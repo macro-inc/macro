@@ -1385,6 +1385,15 @@ impl CustomerRepository for MockCustomerRepository {
         unimplemented!("not exercised by team service tests")
     }
 
+    async fn refund_computer_purchase(
+        &self,
+        _: &stripe::SubscriptionId,
+        _: computer_id::ComputerId,
+        _: &str,
+    ) -> Result<Option<crate::domain::model::ComputerPurchaseCredit>, CustomerError> {
+        unimplemented!("not exercised by team service tests")
+    }
+
     async fn subscription_items(
         &self,
         _: &stripe::SubscriptionId,

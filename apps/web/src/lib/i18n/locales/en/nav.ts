@@ -37,6 +37,13 @@ export default {
   // Rail buttons
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
+  unreadNotifications: {
+    one: '{{count}} unread notification',
+    other: '{{count}} unread notifications',
+  },
+  manyUnreadNotifications: {
+    other: 'More than {{count}} unread notifications',
+  },
   activeCall: 'Active call',
   returnToCall: 'Return to call',
   nextMeeting: 'Next meeting: {{time}}',

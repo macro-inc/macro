@@ -7,6 +7,8 @@ use opensearch_client::{
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
+use crate::parsers::message_text::with_pastes_as_content;
+
 pub async fn process_channel_message_update(
     opensearch_client: &OpensearchClient,
     db: &Pool<Postgres>,
@@ -47,13 +49,17 @@ fn channel_message_upsert_args(
     let channel_id = message.channel_id;
     let message_id = message.message_id;
     let raw_content = &message.content;
-    let transformed_content = match ParsedXmlText::parse(raw_content) {
-        Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
-        Err(e) => {
-            tracing::error!(error = ?e, %channel_id, %message_id, "failed to parse channel message content, indexing raw content");
-            raw_content.to_string()
+    let transformed_content = with_pastes_as_content(raw_content, |markup| {
+        match ParsedXmlText::parse(markup) {
+            Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
+            // The parse error carries the rest of the message, which is
+            // content, so it stays out of the log.
+            Err(_) => {
+                tracing::error!(%channel_id, %message_id, "failed to parse channel message content, indexing raw content");
+                markup.to_string()
+            }
         }
-    };
+    });
 
     Ok(UpsertChannelMessageArgs {
         channel_id: channel_id.to_string(),

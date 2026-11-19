@@ -285,11 +285,8 @@ fn run(cli: Cli) -> Result<()> {
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;
-            let computers = super::computers::Computers::new(
-                Mode::Local,
-                a.computers.fleet(super::computers::Fleet::Docker),
-                &instance,
-            );
+            let computers =
+                super::computers::Computers::new(Mode::Local, a.computers.fleet(), &instance);
             super::validate::local_compose(&instance, Mode::Local, &computers)
         }
         Cmd::ValidateLocalEnv(a) => {

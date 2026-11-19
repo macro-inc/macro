@@ -17,6 +17,8 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - `src/domain/service.rs` (`start_clear`, `run_clear`, `undo_clear`,
   `claim_stalled_clears`): a clear as a stored action applied in chunks. Its
   storage is `notification::domain::bulk_action::BulkActionStore`.
+- `src/domain/service/unread.rs`: the unread rows of the whole inbox by
+  kind, for the sidebar's counts, without paging the inbox.
 - `src/domain/ports.rs` and `src/outbound/`: clear updates to the viewer's
   sessions over the connection gateway (feature `outbound`).
 - `src/domain/policy.rs`: which groups the inbox lists.
@@ -66,8 +68,9 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - A scope lists a row by its `row_type` or any of its `also_listed_as` kinds
   (`also_listed_as` in `src/domain/rows.rs`), for pages, live changes and
   clears alike: a thread whose reply mentions the viewer is listed under
-  channel mentions too, and a clear of mentions takes the whole thread. Agent
-  session and pull request mentions stay agent and pull request rows only.
+  channel mentions too, and a clear of mentions takes the whole thread. A pull
+  request or agent session row that mentions the viewer is also a discussion
+  mention, the kind for mentions outside a channel.
 - A clear belongs to the server, not the request. `start_clear` stores it
   with its scope and start time frozen; `run_clear` applies it a chunk at a
   time, each chunk one transaction (state, ledger, cursor) under a lease. A
@@ -85,6 +88,13 @@ agent session, runtime or team-scoped vault access request). Built on the shared
 - An unread scope filters on each row's `unseen`, which follows the row's own
   rule (mail by its unread messages), so a row leaves or returns through the
   same recompute as any other change.
+- Unread counts come from the same row rules as pages: `unread_rows` asks
+  the feed layer which groups may hold an unread row (an unseen
+  notification, or unread mail whose notifications were seen), reads those
+  groups as a page would and counts rows with `unseen`. Never count from
+  notification state alone; the number would include rows the inbox does
+  not list. An entity type stops being read at `UNREAD_ROWS_COUNTED` rows,
+  and `recount_unread_rows` reads only the groups that changed.
 
 ## Related
 

@@ -1056,6 +1056,12 @@ row menu: `Open in new split`, `Copy Link`, `Copy ID`, and `Share`, plus
 so an editor who doesn't own the project gets neither; several owned projects
 offer only `Delete`. The dialogs are the Projects list's own.
 
+While a project page shows its Overview, Cmd+K lists `Copy link` and `Copy ID`
+(the same URL and id as the title menu), plus the tag and notification commands
+its Home row offers. In the Tasks section, Cmd+K and Shift+Cmd+C act on the
+focused task row instead. In Home's project preview the commands live in the
+preview's own hotkey scope, so they apply once the cursor is in the preview.
+
 `New project` and the global Create menu's `Project` action (C, then P) open
 the same native composer host and layout as task creation,
 with a project name, a Markdown description (`Add description...`), and the
@@ -1235,6 +1241,13 @@ and expanded replies stay in place. Following another comment link highlights
 its target again.
 
 ## Bulk delete
+
+Tasks you own also offer **Delete** in their row's context menu (right-click on
+desktop, long-press on touch; in lists, grouped lists, board, Gantt and Home)
+and in the open task's header menu. It opens the delete confirmation described
+below, which stays open until you confirm or cancel. A row's Delete targets
+that task, except on desktop when the right-clicked row is part of a
+multi-row selection: then it targets every selected task.
 
 Select task rows with their leading checkboxes, choose **Actions → Delete items**,
 then confirm **Delete**. On desktop the dialog opens with Delete focused, so Enter confirms

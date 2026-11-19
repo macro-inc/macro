@@ -275,6 +275,8 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown_token = CancellationToken::new();
     let event_broker_tracker = TaskTracker::new();
+    #[cfg(feature = "processing")]
+    let mailbox_delete_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
@@ -321,6 +323,11 @@ async fn main() -> anyhow::Result<()> {
             document_storage_bucket: config.document_storage_bucket.to_string(),
             lexical_client,
             calendar_search_enabled: config.calendar_search_enabled,
+            mailbox_deletes: process::email::mailbox_delete::MailboxDeletes::new(
+                opensearch_client.clone(),
+                mailbox_delete_tracker.clone(),
+                shutdown_token.clone(),
+            ),
         };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
@@ -363,6 +370,13 @@ async fn main() -> anyhow::Result<()> {
     let consumer_result = consumer_supervisor
         .await
         .context("search processing event consumer supervisor failed");
+
+    // Followers stop at the cancelled token; OpenSearch finishes their tasks.
+    #[cfg(feature = "processing")]
+    {
+        mailbox_delete_tracker.close();
+        mailbox_delete_tracker.wait().await;
+    }
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

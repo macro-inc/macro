@@ -8,8 +8,9 @@ mod team_refresh;
 mod team_sharing;
 mod team_sync_coverage;
 use crate::domain::models::{
-    GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleWatchChannel, OccurrenceException,
-    OccurrenceListing, ProviderEventSource, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+    GOOGLE_CALENDAR_FULL_SCOPE, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot,
+    GoogleWatchChannel, OccurrenceException, OccurrenceListing, ProviderEventSource,
+    REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
 use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
@@ -682,6 +683,183 @@ async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(poo
     assert_eq!(
         sqlx::query_scalar!(
             r#"SELECT sync_status FROM calendar_accounts WHERE id = $1"#,
+            account_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "pending"
+    );
+}
+
+/// A grant from before Macro narrowed its calendar scopes keeps only the broad
+/// scope, which never counts as the capability, so nothing syncs it again.
+/// Maintenance turns it off as a grant that loses calendar would, leaves
+/// current grants alone, and a new grant re-imports it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_broad_scope_only_grant_is_turned_off_and_a_new_grant_reimports(pool: PgPool) {
+    let owner_id = "macro|calendar-broad-scope@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let current_link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    repo.apply_google_grant(
+        current_link_id,
+        complete_grant(),
+        CalendarGrantIntent::CalendarRequested,
+    )
+    .await
+    .unwrap();
+    let google_job = enabled
+        .jobs
+        .iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let account_id = google_job.account_id.unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let calendar_id = repo
+        .upsert_google_calendar(
+            key,
+            lease_token,
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "primary".to_string(),
+                name: "Primary".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: true,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap()
+        .id;
+    let mut google = timed_upsert(
+        owner_id,
+        link_id,
+        (account_id, calendar_id),
+        "broad@example.com",
+        "Stale since the narrowing",
+        1,
+    );
+    google.source = CalendarEventSource::Google(ProviderEventSource {
+        automatic_decline: None,
+        binding: None,
+        observed_access_role: Some("owner".to_owned()),
+        email_link_id: link_id,
+        account_id,
+        calendar_id,
+        provider_event_id: "provider-event".to_string(),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    let event_id = repo
+        .upsert_event(CalendarEventWrite::GoogleBackfill {
+            key,
+            lease_token,
+            upsert: google,
+        })
+        .await
+        .unwrap()
+        .event_id;
+    // The shape such a grant left behind: a ready account whose stored grant
+    // holds the broad scope and not the two Macro requests today.
+    sqlx::query!(
+        r#"
+        UPDATE email_link_google_scopes
+        SET granted_scopes = ARRAY[$2::text, 'https://www.googleapis.com/auth/gmail.modify']
+        WHERE link_id = $1
+        "#,
+        link_id,
+        GOOGLE_CALENDAR_FULL_SCOPE,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_accounts SET sync_status = 'ready', last_synced_at = now() WHERE id = $1",
+        account_id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.disable_google_accounts_without_calendar_capability()
+            .await
+            .unwrap(),
+        1
+    );
+    let state = sqlx::query!(
+        r#"
+        SELECT
+            account.sync_status,
+            calendar.is_deleted,
+            (SELECT count(*) FROM calendar_event_sources WHERE event_id = $2) AS "source_count!",
+            (SELECT count(*) FROM calendar_events WHERE id = $2) AS "event_count!"
+        FROM calendar_accounts account
+        JOIN calendars calendar ON calendar.account_id = account.id
+        WHERE account.id = $1
+        "#,
+        account_id,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(state.sync_status, "disabled");
+    assert!(state.is_deleted);
+    assert_eq!(state.source_count, 0);
+    assert_eq!(state.event_count, 0);
+    assert_ne!(
+        sqlx::query_scalar!(
+            "SELECT sync_status FROM calendar_accounts WHERE email_link_id = $1",
+            current_link_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        "disabled",
+        "a current grant is left alone"
+    );
+    assert_eq!(
+        repo.disable_google_accounts_without_calendar_capability()
+            .await
+            .unwrap(),
+        0
+    );
+
+    let reenabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    assert_eq!(reenabled.jobs.len(), 1);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT sync_status FROM calendar_accounts WHERE id = $1",
             account_id
         )
         .fetch_one(&pool)

@@ -269,6 +269,7 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
+    if (itemType === 'email') return;
     return fetchSharePermissions(id, itemType);
   },
   { initialValue: undefined }
@@ -850,8 +851,11 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       <div class="font-medium truncate">
                         <Show
                           when={
-                            props.channelNameMap.get(recipient.channel_id)
-                              ?.type !== 'direct_message'
+                            props.itemType === 'email'
+                              ? !props.channelNameMap.get(recipient.channel_id)
+                                  ?.name
+                              : props.channelNameMap.get(recipient.channel_id)
+                                  ?.type !== 'direct_message'
                           }
                           fallback={
                             props.channelNameMap.get(recipient.channel_id)
@@ -977,6 +981,7 @@ export function ShareModal(props: ShareModalProps) {
   const isBlockContext = () =>
     !!enclosingBlockId &&
     enclosingBlockId === props.id &&
+    props.itemType !== 'email' &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
     props.itemType !== 'crm_pipeline' &&
@@ -986,9 +991,18 @@ export function ShareModal(props: ShareModalProps) {
   const queryClient = useQueryClient();
   const fallbackPermissionsQuery = useQuery(() => ({
     ...sharePermissionsQueryOptions(props.id, props.itemType),
-    enabled: !isBlockContext() && !!props.id,
+    enabled:
+      !isBlockContext() &&
+      !!props.id &&
+      (props.itemType !== 'email' ||
+        (props.open && props.userPermissions === Permissions.OWNER)),
   }));
   const sharePermission = () => {
+    if (
+      props.itemType === 'email' &&
+      props.userPermissions !== Permissions.OWNER
+    )
+      return undefined;
     if (isBlockContext()) {
       const result = permissionsBlockResource[0].latest;
       return result && !result.isErr() ? result.value : undefined;
@@ -1072,7 +1086,8 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const sharedChannels = createMemo(
-    () => sharedChannelIds(sharePermission()),
+    () =>
+      props.itemType === 'email' ? [] : sharedChannelIds(sharePermission()),
     undefined,
     {
       equals: (a, b) =>
@@ -1085,6 +1100,15 @@ export function ShareModal(props: ShareModalProps) {
 
   // Create a map of channel IDs to channel names
   const channelNameMap = createMemo(() => {
+    const permission = sharePermission();
+    if (permission && 'threadChannelShares' in permission) {
+      return new Map(
+        permission.threadChannelShares.map((share) => [
+          share.channel_id,
+          { name: share.channel_name ?? '', type: share.channel_type },
+        ])
+      );
+    }
     const data = channelNamesQuery.isPending
       ? undefined
       : channelNamesQuery.data;
@@ -1730,8 +1754,12 @@ export function ShareModal(props: ShareModalProps) {
                             <div class="font-medium truncate">
                               <Show
                                 when={
-                                  channelNameMap().get(recipient.channel_id)
-                                    ?.type !== 'direct_message'
+                                  props.itemType === 'email'
+                                    ? !channelNameMap().get(
+                                        recipient.channel_id
+                                      )?.name
+                                    : channelNameMap().get(recipient.channel_id)
+                                        ?.type !== 'direct_message'
                                 }
                                 fallback={
                                   channelNameMap().get(recipient.channel_id)
@@ -1947,7 +1975,7 @@ export function ShareTrigger(props: {
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.
   const warmShareDialog = () => {
-    if (!isAuthenticated()) return;
+    if (!isAuthenticated() || itemType() === 'email') return;
     if (inBlock) {
       const result = permissionsBlockResource[0].latest;
       fireAndForget(

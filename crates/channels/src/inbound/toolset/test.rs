@@ -44,6 +44,8 @@ use std::{
 use uuid::Uuid;
 
 const TEST_USER_ID: &str = "macro|channel-owner@example.com";
+/// A channel member other than the requesting user.
+const OTHER_USER_ID: &str = "macro|someone-else@example.com";
 
 type PostedSharedMessage = (
     EntityAccessReceipt<messages::domain::service::MessageWrite>,
@@ -63,6 +65,8 @@ struct RecordingMessages {
     posts: Arc<Mutex<Vec<PostedSharedMessage>>>,
     /// Author of the message `get` returns; the requesting user when unset.
     stored_sender: Option<Sender>,
+    /// The user a bot-authored stored message was posted for.
+    stored_triggered_by: Option<&'static str>,
     patches: Arc<Mutex<Vec<RecordedPatch>>>,
     deletes: Arc<Mutex<Vec<(MessageWriteReceipt, Uuid)>>>,
     reacts: Arc<Mutex<Vec<RecordedReaction>>>,
@@ -93,7 +97,7 @@ impl RecordingMessages {
             bot_profile: None,
             mentions: vec![],
             triggered_via: None,
-            triggered_by: None,
+            triggered_by: self.stored_triggered_by.map(ToOwned::to_owned),
             content: "stored".to_string(),
             created_at: chrono::Utc::now(),
             updated_at: chrono::Utc::now(),
@@ -114,6 +118,36 @@ impl RecordingMessages {
             Some(error) => Err(error()),
             None => Ok(self.stored_message(&access.entity().entity_id, id, reactions)),
         }
+    }
+}
+
+impl RecordingMessages {
+    /// A message the tool actor bot posted for `user`.
+    fn assistant_message_for(user: &'static str) -> Self {
+        Self {
+            stored_sender: Some(Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
+            stored_triggered_by: Some(user),
+            ..Self::default()
+        }
+    }
+
+    /// The message service's edit rule for a channel member: the receipt's
+    /// actor must be the stored sender.
+    fn authorize_edit(&self, access: &MessageWriteReceipt, id: Uuid) -> bool {
+        let actor = match access.auth() {
+            entity_access::domain::models::EntityAccessAuth::Authenticated(user) => {
+                user.as_ref().to_owned()
+            }
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                bot.bot_id_str().as_ref().to_owned()
+            }
+            _ => return false,
+        };
+        actor
+            == self
+                .stored_message(&access.entity().entity_id, id, vec![])
+                .sender_id
+                .as_ref()
     }
 }
 
@@ -180,6 +214,9 @@ impl messages::domain::api::MessageCommands for RecordingMessages {
         id: Uuid,
         patch: messages::domain::ports::MessagePatch,
     ) -> Result<messages::domain::models::Message, messages::domain::ports::MessageError> {
+        if !self.authorize_edit(&access, id) {
+            return Err(messages::domain::ports::MessageError::Forbidden);
+        }
         let result = self.mutation_result(&access, id, vec![]);
         self.patches.lock().unwrap().push((access, id, patch));
         result
@@ -423,6 +460,7 @@ impl ChannelService for ToolTestChannelService {
                 .metadata_name
                 .clone()
                 .unwrap_or_else(|| "Previous".to_string()),
+            named: true,
         })
     }
 
@@ -1582,11 +1620,8 @@ async fn edit_channel_message_edits_the_users_own_message_as_the_user() {
 }
 
 #[tokio::test]
-async fn edit_channel_message_edits_the_assistants_message_as_the_bot() {
-    let messages = RecordingMessages {
-        stored_sender: Some(Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)),
-        ..RecordingMessages::default()
-    };
+async fn edit_channel_message_edits_the_assistants_message_for_the_user_as_the_bot() {
+    let messages = RecordingMessages::assistant_message_for(TEST_USER_ID);
     let patches = messages.patches.clone();
 
     EditChannelMessage {
@@ -1603,6 +1638,50 @@ async fn edit_channel_message_edits_the_assistants_message_as_the_bot() {
 
     let patches = patches.lock().unwrap();
     assert!(is_bot_receipt(&patches[0].0));
+}
+
+#[tokio::test]
+async fn edit_channel_message_cannot_rewrite_the_assistants_message_for_another_user() {
+    let messages = RecordingMessages::assistant_message_for(OTHER_USER_ID);
+    let patches = messages.patches.clone();
+
+    let error = EditChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+        content: "rewritten".to_string(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect_err("the assistant's message for another user is not the caller's to edit");
+
+    assert!(
+        error.description.contains("author"),
+        "{}",
+        error.description
+    );
+    assert!(patches.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_channel_message_deletes_the_assistants_message_for_another_user_as_the_user() {
+    let messages = RecordingMessages::assistant_message_for(OTHER_USER_ID);
+    let deletes = messages.deletes.clone();
+
+    DeleteChannelMessage {
+        channel_id: Uuid::new_v4(),
+        message_id: Uuid::new_v4(),
+    }
+    .call(
+        message_tool_context(messages),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("a member may delete a bot message in a channel, as in the app");
+
+    assert!(!is_bot_receipt(&deletes.lock().unwrap()[0].0));
 }
 
 #[tokio::test]
@@ -1630,7 +1709,7 @@ async fn edit_channel_message_rejects_empty_content_before_any_access_check() {
 async fn edit_channel_message_explains_a_forbidden_edit() {
     let messages = RecordingMessages {
         stored_sender: Some(Sender::new_from_user(
-            MacroUserIdStr::try_from("macro|someone-else@example.com".to_string()).unwrap(),
+            MacroUserIdStr::try_from(OTHER_USER_ID.to_string()).unwrap(),
         )),
         mutation_error: Some(|| messages::domain::ports::MessageError::Forbidden),
         ..RecordingMessages::default()

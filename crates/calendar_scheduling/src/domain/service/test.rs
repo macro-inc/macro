@@ -1000,46 +1000,104 @@ async fn a_refused_create_leaves_the_booking_failed_and_never_retries() {
         .await
         .unwrap();
     assert_eq!(receipt.booking.status, BookingStatus::Failed);
+    assert!(receipt.booking.abandoned_at.is_some());
     let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
     assert!(
         stored
             .operation
             .as_ref()
-            .is_some_and(|operation| operation.abandoned_at.is_some())
+            .is_some_and(|operation| operation.abandoned_at.is_some() && operation.unsent)
     );
     make_due(&store, receipt.booking.id);
     assert!(!service.recover_once().await.unwrap());
     assert_eq!(calendars.create_attempts.load(Ordering::SeqCst), 1);
-    assert_eq!(
-        service
-            .receipt(receipt.booking.id, receipt.token)
-            .await
-            .unwrap()
-            .booking
-            .status,
-        BookingStatus::Failed
-    );
-    // Nothing owns it any more, so it can be cancelled. A calendar that
-    // refuses the cancellation too keeps the reservations, as lost access
-    // always has; once it accepts, the cancellation frees the time.
+    let shown = service
+        .receipt(receipt.booking.id, receipt.token)
+        .await
+        .unwrap()
+        .booking;
+    assert_eq!(shown.status, BookingStatus::Failed);
+    assert!(shown.abandoned_at.is_some());
+    // Nothing owns it any more, so it can be cancelled. The refused create
+    // never reached the calendar, so the cancellation frees the time without
+    // asking it, even while the calendar refuses changes.
     calendars.reject_cancels.store(true, Ordering::SeqCst);
-    assert_eq!(
-        service
+    let cancelled = service
+        .cancel(receipt.booking.id, Some(receipt.token), None)
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status, BookingStatus::Cancelled);
+    assert!(cancelled.abandoned_at.is_none());
+}
+
+/// A refusal whose completion write fails returns the processing receipt
+/// storage still holds, without the unsaved abandonment.
+#[tokio::test]
+async fn an_unsaved_abandonment_stays_off_the_receipt() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar {
+        reject_creates: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    store.fail_completion.store(true, Ordering::SeqCst);
+    let receipt = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert_eq!(receipt.booking.status, BookingStatus::Processing);
+    assert!(receipt.booking.abandoned_at.is_none());
+}
+
+/// A create whose earlier attempt may have landed can only be cancelled
+/// through the calendar. A calendar that refuses the cancellation too keeps
+/// the reservations, as lost access always has; once it accepts, the
+/// cancellation frees the time.
+#[tokio::test]
+async fn an_abandoned_create_that_may_have_landed_cancels_through_the_calendar() {
+    let store = Arc::new(Memory::default());
+    let calendars = Arc::new(Calendar {
+        lose_create_response: AtomicBool::new(true),
+        ..Default::default()
+    });
+    let service = TestService::new(store.clone(), calendars.clone(), Members);
+    let p = service.save("admin", None, profile(None)).await.unwrap();
+    let receipt = service
+        .book(p.id, p.event_types[0].id, request())
+        .await
+        .unwrap();
+    assert!(receipt.booking.abandoned_at.is_none());
+    calendars.reject_creates.store(true, Ordering::SeqCst);
+    make_due(&store, receipt.booking.id);
+    assert!(service.recover_once().await.unwrap());
+    let stored = store.booking(receipt.booking.id).await.unwrap().unwrap();
+    assert_eq!(stored.booking.status, BookingStatus::Failed);
+    assert!(stored.booking.abandoned_at.is_some());
+    assert!(
+        stored
+            .operation
+            .as_ref()
+            .is_some_and(|operation| operation.abandoned_at.is_some() && !operation.unsent)
+    );
+    calendars.reject_cancels.store(true, Ordering::SeqCst);
+    // The second refusal follows a cancellation refused on its first
+    // attempt: only a refused create skips the calendar, so it stays held.
+    for _ in 0..2 {
+        let refused = service
             .cancel(receipt.booking.id, Some(receipt.token), None)
             .await
-            .unwrap()
-            .status,
-        BookingStatus::Failed
-    );
+            .unwrap();
+        assert_eq!(refused.status, BookingStatus::Failed);
+        assert!(refused.abandoned_at.is_some());
+    }
     calendars.reject_cancels.store(false, Ordering::SeqCst);
-    assert_eq!(
-        service
-            .cancel(receipt.booking.id, Some(receipt.token), None)
-            .await
-            .unwrap()
-            .status,
-        BookingStatus::Cancelled
-    );
+    let cancelled = service
+        .cancel(receipt.booking.id, Some(receipt.token), None)
+        .await
+        .unwrap();
+    assert_eq!(cancelled.status, BookingStatus::Cancelled);
+    assert!(cancelled.abandoned_at.is_none());
 }
 
 /// A calendar that keeps failing in a way that may clear, such as an outage

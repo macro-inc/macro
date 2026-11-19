@@ -817,6 +817,95 @@ fn a_requested_review_offers_the_pull_request() {
     );
 }
 
+fn pull_request_notification(id: u128, tag: &str, extra: Value, minute: u32) -> FeedNotification {
+    let mut content = json!({
+        "foreignEntityId": uuid(0xF0),
+        "githubKey": "macro-inc/macro#1",
+        "owner": "macro-inc",
+        "repo": "macro",
+        "number": 1,
+        "url": "https://github.com/macro-inc/macro/pull/1",
+        "displayName": "macro-inc/macro#1",
+        "title": "Fix the inbox",
+    });
+    for (key, value) in extra.as_object().unwrap() {
+        content[key] = value.clone();
+    }
+    notification(
+        id,
+        entity(EntityType::ForeignEntity, 0xF0),
+        tag,
+        content,
+        minute,
+        NotificationState::Unseen,
+    )
+}
+
+fn pull_request_mention(id: u128, minute: u32) -> FeedNotification {
+    pull_request_notification(
+        id,
+        "github_pr_mention",
+        json!({ "location": "comment", "textSnippet": "can you take a look?" }),
+        minute,
+    )
+}
+
+fn session_mention(id: u128, minute: u32) -> FeedNotification {
+    agent_notification(
+        id,
+        "agent_session_mentioned",
+        json!({ "mentionedBy": "macro|colleague@example.com", "actionId": uuid(0xAC) }),
+        minute,
+    )
+}
+
+const PULL_REQUESTS: &[InboxRowType] = &[InboxRowType::PullRequest];
+const AGENTS: &[InboxRowType] = &[InboxRowType::Agent];
+
+#[test]
+fn a_pull_request_that_mentions_you_is_listed_under_mentions_too() {
+    let pull_request = group(EntityType::ForeignEntity, 0xF0);
+    let requested = pull_request_notification(1, "github_review_requested", json!({}), 1);
+
+    let listed = rows_of(
+        &pull_request,
+        &[requested.clone(), pull_request_mention(2, 2)],
+    );
+    assert_eq!(listed[0].row_type, InboxRowType::PullRequest);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMention]
+    );
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, PULL_REQUESTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
+
+    let without_mention = rows_of(&pull_request, &[requested]);
+    assert!(without_mention[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&without_mention, &[MENTIONS]), vec![0]);
+}
+
+#[test]
+fn an_agent_session_that_mentions_you_is_listed_under_mentions_too() {
+    let session = group(EntityType::AgentSession, SESSION);
+
+    let listed = rows_of(&session, &[settled(1, 1), session_mention(2, 2)]);
+    assert_eq!(listed[0].row_type, InboxRowType::Agent);
+    assert_eq!(
+        listed[0].also_listed_as,
+        vec![InboxRowType::DiscussionMention]
+    );
+    assert_eq!(
+        listed_in(&listed, &[MENTIONS, AGENTS, COMMENTS]),
+        vec![1, 1, 0]
+    );
+
+    let without_mention = rows_of(&session, &[settled(1, 1), waiting(2, 2)]);
+    assert!(without_mention[0].also_listed_as.is_empty());
+    assert_eq!(listed_in(&without_mention, &[MENTIONS]), vec![0]);
+}
+
 #[test]
 fn each_removal_of_runtime_access_is_its_own_row_that_opens() {
     let removed = |id: u128, minute: u32| {

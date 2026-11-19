@@ -34,13 +34,6 @@ export async function pasteIntoRequest(
   await page.keyboard.press('ControlOrMeta+v');
 }
 
-/** Marks the inbox as needing its provider grant renewed. */
-export async function lapseGrant(mailbox: Mailbox): Promise<void> {
-  await mailbox.stack.sql(
-    `UPDATE email_links SET needs_reauth = true WHERE id = '${mailbox.inbox.linkId}' RETURNING id`
-  );
-}
-
 /** Leaves the inbox's calendar turned off by its owner. */
 export async function turnCalendarOff(mailbox: Mailbox): Promise<void> {
   await mailbox.stack.sql(

@@ -2,6 +2,7 @@ import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -26,13 +27,21 @@ import {
   ShareTrigger,
 } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
@@ -72,6 +81,30 @@ type ProjectDetailProps = {
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
+
+/** The project's Cmd+K entity commands (Copy link, Copy ID) and their keys. */
+function ProjectEntityCommands(props: {
+  projectId: string;
+  project: Accessor<ProjectDetailData | undefined>;
+  scopeId: string;
+}) {
+  useBlockEntityCommands({
+    id: props.projectId,
+    scopeId: props.scopeId,
+    resolveEntity: () => {
+      const project = props.project();
+      if (!project) return undefined;
+      return {
+        type: 'initiative',
+        id: project.id,
+        name: project.name,
+        ownerId: project.ownerId,
+        appearance: project.appearance,
+      };
+    },
+  });
+  return null;
+}
 
 function ProjectTitleMenu(props: {
   project: ProjectDetailData;
@@ -188,6 +221,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
+  createOpenTracker('initiative', () => source.project()?.id);
   useSplitDisplayName(
     () => source.project()?.name ?? t('tabs.projectFallbackName')
   );
@@ -232,6 +266,23 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       <Show when={props.breadcrumb}>
         {(breadcrumb) => (
           <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
+        )}
+      </Show>
+      {/* Overview only: the Tasks section's list registers the same commands
+          for its rows on the split's scope, and a second registration there
+          would replace theirs. Keyed by id, which the commands read once. */}
+      <Show
+        when={
+          props.route.section === 'overview' ? source.project()?.id : undefined
+        }
+        keyed
+      >
+        {(projectId) => (
+          <ProjectEntityCommands
+            projectId={projectId}
+            project={source.project}
+            scopeId={panel.splitHotkeyScope}
+          />
         )}
       </Show>
       <ProjectTopBar

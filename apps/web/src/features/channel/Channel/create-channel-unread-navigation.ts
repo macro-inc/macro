@@ -1,5 +1,8 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { isTransientRequestError } from '@core/util/request-error';
+import {
+  isGraphqlServerFault,
+  isTransientRequestError,
+} from '@core/util/request-error';
 import { indexUnreadMessageNotifications } from '@notifications/unread-message-notifications';
 import { createChannelNotificationsQuery } from '@queries/channel/notifications';
 import { queryReadyGate } from '@queries/gate';
@@ -36,9 +39,12 @@ export function createChannelUnreadNavigation(options: {
   );
   const notifications = createMemo(() => {
     if (channelNotifications.isPending) return [];
+    // A server fault is retried like a transport failure; keep what we have.
+    const error = channelNotifications.error;
     if (
-      channelNotifications.error &&
-      !isTransientRequestError(channelNotifications.error)
+      error &&
+      !isTransientRequestError(error) &&
+      !isGraphqlServerFault(error)
     )
       return [];
     const records = channelNotifications.data ?? [];

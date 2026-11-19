@@ -143,7 +143,8 @@ the gateway `/email` prefix.
 - The API's server spans come from `macro_tower_layers`
   (`api::traced`). tower-http's default `TraceLayer` span is DEBUG, below the
   exporter's INFO filter, so an API wrapped in it sends no server spans.
-- `models_email`'s `Link` `Debug` prints only opaque fields. Keep addresses,
+- `models_email`'s `Link`, `BlockSenderPayload` and `UnblockSenderPayload`
+  `Debug` print only opaque fields. Keep addresses,
   `macro_id`, contact emails and whole messages out of span fields: skip them
   in `#[tracing::instrument]` and record `link_id` or provider ids instead.
 
@@ -175,12 +176,21 @@ the gateway `/email` prefix.
   attachment bytes through the provider-aware reader.
 - Preserve the calendar domain's `team_ooo_changed` hint when forwarding a
   calendar refresh so unrelated invitation updates retain teammates' OOO rows.
+- The Outlook sync loop (`mailbox_sync_worker::run`) claims a due folder page
+  before every message read. An import keeps its folders' next pages due, so
+  claiming pages once per cycle would leave a folder with new mail behind
+  every worker's whole cycle of queued messages. A cycle ends when no message
+  is due, so folder catalogs are checked again before more pages are read.
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round
   started at an older reader revision ([runbook](../../docs/runbooks/outlook-folder-reimport.md)).
 - Spawn `run_transfers` regardless of the Outlook flags. Gmail inbox moves
   finish there; with writes off it pauses only the Outlook retire step.
+- Every Graph call takes a permit from `RedisMicrosoftRequestGate`
+  (`email_api_client`). `pubsub_workers` builds the Outlook sync's import
+  gateway with `RequestBudget::Import`; every other Microsoft caller,
+  calendar_service included, uses `RequestBudget::Live`.
 - Every `GmailApi` call takes a permit from `RedisGmailRequestGate`
   (`outbound/email_api/gmail_gate.rs`): per mailbox it caps requests in
   flight and quota units per window, and pauses after a Gmail 429 (live work

@@ -22,11 +22,14 @@ export const stayOnline = ({
   open,
   log,
   ping = pingEvery,
+  onOnline = () => {},
 }: {
   /** Opens a socket to the gateway as the agent. */
   readonly open: () => Socket;
   readonly log: (entry: object) => void;
   readonly ping?: number;
+  /** Told each time the socket opens. */
+  readonly onOnline?: () => void;
 }): void => {
   let wait = firstWait;
   const connect = (): void => {
@@ -35,6 +38,7 @@ export const stayOnline = ({
     socket.onOpen(() => {
       wait = firstWait;
       log({ presence: 'online' });
+      onOnline();
       socket.send('ping');
       pinging = setInterval(() => {
         if (socket.isOpen()) socket.send('ping');

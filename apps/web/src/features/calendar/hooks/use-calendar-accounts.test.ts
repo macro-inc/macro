@@ -38,7 +38,13 @@ describe('toCalendarAccounts', () => {
   });
 
   it('offers enable for an inbox missing calendar permission', () => {
-    const links = [link('a', { needs_calendar_permission: true })];
+    const links = [
+      link('a', {
+        needs_calendar_permission: true,
+        has_calendar_data: false,
+        is_sync_active: true,
+      }),
+    ];
     expect(toCalendarAccounts(links, 'macro|self')).toEqual([
       {
         provider: 'GMAIL',
@@ -74,11 +80,18 @@ describe('toCalendarAccounts', () => {
     }
   );
 
-  it('offers enable — not turn-off — for a legacy inbox with stale data', () => {
+  it('offers reconnect — not turn-off — for a calendar that stopped syncing', () => {
     const links = [
-      link('a', { needs_calendar_permission: true, has_calendar_data: true }),
+      link('a', {
+        needs_calendar_permission: true,
+        has_calendar_data: true,
+        is_sync_active: true,
+      }),
     ];
-    expect(toCalendarAccounts(links, 'macro|self')[0]?.action).toBe('enable');
+    expect(toCalendarAccounts(links, 'macro|self')[0]).toMatchObject({
+      action: 'reconnect',
+      consentScopes: 'calendar',
+    });
   });
 
   it('sorts the primary inbox first and keeps the rest in order', () => {
