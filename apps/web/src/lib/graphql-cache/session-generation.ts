@@ -1,4 +1,5 @@
 import { perfMark } from '@app/observability/perf-marks';
+import { clearCachedResults } from '@core/util/cache';
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 import {
@@ -80,6 +81,7 @@ export function createSessionGeneration(
       initialized = true;
       transitioned = true;
       const captured = generation;
+      clearCachedResults();
       setState({ epoch: generation, paused: true });
       for (const listener of listeners) listener();
       const transition = transitions.then(async () => {

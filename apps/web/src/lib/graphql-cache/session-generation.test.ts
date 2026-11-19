@@ -1,5 +1,27 @@
+import { cache } from '@core/util/cache';
+import { ok } from 'neverthrow';
 import { expect, it, vi } from 'vitest';
 import { createSessionGeneration } from './session-generation';
+
+it('keeps helper results across a baseline correction and clears them on a real transition', async () => {
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(ok({ url: 'before', content: 'old' }))
+    .mockResolvedValueOnce(ok({ url: 'after', content: 'fresh' }));
+  const cached = cache(fetch, { forever: true });
+  const session = createSessionGeneration('hint');
+  await cached('document');
+  session.initialize('owner');
+  expect(await cached('document')).toEqual(
+    ok({ url: 'before', content: 'old' })
+  );
+  expect(fetch).toHaveBeenCalledOnce();
+  await session.transition(async () => {}, 'changed');
+  expect(await cached('document')).toEqual(
+    ok({ url: 'after', content: 'fresh' })
+  );
+  expect(fetch).toHaveBeenCalledTimes(2);
+});
 
 it('establishes the owner baseline without invalidating queries', async () => {
   const session = createSessionGeneration('owner-generation');

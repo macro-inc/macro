@@ -27,7 +27,8 @@ screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
 If account or CRM access changes while a document or file is still loading,
-its load retries once with fresh permissions and content. Check a cold file open
+its load retries once with fresh permissions and content in both Drive and
+standalone file views. Check a cold file open
 with local storage delayed: the file should finish opening after recovery. A
 revoked file stays unavailable, and a second interruption leaves the existing
 retry control. An already-open editor does not reload merely because the cache

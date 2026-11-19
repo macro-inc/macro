@@ -20,8 +20,12 @@ import {
 import { useIsAuthenticated } from '@core/context/user';
 import { trackOpen } from '@core/internal/track-open';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
+import { queryClient } from '@queries/client';
+import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -35,6 +39,7 @@ import {
   type ParentProps,
   Suspense,
   Switch,
+  untrack,
 } from 'solid-js';
 
 export type FileDetailLayoutProps = ParentProps<{
@@ -117,6 +122,8 @@ export function FileDetailLoadGate<
    * unmount.
    */
   dispose?: (data: T) => void;
+  /** Releases a result that never reached its viewer; shown viewers own it. */
+  discard?: (data: T) => void;
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
@@ -125,30 +132,60 @@ export function FileDetailLoadGate<
   // Shown results are released when their content is disposed (after the
   // editor it rendered); the rest here. Each result is released once.
   const released = new WeakSet<T>();
+  const handedToViewer = new WeakSet<T>();
   const release = (data: T | undefined) => {
     if (data === undefined || released.has(data)) return;
     released.add(data);
     props.dispose?.(data);
+    if (!handedToViewer.has(data)) props.discard?.(data);
   };
   let unmounted = false;
   let latestLoad = 0;
   let current: T | undefined;
   const load = async (documentId: string): Promise<T | undefined> => {
     const request = ++latestLoad;
-    const data = await flow.task('document.load', (span) => {
-      span.setAttr('doc.type', props.entityType);
-      span.setAttr('document.id', documentId);
-      return props.load(documentId, span);
-    });
-    // The resource ignores a superseded result; one unloaded while pending
-    // (access revoked) must not become current either, so a later grant finds
-    // nothing loaded and reloads. Nothing will show it, so release it now.
-    if (unmounted || request !== latestLoad) {
-      release(data);
-      return undefined;
+    const superseded = () => unmounted || request !== latestLoad;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const generation = cacheSessionGeneration.capture();
+      let data: T | undefined;
+      try {
+        data = await untrack(() =>
+          flow.task('document.load', (span) => {
+            span.setAttr('doc.type', props.entityType);
+            span.setAttr('document.id', documentId);
+            span.setAttr('doc.session_retry', attempt);
+            return props.load(documentId, span);
+          })
+        );
+      } catch (error) {
+        if (cacheSessionGeneration.isCurrent(generation)) throw error;
+      }
+      // A disposed or revoked view must not publish its late result or recover.
+      if (superseded()) {
+        release(data);
+        return undefined;
+      }
+      if (!cacheSessionGeneration.isCurrent(generation)) {
+        release(data);
+        if (attempt > 0) throw new StaleCacheAuthorityError();
+        // A cold load can overlap local retirement. Retry once from identity,
+        // after local cleanup, with fresh metadata and authorization credentials.
+        await cacheSessionGeneration.settled();
+        if (superseded()) return undefined;
+        if (cacheSessionGeneration.state().paused)
+          throw new StaleCacheAuthorityError();
+        await queryClient.invalidateQueries({
+          queryKey: documentLoadKeys.bundle(documentId).queryKey,
+          exact: true,
+          refetchType: 'none',
+        });
+        if (superseded()) return undefined;
+        continue;
+      }
+      current = data;
+      return data;
     }
-    current = data;
-    return data;
+    throw new StaleCacheAuthorityError();
   };
   const unload = () => {
     latestLoad++;
@@ -227,6 +264,7 @@ export function FileDetailLoadGate<
         </Match>
         <Match when={document()} keyed>
           {(data) => {
+            handedToViewer.add(data);
             // Runs after this content, and the editor it renders, is disposed.
             onCleanup(() => release(data));
             return (

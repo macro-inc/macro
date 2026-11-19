@@ -74,10 +74,14 @@ Do not classify GraphQL fields or REST routes for admission. Preserve socket
 frame generations through payload helpers and keep differently stamped batches
 separate; never replace their stamp when the payload reaches a local consumer.
 
-Recover a superseded in-flight Block load once from its source identity after
+Recover a superseded in-flight Block or Drive detail load once from its source identity after
 local retirement settles; reacquire metadata and credentials instead of replaying
 a presigned URL or preload token. Do not reload an already-open editor on every
 transition. Disposal, a newer load or a second transition ends that recovery.
+Clear decoded service-helper caches on real session transitions, preserving them
+on matching startup baselines; a late error may remove only its own cache entry.
+Release PDF proxies discarded before publication without taking ownership from a
+mounted viewer.
 
 Write the durable denied policy before selective CRM retirement and resume an
 interrupted retirement before serving cached content. Preserve email thread

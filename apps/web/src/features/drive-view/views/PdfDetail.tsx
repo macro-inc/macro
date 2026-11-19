@@ -210,6 +210,9 @@ export function PdfDetail(props: {
       entityType="pdf"
       label="PDF"
       load={loadPdfDocument}
+      discard={(data) =>
+        fireAndForget(data.documentProxy.destroy(), 'drive-pdf-discard')
+      }
     >
       {(data) => (
         <PdfDetailDocument

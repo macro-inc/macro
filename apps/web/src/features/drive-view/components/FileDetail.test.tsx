@@ -1,6 +1,9 @@
 import { TraceFlow, useFlow } from '@app/observability/flow';
 import { initializeUiOperationTelemetry } from '@app/observability/ui-operation';
+import { guardResponseBody } from '@core/util/response-observers';
 import { ThrownResultError } from '@core/util/result';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
@@ -15,6 +18,10 @@ const trackOpen = vi.hoisted(() => vi.fn());
 vi.mock('@core/internal/track-open', () => ({ trackOpen }));
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@components/app/side-panel', () => ({}));
+const invalidateBundle = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@queries/client', () => ({
+  queryClient: { invalidateQueries: invalidateBundle },
+}));
 vi.mock('@core/mobile/native-network-status', () => ({
   nativeNetworkStatus: () => 'online',
 }));
@@ -62,6 +69,7 @@ let dispose: (() => void) | undefined;
 let disposeTelemetry: (() => void) | undefined;
 beforeEach(() => {
   disposeTelemetry = initializeUiOperationTelemetry();
+  invalidateBundle.mockClear();
 });
 afterEach(() => {
   analytics.track.mockClear();
@@ -79,7 +87,8 @@ type Loaded = {
 function mount(
   load: (id: string) => Promise<Loaded>,
   cleanupEditor?: () => void,
-  documentId: Accessor<string> = () => 'private-document'
+  documentId: Accessor<string> = () => 'private-document',
+  discard?: (data: Loaded) => void
 ) {
   const container = document.createElement('div');
   document.body.appendChild(container);
@@ -91,6 +100,7 @@ function mount(
         label="document"
         load={load}
         dispose={(data) => data.source?.cleanup()}
+        discard={discard}
       >
         {(data) => {
           onCleanup(() => cleanupEditor?.());
@@ -102,6 +112,169 @@ function mount(
   );
   return container;
 }
+
+it('restarts an interrupted file load instead of publishing its stale content', async () => {
+  const pending = Promise.withResolvers<Loaded>();
+  const published = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  const discard = vi.fn();
+  const load = vi
+    .fn<() => Promise<Loaded>>()
+    .mockReturnValueOnce(pending.promise)
+    .mockResolvedValue({ userAccessLevel: 'view' });
+  const container = mount(load, undefined, undefined, discard);
+  const observer = new MutationObserver(() => {
+    if (container.textContent?.includes('Document content'))
+      published.resolve();
+  });
+  observer.observe(container, { childList: true, subtree: true });
+  try {
+    await cacheSessionGeneration.transition(async () => {});
+    pending.resolve({
+      userAccessLevel: 'owner',
+      source: { cleanup: cleanupSource },
+    });
+    await published.promise;
+    expect(container.textContent).toContain('Document content: view');
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(cleanupSource).toHaveBeenCalledOnce();
+    expect(discard).toHaveBeenCalledExactlyOnceWith({
+      userAccessLevel: 'owner',
+      source: { cleanup: cleanupSource },
+    });
+    expect(invalidateBundle).toHaveBeenCalledExactlyOnceWith({
+      queryKey: ['documentLoad', 'bundle', 'private-document'],
+      exact: true,
+      refetchType: 'none',
+    });
+  } finally {
+    observer.disconnect();
+  }
+  dispose?.();
+  dispose = undefined;
+  // The rendered viewer owns its PDF proxy; only the discarded proxy uses this hook.
+  expect(discard).toHaveBeenCalledOnce();
+});
+
+it('waits for local cleanup before retrying a stale body decode', async () => {
+  const body = Promise.withResolvers<void>();
+  const decoded = Promise.withResolvers<void>();
+  const cleanup = Promise.withResolvers<void>();
+  const recovered = Promise.withResolvers<void>();
+  const load = vi.fn(async () => {
+    const generation = cacheSessionGeneration.capture();
+    if (load.mock.calls.length === 1) await body.promise;
+    else recovered.resolve();
+    const response = guardResponseBody(new Response('%PDF-1.7'), () => {
+      if (!cacheSessionGeneration.isCurrent(generation))
+        throw new StaleCacheAuthorityError();
+    });
+    try {
+      await response.arrayBuffer();
+      return { userAccessLevel: 'view' as const };
+    } finally {
+      decoded.resolve();
+    }
+  });
+  mount(load);
+  const retirement = cacheSessionGeneration.transition(() => cleanup.promise);
+  body.resolve();
+  await decoded.promise;
+  expect(load).toHaveBeenCalledOnce();
+  cleanup.resolve();
+  await retirement;
+  await recovered.promise;
+  expect(load).toHaveBeenCalledTimes(2);
+});
+
+it('honors a fresh denial after discarding an interrupted file load', async () => {
+  const pending = Promise.withResolvers<Loaded>();
+  const denied = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  const load = vi
+    .fn<() => Promise<Loaded>>()
+    .mockReturnValueOnce(pending.promise)
+    .mockRejectedValue(
+      new ThrownResultError([{ code: 'FORBIDDEN', message: 'Access denied' }])
+    );
+  const container = mount(load);
+  const observer = new MutationObserver(() => {
+    if (container.textContent?.includes('Request access')) denied.resolve();
+  });
+  observer.observe(container, { childList: true, subtree: true });
+  try {
+    await cacheSessionGeneration.transition(async () => {});
+    pending.resolve({
+      userAccessLevel: 'owner',
+      source: { cleanup: cleanupSource },
+    });
+    await denied.promise;
+    expect(container.textContent).not.toContain('Document content');
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(cleanupSource).toHaveBeenCalledOnce();
+  } finally {
+    observer.disconnect();
+  }
+});
+
+it('stops after a second interruption and releases both discarded resources', async () => {
+  const first = Promise.withResolvers<Loaded>();
+  const second = Promise.withResolvers<Loaded>();
+  const started = Promise.withResolvers<void>();
+  const failed = Promise.withResolvers<void>();
+  const cleanupFirst = vi.fn();
+  const cleanupSecond = vi.fn();
+  const load = vi
+    .fn<() => Promise<Loaded>>()
+    .mockReturnValueOnce(first.promise)
+    .mockImplementationOnce(() => {
+      started.resolve();
+      return second.promise;
+    });
+  const container = mount(load);
+  const observer = new MutationObserver(() => {
+    if (container.textContent?.includes('couldn’t be displayed'))
+      failed.resolve();
+  });
+  observer.observe(container, { childList: true, subtree: true });
+  try {
+    await cacheSessionGeneration.transition(async () => {});
+    first.resolve({
+      userAccessLevel: 'owner',
+      source: { cleanup: cleanupFirst },
+    });
+    await started.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    second.resolve({
+      userAccessLevel: 'view',
+      source: { cleanup: cleanupSecond },
+    });
+    await failed.promise;
+    expect(container.textContent).not.toContain('Document content');
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(cleanupFirst).toHaveBeenCalledOnce();
+    expect(cleanupSecond).toHaveBeenCalledOnce();
+  } finally {
+    observer.disconnect();
+  }
+});
+
+it('does not recover an interrupted load after the view is disposed', async () => {
+  const pending = Promise.withResolvers<Loaded>();
+  const released = Promise.withResolvers<void>();
+  const load = vi.fn(() => pending.promise);
+  mount(load);
+  await cacheSessionGeneration.transition(async () => {});
+  dispose?.();
+  dispose = undefined;
+  pending.resolve({
+    userAccessLevel: 'owner',
+    source: { cleanup: () => released.resolve() },
+  });
+  await released.promise;
+  expect(load).toHaveBeenCalledOnce();
+  expect(invalidateBundle).not.toHaveBeenCalled();
+});
 
 describe('file access errors', () => {
   it.each(['UNAUTHORIZED', 'FORBIDDEN'])(
