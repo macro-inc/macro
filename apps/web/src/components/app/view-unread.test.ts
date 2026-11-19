@@ -197,7 +197,7 @@ describe('createMailUnread', () => {
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
   });
 
-  it('asks for a failed page no more, and stays a lower bound', () => {
+  it('asks again for a page that added nothing only once the rows change', () => {
     const {
       count,
       fetchNextPage,
@@ -208,13 +208,18 @@ describe('createMailUnread', () => {
 
     setEmails(threads(100).slice(5));
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    // The page fails, then a cache read ends without advancing: no new rows.
     setNextPageFailed(true);
     setFetchingNextPage(false);
+    setNextPageFailed(false);
+    setFetchingNextPage(true);
+    setFetchingNextPage(false);
     expect(fetchNextPage).toHaveBeenCalledTimes(1);
+    // A lower bound: at least one more is unread.
     expect(count()).toBe(96);
 
-    // Once the query succeeds again, the page is asked for again.
-    setNextPageFailed(false);
+    // New mail arrives: the rows changed, so the page is asked for again.
+    setEmails([...threads(100).slice(5), thread('x')]);
     expect(fetchNextPage).toHaveBeenCalledTimes(2);
   });
 

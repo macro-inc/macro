@@ -84,18 +84,24 @@ export function createMailUnread(options: ViewUnreadOptions): Accessor<number> {
     loaded() < COUNTED_EXACTLY;
 
   // Unread mail past the loaded pages only matters to a number, once reads
-  // leave fewer loaded than the label shows: one more page settles it, until
-  // reads bring the loaded count under the label again. A failed page is not
-  // asked for again here; the number stays a lower bound until the query
-  // next succeeds.
+  // leave fewer loaded than the label shows: the next page is asked for each
+  // time that holds, until the label is reached or no page is left. A page is
+  // asked for again only once the rows have changed since the last ask, so a
+  // page that adds nothing (a failure, or a cache read that did not advance)
+  // never loops; the number stays a lower bound until the rows change.
+  let askedAtRows: number | undefined;
   createEffect(
     on(
       () =>
+        queryReadyGate(email) &&
         unknownPastLoaded() &&
-        !email.isFetchingNextPage &&
-        !email.isFetchNextPageError,
-      (fetchMore) => {
-        if (fetchMore) fireAndForget(email.fetchNextPage(), 'nav.mail-unread');
+        !email.isFetchingNextPage
+          ? email.data.entities.length
+          : undefined,
+      (rows) => {
+        if (rows === undefined || rows === askedAtRows) return;
+        askedAtRows = rows;
+        fireAndForget(email.fetchNextPage(), 'nav.mail-unread');
       }
     )
   );
