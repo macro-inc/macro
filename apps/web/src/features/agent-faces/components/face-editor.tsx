@@ -185,7 +185,7 @@ function PartRow(props: {
           type="button"
           aria-label={t('agentFaces.anyPart', { part: label() })}
           aria-pressed={props.draft.face().pins[props.row.part] === undefined}
-          class="rounded-full border border-edge-muted px-2 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink touch:min-h-[44px]"
+          class="rounded-full border border-edge-muted px-2 text-xs text-ink-muted outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
           onClick={() => props.draft.unpin(props.row.part)}
         >
           {t('agentFaces.any')}
@@ -199,7 +199,7 @@ function PartRow(props: {
                 number: index() + 1,
               })}
               aria-pressed={current() === index()}
-              class="flex items-center justify-center rounded-full outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink touch:min-h-[44px] touch:min-w-[44px]"
+              class="flex items-center justify-center rounded-full outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px] touch:min-w-[44px]"
               onClick={() => props.draft.pin(props.row.part, index())}
             >
               <Show
