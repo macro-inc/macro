@@ -21,12 +21,21 @@ fn cache() -> MacroCache {
 /// A cache signed in as a fresh ACL user that may run every command but
 /// `refused`, and the user's name, to remove it with [`remove_user`].
 async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, String) {
+    let url = redis_url();
+    let address = url
+        .strip_prefix("redis://")
+        .expect("REDIS_URL must be a redis:// URL");
+    assert!(
+        !address.contains('@'),
+        "REDIS_URL must carry no credentials"
+    );
+    let user = fresh_code("acl");
+    let refusing = MacroCache::new(&format!("redis://{user}:unused@{address}"));
     let mut connection = cache
         .inner
         .get_multiplexed_async_connection()
         .await
         .unwrap();
-    let user = fresh_code("acl");
     let mut setuser = redis::cmd("ACL");
     setuser
         .arg("SETUSER")
@@ -39,16 +48,7 @@ async fn cache_refusing(cache: &MacroCache, refused: &[&str]) -> (MacroCache, St
         setuser.arg(format!("-{command}"));
     }
     setuser.query_async::<()>(&mut connection).await.unwrap();
-    let url = redis_url();
-    let address = url.strip_prefix("redis://").unwrap();
-    assert!(
-        !address.contains('@'),
-        "REDIS_URL must carry no credentials"
-    );
-    (
-        MacroCache::new(&format!("redis://{user}:unused@{address}")),
-        user,
-    )
+    (refusing, user)
 }
 
 /// Removes an ACL user from [`cache_refusing`] and returns the commands
