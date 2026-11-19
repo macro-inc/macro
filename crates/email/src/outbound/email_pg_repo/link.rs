@@ -155,6 +155,49 @@ pub(super) async fn inboxes_for_macro_id(
         .collect()
 }
 
+/// Which of `ids` `macro_id` owns or has delegated to it. Delegations are read
+/// by the asked links (`macro_user_links_link_idx`), never by the account,
+/// whose delegations can be many: the fence keeps the planner, which guesses
+/// an account has about one, from scanning them by primary key instead.
+#[tracing::instrument(err, skip(pool, macro_id, ids), fields(ids = ids.len()))]
+pub(super) async fn inbox_ids_among(
+    pool: &PgPool,
+    macro_id: MacroUserIdStr<'_>,
+    ids: &[Uuid],
+) -> Result<Vec<Uuid>, sqlx::Error> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let mut tx = pool.begin().await?;
+    // Each picked link's delegations are read whole, and a shared inbox can
+    // have many: a check that saves a routine must not hold a connection long.
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut *tx)
+        .await?;
+    let theirs = sqlx::query_scalar!(
+        r#"
+        SELECT el.id AS "id!"
+        FROM email_links el
+        WHERE el.id = ANY($2::uuid[]) AND el.macro_id = $1
+        UNION
+        SELECT delegated.link_id
+        FROM (
+            SELECT mul.link_id, mul.primary_macro_id
+            FROM macro_user_links mul
+            WHERE mul.link_id = ANY($2::uuid[])
+            OFFSET 0
+        ) delegated
+        WHERE delegated.primary_macro_id = $1
+        "#,
+        macro_id.as_ref(),
+        ids
+    )
+    .fetch_all(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(theirs)
+}
+
 /// Database representation of an initial mailbox backfill status.
 #[derive(Debug, Clone, Copy, sqlx::Type)]
 #[sqlx(type_name = "email_backfill_job_status", rename_all = "PascalCase")]
