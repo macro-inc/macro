@@ -557,6 +557,7 @@ jobs:
             - '.github/workflows/observability_image.yml'
           observability_cluster:
             - 'infra/k8s/observability/cluster/**'
+            - 'infra/stacks/observability/nixos/backend-config.nix'
             - '.github/workflows/observability_cluster.yml'
           macrod_update:
             - 'crates/coding_agent_worker/**'

@@ -22,7 +22,10 @@ modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──
 | `external-secrets` | `external-secrets` | External Secrets Operator and the `secrets-manager` ClusterSecretStore over the Secrets Manager secret `observability/prod`. Only cluster admins can create stores (namespace `edit` and `admin` can't), since a store without credentials reads with the operator's. |
 | `storage` | `kube-system` | The default `gp3` StorageClass (EBS CSI, encrypted, expandable). |
 | `observability-namespace` | `observability` | The namespace the backends and Grafana run in, default-deny NetworkPolicies and the policies they share. |
-| `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Collects and drops until the backends land. |
+| `alloy-node` | `alloy` | One Alloy per node for the cluster's own node, kubelet, cAdvisor and pod-log telemetry. Sends to Mimir and Loki. |
+| `loki` | `observability` | Loki, three single-binary replicas, logs in S3. |
+| `tempo` | `observability` | Tempo (tempo-distributed), three ingesters, traces in S3; its metrics generator writes span metrics and service graphs to Mimir. |
+| `mimir` | `observability` | Mimir, three monolithic replicas, metrics in S3, in place of the host's Prometheus. |
 
 Charts are pinned in `charts/<repo>/<chart>/default.nix` (version and hash).
 
@@ -35,7 +38,7 @@ Run from this directory.
 | `nix run .#render` | Renders the modules into `manifests/prod/`. Commit the result with the change. |
 | `nix run .#check` | Fails when `manifests/prod/` differs from a fresh render, then validates. CI runs this (`observability_cluster.yml`). |
 | `nix run .#validate` | Validates the manifests strictly with kubeconform: core kinds against the Kubernetes schemas for the cluster's version, custom resources against the CRDs being installed. |
-| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and all must be healthy except `aws-load-balancer-controller` and `external-secrets`, which need AWS (VPC lookup, the ClusterSecretStore). Pass `--delete` to remove the cluster afterwards. |
+| `nix run .#kind-smoke` | Bootstraps the pushed branch onto a throwaway kind cluster and waits for the applications. Every application must sync and all must be healthy except the ones that need AWS: `aws-load-balancer-controller` (VPC lookup), `external-secrets` (the ClusterSecretStore), and `loki`, `tempo` and `mimir` (gp3 volumes and S3). Pass `--delete` to remove the cluster afterwards. |
 | `nix run .#bootstrap -- --context <ctx>` | The one-time bootstrap below. |
 
 ## Bootstrap (once, after the cluster exists)
@@ -97,11 +100,51 @@ The repository is public, so Argo CD clones it over HTTPS without a deploy key
   | `kube-system` | `aws-load-balancer-controller` | the controller's IAM policy |
   | `kube-system` | `ebs-csi-controller-sa` | EBS CSI |
   | `external-secrets` | `external-secrets` | read `observability/prod` |
-  | `observability` | `loki`, `tempo`, `mimir`, `grafana` | their buckets, later PRs |
+  | `observability` | `loki`, `tempo`, `mimir` | read and write their own bucket (below) |
+  | `observability` | `grafana` | later PRs |
+
+## Backends
+
+Loki, Tempo and Mimir (`modules/backends/`) each keep three copies of recent
+data (replication 3, quorum 2), one replica per zone, and older data in their
+own S3 bucket, so a rollout, a drained node or a lost zone loses neither
+writes nor queries. Two parts keep one copy: Tempo's metrics generators and
+Loki's pattern ingester each own a share of the series or streams, so while a
+replica is down its share of span metrics, service graphs and log patterns
+is missing. Each pod keeps its WAL on a gp3 volume.
+
+| Backend | Write | Query | Bucket |
+| --- | --- | --- | --- |
+| Loki | `loki:3100` `/loki/api/v1/push`, OTLP `/otlp` | `loki:3100` | `macro-observability-k8s-loki` |
+| Tempo | `tempo-distributor` OTLP gRPC `:4317`, HTTP `:4318` | `tempo-query-frontend:3200` | `macro-observability-k8s-tempo` |
+| Mimir | `mimir:8080` remote write `/api/v1/push`, OTLP `/otlp` | `mimir:8080/prometheus` | `macro-observability-k8s-mimir` |
+
+Full URLs are in `modules/backends/endpoints.nix`; other modules import them
+from there. No tenant headers: Loki runs without auth (tenant `fake`), Tempo
+and Mimir without multitenancy.
+
+Retention (logs 30 days, traces 7, metrics 30), limits and features (pattern
+ingestion, level detection, span metrics, service graphs) come from the
+single host's `infra/stacks/observability/nixos/backend-config.nix`, so the
+two stay the same while both run; CI re-checks the render when it changes.
+
+- **Loki** runs the chart's monolithic mode: every replica runs every
+  component.
+- **Tempo** uses tempo-distributed 2.26.2 (Tempo 2.10), the last chart with
+  the classic ingesters; later charts run Tempo 3, whose write path needs
+  Kafka.
+- **Mimir** is a hand-written StatefulSet with `-target=all`, because the
+  mimir-distributed chart has no monolithic mode. It takes Prometheus remote
+  write at `/api/v1/push` (Prometheus took it at `/api/v1/write`) and serves
+  the Prometheus API under `/prometheus`.
+
+The node Alloy sends its metrics to Mimir and its logs to Loki, and scrapes
+the backends' own `/metrics`: `macro.alloyNode`, set in
+`modules/backends/default.nix`.
 
 ## Adding a component
 
-Loki, Tempo, Mimir, Grafana, ingest and the edge each come as one module under
+Grafana, ingest and the edge each come as one module under
 `modules/` imported from `modules/default.nix`, as their own Application in the
 `observability` namespace. Each one:
 
@@ -113,8 +156,9 @@ Loki, Tempo, Mimir, Grafana, ingest and the edge each come as one module under
   ClusterSecretStore (`config.macro.cluster.secretStore`);
 - uses a service account named in the table above, so Pod Identity applies.
 
-The metrics and logs backends also point the node Alloy at themselves through
-`macro.alloyNode` (`modules/platform/alloy-node.nix` shows how).
+Their pods reach the backends at the URLs in `modules/backends/endpoints.nix`;
+label writers `observability.macro.com/telemetry-write: "true"` and readers
+`observability.macro.com/telemetry-read: "true"` (`clientLabels` there).
 
 ## Why it's built this way
 

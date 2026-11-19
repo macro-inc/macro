@@ -1,6 +1,6 @@
 # Bootstrap Argo CD on a throwaway kind cluster from this branch (pushed: Argo
 # CD reads it from GitHub) and wait until every application is synced and all
-# but the two that need AWS are healthy.
+# but the ones that need AWS are healthy.
 #
 #   nix run .#kind-smoke [-- --revision <branch>] [--delete]
 name=observability-smoke
@@ -37,10 +37,11 @@ for app in $(kubectl --context "$context" -n argocd get applications -o name); d
     -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
 done
 
-# Every application must sync this commit. Without AWS two can't become
-# healthy: the load balancer controller can't look up its VPC, and the
-# ClusterSecretStore can't authenticate.
-expected_unhealthy="aws-load-balancer-controller external-secrets"
+# Every application must sync this commit. Without AWS some can't become
+# healthy: the load balancer controller can't look up its VPC, the
+# ClusterSecretStore can't authenticate, and Loki, Tempo and Mimir wait for
+# gp3 volumes (EBS CSI) and S3.
+expected_unhealthy="aws-load-balancer-controller external-secrets loki tempo mimir"
 deadline=$((SECONDS + 1200))
 while :; do
   table=$(kubectl --context "$context" -n argocd get applications \

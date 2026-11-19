@@ -13,9 +13,11 @@ use crate::workflows::{runners, steps};
 
 const CLUSTER_DIR: &str = "infra/k8s/observability/cluster";
 
-/// The nixidy flake, its modules and its rendered manifests, plus this workflow.
+/// The nixidy flake, its modules and its rendered manifests, the single
+/// host's backend settings the backends import, plus this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("infra/k8s/observability/cluster/**"),
+    xtask_paths::repo_glob!("infra/stacks/observability/nixos/backend-config.nix"),
     xtask_paths::repo_glob!(".github/workflows/observability_cluster.yml"),
 ];
 

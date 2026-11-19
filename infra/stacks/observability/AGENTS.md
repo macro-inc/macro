@@ -79,6 +79,9 @@ then Biome on changed `.ts`.
 - Changes ship only through the Deploy Observability workflow, which replaces the
   host and takes Grafana, Loki, Tempo and GoAlert down for several minutes. Never
   run it, `pulumi up` or publish an image without explicit permission.
+- `nixos/backend-config.nix` also sets the EKS cluster's Loki, Tempo and Mimir
+  (`infra/k8s/observability/cluster/modules/backends/`). After changing it, run
+  `nix run .#render` in `infra/k8s/observability/cluster` and commit the result too.
 - A plan that changes anything besides the instance, its attachments and its
   alarms is refused by the workflow and needs a reviewed manual `pulumi up`.
 - `pulumi preview` fails until an AMI is tagged for this checkout's image source;

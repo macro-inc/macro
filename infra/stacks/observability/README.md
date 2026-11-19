@@ -240,7 +240,8 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/grafana-provisioning/`: datasources, dashboards, alert rules, contact
   points and routing as plain Nix data, shared with the cluster (see
   [Provisioned dashboards and alerts](#provisioned-dashboards-and-alerts)).
-- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings.
+- `nixos/backend-config.nix`: Loki, Tempo and Prometheus settings, which the
+  EKS cluster's backends also use (`infra/k8s/observability/cluster`).
 - `nixos/ingest.alloy`: unprivileged OTLP receiver and export pipeline.
 - `nixos/host-telemetry.nix` and `nixos/host.alloy`: host metrics and journal logs.
 - `nixos/cloudwatch.nix`: independent disk and memory health metrics.

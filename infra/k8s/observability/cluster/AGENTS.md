@@ -13,6 +13,7 @@ The [README](README.md) has the application list, bootstrap and contract with
 - `modules/cluster.nix`: cluster facts (`macro.cluster`) and the defaults every Application gets.
 - `modules/platform/observability-namespace.nix`: the default-deny pattern new components follow.
 - `env/prod.nix`: the Git target and prod values.
+- `modules/backends/endpoints.nix`: how other modules reach Loki, Tempo and Mimir.
 
 ## Scope
 
@@ -29,7 +30,11 @@ The [README](README.md) has the application list, bootstrap and contract with
 - Add a component: a module imported from `modules/default.nix`, as its own
   Application in `observability`, with its own NetworkPolicies (README,
   "Adding a component").
-- Route the node Alloy's telemetry: `macro.alloyNode` in `modules/platform/alloy-node.nix`.
+- Route the node Alloy's telemetry: `macro.alloyNode`, set in `modules/backends/default.nix`
+  (options in `modules/platform/alloy-node.nix`).
+- Reach a backend from a new component: import `modules/backends/endpoints.nix` and
+  label the pods with its `clientLabels` (`write` or `read`); the backends' policies
+  admit nothing else.
 
 ## Checks
 
@@ -54,6 +59,14 @@ The [README](README.md) has the application list, bootstrap and contract with
   Helm renders and kubeconform validates for it.
 - CI checks the render against `main` as of the run. If another change to this
   directory merges first, re-render on the new `main` before merging.
+- The backends take retention, limits and features from the single host's
+  `infra/stacks/observability/nixos/backend-config.nix`: a change there changes this
+  render too, so re-render and commit both.
+- Backend replicas spread one per zone with `DoNotSchedule`, and there is one node
+  per zone: a replica whose node is gone stays Pending until its zone has a node
+  again, rather than doubling up in another zone (its gp3 volume is zonal anyway).
+- Mimir is hand-written (`modules/backends/mimir.nix`), not a chart: bump its image
+  there, and its push path is `/api/v1/push`, not Prometheus' `/api/v1/write`.
 - Argo CD syncs with server-side apply; ignore a field (`ignoreDifferences`) only
   after seeing it drift on a cluster.
 
