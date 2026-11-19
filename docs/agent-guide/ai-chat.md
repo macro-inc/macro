@@ -992,7 +992,12 @@ the draft: the review lists what was created, from what the session named and
 from its recorded activity, under "Created for this routine" or "Created, not
 used by this routine" (both stay if the routine isn't saved), a code step that still fails stays in it with its errors listed, and
 the routine can't be created until it is drafted again or the step is
-removed. Saving checks every id again. A request the gateway
+removed. Saving checks every id again. The draft also picks the routine's
+icon and colour from Macro's icons, which the new routine's page draws in its
+header and top bar (else the first trigger's icon) and creating it saves; a
+pick naming an icon Macro doesn't have is dropped. An agent that later
+changes what the routine does may pick again, but never replaces a look the
+owner chose with **Change icon**. A request the gateway
 refuses as too large, a timeout and the AI usage limit each show their own
 message in the dialog instead of "Couldn’t draft that routine".
 

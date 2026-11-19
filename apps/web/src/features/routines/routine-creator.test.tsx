@@ -1064,6 +1064,51 @@ describe('new routine', () => {
     await addDocumentEvent();
     expect(icons()).toEqual([drawn(FileTextIcon), drawn(FileTextIcon)]);
   });
+
+  it('shows the look AI picked in the header and the top bar, and creates the routine with it', async () => {
+    const look = {
+      icon: { kind: 'macro', name: 'bug' },
+      color: 'red',
+    } as const;
+    host.create.mockImplementation(async (body) => created(body));
+    startRoutineDraft({
+      ...newRoutineDraft(undefined, {
+        defaultModel: 'claude-sonnet-4-6',
+        codeSteps: false,
+      }),
+      name: 'Bug triage',
+      appearance: look,
+    });
+    await mount();
+    const clock = render(() => <ClockIcon class="size-full" />).container
+      .innerHTML;
+    /** The glyph the page's header draws for the routine, and the top bar's. */
+    const icons = () => {
+      const header = screen.getByLabelText('Routine name').closest('header');
+      const crumb = within(screen.getByLabelText('Routine location'))
+        .getByText('Bug triage')
+        .closest('div');
+      return [header, crumb].map((place) => place?.querySelector('svg'));
+    };
+    await waitFor(() => {
+      for (const glyph of icons()) {
+        expect(glyph?.outerHTML).toBeTruthy();
+        expect(glyph?.outerHTML).not.toBe(clock);
+      }
+    });
+    const [page, top] = icons();
+    expect(top?.outerHTML).toBe(page?.outerHTML);
+    for (const glyph of [page, top]) {
+      expect(
+        glyph?.closest<HTMLElement>('[data-slot="routine-icon"]')?.style.color
+      ).toBe('rgb(229, 72, 77)');
+    }
+    inputPrompt();
+    await addScheduled();
+    create();
+    await waitFor(() => expect(host.create).toHaveBeenCalledOnce());
+    expect(host.create.mock.calls[0][0]).toMatchObject({ appearance: look });
+  });
 });
 
 describe('new routine drafting in the background', () => {

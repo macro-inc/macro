@@ -21019,8 +21019,10 @@ dependencies = [
 name = "system_skills"
 version = "0.1.0"
 dependencies = [
+ "model-entity",
  "prompt",
  "routine_program",
+ "serde_json",
  "uuid",
  "workspace-hack",
 ]
