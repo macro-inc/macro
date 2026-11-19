@@ -602,14 +602,11 @@ pub(super) fn settle(
                 return if valid {
                     (ExecutionStatus::Succeeded, Some(value), None)
                 } else {
-                    (
-                        ExecutionStatus::Failed,
-                        Some(value),
-                        Some(
-                            "main must return exactly {data: JSON}; reviews are unavailable here."
-                                .into(),
-                        ),
-                    )
+                    let error = format!(
+                        "{}main must return exactly {{data: JSON}}; reviews are unavailable here.",
+                        unexpected_keys(&value, &["data"])
+                    );
+                    (ExecutionStatus::Failed, Some(value), Some(error))
                 };
             }
             // Omitted reviews default to empty, but only on a result that is
@@ -636,13 +633,11 @@ pub(super) fn settle(
             if valid {
                 (ExecutionStatus::Succeeded, Some(value), None)
             } else {
-                (
-                    ExecutionStatus::Failed,
-                    Some(value),
-                    Some(format!(
-                        "main must return {{data: JSON}}; optional reviews must be an array of {{kind, id}} references; optional images must be an array of at most {MAX_RESULT_IMAGES} SDK images, such as await canvas.render()."
-                    )),
-                )
+                let error = format!(
+                    "{}main must return {{data: JSON}}; optional reviews must be an array of {{kind, id}} references; optional images must be an array of at most {MAX_RESULT_IMAGES} SDK images, such as await canvas.render().",
+                    unexpected_keys(&value, &["data", "reviews", "images"])
+                );
+                (ExecutionStatus::Failed, Some(value), Some(error))
             }
         }
         Outcome::Failed { error } => (ExecutionStatus::Failed, None, Some(error.message)),
@@ -656,6 +651,27 @@ pub(super) fn settle(
             None,
             Some("Execution timed out. Unfinished calls may have taken effect.".into()),
         ),
+    }
+}
+
+/// Names the top-level keys a result may not have, so a program that returned
+/// `{data, count}` learns to move `count` into `data` instead of guessing.
+fn unexpected_keys(value: &serde_json::Value, allowed: &[&str]) -> String {
+    let Some(object) = value.as_object() else {
+        return String::new();
+    };
+    let extra: Vec<String> = object
+        .keys()
+        .filter(|key| !allowed.contains(&key.as_str()))
+        .map(|key| format!("`{key}`"))
+        .collect();
+    if extra.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "The result has top-level {} beside data; put everything you return inside data. ",
+            extra.join(", ")
+        )
     }
 }
 

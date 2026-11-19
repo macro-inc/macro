@@ -12,10 +12,25 @@ const decoder = new TextDecoder();
 const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
+const keysOf = Object.keys;
+const call = Function.prototype.call.bind(Function.prototype.call);
+const {isWellFormed, toWellFormed} = String.prototype;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
+// JSON.stringify writes a lone UTF-16 surrogate, such as a string sliced in
+// the middle of an emoji, as an escape like "\ud83d": valid JSON text but not
+// Unicode, so the host rejects the whole frame. Send U+FFFD in its place.
+function wellFormed(_key, value) {
+  if (typeof value === "string") return call(toWellFormed, value);
+  if (value === null || typeof value !== "object" || isArray(value)) return value;
+  const keys = keysOf(value);
+  if (keys.every(key => call(isWellFormed, key))) return value;
+  const fixed = {};
+  for (const key of keys) fixed[call(toWellFormed, key)] = value[key];
+  return fixed;
+}
 function emit(frame) {
-  const bytes = encoder.encode(`${stringify(frame)}\n`);
+  const bytes = encoder.encode(`${stringify(frame, wellFormed)}\n`);
   let offset = 0;
   while (offset < bytes.length) offset += write(bytes.subarray(offset));
 }

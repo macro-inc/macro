@@ -432,6 +432,29 @@ async fn optional_reviews_default_to_empty_without_accepting_malformed_results()
     }
 }
 
+#[test]
+fn a_result_with_extra_top_level_keys_names_them() {
+    let succeeded = |value| Outcome::Succeeded { value };
+    let (status, _, error) = settle(
+        succeeded(json!({"data": [], "keys": "none"})),
+        Reviews::Allowed,
+    );
+    assert_eq!(status, ExecutionStatus::Failed);
+    let error = error.unwrap();
+    assert!(
+        error.starts_with("The result has top-level `keys` beside data;"),
+        "{error}"
+    );
+    let (_, _, error) = settle(succeeded(json!({"data": 1, "n": 2})), Reviews::Rejected);
+    assert!(error.unwrap().contains("top-level `n` beside data"));
+    // A malformed allowed key gets only the general contract.
+    let (_, _, error) = settle(
+        succeeded(json!({"data": 1, "reviews": null})),
+        Reviews::Allowed,
+    );
+    assert!(error.unwrap().starts_with("main must return {data: JSON}"));
+}
+
 struct ActivityExecutor;
 #[async_trait]
 impl ProgramExecutor for ActivityExecutor {

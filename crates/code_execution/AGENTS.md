@@ -77,6 +77,11 @@ with an outline and preview, keeping `reviews`; the frame limit stays the backst
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
 
+Every frame the bootstrap emits is made well-formed first: a lone UTF-16
+surrogate (a string sliced mid-emoji) becomes U+FFFD, in values and keys,
+because serde_json rejects the `\udXXX` escape `JSON.stringify` writes for it
+and the whole run would fail as `invalid child frame`.
+
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
 and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
