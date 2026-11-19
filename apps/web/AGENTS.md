@@ -1507,6 +1507,23 @@ the existing error toast. Keep the startup cover fallback in the same owner,
 and let it defer to a pending tap's deadline. The deadline requires responsive
 JavaScript and IPC; it cannot recover a frozen WebContent process.
 
+Open sheets and touch dialogs close when the app navigates, as a scrim tap
+closes them (`createCloseOnNavigation` in `MobileDrawer` and `Dialog`): when
+the active pane shows another view (a link, an agent, the dock, Back), and
+before a notification tap navigates, since it may land on the page already
+shown. A search change (filters) or a pane adopting its content's real id
+keeps the view, so those sheets stay open; so does a sheet the destination
+opens on arrival, and an owner that refuses or confirms a close still does.
+A detail opened inside the same view (a tablet's inline preview) is not a new
+view, so its list's sheets stay. Phones keep the pane behind mounted for
+swipe-back, so without this its sheets stayed over the new page. Opt out with
+`keepOpenOnNavigation` only where dismissing does something the user didn't
+choose: the incoming-share sheet (discards the shared files) and the push and
+iPad prompts (record the prompt as dismissed). The
+backend-free phone and tablet regression drives the real pane stack, router and
+notification tap path with simulated native IPC:
+`bunx playwright test --config src/components/app/mobile/navigation-browser-test/playwright.config.ts`.
+
 The frontend cover deadline has a backend-free phone browser regression:
 `bunx playwright test --config src/lib/tauri/browser-test/playwright.config.ts`.
 It uses the real navigation intent and push API with simulated native IPC;
