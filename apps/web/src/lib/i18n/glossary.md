@@ -41,9 +41,18 @@ Address: formal Sie.
 | notifications | Benachrichtigungen |
 | done | Erledigt |
 | mark as read | Als gelesen markieren |
-| snooze | Benachrichtigungen pausieren… |
+| snooze | Benachrichtigungen pausieren |
 | archive | Archivieren |
 | settings | Einstellungen |
+| computer (Macro computer) | Neuer Macro-Computer |
+| machine (runs agents) | Ihre Rechner |
+| session (agent) | Sitzung starten |
+| routine | Alle Routinen |
+| saved view | Neue gespeicherte Ansicht |
+| call | Anruf verlassen |
+| contact (CRM) | Kontakt |
+| company (CRM) | Unternehmen hinzufügen |
+| thread (email) | Ausgeschlossene Threads |
 
 ## French (`fr`)
 
