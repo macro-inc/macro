@@ -63,7 +63,9 @@ that opened under the finger. That takes the browser's own click, which
 Chromium sends only for a finger that lifts within its tap time, so the test
 turns the sheet's slide off and lifts at once. It also draws a connector and
 checks that a tap beside its end leaves it as it was, and that a drag from
-there moves the end.
+there moves the end. A pen is sent over CDP as a mouse of pointer type pen: one
+test draws with it and checks that a finger under the same tool then pans, until
+Draw with pen only is switched off in the zoom sheet.
 
 ![Two editors and a viewer sharing a scene and Alice's cursor](multiplayer.png)
 
