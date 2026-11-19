@@ -462,6 +462,16 @@ and depopulation serialization without holding up mailbox sync for the history
 scan. `crm.email_interaction_scan` and `crm.email_authority_recheck` distinguish the
 two phases under `crm.email_eligibility`.
 
+The scan also returns the two messages and matched contacts that supply its
+dates and direction. After taking the authority guards, population validates
+those facts with primary-key probes: mailbox/thread, dates, direction, draft and
+provider-missing state, and sender/recipient address. Changed or deleted evidence
+returns `Contended`, which the worker defers as `BackfillWritesBusy`; the retry
+rescans without a mailbox lock. `crm.email_history_witnesses` measures this bounded
+check. It does not rescan a thread or freeze all mailbox history: messages added
+or changed outside these witnesses retain the existing asynchronous population
+and cleanup behavior.
+
 Thread-exclusion controls and API writes are gated by the remote
 `enable-crm-thread-exclusions` flag, off by default in every environment. The
 web registry has no dev default or local override; the CRM domain independently

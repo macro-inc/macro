@@ -235,7 +235,11 @@ tools/HTTP/GraphQL surfaces over them.
   the history scan: overlapping populations can starve an exclusive sync writer.
   Recheck live mailbox, membership and captured consent generation after the scan
   in `READ COMMITTED`; keep the privacy/contact guards across both phases so
-  exclusions and teardown cannot invalidate its results. Never run the mailbox
+  exclusions and teardown cannot invalidate its results. Check the two message
+  witnesses and matched contacts by primary key after authority: changed evidence
+  returns `Contended` for an unlocked retry, never a history scan under the row
+  guard. This neither re-evaluates a witness thread's privacy rules nor freezes
+  other mailbox history. Never run the mailbox
   scan under a domain lock: a team backfill queues every population of the domain
   behind it. Population transactions set a five-second `lock_timeout` and
   return `CrmError::Contended` so their job is deferred, not held. Privacy changes
