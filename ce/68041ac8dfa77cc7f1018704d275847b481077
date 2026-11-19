@@ -1,0 +1,34 @@
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_63bec515a8b083::t_80984ca62fe89a 149-151
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_63bec515a8b083::t_7c617f5940dfc9 44-47
+apps/web/src/features/agent-permissions/components/permissions-notes.tsx
+  s_63bec515a8b083::t_70af1b49de350f 12-13
+apps/web/src/features/agent-permissions/views/agent-permissions-page.test.tsx
+  s_63bec515a8b083::t_e863c2bcfb21b2 84,87-89,93
+apps/web/src/features/agent-permissions/views/agent-permissions-page.tsx
+  s_63bec515a8b083::t_fa46740b24e6b1 55
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_63bec515a8b083::t_3ca514fbcc1f75 108,114,117-123
+  s_63bec515a8b083::t_a51dba3a7ec7f8 93-97
+apps/web/src/lib/i18n/locales/en/agent-permissions.ts
+  s_63bec515a8b083::t_8972e89fe08c1a 5,13,15,105,110
+docs/agent-guide/settings.md
+  s_63bec515a8b083::t_d972a3dbf8ecb0 1161-1164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "ce68041ac8dfa77cc7f1018704d275847b481077",
+  "prompts": {},
+  "sessions": {
+    "s_63bec515a8b083": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "78666780-1362-4198-8dd5-b840ff01c998",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
