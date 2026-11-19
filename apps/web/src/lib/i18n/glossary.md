@@ -560,9 +560,18 @@ Address: आप; common English product terms transliterated.
 | notifications | सूचनाएं |
 | done | पूरे हुए |
 | mark as read | पढ़ा गया मार्क करें |
-| snooze | सूचनाएं स्नूज़ करें… |
+| snooze | सूचनाएं स्नूज़ करें |
 | archive | संग्रहित करें |
 | settings | सेटिंग |
+| computer (Macro computer) | नया Macro कंप्यूटर |
+| machine (runs agents) | आपकी मशीनें |
+| session (agent) | सेशन शुरू करें |
+| routine | सभी रूटीन |
+| saved view | नया सेव किया गया व्यू |
+| call | कॉल शुरू करें |
+| contact (CRM) | संपर्क की कंपनी बदलें |
+| company (CRM) | कंपनी जोड़ें |
+| thread (email) | थ्रेड को CRM से बाहर रखें |
 
 ## Indonesian (`id`)
 
