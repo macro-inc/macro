@@ -49,8 +49,10 @@ function fixture(
     stallReply,
   }: { failReply?: boolean; earlierRun?: boolean; stallReply?: PromiseWithResolvers<void> } = {},
 ) {
+  const replies: unknown[] = [];
   const db = (async (parts: TemplateStringsArray, ...args: unknown[]) => {
     if (parts.join('').includes('from agent_session_log')) {
+      replies.push(args[0]);
       if (failReply && args[0] === 'failed-copy') throw new Error('reply read failed');
       if (stallReply && args[0] === 'stalled-copy') {
         stallReply.resolve();
@@ -86,6 +88,7 @@ function fixture(
   return {
     fetch,
     sleep,
+    replies,
     run: (testCase: Case = item) =>
       runCheck(
         stack,
@@ -122,6 +125,40 @@ test('a stalled copy reply read ends at the copy deadline', async () => {
   expect((await result)?.effects.copies?.[0]?.runs).toEqual([
     { isSuccess: true, result: { resource: { type: 'agent', id: 'stalled-copy' } } },
   ]);
+});
+
+test('a copy run settling past its deadline ends without reading its reply', async () => {
+  const deadline = new AbortController();
+  const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  const settling = Promise.withResolvers<void>();
+  const check = fixture([copy('slow-copy')]);
+  // The copy's settle, after its deadline started, never ends by itself.
+  check.sleep.mockImplementation((ms) => {
+    if (ms !== 5_000 || !timeout.mock.calls.length) return Promise.resolve();
+    settling.resolve();
+    return new Promise(() => undefined);
+  });
+  const result = check.run(copyCase);
+  await settling.promise;
+  deadline.abort();
+  expect((await result)?.effects.copies?.[0]?.runs).toEqual([
+    { isSuccess: true, result: { resource: { type: 'agent', id: 'slow-copy' } } },
+  ]);
+  expect(check.replies).toEqual([]);
+});
+
+test('a deadline passed while a copy run settles starts no reply read', async () => {
+  const deadline = new AbortController();
+  const timeout = spyOn(AbortSignal, 'timeout').mockReturnValue(deadline.signal);
+  const check = fixture([copy('late-copy')]);
+  check.sleep.mockImplementation(async (ms) => {
+    if (ms === 5_000 && timeout.mock.calls.length) deadline.abort();
+  });
+  const result = await check.run(copyCase);
+  expect(result?.effects.copies?.[0]?.runs).toEqual([
+    { isSuccess: true, result: { resource: { type: 'agent', id: 'late-copy' } } },
+  ]);
+  expect(check.replies).toEqual([]);
 });
 
 test('copy completion waits for the run started by execute', async () => {

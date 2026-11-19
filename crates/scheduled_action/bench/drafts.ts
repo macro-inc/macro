@@ -86,6 +86,9 @@ function glossary(ids: Record<string, string>) {
   return names;
 }
 
+/** How long closing the eval's database waits for reads still running. */
+const CLOSE_TIMEOUT_S = 5;
+
 type Session = {
   at: Stack;
   db: SQL;
@@ -385,7 +388,8 @@ async function run(args: string[]) {
     }
   }
   console.log(`wrote ${out}`);
-  await session.db.close();
+  // A copy's reply read left behind at its deadline can't hold the eval open.
+  await session.db.close({ timeout: CLOSE_TIMEOUT_S });
 }
 
 /**
@@ -465,7 +469,7 @@ async function ab(args: string[]) {
             writeFileSync(files[index], `${JSON.stringify(all[index], null, 1)}\n`);
             console.log(line(result));
           }
-          await session.db.close();
+          await session.db.close({ timeout: CLOSE_TIMEOUT_S });
         });
       }
     }
