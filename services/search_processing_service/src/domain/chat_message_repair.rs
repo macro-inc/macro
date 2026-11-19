@@ -95,7 +95,7 @@ pub trait ChatMessageIndex: Send + Sync + 'static {
         &self,
         after_message_id: Option<&str>,
         limit: PageSize,
-    ) -> impl Future<Output = Result<Vec<IndexedChatMessage>, Report>> + Send;
+    ) -> impl Future<Output = Result<Vec<IndexedChatMessage>, MessageIndexError>> + Send;
 
     /// Delete these message documents, leaving their chats.
     fn delete(
@@ -247,9 +247,18 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
             .index
             .page_after(after_message_id, page_size)
             .await
-            .map_err(|e| {
-                span.record("outcome", "index_read_failed");
-                BackfillError::Index(anyhow::anyhow!("{e:#}"))
+            .map_err(|e| match e {
+                MessageIndexError::Refused(reason) => {
+                    span.record("outcome", "refused");
+                    BackfillError::Stopped {
+                        reason,
+                        cursor: after_message_id.map(str::to_owned),
+                    }
+                }
+                e => {
+                    span.record("outcome", "index_read_failed");
+                    BackfillError::Index(anyhow::anyhow!("{e}"))
+                }
             })?;
         let Some(last) = page.last() else {
             span.record("outcome", "exhausted");

@@ -151,3 +151,23 @@ async fn a_failed_item_stops_the_job_and_a_refused_one_is_a_refusal() {
         "{refused:?}"
     );
 }
+
+#[tokio::test]
+async fn a_refused_page_read_is_a_refusal_that_stops_the_job() {
+    let index = OpenSearchChatMessages(
+        opensearch_answering(
+            429,
+            r#"{"error":{"type":"es_rejected_execution_exception","reason":"rejected execution"},"status":429}"#,
+        )
+        .await,
+    );
+
+    let result = index
+        .page_after(None, PageSize::try_from(500).unwrap())
+        .await;
+
+    assert!(
+        matches!(result, Err(MessageIndexError::Refused(_))),
+        "{result:?}"
+    );
+}

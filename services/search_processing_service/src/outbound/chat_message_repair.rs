@@ -24,12 +24,18 @@ impl ChatMessageIndex for OpenSearchChatMessages {
         &self,
         after_message_id: Option<&str>,
         limit: PageSize,
-    ) -> Result<Vec<IndexedChatMessage>, Report> {
+    ) -> Result<Vec<IndexedChatMessage>, MessageIndexError> {
         let page = self
             .0
             .chat_messages_after(after_message_id, limit.get())
             .await
-            .map_err(|error| Report::new(error).into_dynamic())?;
+            .map_err(|error| {
+                if error.refusal().is_some() {
+                    MessageIndexError::Refused(error.to_string())
+                } else {
+                    MessageIndexError::Internal(Report::new(error).into_dynamic())
+                }
+            })?;
         Ok(page
             .into_iter()
             .map(|message| IndexedChatMessage {

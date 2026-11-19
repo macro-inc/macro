@@ -19,6 +19,7 @@ struct FakeIndex {
     pages_after: Mutex<Vec<Option<String>>>,
     deletes: Mutex<Vec<Vec<IndexedChatMessage>>>,
     reply: Option<fn(usize) -> Result<MessageDelete, MessageIndexError>>,
+    refuse_reads: bool,
 }
 
 impl FakeIndex {
@@ -53,7 +54,12 @@ impl ChatMessageIndex for FakeIndex {
         &self,
         after_message_id: Option<&str>,
         limit: PageSize,
-    ) -> Result<Vec<IndexedChatMessage>, Report> {
+    ) -> Result<Vec<IndexedChatMessage>, MessageIndexError> {
+        if self.refuse_reads {
+            return Err(MessageIndexError::Refused(
+                "es_rejected_execution_exception".to_owned(),
+            ));
+        }
         self.pages_after
             .lock()
             .unwrap()
@@ -407,4 +413,30 @@ async fn a_failed_chat_lookup_does_not_stop_the_repair() {
 
     assert_eq!(repair.index.deletes().len(), 2);
     assert_eq!(progress.local_progress().updated, 2);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_refused_read_stops_the_job_at_the_cursor() {
+    let index = FakeIndex {
+        refuse_reads: true,
+        ..FakeIndex::holding(&INDEXED)
+    };
+    let repair = repair(index, rows(), rows());
+
+    let error = repair
+        .repair(
+            DeletedChatMessageRepairRequest {
+                after_message_id: Some("message-b".to_owned()),
+                ..request(false, 2)
+            },
+            Arc::new(JobProgress::detached()),
+            CancellationToken::new(),
+        )
+        .await
+        .unwrap_err();
+
+    let BackfillError::Stopped { cursor, .. } = error else {
+        panic!("expected a stop, got {error:?}");
+    };
+    assert_eq!(cursor.as_deref(), Some("message-b"));
 }

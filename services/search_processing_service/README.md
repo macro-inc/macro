@@ -334,7 +334,9 @@ of the page's deletes failed. A stopped page records nothing, so `cursor` is
 the page before it; resume a run with
 `{"dry_run": false, "after_message_id": "<cursor>"}`, which repeats that page
 (without `dry_run` the resume only counts). Documents the stopped page did
-delete then count as already gone, not in `updated`. A failed or cancelled job
+delete are not read again once the index has refreshed, so neither run's
+`missing` or `updated` counts them, and a resumed run's counters are not the
+total of both runs. A failed or cancelled job
 resumes the same way.
 
 ### Against dev (deployed service)
