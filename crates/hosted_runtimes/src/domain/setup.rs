@@ -57,8 +57,9 @@ pub struct PhaseTiming {
 /// Where an agent teammate's computer is in handing its agent over.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AgentProgress {
-    /// The agent hasn't reported online.
-    pub awaiting: bool,
+    /// The agent reported online: this event is its report. Giving up on a
+    /// start also stops the wait, but is no report.
+    pub reported_online: bool,
     /// The agent is being handed to macrod now.
     pub delivering: bool,
 }
@@ -151,7 +152,7 @@ impl SetupTimeline {
         }
         if let Some(delivered_at) = self.agent_delivered_at
             && self.agent_online_at.is_none()
-            && !agent.awaiting
+            && agent.reported_online
         {
             self.agent_online_at = Some(now);
             finished.push(PhaseTiming {

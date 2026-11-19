@@ -509,3 +509,63 @@ fn the_telemetry_settings_are_written_for_the_service_and_removed_without_an_int
     assert!(!path.exists());
     write_telemetry_env(&path, None).unwrap();
 }
+
+/// A failed write of the telemetry settings leaves the computer unenrolled,
+/// so the retry writes them instead of stopping at "already enrolled".
+#[tokio::test]
+async fn a_failed_telemetry_settings_write_is_retried() {
+    let directory = tempfile::tempdir().expect("temp dir");
+    let config = directory.path().join("macrod.toml");
+    // Already claimed, so enrolling needs no server.
+    std::fs::write(
+        &config,
+        r#"
+[macro]
+api_url = "http://127.0.0.1:9/agent-harness"
+storage_url = "http://127.0.0.1:9/dss"
+
+[harness]
+command = "claude-code-acp"
+
+[workspace]
+path = "/"
+
+[credentials]
+harness_id = "00000000-0000-0000-0000-0000000000a1"
+token = "mhns_claimed"
+pairing_id = "00000000-0000-0000-0000-00000000000a"
+"#,
+    )
+    .unwrap();
+    let source = directory.path().join("enrollment.json");
+    let mut enrollment: serde_json::Value = serde_json::from_str(ENROLLMENT_JSON).unwrap();
+    enrollment["deployment"]["telemetry_url"] = "https://intake.example.com/i/otlp/".into();
+    std::fs::write(&source, enrollment.to_string()).unwrap();
+    let marker = directory.path().join("var/lib/macrod/enrolled");
+    let settings = directory.path().join("var/lib/macrod/telemetry.env");
+    // A directory where the settings go makes their write fail.
+    std::fs::create_dir_all(&settings).unwrap();
+    let options = || EnrollOptions {
+        from: EnrollmentSource::File(source.clone()),
+        config: config.clone(),
+        workspace: directory.path().join("work"),
+        agent: "claude-code".to_owned(),
+        root: directory.path().to_owned(),
+    };
+
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap_err();
+    assert!(!marker.exists(), "enrollment was marked done");
+
+    std::fs::remove_dir(&settings).unwrap();
+    run_enroll_with_host(options(), &FakeHost::default(), |_| ())
+        .await
+        .unwrap();
+    assert!(marker.exists());
+    assert!(
+        std::fs::read_to_string(&settings)
+            .unwrap()
+            .contains("https://intake.example.com/i/otlp")
+    );
+}

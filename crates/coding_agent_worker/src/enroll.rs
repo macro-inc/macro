@@ -180,8 +180,10 @@ async fn run_enroll_with_host<Guard>(
     );
     hosted_runtimes::domain::telemetry::attach(&span, enrollment.traceparent.as_deref());
     async {
-        enroll(&options, host, &marker, &enrollment).await?;
-        write_telemetry_env(&telemetry_env, exporter.as_ref())
+        // Before the marker: once it is written a retry stops at "already
+        // enrolled", so failed settings would never be written.
+        write_telemetry_env(&telemetry_env, exporter.as_ref())?;
+        enroll(&options, host, &marker, &enrollment).await
     }
     .instrument(span.clone())
     .await

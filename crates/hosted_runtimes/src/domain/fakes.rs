@@ -471,7 +471,7 @@ impl ComputerRepo for FakeRepo {
             state.payment_progress(),
         );
         let agent = crate::domain::setup::AgentProgress {
-            awaiting: state.awaiting_agent,
+            reported_online: matches!(event, Event::AgentOnline),
             delivering: effects
                 .iter()
                 .any(|effect| matches!(effect, Effect::DeliverAgent)),
