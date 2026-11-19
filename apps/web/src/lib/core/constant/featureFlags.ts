@@ -744,7 +744,9 @@ export const enableUnifiedNotifications = defineFlag({
 
 // Navigation unread numbers, off in every environment until turned on. Each
 // number is what its view shows as unread (components/app/view-unread.ts); the
-// email e2e bundle turns them on to check them against the views.
+// email e2e bundle turns them on to check them against the views. Mail's
+// number runs the Important tab's unread query in every signed-in tab: turn
+// them on only where idx_email_threads_inbox_signal_unread is built.
 export const enableNavigationUnreadCounts = defineFlag({
   env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
   default: false,

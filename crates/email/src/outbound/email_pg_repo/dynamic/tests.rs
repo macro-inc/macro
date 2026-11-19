@@ -2088,3 +2088,313 @@ fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded
         );
     }
 }
+
+/// The Important tab's unread facet (the Mail view's Unread filter and the
+/// navigation's Mail number) must read only unread Important inbox threads.
+/// Here each of two inboxes holds three unread Important threads, its oldest,
+/// behind 20,000 others: without `idx_email_threads_inbox_signal_unread` each
+/// page walks both whole inboxes to find them.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn unread_important_page_reads_only_unread_important_threads(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use chrono::TimeZone;
+
+    let links = [
+        Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0031),
+        Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0032),
+    ];
+    let mut connection = pool.acquire().await?;
+    start_unread_plan_session(&mut connection).await?;
+    for (n, link) in links.iter().enumerate() {
+        insert_unread_plan_link(&mut connection, *link, n).await?;
+        // Even threads up to 19,997 are read Important mail, odd ones unread
+        // Other mail; 19,998 to 20,000 are the unread Important ones. The
+        // second inbox's threads are 30 seconds older than the first's.
+        sqlx::query!(
+            r#"INSERT INTO email_threads
+                   (id, provider_id, link_id, inbox_visible, is_signal, is_read, latest_inbound_message_ts)
+               SELECT md5($2 || i)::uuid, $2 || i, $1, TRUE,
+                      i % 2 = 0 OR i > 19997, i % 2 = 0 AND i <= 19997,
+                      '2026-02-01'::timestamptz - i * interval '1 minute' - $3 * interval '30 seconds'
+               FROM generate_series(1, 20000) i"#,
+            link,
+            unread_plan_prefix(n),
+            n as f64,
+        )
+        .execute(&mut *connection)
+        .await?;
+        insert_unread_plan_messages(&mut connection, *link, n, 19998, 20000).await?;
+    }
+    // Newest first: each thread of the first inbox, then its twin in the
+    // second.
+    let unread = sqlx::query_scalar!(
+        r#"SELECT md5('unread-plan-' || n || '-' || i)::uuid AS "id!"
+           FROM generate_series(19998, 20000) i, generate_series(0, 1) n
+           ORDER BY i, n"#
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    let cursor_timestamp = chrono::Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap()
+        - chrono::Duration::minutes(19998);
+    let pages = [
+        ("NULL, NULL, NULL".to_string(), unread.clone()),
+        (
+            format!(
+                "'{ts}', '{ts}', '{id}'",
+                ts = cursor_timestamp.to_rfc3339(),
+                id = unread[0]
+            ),
+            unread[1..].to_vec(),
+        ),
+    ];
+
+    // The first round runs on the statistics of an empty table, the second
+    // on fresh ones.
+    for fresh in [false, true] {
+        if fresh {
+            sqlx::raw_sql("ANALYZE email_threads")
+                .execute(&mut *connection)
+                .await?;
+        }
+        prepare_unread_important(&mut connection).await?;
+        for mode in ["force_custom_plan", "force_generic_plan"] {
+            sqlx::query!("SELECT set_config('plan_cache_mode', $1, false)", mode)
+                .fetch_one(&mut *connection)
+                .await?;
+            for (cursor, expected) in &pages {
+                let (ids, plan) = execute_unread_important(&mut connection, &links, cursor).await?;
+                assert_eq!(&ids, expected, "{fresh} {mode} {cursor}");
+                // Three rows per inbox. Each page also reads the messages,
+                // sender and inbox of at most six threads.
+                let touched = email_thread_rows_touched(&plan);
+                assert!(
+                    touched <= 10.0,
+                    "{fresh} {mode} {cursor}: touched {touched} thread rows: {plan}"
+                );
+                let buffers = plan_buffers(&plan);
+                assert!(
+                    buffers <= UNREAD_PLAN_SPARSE_BUFFERS,
+                    "{fresh} {mode} {cursor}: {buffers} buffers: {plan}"
+                );
+            }
+            let counts = sqlx::query!(
+                "SELECT generic_plans, custom_plans FROM pg_prepared_statements \
+                 WHERE name = 'unread_important'"
+            )
+            .fetch_one(&mut *connection)
+            .await?;
+            if mode == "force_generic_plan" {
+                assert!(counts.generic_plans.unwrap() >= 2);
+            } else {
+                assert!(counts.custom_plans.unwrap() >= 2);
+                assert_eq!(counts.generic_plans, Some(0));
+            }
+        }
+        sqlx::raw_sql("DEALLOCATE unread_important")
+            .execute(&mut *connection)
+            .await?;
+    }
+    Ok(())
+}
+
+/// A further page of the same facet starts at its cursor: with 1,000 unread
+/// Important threads, a page from the middle reads only the rows it returns.
+/// Production runs it unprepared (`persistent(false)`), so it is planned with
+/// the cursor's values; a generic plan would filter the cursor instead.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn unread_important_continuation_starts_at_its_cursor(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use chrono::TimeZone;
+
+    let link = Uuid::from_u128(0x0000_0000_0000_4000_8000_0000_0000_0033);
+    let mut connection = pool.acquire().await?;
+    start_unread_plan_session(&mut connection).await?;
+    insert_unread_plan_link(&mut connection, link, 0).await?;
+    sqlx::query!(
+        r#"INSERT INTO email_threads
+               (id, provider_id, link_id, inbox_visible, is_signal, is_read, latest_inbound_message_ts)
+           SELECT md5($2 || i)::uuid, $2 || i, $1, TRUE, TRUE, FALSE,
+                  '2026-02-01'::timestamptz - i * interval '1 minute'
+           FROM generate_series(1, 1000) i"#,
+        link,
+        unread_plan_prefix(0),
+    )
+    .execute(&mut *connection)
+    .await?;
+    insert_unread_plan_messages(&mut connection, link, 0, 1, 1000).await?;
+    sqlx::raw_sql("ANALYZE email_threads")
+        .execute(&mut *connection)
+        .await?;
+    let expected = sqlx::query_scalar!(
+        r#"SELECT md5('unread-plan-0-' || i)::uuid AS "id!"
+           FROM generate_series(501, 601) i ORDER BY i"#
+    )
+    .fetch_all(&mut *connection)
+    .await?;
+    let cursor_id = sqlx::query_scalar!(r#"SELECT md5('unread-plan-0-500')::uuid AS "id!""#)
+        .fetch_one(&mut *connection)
+        .await?;
+    let cursor_timestamp =
+        chrono::Utc.with_ymd_and_hms(2026, 2, 1, 0, 0, 0).unwrap() - chrono::Duration::minutes(500);
+    let cursor = format!(
+        "'{ts}', '{ts}', '{cursor_id}'",
+        ts = cursor_timestamp.to_rfc3339()
+    );
+
+    prepare_unread_important(&mut connection).await?;
+    sqlx::raw_sql("SET plan_cache_mode = force_custom_plan")
+        .execute(&mut *connection)
+        .await?;
+    let (ids, plan) = execute_unread_important(&mut connection, &[link], &cursor).await?;
+    assert_eq!(ids, expected);
+    let touched = email_thread_rows_touched(&plan);
+    assert!(touched <= 101.0, "touched {touched} thread rows: {plan}");
+    let buffers = plan_buffers(&plan);
+    assert!(
+        buffers <= UNREAD_PLAN_DENSE_BUFFERS,
+        "{buffers} buffers: {plan}"
+    );
+    Ok(())
+}
+
+/// Most buffers a page of the sparse fixture may read: about 110 for its six
+/// threads and their messages, senders and inboxes, against about 1,000 for
+/// reading both inboxes' 40,000 threads.
+const UNREAD_PLAN_SPARSE_BUFFERS: f64 = 300.0;
+
+/// Most buffers the dense fixture's page of 101 threads may read: about 1,900
+/// with their messages, senders and inboxes.
+const UNREAD_PLAN_DENSE_BUFFERS: f64 = 4000.0;
+
+/// The unread plan fixtures' thread ids and provider ids start with this,
+/// per inbox.
+fn unread_plan_prefix(inbox: usize) -> String {
+    format!("unread-plan-{inbox}-")
+}
+
+/// Plans like production's (no JIT, SSD page costs), on statistics only the
+/// test changes: autovacuum would analyze the table behind its back.
+async fn start_unread_plan_session(connection: &mut sqlx::PgConnection) -> anyhow::Result<()> {
+    sqlx::raw_sql(
+        "ALTER TABLE email_threads SET (autovacuum_enabled = false); \
+         ANALYZE email_threads; SET random_page_cost = 1.1; \
+         SET work_mem = '16MB'; SET jit = off; SET statement_timeout = '10s';",
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+async fn insert_unread_plan_link(
+    connection: &mut sqlx::PgConnection,
+    link: Uuid,
+    inbox: usize,
+) -> anyhow::Result<()> {
+    let address = format!("unread-plan-{inbox}@example.com");
+    sqlx::query!(
+        "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider) \
+         VALUES ($1, $2, $3, $4, 'GMAIL')",
+        link,
+        format!("macro|{address}"),
+        format!("unread-plan-{inbox}"),
+        address,
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+/// One message for each of the inbox's threads `from..=to`, dated with its
+/// thread.
+async fn insert_unread_plan_messages(
+    connection: &mut sqlx::PgConnection,
+    link: Uuid,
+    inbox: usize,
+    from: i32,
+    to: i32,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO email_messages (id, thread_id, link_id, internal_date_ts)
+           SELECT md5($2 || 'message-' || i)::uuid, md5($2 || i)::uuid, $1,
+                  '2026-02-01'::timestamptz - i * interval '1 minute' - $3 * interval '30 seconds'
+           FROM generate_series($4::int, $5::int) i"#,
+        link,
+        unread_plan_prefix(inbox),
+        inbox as f64,
+        from,
+        to,
+    )
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+/// Prepares the Important tab's unread page as `unread_important`.
+async fn prepare_unread_important(connection: &mut sqlx::PgConnection) -> anyhow::Result<()> {
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Expr::and(
+        Expr::and(
+            Expr::Literal(EmailLiteral::Importance(true)),
+            Expr::Literal(EmailLiteral::Shared(
+                item_filters::SharedEmailFilter::Exclude,
+            )),
+        ),
+        Expr::Literal(EmailLiteral::Read(false)),
+    );
+    let sql = super::query::debug_build_query_sql(&view, &filter);
+    sqlx::raw_sql(&format!(
+        "PREPARE unread_important(boolean, uuid[], timestamptz, timestamptz, uuid, bigint, bigint) AS {sql}"
+    ))
+    .execute(connection)
+    .await?;
+    Ok(())
+}
+
+/// A page of 101 from `unread_important` over `links` after `cursor` (three
+/// SQL literals), with the top node of its `EXPLAIN (ANALYZE, BUFFERS)`.
+async fn execute_unread_important(
+    connection: &mut sqlx::PgConnection,
+    links: &[Uuid],
+    cursor: &str,
+) -> anyhow::Result<(Vec<Uuid>, serde_json::Value)> {
+    let links = links
+        .iter()
+        .map(Uuid::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    // EXECUTE accepts SQL literals, not bind parameters. Only typed fixture
+    // UUIDs and the cursor timestamp enter them.
+    let execute = format!("EXECUTE unread_important(FALSE, '{{{links}}}', {cursor}, 101, 101)");
+    let ids: Vec<Uuid> = sqlx::query_scalar(&execute)
+        .fetch_all(&mut *connection)
+        .await?;
+    let plan: serde_json::Value = sqlx::query_scalar(&format!(
+        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) {execute}"
+    ))
+    .fetch_one(&mut *connection)
+    .await?;
+    Ok((ids, plan[0]["Plan"].clone()))
+}
+
+/// Rows the plan read from `email_threads`: returned plus filtered out, over
+/// every loop. Postgres 18 reports per-loop rows as fractions.
+fn email_thread_rows_touched(plan: &serde_json::Value) -> f64 {
+    let own = if plan["Relation Name"] == "email_threads" {
+        (plan["Actual Rows"].as_f64().unwrap_or(0.0)
+            + plan["Rows Removed by Filter"].as_f64().unwrap_or(0.0))
+            * plan["Actual Loops"].as_f64().unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    own + plan["Plans"].as_array().map_or(0.0, |children| {
+        children.iter().map(email_thread_rows_touched).sum::<f64>()
+    })
+}
+
+/// Shared buffers a plan's top node read, its children's included.
+fn plan_buffers(plan: &serde_json::Value) -> f64 {
+    plan["Shared Hit Blocks"].as_f64().unwrap_or(0.0)
+        + plan["Shared Read Blocks"].as_f64().unwrap_or(0.0)
+}
