@@ -4,6 +4,105 @@ use pollster::block_on;
 use serde_json::json;
 
 #[test]
+fn stale_enqueue_derives_query_link_repair_before_current_generation_settlement() {
+    block_on(async {
+        for explicit in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let authority = engine.current_authority("profile").await.unwrap();
+            let query = "mutation Save { saveEmailDraft { thread { __typename id name } } }";
+            let data = json!({"saveEmailDraft":{"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"retired"}}});
+            let patch: OptimisticLinkPatch = serde_json::from_value(json!({
+                "query": "query Thread($threadId: String!) { user { emailThread(id: $threadId) { id messages { id } } } }",
+                "operationName": "Thread", "variablesJson": "{\"threadId\":\"thread\"}",
+                "path": [{"field":"user"},{"field":"emailThread"},{"field":"messages"}],
+                "operation": {"kind":"prependUnique", "entityKey":"GraphqlSoupEmailMessage:draft"}
+            })).unwrap();
+            let repair = patch.revalidation().unwrap();
+            let mut fragment = patch.clone();
+            fragment.record_root = Some(crate::link_patch::RecordRoot {
+                fragment_name: "ThreadMessages".into(),
+                entity_key: EntityKey("GraphqlSoupEmailThread:thread".into()),
+            });
+            fragment.query =
+                "fragment ThreadMessages on GraphqlSoupEmailThread { id messages { id } }".into();
+            fragment.operation_name = None;
+            fragment.variables_json = "{}".into();
+            let queued = engine
+                .enqueue_optimistic_mutation_in_generation(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: "00000000-0000-4000-8000-000000000081",
+                        query,
+                        operation_name: Some("Save"),
+                        variables: &Default::default(),
+                        data: &data,
+                        link_patches: &[patch.clone(), patch, fragment],
+                        revalidations: if explicit {
+                            std::slice::from_ref(&repair)
+                        } else {
+                            &[]
+                        },
+                        created_at_ms: 1,
+                    },
+                    MutationClaimRequest {
+                        owner: "writer".into(),
+                        now_ms: 2,
+                        lease_expires_at_ms: 100,
+                    },
+                    OptimisticEffects::default(),
+                    Some(Uuid::nil()),
+                )
+                .await
+                .unwrap();
+            let InitialClaimOutcome::Claimed(claimed) = queued.initial_claim else {
+                panic!("command must be claimed")
+            };
+            let stored = engine.storage().load_mutation_queue().await.unwrap();
+            let source =
+                decode_optimistic_source(&stored[0].optimistic.optimistic_data_json).unwrap();
+            assert_eq!(source.revalidations, vec![repair.clone()]);
+            assert_eq!(source.mutation_data, json!({}));
+            assert!(source.link_patches.is_empty());
+            assert!(stored[0].optimistic.normalized_updates.is_empty());
+            let response = json!({"saveEmailDraft":{"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"confirmed"}}});
+            let result = engine
+                .commit_optimistic_write_in_generation(
+                    queued.transaction_id,
+                    MutationClaimToken {
+                        owner: "writer".into(),
+                        generation: claimed.lease_generation,
+                    },
+                    NetworkWrite {
+                        query,
+                        operation_name: Some("Save"),
+                        variables: &Default::default(),
+                        data: &response,
+                        identity: None,
+                    },
+                    vec![],
+                    Some(authority.generation),
+                )
+                .await
+                .unwrap();
+            let CommitOptimisticWriteResult::Committed(result) = result else {
+                panic!("current response must settle")
+            };
+            assert_eq!(result.revalidations, vec![repair]);
+            assert!(
+                engine
+                    .storage()
+                    .load_mutation_queue()
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+        }
+    });
+}
+
+#[test]
 fn stale_commands_keep_fresh_revalidations_through_retirement_and_settlement() {
     block_on(async {
         for enqueue_stale in [false, true] {
@@ -109,15 +208,42 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
             IndexDocument, IntegerAttributePatch, OptimisticProjectionMutation,
             OptimisticProjectionState, Profile, RecordKey, Token,
         };
-        for retired_index in [0, 1] {
+        for (aliased, retired_index) in [false, true]
+            .into_iter()
+            .flat_map(|aliased| [0, 1].map(move |retired_index| (aliased, retired_index)))
+        {
             let mut engine = Engine::new(InMemoryStorage::new());
             let key = RecordKey::new("GraphqlSoupDocument:shared").unwrap();
+            let local = EntityKey("GraphqlSoupDocument:local".into());
+            let source_key = if aliased {
+                RecordKey::new(local.0.as_ref()).unwrap()
+            } else {
+                key.clone()
+            };
+            let bindings = if aliased {
+                vec![IdentityBinding {
+                    local_key: local.clone(),
+                    delete_record: false,
+                    response_path: vec![],
+                    reference_fields: vec![],
+                    revalidation_variables: vec![],
+                }]
+            } else {
+                vec![]
+            };
             let profile = Profile::new(Token::new("retirement-test").unwrap());
             let partition = Token::new("documents").unwrap();
             engine
                 .put_records_with_projections(
                     None,
-                    vec![],
+                    if aliased {
+                        vec![(
+                            local,
+                            identity::alias_record(&EntityKey("GraphqlSoupDocument:shared".into())),
+                        )]
+                    } else {
+                        vec![]
+                    },
                     vec![ProjectionMutation::Replace(IndexDocument {
                         record_key: key.clone(),
                         profile: profile.clone(),
@@ -132,12 +258,12 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
             let mut ids = Vec::new();
             for (index, attribute) in ["older", "newer"].into_iter().enumerate() {
                 let result = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
-                    client_metadata: None, identity_bindings: &[], uuid: &format!("00000000-0000-4000-8000-00000000009{index}"),
+                    client_metadata: None, identity_bindings: &bindings, uuid: &format!("00000000-0000-4000-8000-00000000009{index}"),
                     query: "mutation Rename($inputs: [RenameEntityInput!]!) { renameEntities(inputs: $inputs) { results { __typename } } }",
                     operation_name: Some("Rename"), variables: json!({"inputs":[]}).as_object().unwrap(), data: &json!({}),
                     link_patches: &[], revalidations: &[], created_at_ms: 1,
                 }, vec![OptimisticProjectionMutation::Patch {
-                    record_key: key.clone(), profile: profile.clone(), partition: partition.clone(),
+                    record_key: source_key.clone(), profile: profile.clone(), partition: partition.clone(),
                     exact: vec![], integers: vec![IntegerAttributePatch { attribute: Token::new(attribute).unwrap(), values: vec![1] }], sorts: vec![],
                 }]).await.unwrap();
                 ids.push(result.0);
@@ -146,10 +272,10 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
                 .retire_optimistic_snapshots_where(|entry, _| entry.id == ids[retired_index])
                 .await
                 .unwrap();
-            let reopened = Engine::new(engine.into_storage());
+            let mut reopened = Engine::new(engine.into_storage());
             let shadows = reopened
                 .storage()
-                .load_optimistic_projections(&[key])
+                .load_optimistic_projections(&[key.clone()])
                 .await
                 .unwrap();
             let shadow = shadows[0]
@@ -163,6 +289,19 @@ fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
             assert_eq!(
                 document.integer_facts[0].attribute,
                 Token::new(["newer", "older"][retired_index]).unwrap()
+            );
+            reopened
+                .retire_optimistic_snapshots_where(|_, _| true)
+                .await
+                .unwrap();
+            let reopened = Engine::new(reopened.into_storage());
+            assert!(
+                reopened
+                    .storage()
+                    .load_optimistic_projections(&[key])
+                    .await
+                    .unwrap()[0]
+                    .is_none()
             );
         }
     });

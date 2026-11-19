@@ -187,6 +187,27 @@ export type OptimisticMutationDispositionMetadata =
 export function withoutOptimisticSnapshot(operation: Operation): Operation {
   const context = optimisticContextOf(operation);
   if (!context) return operation;
+  const revalidations = [...context.revalidations];
+  for (const {
+    query,
+    operationName,
+    variablesJson,
+    recordRoot,
+  } of context.linkPatches) {
+    // Query-rooted recipes normally derive this repair during enqueue. Keep
+    // only that fresh read when stripping the recipe before it reaches storage.
+    if (
+      recordRoot ||
+      revalidations.some(
+        (repair) =>
+          repair.query === query &&
+          repair.operationName === operationName &&
+          repair.variablesJson === variablesJson
+      )
+    )
+      continue;
+    revalidations.push({ query, operationName, variablesJson });
+  }
   return makeOperation(operation.kind, operation, {
     ...operation.context,
     [OPTIMISTIC_MUTATION_CONTEXT_KEY]: {
@@ -194,6 +215,7 @@ export function withoutOptimisticSnapshot(operation: Operation): Operation {
       snapshotRejected: true,
       optimisticResponse: undefined,
       linkPatches: [],
+      revalidations,
       // Fresh server reads repair parents whose copied link recipes were retired.
       // Their request and response use the new generation like any other query.
       uncertainCalendarEventKeys: [],

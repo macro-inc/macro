@@ -21,18 +21,29 @@ const interfaceExchanges = () => [
 import {
   createClient,
   type Exchange,
+  makeOperation,
   type Operation,
   stringifyDocument,
 } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { fromValue, mergeMap, pipe } from 'wonka';
-import { EntityPropertiesDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
+import {
+  EmailThreadPageDocument,
+  EntityPropertiesDocument,
+} from '../../service-clients/service-storage/graphql/generated/graphql';
 import { setGraphqlEmailThreadArchived } from '../../service-clients/service-storage/graphql-email-archive-state';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '../../service-clients/service-storage/graphql-email-read-state';
-import { optimisticContextOf, withoutOptimisticSnapshot } from './optimistic';
+import {
+  optimisticContextOf,
+  optimisticMutationContext,
+  prependUnique,
+  select,
+  update,
+  withoutOptimisticSnapshot,
+} from './optimistic';
 
 function setup() {
   const operations: Operation[] = [];
@@ -57,6 +68,60 @@ function setup() {
 }
 
 describe('optimistic mutation authoring contract', () => {
+  it.each([false, true])(
+    'materializes query-link repair before stripping snapshots (explicit repair: %s)',
+    async (explicit) => {
+      const { client, operations } = setup();
+      await markGraphqlEmailThreadSeen(client, 'thread');
+      const variables = { threadId: 'thread', offset: 0, limit: 20 };
+      const patch = update(
+        select(EmailThreadPageDocument, variables)
+          .field('user')
+          .field('emailThread')
+          .field('messages'),
+        prependUnique({ __typename: 'GraphqlSoupEmailMessage', id: 'draft' })
+      );
+      const fragmentPatch = {
+        ...patch,
+        query:
+          'fragment ThreadMessages on GraphqlSoupEmailThread { id messages { id } }',
+        operationName: undefined,
+        variablesJson: '{}',
+        recordRoot: {
+          entityKey: 'GraphqlSoupEmailThread:thread',
+          fragmentName: 'ThreadMessages',
+        },
+      };
+      const operation = makeOperation('mutation', operations[0], {
+        ...operations[0].context,
+        ...optimisticMutationContext(
+          { copied: 'retired response' },
+          {
+            updates: [patch, patch, fragmentPatch],
+            revalidations: explicit
+              ? [{ document: EmailThreadPageDocument, variables }]
+              : [],
+          }
+        ),
+      });
+      const retired = withoutOptimisticSnapshot(operation);
+      const expected = [
+        {
+          query: patch.query,
+          operationName: patch.operationName,
+          variablesJson: patch.variablesJson,
+        },
+      ];
+      expect(optimisticContextOf(retired)?.revalidations).toEqual(expected);
+      expect(optimisticContextOf(retired)?.linkPatches).toEqual([]);
+      expect(optimisticContextOf(retired)?.optimisticResponse).toBeUndefined();
+      expect(
+        optimisticContextOf(withoutOptimisticSnapshot(retired))?.revalidations
+      ).toEqual(expected);
+      expect(optimisticContextOf(operation)?.linkPatches).toHaveLength(3);
+    }
+  );
+
   it('migrates real read/unread callers with field-only payloads and distinct intent IDs', async () => {
     const { client, operations } = setup();
     await markGraphqlEmailThreadSeen(client, 'thread-1');

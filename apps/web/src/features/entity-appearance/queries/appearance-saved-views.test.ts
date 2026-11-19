@@ -1,3 +1,4 @@
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import { QueryClient } from '@tanstack/solid-query';
@@ -175,6 +176,7 @@ it('patches the saved-view GraphQL identity optimistically and rolls back a reje
       records: [{ recordKey: 'GraphqlSavedView:view-1', record }],
     })),
     writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
+      expect(write.generation).toBe(UNKNOWN_CACHE_GENERATION);
       const result = await execute({
         schema: buildSchema(schemaSdl),
         document: parse(write.query),

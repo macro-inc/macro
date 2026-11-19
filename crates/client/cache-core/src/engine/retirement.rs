@@ -46,6 +46,15 @@ impl<S: Storage> Engine<S> {
             };
             retired_projection_owners.insert(entry.id);
         }
+        // Durable sources retain local IDs, while hydrated layers may already
+        // project their canonical aliases. Retire both identities' shadows.
+        affected_projection_keys.extend(
+            self.optimistic
+                .iter()
+                .filter(|layer| retired_projection_owners.contains(&layer.id))
+                .flat_map(|layer| &layer.projection_mutations)
+                .map(|mutation| mutation.record_key().clone()),
+        );
         // Even a preserved command's materialized link update can contain a
         // retired record copied from its old base. Persist the rebuilt updates,
         // while retaining projection shadows owned by preserved commands.

@@ -223,9 +223,22 @@ impl<S: Storage> Engine<S> {
     ) -> Result<EnqueueOptimisticMutationResult<EngineError<S::Error>>, EngineError<S::Error>> {
         let accepted = self.snapshot_is_current(generation).await?;
         let empty = Json::Object(Default::default());
+        // Query-rooted recipes normally derive these fresh reads during
+        // enqueue. Preserve them before dropping the stale copied recipe.
+        let revalidations = (!accepted).then(|| {
+            deduplicate_revalidations(
+                input.revalidations.iter().cloned().chain(
+                    input
+                        .link_patches
+                        .iter()
+                        .filter_map(OptimisticLinkPatch::revalidation),
+                ),
+            )
+        });
         let input = BeginOptimisticWrite {
             data: if accepted { input.data } else { &empty },
             link_patches: if accepted { input.link_patches } else { &[] },
+            revalidations: revalidations.as_deref().unwrap_or(input.revalidations),
             ..input
         };
         if !accepted {
