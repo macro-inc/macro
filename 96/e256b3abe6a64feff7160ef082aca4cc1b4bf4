@@ -1,0 +1,21 @@
+packages/sdk/src/entities/agent-sessions/agent-session.ts
+  s_d68827eef00d3d::t_a4f46566fc738c 241-243
+packages/sdk/src/entities/agent-sessions/namespace.ts
+  s_d68827eef00d3d::t_ee4ba4b6528275 94-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "96e256b3abe6a64feff7160ef082aca4cc1b4bf4",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
