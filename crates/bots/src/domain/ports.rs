@@ -1,7 +1,7 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotIdentity, BotOwner,
     BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
     CreateBotTokenRequest, CreateBotTokenResponse, CreateChannelScopedBotRequest,
     CreateChannelScopedBotResponse, HarnessFacts, HarnessId, PatchAgentRequest, PatchBotRequest,
@@ -100,6 +100,13 @@ pub trait BotRepo: Send + Sync + 'static {
         &self,
         bot_ids: &[BotId],
     ) -> impl Future<Output = Result<HashMap<BotId, BotOwnerProfile>, Self::Err>> + Send;
+
+    /// Load the identities of the requested bots, soft-deleted ones and
+    /// registry system bots included. Unknown ids are absent.
+    fn get_bot_identities(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotIdentity>, Self::Err>> + Send;
 
     /// Users who see the bot's name and picture: its owner, its team's
     /// members, and the people in the channels it takes part in. For a
@@ -356,6 +363,22 @@ pub trait BotService: Send + Sync + 'static {
         &self,
         ids: &[BotId],
     ) -> impl Future<Output = Result<Vec<BotOwnerProfile>, BotError>> + Send;
+
+    /// Load bot identities in request order, each id once. Any caller may
+    /// read the identity of an id it holds; unknown ids are omitted.
+    fn get_identities(
+        &self,
+        ids: &[BotId],
+    ) -> impl Future<Output = Result<Vec<BotIdentity>, BotError>> + Send;
+
+    /// Bots the caller can `@` mention: in a channel, its installed bots and
+    /// the caller's agents available in every channel; elsewhere, every agent
+    /// the caller can start. Each bot once, channel bots first.
+    fn list_mentionable_bots(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        channel: Option<EntityAccessReceipt<MemberParticipantRole>>,
+    ) -> impl Future<Output = Result<Vec<Bot>, BotError>> + Send;
 
     /// Get the authenticated bot's own record.
     fn get_self(&self, bot_id: BotId) -> impl Future<Output = Result<Bot, BotError>> + Send;

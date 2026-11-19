@@ -173,6 +173,7 @@ graphql_crm = { path = "../../crates/graphql_crm" }
 graphql_initiative = { path = "../../crates/graphql_initiative" }
 graphql_databases = { path = "../../crates/graphql_databases" }
 
+graphql_bots = { path = "../../crates/graphql_bots" }
 graphql_calendar = { path = "../../crates/graphql_calendar" }
 graphql_contacts = { path = "../../crates/graphql_contacts" }
 graphql_scheduled_action = { path = "../../crates/graphql_scheduled_action" }

@@ -111,7 +111,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "type GraphqlSoupEmailForwardedAttachment {",
         "type GraphqlSoupCall implements GraphqlSoupEntity {",
         "type GraphqlSoupAgentSession implements GraphqlSoupEntity {",
-        "bot: GraphqlSessionBot",
+        "bot: GraphqlSessionBot @deprecated(reason: \"Use botProfile. Remove after 2026-12-17.\")",
         "type GraphqlSessionBot {",
         "avatarUrl: String",
         "channelName: String",
@@ -933,6 +933,23 @@ fn contacts_reads_have_viewer_scoped_entity_keys() {
             .iter()
             .any(|argument| argument.name == "search" && argument.ty.to_string() == "String")
     );
+}
+
+#[test]
+fn bot_identity_is_one_entity_reached_from_the_user_and_sessions() {
+    let sdl = crate::build_schema().sdl();
+    for expected in [
+        "type GraphqlBot {",
+        "id: ID!",
+        "handle: String!",
+        "isSystem: Boolean!",
+        "bots(ids: [ID!]!): [GraphqlBot!]!",
+        "mentionableBots(channelId: ID): [GraphqlBot!]!",
+        "botProfile: GraphqlBot",
+        "bot: GraphqlAgentSessionLogBot! @deprecated(reason: \"Use the session's botProfile. Remove after 2026-12-17.\")",
+    ] {
+        assert_sdl_line(&sdl, expected);
+    }
 }
 
 #[test]

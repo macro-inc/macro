@@ -9,7 +9,7 @@ mod team_roster;
 use crate::domain::{
     models::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AgentStoppedReason,
-        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotKind, BotOwner,
+        AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId, BotIdentity, BotKind, BotOwner,
         BotOwnerProfile, BotProfile, BotToken, BotTokenCandidate, CreateAgentRequest,
         CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessFacts,
         HarnessId, PatchBotRequest, UpdateAgentRequest,
@@ -1076,6 +1076,54 @@ impl BotRepo for PgBotsRepo {
             );
         }
         Ok(profiles)
+    }
+
+    async fn get_bot_identities(
+        &self,
+        bot_ids: &[BotId],
+    ) -> Result<HashMap<BotId, BotIdentity>, Self::Err> {
+        let mut identities = bot_ids
+            .iter()
+            .filter_map(|id| bot_id::system_bot(*id).map(|bot| (*id, BotIdentity::system(bot))))
+            .collect::<HashMap<_, _>>();
+        let ids = bot_ids
+            .iter()
+            .copied()
+            .filter_map(bot_id::NonSystemBotId::new)
+            .map(|id| id.get().as_uuid())
+            .collect::<Vec<_>>();
+        if ids.is_empty() {
+            return Ok(identities);
+        }
+
+        // Deleted bots are included: their old messages still show who sent them.
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, name, handle, avatar_url, deleted_at
+            FROM bots
+            WHERE id = ANY($1)
+            "#,
+            &ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to get bot identities")?;
+
+        identities.extend(rows.into_iter().map(|row| {
+            let id = BotId::new_from_uuid(row.id);
+            (
+                id,
+                BotIdentity {
+                    id,
+                    name: row.name,
+                    handle: row.handle,
+                    avatar_url: row.avatar_url,
+                    deleted_at: row.deleted_at,
+                    is_system: false,
+                },
+            )
+        }));
+        Ok(identities)
     }
 
     async fn bot_audience(&self, bot_id: BotId) -> Result<Vec<MacroUserIdStr<'static>>, Self::Err> {
