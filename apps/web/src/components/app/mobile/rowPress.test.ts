@@ -130,4 +130,36 @@ describe('row press', () => {
     vi.advanceTimersByTime(500);
     expect(pressed()).toBe(false);
   });
+
+  it('holds a quickly opened row until 500ms after the tap', () => {
+    const event = new MouseEvent('click', { bubbles: true });
+    label.dispatchEvent(event);
+    const release = holdRowPress(event);
+    vi.advanceTimersByTime(200);
+    release?.();
+    vi.advanceTimersByTime(299);
+    expect(pressed()).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(pressed()).toBe(false);
+  });
+
+  it('keeps the row pressed while a later navigation from it still runs', () => {
+    const first = new MouseEvent('click', { bubbles: true });
+    label.dispatchEvent(first);
+    const releaseFirst = holdRowPress(first);
+    vi.advanceTimersByTime(200);
+    const second = new MouseEvent('click', { bubbles: true });
+    label.dispatchEvent(second);
+    const releaseSecond = holdRowPress(second);
+
+    vi.advanceTimersByTime(400);
+    releaseFirst?.();
+    releaseFirst?.();
+    vi.advanceTimersByTime(1000);
+    expect(pressed()).toBe(true);
+
+    releaseSecond?.();
+    vi.advanceTimersByTime(0);
+    expect(pressed()).toBe(false);
+  });
 });

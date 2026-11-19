@@ -287,8 +287,10 @@ export function ListEntity(props: ListEntityProps) {
   // goes over the panel color rather than replacing it.
   const swipeFill = () => {
     if (!classic()) return undefined;
+    // The selected fill is an image over the panel; pressing keeps it under
+    // the press grey (index.css).
     if (props.checked)
-      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected';
+      return 'bg-panel bg-linear-to-b from-list-selected to-list-selected [--press-underlay:linear-gradient(var(--color-list-selected),var(--color-list-selected))]';
     return unread() ? 'bg-control' : undefined;
   };
 

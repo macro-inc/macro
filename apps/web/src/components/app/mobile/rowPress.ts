@@ -29,6 +29,8 @@ type Press = {
 };
 
 const releaseTimers = new WeakMap<HTMLElement, number>();
+// Navigations still running from a row; it stays pressed while any are.
+const navigationHolds = new WeakMap<HTMLElement, number>();
 
 /** The row a touch or click on `target` presses, if it is in one. */
 function pressedRow(target: EventTarget | null): HTMLElement | undefined {
@@ -54,6 +56,7 @@ function showPressed(row: HTMLElement) {
 
 function hidePressed(row: HTMLElement) {
   cancelRelease(row);
+  if (navigationHolds.has(row)) return;
   row.classList.remove(PRESSED_CLASS);
 }
 
@@ -63,6 +66,7 @@ function hidePressedAfter(row: HTMLElement, delay: number) {
     row,
     window.setTimeout(() => {
       releaseTimers.delete(row);
+      if (navigationHolds.has(row)) return;
       row.classList.remove(PRESSED_CLASS);
     }, delay)
   );
@@ -176,9 +180,20 @@ export function holdRowPress(
   if (!row) return undefined;
 
   showPressed(row);
+  navigationHolds.set(row, (navigationHolds.get(row) ?? 0) + 1);
   const startedAt = performance.now();
+  let released = false;
 
   return () => {
+    if (released) return;
+    released = true;
+
+    const holds = (navigationHolds.get(row) ?? 1) - 1;
+    if (holds > 0) {
+      navigationHolds.set(row, holds);
+      return;
+    }
+    navigationHolds.delete(row);
     const elapsed = performance.now() - startedAt;
     hidePressedAfter(row, Math.max(0, NAVIGATION_HOLD_MIN_MS - elapsed));
   };

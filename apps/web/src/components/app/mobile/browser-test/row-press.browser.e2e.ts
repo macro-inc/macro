@@ -145,6 +145,8 @@ for (const row of ROWS) {
 
     await touch(cdp, 'touchEnd');
     await expect(opened(page)).toHaveAttribute('data-opened', row);
+    // The grey holds for 350ms after release.
+    expect(await offGrey(page, spots[0], grey)).toBeLessThan(1);
     await expect.poll(() => offGrey(page, spots[0], grey)).toBeGreaterThan(5);
   });
 }
