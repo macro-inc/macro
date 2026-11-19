@@ -1,3 +1,5 @@
+import { beginInteraction } from '@app/observability/flow';
+import { NOOP_SPAN } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -39,6 +41,11 @@ vi.mock('@service-scheduled-action/client', () => ({
   scheduledActionClient: client,
 }));
 vi.mock('@app/lib/analytics', () => ({ analytics: { track: vi.fn() } }));
+vi.mock('@app/observability/flow', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@app/observability/flow')>();
+  return { ...actual, beginInteraction: vi.fn(actual.beginInteraction) };
+});
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
@@ -424,6 +431,78 @@ describe('routine row operations', () => {
 
     client.listChildren.mockResolvedValueOnce(err([{ message: 'Down' }]));
     await expect(operations.createdCount('digest')).resolves.toBeUndefined();
+  });
+
+  it('counts in an interaction of its own, reading in its span even after an earlier read', async () => {
+    // How deep the test is in a count span's `run` when the read is sent.
+    let inside = 0;
+    const counts: {
+      span: typeof NOOP_SPAN;
+      release: ReturnType<typeof vi.fn>;
+    }[] = [];
+    vi.mocked(beginInteraction).mockImplementation(() => {
+      const span = {
+        ...NOOP_SPAN,
+        run: <T,>(operation: () => T) => {
+          inside += 1;
+          try {
+            return operation();
+          } finally {
+            inside -= 1;
+          }
+        },
+        setAttr: vi.fn(),
+        error: vi.fn(),
+        end: vi.fn(),
+      };
+      const release = vi.fn();
+      counts.push({ span, release });
+      return {
+        span: { ...NOOP_SPAN, span: () => span },
+        hold: () => release,
+        end: vi.fn(),
+      };
+    });
+    const sentInSpan: boolean[] = [];
+    let answerFirst!: (result: unknown) => void;
+    client.listChildren.mockImplementationOnce(() => {
+      sentInSpan.push(inside > 0);
+      return new Promise((resolve) => {
+        answerFirst = resolve;
+      });
+    });
+    client.listChildren.mockImplementation(async () => {
+      sentInSpan.push(inside > 0);
+      return ok([routine('active', 'Active')]);
+    });
+    try {
+      const operations = mount();
+      const first = operations.createdCount('briefing');
+      // The second waits the first read out, then reads in its own span.
+      const second = operations.createdCount('briefing');
+      answerFirst(ok([]));
+      await expect(first).resolves.toEqual({ count: 0, atLeast: false });
+      await expect(second).resolves.toEqual({ count: 1, atLeast: false });
+      expect(sentInSpan).toEqual([true, true]);
+      expect(beginInteraction).toHaveBeenCalledWith(
+        'routine.delete_count.action',
+        { attributes: { 'routine.id': 'briefing' } }
+      );
+      expect(counts[1]?.span.setAttr).toHaveBeenCalledWith(
+        'routine.created.count',
+        1
+      );
+      expect(counts[1]?.release).toHaveBeenCalledExactlyOnceWith('success');
+
+      client.listChildren.mockResolvedValueOnce(err([{ message: 'Down' }]));
+      await expect(operations.createdCount('digest')).resolves.toBeUndefined();
+      expect(counts[2]?.span.error).toHaveBeenCalledExactlyOnceWith(
+        'Routine children read failed'
+      );
+      expect(counts[2]?.release).toHaveBeenCalledExactlyOnceWith('error');
+    } finally {
+      vi.mocked(beginInteraction).mockReset();
+    }
   });
 
   it('counts at least the finished routines the scheduler lists, when it lists as many as it can', async () => {

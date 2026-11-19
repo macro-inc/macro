@@ -243,9 +243,10 @@ export function useChildrenQuery(
  * failing at once, offline too, rather than retrying while the confirmation
  * is open. A read already in flight may predate a child a run just made, so
  * it is waited out and the children read after it (or with the read a run's
- * stop queued after it).
+ * stop queued after it). The read runs in `parent`, which an awaited earlier
+ * read would otherwise lose.
  */
-export function fetchChildren(scheduleId: string) {
+export function fetchChildren(scheduleId: string, parent?: TraceContext) {
   const options = {
     ...childrenQueryOptions(scheduleId, true),
     staleTime: 0,
@@ -260,7 +261,8 @@ export function fetchChildren(scheduleId: string) {
     pending?.state.fetchStatus === 'fetching' ? pending.promise : undefined;
   const read = async () => {
     if (earlier) await Promise.allSettled([earlier]);
-    return queryClient.fetchQuery(options);
+    const fetch = () => queryClient.fetchQuery(options);
+    return parent ? parent.run(fetch) : fetch();
   };
   return ResultAsync.fromPromise(read(), (error) => error);
 }

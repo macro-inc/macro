@@ -747,17 +747,31 @@ export function createRoutineRowOperations(
  */
 const FINISHED_CHILDREN_LISTED = 200;
 
-/** What a delete removes with routine `id`, from a fresh read of its children. */
-async function readCreatedCount(id: string): Promise<CreatedCount | undefined> {
-  const created = await fetchChildren(id);
-  if (created.isErr()) return undefined;
-  const children = created.value.filter((item) => item.id);
-  const finished = children.filter(
-    (item) => item.trigger.type === 'once' && !item.next_run_at
-  ).length;
-  return {
-    count: children.length,
-    // As many as it lists: it may have left older ones out.
-    atLeast: finished >= FINISHED_CHILDREN_LISTED,
-  };
+/**
+ * What a delete removes with routine `id`, from a fresh read of its
+ * children: an interaction of its own, started as the confirmation opens,
+ * so a slow or failed count shows in its trace.
+ */
+function readCreatedCount(id: string): Promise<CreatedCount | undefined> {
+  return traceRoutineInteraction(
+    'routine.delete_count',
+    id,
+    async (span, markFailed) => {
+      const created = await fetchChildren(id, span);
+      if (created.isErr()) {
+        span.error('Routine children read failed');
+        markFailed();
+        return undefined;
+      }
+      const children = created.value.filter((item) => item.id);
+      const finished = children.filter(
+        (item) => item.trigger.type === 'once' && !item.next_run_at
+      ).length;
+      // As many as it lists: it may have left older ones out.
+      const atLeast = finished >= FINISHED_CHILDREN_LISTED;
+      span.setAttr('routine.created.count', children.length);
+      span.setAttr('routine.created.at_least', atLeast);
+      return { count: children.length, atLeast };
+    }
+  );
 }
