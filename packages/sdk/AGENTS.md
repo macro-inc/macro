@@ -53,7 +53,11 @@ enforced by the ordinary backend APIs.
   request, or the older single agent task. Its examples use steps only:
   agents copy them, and a routine draft hands back steps, converting a single
   agent task when it can (`scheduled_action` drafts). `routineBody` maps both onto the
-  scheduler's `RoutineTask`. `routines.create(options, { key })` passes
+  scheduler's `RoutineTask`. With `steps`, `subRoutines` defines up to five
+  named programs with their own inputs and steps. On update, supply the full
+  definition list to keep or replace it, or `[]` to remove it. The scheduler
+  refuses an omitted list when the saved routine has definitions.
+  `routines.create(options, { key })` passes
   `?key=`; inside a routine's run the server makes the new routine a
   sub-routine of the running routine, from the credential alone, and a
   repeated key updates it. `routines.schedule(subRoutine, { trigger, inputs,

@@ -188,8 +188,9 @@ export interface StepsRoutineOptions extends RoutineCommonOptions {
   /**
    * Work the routine's runs schedule once per item, such as a reminder before
    * each task is due: each defined once here, then scheduled from a code step
-   * with {@link RoutineNamespace.schedule}. At most 5. An update that omits
-   * them is refused while the routine has any, so it never drops them.
+   * with {@link RoutineNamespace.schedule}. At most 5. On update, pass the
+   * full list to keep or replace it, or `[]` to remove it. Omitting the list
+   * is refused while the routine has definitions.
    */
   subRoutines?: readonly SubRoutineOptions[];
   /**

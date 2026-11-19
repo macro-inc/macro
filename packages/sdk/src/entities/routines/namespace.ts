@@ -40,7 +40,7 @@ export interface CreatedEntity {
  * - "Remind me", "every Monday", "tomorrow at 9" and "whenever something happens" ask for a routine: work that runs later, as the user, after this conversation ends. A meeting with other people is a calendar event, not a routine.
  * - A routine's run never sees this conversation. Write its instructions to stand alone: what to do, the items involved by id or link, absolute dates, and where to report the result.
  * - Before creating one, look for a routine of the user's that already does this, and update it instead of adding a second.
- * - A routine created by a routine's run, from its code or its Ask AI step, is that routine's sub-routine: it is listed under it, pauses and is deleted with it, and `list()` leaves it out unless asked. A routine has at most 50 active sub-routines (one-time ones that have run don't count); creating another is refused. When a run may create the same routine again, pass a `key` so the second create updates the first instead of adding a duplicate.
+ * - A routine created by a routine's run, from its code or its Ask AI step, is that routine's sub-routine: it is listed under it, pauses and is deleted with it, and `list()` leaves it out unless asked. A new copy or other sub-routine is admitted only while fewer than 50 are active under the parent. A one-time sub-routine stops counting once it fires at its scheduled time, even if that run fails, or once a run started by hand ends at or after that time. A repeated `key` updates the existing sub-routine. Rescheduling a finished copy by its key can make it active again.
  *
  * ### Writing one
  *
@@ -94,8 +94,8 @@ export class RoutineNamespace {
    * ({@link Routine.parent}). Pass `key` there to name it: creating with the
    * same key again updates that sub-routine instead of adding another, so a
    * run that repeats is safe. Without a key every create adds a routine, and
-   * the 51st active sub-routine is refused. Outside a routine's run a key is
-   * rejected.
+   * a new sub-routine is admitted only while fewer than 50 are active under
+   * the parent. Outside a routine's run a key is rejected.
    *
    * @example
    * // Every ten minutes, in New York time.
@@ -189,9 +189,12 @@ export class RoutineNamespace {
    * a value of its type. The copy runs the sub-routine as the routine holds
    * it when the copy runs, so editing the sub-routine changes every copy
    * that hasn't run yet. Pass `key` to name the copy: scheduling with the
-   * same key again updates that copy instead of adding another. A copy
-   * counts toward the routine's 50 active sub-routines, and is named after
-   * the sub-routine's title unless `name` is given.
+   * same key again updates that copy instead of adding another. A new copy
+   * is admitted only while fewer than 50 sub-routines are active under
+   * the parent. A one-time copy stops counting when it fires at its time,
+   * even if that run fails, or when a manual run ends at or after that
+   * time. Rescheduling a finished copy by its key can make it active again.
+   * The copy uses the sub-routine's title unless `name` is given.
    *
    * @example
    * // In a routine that defines a `remind` sub-routine with a `taskId` input,
