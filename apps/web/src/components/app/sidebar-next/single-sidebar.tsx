@@ -126,13 +126,14 @@ function CalendarAppRow(props: Omit<AppRowProps, 'badge'>) {
 /**
  * Where the active split's workspace renders its navigation (see
  * `NavigationHost`). It fills the room the app rows leave, and takes none
- * while the workspace has no navigation.
+ * while the workspace has no navigation. The navigation fills it absolutely,
+ * as a docked split panel does, so the workspace's own list scrolls inside.
  */
 function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
   return (
     <div
       ref={props.ref}
-      class="-mx-(--sidebar-gutter) flex min-h-0 flex-1 flex-col pl-3 empty:hidden"
+      class="relative -mr-(--sidebar-gutter) ml-1 min-h-0 flex-1 overflow-hidden empty:hidden"
       data-single-sidebar-slot=""
     />
   );

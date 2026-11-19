@@ -609,7 +609,12 @@ function HostedAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
           <Portal mount={slot}>
             <div
               {...rest}
-              class={cn('flex min-h-0 min-w-0 flex-1 flex-col', local.class)}
+              class={cn(
+                'absolute inset-0 flex min-h-0 min-w-0 flex-col',
+                local.class,
+                // The single sidebar's own surface shows through.
+                'bg-transparent'
+              )}
               data-view-shell-aside=""
             >
               {local.children}
