@@ -19,6 +19,7 @@ import type { ConsentScopes } from '@service-auth/client';
 import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
+  INBOX_BEING_REMOVED_CODE,
   NO_GMAIL_GRANT_CODE,
   SHARED_INBOX_CONFLICT_CODE,
 } from '@service-email/client';
@@ -66,6 +67,8 @@ type EmailInitError =
   | { tag: 'NoGmailGrant' }
   /** The mailbox is already connected by another user; confirm to share it. */
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
+  /** The mailbox is still being removed from Macro; retry once that finishes. */
+  | { tag: 'InboxBeingRemoved' }
   | { tag: 'FailedToInitialize'; message: string };
 
 function parseSharedInboxConflict(message: string): {
@@ -120,6 +123,9 @@ function initEmailLink(args?: {
       }
       if (initResult.error.some((e) => e.code === NO_GMAIL_GRANT_CODE)) {
         return err<string, EmailInitError>({ tag: 'NoGmailGrant' });
+      }
+      if (initResult.error.some((e) => e.code === INBOX_BEING_REMOVED_CODE)) {
+        return err<string, EmailInitError>({ tag: 'InboxBeingRemoved' });
       }
       const error: EmailInitError = initResult.error.some(
         (e) => e.code === ALREADY_INITIALIZED_CODE

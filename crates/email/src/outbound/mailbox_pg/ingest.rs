@@ -301,13 +301,18 @@ impl MailboxIngest for PgMailboxSync {
             .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
         };
-        let work = sqlx::query!(r#"
+        let Some(work) = sqlx::query!(r#"
             SELECT revision FROM email_message_reconciliation
             WHERE link_id = $1 AND generation = $2 AND provider_id = $3 AND lease_id = $4 AND lease_until > now() FOR UPDATE
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,lease.provider_id.as_str(),lease.lease_id)
-            .fetch_optional(&mut *tx).await.map_err(db_error)?;
-        if work.is_none() {
+            .fetch_optional(&mut *tx).await.map_err(db_error)? else {
             return Err(MailboxError::Stale);
+        };
+        // A change queued during the lease outdates this read's 404: leave the
+        // message as it is, and `complete_message` keeps the newer revision due
+        // for a read of its own.
+        if work.revision != lease.revision {
+            return Ok(());
         }
         // The correspondents of mail that leaves the mailbox now, read before the
         // mark below: sent mail's recipients and received mail's sender, as a

@@ -3,10 +3,12 @@ use std::time::{Duration, Instant};
 use firecracker_host_api::{Action, ComputerId, HostLimits, Usage};
 use uuid::Uuid;
 
+use super::super::SwapPlacement;
 use super::super::test::{FakeMachines, FakeStore, computer_id, create_request, host_with};
 use super::{SQUEEZE_AFTER, SqueezeView, SqueezeWindow, Squeezed, squeeze_candidate};
 use crate::domain::activity::ActivitySettings;
 use crate::domain::health::HealthCheck;
+use crate::domain::ports::GuestSwap;
 
 const GIB: u64 = 1024 * 1024 * 1024;
 const WINDOW: SqueezeWindow = SqueezeWindow {
@@ -56,6 +58,7 @@ fn usage(cpu_seconds: u64) -> Usage {
     Usage {
         resident_memory_bytes: 600 * 1024 * 1024,
         private_memory_bytes: 0,
+        swap_bytes: Some(0),
         cpu_usage_microseconds: cpu_seconds * 1_000_000,
     }
 }
@@ -209,4 +212,113 @@ async fn the_window_comes_from_the_host_limits_and_needs_swap() {
 
     assert_eq!(host.service.squeeze_window(), Some(WINDOW));
     assert!(!swap_check(&host), "the fake host has no swap");
+}
+
+#[tokio::test]
+async fn a_disk_swap_device_fails_the_swap_check_and_stops_the_squeeze() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 2).await;
+    host.service
+        .create(computer_id(), create_request(1, true))
+        .await
+        .unwrap();
+    host.machines
+        .usage
+        .lock()
+        .unwrap()
+        .insert(computer_id(), usage(0));
+    *host.probe.0.lock().unwrap() = 95 * GIB;
+    *host.probe.1.lock().unwrap() = SwapPlacement::Disk { devices: 1 };
+    let settings = ActivitySettings::default();
+    let start = Instant::now();
+    host.service.activity_pass(start, &settings);
+    let late = start + SQUEEZE_AFTER;
+    host.service.activity_pass(late, &settings);
+
+    assert_eq!(host.service.squeeze_once(WINDOW, late).await, None);
+    assert!(host.machines.reclaims.lock().unwrap().is_empty());
+    let swap = host
+        .service
+        .service_checks()
+        .into_iter()
+        .find(|check| check.check == HealthCheck::Swap)
+        .unwrap();
+    assert!(
+        !swap.healthy,
+        "no squeeze asked, but a disk swap device is active"
+    );
+}
+
+#[tokio::test]
+async fn vms_may_swap_only_while_all_swap_is_in_ram_and_the_limit_is_applied_on_change() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 1).await;
+    let writes = || host.machines.guest_swap.lock().unwrap().clone();
+
+    host.service.guard_guest_swap().await;
+    host.service.guard_guest_swap().await;
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed],
+        "zram only: allowed, written once"
+    );
+
+    *host.probe.1.lock().unwrap() = SwapPlacement::Disk { devices: 1 };
+    host.service.guard_guest_swap().await;
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off],
+        "a disk swap device: none"
+    );
+
+    *host.probe.1.lock().unwrap() = SwapPlacement::Unknown;
+    host.service.guard_guest_swap().await;
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off],
+        "unreadable stays none"
+    );
+
+    *host.probe.1.lock().unwrap() = SwapPlacement::RamOnly;
+    host.service.guard_guest_swap().await;
+    assert_eq!(
+        writes(),
+        [GuestSwap::Allowed, GuestSwap::Off, GuestSwap::Allowed],
+        "back to zram only"
+    );
+}
+
+#[tokio::test]
+async fn an_unreadable_swap_list_fails_the_swap_check_and_stops_the_squeeze() {
+    let host = host_with(FakeStore::default(), FakeMachines::default(), 2).await;
+    host.service
+        .create(computer_id(), create_request(1, true))
+        .await
+        .unwrap();
+    host.machines
+        .usage
+        .lock()
+        .unwrap()
+        .insert(computer_id(), usage(0));
+    *host.probe.0.lock().unwrap() = 95 * GIB;
+    *host.probe.1.lock().unwrap() = SwapPlacement::Unknown;
+    let settings = ActivitySettings::default();
+    let start = Instant::now();
+    host.service.activity_pass(start, &settings);
+    let late = start + SQUEEZE_AFTER;
+    host.service.activity_pass(late, &settings);
+
+    assert_eq!(host.service.squeeze_once(WINDOW, late).await, None);
+    let swap = host
+        .service
+        .service_checks()
+        .into_iter()
+        .find(|check| check.check == HealthCheck::Swap)
+        .unwrap();
+    assert!(!swap.healthy);
+    assert!(
+        swap.detail
+            .as_deref()
+            .unwrap_or_default()
+            .contains("unreadable"),
+        "{swap:?}"
+    );
 }

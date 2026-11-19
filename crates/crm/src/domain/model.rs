@@ -543,6 +543,10 @@ pub enum CrmError {
     /// Preview work is limited to one new request per member per thirty seconds.
     #[error("wait before starting another email contribution preview")]
     EmailPreviewRateLimited,
+    /// Complete live rule discovery exceeded an authoring/read resource limit.
+    #[cfg(feature = "ports")]
+    #[error(transparent)]
+    EmailRuleLimitExceeded(#[from] super::email_rule_discovery::EmailRuleLimitExceeded),
     /// A count page reached its bounded statement/work budget.
     #[error("email contribution preview reached its work budget")]
     EmailPreviewBudgetExhausted,

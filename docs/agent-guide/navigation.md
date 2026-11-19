@@ -664,7 +664,10 @@ use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
-do not fetch additional pages to find every unread item.
+do not fetch additional pages to find every unread item. These dots and the
+unread checks described below are the rail's with `enable-unified-notifications`
+off; with it on, the buttons follow the Notifications inbox's unread rows
+instead (see [Notifications](notifications.md)).
 Home uses `HomeUnreadPresence` over its existing 100-item Signal/unread candidate
 page, with one state-only notification witness per entity (plus one reminder
 witness for email). It must not fetch full notification history just to draw the
@@ -1109,12 +1112,13 @@ with a filled glyph also swap to it. More carries that selected state while the
 open view is one of the destinations it hides, so the island always shows where
 you are. Search, on its own island, stays an action at full ink.
 
-Notifications, Email, and Channels use the same reactive unread-presence checks
-as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
-the represented items are read or completed, not merely when opening a view.
-Overflow destinations keep their dots in More; More itself has a dot when any
-hidden destination is unread. Resizing or reordering moves the indicator with
-its destination. These remain presence indicators, with no extra pagination.
+Notifications, Email, and Channels get unread indicators from the same
+`useNavigationUnread` hook as the desktop sidebar. Their accent dots clear when
+the represented items are read or completed. Overflow destinations keep their
+dots in More, and More itself has a dot when any hidden destination is unread.
+Resizing or reordering moves the indicator with its destination. See
+[Notifications](notifications.md#notifications-view--appnotifications) for the
+source of the dots and the opt-in for unread numbers.
 
 Open **More views → Customize dock** to change the order. Drag a row's handle immediately,
 without holding first, and move it across the **In dock** / **In More** boundary. The counts use the

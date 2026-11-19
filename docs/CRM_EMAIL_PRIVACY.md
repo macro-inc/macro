@@ -196,12 +196,14 @@ keep their parity tests against the functions passing.
 The Team reader calls `crm_email_thread_excluded` for each candidate and each
 competing copy before choosing the conversation's representative.
 The Team view's read takes the inboxes that contributed when its filters resolved
-and rechecks each thread's consent and exclusions. The optimized Team reader uses
-one read-only repeatable-read snapshot for mode resolution, probe and page, like
+and rechecks each thread's consent and exclusions. Every Team reader uses
+one read-only repeatable-read snapshot for mode resolution, discovery and page, like
 the Owned reader, so an import cannot make a previously sparse set dense between statements.
 An in-flight request answers from that snapshot; a withdrawal or new exclusion
 committed during it takes effect on the next request. A new grant also shows mail
-from the next request. General fallback reads keep their existing transaction.
+from the next request. General fallback reads retain that snapshot, including
+when the initial resolution finds only all-mail contributors; opening a new
+transaction could otherwise read a selected policy that skipped discovery.
 Its address superset
 relies on a message listing only its own inbox's contacts
 (`parse_and_upsert_message_contacts`): a message naming another inbox's contact
@@ -368,17 +370,73 @@ must cover references committed while teardown waits, without holding the team
 privacy lock across long cascades. The remote flag controls future writes,
 never enforcement of stored restrictions.
 
-The optimized Team reader resolves contribution modes inside its read snapshot.
-When none of the requested contributors uses selected mode, it emits the existing
-all-mail probe and page SQL without selected-rule CTEs or predicates. Mode changes
-committed during a request apply to the next request, just like withdrawals and
+The optimized and General Team readers resolve contribution modes inside their
+read snapshot.
+When none of the requested contributors uses selected mode, the optimized reader
+emits the existing all-mail probe and page SQL without selected-rule CTEs or
+predicates. General keeps its scalar page SQL and skips selected discovery in
+that case. Mode changes committed during a request apply to the next request,
+just like withdrawals and
 private-thread exceptions. Deterministic transition tests cover both directions.
 
 The Team reader keeps a shared ten-second deadline for its probes and pages.
-For selected mailboxes it first probes positive targets, so sparse selections do
-not require walking a record's entire mailbox history. Live company domains
-resolve against each selected mailbox's contacts in one indexed pass per page;
-contact-address targets use direct indexed lookups. Per-thread eligibility keeps
+For selected mailboxes, an injected CRM discovery core resolves each distinct
+live contact/company source once and preserves each contributor's visibility.
+The positive-target probe and page reuse its complete contact IDs in the same
+snapshot. A small-input path is selected before expansion (up to eight selected
+contributors and 4,000 raw references); larger scopes fold shared sources and
+keyset-page mailbox contacts. Exact-address policies use existing indexed
+lookups until their estimated cross product exceeds 50,000, then scan within the
+same work budget. No hot email-table index is added.
+
+Discovery caps contributors (1,000), raw references/live contact addresses/live
+company domains (50,000 each), one live value (4 KiB), source text (8 MiB), raw
+mailbox contacts (250,000), contact text (32 MiB), suffix checks (750,000),
+membership checks (250,000), and its shared deadline (ten seconds). Counts apply
+before filtering/deduplication. Suffix checks apply only to mailboxes with their
+own applicable domain selectors, including live company domains. A complete
+result or an explicit error is required; truncating discovery cannot authorize
+a partial feed. The small SQL aggregate may materialize the bounded raw page
+before the text-byte check.
+
+Both policy validation and replacement use this same checker against the
+proposed owner policy and the other active selected contributors. Validation is
+read-only; replacement repeats admission inside its locked transaction before
+granting. Successful admission restores the mutation's existing 15-second
+statement timeout for subsequent writes. Failure returns HTTP 400 with the limit
+name/maximum and leaves consent, identity, historical work, audit and idempotency
+unchanged. Subsequent live-source growth may exceed a bound: Team reads then
+return HTTP 503 with that limit,
+record the limit and work counters on `crm.email_rules.discovery`, and return no
+partial result or advanced cursor. Public errors omit observed team usage and
+private target values. Withdrawal and all-mail behavior remain independent.
+
+More than eight distinct live sources start with bounded first-page batches:
+at most 128 sources and eight values per source. Full sources continue by keyset;
+all prefetched raw rows are charged before continuations. Small source sets keep
+the single-source queries, and neither path truncates the discovered set.
+
+General fallback keeps mode resolution, discovery and its page in one snapshot.
+Discovery bounds do not bound every later candidate/message/fallback cost;
+those remain activation checks.
+
+Address-filtered Team All Mail pages also use the optimized reader for
+ViewedUpdated sorting when their filter does not inspect view history. A saved
+view time overrides message recency. Sparse matches look up history by primary
+key; dense pages merge viewed and never-viewed sources and refill in the same
+snapshot. The same eligibility and competing-copy checks apply in every round.
+Any later failure returns an error, never a partial page. Window sizes bound
+emitted candidates, not all rejected source rows or timestamp ties; the existing
+request deadline still applies. Other unsupported sorts and filters retain
+General. The common `crm.team_email_read` span records sort and chosen path.
+
+The optimized reader probes positive targets first, so sparse selections do not
+require walking a record's entire mailbox history. In a selected page, each
+candidate and competing-copy check expands its non-draft participants once and
+reuses the complete set for inclusion and domain vetoes. An early matching
+participant never hides a private participant later in the thread. This removes
+duplicate message/recipient work; it does not cap the length of a thread or the
+number of candidates. Per-thread eligibility keeps
 only the bounded live target IDs and probes their indexed addresses or domains,
 so it does not repeat that expansion for each thread. Selected-policy target
 resolution fences mailbox contact and participant lookups. Company domains are

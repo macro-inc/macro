@@ -334,6 +334,12 @@ impl IntoResponse for CrmError {
                     message: "wait before starting another email contribution preview".into(),
                 }),
             ),
+            CrmError::EmailRuleLimitExceeded(error) => (
+                StatusCode::BAD_REQUEST,
+                Json(ErrorResponse {
+                    message: error.to_string().into(),
+                }),
+            ),
             CrmError::EmailPreviewBudgetExhausted => (
                 StatusCode::SERVICE_UNAVAILABLE,
                 Json(ErrorResponse {

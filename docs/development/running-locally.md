@@ -372,8 +372,9 @@ persona accounts it created. It is safe to run against a stack that you tested i
 
 Passwords uses a local OpenBao server with team-scoped namespaces and single-node
 integrated Raft on a named Compose volume per instance. Startup initializes it once
-and unseals it automatically with a generated local seal key. Provision each new team
-using the [local vault bootstrap](../../infra/local/openbao/README.md); container
+and unseals it automatically with a generated local seal key. Stack startup provisions
+every existing team; for a team created later run `just passwords_provision`
+(see the [local vault bootstrap](../../infra/local/openbao/README.md)). Container
 and stack restarts preserve credentials, TOTP seeds, and provisioning without a
 reseed. Keep the volume and seal key together, and use synthetic credentials only.
 Migrating from the old in-memory development server requires restoring its values

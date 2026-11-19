@@ -149,10 +149,18 @@ vi.mock('@app/components/list', () => ({
     mocks.onNavigate = options.navigation.onNavigate;
   },
 }));
-vi.mock('@app/components/view-shell', () => ({
+vi.mock('@app/components/view-shell', async () => ({
+  CollapsibleSection: (
+    await import('@app/components/view-shell/CollapsibleSection')
+  ).CollapsibleSection,
   ViewSidebar: {
     Header: (props: { children: JSX.Element }) => <div>{props.children}</div>,
     Primary: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    Toolbar: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    Content: (props: { children: JSX.Element }) => <div>{props.children}</div>,
+    Control: (props: { children: JSX.Element }) => (
+      <button>{props.children}</button>
+    ),
     CloseButton: () => null,
     Title: (props: { children: JSX.Element }) => <span>{props.children}</span>,
   },
@@ -275,7 +283,23 @@ vi.mock('@thisbeyond/solid-dnd', () => ({
   createDroppable: () => ({ ref: () => {}, isActiveDroppable: false }),
   useDragDropContext: () => undefined,
 }));
-vi.mock('@ui', () => ({ confirmDialog: mocks.confirmDialog }));
+vi.mock('@ui', async () => ({
+  cn: (await import('@ui/utils/classname')).cn,
+  confirmDialog: mocks.confirmDialog,
+  Tabs: () => null,
+  Hotkey: () => null,
+}));
+vi.mock('@app/features/routine-suggestions/routine-suggestions', () => ({
+  SidebarRoutineSuggestions: () => null,
+}));
+vi.mock('./ChannelFavoriteRows', () => ({
+  ChannelFavoritesSection: () => null,
+}));
+vi.mock('./ChannelSortDropdown', () => ({ ChannelSortDropdown: () => null }));
+vi.mock('./ChannelLabelRows', () => ({
+  ChannelLabelRow: () => null,
+  ChannelsCreateMenu: () => null,
+}));
 vi.mock('../../channels-view-context', () => ({
   useChannelsView: () => ({
     state: {
@@ -336,7 +360,14 @@ vi.mock('./ChannelLabelNameDialog', () => ({
   promptLabelName: vi.fn(),
 }));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
-vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
+vi.mock('./ExpandedChannelsRail', async (importOriginal) => {
+  const { ExpandedChannelsRail: RealRenderer } =
+    await importOriginal<typeof import('./ExpandedChannelsRail')>();
+  return {
+    ExpandedChannelsRail: (props: Parameters<typeof RealRenderer>[0]) =>
+      mocks.realRenderer ? <RealRenderer {...props} /> : null,
+  };
+});
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
   useChannelRailActivity: (
@@ -347,6 +378,9 @@ vi.mock('./hooks/useChannelRailActivity', () => ({
     mocks.activityChannels = channels;
     mocks.additionalActivityChannels = additionalChannels;
     return {
+      targetChannelId: () => undefined,
+      targetLabel: () => undefined,
+      unreadCount: () => 0,
       unreadChannelIds: () =>
         new Set(
           channels()
@@ -473,7 +507,7 @@ vi.mock('@core/util/createScrollTopFade', () => ({
   createScrollTopFade: () => {},
 }));
 vi.mock('../../live-calls-sidebar', () => ({
-  ChannelsLiveCallsSidebar: () => null,
+  ChannelsLiveCallsSidebar: () => <section aria-label="Live calls" />,
 }));
 vi.mock('@app/features/slack-import/slack-import-sidebar', () => ({
   SlackImportSidebar: () => null,
@@ -588,6 +622,31 @@ afterEach(() => {
   delete document.documentElement.dataset.modality;
 });
 
+it.each([false, true])(
+  'mounts live calls before conversation sections with sections enabled: %s',
+  (enabled) => {
+    mocks.sectionsEnabled = enabled;
+    mocks.realRenderer = true;
+    mocks.closedGroups = ['team_channels', 'channels', 'direct_messages'];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    mount();
+
+    const liveCalls = screen.getByRole('region', { name: 'Live calls' });
+    const conversations = screen.getByRole('tree');
+    expect(
+      liveCalls.compareDocumentPosition(conversations) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(conversations.contains(liveCalls)).toBe(false);
+  }
+);
 it.each([false, true])(
   'tracks unread activity for favorites outside loaded channel pages with sections enabled: %s',
   (enabled) => {

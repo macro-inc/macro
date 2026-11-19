@@ -13,7 +13,8 @@ use crate::domain::{
     customer_repo::CustomerRepository,
     model::{
         ComputerPurchaseCredit, ItemChangeSettlement, ItemChangeStatus, ItemProration,
-        ItemQuantityChange, ItemRemoval, PriceInfo, SubscriptionItemView, SubscriptionTerms,
+        ItemQuantityChange, ItemRemoval, PaymentTerms, PriceInfo, ProratedCharge,
+        SubscriptionItemView, SubscriptionTerms,
     },
     open_seat_release::OpenSeatRelease,
     owned_entity_cleanup::OwnedEntityCleanup,
@@ -214,6 +215,31 @@ where
         Ok(self
             .customer_repository
             .subscription_terms(&subscription)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn team_payment_terms(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> Result<PaymentTerms, TeamSubscriptionItemsError> {
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .payment_terms(&subscription)
+            .await?)
+    }
+
+    #[tracing::instrument(skip(self, prices), fields(prices = prices.len()), err)]
+    async fn preview_item_prorations(
+        &self,
+        team_id: &uuid::Uuid,
+        prices: &[stripe::PriceId],
+    ) -> Result<Vec<ProratedCharge>, TeamSubscriptionItemsError> {
+        let subscription = self.team_subscription(team_id).await?;
+        Ok(self
+            .customer_repository
+            .preview_prorations(&subscription, prices)
             .await?)
     }
 

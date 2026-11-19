@@ -94,3 +94,70 @@ async fn losing_access_after_submission_reads_as_unconfirmed_not_failed(db: PgPo
         "the provider may already have sent it, so a resend risks a duplicate"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cancelling_rejected_schedule_restores_draft_and_fences_retry(db: PgPool) {
+    use crate::domain::{
+        models::mailbox_operation::*,
+        scheduled::{EmailSchedulingRepo, ScheduleChange},
+    };
+    let (sync, repo, input, link) = setup(&db, true).await;
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id) VALUES ($1,$2,now() - interval '1 second',$3)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    let lease = claim(&sync).await;
+    let cp = checkpoint(&lease, DraftStage::Submitting);
+    assert!(matches!(
+        sync.start_delivery(&lease, &cp).await.unwrap(),
+        DeliveryStart::Started
+    ));
+    let actor = actor();
+    assert!(matches!(
+        repo.change_schedule(link, input.db_id, &actor, ScheduleChange::Cancel, None, 0)
+            .await,
+        Err(crate::domain::models::EmailErr::MessageDeliveryConflict(_))
+    ));
+    sync.fail_draft(&lease, DraftFailure::SendRejected)
+        .await
+        .unwrap();
+    let facts = repo
+        .message_operation_facts(&[input.db_id])
+        .await
+        .unwrap()
+        .remove(&input.db_id)
+        .unwrap();
+    let retry = plan_resolution(
+        facts.clone(),
+        MessageResolutionRequest {
+            message_id: input.db_id,
+            revision: facts.revision,
+            remote_version: facts.remote_version.clone(),
+            action: MessageResolutionAction::RetrySend,
+            accept_duplicate_risk: false,
+        },
+    )
+    .unwrap();
+
+    repo.change_schedule(link, input.db_id, &actor, ScheduleChange::Cancel, None, 0)
+        .await
+        .unwrap();
+    assert!(matches!(
+        repo.commit_message_resolution(&actor, retry).await,
+        Err(crate::domain::models::EmailErr::MessageDeliveryConflict(_))
+    ));
+    let facts = repo
+        .message_operation_facts(&[input.db_id])
+        .await
+        .unwrap()
+        .remove(&input.db_id)
+        .unwrap();
+    let status = MessageOperationStatus::from(facts);
+    assert_eq!(status.state, MessageOperationState::Pending);
+    assert_eq!(status.issue, None);
+    let resumed = claim(&sync).await;
+    let cp = resumed.checkpoint.as_ref().unwrap();
+    assert_eq!(cp.stage, DraftStage::Ready);
+    assert!(!cp.submission_started);
+    assert!(matches!(
+        sync.start_delivery(&resumed, cp).await.unwrap(),
+        DeliveryStart::NotDue
+    ));
+}
