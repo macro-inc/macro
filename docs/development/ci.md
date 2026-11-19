@@ -19,6 +19,58 @@ what each `CI gate` state means, re-runs, and fork PRs. The workflows are
 generated from Rust; see the
 [workflows rule](../../.agents/rules/infra/github-workflows.md).
 
+## Attesting checks from your machine
+
+A `PR CI` job your own machine has already passed doesn't need a runner.
+`cargo x attest` runs a job's steps on the merge of your commit with `main` and
+records each pass as an `attested/<check>` commit status. A requested `PR CI`
+run skips the jobs that have an accepted status and runs the rest as before.
+
+```sh
+cargo x attest list                                  # the checks that can be attested
+cargo x attest run web-app/test cloud-storage/check  # run them; nothing leaves the machine
+cargo x attest run all --post                        # run every check PR CI would, post the passes
+```
+
+Push the commit before `--post`, then add `run-ci` as usual. A check that fails
+posts nothing, so its job runs in `PR CI`. `all` leaves out the checks `PR CI`
+would not run for the change.
+
+How a check runs:
+
+- On the commit, never the working tree: `HEAD` merged with `origin/main`, in
+  a checkout of its own under `~/.cache/macro-attest/`. That checkout keeps its
+  own `target` and `node_modules`, so the first run of a check is a cold build.
+- With the job's own steps, read from the generated workflow in that merge,
+  inside the repository's Nix dev shell. Steps that only keep a runner's caches
+  are skipped.
+- One at a time per clone, whichever worktree starts it; a second run waits.
+
+What `PR CI` accepts:
+
+- Only people who can push to the repository can post a status, and only
+  same-repository PRs have theirs read. The newest status of a check counts.
+- The status names the job's fingerprint. A job whose definition changed since,
+  in the PR or on `main`, runs on a runner.
+- For a job `path-check` selects (Rust packages, conditional web steps), the
+  status carries a digest of the outputs it ran on. `path-check` skips the job
+  only when this run selects the same.
+- Statuses sit on a commit: every push needs new attestations.
+- One request in ten is an audit: it ignores every attestation and runs all
+  jobs. An attested check that fails there fails the run, and `CI gate` reads
+  `Attested but failed here: <checks>`. Nothing else runs these jobs for a pull
+  request, so treat that as a defect: find why the machine and the runner
+  disagree before attesting the check again.
+
+To withdraw an attestation, post a `failure` status with the same context:
+`gh api repos/macro-inc/macro/statuses/<sha> -f state=failure -f context=attested/<check>`.
+
+The Rust `test` job, `doppler-config`, the web `build`, the functional and
+browser tests, the native checks and every macOS or Windows job can't be
+attested: they need service containers, secrets, system packages, another
+operating system, or the pull request's labels. The list of checks, and how to
+add one, is in `xtask_workflows`' `attestation.rs`.
+
 ## Email end-to-end suites
 
 `PR CI` does not run the email end-to-end suites, and `CI gate` does not

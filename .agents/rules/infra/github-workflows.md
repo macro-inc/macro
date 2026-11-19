@@ -19,6 +19,12 @@ steps; hand-edited YAML drifts and fails CI's `cargo x workflows --check`.
   then run `cargo x workflows` and commit the regenerated YAML with it.
 - New CI scripts are Rust or TypeScript, never Python. A step with no checkout embeds
   its script with `include_str!` and runs it on the hosted image's Node.
+- A job `PR CI` waits for can be attested from a developer's machine only when
+  it is listed in `attestation.rs`'s `CHECKS` with the steps that are the check.
+  A step you add to a listed job goes in its `steps`, or in `RUNNER_STEPS` when
+  it only keeps a runner's caches. List a new job when a machine can run it as
+  the runner does: no secrets, service containers or other operating system,
+  and no other job that needs it.
 - A few older workflows are still hand-written YAML. When you change one
   substantially, port it to the generator instead of editing the YAML.
 
