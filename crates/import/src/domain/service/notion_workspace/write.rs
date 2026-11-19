@@ -296,6 +296,24 @@ impl<'a, Store: WrittenObjects> Progress<'a, Store> {
             .unwrap_or_default()
     }
 
+    /// Resolve this source's omitted assignees once, without revisiting user edits.
+    fn omitted_assignee_tasks(&self) -> anyhow::Result<HashSet<Uuid>> {
+        let mut tasks = HashSet::new();
+        for (payload, id) in self.all(WrittenKind::TaskNotice) {
+            let notice: crate::domain::models::TaskImportNotice = serde_json::from_str(&payload)?;
+            anyhow::ensure!(
+                notice.task_id == id,
+                "Task notice identity does not match its marker"
+            );
+            match notice.reason {
+                crate::domain::models::TaskImportNoticeReason::PersonalAssigneeOmitted => {
+                    tasks.insert(id);
+                }
+            }
+        }
+        Ok(tasks)
+    }
+
     /// Record a typed task notice before its written marker makes retries skip it.
     pub async fn record_task_notice(
         &self,
@@ -375,7 +393,7 @@ pub(super) async fn folder_once<Writer: WorkspaceWriter, Store: WrittenObjects>(
 
 /// Write a task list: a folder of Macro tasks, one per row, shared with the
 /// team with `share`. Returns the folder id. Rows an earlier attempt already
-/// wrote are skipped.
+/// wrote keep their contents; Shared retries reapply their assignees.
 #[expect(
     clippy::too_many_arguments,
     reason = "a task list needs its source, destination, people, links and progress"
@@ -388,7 +406,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
     folder: Uuid,
     share: bool,
     people: &PeopleMap,
-    links: &NotionLinks,
+    links: &tokio::sync::RwLock<NotionLinks>,
     progress: &Progress<'_, Store>,
     cancel: &Cancel,
     personal_folder: Option<Uuid>,
@@ -426,18 +444,36 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
         }
     }
     let failures = Mutex::new(0usize);
+    let replay_failed = std::sync::atomic::AtomicBool::new(false);
+    let omitted_assignees = progress.omitted_assignee_tasks()?;
     stream::iter(rows.iter().cloned())
         .map(|row| {
             let failures = &failures;
+            let replay_failed = &replay_failed;
+            let omitted_assignees = &omitted_assignees;
             async move {
-                if cancel.stopped()
-                    || progress
-                        .get_for(WrittenKind::Task, row.id.as_str())
-                        .is_some()
-                {
+                if cancel.stopped() {
                     return;
                 }
                 let outcome: anyhow::Result<()> = async {
+                    if let Some(task) = progress.get_for(WrittenKind::Task, row.id.as_str()) {
+                        if item.shared
+                            && omitted_assignees.contains(&task)
+                            && let Some(email) =
+                                task_properties(&row, &item.task_fields, people).assignee_email
+                        {
+                            let notice = writer
+                                .reapply_task_assignee(user, task, &email, visibility)
+                                .await
+                                .inspect_err(|_| {
+                                    replay_failed.store(true, std::sync::atomic::Ordering::Relaxed);
+                                })?;
+                            if let Some(notice) = notice {
+                                progress.record_task_notice(task, notice).await?;
+                            }
+                        }
+                        return Ok(());
+                    }
                     let content = full_markdown(api, &row.id).await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
@@ -447,13 +483,14 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
+                    let links = links.read().await.clone();
                     let created = writer
                         .create_task(
                             user,
                             id,
                             title,
                             &body,
-                            links,
+                            &links,
                             &properties,
                             Some(tasks_folder),
                             Some(SourceDates::from(&row)),
@@ -480,6 +517,10 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
         .collect::<Vec<()>>()
         .await;
     cancel.ensure_running()?;
+    anyhow::ensure!(
+        !replay_failed.load(std::sync::atomic::Ordering::Relaxed),
+        "Some task assignees could not be reapplied. Retry the import."
+    );
     let failed = failures.into_inner().unwrap_or_default();
     anyhow::ensure!(
         failed < rows.len() || rows.is_empty(),

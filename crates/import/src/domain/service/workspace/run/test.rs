@@ -54,7 +54,10 @@ fn page_times(id: &NotionId) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
 }
 
 /// A workspace of plain pages, each with a body.
-struct Pages;
+#[derive(Default)]
+struct Pages {
+    after_replacement: Option<Arc<Notify>>,
+}
 
 impl NotionApi for Pages {
     async fn search(
@@ -80,6 +83,19 @@ impl NotionApi for Pages {
     }
 
     async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
+        if *id == page_id('f')
+            && let Some(ready) = &self.after_replacement
+        {
+            ready.notified().await;
+            return Ok(PageMarkdown {
+                markdown: format!(
+                    "See [Wiki]({}) and [Live]({})",
+                    page_id('e').url(),
+                    page_id('a').url()
+                ),
+                unknown_block_ids: Vec::new(),
+            });
+        }
         Ok(PageMarkdown {
             markdown: format!("Body of {id}"),
             unknown_block_ids: Vec::new(),
@@ -138,77 +154,27 @@ impl NotionConnections for Connected {
         &self,
         _: &MacroUserIdStr<'static>,
     ) -> std::result::Result<Option<Pages>, NotionError> {
-        Ok(Some(Pages))
+        Ok(Some(Pages::default()))
     }
 }
 
-/// Records the documents and folders a write makes. With `hold` set, a
-/// document write waits until the process is shutting down and then fails,
-/// as a write cut off by a deploy does.
-#[derive(Default)]
-struct Writer {
-    task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
-    folders: Mutex<Vec<String>>,
-    folder_delay: Option<std::time::Duration>,
-    folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
-    documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
-    shares: Mutex<Vec<SharedEntity>>,
-    hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
-    tracker_tasks: Mutex<Vec<Uuid>>,
-    visibilities: Mutex<Vec<(Uuid, crate::domain::ports::ImportVisibility)>>,
-    tracker_projects: Mutex<Vec<Uuid>>,
-    tracker_links: Mutex<Vec<Uuid>>,
-    tracker_events: Mutex<Vec<(Uuid, &'static str)>>,
-    reject_tracker_links: std::sync::atomic::AtomicBool,
-    reject_tracker_projects: std::sync::atomic::AtomicBool,
-    /// Each document written with the source dates it was given.
-    document_dates: Mutex<Vec<(Uuid, Option<SourceDates>)>>,
-    folder_records: Mutex<Vec<(Uuid, String, Option<Uuid>)>>,
-    document_folders: Mutex<Vec<(Uuid, Option<Uuid>)>>,
-    task_folders: Mutex<Vec<Option<Uuid>>>,
-    grants: Mutex<std::collections::HashSet<Uuid>>,
+struct AfterReplacement(Arc<Notify>);
+
+impl NotionConnections for AfterReplacement {
+    type Api = Pages;
+
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'static>,
+    ) -> std::result::Result<Option<Pages>, NotionError> {
+        Ok(Some(Pages {
+            after_replacement: Some(Arc::clone(&self.0)),
+        }))
+    }
 }
 
-impl EntityCreator for Writer {
-    async fn can_view(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: crate::domain::models::ImportSource,
-        _: &str,
-    ) -> anyhow::Result<bool> {
-        Ok(true)
-    }
-    async fn create_task(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &str,
-        _: &ImportedTaskProperties,
-    ) -> anyhow::Result<String> {
-        unimplemented!("workspace imports write through WorkspaceWriter")
-    }
-
-    async fn create_notion_document(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &str,
-        _: &NotionLinks,
-        _: &ImportedDocumentProperties,
-    ) -> anyhow::Result<String> {
-        unimplemented!("workspace imports write through WorkspaceWriter")
-    }
-
-    async fn create_channel(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &ImportTargetReservation,
-        _: &[String],
-    ) -> anyhow::Result<Uuid> {
-        unimplemented!("workspace imports write no channels")
-    }
-}
+mod writer;
+use writer::Writer;
 
 type Service = ImportServiceImpl<
     PgImportRepo,
@@ -920,11 +886,11 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
     }
 }
 
-/// The session events the import produces, in order.
 mod events;
+mod reimport;
+/// The session events the import produces, in order.
+mod root;
 mod tracker;
 
 mod dates;
 mod folders;
-
-mod writer;

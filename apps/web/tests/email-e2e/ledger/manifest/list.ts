@@ -21,31 +21,31 @@ export const list = {
       id: 'SL-03',
       name: 'Signal tab (id important)',
       opened:
-        'Sidebar Inbox > header tab Signal; g i; mobile pill; default tab',
+        'Sidebar Inbox > header tab Signal; g e; mobile pill; default tab',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-04',
       name: 'Noise tab',
-      opened: 'Inbox header tab Noise; g o; mobile pill',
+      opened: 'Inbox header tab Noise; mobile pill',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-05',
       name: 'Favorites tab',
-      opened: 'Sidebar Favorites; g s; touch sidebar sheet',
+      opened: 'Sidebar Favorites; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-06',
       name: 'Drafts tab',
-      opened: 'Sidebar Drafts; g d; touch sidebar sheet',
+      opened: 'Sidebar Drafts; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-07',
       name: 'Sent tab',
-      opened: 'Sidebar Sent; g t; touch sidebar sheet',
+      opened: 'Sidebar Sent; g s; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
@@ -63,13 +63,13 @@ export const list = {
     {
       id: 'SL-10',
       name: 'All mail tab',
-      opened: 'Sidebar Library > All mail; g a; touch sidebar sheet',
+      opened: 'Sidebar Library > All mail; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
       id: 'SL-11',
       name: 'Archived tab',
-      opened: 'Sidebar Library > Archived; g e; touch sidebar sheet',
+      opened: 'Sidebar Library > Archived; touch sidebar sheet',
       viewports: BOTH_VIEWPORTS,
     },
     {
@@ -230,20 +230,6 @@ export const list = {
       note: 'the other tabs are chosen in the touch sidebar sheet (AL-002)',
     },
     {
-      id: 'AL-005',
-      surface: 'SL-01',
-      fn: ['F-029', 'F-030'],
-      action: 'go to tab by letter',
-      trigger:
-        'hotkey g then i (Signal), o (Noise), s (Favorites), t (Sent), d (Drafts), e (Archived), a (All)',
-      source: ['src/features/email-view/use-email-view-hotkeys.ts'],
-      registered: [
-        // biome-ignore lint/suspicious/noTemplateCurlyInString: the key derive.ts prints
-        'src/features/email-view/use-email-view-hotkeys.ts#Go to ${label}',
-      ],
-      viewports: ['desktop'],
-    },
-    {
       id: 'AL-006',
       surface: 'SL-17',
       fn: ['F-029', 'F-030'],
@@ -294,8 +280,8 @@ export const list = {
       id: 'AL-400',
       surface: 'SL-01',
       fn: ['F-029'],
-      action: 'open the Email view from anywhere in the app',
-      trigger: 'app sidebar go-to hotkey for Email (key e)',
+      action: 'open the Email view on Signal from anywhere in the app',
+      trigger: 'app sidebar go-to hotkey for Email (g then e)',
       source: [
         'src/components/app/app-sidebar/sidebar.tsx',
         'src/components/app/sidebar-next/nav-items.ts',
@@ -342,6 +328,17 @@ export const list = {
       ],
       viewports: ['phone'],
       note: "the way on touch to every tab outside the Inbox and to saved views; it took the place of the phone's saved-view pill (AL-121, removed with its picker)",
+    },
+    {
+      id: 'AL-912',
+      surface: 'SL-01',
+      fn: ['F-030'],
+      action: 'open the Sent tab from anywhere in the app',
+      trigger: 'app sidebar go-to hotkey for Sent (g then s)',
+      source: ['src/components/app/app-sidebar/sidebar.tsx'],
+      registered: ['sidebar.goTo.sent'],
+      viewports: ['desktop'],
+      note: "took the place of Email's own go-to letters (AL-005, removed): g and a letter now means the same in every view",
     },
     {
       id: 'AL-011',
@@ -2048,6 +2045,18 @@ export const list = {
         'src/features/email-view/components/EmailRowActions.tsx',
         'src/features/email-view/components/EmailList.tsx',
         'src/features/next-soup/actions/make-mark-done-action.ts',
+      ],
+    },
+    {
+      id: 'STL-990',
+      surface: 'SL-01',
+      fn: ['F-075'],
+      state: 'result: the thread leaves the list it was trashed from',
+      trigger:
+        'after the trash succeeds, also while the mark read of a thread just opened is on its way',
+      source: [
+        'src/features/email-view/components/EmailList.tsx',
+        'src/features/next-soup/utils.ts',
       ],
     },
     {

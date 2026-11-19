@@ -64,6 +64,20 @@ projects.
   retries, so a recovered attempt does not record an error span.
 - Requests time out after five minutes (`REQUEST_TIMEOUT`); delete-by-query
   across a large mailbox runs for minutes.
+- Agent-session writes never wait for a refresh. A search sees only refreshed
+  documents, so delete what you know by id first and leave those ids out of
+  the sweep's search, which finds the leftovers to delete by id. The parent's
+  `indexed_messages` record (child id to content hash) and `pending_messages`
+  (children being changed, not yet confirmed) are read with a real-time GET,
+  so they are current without a refresh. Never trust a record
+  without first naming the children you change as pending. Every agent-session
+  write and delete carries `ReconcileAgentSessionArgs::version` as an
+  `external_gte` version (a session delete carries its own lease's). A 409
+  means the document holds a later version, not that the later reconcile
+  finished: the request fails; a live event's retry runs under a new lease,
+  and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
+  the reconcile and the session delete first read the parent, which fails on a
+  missing index or alias.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`

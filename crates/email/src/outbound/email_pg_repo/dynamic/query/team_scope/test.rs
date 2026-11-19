@@ -14,6 +14,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 
 pub(super) mod selected;
+mod stream_plan;
 
 const TEAM: Uuid = Uuid::from_u128(0xf1);
 const OWN: Uuid = Uuid::from_u128(1);
@@ -169,9 +170,12 @@ fn thread_terms_and_cursor_are_stream_conditions() {
     let stream = page
         .split(") AS stream")
         .next()
-        .and_then(|head| head.rsplit("FROM email_threads t").next())
+        .and_then(|head| {
+            head.rsplit("FROM (SELECT DISTINCT thread_id FROM matching_threads) matched")
+                .next()
+        })
         .unwrap();
-    assert!(stream.contains("t.id = ANY(ARRAY(SELECT thread_id FROM matching_threads))"));
+    assert!(stream.contains("WHERE id = matched.thread_id OFFSET 0"));
     assert!(stream.contains("t.is_signal"));
     assert!(stream.contains("t.link_id = $"));
     assert!(stream.contains("(COALESCE(t.latest_non_spam_message_ts, t.updated_at), t.id) < ($"));

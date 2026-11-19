@@ -160,16 +160,6 @@ export const enableDesktopTabs = defineFlag({
 });
 
 /**
- * Macro computers: the whole computer UI (Settings → Machines, Billing,
- * Agents). Off hides it; existing computers keep running and billing.
- * No dev default: dev follows PostHog like the backend, which fails closed.
- */
-export const enableMacroComputers = defineFlag({
-  key: 'enable-macro-computers',
-  env: 'ENABLE_MACRO_COMPUTERS',
-});
-
-/**
  * Agent teammates: team admins invite an AI agent, with its own account and
  * Macro computer, from Settings → Team → Members.
  */
@@ -524,8 +514,8 @@ export const enableEmailWideSearch = defineFlag({
 });
 
 // The Focus tab in Mail: signal threads the email focus worker classified as
-// worth the owner's attention. Only allowlisted inboxes are classified, so the
-// tab is empty for everyone else.
+// worth the owner's attention. The worker reads this same flag for each inbox
+// owner and classifies only theirs, so a rollout step changes both together.
 export const enableEmailFocus = defineFlag({
   key: 'enable-email-focus',
   env: 'ENABLE_EMAIL_FOCUS',

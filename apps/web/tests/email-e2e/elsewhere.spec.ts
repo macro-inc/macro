@@ -2,10 +2,12 @@
 // composer a thread opens, and a thread's link pasted into another editor.
 
 import type { Page } from '@playwright/test';
-import { draftThreads } from './harness/drafts';
+import { draftThreads, graphqlOperation } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { readMailbox } from './harness/journeys';
 import { anInbox, PROVIDERS } from './harness/providers';
+import { holdRequests } from './harness/states-compose';
+import { universalInput } from './harness/ways-elsewhere';
 import { confirmed, did, saw } from './ledger/record';
 
 const from = 'Grace <grace@example.com>';
@@ -44,24 +46,35 @@ for (const provider of PROVIDERS) {
   test.describe(`elsewhere in Macro, with ${anInbox(provider)}`, () => {
     test.use({ provider });
 
-    // Class universal-input-email-needs-draft-id: the universal input saves
-    // its email without a draft id, which the save refuses ("Save the draft
-    // before sending"), so nothing is saved or sent.
     // When this fails, an email written in the universal input is not sent:
-    // "Send email" does nothing, never says "Email sent", or the provider
-    // gets no message, or one with another recipient, subject or text.
-    test('known bug: universal-input-email-needs-draft-id: the universal input sends an email @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // "Send email" does nothing, does not open the thread it sent, or the
+    // provider gets no message, or one with another recipient, subject or
+    // text.
+    test('the universal input sends an email and opens its thread', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.open('/app/mail');
       await universalEmail(page, 'Lunch moved');
+      // The save before the send, held so the pending button stays.
+      const save = await holdRequests(
+        page,
+        (sent) => graphqlOperation(sent) === 'SaveEmailDraft'
+      );
 
       await page.getByRole('button', { name: 'Send email' }).click();
       did('AX-050');
       await expect(
-        page.getByRole('status').filter({ hasText: 'Email sent' })
-      ).toBeVisible();
+        universalInput(page).getByRole('button', { name: 'Working…' })
+      ).toBeDisabled();
       saw('STX-303');
+      await save.release();
+      // Once it is sent, the universal input closes and opens the thread.
+      await expect(universalInput(page)).toHaveCount(0);
+      await expect(
+        page.getByRole('heading', { name: 'Lunch moved', level: 1 })
+      ).toBeVisible();
+      saw('STX-977');
 
       await expect
         .poll(
@@ -76,36 +89,44 @@ for (const provider of PROVIDERS) {
         )
         .toEqual([{ to: [recipient], text: true }]);
       confirmed('F-166');
+      await expect(page.getByText(request)).toBeVisible();
+      // What it sent was the draft it saved, so no draft is left.
+      await expect.poll(async () => await draftThreads(mailbox)).toEqual([]);
     });
 
-    // Class universal-input-email-needs-draft-id, as above.
     // When this fails, "Save as draft" in the universal input keeps no
-    // draft, or its "Open" leads somewhere else than the draft it saved.
-    test('known bug: universal-input-email-needs-draft-id: the universal input saves an email draft and opens it @known-bug', {
-      tag: '@known-bug',
-    }, async ({ page, mailbox }) => {
+    // draft, or opens something else than the draft it saved.
+    test('the universal input saves an email draft and opens it', async ({
+      page,
+      mailbox,
+    }) => {
       await mailbox.open('/app/mail');
       await universalEmail(page, 'Lunch moved');
+      // Held so the pending button stays.
+      const save = await holdRequests(
+        page,
+        (sent) => graphqlOperation(sent) === 'SaveEmailDraft'
+      );
 
       await page.getByRole('button', { name: 'Save as draft' }).click();
       did('AX-049');
-      const result = page
-        .getByRole('status')
-        .filter({ hasText: 'Email draft saved' });
-      await expect(result).toBeVisible();
+      await expect(
+        universalInput(page).getByRole('button', { name: 'Saving…' })
+      ).toBeDisabled();
       saw('STX-303');
+      await save.release();
+      // Once it is saved, the universal input closes and opens the draft.
+      await expect(universalInput(page)).toHaveCount(0);
+      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
+        'Lunch moved'
+      );
+      saw('STX-977');
+      await expect(page.getByText(request)).toBeVisible();
       await expect
         .poll(async () =>
           (await draftThreads(mailbox)).map((thread) => thread.name)
         )
         .toEqual(['Lunch moved']);
-
-      await result.getByRole('button', { name: 'Open' }).click();
-      did('AX-307');
-      await expect(page.getByPlaceholder(/subject/i)).toHaveValue(
-        'Lunch moved'
-      );
-      await expect(page.getByText(request)).toBeVisible();
     });
 
     // When this fails, "Create task" on a thread opens no task composer, or

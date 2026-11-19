@@ -594,3 +594,9 @@ pub trait ProjectService: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<BasicProject, ProjectError>> + Send;
 }
+
+/// Physical folder lifecycle facts for trusted backend hosts; grants no access.
+pub trait ProjectLifecycleReads: Send + Sync + 'static {
+    /// True only for an existing folder outside trash, independent of a viewer.
+    fn project_is_live(&self, id: uuid::Uuid) -> impl Future<Output = anyhow::Result<bool>> + Send;
+}

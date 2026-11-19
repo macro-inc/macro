@@ -33,9 +33,18 @@ execution, display) that don't belong to a single domain.
   get an exact OFF override before insertion; shared items retain defaults.
   Personal tasks also omit teammate assignees, returning a typed notice for the
   import report; keep the same verdict on every property pass, including retries.
+  Propagate roster lookup errors on assignee replay so a transient outage cannot
+  clear an omission notice without applying the assignment.
   Notion tasks have no direct team grant; shared lists grant team access
   through their folder, while single tracked tasks (Linear) stay team-shared
   at creation.
+  `ImportedTargetReader` reads document/folder/database/initiative lifecycle
+  state through their owning domain ports, independently of viewer permissions;
+  root-folder reuse separately checks view access. Transient read failures propagate
+  so the import domain does not invalidate a live copy on an outage.
+- `src/import_workspace/lifecycle.rs`: physical lifecycle dispatch through owning
+  ports. PostgreSQL adapter tests cover live targets without grants,
+  trash/restore/purge and transient failures; hosts never reach service repos.
 - `src/import_jobs.rs`: `ImportJobs`, the shutdown token and tracker every
   host passes to `build_tool_service_context_from_env` (or its own import
   service) and calls `hand_over` on at shutdown, so running Notion imports

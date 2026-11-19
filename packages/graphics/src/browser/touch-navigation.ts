@@ -204,6 +204,24 @@ export function attachTouchNavigation(
     editor.panZoomBy(step.pan, step.center, step.zoom);
   };
 
+  // Each finger reports its own moves, so two fingers ask twice a frame. The
+  // camera moves once per frame, to where both fingers are by then: every move
+  // of it re-lays out the whole scene.
+  let frame: number | undefined;
+  let frameTime = 0;
+  const navigateNextFrame = (time: number) => {
+    frameTime = time;
+    frame ??= requestAnimationFrame(() => {
+      frame = undefined;
+      navigate(frameTime);
+    });
+  };
+  const dropFrame = () => {
+    if (frame === undefined) return;
+    cancelAnimationFrame(frame);
+    frame = undefined;
+  };
+
   /**
    * A pinch does not fling. With one finger still and the other spreading, the
    * midpoint travels too, at half the speed the spread changes; two fingers
@@ -299,7 +317,7 @@ export function attachTouchNavigation(
     if (!navigating) return;
 
     swallow(event);
-    if (pair?.ids.includes(event.pointerId)) navigate(event.timeStamp);
+    if (pair?.ids.includes(event.pointerId)) navigateNextFrame(event.timeStamp);
   };
 
   const pointerEnd = (event: PointerEvent) => {
@@ -314,6 +332,10 @@ export function attachTouchNavigation(
     swallow(event);
     if (event.type === 'pointercancel') cancelled = true;
     if (pair?.ids.includes(event.pointerId)) {
+      // The step below takes the fingers as they are now, so the frame that
+      // was waiting has nothing left to do. A finger that is not of the pair
+      // leaves that frame alone: the pair's last move is still owed.
+      dropFrame();
       // Take the lifting finger's last position (a cancelled touch reports
       // none), then hand over to the next pair if a third finger is still down.
       if (event.type === 'pointerup')
@@ -338,6 +360,19 @@ export function attachTouchNavigation(
     else glide.reset();
   };
 
+  // A surface that leaves one finger to the page lets the browser pan it
+  // (`touch-action: pan-x pan-y`), with any number of fingers. Two fingers
+  // are for the canvas: say so before the browser starts scrolling with them.
+  const touchMove = (event: TouchEvent) => {
+    if (navigating && event.cancelable) event.preventDefault();
+  };
+  // Fingers on the surface, by their touch events. The browser takes a
+  // finger's pointer events away once it scrolls the page with it, and the
+  // finger is still there.
+  let fingers = 0;
+  const countFingers = (event: TouchEvent) => {
+    fingers = event.targetTouches.length;
+  };
   const wheel = () => glide.cancel();
   // A press released in another window never reports its release here. Forget
   // it, or a mouse that went away pressed would keep fingers from navigating.
@@ -348,13 +383,18 @@ export function attachTouchNavigation(
   window.addEventListener('pointerup', pointerEnd, true);
   window.addEventListener('pointercancel', pointerEnd, true);
   element.addEventListener('wheel', wheel, { passive: true });
+  element.addEventListener('touchmove', touchMove, { passive: false });
+  element.addEventListener('touchstart', countFingers, { passive: true });
+  element.addEventListener('touchend', countFingers, { passive: true });
+  element.addEventListener('touchcancel', countFingers, { passive: true });
   window.addEventListener('blur', blur);
 
   return {
     /** Touches are down on the surface, so a WebKit gesture event duplicates them. */
-    tracking: () => touches.size > 0,
+    tracking: () => touches.size > 0 || fingers > 0,
     detach() {
       glide.cancel();
+      dropFrame();
       cancelLongPress();
       liftClick?.stop();
       window.removeEventListener('pointerdown', pointerDown, true);
@@ -362,6 +402,10 @@ export function attachTouchNavigation(
       window.removeEventListener('pointerup', pointerEnd, true);
       window.removeEventListener('pointercancel', pointerEnd, true);
       element.removeEventListener('wheel', wheel);
+      element.removeEventListener('touchmove', touchMove);
+      element.removeEventListener('touchstart', countFingers);
+      element.removeEventListener('touchend', countFingers);
+      element.removeEventListener('touchcancel', countFingers);
       window.removeEventListener('blur', blur);
     },
   };

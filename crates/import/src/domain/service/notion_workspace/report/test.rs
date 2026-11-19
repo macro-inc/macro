@@ -462,3 +462,23 @@ fn notice_reads_exclude_shared_items_and_older_reviews() {
         vec![expected]
     );
 }
+
+#[test]
+fn shared_re_reviews_hide_historical_personal_relocations() {
+    let mut item = row(
+        "Tasks",
+        ImportKind::DataSource,
+        ImportStatus::Importing,
+        NotionDecision::Tasks,
+        None,
+        None,
+    );
+    item.metadata["plan"]["shared"] = true.into();
+    item.metadata["personalFolderId"] = Uuid::now_v7().to_string().into();
+    assert!(
+        report(None, &[item])
+            .warnings
+            .iter()
+            .all(|warning| !warning.contains("kept in Notion (personal)"))
+    );
+}

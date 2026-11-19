@@ -55,11 +55,12 @@ pub(in crate::domain::service) fn report(
             }
         }
         let Some(plan) = &meta.plan else { continue };
-        if row
-            .metadata
-            .get("personalFolderId")
-            .and_then(serde_json::Value::as_str)
-            .is_some()
+        if !plan.shared
+            && row
+                .metadata
+                .get("personalFolderId")
+                .and_then(serde_json::Value::as_str)
+                .is_some()
         {
             report.warnings.push(format!(
                 "{} was kept in Notion (personal) to avoid inherited folder sharing.",

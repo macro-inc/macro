@@ -513,15 +513,16 @@ async fn shared_notion_re_review_clears_only_its_own_task_notices(pool: PgPool) 
         .upsert_staged(
             &owner,
             ImportSource::Notion,
-            ImportKind::Page,
+            ImportKind::DataSource,
             Initiator::Manual,
             page_id('b').as_str(),
-            &planned_page('b', "Unrelated", false).metadata,
+            &planned.metadata,
         )
         .await
         .unwrap()
         .unwrap();
     let task = Uuid::now_v7();
+    let other_task = Uuid::now_v7();
     service
         .repo
         .record_written(
@@ -535,13 +536,26 @@ async fn shared_notion_re_review_clears_only_its_own_task_notices(pool: PgPool) 
         )
         .await
         .unwrap();
-    for row in [&source, &unrelated] {
+    service
+        .repo
+        .record_written(
+            &owner,
+            &[WrittenObject::for_row(
+                unrelated.id,
+                WrittenKind::Task,
+                &page_id('f'),
+                other_task,
+            )],
+        )
+        .await
+        .unwrap();
+    for (row, notice_task) in [(&source, task), (&unrelated, other_task)] {
         service
             .repo
             .record_task_notice(
                 &owner,
                 row.id,
-                task,
+                notice_task,
                 TaskImportNoticeReason::PersonalAssigneeOmitted,
             )
             .await

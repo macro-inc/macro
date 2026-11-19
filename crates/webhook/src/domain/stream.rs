@@ -9,27 +9,190 @@
 //! Team-scoped workspace events use `get_user_team_workspace_id` and
 //! re-check membership per event.
 //!
-//! Delivery is best-effort through a process-local broadcast channel. Slow or
-//! disconnected subscribers may miss events and must resync out of band when
-//! continuity matters.
+//! Delivery goes through a process-local [`StreamFeed`], which also keeps the
+//! last two minutes of events. A subscriber that reopens with the id of the
+//! last event it saw ([`StreamCursor`]) is first sent every retained event
+//! after it, so a reconnect, or a stream opened just after the event it was
+//! waiting for, loses nothing. Events older than the retention, or published
+//! while this process was not consuming, are still missed.
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::models::{NormalizedWebhookEvent, WebhookFilters, WebhookScope};
 use crate::domain::ports::{WebhookContactChecker, WebhookWorkspaceResolver};
+use chrono::{DateTime, Utc};
 use entity_access::domain::models::{AccessError, EntityType};
 use entity_access::domain::ports::EntityAccessService;
 use futures::StreamExt as _;
 use futures::stream::BoxStream;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::collections::VecDeque;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::Duration;
 use tokio::sync::broadcast;
+use uuid::Uuid;
 
 /// Number of events retained for each active subscriber before it starts
 /// missing events.
 pub const WEBHOOK_STREAM_CHANNEL_CAPACITY: usize = 1_024;
+
+/// Most events the feed keeps for subscribers resuming from a cursor.
+pub const WEBHOOK_STREAM_REPLAY_CAPACITY: usize = 4_096;
+
+/// How long the feed keeps an event for subscribers resuming from a cursor.
+/// Covers a reconnect's backoff, and the gap between a runtime learning of a
+/// newly bound agent and its stream covering that agent.
+pub const WEBHOOK_STREAM_REPLAY_RETENTION: Duration = Duration::from_secs(120);
+
+/// How far before its cursor a resumed stream starts: events minted that
+/// close before it may still reach this replica after it.
+pub const WEBHOOK_STREAM_REPLAY_LOOKBACK: Duration = Duration::from_secs(5);
+
+/// When an event was minted, from its UUIDv7 id.
+fn minted(candidate: &StreamCandidateEvent) -> Option<DateTime<Utc>> {
+    StreamCursor::parse(&candidate.event.event_id)
+        .ok()
+        .and_then(StreamCursor::time)
+}
+
+/// Where a subscriber resumes: the id of the last event it saw, sent back as
+/// SSE `Last-Event-ID`.
+///
+/// Broker event ids are UUIDv7. A stream resumed from one replays every
+/// retained event minted from a few seconds before it on, except the cursor's
+/// own event, so the subscriber drops repeats by id. A cursor minted from a
+/// timestamp works the same way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamCursor(Uuid);
+
+impl StreamCursor {
+    /// Parse the `Last-Event-ID` a subscriber sent back.
+    pub fn parse(last_event_id: &str) -> Result<Self, WebhookStreamError> {
+        let id = Uuid::parse_str(last_event_id.trim()).map_err(|_| {
+            WebhookStreamError::BadRequest("`Last-Event-ID` must be an event id".to_string())
+        })?;
+        if id.get_version_num() != 7 {
+            return Err(WebhookStreamError::BadRequest(
+                "`Last-Event-ID` must be a UUIDv7 event id".to_string(),
+            ));
+        }
+        Ok(Self(id))
+    }
+
+    /// When the cursor's event was minted.
+    fn time(self) -> Option<DateTime<Utc>> {
+        let (seconds, nanos) = self.0.get_timestamp()?.to_unix();
+        DateTime::from_timestamp(i64::try_from(seconds).ok()?, nanos)
+    }
+}
+
+/// An event the feed keeps for resuming subscribers.
+struct Retained {
+    /// When this process published it.
+    at: DateTime<Utc>,
+    candidate: Arc<StreamCandidateEvent>,
+}
+
+/// The process-local feed every stream reads: a broadcast for live
+/// subscribers, plus the recent events a resuming subscriber replays.
+///
+/// Publishing and subscribing take one lock, so a subscriber's replay and its
+/// live receiver meet exactly: no event lands in both, and none in neither.
+#[derive(Clone)]
+pub struct StreamFeed {
+    inner: Arc<Mutex<FeedInner>>,
+}
+
+struct FeedInner {
+    sender: broadcast::Sender<Arc<StreamCandidateEvent>>,
+    recent: VecDeque<Retained>,
+    replay_capacity: usize,
+}
+
+impl StreamFeed {
+    /// A feed whose live subscribers buffer `channel_capacity` events and
+    /// which keeps up to `replay_capacity` recent events for resuming ones.
+    pub fn new(channel_capacity: usize, replay_capacity: usize) -> Self {
+        let (sender, _) = broadcast::channel(channel_capacity);
+        Self {
+            inner: Arc::new(Mutex::new(FeedInner {
+                sender,
+                recent: VecDeque::with_capacity(replay_capacity),
+                replay_capacity,
+            })),
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, FeedInner> {
+        // Every mutation under the lock is a single push or pop, so a panic
+        // cannot leave the queue half-changed.
+        self.inner.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Hand `candidate` to every live subscriber and keep it for resuming
+    /// ones.
+    pub fn publish(&self, candidate: StreamCandidateEvent) {
+        // Shared, not copied: a resuming subscriber takes its replay under
+        // this lock, and copying envelopes there would stall publishing.
+        let candidate = Arc::new(candidate);
+        let now = Utc::now();
+        let oldest_kept = now - WEBHOOK_STREAM_REPLAY_RETENTION;
+        let mut inner = self.lock();
+        while let Some(oldest) = inner.recent.front()
+            && (oldest.at < oldest_kept || inner.recent.len() >= inner.replay_capacity)
+        {
+            inner.recent.pop_front();
+        }
+        if inner.replay_capacity > 0 {
+            inner.recent.push_back(Retained {
+                at: now,
+                candidate: Arc::clone(&candidate),
+            });
+        }
+        // Having no active subscribers is expected.
+        let _ = inner.sender.send(candidate);
+    }
+
+    /// Subscribe to live events, and take the retained ones after `after`.
+    fn subscribe_after(
+        &self,
+        after: Option<StreamCursor>,
+    ) -> (
+        VecDeque<Arc<StreamCandidateEvent>>,
+        broadcast::Receiver<Arc<StreamCandidateEvent>>,
+    ) {
+        let inner = self.lock();
+        let receiver = inner.sender.subscribe();
+        let Some(after) = after else {
+            return (VecDeque::new(), receiver);
+        };
+        // Pruning happens on publish, so a quiet feed can still hold events
+        // past the retention; never replay those.
+        let oldest_kept = Utc::now() - WEBHOOK_STREAM_REPLAY_RETENTION;
+        let Some(since) = after
+            .time()
+            .map(|minted| minted - WEBHOOK_STREAM_REPLAY_LOOKBACK)
+        else {
+            return (VecDeque::new(), receiver);
+        };
+        // By when each event was minted, not where it sits here: replicas
+        // consume the topics in their own order, so the events after a cursor
+        // on one can sit before it on another. Looking back a little more
+        // repeats some the subscriber saw, which it drops by id.
+        let cursor = after.0.to_string();
+        let replay = inner
+            .recent
+            .iter()
+            .filter(|retained| retained.at >= oldest_kept)
+            .filter(|retained| retained.candidate.event.event_id != cursor)
+            .filter(|retained| minted(&retained.candidate).unwrap_or(retained.at) >= since)
+            .map(|retained| retained.candidate.clone())
+            .collect();
+        (replay, receiver)
+    }
+}
 
 /// Whose access decides who may see one candidate event.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -103,19 +266,21 @@ pub trait WebhookEventStreamService: Clone + Send + Sync + 'static {
     ///
     /// `scope` selects the subscriber's personal or current team workspace for
     /// webhook lifecycle events. Entity events remain gated by entity access.
-    ///
+    /// With `after`, the stream first replays the retained events after that
+    /// cursor, through the same filters and access checks.
     fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
         scope: WebhookScope,
         filters: WebhookFilters,
+        after: Option<StreamCursor>,
     ) -> impl Future<Output = Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError>>
     + Send;
 }
 
 /// Webhook event stream service implementation.
 pub struct WebhookEventStreamServiceImpl<A, R, C> {
-    sender: broadcast::Sender<StreamCandidateEvent>,
+    feed: StreamFeed,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
     contact_checker: C,
@@ -124,7 +289,7 @@ pub struct WebhookEventStreamServiceImpl<A, R, C> {
 impl<A, R: Clone, C: Clone> Clone for WebhookEventStreamServiceImpl<A, R, C> {
     fn clone(&self) -> Self {
         Self {
-            sender: self.sender.clone(),
+            feed: self.feed.clone(),
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
             contact_checker: self.contact_checker.clone(),
@@ -135,13 +300,13 @@ impl<A, R: Clone, C: Clone> Clone for WebhookEventStreamServiceImpl<A, R, C> {
 impl<A, R, C> WebhookEventStreamServiceImpl<A, R, C> {
     /// Create a webhook event stream service.
     pub fn new(
-        sender: broadcast::Sender<StreamCandidateEvent>,
+        feed: StreamFeed,
         entity_access_service: Arc<A>,
         workspace_resolver: R,
         contact_checker: C,
     ) -> Self {
         Self {
-            sender,
+            feed,
             entity_access_service,
             workspace_resolver,
             contact_checker,
@@ -151,7 +316,9 @@ impl<A, R, C> WebhookEventStreamServiceImpl<A, R, C> {
 
 /// Owned per-stream state advanced by the unfold loop.
 struct StreamState<A, R, C> {
-    receiver: broadcast::Receiver<StreamCandidateEvent>,
+    /// Retained events after the subscriber's cursor, delivered first.
+    replay: VecDeque<Arc<StreamCandidateEvent>>,
+    receiver: broadcast::Receiver<Arc<StreamCandidateEvent>>,
     entity_access_service: Arc<A>,
     workspace_resolver: R,
     contact_checker: C,
@@ -266,7 +433,11 @@ where
     /// Returns `None` when the channel closes or an access check fails.
     async fn next_delivered(&mut self) -> Option<NormalizedWebhookEvent> {
         loop {
-            let candidate = match self.receiver.recv().await {
+            let next = match self.replay.pop_front() {
+                Some(candidate) => Ok(candidate),
+                None => self.receiver.recv().await,
+            };
+            let candidate = match next {
                 Ok(candidate) => candidate,
                 Err(broadcast::error::RecvError::Lagged(skipped)) => {
                     tracing::warn!(skipped, "webhook event stream subscriber missed events");
@@ -283,7 +454,7 @@ where
                 continue;
             }
             match self.subscriber_in_audience(&candidate.audience).await {
-                Ok(true) => return Some(candidate.event),
+                Ok(true) => return Some(candidate.event.clone()),
                 Ok(false) => continue,
                 Err(error) => {
                     tracing::error!(error = ?error, "webhook event stream access check failed; ending stream");
@@ -313,12 +484,16 @@ where
     R: WebhookWorkspaceResolver,
     C: WebhookContactChecker,
 {
-    #[tracing::instrument(skip(self, filters), fields(filter_count = filters.len()))]
+    #[tracing::instrument(
+        skip(self, filters),
+        fields(filter_count = filters.len(), replayed = tracing::field::Empty)
+    )]
     async fn open_stream(
         &self,
         subscriber: MacroUserIdStr<'static>,
         scope: WebhookScope,
         filters: WebhookFilters,
+        after: Option<StreamCursor>,
     ) -> Result<BoxStream<'static, NormalizedWebhookEvent>, WebhookStreamError> {
         validate_filters(&filters)?;
 
@@ -340,8 +515,11 @@ where
             }
         }
 
+        let (replay, receiver) = self.feed.subscribe_after(after);
+        tracing::Span::current().record("replayed", replay.len());
         let state = StreamState {
-            receiver: self.sender.subscribe(),
+            replay,
+            receiver,
             entity_access_service: self.entity_access_service.clone(),
             workspace_resolver: self.workspace_resolver.clone(),
             contact_checker: self.contact_checker.clone(),

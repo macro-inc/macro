@@ -25,6 +25,9 @@ export async function measureStep(
   iteration: number,
   holdMs?: number
 ): Promise<Sample> {
+  // The checks before and after bracket the step: the rate cannot lapse and
+  // come back in between, because it lasts as long as the connection.
+  const throttleBefore = await session.checkCpuThrottle();
   const point = await session.waitFor(step.target(targets));
   const failures = session.captureFailures;
   // The same clock as the page's event and span times.
@@ -56,7 +59,11 @@ export async function measureStep(
   // A lost export may hold this step's child spans; its counts would be wrong.
   if (session.captureFailures > failures)
     throw new Error(`${step.id}: a trace export could not be read`);
-  return sampleFrom(session, step.id, variant, iteration, start, root, extra);
+  const throttleAfter = await session.checkCpuThrottle();
+  return {
+    ...sampleFrom(session, step.id, variant, iteration, start, root, extra),
+    cpuThrottleMeasured: [throttleBefore, throttleAfter],
+  };
 }
 
 /** Force-stops and relaunches the app, attaches, and waits for its boot. */

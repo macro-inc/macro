@@ -8,10 +8,8 @@ const mocks = vi.hoisted(() => ({
   inventoryEnabled: (): boolean => false,
   offersRequest: vi.fn(),
 }));
-vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => macroFlag,
-}));
 vi.mock('@queries/computers/computers', () => ({
+  useMacroComputersRollout: () => macroFlag,
   useComputersQuery: (enabled: () => boolean) => {
     mocks.inventoryEnabled = enabled;
     return { isPending: false, data: [] };

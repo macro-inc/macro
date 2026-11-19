@@ -120,6 +120,8 @@ struct WrittenDocument {
 /// leave it.
 #[derive(Default)]
 struct FakeWriter {
+    reject_assignee_replay: bool,
+    reapplied_tasks: Mutex<Vec<(Uuid, String, ImportVisibility)>>,
     task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
     databases: Mutex<usize>,
     tasks: Mutex<Vec<crate::domain::ports::ImportVisibility>>,
@@ -136,6 +138,12 @@ struct FakeWriter {
 const DATABASE: Uuid = Uuid::from_u128(500);
 const TABLE: Uuid = Uuid::from_u128(501);
 const TITLE_COLUMN: Uuid = Uuid::from_u128(502);
+
+impl crate::domain::ports::ImportedTargetReader for FakeWriter {
+    async fn target_exists(&self, _: crate::domain::ports::ImportedTarget) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+}
 
 impl WorkspaceWriter for FakeWriter {
     async fn create_tracker_project(
@@ -240,6 +248,21 @@ impl WorkspaceWriter for FakeWriter {
             });
         }
         Ok(id.to_string())
+    }
+
+    async fn reapply_task_assignee(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        id: Uuid,
+        email: &str,
+        visibility: ImportVisibility,
+    ) -> anyhow::Result<Option<crate::domain::ports::TaskImportNoticeReason>> {
+        self.reapplied_tasks
+            .lock()
+            .unwrap()
+            .push((id, email.to_string(), visibility));
+        anyhow::ensure!(!self.reject_assignee_replay, "assignee update failed");
+        Ok(None)
     }
 
     async fn create_task(
@@ -416,7 +439,7 @@ async fn a_data_source_becomes_a_database_with_typed_columns_rows_bodies_and_pen
         folder,
         false,
         &PeopleMap::new(),
-        &links,
+        &tokio::sync::RwLock::new(links.clone()),
         &progress,
         &Cancel::default(),
         None,
@@ -611,7 +634,7 @@ async fn a_shared_database_is_shared_with_its_row_bodies_folder() {
         Uuid::from_u128(42),
         true,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
         None,
@@ -675,7 +698,7 @@ async fn a_cancelled_import_stops_before_writing_rows() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &cancel,
         None,
@@ -736,7 +759,7 @@ async fn a_database_whose_rows_have_no_content_gets_no_page_column() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
         None,
@@ -810,7 +833,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
         None,
@@ -830,7 +853,7 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
         None,
@@ -900,7 +923,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
         None,
@@ -920,7 +943,7 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
         None,

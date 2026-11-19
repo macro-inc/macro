@@ -307,3 +307,24 @@ fn retry_after_rounds_up_to_whole_seconds() {
     assert_eq!(whole_seconds_after(Duration::from_secs(10)), 10);
     assert_eq!(whole_seconds_after(Duration::from_millis(10_001)), 11);
 }
+
+#[test]
+fn a_runtime_accepts_only_the_messages_it_lists() {
+    use axum::http::{HeaderMap, HeaderValue};
+
+    assert_eq!(
+        super::runtime_accepts(&HeaderMap::new()),
+        RuntimeAccepts::default()
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        RUNTIME_ACCEPTS_HEADER,
+        HeaderValue::from_static("something-later, agents-changed"),
+    );
+    assert!(super::runtime_accepts(&headers).agents_changed);
+
+    let mut headers = HeaderMap::new();
+    headers.insert(RUNTIME_ACCEPTS_HEADER, HeaderValue::from_static("agents"));
+    assert!(!super::runtime_accepts(&headers).agents_changed);
+}

@@ -109,8 +109,15 @@ render: `CanvasViewParts` (the root that wires the viewport, the scene, the
 insert menu, the presentation and the empty state), `CanvasInspectorSections`,
 `CanvasReadOnlyParts`, and `CANVAS_TOOLS`, which names and draws each tool
 while every view lists the tools it offers. A canvas embedded in a document
-keeps the desktop read-only view on every device, so its controls stay inside
-the embed.
+keeps its controls inside the embed: the desktop read-only view on desktop, and
+on touch `views/mobile/canvas-embedded-view.tsx`, which lets the document
+scroll. There one finger or a pen over the canvas scrolls the document and the
+plain wheel does too (`yieldToPage` on the surface: `touch-action: pan-x pan-y`,
+and presses other than a mouse's ignored), while two fingers, a trackpad pinch
+and Ctrl/Cmd-wheel still move the canvas. **Interact** gives the canvas every
+gesture, with the Hand tool, until **Done** or a press elsewhere in the
+document. Zoom to fit and Done then sit at the bottom of the screen, above the
+dock, because the embed's own corner may be out of reach.
 
 On touch the canvas's controls are islands in the app's bottom chrome, in the
 `accessory` float region above the dock, so the dock, the home indicator and
@@ -129,7 +136,12 @@ app's bottom chrome (a public link opened signed out) there is no float region,
 and the same islands sit at the bottom of the canvas instead.
 
 The zoom button opens a sheet with what the desktop zoom menu holds: fit, zoom
-to selection, zoom levels, the dot grid and snapping. More, and a long press on
+to selection, zoom levels, the dot grid and snapping. It also holds **Keep tool
+after drawing** (`toolLocked` in the canvas state): a drawing tool normally hands
+back to Select after one shape, line or text, which costs a finger a trip to the
+toolbar for every further one; kept, it stays and nothing is selected. The lock
+acts only while a drawing tool is chosen (`keepsTool`): under Select, a text
+edited or a connector's end dragged stays selected. More, and a long press on
 the canvas with Select or Hand, open a sheet with every context-menu action:
 clipboard, duplicate, select all, group, layer order and delete. Copy leaves the
 sheet open and confirms with a check, as copy actions do in other menus. A long press
@@ -138,10 +150,16 @@ whatever the press had started; `longPress` on the graphics input reports it,
 half a second in, if the finger has drifted no more than 10px. The sheet opens
 under the finger, and a browser clicks whatever is under a finger as it lifts,
 so the graphics input swallows that lift's click: letting go presses no row.
+When the press
+landed on an item inside the group it selected, the sheet adds Select inside
+group, which selects that item alone: a finger has no Cmd/Ctrl-click.
 
 On a phone Style opens the inspector in a sheet over the lower half of the
 screen. Its scrim is clear, so the shape stays visible and a change shows as it
-is made, and a tap on the canvas closes it with the selection kept. Wider touch
+is made, and a tap on the canvas closes it with the selection kept. The colour
+picker is a popover that would cover the shape, so in the sheet each colour
+field also lists its swatches in a row (`swatchRow` on `InspectorColorField`),
+the palette and then the canvas's own colours. Wider touch
 screens keep the inspector as a floating panel on the right, between the split
 header and the bottom chrome; Style collapses it, remembered for the browser
 session.
@@ -181,6 +199,8 @@ already pressed keeps its gesture, and fingers landing meanwhile (a resting palm
 are ignored. A flick glides only when the fingers were travelling together as
 they lifted: a pinch, whose midpoint also drifts, does not, and neither does a
 gesture the system cancelled.
+Each finger reports its own moves, so the camera is moved once per animation
+frame, to where both fingers are by then, rather than once per event.
 `attachTouchNavigation` in `packages/graphics/src/browser` owns this for every
 `GraphicsSurface`; the glide and the pinch math are `@macro-inc/graphics/pan-zoom`,
 which the lightbox and opened images also use for their momentum.

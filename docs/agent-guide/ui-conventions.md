@@ -28,15 +28,24 @@ in a detail header), never inside a group. Action groups use
 `variant="secondary" finish="raised"`, fully rounded ends, and 8px gaps. Keep
 the right side of a bar at one height: detail headers use `sm`/`icon-sm` segments
 (28px controls); collection headers, beside New and Search, use `md`/`icon-md`
-(32px). New and Search retain `md` sizing. A block whose split header is 32px
-passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
+(32px). New and Search retain `md` sizing. Inside an `@container/split-header`
+600px or narrower (the `@max-[600px]/split-header` rule header actions share),
+New drops its label and keeps its icon, its caret when it opens a menu, its name
+and its tooltip. The open Search field narrows, down
+to its 96px minimum, before the header's actions would push its end and its
+close button out of view; check a narrowed pane (Customers or Tasks at 760px,
+or beside a docked sidebar) with the field open. A block whose split header is
+32px passes `size="md"` to `SplitHeaderRight` so the header's own previous/next
 island matches.
 Compose their actions with `ButtonGroup.Button`; the group shares Button's frame
 materials while each segment keeps its own interaction states. Standalone Buttons
 remain independent. Nested shared actions reuse the containing group rather than adding
 another frame, and a group with no visible actions renders nothing. Keep
 tooltips on icon-only controls and collapse labels as a pane narrows (`Tabs
-iconOnly`, then a menu). Preserve specialized editor toolbars. A touch header
+iconOnly`, then a menu). Decide those steps from whether the row fits with the
+shared mechanisms, `createLabelCollapse` (`@core/signal/create-label-collapse`;
+Reviews' list header, Email's phone reply buttons) or the split header's
+`PriorityCollapse`, never a new measurement. Preserve specialized editor toolbars. A touch header
 belongs to its view's mobile view, which lists every island it shows. A new one
 shows Back, the title (tap it for the title menu), and Info, with other actions
 in the title menu, as the email thread's does. A header split from a shared one

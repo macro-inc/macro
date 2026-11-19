@@ -484,13 +484,14 @@ where
         tracing::Span::current().record("already_in_macro", already_imported.len());
         // The whole tree is staged before the decision model answers, so the
         // review shows it while each batch is decided.
-        self.repo
-            .replace_plan(
-                user,
-                self.workspace_source,
-                &tree.staged_rows(sharing, team, &already_imported),
-            )
-            .await?;
+        super::lifecycle::replace_plan(
+            &self.repo,
+            self.creator.as_ref(),
+            user,
+            self.workspace_source,
+            &tree.staged_rows(sharing, team, &already_imported),
+        )
+        .await?;
         self.notify(user).await;
         // Objects already in Macro need no decision, so they cost no model call.
         let items = tree.triage_items(&already_imported);
@@ -599,8 +600,7 @@ where
             Ok(failed) => (
                 RunStatus::Completed,
                 Some(format!(
-                    "{failed} of {} objects could not be imported",
-                    set.pending.len()
+                    "{failed} objects could not be imported. Plan again to retry them."
                 )),
             ),
             Err(error) => {
@@ -656,7 +656,8 @@ where
         let people = self.people(&api, user).await;
         let ids: Vec<Uuid> = set.all.iter().map(|item| item.import_id).collect();
         let written = self.repo.written(user, &ids).await?;
-        let links = self.links(user, &set.all, &people).await?;
+        let (links, unavailable) = self.links(user, &set.all, &people).await?;
+        let links = tokio::sync::RwLock::new(links);
         let root = self.root_folder(user).await?;
 
         // Folders first, parents before children. A folder is shared only
@@ -745,7 +746,7 @@ where
 
         // Objects a teammate was writing: link to what they finished, take
         // over what they gave up, and wait on the rest.
-        let mut failed = 0;
+        let mut failed = unavailable;
         let mut waiting = Vec::new();
         for (item, outcome) in set.pending.iter().zip(outcomes) {
             match outcome {
@@ -800,7 +801,10 @@ where
 
     /// The user's "Notion" folder: the one earlier imports made while it
     /// still exists, otherwise a new one.
-    async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Uuid> {
+    pub(in crate::domain::service) async fn root_folder(
+        &self,
+        user: &MacroUserIdStr<'static>,
+    ) -> Result<Uuid> {
         if let Some(folder) = self.repo.root_folder(user).await?
             && self.creator.folder_exists(user, folder).await?
         {

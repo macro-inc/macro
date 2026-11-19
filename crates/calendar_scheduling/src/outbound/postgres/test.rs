@@ -1,5 +1,5 @@
 use super::*;
-use chrono::Duration;
+use chrono::{Duration, SubsecRound};
 
 /// CI clones every test database from a `template1` that already holds the macrodb
 /// schema (`just setup_test_template`). These tests build their own schema, so they
@@ -83,6 +83,7 @@ fn booking(profile: Uuid, start: DateTime<Utc>) -> BookingRecord {
             attendance: BookingAttendance::Unknown,
             reschedule_count: 0,
             rescheduled_at: None,
+            abandoned_at: None,
             location: String::new(),
             answers: Default::default(),
             question_labels: Default::default(),
@@ -262,6 +263,180 @@ async fn recovery_claims_are_exclusive_and_completion_is_fenced(pool: PgPool) {
     repo.update_booking(claimed, BookingStatus::Processing)
         .await
         .unwrap();
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_reverted_move_restores_its_time_and_releases_the_new_interval(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now().trunc_subsecs(0) + Duration::days(2);
+    let original = booking(p.id, start);
+    repo.reserve(original.clone(), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let mut moving = original.clone();
+    moving.booking.starts_at += Duration::hours(2);
+    moving.booking.ends_at += Duration::hours(2);
+    moving.busy_start += Duration::hours(2);
+    moving.busy_end += Duration::hours(2);
+    moving.operation = Some(CalendarOperation::new(CalendarOperationKind::Move {
+        status: original.booking.status,
+        original_start: start,
+    }));
+    moving.booking.status = BookingStatus::Processing;
+    let moved = repo
+        .move_booking(
+            moving,
+            original.booking.status,
+            start,
+            start + Duration::days(1),
+        )
+        .await
+        .unwrap();
+    let mut reverted = moved;
+    reverted.booking.starts_at = original.booking.starts_at;
+    reverted.booking.ends_at = original.booking.ends_at;
+    reverted.busy_start = original.busy_start;
+    reverted.busy_end = original.busy_end;
+    reverted.booking.status = original.booking.status;
+    let id = reverted.booking.id;
+    repo.update_booking(reverted, BookingStatus::Processing)
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT starts_at, ends_at, recovery_at FROM scheduling_booking WHERE id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.starts_at, original.booking.starts_at);
+    assert_eq!(row.ends_at, original.booking.ends_at);
+    assert!(row.recovery_at.is_none());
+    // The time the move asked for is free again; the original is still held.
+    repo.reserve(
+        booking(p.id, start + Duration::hours(2)),
+        None,
+        start,
+        start + Duration::days(1),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        repo.reserve(booking(p.id, start), None, start, start + Duration::days(1))
+            .await,
+        Err(Error::Conflict)
+    ));
+}
+
+#[sqlx::test(migrations = false)]
+async fn an_abandoned_operation_is_never_claimed_again(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now() + Duration::days(2);
+    let mut original = booking(p.id, start);
+    original.booking.status = BookingStatus::Processing;
+    let mut operation = CalendarOperation::new(CalendarOperationKind::Create);
+    operation.retry_at = Utc::now() - Duration::seconds(1);
+    original.operation = Some(operation);
+    repo.reserve(original, None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let mut claimed = repo.claim_recovery().await.unwrap().unwrap();
+    claimed.booking.status = BookingStatus::Failed;
+    let operation = claimed.operation.as_mut().unwrap();
+    operation.retry_at = Utc::now() - Duration::seconds(1);
+    operation.abandoned_at = Some(Utc::now());
+    let id = claimed.booking.id;
+    repo.update_booking(claimed, BookingStatus::Processing)
+        .await
+        .unwrap();
+    let row = sqlx::query!(
+        "SELECT status, recovery_at FROM scheduling_booking WHERE id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "failed");
+    assert!(row.recovery_at.is_none());
+    assert!(repo.claim_recovery().await.unwrap().is_none());
+    let reservations = sqlx::query_scalar!(
+        "SELECT count(*) FROM scheduling_host_claim WHERE booking_id = $1",
+        id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        reservations,
+        Some(1),
+        "an abandoned booking keeps its reservation"
+    );
+}
+
+/// Bookings abandoned before the booking carried its own abandon time read
+/// back with it, and a create refused on its first attempt reads back unsent.
+#[sqlx::test(migrations = false)]
+async fn older_abandoned_bookings_read_back_with_their_abandon_time(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let start = Utc::now() + Duration::days(2);
+    let reserve = |offset: i64, due: bool| {
+        let mut record = booking(p.id, start + Duration::hours(offset));
+        record.booking.status = BookingStatus::Processing;
+        let mut operation = CalendarOperation::new(CalendarOperationKind::Create);
+        if due {
+            operation.retry_at = Utc::now() - Duration::seconds(1);
+        }
+        record.operation = Some(operation);
+        record
+    };
+    let first = repo
+        .reserve(reserve(0, false), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    repo.reserve(reserve(2, true), None, start, start + Duration::days(1))
+        .await
+        .unwrap();
+    let retried = repo.claim_recovery().await.unwrap().unwrap();
+    let past = Utc::now() - Duration::hours(1);
+    let mut late = booking(p.id, past);
+    late.booking.status = BookingStatus::Processing;
+    late.operation = Some(CalendarOperation::new(CalendarOperationKind::Create));
+    let late = repo
+        .reserve(late, None, past, past + Duration::days(1))
+        .await
+        .unwrap();
+    let mut ids = Vec::new();
+    for mut record in [first, retried, late] {
+        // The shape an older release wrote: only the operation knows.
+        record.booking.status = BookingStatus::Failed;
+        record.booking.abandoned_at = None;
+        record.operation.as_mut().unwrap().abandoned_at = Some(Utc::now());
+        ids.push(record.booking.id);
+        repo.update_booking(record, BookingStatus::Processing)
+            .await
+            .unwrap();
+    }
+    let first = repo.booking(ids[0]).await.unwrap().unwrap();
+    let operation = first.operation.as_ref().unwrap();
+    assert_eq!(first.booking.abandoned_at, operation.abandoned_at);
+    assert!(operation.unsent);
+    let retried = repo.booking(ids[1]).await.unwrap().unwrap();
+    let operation = retried.operation.as_ref().unwrap();
+    assert_eq!(retried.booking.abandoned_at, operation.abandoned_at);
+    assert!(!operation.unsent, "a retried create may have landed");
+    let late = repo.booking(ids[2]).await.unwrap().unwrap();
+    let operation = late.operation.as_ref().unwrap();
+    assert_eq!(late.booking.abandoned_at, operation.abandoned_at);
+    assert!(
+        !operation.unsent,
+        "abandoned after its start, so not necessarily refused"
+    );
 }
 
 #[sqlx::test(migrations = false)]

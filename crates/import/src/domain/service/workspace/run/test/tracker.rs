@@ -614,3 +614,5 @@ async fn shared_tracker_retry_clears_the_sources_personal_omission_notice(pool: 
         [created]
     );
 }
+
+mod lifecycle;

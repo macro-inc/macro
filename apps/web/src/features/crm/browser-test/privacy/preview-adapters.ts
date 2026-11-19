@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useQueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
@@ -20,8 +21,18 @@ const [state, setState] = createSignal<EmailPrivacy>({
   enabled: params.has('contributing'),
   mailboxEmail: params.has('disconnected') ? null : 'member@example.com',
   mailboxLinkId: params.has('disconnected') ? null : mailboxId,
-  teamDomains: ['team.example.com'],
-  personalDomains: ['personal.example.com'],
+  teamDomains: params.has('mailbox-guard')
+    ? ['example.com']
+    : ['team.example.com'],
+  personalDomains: params.has('mailbox-guard')
+    ? ['gmail.com']
+    : ['personal.example.com'],
+  teamDomainWarnings: params.has('mailbox-guard')
+    ? { 'example.com': 'company' }
+    : {},
+  personalDomainWarnings: params.has('mailbox-guard')
+    ? { 'gmail.com': 'personal_provider' }
+    : {},
   canRemoveTeamDomains: params.has('admin'),
 });
 export const [lastChange, setLastChange] = createSignal('');
@@ -121,6 +132,8 @@ function response() {
     mailbox_link_id: value.mailboxLinkId,
     team_domains: value.teamDomains,
     personal_domains: value.personalDomains,
+    team_domain_warnings: value.teamDomainWarnings ?? {},
+    personal_domain_warnings: value.personalDomainWarnings ?? {},
     can_remove_team_domains: value.canRemoveTeamDomains,
   };
 }
@@ -162,6 +175,20 @@ export const crmEmailPrivacyClient = {
     });
   },
   update: async (change: EmailPrivacyChange) => {
+    if (params.has('mailbox-guard') && change.action === 'add_domain') {
+      const domain = change.domain.toLowerCase();
+      if (domain === 'example.com' || domain === 'gmail.com') {
+        return err([
+          {
+            code: 'HTTP_ERROR' as const,
+            message:
+              domain === 'example.com'
+                ? t('crm.privacyCompanyMailboxDomain')
+                : t('crm.privacyPersonalMailboxDomain'),
+          },
+        ]);
+      }
+    }
     apply(change);
     return ok(response());
   },

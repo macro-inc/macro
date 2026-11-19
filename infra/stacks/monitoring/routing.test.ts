@@ -183,6 +183,17 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'computer-fleet-capacity',
     'computer-host-capacity',
     'error-logs-anomaly',
+    'firecracker-create-failures',
+    'firecracker-golden-failures',
+    'firecracker-golden-secret-refused',
+    'firecracker-hibernate-failures',
+    'firecracker-host-memory',
+    'firecracker-host-unhealthy',
+    'firecracker-reconcile-drift',
+    'firecracker-restore-latency',
+    'firecracker-wake-failures',
+    'kafka-consumer-lag-high',
+    'kafka-consumer-not-caught-up',
     'macrodb-blocked-connections',
     'macrodb-cpu',
     'macrodb-free-storage',
@@ -268,6 +279,35 @@ test('instance I/O credits alert per instance, well before they run out', () => 
   expect(credits?.inputs.message).toContain('macrodb.md#io-credits');
 });
 
+test('Kafka lag alerts per prod consumer group and topic, without paging', () => {
+  const lag =
+    'max:aws.kafka.sum_offset_lag{cluster_name:prod-macro-event-kafka-cluster,!topic:_amazon_msk_canary} by {consumer_group,topic}';
+  const high = monitors().find((r) => r.name === 'kafka-consumer-lag-high');
+  expect(high?.inputs.query).toBe(`avg(last_15m):${lag} > 5000000`);
+  expect(high?.inputs.monitorThresholds).toEqual({
+    critical: '5000000',
+    warning: '2000000',
+  });
+  const behind = monitors().find(
+    (r) => r.name === 'kafka-consumer-not-caught-up'
+  );
+  expect(behind?.inputs.query).toBe(
+    `min(last_1d):${lag}.rollup(min, 300) > 100`
+  );
+  expect(behind?.inputs.requireFullWindow).toBe(true);
+  expect(high?.inputs.requireFullWindow).toBe(false);
+  for (const monitor of [high, behind]) {
+    expect(monitor?.inputs.name).toStartWith('[PROD] Kafka consumer ');
+    expect(monitor?.inputs.priority).toBe('3');
+    expect(monitor?.inputs.message).toContain('{{consumer_group.name}}');
+    expect(monitor?.inputs.message).toContain('{{topic.name}}');
+    expect(monitor?.inputs.message).toContain(
+      'Runbook: https://github.com/macro-inc/macro/blob/main/docs/runbooks/queues.md#kafka-consumer-lag\nDashboard: https://us5.datadoghq.com/dashboard/queue-alerts/title'
+    );
+    expect(monitor?.inputs.message).not.toContain('Paging on-call');
+  }
+});
+
 test('pool waits alert names the environment and the pool', () => {
   const wait = monitors().find((r) => r.name === 'storage-pool-wait');
   expect(wait?.inputs.name).toStartWith('[PROD] ');
@@ -304,5 +344,52 @@ test('pool graphs never sum or take percentiles across tasks', () => {
   }
   expect(queries.join()).toContain(
     'max:db.client.connection.used{env:$env.value,service:cloud-storage-service} by {db.client.connection.pool.name,availability-zone}, max:db.client.connection.max{'
+  );
+});
+
+test('Firecracker readiness detects lost telemetry without paging idle operations', () => {
+  const host = monitors().find((r) => r.name === 'firecracker-host-unhealthy');
+  expect(host?.inputs.notifyNoData).toBe(true);
+  expect(host?.inputs.noDataTimeframe).toBe(5);
+  expect(host?.inputs.query).toContain('by {host}.fill(null) < 1');
+  for (const resource of monitors().filter(
+    (r) => r.name.startsWith('firecracker-') && r !== host
+  )) {
+    expect(resource.inputs.notifyNoData).not.toBe(true);
+  }
+});
+
+test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
+  const duration = resources.find(
+    (r) => r.name === 'firecracker-restore-duration'
+  );
+  expect(duration?.inputs.compute).toEqual({
+    aggregationType: 'distribution',
+    path: '@duration',
+    includePercentiles: true,
+  });
+  expect(duration?.inputs.filter.query).toContain(
+    '@source:(golden OR hibernation) status:ok'
+  );
+  expect(duration?.inputs.groupBies).toEqual([
+    { path: 'env', tagName: 'env' },
+    { path: 'host', tagName: 'host' },
+    { path: '@source', tagName: 'source' },
+  ]);
+});
+
+test('Firecracker memory follows admission policy and unresolved drift persists before alerting', () => {
+  const memory = monitors().find((r) => r.name === 'firecracker-host-memory');
+  expect(memory?.inputs.query).toContain(
+    'computer.host.memory.used_ratio{env:prod}'
+  );
+  expect(memory?.inputs.query).toContain(
+    '/ min:computer.host.memory.high_watermark_ratio{env:prod}'
+  );
+  const drift = monitors().find(
+    (r) => r.name === 'firecracker-reconcile-drift'
+  );
+  expect(drift?.inputs.query).toBe(
+    'min(last_5m):max:firecracker_host.reconcile.drift{env:prod,service:firecracker-host} by {host} > 0'
   );
 });

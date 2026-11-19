@@ -778,3 +778,107 @@ async fn malformed_task_notice_payloads_fail_loudly(pool: PgPool) {
         repo.clear_task_notices(&owner, row.id).await.unwrap();
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_recreated_generation_drops_old_task_notices_and_folder_reports(pool: PgPool) {
+    use crate::domain::{models::Initiator, ports::TaskImportNoticeReason};
+    let repo = PgImportRepo::new(pool);
+    let owner = user("renew-notices");
+    let target = Uuid::now_v7().to_string();
+    let folder = Uuid::now_v7();
+    let metadata = serde_json::json!({"title":"Tasks","plan":{"decision":"tasks","shared":false,"shareable":true},"personalFolderId":folder,"separateFolder":{"visibility":"personal","reason":"shared_branch","folderId":folder}});
+    let row = repo
+        .upsert_imported(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            "tasks",
+            &metadata,
+            &target,
+            "project",
+            None,
+        )
+        .await
+        .unwrap();
+    repo.record_task_notice(
+        &owner,
+        row.id,
+        Uuid::now_v7(),
+        TaskImportNoticeReason::PersonalAssigneeOmitted,
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.renew_deleted_copy(&owner, row.id, &target, None, || async { Ok(true) })
+            .await
+            .unwrap()
+    );
+    let renewed = repo
+        .get_own_by_foreign_id(&owner, ImportSource::Notion, "tasks")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_ne!(renewed.id, row.id);
+    assert!(
+        repo.task_notice_counts(&owner, &[row.id, renewed.id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(
+        repo.written(&owner, &[row.id, renewed.id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert!(renewed.metadata.get("personalFolderId").is_none());
+    assert!(renewed.metadata.get("separateFolder").is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn notice_markers_alone_do_not_retain_a_staged_generation(pool: PgPool) {
+    use crate::domain::{models::Initiator, ports::TaskImportNoticeReason};
+    let repo = PgImportRepo::new(pool);
+    let owner = user("notice-retention");
+    let plan = PlanRow {
+        kind: ImportKind::DataSource,
+        foreign_id: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee".into(),
+        parent_foreign_id: None,
+        metadata: serde_json::json!({"title":"Tasks","plan":{"decision":"tasks","shared":false,"shareable":true}}),
+    };
+    let row = repo
+        .upsert_staged(
+            &owner,
+            ImportSource::Notion,
+            ImportKind::DataSource,
+            Initiator::Manual,
+            &plan.foreign_id,
+            &plan.metadata,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    repo.record_task_notice(
+        &owner,
+        row.id,
+        Uuid::now_v7(),
+        TaskImportNoticeReason::PersonalAssigneeOmitted,
+    )
+    .await
+    .unwrap();
+    let next = repo
+        .replace_plan(&owner, ImportSource::Notion, &[plan])
+        .await
+        .unwrap();
+    assert_ne!(
+        next[0].id, row.id,
+        "a report notice is not a physical or resumable output"
+    );
+    assert!(
+        repo.task_notice_counts(&owner, &[row.id, next[0].id])
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}

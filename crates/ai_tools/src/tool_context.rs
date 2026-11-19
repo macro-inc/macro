@@ -1969,35 +1969,60 @@ impl ToolEntityCreator {
             }
         }
 
-        if let Some(email) = properties.assignee_email.as_deref() {
-            // Only assign teammates — an email with no roster match (an
-            // external collaborator, a bot) is silently skipped.
-            let assignee = roster
-                .iter()
-                .find(|member| member.email_str().eq_ignore_ascii_case(email))?;
-            if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
-                return Some(notice);
-            }
-            let reference = models_properties::EntityReference::new(
-                assignee.as_ref().to_string(),
-                models_properties::EntityType::User,
-            );
-            if let Err(e) = self
-                .task_properties
-                .set_entity_property(
-                    &principal,
-                    task_id,
-                    SystemPropertyKey::Assignees.uuid(),
-                    Some(SetPropertyValue::MultiEntityReference {
-                        references: vec![reference],
-                    }),
-                )
-                .await
-            {
-                tracing::warn!(task_id, email, error = ?e, "failed to set imported task assignee");
+        match self
+            .apply_task_assignee(
+                user,
+                task_id,
+                properties.assignee_email.as_deref(),
+                roster,
+                visibility,
+            )
+            .await
+        {
+            Ok(notice) => notice,
+            Err(error) => {
+                tracing::warn!(task_id, error = ?error, "failed to set imported task assignee");
+                None
             }
         }
-        None
+    }
+
+    /// Apply only the assignee, sharing the same visibility policy with strict retries.
+    pub(crate) async fn apply_task_assignee(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        task_id: &str,
+        email: Option<&str>,
+        roster: &[MacroUserIdStr<'static>],
+        visibility: import::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<import::domain::ports::TaskImportNoticeReason>> {
+        use models_properties::api::requests::SetPropertyValue;
+        use system_properties::SystemPropertyKey;
+        let Some(assignee) = email.and_then(|email| {
+            roster
+                .iter()
+                .find(|member| member.email_str().eq_ignore_ascii_case(email))
+        }) else {
+            return Ok(None);
+        };
+        if let Some(notice) = visibility.task_assignee_notice(user, assignee) {
+            return Ok(Some(notice));
+        }
+        let reference = models_properties::EntityReference::new(
+            assignee.as_ref().to_string(),
+            models_properties::EntityType::User,
+        );
+        self.task_properties
+            .set_entity_property(
+                &Self::creation_principal(user),
+                task_id,
+                SystemPropertyKey::Assignees.uuid(),
+                Some(SetPropertyValue::MultiEntityReference {
+                    references: vec![reference],
+                }),
+            )
+            .await?;
+        Ok(None)
     }
 }
 
@@ -2016,7 +2041,7 @@ fn imported_entity_type(source: import::domain::models::ImportSource) -> model_e
 /// Whether an access-check failure means the caller cannot see the entity,
 /// as opposed to the check itself failing. A malformed id names nothing the
 /// caller can see, so it is refused too.
-fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
+pub(crate) fn refuses_view(error: &entity_access::domain::models::AccessError) -> bool {
     use entity_access::domain::models::AccessError;
     matches!(
         error,

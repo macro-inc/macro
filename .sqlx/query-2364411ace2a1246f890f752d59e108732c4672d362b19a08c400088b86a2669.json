@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM crm_companies co WHERE co.team_id=$1 AND co.email_sync=TRUE AND co.manually_created=FALSE\n               AND NOT EXISTS(SELECT 1 FROM crm_contacts WHERE company_id=co.id) RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2364411ace2a1246f890f752d59e108732c4672d362b19a08c400088b86a2669"
+}

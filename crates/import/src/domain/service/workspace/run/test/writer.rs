@@ -1,6 +1,79 @@
-//! Stateful writer fixture for the workspace orchestration tests.
+//! Test host writer: records writes and can exercise real target lifecycle reads.
 
 use super::*;
+
+/// Records the documents and folders a write makes. With `hold` set, a
+/// document write waits until the process is shutting down and then fails,
+/// as a write cut off by a deploy does.
+#[derive(Default)]
+pub(super) struct Writer {
+    pub(super) task_notice: Option<crate::domain::ports::TaskImportNoticeReason>,
+    pub(super) folders: Mutex<Vec<String>>,
+    pub(super) folder_delay: Option<std::time::Duration>,
+    pub(super) folder_visibilities: Mutex<Vec<(String, crate::domain::ports::ImportVisibility)>>,
+    pub(super) documents: Mutex<Vec<(Uuid, String, NotionLinks)>>,
+    pub(super) shares: Mutex<Vec<SharedEntity>>,
+    pub(super) hold: Option<(Arc<Notify>, tokio_util::sync::CancellationToken)>,
+    pub(super) tracker_tasks: Mutex<Vec<Uuid>>,
+    pub(super) visibilities: Mutex<Vec<(Uuid, crate::domain::ports::ImportVisibility)>>,
+    pub(super) tracker_projects: Mutex<Vec<Uuid>>,
+    pub(super) tracker_links: Mutex<Vec<Uuid>>,
+    pub(super) tracker_events: Mutex<Vec<(Uuid, &'static str)>>,
+    pub(super) reject_tracker_links: std::sync::atomic::AtomicBool,
+    pub(super) reject_tracker_projects: std::sync::atomic::AtomicBool,
+    /// Each document written with the source dates it was given.
+    pub(super) document_dates: Mutex<Vec<(Uuid, Option<SourceDates>)>>,
+    pub(super) folder_records: Mutex<Vec<(Uuid, String, Option<Uuid>)>>,
+    pub(super) document_folders: Mutex<Vec<(Uuid, Option<Uuid>)>>,
+    pub(super) task_folders: Mutex<Vec<Option<Uuid>>>,
+    pub(super) grants: Mutex<std::collections::HashSet<Uuid>>,
+    pub(super) target_pool: Option<PgPool>,
+    pub(super) delete_on_first_read: std::sync::atomic::AtomicBool,
+    pub(super) delete_target: Option<Uuid>,
+    pub(super) notify_on_document: Option<(Uuid, Arc<Notify>)>,
+    pub(super) folder_pool: Option<PgPool>,
+    pub(super) tracker_task_sharing: Mutex<Vec<bool>>,
+}
+
+impl crate::domain::ports::ImportedTargetReader for Writer {
+    async fn target_exists(
+        &self,
+        target: crate::domain::ports::ImportedTarget,
+    ) -> anyhow::Result<bool> {
+        if let Some(pool) = &self.target_pool {
+            let live = match target {
+                crate::domain::ports::ImportedTarget::Document(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
+                    id.to_string(),
+                ).fetch_one(pool).await?,
+                crate::domain::ports::ImportedTarget::Folder(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,
+                    id.to_string(),
+                ).fetch_one(pool).await?,
+                crate::domain::ports::ImportedTarget::Database(id) => sqlx::query_scalar!(
+                    r#"SELECT EXISTS(SELECT 1 FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL) AS "live!""#,
+                    id,
+                ).fetch_one(pool).await?,
+                crate::domain::ports::ImportedTarget::Initiative(id) => sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM initiative WHERE id = $1)", id).fetch_one(pool).await?.unwrap_or(false),
+            };
+            if let crate::domain::ports::ImportedTarget::Document(id) = target
+                && self.delete_target.is_none_or(|target| target == id)
+                && self
+                    .delete_on_first_read
+                    .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                sqlx::query!(
+                    r#"UPDATE "Document" SET "deletedAt" = NOW() WHERE id = $1"#,
+                    id.to_string()
+                )
+                .execute(pool)
+                .await?;
+            }
+            return Ok(live);
+        }
+        Ok(true)
+    }
+}
 
 impl WorkspaceWriter for Writer {
     async fn create_tracker_project(
@@ -33,6 +106,10 @@ impl WorkspaceWriter for Writer {
         _: &ImportedTaskProperties,
         visibility: crate::domain::ports::ImportVisibility,
     ) -> anyhow::Result<crate::domain::ports::CreatedImportTask> {
+        self.tracker_task_sharing
+            .lock()
+            .unwrap()
+            .push(visibility == crate::domain::ports::ImportVisibility::Shared);
         self.visibilities.lock().unwrap().push((id, visibility));
         let mut tasks = self.tracker_tasks.lock().unwrap();
         if !tasks.contains(&id) {
@@ -64,7 +141,7 @@ impl WorkspaceWriter for Writer {
 
     async fn create_folder(
         &self,
-        _: &MacroUserIdStr<'static>,
+        user: &MacroUserIdStr<'static>,
         name: &str,
         parent: Option<Uuid>,
         visibility: crate::domain::ports::ImportVisibility,
@@ -82,6 +159,16 @@ impl WorkspaceWriter for Writer {
             .lock()
             .unwrap()
             .push((id, name.to_string(), parent));
+        if let Some(pool) = &self.folder_pool {
+            sqlx::query!(
+                r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, $2, $3)"#,
+                id.to_string(),
+                name,
+                user.as_ref()
+            )
+            .execute(pool)
+            .await?;
+        }
         Ok(id)
     }
 
@@ -118,7 +205,10 @@ impl WorkspaceWriter for Writer {
             .any(|share| matches!(share, SharedEntity::Folder(id) if *id == folder)))
     }
 
-    async fn folder_exists(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
+    async fn folder_exists(&self, _: &MacroUserIdStr<'static>, id: Uuid) -> anyhow::Result<bool> {
+        if let Some(pool) = &self.folder_pool {
+            return Ok(sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Project" WHERE id = $1 AND "deletedAt" IS NULL) AS "live!""#,id.to_string()).fetch_one(pool).await?);
+        }
         Ok(true)
     }
 
@@ -161,7 +251,22 @@ impl WorkspaceWriter for Writer {
             .lock()
             .unwrap()
             .push((id, name.to_string(), links.clone()));
+        if let Some((expected, ready)) = &self.notify_on_document
+            && *expected == id
+        {
+            ready.notify_one();
+        }
         Ok(id.to_string())
+    }
+
+    async fn reapply_task_assignee(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: Uuid,
+        _: &str,
+        _: crate::domain::ports::ImportVisibility,
+    ) -> anyhow::Result<Option<crate::domain::ports::TaskImportNoticeReason>> {
+        Ok(None)
     }
 
     async fn create_task(
@@ -225,5 +330,46 @@ impl WorkspaceWriter for Writer {
 
     async fn team_members(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<Vec<TeamMember>> {
         Ok(Vec::new())
+    }
+}
+
+impl EntityCreator for Writer {
+    async fn can_view(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: crate::domain::models::ImportSource,
+        _: &str,
+    ) -> anyhow::Result<bool> {
+        Ok(true)
+    }
+    async fn create_task(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: &str,
+        _: &ImportedTaskProperties,
+    ) -> anyhow::Result<String> {
+        unimplemented!("workspace imports write through WorkspaceWriter")
+    }
+
+    async fn create_notion_document(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: &str,
+        _: &NotionLinks,
+        _: &ImportedDocumentProperties,
+    ) -> anyhow::Result<String> {
+        unimplemented!("workspace imports write through WorkspaceWriter")
+    }
+
+    async fn create_channel(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &str,
+        _: &ImportTargetReservation,
+        _: &[String],
+    ) -> anyhow::Result<Uuid> {
+        unimplemented!("workspace imports write no channels")
     }
 }

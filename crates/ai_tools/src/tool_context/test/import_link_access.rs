@@ -622,3 +622,102 @@ async fn omitted_personal_assignees_are_counted_once_in_the_import_report(
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_shared_assignee_replay_grants_only_the_previously_omitted_assignee(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use import::domain::ports::TaskImportNoticeReason;
+    let users = users(&pool).await?;
+    let host = host::host(&pool).await;
+    let id = Uuid::now_v7();
+    let properties = import::domain::ports::ImportedTaskProperties {
+        assignee_email: Some(users.teammate.email_str().to_string()),
+        ..Default::default()
+    };
+    let task = host
+        .creator
+        .create_task(
+            &users.owner,
+            id,
+            "Personal task",
+            "Body",
+            &Default::default(),
+            &properties,
+            None,
+            None,
+            ImportVisibility::Personal,
+        )
+        .await?;
+    assert_eq!(
+        task.notice,
+        Some(TaskImportNoticeReason::PersonalAssigneeOmitted)
+    );
+    let access = PgAccessRepository::new(pool);
+    for (visibility, expected, notice) in [
+        (
+            ImportVisibility::Personal,
+            None,
+            Some(TaskImportNoticeReason::PersonalAssigneeOmitted),
+        ),
+        (ImportVisibility::Shared, Some(AccessLevel::Edit), None),
+    ] {
+        assert_eq!(
+            host.creator
+                .reapply_task_assignee(&users.owner, id, users.teammate.email_str(), visibility)
+                .await?,
+            notice
+        );
+        assert_eq!(
+            access
+                .get_document_access(&task.id, Some(&users.teammate.0))
+                .await?,
+            expected
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn an_assignee_replay_roster_outage_remains_retryable(pool: PgPool) -> anyhow::Result<()> {
+    let users = users(&pool).await?;
+    let mut host = host::host(&pool).await;
+    let id = Uuid::now_v7();
+    host.creator
+        .create_task(
+            &users.owner,
+            id,
+            "Personal task",
+            "Body",
+            &Default::default(),
+            &Default::default(),
+            None,
+            None,
+            ImportVisibility::Personal,
+        )
+        .await?;
+    let unavailable = sqlx::postgres::PgPoolOptions::new()
+        .connect_lazy("postgres://user:password@127.0.0.1:1/unavailable")?;
+    unavailable.close().await;
+    host.creator.team_repository = crate::tool_context::build_team_repository(unavailable);
+    let result = host
+        .creator
+        .reapply_task_assignee(
+            &users.owner,
+            id,
+            users.teammate.email_str(),
+            ImportVisibility::Shared,
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "a roster outage must not report successful assignment replay"
+    );
+    assert_eq!(
+        PgAccessRepository::new(pool)
+            .get_document_access(&id.to_string(), Some(&users.teammate.0),)
+            .await?,
+        None
+    );
+    Ok(())
+}

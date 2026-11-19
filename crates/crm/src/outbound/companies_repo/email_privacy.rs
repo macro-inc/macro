@@ -3,6 +3,7 @@ use crate::domain::{
     email_privacy::{
         EmailBlockScope, EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
         EmailPrivacyRepository, EmailPrivacySettings, ExcludedEmailThread, ExcludedEmailThreads,
+        mailbox_domains::{self, ConnectedMailboxDomain},
     },
     model::CrmError,
 };
@@ -18,7 +19,125 @@ pub(super) struct EligibleInteractions {
     pub(super) is_sent: bool,
 }
 
+struct MailboxGuardTimeouts {
+    statement: String,
+    lock: String,
+}
+
 impl CompaniesRepositoryImpl {
+    async fn bound_mailbox_guard(
+        conn: &mut PgConnection,
+    ) -> Result<MailboxGuardTimeouts, CrmError> {
+        let previous = sqlx::query_as!(
+            MailboxGuardTimeouts,
+            r#"SELECT current_setting('statement_timeout') AS "statement!",
+                      current_setting('lock_timeout') AS "lock!""#
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(conn)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(previous)
+    }
+
+    async fn restore_mailbox_guard_timeouts(
+        conn: &mut PgConnection,
+        previous: MailboxGuardTimeouts,
+    ) -> Result<(), CrmError> {
+        // Legacy cascades retain the caller's limits; only the new lookup is bounded.
+        sqlx::query!(
+            "SELECT set_config('statement_timeout', $1, true) AS statement_timeout, set_config('lock_timeout', $2, true) AS lock_timeout",
+            previous.statement,
+            previous.lock
+        )
+        .fetch_one(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
+    }
+
+    pub(super) async fn guard_team_domain_exclusion(
+        conn: &mut PgConnection,
+        team: Uuid,
+        domain: &str,
+    ) -> Result<(), CrmError> {
+        let previous = Self::bound_mailbox_guard(conn).await?;
+        let mailboxes = Self::lock_mailbox_domains(conn, team, None, EmailBlockScope::Team).await?;
+        mailbox_domains::validate(domain, EmailBlockScope::Team, &mailboxes)?;
+        Self::restore_mailbox_guard_timeouts(conn, previous).await
+    }
+
+    pub(super) async fn guard_company_domain_exclusion(
+        conn: &mut PgConnection,
+        team: Uuid,
+        company: Uuid,
+    ) -> Result<(), CrmError> {
+        let previous = Self::bound_mailbox_guard(conn).await?;
+        let mailboxes = Self::lock_mailbox_domains(conn, team, None, EmailBlockScope::Team).await?;
+        // Keep stale statistics from turning a company lookup into a team scan.
+        let domains = sqlx::query_scalar!(
+            "SELECT domain FROM (SELECT domain, team_id FROM crm_domains WHERE company_id = $2 OFFSET 0) company_domains WHERE team_id = $1",
+            team,
+            company
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        for domain in domains {
+            mailbox_domains::validate(&domain, EmailBlockScope::Team, &mailboxes)?;
+        }
+        Self::restore_mailbox_guard_timeouts(conn, previous).await
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team, scope = ?scope), err)]
+    pub(super) async fn lock_mailbox_domains(
+        conn: &mut PgConnection,
+        team: Uuid,
+        user: Option<&str>,
+        scope: EmailBlockScope,
+    ) -> Result<Vec<ConnectedMailboxDomain>, CrmError> {
+        let personal = scope == EmailBlockScope::Personal;
+        // Start at this team's membership index and probe only each member's
+        // primary connection. Keep lifecycle locks until the caller commits,
+        // before any domain/entity locks, so a checked mailbox cannot change
+        // between validation and the exclusion write.
+        sqlx::query_file_as!(
+            ConnectedMailboxDomain,
+            "src/outbound/companies_repo/email_privacy/lock_mailbox_domains.sql",
+            team,
+            user,
+            personal
+        )
+        .fetch_all(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
+    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
+    async fn read_mailbox_domains(
+        conn: &mut PgConnection,
+        team: Uuid,
+        user: &str,
+    ) -> Result<Vec<ConnectedMailboxDomain>, CrmError> {
+        // Settings warnings must not wait for mailbox lifecycle or sync writes.
+        sqlx::query_file_as!(
+            ConnectedMailboxDomain,
+            "src/outbound/companies_repo/email_privacy/mailbox_domains.sql",
+            team,
+            user
+        )
+        .fetch_all(conn)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
     async fn read_email_consent(
         conn: &mut PgConnection,
         team: Uuid,
@@ -347,6 +466,11 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
         let personal_domains = sqlx::query_scalar!(
             "SELECT domain FROM crm_personal_email_blocklist WHERE team_id = $1 AND user_id = $2 ORDER BY domain", team, user
         ).fetch_all(&mut *tx).await.map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        let mailboxes = Self::read_mailbox_domains(&mut tx, team, user).await?;
+        let team_domain_warnings =
+            mailbox_domains::warnings(&team_domains, EmailBlockScope::Team, &mailboxes);
+        let personal_domain_warnings =
+            mailbox_domains::warnings(&personal_domains, EmailBlockScope::Personal, &mailboxes);
         tx.commit()
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
@@ -356,6 +480,8 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
             mailbox_email: consent.mailbox_email,
             team_domains,
             personal_domains,
+            team_domain_warnings,
+            personal_domain_warnings,
             can_remove_team_domains: false,
         })
     }
@@ -478,6 +604,9 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                 backfill_user = enabled;
             }
             EmailPrivacyChange::AddDomain { scope, domain } => {
+                let mailboxes =
+                    Self::lock_mailbox_domains(&mut tx, team, Some(user), scope).await?;
+                mailbox_domains::validate(&domain, scope, &mailboxes)?;
                 match scope {
                     EmailBlockScope::Team => {
                         sqlx::query!("INSERT INTO crm_blocked_domains (team_id, domain) VALUES ($1, $2) ON CONFLICT DO NOTHING", team, domain)
@@ -531,6 +660,7 @@ impl EmailPrivacyRepository for CompaniesRepositoryImpl {
                 backfill_user = true;
             }
         }
+        Self::invalidate_email_previews(&mut tx, team).await?;
         if backfill_user || backfill_team {
             Self::schedule_contribution_history(&mut tx, team, (!backfill_team).then_some(user))
                 .await?;

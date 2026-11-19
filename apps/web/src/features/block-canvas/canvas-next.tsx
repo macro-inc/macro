@@ -41,6 +41,7 @@ import { canvasAssetSource } from './queries/assets';
 import type { CanvasSession } from './queries/canvas-session';
 import { CanvasReadOnlyView } from './views/canvas-read-only-view';
 import { CanvasView } from './views/canvas-view';
+import { MobileCanvasEmbeddedView } from './views/mobile/canvas-embedded-view';
 import { MobileCanvasReadOnlyView } from './views/mobile/canvas-read-only-view';
 import { MobileCanvasView } from './views/mobile/canvas-view';
 import type { CanvasViewProps } from './views/shared/canvas-view-parts';
@@ -115,11 +116,8 @@ export function CanvasNextEditor(props: {
         <Show
           when={props.canEdit && !props.isEmbedded}
           fallback={
-            // Inside a document the canvas keeps its controls within the
-            // embed on every device, so only a canvas open as its own page
-            // takes the touch layout and the app's bottom chrome.
             <Show
-              when={isTouchDevice() && !props.isEmbedded}
+              when={isTouchDevice()}
               fallback={
                 <CanvasReadOnlyView
                   editor={editor}
@@ -128,11 +126,25 @@ export function CanvasNextEditor(props: {
                 />
               }
             >
-              <MobileCanvasReadOnlyView
-                editor={editor}
-                fitOnLoad={props.fitOnLoad}
-                presence={presence}
-              />
+              {/* Inside a document the canvas keeps its controls within the
+                  embed and lets the document scroll; only a canvas open as
+                  its own page takes the app's bottom chrome. */}
+              <Show
+                when={props.isEmbedded}
+                fallback={
+                  <MobileCanvasReadOnlyView
+                    editor={editor}
+                    fitOnLoad={props.fitOnLoad}
+                    presence={presence}
+                  />
+                }
+              >
+                <MobileCanvasEmbeddedView
+                  editor={editor}
+                  fitOnLoad={props.fitOnLoad}
+                  presence={presence}
+                />
+              </Show>
             </Show>
           }
         >
