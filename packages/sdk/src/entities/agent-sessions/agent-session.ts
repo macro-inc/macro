@@ -238,9 +238,9 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   }
 
   /**
-   * The tool permissions that apply in this session: its agent's (for a
-   * built-in persona, the session owner's), plus any restrictions the agent
-   * put on itself for this session only (`sessionRules`).
+   * This session's tool permissions. They are its agent's (for a built-in
+   * persona, the session owner's), plus any restrictions the agent put on
+   * itself for this session only (`sessionRules`).
    *
    * @readonly
    */
