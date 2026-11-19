@@ -67,7 +67,7 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
-  /** Current session authority; individual pipeline grants are checked separately. */
+  /** Admitted record data; pending/error stay gated. Pipeline grants are separate. */
   canAccess: Accessor<boolean>;
   accessState: Accessor<'pending' | 'allowed' | 'denied' | 'error'>;
   retryAccess(): Promise<unknown>;

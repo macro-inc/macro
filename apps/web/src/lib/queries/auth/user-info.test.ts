@@ -8,6 +8,7 @@ import {
   recordSessionCacheWrite,
   registerCacheHost,
 } from '@graphql-cache/lifecycle';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   beginCacheWriteSession,
   captureCacheWriteSession,
@@ -335,6 +336,7 @@ it.each(['same-viewer', 'new-viewer'])(
     );
     await host.enqueueOptimisticMutation(
       {
+        generation: cacheSessionGeneration.capture(),
         uuid: 'draft-1',
         query: 'mutation { saveDraft }',
         data: { text: 'Unsent draft' },

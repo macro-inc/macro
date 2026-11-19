@@ -73,14 +73,58 @@ it('closes old response publication immediately while retirement is pending', as
   expect(session.isCurrent(before)).toBe(false);
 });
 
-it('keeps failed retirement closed until a successful retry', async () => {
+it('keeps live requests usable after failed disk retirement without admitting old responses', async () => {
   const session = createSessionGeneration();
+  const before = session.capture();
   await expect(
     session.transition(async () => {
       throw new Error('storage unavailable');
     })
   ).rejects.toThrow('storage unavailable');
-  expect(session.isCurrent(session.capture())).toBe(false);
+  expect(session.isCurrent(session.capture())).toBe(true);
+  expect(session.isCurrent(before)).toBe(false);
   await session.transition(async () => {});
   expect(session.isCurrent(session.capture())).toBe(true);
+});
+
+it('does not reopen publication between queued retirements of the same generation', async () => {
+  const session = createSessionGeneration();
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
+  const secondStarted = Promise.withResolvers<void>();
+  const initial = session.transition(() => first.promise, 'denied');
+  const retry = session.transition(() => {
+    secondStarted.resolve();
+    return second.promise;
+  }, 'denied');
+  first.resolve();
+  await initial;
+  await secondStarted.promise;
+  expect(session.isCurrent('denied')).toBe(false);
+  second.resolve();
+  await retry;
+  expect(session.isCurrent('denied')).toBe(true);
+});
+
+it('waits for a retirement queued while a caller awaits settlement', async () => {
+  const session = createSessionGeneration();
+  const first = Promise.withResolvers<void>();
+  const second = Promise.withResolvers<void>();
+  const secondStarted = Promise.withResolvers<void>();
+  const initial = session.transition(() => first.promise);
+  let settled = false;
+  const waiting = session.settled().then(() => {
+    settled = true;
+  });
+  const retry = session.transition(() => {
+    secondStarted.resolve();
+    return second.promise;
+  });
+  first.resolve();
+  await initial;
+  await secondStarted.promise;
+  expect(settled).toBe(false);
+  second.resolve();
+  await Promise.all([retry, waiting]);
+  expect(settled).toBe(true);
 });

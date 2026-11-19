@@ -28,7 +28,8 @@ const RECORD_ICONS = {
 export function CrmSidebar(props: {
   /** The highlighted record type, list, pipeline, or `settings`. */
   active: string;
-  canAccess?: boolean;
+  /** Keep destinations visible until access is proven denied. */
+  canAccess: boolean;
   pipelines?: JSX.Element;
   /** Pinned to the bottom of the scrolling content, above the tools. */
   promotion?: JSX.Element;
@@ -58,7 +59,7 @@ export function CrmSidebar(props: {
             <ViewSidebar.Title>{t('nav.customers')}</ViewSidebar.Title>
           </div>
         </ViewSidebar.Header>
-        <Show when={props.canAccess !== false}>
+        <Show when={props.canAccess}>
           <ViewSidebar.Primary ref={tourTarget(COMPANIES_TOUR.create)}>
             <CrmCreateMenu
               onCreateCompany={props.onCreateCompany}
@@ -69,7 +70,7 @@ export function CrmSidebar(props: {
         </Show>
       </header>
       <ViewSidebar.Content>
-        <Show when={props.canAccess !== false}>
+        <Show when={props.canAccess}>
           <SidebarRoutineSuggestions surface="crm" />
           <CollapsibleSection.Root
             open={recordsOpen()}
@@ -105,7 +106,7 @@ export function CrmSidebar(props: {
           </CollapsibleSection.Root>
         </Show>
         {props.pipelines}
-        <Show when={props.canAccess !== false && props.listsEnabled}>
+        <Show when={props.canAccess && props.listsEnabled}>
           <CollapsibleSection.Root
             open={listsOpen()}
             onOpenChange={setListsOpen}
@@ -155,9 +156,9 @@ export function CrmSidebar(props: {
             </CollapsibleSection.Content>
           </CollapsibleSection.Root>
         </Show>
-        <Show when={props.canAccess !== false}>{props.promotion}</Show>
+        <Show when={props.canAccess}>{props.promotion}</Show>
       </ViewSidebar.Content>
-      <Show when={props.canAccess !== false}>
+      <Show when={props.canAccess}>
         <ViewSidebar.Footer>
           <ViewSidebar.Nav aria-label={t('crm.toolsNavigation')}>
             <ViewSidebar.Item

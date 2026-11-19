@@ -245,3 +245,73 @@ fn cache_commands_preserve_flat_arguments_and_validate_write_generations() {
         }
     }
 }
+
+#[test]
+fn legacy_payloads_omit_generation_through_the_invoke_handler() {
+    let handle = crate::engine::EngineHandle::new(
+        cache_turso::TursoStorage::open_in_memory("legacy-profile").unwrap(),
+        None,
+    );
+    let app = tauri::test::mock_builder()
+        .manage(crate::CacheState(std::sync::Mutex::new(Some(
+            crate::InitializedCache {
+                scope: "legacy-profile".into(),
+                handle,
+            },
+        ))))
+        .invoke_handler(tauri::generate_handler![
+            super::graphql_cache_write,
+            super::graphql_cache_read,
+            super::graphql_cache_watch
+        ])
+        .build(tauri::test::mock_context(tauri::test::noop_assets()))
+        .unwrap();
+    let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .unwrap();
+    for (command, body) in [
+        (
+            "graphql_cache_write",
+            serde_json::json!({"query":"{ user { id } }", "data":{"user":{"id":"viewer"}}, "identity":"viewer"}),
+        ),
+        (
+            "graphql_cache_read",
+            serde_json::json!({"query":"{ user { id } }"}),
+        ),
+        (
+            "graphql_cache_watch",
+            serde_json::json!({"query":"{ user { id } }", "opId":"legacy:watch"}),
+        ),
+    ] {
+        assert!(body.get("generation").is_none());
+        assert!(body.get("authority").is_none());
+        let response = tauri::test::get_ipc_response(
+            &webview,
+            tauri::webview::InvokeRequest {
+                cmd: command.into(),
+                callback: tauri::ipc::CallbackFn(0),
+                error: tauri::ipc::CallbackFn(1),
+                url: if cfg!(any(windows, target_os = "android")) {
+                    "http://tauri.localhost"
+                } else {
+                    "tauri://localhost"
+                }
+                .parse()
+                .unwrap(),
+                body: tauri::ipc::InvokeBody::Json(body),
+                headers: Default::default(),
+                invoke_key: tauri::test::INVOKE_KEY.into(),
+            },
+        )
+        .expect("deployed argument omissions must reach the engine")
+        .deserialize::<serde_json::Value>()
+        .unwrap();
+        if command != "graphql_cache_write" {
+            assert_eq!(response["kind"], "hit");
+            assert_eq!(
+                response["data"],
+                serde_json::json!({"user":{"id":"viewer"}})
+            );
+        }
+    }
+}

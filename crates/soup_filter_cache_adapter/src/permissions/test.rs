@@ -253,10 +253,12 @@ fn retirement_removes_children_orphans_and_aggregates_but_keeps_offline_work_and
 #[test]
 fn mutation_only_property_ownership_survives_without_a_parent_record() {
     block_on(async {
-        let mut engine = Engine::new(InMemoryStorage::new());
-        let query = "mutation Set($input: SetEntityPropertyInput!) { setEntityProperty(input: $input) { __typename id propertyDefinitionId } }";
+        let mut engine =
+            Engine::new(InMemoryStorage::new()).with_response_records(response_property_owners);
+        let query = "mutation Set($input: SetEntityPropertyInput!, $first: Boolean!) { setEntityProperty(input: $input) { __typename first: id @include(if: $first) id propertyDefinitionId } }";
         for (id, entity_type) in [("crm-property", "COMPANY"), ("doc-property", "DOCUMENT")] {
-            let variables = json!({"input":{"entityType":entity_type,"entityId":"owner"}});
+            let variables =
+                json!({"first":false,"input":{"entityType":entity_type,"entityId":"owner"}});
             let data = json!({"setEntityProperty":{"__typename":"GraphqlProperty","id":id,"propertyDefinitionId":"definition"}});
             engine
                 .write_query(
@@ -269,15 +271,6 @@ fn mutation_only_property_ownership_survives_without_a_parent_record() {
                 )
                 .await
                 .unwrap();
-            remember_property_owners(
-                &mut engine,
-                query,
-                Some("Set"),
-                variables.as_object().unwrap(),
-                &data,
-            )
-            .await
-            .unwrap();
         }
         let initial = engine.current_authority("viewer").await.unwrap();
         transition_crm_authority(
@@ -288,16 +281,21 @@ fn mutation_only_property_ownership_survives_without_a_parent_record() {
         )
         .await
         .unwrap();
+        let engine = Engine::new(engine.into_storage());
         let rows = engine
             .storage()
             .get_batch(&[
                 key("GraphqlProperty", "crm-property"),
                 key("GraphqlProperty", "doc-property"),
+                key(OWNER_TYPE, "crm-property"),
+                key(OWNER_TYPE, "doc-property"),
             ])
             .await
             .unwrap();
         assert!(rows[0].is_none());
         assert!(rows[1].is_some());
+        assert!(rows[2].is_none());
+        assert!(rows[3].is_some());
     });
 }
 

@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type {
@@ -114,6 +115,25 @@ function setup(
 describe('CalendarSyncController', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
+
+  it('runs the requested new-generation pass after an old commit is rejected', async () => {
+    const { host, fetchChanges, controller } = setup([changes()]);
+    const started = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      started.resolve();
+      return first.promise;
+    });
+    host.calendarCommit.mockRejectedValueOnce(new StaleCacheAuthorityError());
+    const running = controller.runDelta();
+    await started.promise;
+    const rerun = controller.runDelta();
+    first.resolve(changes());
+    await Promise.all([running, rerun]);
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    expect(host.calendarCommit).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
 
   it('preserves the delta request generation through a later index commit', async () => {
     const { host, fetchChanges, controller } = setup([]);

@@ -172,6 +172,23 @@ it.each([
         onMutationAttemptResult: journal,
       });
     const op = operation();
+    const revalidations = [
+      {
+        query: 'query PropertyParent { user { id } }',
+        operationName: 'PropertyParent',
+        variablesJson: '{}',
+        onlyOnLinkFailure: true,
+      },
+    ];
+    commit.mockResolvedValue({
+      kind: 'committed',
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: true,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+      revalidations,
+    });
     await runner.admit(op, enqueue(op, '1'), runner.epoch());
     await cacheSessionGeneration.transition(async () => {});
     const result = {
@@ -199,6 +216,12 @@ it.each([
     ).toMatchObject({ kind: 'committed' });
     expect(replayExplicitEffects).not.toHaveBeenCalled();
     expect(revalidate).toHaveBeenCalledOnce();
+    expect(revalidate).toHaveBeenCalledWith(
+      revalidations,
+      expect.anything(),
+      [],
+      true
+    );
   }
 );
 

@@ -16,8 +16,24 @@ pub(super) fn assignment_owners<E: std::error::Error + 'static>(
         return Ok(BTreeMap::new());
     }
     let updates = normalize(schema, op, variables, data)?;
+    Ok(response_property_owners(
+        schema, op, variables, data, &updates,
+    )?)
+}
+
+/// Derive ownership metadata from the response's existing normalization pass.
+pub fn response_property_owners(
+    schema: &Schema,
+    op: &cache_core::document::Operation,
+    variables: &Map<String, Value>,
+    data: &Value,
+    updates: &cache_core::normalize::RecordUpdates,
+) -> Result<cache_core::normalize::RecordUpdates, cache_core::normalize::NormalizeError> {
+    if !selects_properties(&op.selection_set) {
+        return Ok(BTreeMap::new());
+    }
     let mut owners = BTreeMap::new();
-    for (parent, record) in &updates {
+    for (parent, record) in updates {
         for (field, value) in &record.fields {
             if field_name(field) == "properties" {
                 refs(value, &mut |property| {
@@ -64,9 +80,8 @@ pub(super) fn assignment_owners<E: std::error::Error + 'static>(
             );
             let Some(id) = selections
                 .iter()
-                .find(|field| field.name == "id")
-                .and_then(|field| value.get(&field.response_key))
-                .and_then(Value::as_str)
+                .filter(|field| field.name == "id")
+                .find_map(|field| value.get(&field.response_key).and_then(Value::as_str))
             else {
                 continue;
             };

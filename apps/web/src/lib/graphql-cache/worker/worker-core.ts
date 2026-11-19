@@ -5,6 +5,7 @@
 
 import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
+import { isReadOnlyCacheRequest } from '../host/read-availability';
 import { executePeopleRequest } from '../people/worker';
 import type {
   AffectedOperationsResult,
@@ -617,33 +618,50 @@ export class CacheWorkerCore {
   }
 
   private async dispatch(request: CacheRequest): Promise<unknown> {
-    let before: string | undefined;
+    let before = this.executingAuthority;
     if (request.kind !== 'init') {
-      const authority = await this.requireEngine().currentAuthority(
-        this.scope!
-      );
-      before = authority.generation;
-      if (this.executingAuthority !== before)
-        this.push({ kind: 'authority-changed', authority });
-      this.executingAuthority = before;
       if (
-        [
-          'write',
-          'hydrate',
-          'calendar-commit',
-          'people-update',
-          'contact-reconcile',
-          'invalidate',
-          'delete-records',
-        ].includes(request.kind) &&
-        request.generation !== undefined &&
-        request.generation !== before
+        before === undefined ||
+        (!isReadOnlyCacheRequest(request.kind) &&
+          request.kind !== 'current-authority')
+      ) {
+        const authority = await this.requireEngine().currentAuthority(
+          this.scope!
+        );
+        before = authority.generation;
+        if (this.executingAuthority !== before)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = before;
+      }
+      const writesSnapshot = [
+        'write',
+        'hydrate',
+        'calendar-commit',
+        'people-update',
+        'contact-reconcile',
+        'invalidate',
+        'delete-records',
+      ].includes(request.kind);
+      const settlesCommand =
+        request.kind === 'enqueue-optimistic-mutation' ||
+        request.kind === 'commit-optimistic-write';
+      if (
+        (writesSnapshot && request.generation !== before) ||
+        ((writesSnapshot || settlesCommand) && request.generation === undefined)
       )
         throw new Error(
           'cache response belongs to an older session generation'
         );
     }
-    const result = await this.execute(request);
+    let result: unknown;
+    try {
+      result = await this.execute(request);
+    } catch (error) {
+      // A failed transition may have committed its closed marker. The next
+      // request must resume it before any read, even on the warm read path.
+      this.executingAuthority = undefined;
+      throw error;
+    }
     if (
       request.kind === 'write' ||
       request.kind === 'hydrate' ||
@@ -678,9 +696,15 @@ export class CacheWorkerCore {
         ).generation;
         return null;
       })
-      .with({ kind: 'current-authority' }, async (request) =>
-        this.requireEngine().currentAuthority(request.identity)
-      )
+      .with({ kind: 'current-authority' }, async (request) => {
+        const authority = await this.requireEngine().currentAuthority(
+          request.identity
+        );
+        if (this.executingAuthority !== authority.generation)
+          this.push({ kind: 'authority-changed', authority });
+        this.executingAuthority = authority.generation;
+        return authority;
+      })
       .with({ kind: 'transition-authority' }, async (request) => {
         const context = request.traceparent
           ? Telemetry.remoteContext(request.traceparent)
@@ -1061,6 +1085,7 @@ export class CacheWorkerCore {
       })
       .with({ kind: 'clear' }, async () => {
         const result: CacheRevisionResult = await this.requireEngine().clear();
+        this.executingAuthority = undefined;
         const revision = parseCacheRevision(result.revision);
         this.push({ kind: 'cache-changed', revision, reset: true });
         return revision;

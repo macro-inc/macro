@@ -21,13 +21,16 @@ it('interrupts a read waiting for initialization without interrupting a write or
   await availability.waitUntilReady(() => initialized.promise, true);
 });
 
-it.each(['people-context', 'people-search', 'people-references'] as const)(
-  'classifies %s as a read-only request',
-  (kind) => {
-    expect(isReadOnlyCacheRequest(kind)).toBe(true);
-    expect(isReadOnlyCacheRequest('people-update')).toBe(false);
-  }
-);
+it.each([
+  'people-context',
+  'people-search',
+  'people-references',
+  'people-sql',
+  'contact-snapshot',
+] as const)('classifies %s as a read-only request', (kind) => {
+  expect(isReadOnlyCacheRequest(kind)).toBe(true);
+  expect(isReadOnlyCacheRequest('people-update')).toBe(false);
+});
 
 it('preserves read/write startup continuation order', async () => {
   const availability = new CacheReadAvailability();

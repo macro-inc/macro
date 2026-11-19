@@ -5,7 +5,14 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, For, type JSX, type ParentProps, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  type JSX,
+  onCleanup,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createSettingsPage } from '../primitives/settings-page';
 import { CrmWorkspaceView } from './crm-workspace';
@@ -22,6 +29,10 @@ const fixture = vi.hoisted(() => ({
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
   root: vi.fn(),
+  saveList: vi.fn(),
+  saved: undefined as Promise<void> | undefined,
+  recordMounted: vi.fn(),
+  recordDisposed: vi.fn(),
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
@@ -147,21 +158,39 @@ vi.mock(
   })
 );
 vi.mock('../components/company-list-dialog', () => ({
-  CrmListDialog: () => null,
+  CrmListDialog: (props: {
+    onSave(name: string, companyIds: string[]): Promise<void>;
+  }) => (
+    <button
+      type="button"
+      onClick={() => {
+        fixture.saved = props.onSave('Saved list', ['company']);
+      }}
+    >
+      Save list
+    </button>
+  ),
 }));
 vi.mock('../components/crm-sidebar', () => ({
   CrmSidebar: (props: {
     pipelines?: JSX.Element;
     onNavigate: (id: string) => void;
     onSettings: () => void;
+    canAccess: boolean;
+    onNewList: () => void;
   }) => (
     <nav aria-label="CRM sidebar">
-      <button type="button" onClick={() => props.onNavigate('active')}>
-        Companies
-      </button>
-      <button type="button" onClick={() => props.onNavigate('people')}>
-        People
-      </button>
+      <Show when={props.canAccess}>
+        <button type="button" onClick={() => props.onNavigate('active')}>
+          Companies
+        </button>
+        <button type="button" onClick={() => props.onNavigate('people')}>
+          People
+        </button>
+        <button type="button" onClick={props.onNewList}>
+          New list
+        </button>
+      </Show>
       {props.pipelines}
       <button type="button" onClick={props.onSettings}>
         CRM settings
@@ -194,12 +223,16 @@ vi.mock('./record-detail', () => ({
   CrmRecordDetail: (props: {
     viewName: string;
     records: { type: string; id: string }[];
-  }) => (
-    <div>
-      {props.viewName} record{' '}
-      {props.records.map((record) => `${record.type}:${record.id}`).join(' ')}
-    </div>
-  ),
+  }) => {
+    fixture.recordMounted();
+    onCleanup(fixture.recordDisposed);
+    return (
+      <div>
+        {props.viewName} record{' '}
+        {props.records.map((record) => `${record.type}:${record.id}`).join(' ')}
+      </div>
+    );
+  },
 }));
 vi.mock('./crm-settings', () => ({ Crm: () => <div>Stage settings</div> }));
 vi.mock('./export-companies', () => ({ CrmExport: () => null }));
@@ -259,6 +292,11 @@ vi.mock('./use-crm', () => ({
       },
     ],
     query: { isLoading: false, isError: false },
+    save: { mutateAsync: fixture.saveList },
+  }),
+  useQuickAccessCrmCompaniesQuery: () => ({
+    companies: () => [],
+    query: { isLoading: false },
   }),
 }));
 vi.mock('./apply-view', () => ({
@@ -279,6 +317,10 @@ afterEach(() => {
   fixture.width = 600;
   fixture.openWithSplit.mockReset();
   fixture.root.mockReset();
+  fixture.saveList.mockReset();
+  fixture.saved = undefined;
+  fixture.recordMounted.mockReset();
+  fixture.recordDisposed.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -682,4 +724,81 @@ it('waits for the initial CRM proof before choosing the deep-link fallback', () 
   expect(screen.getByText('Record list')).toBeTruthy();
   setState('denied');
   expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+});
+
+it('unmounts the open record at the workspace boundary on denial and restores it on regrant', () => {
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  const { record } = setup('pipeline:sales');
+  record.open([{ type: 'company', id: 'company', name: '' }]);
+  expect(fixture.recordMounted).toHaveBeenCalledOnce();
+  setAllowed(false);
+  expect(fixture.recordDisposed).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Sales record company:company')).toBeNull();
+  expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
+  setAllowed(true);
+  expect(fixture.recordMounted).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Sales record company:company')).toBeTruthy();
+});
+
+it.each(['pending', 'error'] as const)(
+  'keeps navigation available while the records workspace is %s',
+  (state) => {
+    fixture.canAccess = () => false;
+    fixture.accessState = () => state;
+    const { activeTab } = setup();
+    const navigation = within(
+      screen.getByRole('navigation', { name: 'CRM views' })
+    );
+    fireEvent.click(navigation.getByRole('button', { name: 'People' }));
+    expect(activeTab()).toBe('people');
+    expect(screen.queryByText('Record list')).toBeNull();
+    expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+  }
+);
+
+it.each([false, true])(
+  'does not open a shared pipeline record after denial (touch: %s)',
+  (touch) => {
+    fixture.touch = touch;
+    fixture.canAccess = () => false;
+    const { record } = setup('pipeline:sales');
+    fireEvent.click(screen.getByRole('button', { name: 'Open Acme' }));
+    expect(record.open).not.toHaveBeenCalled();
+    expect(fixture.openWithSplit).not.toHaveBeenCalled();
+    expect(screen.getByText('Sales table')).toBeTruthy();
+  }
+);
+
+it('offers pipeline navigation instead of a denied Companies destination', () => {
+  fixture.touch = false;
+  fixture.canAccess = () => false;
+  const { activeTab } = setup('pipeline:unavailable');
+  expect(
+    screen.queryByRole('button', { name: 'Back to companies' })
+  ).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+  const navigation = within(
+    screen.getByRole('navigation', { name: 'CRM sidebar' })
+  );
+  fireEvent.click(navigation.getByRole('button', { name: 'Sales' }));
+  expect(activeTab()).toBe('pipeline:sales');
+  expect(screen.getByText('Sales table')).toBeTruthy();
+});
+
+it('keeps a shared pipeline open when a list save commits after denial', async () => {
+  const result = Promise.withResolvers<string>();
+  fixture.saveList.mockReturnValue(result.promise);
+  const [allowed, setAllowed] = createSignal(true);
+  fixture.canAccess = allowed;
+  fixture.touch = false;
+  const { activeTab } = setup('pipeline:sales');
+  fireEvent.click(screen.getByRole('button', { name: 'New list' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save list' }));
+  expect(fixture.saveList).toHaveBeenCalledOnce();
+  setAllowed(false);
+  result.resolve('saved');
+  await fixture.saved;
+  expect(activeTab()).toBe('pipeline:sales');
+  expect(screen.getByText('Sales table')).toBeTruthy();
 });

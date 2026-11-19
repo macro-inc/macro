@@ -17,6 +17,7 @@ import {
   type AuthorityTransition,
   cacheAuthorityError,
   createAuthorityObserver,
+  StaleCacheAuthorityError,
 } from '../authority';
 import { CacheAuthoritySchema } from '../authority.generated';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
@@ -153,6 +154,17 @@ const TIMED_COMMANDS: ReadonlySet<string> = new Set([
   'graphql_cache_inspect_query',
 ]);
 
+function returnsCachedContent(command: string): boolean {
+  return (
+    (TIMED_COMMANDS.has(command) &&
+      command !== INIT_COMMAND &&
+      command !== 'graphql_cache_current_authority') ||
+    command === PEOPLE_SQL_COMMAND ||
+    command === PEOPLE_REFERENCES_COMMAND ||
+    command === 'graphql_cache_contact_snapshot'
+  );
+}
+
 // A deadline timer running this late measured a stall of the page itself (an
 // occluded or napping window, a long task): the engine's answer may already be
 // queued behind it. Time out only after a window the page ran through on time.
@@ -273,10 +285,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     if ('generation' in args)
       args = {
         ...args,
-        generation:
-          args.generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
       };
     if (command !== 'graphql_cache_read') pendingReads.clear();
     const span = Telemetry.span('graphql_cache.ipc.request', {
@@ -286,11 +295,17 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     const traceparent = span.traceparent();
     const wireArgs = traceparent ? { ...args, traceparent } : args;
     const deadline = { timedOut: false, pageStallMs: 0 };
+    const authorityGeneration = authorityObserver.snapshot()?.generation;
     try {
       const operation = span.run(() => invoke<T>(command, wireArgs));
       const value = await (TIMED_COMMANDS.has(command)
         ? withRequestDeadline(command, operation, requestTimeoutMs, deadline)
         : operation);
+      if (
+        returnsCachedContent(command) &&
+        authorityGeneration !== authorityObserver.snapshot()?.generation
+      )
+        throw new StaleCacheAuthorityError();
       span.setAttr('graphql_cache.ipc.outcome', 'ok');
       return value;
     } catch (error) {
@@ -322,7 +337,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       identity: options.scope,
     });
     const observed = context.run(() =>
-      authorityObserver.observe(value, version)
+      authorityObserver.observeCurrent(value, version)
     );
     return observed;
   }
@@ -561,7 +576,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           })
         );
         const previousGeneration = authorityObserver.snapshot()?.generation;
-        context.run(() => authorityObserver.observe(result.authority, version));
+        context.run(() =>
+          authorityObserver.observe(result.authority, version, 'transition')
+        );
         if (previousGeneration !== result.authority.generation) {
           pendingReads.clear();
           liveQueries.clear();
@@ -682,7 +699,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
           result.revision,
           result.revisionAdvanced,
           ['person'],
-          authorityObserver.snapshot()?.generation
+          captured
         );
         return result.revision;
       },
@@ -896,10 +913,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       const context = Telemetry.captureContext();
       args = {
         ...args,
-        generation:
-          args.generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await context.run(() =>
@@ -925,10 +939,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     async hydrateQuery(args: CacheHydrateArgs): Promise<HydrationResult> {
       args = {
         ...args,
-        generation:
-          args.generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       if (args.hydrationScope) {
@@ -972,7 +983,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         result.revision,
         result.revisionAdvanced,
         result.searchChangedBuckets,
-        authorityObserver.snapshot()?.generation,
+        args.generation,
         result.unchangedViews
       );
       return result;
@@ -984,10 +995,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<EnqueueOptimisticMutationResult> {
       args = {
         ...args,
-        generation:
-          args.generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await request<EnqueueOptimisticMutationResult>(
@@ -1086,10 +1094,7 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     ): Promise<CommitOptimisticWriteResult> {
       args = {
         ...args,
-        generation:
-          args.generation ??
-          authorityObserver.snapshot()?.generation ??
-          UNKNOWN_CACHE_GENERATION,
+        generation: args.generation ?? UNKNOWN_CACHE_GENERATION,
       };
       await ready;
       return await request<CommitOptimisticWriteResult>(
@@ -1127,10 +1132,12 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     },
 
     async invalidate(keys: string[]): Promise<AffectedOperationsResult> {
+      const generation =
+        authorityObserver.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       await ready;
       const result = await request<AffectedOperationsResult>(
         'graphql_cache_invalidate',
-        { keys, generation: undefined }
+        { keys, generation }
       );
       return { ...result, revision: parseCacheRevision(result.revision) };
     },

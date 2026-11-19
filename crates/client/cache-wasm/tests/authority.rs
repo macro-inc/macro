@@ -75,6 +75,13 @@ async fn opfs_stale_generation_settles_commands_without_restoring_retired_respon
         );
         let queued = result(engine.inspect_mutations()).await;
         assert!(!queued.to_string().contains("retired subject"));
+        let records = result(engine.read_records_by_keys(
+            "fragment Thread on GraphqlSoupEmailThread { id name }".into(),
+            "Thread".into(),
+            js(json!(["GraphqlSoupEmailThread:server-thread"])),
+        ))
+        .await;
+        assert!(!records.to_string().contains("retired subject"));
         result(
             engine.commit_optimistic_write(
                 enqueued["transactionId"].as_str().unwrap().into(),
@@ -97,6 +104,13 @@ async fn opfs_stale_generation_settles_commands_without_restoring_retired_respon
     let reopened = open_cache(SCOPE.into(), None).await.unwrap();
     let current = result(reopened.current_authority(SCOPE.into())).await;
     assert_eq!(current["generation"], denied["generation"]);
+    let records = result(reopened.read_records_by_keys(
+        "fragment Thread on GraphqlSoupEmailThread { id name }".into(),
+        "Thread".into(),
+        js(json!(["GraphqlSoupEmailThread:server-thread"])),
+    ))
+    .await;
+    assert!(!records.to_string().contains("retired subject"));
     JsFuture::from(reopened.close()).await.unwrap();
     destroy_cache(SCOPE.into()).await.unwrap();
 }

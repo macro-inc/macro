@@ -7,6 +7,7 @@ export type IdentityBindingWire = {
   revalidationVariables?: string[];
 };
 
+import { CacheAuthoritySchema } from './authority.generated';
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 import type {
   ContactReconcile,
@@ -1225,13 +1226,7 @@ export function isCachePush(value: unknown): value is CachePush {
     case 'authority-changed':
       return (
         hasOnlyWireKeys(value, ['kind', 'authority']) &&
-        isWireRecord(value.authority) &&
-        typeof value.authority.identity === 'string' &&
-        typeof value.authority.generation === 'string' &&
-        /^[0-9a-f-]{36}$/.test(value.authority.generation) &&
-        (value.authority.policy === null ||
-          typeof value.authority.policy === 'string') &&
-        typeof value.authority.ready === 'boolean'
+        CacheAuthoritySchema.safeParse(value.authority).success
       );
     case 'ops-affected':
       return (

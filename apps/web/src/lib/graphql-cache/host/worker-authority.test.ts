@@ -14,7 +14,7 @@ import { createWorkerCacheHost } from './worker-host';
 let state: CacheAuthority;
 let requests: CacheRequest[];
 let adapter: {
-  onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null;
+  onmessage: ((event: MessageEvent<unknown>) => void) | null;
   start: () => Promise<void>;
   dispose: () => Promise<void>;
   postMessage: (request: CacheRequest) => void;
@@ -93,13 +93,159 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each([
+  { phase: 'startup', reply: 'stale' },
+  { phase: 'refresh', reply: 'stale' },
+  { phase: 'startup', reply: 'foreign' },
+  { phase: 'startup', reply: 'malformed' },
+] as const)(
+  'handles a held $phase authority $reply reply after a newer push',
+  async ({ phase, reply }) => {
+    host.dispose();
+    const makeAdapter = factory.getMockImplementation()!;
+    const started = Promise.withResolvers<CacheRequest>();
+    let hold = phase === 'startup';
+    let held = false;
+    factory.mockImplementation((options) => {
+      const connection = makeAdapter(options) as typeof adapter;
+      const post = connection.postMessage;
+      connection.postMessage = (request) => {
+        if (hold && !held && request.kind === 'current-authority') {
+          held = true;
+          started.resolve(request);
+        } else post(request);
+      };
+      return connection;
+    });
+    state = { ...state, account: null };
+    const initial = state;
+    const failed = vi.fn();
+    host = createWorkerCacheHost({
+      scope: state.identity,
+      onInitializationError: failed,
+    });
+    if (phase === 'refresh') {
+      await host.authority!.current();
+      hold = true;
+    }
+    const pending =
+      phase === 'startup'
+        ? host.readQuery({ query: '{ user { emailThread { id } } }' })
+        : host.authority!.current();
+    const outcome = pending.then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error })
+    );
+    const request = await started.promise;
+    state = { ...state, account: 'viewer', ready: true, policy: 'none' };
+    adapter.onmessage?.(
+      new MessageEvent('message', {
+        data: { kind: 'authority-changed', authority: state },
+      })
+    );
+    adapter.onmessage?.(
+      new MessageEvent('message', {
+        data: {
+          id: request.id,
+          ok: true,
+          authorityGeneration: initial.generation,
+          result:
+            reply === 'foreign'
+              ? { ...initial, identity: 'other-profile' }
+              : reply === 'malformed'
+                ? { ...initial, account: 42 }
+                : initial,
+        },
+      })
+    );
+    if (reply === 'stale') {
+      expect(await outcome).toMatchObject({
+        value: phase === 'startup' ? { kind: 'hit' } : state,
+      });
+      expect(host.authority!.snapshot()).toEqual(state);
+      expect(failed).not.toHaveBeenCalled();
+    } else {
+      expect(await outcome).toMatchObject({ error: expect.any(Error) });
+      expect(failed).toHaveBeenCalledOnce();
+    }
+  }
+);
+
+it.each(['read', 'read-records-by-keys'] as const)(
+  'rejects a delayed %s response after observing a newer authority',
+  async (kind) => {
+    await host.authority!.current();
+    const started = Promise.withResolvers<CacheRequest>();
+    const post = adapter.postMessage;
+    adapter.postMessage = (request) => {
+      if (request.kind === kind) started.resolve(request);
+      else post(request);
+    };
+    const reading =
+      kind === 'read'
+        ? host.readQuery({ query: '{ user { id } }' })
+        : host.readRecordsByKeys({
+            keys: [],
+            document: 'fragment Item on GraphqlSoupDocument { id }',
+            fragmentName: 'Item',
+          });
+    const request = await started.promise;
+    const previous = state.generation;
+    state = { ...state, generation: crypto.randomUUID(), ready: true };
+    adapter.onmessage?.(
+      new MessageEvent<WorkerMessage>('message', {
+        data: { kind: 'authority-changed', authority: state },
+      })
+    );
+    const rejected = expect(reading).rejects.toBeInstanceOf(
+      StaleCacheAuthorityError
+    );
+    adapter.onmessage?.(
+      new MessageEvent<WorkerMessage>('message', {
+        data: {
+          id: request.id,
+          ok: true,
+          result: { kind: 'hit', data: { retired: true } },
+          authorityGeneration: previous,
+        },
+      })
+    );
+    await rejected;
+  }
+);
+
+it('ignores malformed and foreign authority pushes without throwing from the transport callback', async () => {
+  await host.authority!.current();
+  const initial = state;
+  for (const authority of [
+    { ...state, account: 42 },
+    { ...state, identity: 'other-profile' },
+  ]) {
+    expect(() =>
+      adapter.onmessage?.(
+        new MessageEvent('message', {
+          data: { kind: 'authority-changed', authority },
+        })
+      )
+    ).not.toThrow();
+    expect(host.authority!.snapshot()).toEqual(initial);
+  }
+  state = { ...state, generation: crypto.randomUUID() };
+  adapter.onmessage?.(
+    new MessageEvent<WorkerMessage>('message', {
+      data: { kind: 'authority-changed', authority: state },
+    })
+  );
+  expect(host.authority!.snapshot()).toEqual(state);
+});
+
 it.each([undefined, UNKNOWN_CACHE_GENERATION])(
   'never restamps a pre-ready copied write after the owner becomes ready: %s',
   async (generation) => {
     await host.writeQuery({
       query: '{ user { id } }',
       data: { user: { id: 'viewer' } },
-      generation,
+      generation: generation ?? UNKNOWN_CACHE_GENERATION,
     });
     const write = requests.find((request) => request.kind === 'write');
     expect(write?.generation).toBe(UNKNOWN_CACHE_GENERATION);

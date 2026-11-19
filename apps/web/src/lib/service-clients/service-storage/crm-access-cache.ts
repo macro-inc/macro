@@ -13,9 +13,8 @@ import {
 import type { CacheHost } from '@graphql-cache/host/types';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
+import { fetchUserInfo } from '@queries/auth/user-info';
 import { queryClient, queryPersistence } from '@queries/client';
-import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
-import { authServiceClient } from '@service-auth/client';
 import { focusManager, onlineManager } from '@tanstack/solid-query';
 import { dssFetch } from './client';
 import {
@@ -29,6 +28,10 @@ import type { CrmMemberAccessResponse } from './generated/schemas/crmMemberAcces
 let host: CacheHost | undefined;
 let installed = false;
 let lastMismatchedHint: string | undefined;
+let lastHintAttempt = 0;
+let hintRefresh: Promise<void> | undefined;
+let hintRerun = false;
+let hintSession = 0;
 
 async function fetchProof(timeoutMs: number): Promise<string> {
   const signal = AbortSignal.timeout(timeoutMs);
@@ -55,24 +58,66 @@ async function retireVisibleSnapshots(
   scope: CrmRetirementScope | undefined,
   generation: string
 ) {
-  await cacheSessionGeneration.transition(async () => {
-    // Cancel every pre-transition query; mutations retain their real server outcome.
-    await queryClient.cancelQueries();
-    if (scope)
-      await queryPersistence.retire(
-        scope === 'session' ? () => true : crmProtectedQueryKey
+  try {
+    await cacheSessionGeneration.transition(async () => {
+      // Cancel every pre-transition query; mutations retain their real server outcome.
+      await queryClient.cancelQueries();
+      // Permission changes are rare and CRM references can appear in any query
+      // family. Retire every TanStack snapshot rather than maintain a second schema.
+      if (scope) await queryPersistence.retire(() => true);
+    }, generation);
+  } finally {
+    // Failed disk pruning remains quarantined, but fresh server reads can still
+    // replace the retired memory snapshot once this transition has unpaused.
+    if (cacheSessionGeneration.isCurrent(generation))
+      fireAndForget(
+        queryClient.refetchQueries({ type: 'active' }),
+        'crm.access.refetch'
       );
-  }, generation);
-  if (!cacheSessionGeneration.isCurrent(generation)) return;
-  fireAndForget(
-    queryClient.refetchQueries({ type: 'active' }),
-    'crm.access.refetch'
-  );
+  }
 }
 
 function refresh() {
   if (crmAccessAuthority.account())
     fireAndForget(crmAccessAuthority.refresh(), 'crm.access.refresh');
+}
+
+function refreshHint(hint: string) {
+  if (hintRefresh) {
+    lastMismatchedHint = hint;
+    hintRerun = true;
+    return;
+  }
+  if (hint === lastMismatchedHint && Date.now() - lastHintAttempt < 1_000)
+    return;
+  lastMismatchedHint = hint;
+  lastHintAttempt = Date.now();
+  hintRerun = false;
+  const session = hintSession;
+  const work = (async () => {
+    let failure: unknown;
+    try {
+      await crmAccessAuthority.refresh();
+    } catch (error) {
+      failure = error;
+    }
+    // The joined proof may predate this hint. If it did not establish the
+    // hinted policy, take one fresh proof after it settles; bursts coalesce.
+    if (
+      session === hintSession &&
+      lastMismatchedHint &&
+      lastMismatchedHint !== crmAccessAuthority.snapshot()?.policy &&
+      (!failure || hintRerun)
+    ) {
+      await crmAccessAuthority.refresh();
+      return;
+    }
+    if (failure) throw failure;
+  })().finally(() => {
+    if (hintRefresh === work) hintRefresh = undefined;
+  });
+  hintRefresh = work;
+  fireAndForget(work, 'crm.access.hint');
 }
 
 function install() {
@@ -105,11 +150,10 @@ function install() {
       )
         throw new StaleCacheAuthorityError();
       // Only fresh authenticated identity may bind a restored anonymous profile.
-      const identity = await authServiceClient.getLegacyUserPermissions();
+      const identity = await fetchUserInfo({ fresh: true });
       if (
-        identity.isErr() ||
-        !identity.value.authenticated ||
-        identity.value.userId !== account ||
+        !identity.authenticated ||
+        identity.userId !== account ||
         target !== host ||
         crmAccessAuthority.account() !== account
       )
@@ -130,17 +174,17 @@ function install() {
   onlineManager.subscribe((online) => {
     if (online) refresh();
   });
+  const storage = new URL(
+    SERVER_HOSTS['document-storage-service'],
+    document.baseURI
+  );
+  const base = storage.pathname.replace(/\/$/, '');
   registerResponseObserver((input, init) => {
     if (!crmAccessAuthority.account()) return;
     const url = new URL(
       input instanceof Request ? input.url : String(input),
       document.baseURI
     );
-    const storage = new URL(
-      SERVER_HOSTS['document-storage-service'],
-      document.baseURI
-    );
-    const base = storage.pathname.replace(/\/$/, '');
     const isStorage =
       url.origin === storage.origin && url.pathname.startsWith(`${base}/`);
     const path = isStorage ? url.pathname.slice(base.length) : '';
@@ -160,10 +204,8 @@ function install() {
       const hint = response.headers.get('x-macro-crm-access');
       const policy = crmAccessAuthority.snapshot()?.policy;
       if (hint === policy) lastMismatchedHint = undefined;
-      else if (isCrmPolicy(hint) && hint !== lastMismatchedHint) {
-        lastMismatchedHint = hint;
-        refresh();
-      } else if (
+      else if (isCrmPolicy(hint)) refreshHint(hint);
+      else if (
         isStorage &&
         path.startsWith('/crm/') &&
         response.status === 403 &&
@@ -196,6 +238,9 @@ export function initializeCrmCacheOwner() {
 export function setCrmAccessSession(account: string | undefined, epoch = 0) {
   install();
   if (crmAccessAuthority.setSession(account, epoch)) {
+    hintSession += 1;
+    hintRefresh = undefined;
+    hintRerun = false;
     lastMismatchedHint = undefined;
     refresh();
   }

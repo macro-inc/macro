@@ -243,6 +243,7 @@ export function CrmWorkspaceView(props: {
   };
   const inlinePreviewLayout = useInlinePreviewLayout();
   const openRecord = (entity: EntityData) => {
+    if (accessState() === 'denied') return false;
     const type = isCrmCompanyEntity(entity)
       ? 'company'
       : isCrmContactEntity(entity)
@@ -257,10 +258,11 @@ export function CrmWorkspaceView(props: {
   const openPipelineRecord = (record: {
     type: 'company' | 'contact';
     id: string;
-  }) =>
-    inlinePreviewLayout()
-      ? showRecord({ ...record, name: '' })
-      : openWithSplit(record, { activate: true });
+  }) => {
+    if (accessState() === 'denied') return;
+    if (inlinePreviewLayout()) showRecord({ ...record, name: '' });
+    else openWithSplit(record, { activate: true });
+  };
   const apply = useApplyCrmView();
   const teamQuery = useCurrentTeamQuery();
   const teamId = () =>
@@ -407,7 +409,7 @@ export function CrmWorkspaceView(props: {
   const mobileHeader = () => (
     <div class="flex min-w-0 flex-col gap-2">
       <CrmMobileTabs
-        canAccess={canAccess()}
+        canAccess={accessState() !== 'denied'}
         active={activeRecord()}
         pipelines={pipelines.pipelines()}
         lists={listsEnabled() ? lists.lists() : []}
@@ -476,7 +478,7 @@ export function CrmWorkspaceView(props: {
       <ViewShell.Aside>
         <Suspense fallback={<CrmListSkeleton label="Loading CRM" />}>
           <CrmSidebar
-            canAccess={canAccess()}
+            canAccess={accessState() !== 'denied'}
             promotion={
               <ConnectorImportSidebar
                 category="crm"
@@ -591,9 +593,22 @@ export function CrmWorkspaceView(props: {
                       }
                       onRetry={() => pipelines.refresh()}
                     />
-                    <Button variant="ghost" onClick={() => navigate('active')}>
-                      Back to companies
-                    </Button>
+                    <Show
+                      when={accessState() !== 'denied'}
+                      fallback={
+                        <ViewSidebar.Toggle
+                          action="expand"
+                          presentation="pill"
+                        />
+                      }
+                    >
+                      <Button
+                        variant="ghost"
+                        onClick={() => navigate('active')}
+                      >
+                        Back to companies
+                      </Button>
+                    </Show>
                   </Show>
                 </Show>
                 <Show when={!pipelineId() && activityTab()} keyed>
@@ -791,13 +806,13 @@ export function CrmWorkspaceView(props: {
                   name,
                   companyIds,
                 });
-                navigate(`list:${id}`);
+                if (accessState() !== 'denied') navigate(`list:${id}`);
               }}
               onDelete={
                 initial().id
                   ? async () => {
                       await lists.remove.mutateAsync(initial().id!);
-                      navigate('active');
+                      if (accessState() !== 'denied') navigate('active');
                     }
                   : undefined
               }

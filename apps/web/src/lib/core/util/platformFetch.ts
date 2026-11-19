@@ -112,6 +112,34 @@ export function createPlatformFetch(
 export const platformFetch: typeof fetch = (input, init) => {
   try {
     const request = { ...init };
+    // Fetch reads dictionary members through the prototype too. Snapshot their
+    // values into writable fields so observers can annotate frozen/class inputs.
+    if (init) {
+      for (const key of [
+        'body',
+        'cache',
+        'credentials',
+        'headers',
+        'integrity',
+        'keepalive',
+        'method',
+        'mode',
+        'priority',
+        'redirect',
+        'referrer',
+        'referrerPolicy',
+        'signal',
+        'window',
+      ] as const) {
+        if (!Object.hasOwn(request, key) && key in init)
+          Object.defineProperty(request, key, {
+            value: init[key],
+            configurable: true,
+            enumerable: true,
+            writable: true,
+          });
+      }
+    }
     const observe = prepareResponseObservers(input, request);
     const response = globalThis.fetch(input, request);
     return observe === passResponse ? response : response.then(observe);

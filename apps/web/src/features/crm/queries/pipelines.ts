@@ -54,7 +54,6 @@ export function createPipelinesSource(
             : [pipeline]
         )
     );
-    fireAndForget(refreshAfterSave(), 'crm');
   }
   return {
     pipelines: () => (queryReadyGate(query) ? query.data : []),
@@ -66,11 +65,12 @@ export function createPipelinesSource(
       const pipeline = await throwOnErr(() =>
         deps.storage.createCrmPipeline(input)
       );
-      if (!canCache()) return pipeline;
-      deps.client.setQueryData(
-        crmKeys.pipelines(pipeline.teamId).queryKey,
-        (old: (typeof pipeline)[] | undefined) => [...(old ?? []), pipeline]
-      );
+      if (canCache()) {
+        deps.client.setQueryData(
+          crmKeys.pipelines(pipeline.teamId).queryKey,
+          (old: (typeof pipeline)[] | undefined) => [...(old ?? []), pipeline]
+        );
+      }
       fireAndForget(refreshAfterSave(), 'crm');
       return pipeline;
     },
@@ -78,11 +78,13 @@ export function createPipelinesSource(
       const canCache = captureQueryAuthorization();
       await throwOnErr(() => deps.storage.renameCrmPipeline(id, name));
       if (canCache()) update(id, { name });
+      fireAndForget(refreshAfterSave(), 'crm');
     },
     trash: async (id) => {
       const canCache = captureQueryAuthorization();
       await throwOnErr(() => deps.storage.trashCrmPipeline(id));
       if (canCache()) update(id);
+      fireAndForget(refreshAfterSave(), 'crm');
     },
   };
 }

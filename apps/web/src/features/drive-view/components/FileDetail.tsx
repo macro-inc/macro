@@ -24,8 +24,6 @@ import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { type Span, Telemetry } from '@macro-inc/observability';
-import { queryClient } from '@queries/client';
-import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -37,10 +35,18 @@ import {
   Match,
   onCleanup,
   type ParentProps,
+  type ResourceFetcherInfo,
   Suspense,
   Switch,
   untrack,
 } from 'solid-js';
+
+type FileDetailPublication<T> = {
+  data: T;
+  generation: string;
+  attempt: number;
+  request: number;
+};
 
 export type FileDetailLayoutProps = ParentProps<{
   documentId: string;
@@ -115,6 +121,8 @@ export function FileDetailLoadGate<
   entityType: BlockName;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
+  /** Retires query-adapter credentials before the one identity retry. */
+  recover: (documentId: string) => Promise<void>;
   /**
    * Releases what a load opened, such as a markdown document's sync source,
    * once its result can no longer be shown: its content replaced or removed,
@@ -142,10 +150,24 @@ export function FileDetailLoadGate<
   let unmounted = false;
   let latestLoad = 0;
   let current: T | undefined;
-  const load = async (documentId: string): Promise<T | undefined> => {
+  const load = async (
+    documentId: string,
+    info: ResourceFetcherInfo<FileDetailPublication<T> | undefined, number>
+  ): Promise<FileDetailPublication<T> | undefined> => {
     const request = ++latestLoad;
     const superseded = () => unmounted || request !== latestLoad;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    const firstAttempt =
+      typeof info.refetching === 'number' ? info.refetching : 0;
+    const recover = async () => {
+      await cacheSessionGeneration.settled();
+      if (superseded()) return false;
+      if (cacheSessionGeneration.state().paused)
+        throw new StaleCacheAuthorityError();
+      await props.recover(documentId);
+      return !superseded();
+    };
+    if (firstAttempt === 1 && !(await recover())) return undefined;
+    for (let attempt = firstAttempt; attempt < 2; attempt++) {
       const generation = cacheSessionGeneration.capture();
       let data: T | undefined;
       try {
@@ -170,20 +192,11 @@ export function FileDetailLoadGate<
         if (attempt > 0) throw new StaleCacheAuthorityError();
         // A cold load can overlap local retirement. Retry once from identity,
         // after local cleanup, with fresh metadata and authorization credentials.
-        await cacheSessionGeneration.settled();
-        if (superseded()) return undefined;
-        if (cacheSessionGeneration.state().paused)
-          throw new StaleCacheAuthorityError();
-        await queryClient.invalidateQueries({
-          queryKey: documentLoadKeys.bundle(documentId).queryKey,
-          exact: true,
-          refetchType: 'none',
-        });
-        if (superseded()) return undefined;
+        if (!(await recover())) return undefined;
         continue;
       }
       current = data;
-      return data;
+      return data ? { data, generation, attempt, request } : undefined;
     }
     throw new StaleCacheAuthorityError();
   };
@@ -208,7 +221,13 @@ export function FileDetailLoadGate<
   // revoked access is ready without a document and is not an open.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready' || document.latest === undefined) return;
+    if (document.state !== 'ready') return;
+    const publication = document.latest;
+    if (publication === undefined) return;
+    if (
+      !untrack(() => cacheSessionGeneration.isCurrent(publication.generation))
+    )
+      return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
@@ -231,7 +250,8 @@ export function FileDetailLoadGate<
         unload();
         return;
       }
-      const loaded = document.state === 'ready' ? document.latest : undefined;
+      const loaded =
+        document.state === 'ready' ? document.latest?.data : undefined;
       if (loaded?.userAccessLevel !== level) reload();
     }
   );
@@ -263,7 +283,19 @@ export function FileDetailLoadGate<
           )}
         </Match>
         <Match when={document()} keyed>
-          {(data) => {
+          {(publication) => {
+            const data = publication.data;
+            if (
+              !untrack(() =>
+                cacheSessionGeneration.isCurrent(publication.generation)
+              )
+            ) {
+              release(data);
+              if (current === data) current = undefined;
+              if (!unmounted && publication.request === latestLoad)
+                fireAndForget(refetch(publication.attempt + 1), 'drive-view');
+              return null;
+            }
             handedToViewer.add(data);
             // Runs after this content, and the editor it renders, is disposed.
             onCleanup(() => release(data));

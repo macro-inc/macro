@@ -64,12 +64,13 @@ pub struct QueueDiagnostics {
 pub trait Storage: MaybeSend {
     type Error: std::error::Error + MaybeSend + 'static;
 
-    /// Atomically replace cached optimistic layers and remove projections only
-    /// for the specified owners. Preserve other shadows and all command metadata.
+    /// Atomically replace copied layers and recomposed shadows for affected keys.
+    /// Preserve all other shadows and authored command metadata.
     fn replace_optimistic_layers(
         &mut self,
         layers: &[(MutationId, PersistedOptimisticLayer)],
-        retired_projection_owners: &[MutationId],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
     /// Enumerate raw normalized keys of one type, including hidden, partial and
@@ -789,15 +790,21 @@ impl Storage for InMemoryStorage {
     async fn replace_optimistic_layers(
         &mut self,
         layers: &[(MutationId, PersistedOptimisticLayer)],
-        retired_projection_owners: &[MutationId],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
     ) -> Result<(), Self::Error> {
         for (id, layer) in layers {
             if let Some(entry) = self.mutations.get_mut(id) {
                 entry.optimistic = layer.clone();
             }
         }
-        self.optimistic_projections
-            .retain(|_, projection| !retired_projection_owners.contains(&projection.owner));
+        for key in affected_projection_keys {
+            self.optimistic_projections.remove(key);
+        }
+        for projection in projections {
+            self.optimistic_projections
+                .insert(projection.state.record_key().clone(), projection.clone());
+        }
         Ok(())
     }
 

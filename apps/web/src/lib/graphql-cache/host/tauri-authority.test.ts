@@ -8,10 +8,11 @@ import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 
 const invoke = vi.hoisted(() => vi.fn());
 const listen = vi.hoisted(() => vi.fn());
+const emit = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
 vi.mock('@tauri-apps/api/event', () => ({
   listen,
-  emit: vi.fn(async () => {}),
+  emit,
 }));
 
 import { createTauriCacheHost } from './tauri-host';
@@ -19,7 +20,7 @@ import { createTauriCacheHost } from './tauri-host';
 let state: CacheAuthority;
 let host: ReturnType<typeof createTauriCacheHost>;
 let read: () => Promise<unknown>;
-let readAuthority: () => Promise<CacheAuthority>;
+let readAuthority: () => Promise<unknown>;
 type NativeEventListener = (event: { payload: unknown }) => void;
 let listeners: Map<string, NativeEventListener>;
 beforeEach(() => {
@@ -77,6 +78,128 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it.each([
+  { phase: 'startup', reply: 'stale' },
+  { phase: 'refresh', reply: 'stale' },
+  { phase: 'startup', reply: 'foreign' },
+  { phase: 'startup', reply: 'malformed' },
+] as const)(
+  'handles a held $phase authority $reply reply after a newer push',
+  async ({ phase, reply }) => {
+    await host.authority!.current();
+    host.dispose();
+    const started = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<unknown>();
+    let hold = phase === 'startup';
+    let held = false;
+    readAuthority = () => {
+      if (hold && !held) {
+        held = true;
+        started.resolve();
+        return response.promise;
+      }
+      return Promise.resolve(state);
+    };
+    state = { ...state, account: null };
+    const initial = state;
+    const failed = vi.fn();
+    host = createTauriCacheHost({
+      scope: state.identity,
+      onInitializationError: failed,
+    });
+    if (phase === 'refresh') {
+      await host.authority!.current();
+      hold = true;
+    }
+    const pending =
+      phase === 'startup'
+        ? host.readQuery({ query: '{ user { emailThread { id } } }' })
+        : host.authority!.current();
+    const outcome = pending.then(
+      (value) => ({ value }),
+      (error: unknown) => ({ error })
+    );
+    await started.promise;
+    state = { ...state, account: 'viewer', ready: true, policy: 'none' };
+    listeners.get('graphql-cache://authority-changed')!({ payload: state });
+    response.resolve(
+      reply === 'foreign'
+        ? { ...initial, identity: 'other-profile' }
+        : reply === 'malformed'
+          ? { ...initial, account: 42 }
+          : initial
+    );
+    if (reply === 'stale') {
+      expect(await outcome).toMatchObject({
+        value: phase === 'startup' ? { kind: 'hit' } : state,
+      });
+      expect(host.authority!.snapshot()).toEqual(state);
+      expect(failed).not.toHaveBeenCalled();
+    } else {
+      expect(await outcome).toMatchObject({ error: expect.any(Error) });
+      expect(failed).toHaveBeenCalledOnce();
+    }
+  }
+);
+
+it('rejects a delayed native read after another window changes authority', async () => {
+  await host.authority!.current();
+  const started = Promise.withResolvers<void>();
+  const reply = Promise.withResolvers<unknown>();
+  read = () => {
+    started.resolve();
+    return reply.promise;
+  };
+  const reading = host.readQuery({ query: '{ user { emailThread { id } } }' });
+  const rejected = expect(reading).rejects.toBeInstanceOf(
+    StaleCacheAuthorityError
+  );
+  await started.promise;
+  state = { ...state, generation: crypto.randomUUID() };
+  listeners.get('graphql-cache://authority-changed')!({ payload: state });
+  reply.resolve({
+    kind: 'hit',
+    data: { user: { emailThread: { id: 'retired' } } },
+  });
+  await rejected;
+});
+
+it('keeps a committed hydration broadcast stamped with its original authority', async () => {
+  await host.authority!.current();
+  const generation = state.generation;
+  const started = Promise.withResolvers<void>();
+  const reply = Promise.withResolvers<unknown>();
+  const invokeBefore = invoke.getMockImplementation()!;
+  invoke.mockImplementation((command, args) => {
+    if (command === 'graphql_cache_hydrate') {
+      started.resolve();
+      return reply.promise;
+    }
+    return invokeBefore(command, args);
+  });
+  const hydration = host.hydrateQuery({
+    query: '{ user { id } }',
+    data: { user: { id: 'viewer' } },
+    generation,
+  });
+  await started.promise;
+  state = { ...state, generation: crypto.randomUUID() };
+  listeners.get('graphql-cache://authority-changed')!({ payload: state });
+  reply.resolve({
+    revision: '1',
+    revisionAdvanced: true,
+    unchangedViews: ['view'],
+  });
+  await hydration;
+  expect(emit).toHaveBeenCalledWith(
+    'graphql-cache://cache-hydrated',
+    expect.objectContaining({
+      authorityGeneration: generation,
+      unchangedViews: ['view'],
+    })
+  );
+});
+
 it.each([undefined, UNKNOWN_CACHE_GENERATION])(
   'never gives a pre-ready copied write the later owner generation: %s',
   async (generation) => {
@@ -91,7 +214,7 @@ it.each([undefined, UNKNOWN_CACHE_GENERATION])(
     const writing = host.writeQuery({
       query: '{ user { id } }',
       data: { user: { id: 'viewer' } },
-      generation,
+      generation: generation ?? UNKNOWN_CACHE_GENERATION,
     });
     await started.promise;
     expect(
@@ -128,6 +251,7 @@ it.each(['enqueue', 'commit'] as const)(
     readAuthority = () => owner.promise;
     host = createTauriCacheHost({ scope: state.identity });
     const args = {
+      generation: UNKNOWN_CACHE_GENERATION,
       query: 'mutation Save { save { id } }',
       data: { save: { id: 'draft' } },
     };
@@ -136,7 +260,10 @@ it.each(['enqueue', 'commit'] as const)(
     if (operation === 'enqueue') {
       command = 'graphql_cache_enqueue_optimistic_mutation';
       writing = host.enqueueOptimisticMutation(
-        { ...args, uuid: crypto.randomUUID() },
+        {
+          ...args,
+          uuid: crypto.randomUUID(),
+        },
         { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 100 }
       );
     } else {
@@ -184,6 +311,7 @@ it('observes a first account binding from another native window before the next 
     host.writeQuery({
       query: '{ user { id } }',
       data: { user: { id: 'viewer' } },
+      generation,
     })
   ).rejects.toThrow('test stopped');
   expect(invoke).toHaveBeenLastCalledWith(

@@ -72,6 +72,58 @@ it('sends observer annotations without changing the caller request options', asy
   }
 });
 
+it('preserves inherited and non-enumerable fetch options in the observer copy', async () => {
+  const abort = new AbortController();
+  const headers = new Headers({ 'x-original': 'kept' });
+  class Options {
+    get method() {
+      return 'POST';
+    }
+    get body() {
+      return 'payload';
+    }
+    get signal() {
+      return abort.signal;
+    }
+    get headers() {
+      return headers;
+    }
+  }
+  const init = new Options();
+  const referrer = vi.fn(() => 'https://sender.example/');
+  Object.defineProperty(init, 'credentials', { value: 'include' });
+  Object.defineProperty(init, 'referrer', {
+    enumerable: true,
+    get: referrer,
+  });
+  Object.freeze(init);
+  const sent = vi.fn<typeof fetch>().mockResolvedValue(new Response('ok'));
+  vi.stubGlobal('fetch', sent);
+  const stop = registerResponseObserver((_input, request) => {
+    expect(request.method).toBe('POST');
+    const outgoing = new Headers(request.headers);
+    outgoing.set('x-retirement-signal', '1');
+    request.headers = outgoing;
+  });
+  try {
+    await platformFetch('https://gateway.example/storage', init);
+    const outgoing = sent.mock.calls[0][1];
+    expect(outgoing).toMatchObject({
+      method: 'POST',
+      body: 'payload',
+      credentials: 'include',
+      referrer: 'https://sender.example/',
+    });
+    expect(referrer).toHaveBeenCalledOnce();
+    expect(outgoing?.signal).toBe(abort.signal);
+    expect(new Headers(outgoing?.headers).get('x-original')).toBe('kept');
+    expect(headers.has('x-retirement-signal')).toBe(false);
+    expect(sent.mock.calls[0][1]).not.toBe(init);
+  } finally {
+    stop();
+  }
+});
+
 it.each([
   'ipc://localhost/',
   'http://ipc.localhost/',

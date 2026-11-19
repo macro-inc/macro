@@ -118,8 +118,9 @@ describe('Quick Access local projection', () => {
     setRevision(1);
     await started.promise;
     expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:kept' }]);
-    refresh.resolve(page(['kept']));
+    refresh.resolve(page(['updated']));
     await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+    expect(list.items()).toEqual([{ id: 'GraphqlSoupDocument:updated' }]);
   });
 
   it('drops email-only results and a delayed materialization when access is revoked', async () => {

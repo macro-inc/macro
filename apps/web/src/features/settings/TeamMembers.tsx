@@ -293,7 +293,6 @@ function MemberRow(props: {
               checked={props.crmAccess}
               disabled={props.crmPending}
               onChange={props.onCrmAccessChange}
-              aria-label={t('crm.memberAccessFor', { name: displayName() })}
             />
           </Show>
         </SettingsRow>

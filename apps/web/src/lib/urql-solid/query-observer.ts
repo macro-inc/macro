@@ -31,6 +31,7 @@ type PendingRefetch<QueryData, Variables extends AnyVariables, Data> = {
 
 type QueryExecution<QueryData, Variables extends AnyVariables, Data> = {
   options: UrqlQueryOptions<QueryData, Variables, Data>;
+  context: Partial<OperationContext>;
   source: OperationResultSource<OperationResult<QueryData, Variables>>;
   subscription?: Subscription;
   pending?: PendingRefetch<QueryData, Variables, Data>;
@@ -259,6 +260,7 @@ export class QueryObserver<
 
       const currentExecution: QueryExecution<QueryData, Variables, Data> = {
         options,
+        context,
         networkOnly: context.requestPolicy === 'network-only',
         source: client.executeQuery<QueryData, Variables>(request, context),
         pending,
@@ -371,7 +373,7 @@ export class QueryObserver<
           this.execute(
             execution.options,
             this.client,
-            { requestPolicy: 'network-only' },
+            { requestPolicy: 'network-only', context: execution.context },
             pending
           );
         });

@@ -53,6 +53,7 @@ import {
 } from '@urql/core';
 import { type DocumentNode, Kind, parse } from 'graphql';
 import { match } from 'ts-pattern';
+import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import type { CacheHost } from '../host/types';
 import type {
   ClaimedMutation,
@@ -1205,7 +1206,7 @@ export function createMutationQueueRunner(
         const snapshotGeneration =
           typeof op.context.cacheSessionGeneration === 'string'
             ? op.context.cacheSessionGeneration
-            : cacheSessionGeneration.capture();
+            : UNKNOWN_CACHE_GENERATION;
         const committed = await host.commitOptimisticWrite(
           attempt.transactionId,
           claim,
@@ -1254,12 +1255,23 @@ export function createMutationQueueRunner(
           outcome = 'superseded';
           if (cacheSessionGeneration.isCurrent(snapshotGeneration))
             await deps.deleteReportedRecords(result);
-          else await deps.revalidate([], op, committed.affectedOps ?? [], true);
+          else
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
         } else {
           disposition = 'committed';
           outcome = 'committed';
           if (!cacheSessionGeneration.isCurrent(snapshotGeneration)) {
-            await deps.revalidate([], op, committed.affectedOps ?? [], true);
+            await deps.revalidate(
+              committed.revalidations ?? [],
+              op,
+              committed.affectedOps ?? [],
+              true
+            );
           } else {
             const deleted = await deps.deleteReportedRecords(result);
             if (!isCurrent(attempt)) return detachedResult();

@@ -471,18 +471,21 @@ export function setPreviewName({
  * });
  */
 export function setPreviewOnCreate({
+  generation,
   itemId,
   itemType,
   name,
   fileType,
   subType,
 }: {
+  generation: string;
   itemId: string;
   itemType: Exclude<ItemType, 'calendar_event'>;
   name?: string;
   fileType?: string;
   subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };
 }) {
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   if (
     itemType === 'document' ||
     itemType === 'chat' ||
@@ -499,7 +502,8 @@ export function setPreviewOnCreate({
             fileType,
             subType,
           },
-          userId
+          userId,
+          generation
         )
       );
     }

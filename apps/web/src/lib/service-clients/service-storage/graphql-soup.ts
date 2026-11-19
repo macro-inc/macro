@@ -29,6 +29,7 @@ import {
 import { optimisticResolversExchange } from '@graphql-cache/exchange/optimistic-resolvers';
 import {
   cacheSessionExchange,
+  createCacheSessionExchange,
   sessionSubscriptionExchange,
 } from '@graphql-cache/exchange/session-exchange';
 import { CacheNavigationError } from '@graphql-cache/host/navigation-error';
@@ -571,6 +572,7 @@ function disposeUncachedRealtimeClient(): void {
 
 function getUncachedRealtimeClient(): Client {
   if (uncachedRealtimeClient) return uncachedRealtimeClient;
+  const lifetime = new AbortController();
 
   const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
     suspendOnPagehide: !isTauri(),
@@ -582,7 +584,7 @@ function getUncachedRealtimeClient(): Client {
     url: `${dssHost}/items/soup/graphql`,
     preferGetMethod: false,
     exchanges: [
-      cacheSessionExchange,
+      createCacheSessionExchange(lifetime.signal),
       captureTraceParentExchange,
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
@@ -605,6 +607,7 @@ function getUncachedRealtimeClient(): Client {
   );
   uncachedRealtimeCleanup = () => {
     subscriptionsLifecycle.dispose();
+    lifetime.abort();
     fireAndForget(websocketClient.dispose(), 'graphql-soup-client');
   };
   return client;
@@ -922,11 +925,13 @@ export function getGraphqlSoupClient(): Client {
     const subscriptionsLifecycle = createGraphqlSoupSubscriptionsLifecycle({
       suspendOnPagehide: !native,
     });
+    const lifetime = new AbortController();
     const cleanup = () => {
       unregisterHost();
       // Unsubscribing emits urql teardown operations; keep the cache host
       // available until those best-effort registration removals are issued.
       subscriptionsLifecycle.dispose();
+      lifetime.abort();
       // Retires the host: operations still running on this client, and any
       // caller that captured the host, fall back to the network from here.
       host?.dispose();
@@ -1010,11 +1015,12 @@ export function getGraphqlSoupClient(): Client {
         // See graphqlSoupClient: GET serves GraphiQL on this path.
         preferGetMethod: false,
         exchanges: [
-          cacheSessionExchange,
+          createCacheSessionExchange(lifetime.signal),
           captureTraceParentExchange,
           optimisticResolversExchange(soupOptimisticResolvers),
           networkRevalidationExchange(() => host?.disabled === true),
           normalizedCacheExchange(host, {
+            signal: lifetime.signal,
             ...localDraftQueueLifecycle(host),
             externalMutationVersion: () => externalMutationVersion,
             deletedRecordKeys: emailCacheDeletionKeys,

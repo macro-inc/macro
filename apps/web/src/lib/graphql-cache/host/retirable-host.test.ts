@@ -1,3 +1,4 @@
+import { TEST_AUTHORITY_GENERATION } from '@graphql-cache/authority-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPeopleCache } from '../people/host';
 import {
@@ -70,7 +71,11 @@ describe('createRetirableCacheHost', () => {
     );
     await expect(host.readQuery(QUERY)).resolves.toEqual({ kind: 'miss' });
     await expect(
-      host.writeQuery({ ...QUERY, data: { user: { id: 'u' } } })
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        ...QUERY,
+        data: { user: { id: 'u' } },
+      })
     ).resolves.toMatchObject({ revision: INITIAL_CACHE_REVISION });
     await expect(
       host.search({ profile: 'quick-access-v1', query: '', limit: 10 })

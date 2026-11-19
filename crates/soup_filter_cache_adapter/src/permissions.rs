@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use uuid::Uuid;
 
 mod ownership;
+pub use ownership::response_property_owners;
 use ownership::{assignment_owners, read_records, selected_keys};
 
 const PAGE: usize = 500;
@@ -337,13 +338,6 @@ async fn retire_optimism<S: PredicateIndexStorage>(
                     id: entry.id,
                     detail: error.to_string(),
                 })?;
-        let owners = assignment_owners::<S::Error>(
-            engine.schema(),
-            &entry.mutation.request.query,
-            entry.mutation.request.operation_name.as_deref(),
-            &variables,
-            &source.mutation_data,
-        )?;
         let entries = records.into_iter().collect::<Vec<_>>();
         let document = crate::parsed_document::parsed_document(&entry.mutation.request.query)?;
         let operation = document.operation(entry.mutation.request.operation_name.as_deref())?;
@@ -352,6 +346,13 @@ async fn retire_optimism<S: PredicateIndexStorage>(
             operation,
             &variables,
             &source.mutation_data,
+        )?;
+        let owners = response_property_owners(
+            engine.schema(),
+            operation,
+            &variables,
+            &source.mutation_data,
+            &authored_source,
         )?;
         let protected = !selected_keys(engine, &entries, owners).await?.is_empty()
             || authored_source.iter().any(|(key, record)| {
@@ -473,7 +474,47 @@ pub async fn transition_crm_authority<S: PredicateIndexStorage>(
     // Rebuild retained command recipes only after their copied base aggregates
     // have been removed, so an unrelated favorite cannot restore an old list.
     retire_optimism(engine).await?;
+    retire_ownership_metadata(engine).await?;
     engine.complete_authority_transition(authority).await
+}
+
+async fn retire_ownership_metadata<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+) -> Result<(), EngineError<S::Error>> {
+    let mut after = None;
+    loop {
+        let keys = engine
+            .storage()
+            .record_keys(OWNER_TYPE, after.as_deref(), PAGE)
+            .await
+            .map_err(EngineError::Storage)?;
+        let Some(last) = keys.last() else {
+            break;
+        };
+        after = Some(last.id().unwrap_or_default().to_owned());
+        let records = engine
+            .storage()
+            .get_batch(&keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        let remove = keys
+            .into_iter()
+            .zip(records)
+            .filter_map(|(key, record)| {
+                match record
+                    .as_ref()
+                    .and_then(|record| record.fields.get("owner"))
+                {
+                    Some(CacheValue::Ref(owner)) if content_key(owner) => Some(key),
+                    _ => None,
+                }
+            })
+            .collect::<Vec<_>>();
+        if !remove.is_empty() {
+            engine.delete_keys_with_projections(&remove, &[]).await?;
+        }
+    }
+    Ok(())
 }
 
 #[tracing::instrument(name = "crm.access.retire_property_owners", skip_all, fields(crm.access.scanned = tracing::field::Empty), err)]

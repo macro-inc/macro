@@ -79,7 +79,7 @@ export type InspectQueryVariantsArgs = Omit<
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
   /** Capture before dispatch; the shared owner compares it before publication. */
-  generation?: string;
+  generation: string;
   data: unknown;
   /** Installs this active query's dependencies from the normalized response. */
   registerDependencies?: boolean;

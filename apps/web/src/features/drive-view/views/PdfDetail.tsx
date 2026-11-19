@@ -36,6 +36,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import Printer from '@icon/system/regular/printer.svg';
 import { Telemetry } from '@macro-inc/observability';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';
@@ -206,6 +207,7 @@ export function PdfDetail(props: {
 }) {
   return (
     <FileDetailLoadGate
+      recover={invalidateDocumentLoadBundle}
       documentId={props.documentId}
       entityType="pdf"
       label="PDF"

@@ -27,6 +27,7 @@ export function createSessionGeneration(
     notify((value) => value + 1);
   };
   let transitions = Promise.resolve();
+  let latestTransition: object | undefined;
   let initialized = false;
   let transitioned = false;
   const listeners = new Set<() => void>();
@@ -73,7 +74,13 @@ export function createSessionGeneration(
     capture: () => current.epoch,
     isCurrent,
     /** Existing local cleanup only; never waits for a network permission proof. */
-    settled: () => transitions,
+    async settled() {
+      let pending: Promise<void>;
+      do {
+        pending = transitions;
+        await pending;
+      } while (pending !== transitions);
+    },
     transition(
       retire: () => Promise<void>,
       generation: string = crypto.randomUUID()
@@ -81,17 +88,25 @@ export function createSessionGeneration(
       initialized = true;
       transitioned = true;
       const captured = generation;
+      const attempt = {};
+      latestTransition = attempt;
       clearCachedResults();
       setState({ epoch: generation, paused: true });
       for (const listener of listeners) listener();
       const transition = transitions.then(async () => {
-        await retire();
-        if (captured === state().epoch) {
-          setState({ epoch: captured, paused: false });
-          for (const listener of listeners) listener();
+        try {
+          await retire();
+        } finally {
+          // Failed disk pruning stays quarantined in persistence. The durable
+          // owner marker and new generation still fence old data; live reads
+          // must remain usable even when this browser cannot write IndexedDB.
+          if (latestTransition === attempt) {
+            setState({ epoch: captured, paused: false });
+            for (const listener of listeners) listener();
+          }
         }
       });
-      // A failed retirement remains closed, but a later retry can finish it.
+      // Keep the queue usable while the caller receives its cleanup failure.
       transitions = transition.catch(() => {});
       return transition;
     },

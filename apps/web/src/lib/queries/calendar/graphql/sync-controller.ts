@@ -1,3 +1,4 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import type {
   CacheHost,
   CalendarLinkWatermarkWire,
@@ -111,7 +112,14 @@ export class CalendarSyncController {
       try {
         do {
           this.rerun = false;
-          await this.applyChanges();
+          try {
+            await this.applyChanges();
+          } catch (error) {
+            // The owner rejected only this old snapshot. Preserve an already
+            // requested fresh pass instead of waiting for another external poke.
+            if (!(error instanceof StaleCacheAuthorityError) || !this.rerun)
+              throw error;
+          }
         } while (this.rerun && !this.disposed);
       } finally {
         this.running = undefined;

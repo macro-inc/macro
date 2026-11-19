@@ -1,7 +1,6 @@
 import { Telemetry } from '@macro-inc/observability';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TEST_AUTHORITY_GENERATION, testAuthority } from '../authority-fixture';
-import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 
 const invokeMock = vi.hoisted(() => vi.fn());
 const authorityMock = vi.hoisted(() => vi.fn());
@@ -106,7 +105,11 @@ describe('createTauriCacheHost', () => {
     const first = host.readQuery({ opKey: 1, query: '{ x }' });
     const duplicate = host.readQuery({ opKey: 1, query: '{ x }' });
     const otherOperation = host.readQuery({ opKey: 2, query: '{ x }' });
-    await host.writeQuery({ query: '{ x }', data: {} });
+    await host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
+      query: '{ x }',
+      data: {},
+    });
     const afterWrite = host.readQuery({ opKey: 1, query: '{ x }' });
     release();
     await Promise.all([first, duplicate, otherOperation, afterWrite]);
@@ -235,6 +238,7 @@ describe('createTauriCacheHost', () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await expect(
       host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         query: '{ user { id } }',
         data: {},
         hydrationScope: {
@@ -270,6 +274,7 @@ describe('createTauriCacheHost', () => {
       storageGeneration: '00000000-0000-4000-8000-000000000001',
     };
     await host.hydrateQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: '{ user { id } }',
       data: {},
       hydrationScope: scope,
@@ -294,6 +299,7 @@ describe('createTauriCacheHost', () => {
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await expect(
       host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         query: '{ user { id } }',
         data: {},
         hydrationScope: {
@@ -410,6 +416,7 @@ describe('createTauriCacheHost', () => {
     await expect(
       host.enqueueOptimisticMutation(
         {
+          generation: TEST_AUTHORITY_GENERATION,
           uuid: '00000000-0000-4000-8000-000000000001',
           query: 'mutation Save { save { id } }',
           data: {},
@@ -580,7 +587,11 @@ describe('createTauriCacheHost', () => {
           kind: 'miss',
         });
         await expect(
-          host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+          host.hydrateQuery({
+            generation: TEST_AUTHORITY_GENERATION,
+            query: '{ x }',
+            data: { x: 1 },
+          })
         ).resolves.toEqual({
           kind: 'void',
           revision: INITIAL_CACHE_REVISION,
@@ -769,6 +780,7 @@ describe('createTauriCacheHost', () => {
     );
 
     const result = await host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       opKey: 3,
       registerDependencies: true,
       query: '{ x }',
@@ -785,7 +797,7 @@ describe('createTauriCacheHost', () => {
     });
     expect(result).toEqual(writeResult);
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_write', {
-      generation: UNKNOWN_CACHE_GENERATION,
+      generation: TEST_AUTHORITY_GENERATION,
       originOpId: `${host.clientId}:3`,
       registration: {
         opId: `${host.clientId}:3`,
@@ -820,6 +832,7 @@ describe('createTauriCacheHost', () => {
 
     await expect(
       host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         query: 'query Backfill { items @cacheOnly { id } cursor }',
         data: { items: [{ id: '1' }], cursor: 'next' },
         identity: 'user-1',
@@ -830,7 +843,7 @@ describe('createTauriCacheHost', () => {
       revision: '1',
     });
     expect(invokeMock).toHaveBeenCalledWith('graphql_cache_hydrate', {
-      generation: UNKNOWN_CACHE_GENERATION,
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Backfill { items @cacheOnly { id } cursor }',
       operationName: undefined,
       variables: undefined,
@@ -853,7 +866,11 @@ describe('createTauriCacheHost', () => {
         command === 'graphql_cache_hydrate' ? hydration : null
       );
       await expect(
-        host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+        host.hydrateQuery({
+          generation: TEST_AUTHORITY_GENERATION,
+          query: '{ x }',
+          data: { x: 1 },
+        })
       ).resolves.toEqual(hydration);
       expect(emitMock).not.toHaveBeenCalled();
       host.dispose();
@@ -874,7 +891,11 @@ describe('createTauriCacheHost', () => {
         : null
     );
     for (let i = 0; i < 4; i++)
-      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      await host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      });
     expect(emitMock.mock.calls).toEqual([
       [
         'graphql-cache://cache-hydrated',
@@ -910,7 +931,11 @@ describe('createTauriCacheHost', () => {
           ? { kind: 'void', revision: '7' }
           : null
       );
-      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      await host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      });
       expect(emitMock).not.toHaveBeenCalled();
       host.dispose();
     }
@@ -934,7 +959,11 @@ describe('createTauriCacheHost', () => {
             }
           : null
       );
-      await host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      await host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      });
       expect(emitMock).toHaveBeenCalledWith('graphql-cache://cache-hydrated', {
         authorityGeneration: TEST_AUTHORITY_GENERATION,
         revision: '7',
@@ -1003,7 +1032,11 @@ describe('createTauriCacheHost', () => {
     invokeMock.mockResolvedValue(hydration);
     emitMock.mockRejectedValueOnce(new Error('notification failed'));
     await expect(
-      host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+      host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      })
     ).resolves.toEqual(hydration);
     expect(emitMock).toHaveBeenCalledOnce();
     warning.mockRestore();
@@ -1051,6 +1084,7 @@ describe('createTauriCacheHost', () => {
     };
     const begun = await host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000004',
         query: 'mutation { m }',
         data: { m: 1 },
@@ -1077,6 +1111,7 @@ describe('createTauriCacheHost', () => {
 
     const claim = { owner: 'runner', generation: '2' };
     await host.commitOptimisticWrite('1', claim, {
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'mutation { m }',
       data: { m: 2 },
     });
@@ -1388,6 +1423,7 @@ describe('createTauriCacheHost', () => {
       void host
         .enqueueOptimisticMutation(
           {
+            generation: TEST_AUTHORITY_GENERATION,
             uuid: '00000000-0000-4000-8000-000000000101',
             query: 'mutation Rename { rename { id } }',
             data: {},
@@ -1427,12 +1463,24 @@ describe('createTauriCacheHost', () => {
         requestTimeoutMs: 50,
       });
 
-      const write = host.writeQuery({ query: '{ x }', data: { x: 1 } });
-      const hydrate = host.hydrateQuery({ query: '{ x }', data: { x: 1 } });
+      const write = host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      });
+      const hydrate = host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      });
       const commit = host.commitOptimisticWrite(
         '7',
         { owner: 'runner', generation: '2' },
-        { query: 'mutation { m }', data: { m: 1 } }
+        {
+          generation: TEST_AUTHORITY_GENERATION,
+          query: 'mutation { m }',
+          data: { m: 1 },
+        }
       );
       const deletion = host.deleteRecords(['A:1']);
       await vi.dynamicImportSettled();
@@ -1640,6 +1688,7 @@ describe('createTauriCacheHost', () => {
         invokeMock.mockResolvedValue(null);
         const enqueued = host.enqueueOptimisticMutation(
           {
+            generation: TEST_AUTHORITY_GENERATION,
             query: 'mutation M { m }',
             data: {},
             uuid: '00000000-0000-4000-8000-000000000001',

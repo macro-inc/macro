@@ -18,20 +18,17 @@ impl EngineHandle {
         self
     }
 
-    pub(super) async fn publish_bound_generation(
+    pub(super) fn publish_bound_generation(
         &self,
-        engine: &mut cache_core::engine::Engine<cache_turso::TursoStorage>,
-    ) -> Result<(), String> {
-        if let Some((identity, listener)) = &self.authority_listener {
-            let current = engine
-                .current_authority(identity)
-                .await
-                .map_err(|error| error.to_string())?;
+        engine: &cache_core::engine::Engine<cache_turso::TursoStorage>,
+    ) {
+        if let Some((_, listener)) = &self.authority_listener
+            && let Some(current) = engine.authority_snapshot()
+        {
             if self.generation != Some(current.generation) {
-                listener(&current);
+                listener(current);
             }
         }
-        Ok(())
     }
 
     pub(super) async fn resume_retirement(&self, state: &mut EngineState) -> Result<(), String> {
@@ -55,6 +52,15 @@ impl EngineHandle {
     }
 
     async fn check_generation(&self, state: &mut EngineState) -> Result<(), String> {
+        // Prepare legacy callers too, before any response is committed. Identity
+        // binding updates this authority in the same durable batch as its witness.
+        if let Some((identity, _)) = &self.authority_listener {
+            state
+                .engine
+                .current_authority(identity)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
         if state
             .engine
             .snapshot_is_current(self.generation)

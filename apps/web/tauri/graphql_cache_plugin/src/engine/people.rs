@@ -77,7 +77,7 @@ impl EngineHandle {
             .update_people_context(&update)
             .await
             .map_err(|error| error.to_string())?;
-        self.publish_bound_generation(engine).await?;
+        self.publish_bound_generation(engine);
         Ok(wire_write_result(ops, result))
     }
     /// Stream contacts into the shared core's bounded ranked result.

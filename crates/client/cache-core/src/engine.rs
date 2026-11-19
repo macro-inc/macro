@@ -127,6 +127,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     /// The response or cache operation belongs to an obsolete permission scope.
     #[error("cache authority changed; obtain a new permission proof")]
     StaleAuthority,
+    /// A present permission marker cannot be decoded; never treat it as a fresh cache.
+    #[error("cache authority metadata is malformed")]
+    InvalidAuthority,
     /// Contact observations predate another accepted contact write or engine.
     #[error("contact write fence changed")]
     StaleContactFence,
@@ -380,6 +383,16 @@ const MAX_UNCERTAIN_CALENDAR_EVENTS: usize = 256;
 // leaving room for the production operation catalog and fragment variants.
 const DOCUMENT_CACHE_CAPACITY: usize = 128;
 
+/// Application metadata derived from an authoritative normalized response.
+/// Returned records commit in the response's existing storage transaction.
+pub type ResponseRecords = fn(
+    &crate::meta::Schema,
+    &crate::document::Operation,
+    &serde_json::Map<String, Json>,
+    &Json,
+    &RecordUpdates,
+) -> Result<RecordUpdates, NormalizeError>;
+
 pub struct Engine<S: Storage> {
     schema: std::sync::Arc<crate::meta::Schema>,
     live_queries: live_query::LiveQueries,
@@ -395,6 +408,7 @@ pub struct Engine<S: Storage> {
     identity: IdentityState,
     /// Single-owner authority cache, invalidated alongside the identity witness.
     authority: std::sync::OnceLock<Option<authority::CacheAuthority>>,
+    response_records: Option<ResponseRecords>,
     /// Ordered optimistic mutation layers hydrated from durable storage.
     optimistic: Vec<OptimisticLayer>,
     optimistic_hydrated: bool,
@@ -429,9 +443,16 @@ impl<S: Storage> Engine<S> {
             deps: DepIndex::new(),
             identity: IdentityState::NotHydrated,
             authority: std::sync::OnceLock::new(),
+            response_records: None,
             optimistic: Vec::new(),
             optimistic_hydrated: false,
         }
+    }
+
+    /// Compose host-owned metadata with each admitted response, without another write.
+    pub fn with_response_records(mut self, records: ResponseRecords) -> Self {
+        self.response_records = Some(records);
+        self
     }
 
     /// Returns the current effective-view revision of this engine generation.
@@ -827,11 +848,18 @@ impl<S: Storage> Engine<S> {
             IDENTITY_VALUE_FIELD.to_string(),
             crate::value::CacheValue::String(identity.to_string()),
         );
+        let authority = self
+            .stored_authority()
+            .await?
+            .map(|authority| authority.for_account(Some(identity.to_owned())));
+        let mut records = vec![(EntityKey(IDENTITY_META_KEY.into()), record)];
+        records.extend(authority.as_ref().map(authority::CacheAuthority::record));
         self.storage
-            .put_batch(vec![(EntityKey(IDENTITY_META_KEY.into()), record)])
+            .put_batch(records)
             .await
             .map_err(EngineError::Storage)?;
         self.identity = IdentityState::Bound(identity.to_string());
+        self.authority = std::sync::OnceLock::from(authority);
         Ok(())
     }
 
@@ -1433,6 +1461,9 @@ impl<S: Storage> Engine<S> {
         let normalized =
             normalize_with_dependencies(&self.schema, op, variables, data, &entity_resolvers)?;
         let mut updates = normalized.updates;
+        if let Some(records) = self.response_records {
+            updates.extend(records(&self.schema, op, variables, data, &updates)?);
+        }
         if !allow_contacts
             && updates
                 .keys()
@@ -1457,6 +1488,16 @@ impl<S: Storage> Engine<S> {
                         crate::value::CacheValue::String(observed.into()),
                     );
                     updates.insert(EntityKey(IDENTITY_META_KEY.into()), witness);
+                    // The new authority commits with the account reset. Native
+                    // publication then needs no fallible post-commit storage IO.
+                    let authority = self.stored_authority().await?.map(|mut authority| {
+                        authority.account = Some(observed.to_owned());
+                        authority.generation = Uuid::now_v7();
+                        authority.policy = None;
+                        authority.ready = false;
+                        authority
+                    });
+                    updates.extend(authority.as_ref().map(authority::CacheAuthority::record));
                     let entries: Vec<_> = updates.into_iter().collect();
                     // Identity, records, and old queue removal are one transaction.
                     // There is no reset to publish if any part of it fails.
@@ -1466,6 +1507,7 @@ impl<S: Storage> Engine<S> {
                         .map_err(EngineError::Storage)?;
                     self.external_reset()?;
                     self.identity = IdentityState::Bound(observed.into());
+                    self.authority = std::sync::OnceLock::from(authority);
                     self.optimistic_hydrated = true;
                     for (key, record) in entries {
                         self.hot.put(key, record);
@@ -2689,6 +2731,9 @@ impl<S: Storage> Engine<S> {
                 )));
             }
         };
+        if publish_snapshot && let Some(records) = self.response_records {
+            updates.extend(records(&self.schema, op, variables, data, &updates)?);
+        }
         if updates
             .keys()
             .any(|key| key.typename() == Some("GraphqlContact"))
@@ -2697,13 +2742,17 @@ impl<S: Storage> Engine<S> {
         }
         // Recipes and revalidation variables may contain unresolved local IDs.
         // On a binding error, commit only authoritative data and valid aliases.
-        let (mut recipes, mut revalidations) = if identity_errors.is_empty() && publish_snapshot {
-            (
-                self.optimistic[index].link_patches.clone(),
-                self.optimistic[index].revalidations.clone(),
-            )
+        let mut recipes = if identity_errors.is_empty() && publish_snapshot {
+            self.optimistic[index].link_patches.clone()
         } else {
-            (Vec::new(), Vec::new())
+            Vec::new()
+        };
+        // A retired link recipe cannot repair a parent cache edge. Its authored
+        // query descriptor must still request fresh, server-authorized content.
+        let mut revalidations = if identity_errors.is_empty() {
+            self.optimistic[index].revalidations.clone()
+        } else {
+            Vec::new()
         };
         for patch in &mut recipes {
             identity::remap_patch(patch, &bindings, &identities);

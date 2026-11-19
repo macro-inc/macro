@@ -58,6 +58,36 @@ function client(
   return { authority, fetchProof, retire };
 }
 
+it('keeps team-less users admitted to the existing join-a-team workspace', async () => {
+  const { authority } = client(
+    sharedOwner('none'),
+    vi.fn(async () => 'none')
+  );
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+  expect(authority.allowed()).toBe(true);
+});
+
+it('keeps a proven denial through a failed local commit and failed proof until a confirmed grant', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const { authority, fetchProof } = client(owner);
+  await authority.refresh();
+  fetchProof.mockResolvedValue(`${team}:denied`);
+  const commit = vi
+    .spyOn(owner, 'transition')
+    .mockRejectedValueOnce(new Error('disk failure'));
+  await expect(authority.refresh()).rejects.toThrow('disk failure');
+  expect(authority.state()).toBe('denied');
+  expect(owner.snapshot()?.policy).toBe(`${team}:allowed`);
+  fetchProof.mockRejectedValueOnce(new Error('proof unavailable'));
+  await expect(authority.refresh()).rejects.toThrow('proof unavailable');
+  expect(authority.state()).toBe('denied');
+  commit.mockRestore();
+  fetchProof.mockResolvedValue(`${team}:allowed`);
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+});
+
 it.each([null, `${team}:denied`, `${team}:allowed`])(
   'uses an early proof only for UI and commits the later proof after the %s baseline',
   async (policy) => {
@@ -296,7 +326,7 @@ it.each([null, `${team}:allowed`])(
 );
 
 it.each(['missing', 'denied', 'different-account', 'unfinished'])(
-  'keeps the %s startup hint pending until an owner or proof confirms access',
+  'keeps the %s startup hint closed until an owner or proof confirms access',
   (mode) => {
     const hint = sharedOwner(`${team}:allowed`).snapshot()!;
     const authority = createCrmAccessAuthority({
@@ -314,7 +344,7 @@ it.each(['missing', 'denied', 'different-account', 'unfinished'])(
       fetchProof: async () => `${team}:allowed`,
     });
     authority.setSession('viewer');
-    expect(authority.state()).toBe('pending');
+    expect(authority.state()).toBe(mode === 'denied' ? 'denied' : 'pending');
   }
 );
 
@@ -343,7 +373,7 @@ it.each([`${team}:allowed`, 'none'])(
     await authority.refresh();
     expect(authority.snapshot()?.generation).toBe(before.generation);
     expect(retire).not.toHaveBeenCalled();
-    expect(authority.state()).toBe(policy === 'none' ? 'denied' : 'allowed');
+    expect(authority.state()).toBe('allowed');
   }
 );
 
@@ -599,8 +629,15 @@ it('never reapplies an allowed response whose generation was retired by another 
   const refreshing = authority.refresh();
   await started.promise;
   await owner.transition(owner.snapshot()!.generation, `${team}:denied`);
+  const states: string[] = [];
+  const dispose = createRoot((dispose) => {
+    createComputed(() => states.push(authority.state()));
+    return dispose;
+  });
   proof.resolve(`${team}:allowed`);
   await refreshing;
+  dispose();
+  expect(states).not.toContain('allowed');
   expect(authority.state()).toBe('denied');
   expect(fetchProof).toHaveBeenCalledTimes(2);
 });

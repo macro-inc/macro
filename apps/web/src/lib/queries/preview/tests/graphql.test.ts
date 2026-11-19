@@ -543,7 +543,8 @@ describe('GraphQL item previews', () => {
           name: 'New document',
           fileType: 'md',
         },
-        'user-1'
+        'user-1',
+        cacheSessionGeneration.capture()
       );
 
       createRoot((dispose) => {
@@ -775,7 +776,8 @@ describe('GraphQL item previews', () => {
           fileType: 'md',
           subType: { type: 'task', is_completed: false },
         },
-        'user-1'
+        'user-1',
+        cacheSessionGeneration.capture()
       );
 
       expect(writeQuery).toHaveBeenNthCalledWith(

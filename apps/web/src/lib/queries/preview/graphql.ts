@@ -399,6 +399,7 @@ export async function setGraphqlPreviewName(
   name: string,
   userId: string
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const input = itemPreviewInput(item);
   if (!input) return;
   const type = normalizedItemType(item) as GraphqlPreviewType;
@@ -448,6 +449,7 @@ export async function setGraphqlPreviewName(
     .exhaustive(() => null);
   if (!record) return;
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
     operationName: 'ItemPreviewNameCacheWrite',
     variables: { input },
@@ -468,10 +470,12 @@ export async function setGraphqlPreviewFileType(
   fileType: string,
   userId: string
 ): Promise<void> {
+  const generation = cacheSessionGeneration.capture();
   const item = { id: itemId, type: 'document' } satisfies ItemEntity;
   const input = itemPreviewInput(item);
   if (!input) return;
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewFileTypeCacheWriteDocument),
     operationName: 'ItemPreviewFileTypeCacheWrite',
     variables: { input },
@@ -495,7 +499,8 @@ export async function setGraphqlPreviewFileType(
 /** Seeds a newly created entity into the normalized GraphQL preview query. */
 export async function setGraphqlPreviewOnCreate(
   preview: CreatedGraphqlPreview,
-  userId: string
+  userId: string,
+  generation: string
 ): Promise<void> {
   const item = {
     id: preview.itemId,
@@ -505,6 +510,7 @@ export async function setGraphqlPreviewOnCreate(
   if (!input) return;
   markRecentlyCreated(item);
   await writeGraphqlPreviewCache({
+    generation,
     query: stringifyDocument(ItemPreviewDocument),
     operationName: 'ItemPreview',
     variables: { input },

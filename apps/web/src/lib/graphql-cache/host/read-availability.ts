@@ -9,6 +9,8 @@ export function isReadOnlyCacheRequest(kind: CacheRequest['kind']): boolean {
     kind === 'read-records-by-keys' ||
     kind === 'search' ||
     kind === 'people-references' ||
+    kind === 'people-sql' ||
+    kind === 'contact-snapshot' ||
     kind === 'entity-filter' ||
     kind === 'calendar-range' ||
     kind === 'people-context' ||

@@ -103,10 +103,12 @@ issue new owner generations, so
 delayed or missing mirror updates cannot admit pre-reset content.
 
 A deny-then-grant cycle during startup can return to the same account, team and
-allowed status. In-memory bodies fetched under that same access remain visible:
-they reveal nothing the member cannot currently access, with only possible
-staleness covered by normal refetching. Copied writes still require an exact
-generation match at the owner. On web, a ready allowed mirror for the signed-in
+allowed status. In-memory bodies from the last observation remain visible under
+the accepted offline semantics until normal refetching updates them. Matching
+account, team and allowed status does not prove current access to each thread:
+a mailbox owner may have withdrawn consent while the member was denied.
+Copied writes still require an exact generation match at the owner. On web,
+a ready allowed mirror for the signed-in
 account may open CRM UI before storage is ready. A missing mirror and unknown
 owner also start a short, UI-only server proof in parallel with storage. Its
 result is bound to that login and host and cannot override an owner observation.

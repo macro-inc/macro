@@ -8,7 +8,7 @@ import {
 } from '@urql/core';
 import { type DocumentNode, print } from 'graphql';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
-import { filter, makeSubject, map, merge, pipe } from 'wonka';
+import { filter, makeSubject, map, merge, onEnd, pipe } from 'wonka';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import { cacheSessionGeneration } from '../session-generation';
 
@@ -21,75 +21,92 @@ export function responseGeneration(result: OperationResult): string {
 }
 
 /** One blanket response fence; mutation outcomes remain available to their callers. */
-export const cacheSessionExchange: Exchange = ({ forward, client }) => {
-  const active = new Map<number, Operation>();
-  const interrupted = new Set<number>();
-  const invalidations = makeSubject<OperationResult>();
-  cacheSessionGeneration.onChanged(() => {
-    if (cacheSessionGeneration.state().paused) {
-      // Release urql's in-flight deduplication without publishing old content
-      // or ending the subscription. Its replacement can dispatch after cleanup.
-      for (const operation of active.values())
-        invalidations.next({ operation, stale: true, hasNext: false });
-      return;
-    }
-    const generation = cacheSessionGeneration.capture();
-    for (const operation of active.values()) {
-      // Solid observers may already have replaced their subscription. Recover
-      // only readers that still belong to the retired generation.
-      const startedDuringCleanup = interrupted.delete(operation.key);
-      if (startedDuringCleanup)
-        invalidations.next({ operation, stale: true, hasNext: false });
-      if (
-        operation.context.cacheSessionGeneration !== generation ||
-        startedDuringCleanup
-      ) {
-        perfMark('cache.generation-recovery', { reason: 'transition' });
-        client.reexecuteOperation(
-          makeOperation('query', operation, {
-            ...operation.context,
-            requestPolicy: 'network-only',
-          })
-        );
+export function createCacheSessionExchange(signal?: AbortSignal): Exchange {
+  return ({ forward, client }) => {
+    const active = new Map<number, Operation>();
+    const interrupted = new Set<number>();
+    const invalidations = makeSubject<OperationResult>();
+    const stopGeneration = cacheSessionGeneration.onChanged(() => {
+      if (cacheSessionGeneration.state().paused) {
+        // Release urql's in-flight deduplication without publishing old content
+        // or ending the subscription. Its replacement can dispatch after cleanup.
+        for (const operation of active.values())
+          invalidations.next({ operation, stale: true, hasNext: false });
+        return;
       }
-    }
-  });
-  return (operations) =>
-    merge([
-      invalidations.source,
-      pipe(
-        operations,
-        map((operation) => {
-          const current = makeOperation(operation.kind, operation, {
-            ...operation.context,
-            cacheAuthorizationEpoch: cacheSessionGeneration.capture(),
-            cacheSessionGeneration: cacheSessionGeneration.capture(),
-          });
-          if (operation.kind === 'query') {
-            active.set(operation.key, current);
-            if (cacheSessionGeneration.state().paused)
-              interrupted.add(operation.key);
-            else interrupted.delete(operation.key);
-          } else if (operation.kind === 'teardown') {
-            active.delete(operation.key);
-            interrupted.delete(operation.key);
-          }
-          return current;
-        }),
-        forward,
-        filter((result) => {
-          if (result.operation.kind === 'mutation') return true;
-          const generation =
-            result.extensions?.cacheSessionGeneration ??
-            result.operation.context.cacheSessionGeneration;
-          return (
-            typeof generation !== 'string' ||
-            cacheSessionGeneration.isCurrent(generation)
+      const generation = cacheSessionGeneration.capture();
+      for (const operation of active.values()) {
+        // Solid observers may already have replaced their subscription. Recover
+        // only readers that still belong to the retired generation.
+        const startedDuringCleanup = interrupted.delete(operation.key);
+        if (startedDuringCleanup)
+          invalidations.next({ operation, stale: true, hasNext: false });
+        if (
+          operation.context.cacheSessionGeneration !== generation ||
+          startedDuringCleanup
+        ) {
+          perfMark('cache.generation-recovery', { reason: 'transition' });
+          client.reexecuteOperation(
+            makeOperation('query', operation, {
+              ...operation.context,
+              requestPolicy:
+                operation.context.requestPolicy === 'cache-only'
+                  ? 'cache-only'
+                  : 'network-only',
+            })
           );
-        })
-      ),
-    ]);
-};
+        }
+      }
+    });
+    const dispose = () => {
+      stopGeneration();
+      signal?.removeEventListener('abort', dispose);
+      active.clear();
+      interrupted.clear();
+    };
+    signal?.addEventListener('abort', dispose, { once: true });
+    return (operations) =>
+      pipe(
+        merge([
+          invalidations.source,
+          pipe(
+            operations,
+            map((operation) => {
+              const current = makeOperation(operation.kind, operation, {
+                ...operation.context,
+                cacheAuthorizationEpoch: cacheSessionGeneration.capture(),
+                cacheSessionGeneration: cacheSessionGeneration.capture(),
+              });
+              if (operation.kind === 'query') {
+                active.set(operation.key, current);
+                if (cacheSessionGeneration.state().paused)
+                  interrupted.add(operation.key);
+                else interrupted.delete(operation.key);
+              } else if (operation.kind === 'teardown') {
+                active.delete(operation.key);
+                interrupted.delete(operation.key);
+              }
+              return current;
+            }),
+            forward,
+            filter((result) => {
+              if (result.operation.kind === 'mutation') return true;
+              const generation =
+                result.extensions?.cacheSessionGeneration ??
+                result.operation.context.cacheSessionGeneration;
+              return (
+                typeof generation !== 'string' ||
+                cacheSessionGeneration.isCurrent(generation)
+              );
+            })
+          ),
+        ]),
+        onEnd(dispose)
+      );
+  };
+}
+
+export const cacheSessionExchange = createCacheSessionExchange();
 
 /** A subscription generation belongs to its source socket, including reconnects. */
 export function sessionSubscriptionExchange(

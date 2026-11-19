@@ -4,14 +4,21 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
-import { queryClient } from '@queries/client';
-import { documentLoadKeys } from '@queries/storage/documentLoad/keys';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
-import { createEffect, type JSX, onCleanup, untrack } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import {
   type BlockDefinition,
   type BlockName,
@@ -129,16 +136,31 @@ export function BlockLoader<
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
 
   const retryToken = blockLoadRetrySignal.get;
+  const [publicationRetry, retryPublication] = createSignal(0);
+  const loadRequest = createMemo(() => {
+    retryToken();
+    return {
+      source: props.source,
+      definition: props.definition,
+      id: props.id,
+      attempt: 0,
+    };
+  });
   let loadVersion = 0;
   let disposed = false;
 
   const getResult = createAsync(async () => {
-    // Tracked before the first await so a failure view can re-run the load.
-    retryToken();
+    publicationRetry();
+    const request = loadRequest();
     const version = ++loadVersion;
-    const source = props.source;
-    const definition = props.definition;
-    const id = props.id;
+    const { source, definition, id } = request;
+    let generation = cacheSessionGeneration.capture();
+    const respond = <R,>(result: R) => ({
+      result,
+      generation,
+      version,
+      request,
+    });
     const superseded = () =>
       disposed ||
       version !== loadVersion ||
@@ -147,9 +169,10 @@ export function BlockLoader<
       err([
         { code: 'INVALID' as const, message: 'The loading session changed' },
       ]);
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (superseded()) return stale();
-      const generation = untrack(cacheSessionGeneration.capture);
+    for (let attempt = request.attempt; attempt < 2; attempt++) {
+      request.attempt = attempt;
+      if (superseded()) return respond(stale());
+      generation = cacheSessionGeneration.capture();
       const result = await untrack(() =>
         loadBlockDataAfterComponentPreload(
           () =>
@@ -175,21 +198,17 @@ export function BlockLoader<
       if (superseded() || !cacheSessionGeneration.isCurrent(generation)) {
         if (result.isOk() && 'syncSource' in result.value)
           result.value.syncSource.cleanup();
-        if (attempt > 0 || superseded()) return stale();
+        if (attempt > 0 || superseded()) return respond(stale());
         await cacheSessionGeneration.settled();
         if (superseded() || cacheSessionGeneration.state().paused)
-          return stale();
+          return respond(stale());
         // This imperative bundle is not an active TanStack query. Its fresh
         // authorization read must not reuse a token cached before retirement.
-        await queryClient.invalidateQueries({
-          queryKey: documentLoadKeys.bundle(id).queryKey,
-          exact: true,
-          refetchType: 'none',
-        });
+        await invalidateDocumentLoadBundle(id);
         continue;
       }
       if (result.isErr()) {
-        return err(result.error);
+        return respond(err(result.error));
       }
       const data = result.value;
       if ('type' in data && data.type === 'preload') {
@@ -197,19 +216,23 @@ export function BlockLoader<
           `BlockLoader received a nested preload.
 Check that the load function does not return a preload source when the intent is not preload`
         );
-        return err([
-          {
-            code: 'INVALID' as const,
-            message: 'BlockLoader received a nested preload',
-          },
-        ]);
+        return respond(
+          err([
+            {
+              code: 'INVALID' as const,
+              message: 'BlockLoader received a nested preload',
+            },
+          ])
+        );
       }
-      return ok({
-        ...data,
-        __block: props.definition.name,
-      });
+      return respond(
+        ok({
+          ...data,
+          __block: definition.name,
+        })
+      );
     }
-    return stale();
+    return respond(stale());
   });
 
   onCleanup(() => {
@@ -221,7 +244,8 @@ Check that the load function does not return a preload source when the intent is
   });
 
   createEffect(() => {
-    const result = getResult();
+    const publication = getResult();
+    const result = publication?.result;
 
     // An earlier in-flight load must not restore a document after revocation.
     if (untrack(currentSharedAccess) === null) {
@@ -229,6 +253,41 @@ Check that the load function does not return a preload source when the intent is
         result.value.syncSource.cleanup();
       clearLoadedDocument();
       setError('UNAUTHORIZED');
+      return;
+    }
+
+    if (
+      publication &&
+      result?.isOk() &&
+      !untrack(() => cacheSessionGeneration.isCurrent(publication.generation))
+    ) {
+      if ('syncSource' in result.value) result.value.syncSource.cleanup();
+      clearLoadedDocument();
+      if (publication.request.attempt > 0) {
+        setError('INVALID');
+        return;
+      }
+      // Resource delivery is another asynchronous boundary. Keep the original
+      // attempt budget when a result is retired after the loader accepted it.
+      publication.request.attempt = 1;
+      const accepted = publication;
+      async function retryAcceptedLoad() {
+        await cacheSessionGeneration.settled();
+        if (
+          disposed ||
+          accepted.version !== loadVersion ||
+          untrack(currentSharedAccess) === null
+        )
+          return;
+        if (cacheSessionGeneration.state().paused) {
+          setError('INVALID');
+          return;
+        }
+        await invalidateDocumentLoadBundle(accepted.request.id);
+        if (!disposed && accepted.version === loadVersion)
+          retryPublication((value) => value + 1);
+      }
+      fireAndForget(retryAcceptedLoad(), 'block-loader');
       return;
     }
 

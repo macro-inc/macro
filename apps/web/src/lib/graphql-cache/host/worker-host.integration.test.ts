@@ -859,6 +859,7 @@ describe('worker CacheHost coordinator integration', () => {
       standby.readQuery({ opKey: 9, query: 'query Blocked { blocked }' })
     ).rejects.toThrow('owner handoff timeout');
     const write = standby.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Write { write }',
       data: { write: true },
     });

@@ -26,13 +26,13 @@ import {
 } from '@urql/core';
 import { describe, expect, it, vi } from 'vitest';
 import { fromValue, mergeMap, pipe } from 'wonka';
-import { MarkEmailThreadSeenDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
+import { EntityPropertiesDocument } from '../../service-clients/service-storage/graphql/generated/graphql';
 import { setGraphqlEmailThreadArchived } from '../../service-clients/service-storage/graphql-email-archive-state';
 import {
   markGraphqlEmailThreadSeen,
   markGraphqlEmailThreadUnread,
 } from '../../service-clients/service-storage/graphql-email-read-state';
-import { optimisticContextOf } from './optimistic';
+import { optimisticContextOf, withoutOptimisticSnapshot } from './optimistic';
 
 function setup() {
   const operations: Operation[] = [];
@@ -124,17 +124,25 @@ describe('optimistic mutation authoring contract', () => {
   it('preserves durable revalidations when the caller has an unpatchable relation', async () => {
     const { client, operations } = setup();
     const revalidation = {
-      document: MarkEmailThreadSeenDocument,
-      variables: { input: { threadId: 'thread-2' } },
+      document: EntityPropertiesDocument,
+      variables: {
+        input: { entityId: 'thread-2', entityType: 'EMAIL_THREAD' },
+      },
     };
     await markGraphqlEmailThreadSeen(client, 'thread-1', [revalidation]);
     expect(optimisticContextOf(operations[0])?.revalidations).toEqual([
       {
         query: stringifyDocument(revalidation.document),
-        operationName: 'MarkEmailThreadSeen',
+        operationName: 'EntityProperties',
         variablesJson: JSON.stringify(revalidation.variables),
       },
     ]);
+    const retired = withoutOptimisticSnapshot(operations[0]);
+    expect(optimisticContextOf(retired)?.optimisticResponse).toBeUndefined();
+    expect(optimisticContextOf(retired)?.linkPatches).toEqual([]);
+    expect(optimisticContextOf(retired)?.revalidations).toEqual(
+      optimisticContextOf(operations[0])?.revalidations
+    );
   });
 });
 

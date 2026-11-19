@@ -67,8 +67,9 @@ and recover rejected copied writes with fresh reads of their own queries. A
 changed account or policy retires visible content normally. Mirrors may lag
 across windows and never grant admission or replace the owner's fresh generation
 after reset. On web, a ready allowed hint for the signed-in account may open CRM
-UI before the owner arrives; denied or mismatching hints stay pending. A missing
-hint requires the web's early server proof or the normal owner baseline.
+UI before the owner arrives. A matching durable denial closes entry points
+immediately; mismatching or missing hints keep the workspace pending until the
+early server proof or normal owner baseline answers.
 Keep `crm-access-authority.ts` as the policy state machine and
 `crm-access-cache.ts` as detection and visible/persisted retirement glue.
 The urql browser suite covers open row menus across fresh, upgrade and allowed
@@ -86,7 +87,11 @@ separate; never replace their stamp when the payload reaches a local consumer.
 Recover a superseded in-flight Block or Drive detail load once from its source identity after
 local retirement settles; reacquire metadata and credentials instead of replaying
 a presigned URL or preload token. Do not reload an already-open editor on every
-transition. Disposal, a newer load or a second transition ends that recovery.
+transition. Check the captured generation again at resource publication; disposal,
+a newer load or a second superseded attempt ends that recovery. Keep bundle
+invalidation in the query adapter, supplied to Drive's load gate as a capability.
+Fence streamed response chunks and body decoders with the same generation, and
+do not let a post-transition preview join or settle an older pending batch.
 Clear decoded service-helper caches on real session transitions, preserving them
 on matching startup baselines; a late error may remove only its own cache entry.
 Release PDF proxies discarded before publication without taking ownership from a
@@ -97,10 +102,15 @@ interrupted retirement before serving cached content. Preserve email thread
 persistence for allowed or pending members; exclude and retire it only on a
 proven denial. Initial allowed/team-less proofs preserve offline records and the
 existing generation. Keep the account fence independently of access policy.
+Retire all TanStack memory snapshots on permission changes. If disk pruning
+fails, unpause live queries and refetch while keeping the affected persistence
+scope quarantined against restore and writes until a later prune succeeds.
 
 Keep mutation outcomes and authored queue state through retirement. Stale queued
 commits settle identities without copied content, projections or link recipes;
-the draft journal receives the actual server result before that discard. Capture
+the draft journal receives the actual server result before that discard. Keep
+fresh server-query revalidation descriptors with authored commands so stripped
+parent-link recipes can repair their current data before the next edit. Capture
 a new generation only for a new HTTP attempt, not a confirmed local settlement
 retry. Preserve the original generation of copied optimistic input. Wait only
 for affected publications before returning a committed mutation; unrelated reads
@@ -112,13 +122,20 @@ proof generations or network failures, once, with a short second timeout.
 Preserve the last proven state across transient failure; show denial and tear
 down CRM dialogs only on proven denial. Gate the admin switch with the server's
 remote `enable-crm-member-access-changes` flag, never denial enforcement.
+Use `crmAccessAllowed` for navigation and create entry points, and
+`crmAccessAuthority.allowed` for record data and `CrmContext.canAccess`; pending
+or failed proofs keep entry points visible while workspace content shows its
+loading or retry state. Preserve the team-less join-team empty state. Exercise
+the real workspace and shell in `features/crm/browser-test/member-access`, with
+synthetic records and the privacy preview adapters, rather than duplicating its
+permission gate in the fixture.
 
 Keep personal privacy controls available without CRM access. Preserve authored
 drafts and queue variables independently of optional cached enrichment. Derive
 whole-list team-view mutations from a fresh settings read inside the serialized
 mutation and retain its authoring account/session through the write.
 
-Offline or idle devices retain cached content until the next server signal;
+Offline or idle devices retain cached content until a fresh proof succeeds;
 already-rendered content stays until its next render. This design has no TTL.
 
 ## Verifying a change in a real browser

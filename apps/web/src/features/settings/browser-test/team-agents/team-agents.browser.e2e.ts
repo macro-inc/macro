@@ -339,13 +339,15 @@ async function scriptAuthService(
 
     if (path.endsWith('/team') && request.method() === 'PATCH') {
       const change = request.postDataJSON().member_crm_access;
-      backend.crmSaves.push(change);
-      if (backend.failedCrmSaves > 0) {
-        backend.failedCrmSaves -= 1;
-        return json(503, { message: 'Try again.' });
+      if (change) {
+        backend.crmSaves.push(change);
+        if (backend.failedCrmSaves > 0) {
+          backend.failedCrmSaves -= 1;
+          return json(503, { message: 'Try again.' });
+        }
+        backend.crmAccess[change.user_id] = change.enabled;
+        return json(200, null);
       }
-      backend.crmAccess[change.user_id] = change.enabled;
-      return json(200, null);
     }
 
     if (path.endsWith('/team'))

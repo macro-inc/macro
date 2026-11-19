@@ -18,7 +18,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 ## Start here
 
 - `src/engine.rs`: the `CacheEngine` — the crate's entry point, owns queued
-  mutations, watched queries, and optimistic resolution.
+  mutations, watched queries, and optimistic resolution. `with_response_records` composes application sidecars from already-normalized updates into the response transaction.
 - `src/engine/window_observation.rs`: bounded immutable predicate-window proofs
   over the complete change journal, selected dependencies and catalog input fields;
   unknown evidence never suppresses invalidation.
@@ -26,7 +26,7 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
   transforms.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
 - `src/engine/authority.rs`: an opaque durable policy and one response generation, compared under the owner lock without read admission. Cache the authority alongside the identity in the single-owner engine and invalidate both on reset. Let the application decide whether a transition needs retirement; initial non-denials preserve offline snapshots. Carry an unfinished policy across account-witness binding and keep the closed marker until required application retirement completes; retire projection-only sources and persist rebuilt layers without changing commands or unrelated projection shadows. Generate Rust/TypeScript transport schemas with `bun run gen-cache-authority-schema --rust` from `apps/web`.
-- `src/engine/retirement.rs`: selective record/optimistic cleanup that preserves authored commands and canonical identity metadata.
+- `src/engine/retirement.rs`: selective record/optimistic cleanup that preserves authored commands, fresh query revalidations, and canonical identity metadata; recompute affected projection shadows from every surviving layer in the same storage transaction.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
   used to select which cached records satisfy a query.
 - `src/search.rs`: disposable Quick Access projection (version 6); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`.
@@ -78,7 +78,8 @@ eviction and reset make it miss. A miss requires full registration and never reu
 
 ## Gotchas
 
-- Preserve the authority generation when binding the first account without a stored policy; actual account replacement and policy-bearing or unfinished retirement keep their existing reset and cleanup semantics.
+- Preserve the authority generation when binding the first account without a stored policy; commit account/authority metadata atomically on binding or reset and publish the cached authority without post-commit I/O. Reject malformed stored authority instead of treating it as absent.
+- Use the shared `_in_generation` enqueue/commit methods in every host; discard stale copied data, links, and projections while retaining authored commands and fresh query revalidation descriptors. `None` is reserved for legacy native clients.
 
 - Keep ordinary title/channel query tokens split on whitespace and commas, with each token matching independently in any order; storage filtering must remain a superset of core ranking.
 

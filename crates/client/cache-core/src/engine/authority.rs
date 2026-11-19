@@ -32,6 +32,36 @@ pub struct CacheAuthority {
     pub ready: bool,
 }
 
+impl CacheAuthority {
+    pub(super) fn for_account(mut self, account: Option<String>) -> Self {
+        if self.account == account {
+            return self;
+        }
+        if !(self.account.is_none() && account.is_some() && self.policy.is_none()) {
+            self.generation = Uuid::now_v7();
+            if self.ready {
+                self.policy = None;
+            }
+            self.ready = false;
+        }
+        self.account = account;
+        self
+    }
+
+    pub(super) fn record(&self) -> (EntityKey<'static>, Record) {
+        let value = serde_json::json!({
+            "identity": self.identity, "account": self.account,
+            "generation": self.generation, "policy": self.policy, "ready": self.ready,
+        });
+        (
+            EntityKey(AUTHORITY_KEY.into()),
+            Record {
+                fields: [(AUTHORITY_FIELD.into(), CacheValue::opaque(&value))].into(),
+            },
+        )
+    }
+}
+
 /// Shared browser/native transport for a completed permission transition.
 #[derive(Debug, serde::Serialize)]
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
@@ -70,9 +100,8 @@ pub struct AuthorityTransition {
 }
 
 /// Derived optimistic state that must share the response's permission scope.
-#[cfg(test)]
 #[derive(Default)]
-struct OptimisticEffects {
+pub struct OptimisticEffects {
     /// Predicate/projection shadows derived from the optimistic response.
     pub projections: Vec<OptimisticProjectionMutation>,
     /// Calendar occurrences invalidated by that response's optimistic changes.
@@ -80,6 +109,10 @@ struct OptimisticEffects {
 }
 
 impl<S: Storage> Engine<S> {
+    /// Last durably committed authority, for infallible notifications under the owner lock.
+    pub fn authority_snapshot(&self) -> Option<&CacheAuthority> {
+        self.authority.get().and_then(Option::as_ref)
+    }
     pub(super) async fn stored_authority(
         &self,
     ) -> Result<Option<CacheAuthority>, EngineError<S::Error>> {
@@ -91,12 +124,15 @@ impl<S: Storage> Engine<S> {
             .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
             .await
             .map_err(EngineError::Storage)?;
-        let authority = rows.into_iter().next().flatten().and_then(|record| {
-            match record.fields.get(AUTHORITY_FIELD) {
-                Some(CacheValue::Opaque(value)) => serde_json::from_str(value).ok(),
-                _ => None,
-            }
-        });
+        let authority = match rows.into_iter().next().flatten() {
+            None => None,
+            Some(record) => match record.fields.get(AUTHORITY_FIELD) {
+                Some(CacheValue::Opaque(value)) => {
+                    Some(serde_json::from_str(value).map_err(|_| EngineError::InvalidAuthority)?)
+                }
+                _ => return Err(EngineError::InvalidAuthority),
+            },
+        };
         let _ = self.authority.set(authority.clone());
         Ok(authority)
     }
@@ -116,18 +152,8 @@ impl<S: Storage> Engine<S> {
         &mut self,
         authority: &CacheAuthority,
     ) -> Result<(), EngineError<S::Error>> {
-        let value = serde_json::json!({
-            "identity": authority.identity,
-            "account": authority.account,
-            "generation": authority.generation,
-            "policy": authority.policy,
-            "ready": authority.ready,
-        });
-        let record = Record {
-            fields: [(AUTHORITY_FIELD.into(), CacheValue::opaque(&value))].into(),
-        };
         self.storage
-            .put_batch(vec![(EntityKey(AUTHORITY_KEY.into()), record)])
+            .put_batch(vec![authority.record()])
             .await
             .map_err(EngineError::Storage)?;
         self.authority = std::sync::OnceLock::from(Some(authority.clone()));
@@ -145,31 +171,22 @@ impl<S: Storage> Engine<S> {
             return Err(EngineError::StaleAuthority);
         }
         let account = self.current_identity().await?;
-        let mut unfinished_policy = None;
-        if let Some(mut authority) = self.stored_authority().await? {
+        if let Some(authority) = self.stored_authority().await? {
             if authority.identity != identity {
                 return Err(EngineError::StaleAuthority);
             }
             if authority.account == account {
                 return Ok(authority);
             }
-            // Before any policy exists, the first authenticated identity only
-            // fills in the account witness. No earlier account or access scope
-            // was replaced, so in-flight content keeps the same generation.
-            if authority.account.is_none() && account.is_some() && authority.policy.is_none() {
-                authority.account = account;
-                self.store_authority(&authority).await?;
-                return Ok(authority);
-            }
-            if !authority.ready {
-                unfinished_policy = authority.policy;
-            }
+            let authority = authority.for_account(account);
+            self.store_authority(&authority).await?;
+            return Ok(authority);
         }
         let authority = CacheAuthority {
             identity: identity.to_owned(),
             account,
             generation: Uuid::now_v7(),
-            policy: unfinished_policy,
+            policy: None,
             ready: false,
         };
         self.store_authority(&authority).await?;
@@ -183,6 +200,8 @@ impl<S: Storage> Engine<S> {
         generation: Option<Uuid>,
     ) -> Result<bool, EngineError<S::Error>> {
         let Some(generation) = generation else {
+            // Deployed native bundles may omit this IPC argument. Protocol 18
+            // browser requests must supply a stamp before reaching the core.
             return Ok(true);
         };
         let account = self.current_identity().await?;
@@ -194,8 +213,7 @@ impl<S: Storage> Engine<S> {
 
     /// Keep an authored command from an older window without letting its copied
     /// response, link recipes, or projection shadows restore retired content.
-    #[cfg(test)]
-    async fn enqueue_optimistic_mutation_in_generation(
+    pub async fn enqueue_optimistic_mutation_in_generation(
         &mut self,
         origin_op: Option<OpId>,
         input: BeginOptimisticWrite<'_>,
@@ -208,7 +226,6 @@ impl<S: Storage> Engine<S> {
         let input = BeginOptimisticWrite {
             data: if accepted { input.data } else { &empty },
             link_patches: if accepted { input.link_patches } else { &[] },
-            revalidations: if accepted { input.revalidations } else { &[] },
             ..input
         };
         if !accepted {
@@ -228,8 +245,7 @@ impl<S: Storage> Engine<S> {
     /// Settle a successful server command even if permission changed while its
     /// response was pending. Stale content is discarded; canonical identities
     /// and queue settlement remain atomic and durable.
-    #[cfg(test)]
-    async fn commit_optimistic_write_in_generation(
+    pub async fn commit_optimistic_write_in_generation(
         &mut self,
         transaction: OptimisticTransactionId,
         claim: MutationClaimToken,

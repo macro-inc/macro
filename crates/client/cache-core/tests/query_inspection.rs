@@ -197,10 +197,11 @@ impl Storage for OwnerOnlyStorage {
             cache_core::queue::MutationId,
             cache_core::queue::PersistedOptimisticLayer,
         )],
-        retired_projection_owners: &[cache_core::queue::MutationId],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
     ) -> Result<(), Self::Error> {
         self.0
-            .replace_optimistic_layers(layers, retired_projection_owners)
+            .replace_optimistic_layers(layers, affected_projection_keys, projections)
             .await
     }
 

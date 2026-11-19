@@ -1,4 +1,5 @@
 import type { OptimisticResponse } from '@graphql-cache/exchange/optimistic';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import {
   type CacheHost,
   executeOptimisticMutation,
@@ -211,7 +212,7 @@ async function settle<TData, TVariables extends AnyVariables>(
           ? { deletedEventKeys: [eventKey(payload.deletedEventId)] }
           : {}),
       },
-      typeof generation === 'string' ? generation : undefined
+      typeof generation === 'string' ? generation : UNKNOWN_CACHE_GENERATION
     )
     .catch((error) => {
       console.warn('Calendar mutation commit failed', error);

@@ -1039,7 +1039,7 @@ it('never restores or persists excluded content, even when another instance flus
   currentClient.clear();
 });
 
-it('releases the retirement fence after a failed disk flush', async () => {
+it('quarantines disk snapshots after a failed retirement until a later prune succeeds', async () => {
   const store = createMockStore();
   const queryClient = new QueryClient();
   const persistence = setupQueryPersistence({
@@ -1052,8 +1052,16 @@ it('releases the retirement fence after a failed disk flush', async () => {
     'disk failure'
   );
   queryClient.setQueryData(key, { body: 'fresh allowed response' });
-  expect(store.entries.get(JSON.stringify(key))?.data).toEqual({
+  expect(queryClient.getQueryData(key)).toEqual({
     body: 'fresh allowed response',
+  });
+  expect(store.set).not.toHaveBeenCalled();
+  await persistence.restoreQuery(key);
+  expect(store.get).not.toHaveBeenCalled();
+  await persistence.flush();
+  queryClient.setQueryData(key, { body: 'after prune' });
+  expect(store.entries.get(JSON.stringify(key))?.data).toEqual({
+    body: 'after prune',
   });
   persistence.dispose();
   queryClient.clear();

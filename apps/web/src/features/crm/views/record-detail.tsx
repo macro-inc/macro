@@ -23,7 +23,6 @@ import {
   Suspense,
   untrack,
 } from 'solid-js';
-import { CrmAccessFallback } from '../components/access-denied';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordTabs } from '../components/record-tabs';
 import { useCrmContext } from '../context/crm-context';
@@ -79,28 +78,10 @@ type CrmRecordDetailProps = {
   onSectionChange: (section: CrmRecordSection) => void;
   onClose: () => void;
   navigation: JSX.Element;
-  deniedHeader?: JSX.Element;
   onOpenPipeline?: (pipelineId: string) => void;
 };
 
 export function CrmRecordDetail(props: CrmRecordDetailProps) {
-  const { canAccess, accessState, retryAccess } = useCrmContext();
-  return (
-    <Show
-      when={canAccess()}
-      fallback={
-        <>
-          {props.deniedHeader}
-          <CrmAccessFallback state={accessState()} onRetry={retryAccess} />
-        </>
-      }
-    >
-      <CrmRecordDetailContent {...props} />
-    </Show>
-  );
-}
-
-function CrmRecordDetailContent(props: CrmRecordDetailProps) {
   const trail = () => props.records;
   // Each navigation brings new record objects; only another record remounts.
   const current = createMemo(() => trail()[trail().length - 1]!, undefined, {

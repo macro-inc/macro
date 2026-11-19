@@ -1376,7 +1376,8 @@ impl Storage for TursoStorage {
     async fn replace_optimistic_layers(
         &mut self,
         layers: &[(MutationId, PersistedOptimisticLayer)],
-        retired_projection_owners: &[MutationId],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
     ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let connection = self.connection();
@@ -1393,11 +1394,15 @@ impl Storage for TursoStorage {
                     ],
                 )?;
             }
-            for id in retired_projection_owners {
-                driver::execute(
+            for key in affected_projection_keys {
+                delete_optimistic_projection(&connection, key)?;
+            }
+            for projection in projections {
+                insert_optimistic_projection(
                     &connection,
-                    "DELETE FROM optimistic_index_documents WHERE owner_mutation_id = ?1",
-                    vec![Value::from_i64(mutation_id_to_sql(*id)?)],
+                    mutation_id_to_sql(projection.owner)?,
+                    projection.state.clone(),
+                    projection.uncertainty.clone(),
                 )?;
             }
             Ok(())

@@ -1,30 +1,31 @@
 import '../../../../index.css';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { createCrmAccessAuthority } from '@service-storage/crm-access-authority';
+import { queryClient } from '@queries/client';
+import { Route, Router } from '@solidjs/router';
+import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
-import { CrmAccessFallback } from '../../components/access-denied';
-import { CrmMobileTabs } from '../../components/crm-mobile-tabs';
-import { CrmSidebar } from '../../components/crm-sidebar';
+import { CrmWorkspaceView } from '../../views/crm-workspace';
+import { CrmEmptyState } from '../../views/empty-state';
+import {
+  authority,
+  navigate,
+  openRecord,
+  recordDisposals,
+  recordMounts,
+} from './workspace-adapters';
 
-// Production navigation and authority state, with local-only response fixtures.
+applyTheme('macro-light');
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
+const params = new URLSearchParams(location.search);
+if (params.has('collapsed'))
+  localStorage.setItem('macro:pref:view-sidebar:collapsed:crm', 'true');
+
 function Fixture() {
-  const authority = createCrmAccessAuthority({
-    fetchProof: async () => {
-      const response = await fetch('/fixture-authority');
-      const policy = response.headers.get('x-macro-crm-access');
-      if (!policy) throw new Error('Missing permission proof');
-      return policy;
-    },
-    retire: async () => {},
-  });
   authority.setSession('fixture-viewer');
-  const [active, setActive] = createSignal(
-    new URLSearchParams(location.search).get('view') === 'pipeline'
-      ? 'pipeline:shared'
-      : 'active'
-  );
   const [failed, setFailed] = createSignal(false);
   const refresh = async () => {
     try {
@@ -37,101 +38,51 @@ function Fixture() {
   onMount(() => {
     fireAndForget(refresh(), 'crm.access.fixture');
   });
-  const pipelines = [{ id: 'shared', name: 'Shared pipeline' }];
-  const lists = [{ id: 'private', name: 'Private collection', count: 3 }];
   return (
     <main class="flex h-dvh flex-col bg-panel text-ink">
-      <div class="flex flex-wrap items-center gap-2 border-b border-edge-muted p-3">
+      <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-edge-muted p-3">
         <Button onClick={refresh}>Check access</Button>
-        <Button onClick={() => setActive('active')}>Open records route</Button>
-        <Button onClick={() => setActive('pipeline:shared')}>
+        <Button onClick={() => navigate('active')}>Open records route</Button>
+        <Button onClick={() => navigate('pipeline:shared')}>
           Open shared pipeline
         </Button>
+        <Button onClick={openRecord}>Open record route</Button>
         <Show when={failed()}>
           <p role="alert">Access could not be refreshed</p>
         </Show>
       </div>
+      <output hidden data-testid="record-mounts">
+        {recordMounts()}
+      </output>
+      <output hidden data-testid="record-disposals">
+        {recordDisposals()}
+      </output>
       <div class="flex min-h-0 flex-1">
-        <aside class="hidden w-64 shrink-0 border-r border-edge-muted md:flex">
-          <CrmSidebar
-            active={active()}
-            canAccess={authority.allowed()}
-            pipelines={
-              <Button onClick={() => setActive('pipeline:shared')}>
-                Shared pipeline
-              </Button>
-            }
-            lists={lists}
-            listsEnabled
-            listsLoading={false}
-            listsError={false}
-            canCreateList
-            onNavigate={setActive}
-            onCreateCompany={() => {}}
-            onCreateContact={() => {}}
-            onNewList={() => {}}
-            onImport={() => {}}
-            onExport={() => {}}
-            onSettings={() => {}}
-          />
-        </aside>
-        <section class="flex min-w-0 flex-1 flex-col">
-          <div class="min-w-0 border-b border-edge-muted px-4 md:hidden">
-            <CrmMobileTabs
-              active={active()}
-              canAccess={authority.allowed()}
-              pipelines={pipelines}
-              lists={lists}
-              onNavigate={setActive}
-            />
-          </div>
-          <Show
-            when={active() === 'pipeline:shared'}
-            fallback={
-              <Show
-                when={authority.allowed()}
-                fallback={
-                  <CrmAccessFallback
-                    state={authority.state()}
-                    onRetry={refresh}
-                  />
-                }
-              >
-                <div class="p-6">
-                  <h1 class="text-xl font-semibold">Company records</h1>
-                  <p>Private record content</p>
-                </div>
-              </Show>
-            }
-          >
-            <div class="p-6">
-              <h1 class="text-xl font-semibold">Shared pipeline</h1>
-              <table class="mt-4 w-full text-left">
-                <thead>
-                  <tr>
-                    <th>Record reference</th>
-                    <th>Stage</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setActive('record')}
-                      >
-                        Open referenced record
-                      </Button>
-                    </td>
-                    <td>Qualified</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </Show>
-        </section>
+        <CrmWorkspaceView>
+          {() => (
+            <Show when={!params.has('no-team')} fallback={<CrmEmptyState />}>
+              <div class="p-6 pt-[max(1.5rem,var(--mobile-content-inset-top,0px))]">
+                <h1 class="text-xl font-semibold">Company records</h1>
+                <p>Private record content</p>
+              </div>
+            </Show>
+          )}
+        </CrmWorkspaceView>
       </div>
     </main>
   );
 }
-render(Fixture, document.getElementById('root')!);
+render(
+  () => (
+    <Router
+      root={(props) => (
+        <QueryClientProvider client={queryClient}>
+          {props.children}
+        </QueryClientProvider>
+      )}
+    >
+      <Route path="*all" component={Fixture} />
+    </Router>
+  ),
+  document.getElementById('root')!
+);

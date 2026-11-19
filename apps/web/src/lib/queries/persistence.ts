@@ -219,18 +219,17 @@ export function setupQueryPersistence(
     scopes: readonly PersistScope[];
     /** Entries excluded by the current permission policy cannot be restored or written. */
     exclude?: (key: QueryKey) => boolean;
-    /** Verify a reusable permission proof before restoring protected snapshots. */
-    beforeRestore?: (key: QueryKey) => Promise<void>;
   }>
 ): QueryPersistence {
-  const { queryClient, scopes, exclude, beforeRestore } = params;
+  const { queryClient, scopes, exclude } = params;
   let restores = new WeakMap<Query, Promise<void>>();
   let generation = 0;
   let clearing = false;
   let disposed = false;
-  const retiring = new Set<(key: QueryKey) => boolean>();
+  const retiring = new Map<(key: QueryKey) => boolean, object>();
+  let retirement = Promise.resolve();
   const isRetiring = (key: QueryKey) =>
-    [...retiring].some((matches) => matches(key));
+    [...retiring.keys()].some((matches) => matches(key));
 
   const findScope = (queryKey: QueryKey) =>
     exclude?.(queryKey)
@@ -240,7 +239,6 @@ export function setupQueryPersistence(
   async function restoreFromStore(query: Query, scope: PersistScope) {
     const capturedGeneration = generation;
     try {
-      await beforeRestore?.(query.queryKey);
       if (exclude?.(query.queryKey)) return;
       await handleRestore(
         queryClient,
@@ -267,13 +265,29 @@ export function setupQueryPersistence(
     return pending;
   };
 
-  const flushAll = async () => {
-    await Promise.all(scopes.map((scope) => scope.store.flush()));
+  const pruneRetired = () => {
+    const work = retirement.then(async () => {
+      const owed = [...retiring];
+      await Promise.all(
+        scopes.map(async (scope) => {
+          await scope.store.flush({ throwOnError: true });
+          if (owed.length)
+            await scope.store.prune(
+              (entry) => !owed.some(([matches]) => matches(entry.queryKey))
+            );
+        })
+      );
+      for (const [matches, attempt] of owed) {
+        if (retiring.get(matches) === attempt) retiring.delete(matches);
+      }
+    });
+    retirement = work.catch(() => {});
+    return work;
   };
 
   const onVisibilityChange = () => {
     if (document.visibilityState === 'hidden')
-      fireAndForget(flushAll(), 'query-persistence');
+      fireAndForget(pruneRetired(), 'query-persistence');
   };
   document.addEventListener('visibilitychange', onVisibilityChange);
 
@@ -324,20 +338,13 @@ export function setupQueryPersistence(
     },
     async retire(matches) {
       restores = new WeakMap();
-      retiring.add(matches);
+      retiring.set(matches, {});
       clearQueryMemory(queryClient, matches);
       // Finish earlier puts before pruning, while matching new writes and restores
       // stay fenced. This also removes entries that were never loaded this session.
-      try {
-        await Promise.all(
-          scopes.map(async (scope) => {
-            await scope.store.flush({ throwOnError: true });
-            await scope.store.prune((entry) => !matches(entry.queryKey));
-          })
-        );
-      } finally {
-        retiring.delete(matches);
-      }
+      // A failed prune leaves this scope quarantined; a later retirement or
+      // flush retries it without blocking fresh in-memory query results.
+      await pruneRetired();
     },
     async clear() {
       generation += 1;
@@ -359,11 +366,7 @@ export function setupQueryPersistence(
         clearing = false;
       }
     },
-    flush: async () => {
-      await Promise.all(
-        scopes.map((scope) => scope.store.flush({ throwOnError: true }))
-      );
-    },
+    flush: pruneRetired,
     dispose() {
       disposed = true;
       cacheUnsubscribe();

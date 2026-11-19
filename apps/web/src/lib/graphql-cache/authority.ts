@@ -36,19 +36,37 @@ export function createAuthorityObserver(identity: string) {
   let current: CacheAuthority | undefined;
   let version = 0;
   const listeners = new Set<(authority: CacheAuthority) => void>();
-  return {
+  const observer = {
     snapshot: () => current,
     version: () => version,
-    observe(value: unknown, expectedVersion = version) {
+    observe(
+      value: unknown,
+      expectedVersion = version,
+      source: 'snapshot' | 'current' | 'transition' = 'snapshot'
+    ) {
       const next = parseCacheAuthority(value);
       if (next.identity !== identity) throw new StaleCacheAuthorityError();
-      if (
-        expectedVersion !== version &&
-        current?.generation !== next.generation
-      )
-        throw new StaleCacheAuthorityError();
       const changed =
-        current?.generation !== next.generation || current.ready !== next.ready;
+        current?.generation !== next.generation ||
+        current.ready !== next.ready ||
+        current.account !== next.account ||
+        current.policy !== next.policy;
+      // An owner completion can follow its begin event. A delayed read cannot
+      // undo an account witness or readiness already observed in that generation.
+      const completesTransition =
+        source === 'transition' &&
+        current?.generation === next.generation &&
+        !current.ready &&
+        next.ready &&
+        current.account === next.account &&
+        current.policy === next.policy;
+      if (expectedVersion !== version && changed && !completesTransition) {
+        // A current() handshake may race a validated owner push. It can use
+        // that newer observation only after validating this reply's protocol
+        // and identity; stale proof completions must still reject.
+        if (source === 'current' && current) return current;
+        throw new StaleCacheAuthorityError();
+      }
       current = next;
       rememberGeneration(next);
       if (changed) {
@@ -56,6 +74,9 @@ export function createAuthorityObserver(identity: string) {
         for (const listener of listeners) listener(next);
       }
       return next;
+    },
+    observeCurrent(value: unknown, expectedVersion = version): CacheAuthority {
+      return observer.observe(value, expectedVersion, 'current');
     },
     onChanged(callback: (authority: CacheAuthority) => void) {
       listeners.add(callback);
@@ -68,6 +89,7 @@ export function createAuthorityObserver(identity: string) {
       version += 1;
     },
   };
+  return observer;
 }
 
 /** Rust generation errors cross IPC as strings. Keep their retry semantics. */

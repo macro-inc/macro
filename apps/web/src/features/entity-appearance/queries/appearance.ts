@@ -4,6 +4,7 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@graphql-cache/exchange/record-selection';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import { previewKeys } from '@queries/preview/keys';
@@ -55,9 +56,11 @@ async function readCachedAppearance(
 function appearanceCacheWrite(
   soup: SoupAppearanceTarget,
   id: string,
-  appearance: EntityAppearance | null
+  appearance: EntityAppearance | null,
+  generation: string
 ) {
   return {
+    generation,
     query: APPEARANCE_CACHE_WRITE,
     operationName: 'EntityAppearanceCacheWrite',
     data: {
@@ -89,7 +92,10 @@ type AppearanceReaders = {
 export function createSaveEntityAppearance(sources: {
   queryClient: QueryClient;
   cacheHost: () =>
-    | Pick<CacheHost, 'disabled' | 'writeQuery' | 'readRecordsByKeys'>
+    | Pick<
+        CacheHost,
+        'disabled' | 'writeQuery' | 'readRecordsByKeys' | 'authority'
+      >
     | undefined;
   update: (
     type: AppearanceEntityType,
@@ -137,6 +143,8 @@ export function createSaveEntityAppearance(sources: {
       const soup = adapter.soup;
       const key = `${entity.type}:${entity.id}`;
       const host = sources.cacheHost();
+      const generation =
+        host?.authority?.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
       const keys: QueryKey[] = [
         previewKeys.item(entity.id).queryKey,
         ...adapter.readers.map((reader) => reader.key),
@@ -201,7 +209,12 @@ export function createSaveEntityAppearance(sources: {
               sameAppearance(current.appearance, appearance)
             ) {
               await host.writeQuery(
-                appearanceCacheWrite(soup, entity.id, prior.appearance ?? null)
+                appearanceCacheWrite(
+                  soup,
+                  entity.id,
+                  prior.appearance ?? null,
+                  generation
+                )
               );
             }
           });
@@ -228,7 +241,7 @@ export function createSaveEntityAppearance(sources: {
         // Only patch loaded records; a failed save must not leave a partial cache entry.
         if (graphPrevious && isCurrent() && host === sources.cacheHost()) {
           await host.writeQuery(
-            appearanceCacheWrite(soup, entity.id, appearance)
+            appearanceCacheWrite(soup, entity.id, appearance, generation)
           );
         }
       });
@@ -263,7 +276,8 @@ export function createSaveEntityAppearance(sources: {
                 appearanceCacheWrite(
                   soup,
                   entity.id,
-                  latest?.appearance ?? appearance
+                  latest?.appearance ?? appearance,
+                  generation
                 )
               );
               return true;

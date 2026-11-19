@@ -515,7 +515,12 @@ function makeOp(
   return makeOperation(
     'query',
     { key, query: QUERY, variables: { input: { limit: 2 } } },
-    { requestPolicy, url: 'http://test', suspense: false } as never
+    {
+      requestPolicy,
+      url: 'http://test',
+      suspense: false,
+      cacheSessionGeneration: cacheSessionGeneration.capture(),
+    } as never
   );
 }
 
@@ -531,6 +536,7 @@ function makeHydrationOp(key: number): Operation {
       requestPolicy: 'network-only',
       url: 'http://test',
       suspense: false,
+      cacheSessionGeneration: cacheSessionGeneration.capture(),
       [HYDRATE_ONLY_CONTEXT_KEY]: true,
     } as never
   );
@@ -544,6 +550,7 @@ function makeSubscriptionOp(key: number): Operation {
       requestPolicy: 'cache-first',
       url: 'http://test',
       suspense: false,
+      cacheSessionGeneration: cacheSessionGeneration.capture(),
     } as never
   );
 }
@@ -564,6 +571,7 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       requestPolicy: 'cache-first',
       url: 'http://test',
       suspense: false,
+      cacheSessionGeneration: cacheSessionGeneration.capture(),
       ...(optimisticResponse === undefined
         ? {}
         : {
@@ -595,6 +603,7 @@ function makeRenameMutationOp(key: number, aliased = false): Operation {
       requestPolicy: 'cache-first',
       url: 'http://test',
       suspense: false,
+      cacheSessionGeneration: cacheSessionGeneration.capture(),
     } as never
   );
 }
@@ -738,13 +747,38 @@ describe('normalizedCacheExchange', () => {
     host = makeFakeHost();
   });
 
-  it.each([false, true])(
+  it('removes the generation listener when its client lifetime ends', () => {
+    const released = vi.fn();
+    const listen = vi
+      .spyOn(cacheSessionGeneration, 'onChanged')
+      .mockReturnValue(released);
+    try {
+      const lifetime = new AbortController();
+      controlledQueryHarness(host, { signal: lifetime.signal });
+      lifetime.abort();
+      expect(released).toHaveBeenCalledOnce();
+    } finally {
+      listen.mockRestore();
+    }
+  });
+
+  it.each([false, true, 'owner unavailable'] as const)(
     'recovers a rejected copied response once while preserving memory rendering (rejected again=%s)',
     async (rejectAgain) => {
       const write = vi.spyOn(host, 'writeQuery');
       write.mockRejectedValueOnce(new StaleCacheAuthorityError());
-      if (rejectAgain)
+      if (rejectAgain === true)
         write.mockRejectedValueOnce(new StaleCacheAuthorityError());
+      if (rejectAgain === 'owner unavailable')
+        host = {
+          ...host,
+          authority: {
+            current: vi.fn().mockRejectedValue(new Error('owner unavailable')),
+            snapshot: () => undefined,
+            onChanged: () => () => {},
+            transition: vi.fn(),
+          },
+        };
       const first = deferred<OperationResult>();
       const second = deferred<OperationResult>();
       let published = 0;
@@ -781,7 +815,7 @@ describe('normalizedCacheExchange', () => {
         await secondMetadata.persistence;
       expect(h.forwarded).toHaveLength(2);
       expect(host.writes.map((args) => args.data)).toEqual(
-        rejectAgain ? [] : [{ soup: { nextCursor: 'fresh' } }]
+        rejectAgain === true ? [] : [{ soup: { nextCursor: 'fresh' } }]
       );
       h.ops.next(teardownOf(retry));
     }
@@ -1576,6 +1610,76 @@ describe('normalizedCacheExchange', () => {
       generation
     );
     expect(cacheContainsDocument).toBe(false);
+  });
+
+  it('keeps a stale optimistic server outcome and the cache-only reader contract', async () => {
+    const h = controlledQueryHarness({ ...host, disabled: true });
+    h.ops.next(makeOp(990, 'cache-only'));
+    const mutation = makeMutationOp(991, { accepted: true });
+    h.ops.next(mutation);
+    await tick();
+    const dispatched = h.forwarded.find(
+      (operation) => operation.kind === 'mutation'
+    )!;
+    await cacheSessionGeneration.transition(async () => {});
+    h.network.next(queryResult(dispatched, { accepted: true }));
+    await vi.waitFor(() =>
+      expect(
+        h.results.some((result) => result.operation.kind === 'mutation')
+      ).toBe(true)
+    );
+    const result = h.results.find(
+      (result) => result.operation.kind === 'mutation'
+    )!;
+    expect(optimisticMutationDispositionOf(result)?.kind).toBe('committed');
+    expect(h.client.reexecuteOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({ requestPolicy: 'cache-only' }),
+      })
+    );
+    expect(
+      h.forwarded.filter((operation) => operation.kind === 'query')
+    ).toHaveLength(0);
+    expect(host.writes).toHaveLength(0);
+    h.ops.next(teardownOf(mutation));
+    h.ops.next(teardownOf(makeOp(990, 'cache-only')));
+  });
+
+  it('fences current-generation reads that predate an older nonqueued mutation settlement', async () => {
+    const h = controlledQueryHarness(host);
+    const mutation = makeMutationOp(995);
+    h.ops.next(mutation);
+    await vi.waitFor(() => expect(h.forwarded).toHaveLength(1));
+    const dispatchedMutation = h.forwarded[0];
+    await cacheSessionGeneration.transition(async () => {});
+    const query = makeOp(996, 'network-only');
+    h.ops.next(query);
+    await vi.waitFor(() => expect(h.forwarded).toHaveLength(2));
+    const earlierRead = h.forwarded[1];
+    h.network.next(queryResult(dispatchedMutation, { saved: true }));
+    await vi.waitFor(() => expect(h.forwarded).toHaveLength(3));
+    h.network.next(queryResult(h.forwarded[2], { value: 'after-save' }));
+    await vi.waitFor(() =>
+      expect(
+        host.writes.some((write) =>
+          JSON.stringify(write.data).includes('after-save')
+        )
+      ).toBe(true)
+    );
+    h.network.next(queryResult(earlierRead, { value: 'before-save' }));
+    await tick();
+    expect(
+      h.results.some((result) =>
+        JSON.stringify(result.data)?.includes('before-save')
+      )
+    ).toBe(false);
+    expect(
+      host.writes.some((write) =>
+        JSON.stringify(write.data).includes('before-save')
+      )
+    ).toBe(false);
+    h.ops.next(teardownOf(query));
+    h.ops.next(teardownOf(mutation));
   });
 
   it.each(['subscription', 'mutation'] as const)(
@@ -3417,8 +3521,18 @@ describe('normalizedCacheExchange', () => {
                 ...result,
                 kind,
                 replacementTransactionId: 'replacement',
+                affectedOps: [],
+                revalidations: [
+                  { query: stringifyDocument(QUERY), variablesJson: '{}' },
+                ],
               };
-            return { ...result, affectedOps: [] };
+            return {
+              ...result,
+              affectedOps: [],
+              revalidations: [
+                { query: stringifyDocument(QUERY), variablesJson: '{}' },
+              ],
+            };
           };
           const { ops, results, forwarded } = harness(host);
           ops.next(makeOp(11));
@@ -3904,6 +4018,7 @@ describe('normalizedCacheExchange', () => {
         expect(context.linkPatches).toHaveLength(1);
         if (replay) {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: context.uuid,
             query: stringifyDocument(submitted.query),
             operationName: 'SetFavorite',
@@ -3981,6 +4096,7 @@ describe('normalizedCacheExchange', () => {
         const context = optimisticContextOf(submitted)!;
         expect(context.revalidations).toHaveLength(2);
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: context.uuid,
           query: stringifyDocument(submitted.query),
           variables: submitted.variables ?? undefined,
@@ -4005,6 +4121,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays a persisted mutation when the exchange starts', async () => {
       host.seedQueued({
+        generation: cacheSessionGeneration.capture(),
         uuid: '00000000-0000-4000-8000-000000000001',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
@@ -4028,6 +4145,7 @@ describe('normalizedCacheExchange', () => {
         try {
           const metadata = { kind: 'email-draft', revision: 7 };
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: 'draft-handle',
             query: stringifyDocument(SaveEmailDraftDocument),
             operationName: 'SaveEmailDraft',
@@ -4036,6 +4154,7 @@ describe('normalizedCacheExchange', () => {
             clientMetadata: metadata,
           });
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: 'unrelated',
             query: stringifyDocument(MUTATION),
             operationName: 'SetEntityProperty',
@@ -4097,6 +4216,7 @@ describe('normalizedCacheExchange', () => {
         const skipped = vi.fn();
         try {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: 'unrelated',
             query: stringifyDocument(MUTATION),
             operationName: 'SetEntityProperty',
@@ -4207,6 +4327,7 @@ describe('normalizedCacheExchange', () => {
       vi.useFakeTimers();
       try {
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: 'draft',
           query: stringifyDocument(SaveEmailDraftDocument),
           operationName: 'SaveEmailDraft',
@@ -4235,6 +4356,7 @@ describe('normalizedCacheExchange', () => {
       vi.useFakeTimers();
       try {
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: 'unrelated',
           query: stringifyDocument(MUTATION),
           operationName: 'SetEntityProperty',
@@ -4313,6 +4435,7 @@ describe('normalizedCacheExchange', () => {
         vi.useFakeTimers();
         try {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: 'draft',
             query: stringifyDocument(SaveEmailDraftDocument),
             operationName: 'SaveEmailDraft',
@@ -4321,6 +4444,7 @@ describe('normalizedCacheExchange', () => {
             clientMetadata: legacy ? undefined : { kind: 'email-draft' },
           });
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: 'other',
             query: stringifyDocument(MUTATION),
             operationName: 'SetEntityProperty',
@@ -4442,6 +4566,7 @@ describe('normalizedCacheExchange', () => {
         vi.useFakeTimers();
         try {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: '00000000-0000-4000-8000-000000000001',
             query: stringifyDocument(SetEmailThreadArchivedDocument),
             operationName: 'SetEmailThreadArchived',
@@ -4466,6 +4591,7 @@ describe('normalizedCacheExchange', () => {
             ],
           };
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: '00000000-0000-4000-8000-000000000002',
             query: stringifyDocument(UpdateNotificationsDocument),
             operationName: 'UpdateNotifications',
@@ -4525,6 +4651,7 @@ describe('normalizedCacheExchange', () => {
         vi.useFakeTimers();
         try {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: '00000000-0000-4000-8000-000000000001',
             query: stringifyDocument(SaveEmailDraftDocument),
             operationName: 'SaveEmailDraft',
@@ -4600,6 +4727,7 @@ describe('normalizedCacheExchange', () => {
       async (requiresConfirmation) => {
         for (const version of ['create', 'edit']) {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: '00000000-0000-4000-8000-000000000001',
             query: stringifyDocument(MUTATION),
             operationName: 'SetEntityProperty',
@@ -4640,6 +4768,7 @@ describe('normalizedCacheExchange', () => {
 
     it('evicts deleted threads when a persisted mutation replays without its caller', async () => {
       host.seedQueued({
+        generation: cacheSessionGeneration.capture(),
         uuid: '00000000-0000-4000-8000-000000000003',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
@@ -4727,6 +4856,7 @@ describe('normalizedCacheExchange', () => {
           const { forwarded } = harness(host);
           await vi.advanceTimersByTimeAsync(0);
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: crypto.randomUUID(),
             query: stringifyDocument(MUTATION),
             data: optimistic,
@@ -4772,6 +4902,7 @@ describe('normalizedCacheExchange', () => {
 
       it('retries failed readiness without acquiring a mutation lease', async () => {
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: crypto.randomUUID(),
           query: stringifyDocument(MUTATION),
           data: optimistic,
@@ -4793,6 +4924,7 @@ describe('normalizedCacheExchange', () => {
 
       it('fences a successful claim if storage resets after admission', async () => {
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: crypto.randomUUID(),
           query: stringifyDocument(MUTATION),
           variables: { input: { version: 'old' } },
@@ -4813,6 +4945,7 @@ describe('normalizedCacheExchange', () => {
         host.resetStorage();
         // The replacement database can reuse the old transaction ID.
         host.seedQueued({
+          generation: cacheSessionGeneration.capture(),
           uuid: crypto.randomUUID(),
           query: stringifyDocument(MUTATION),
           variables: { input: { version: 'new' } },
@@ -4917,6 +5050,7 @@ describe('normalizedCacheExchange', () => {
           const claim = vi.spyOn(host, 'claimNextMutation');
           claim.mockImplementationOnce(() => pendingClaim.promise);
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: crypto.randomUUID(),
             query: stringifyDocument(MUTATION),
             data: optimistic,
@@ -4967,6 +5101,7 @@ describe('normalizedCacheExchange', () => {
           ops.next(makeMutationOp(1, optimistic));
           await vi.advanceTimersByTimeAsync(1);
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: crypto.randomUUID(),
             query: stringifyDocument(MUTATION),
             data: optimistic,
@@ -5113,6 +5248,7 @@ describe('normalizedCacheExchange', () => {
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {
       host.seedQueued({
+        generation: cacheSessionGeneration.capture(),
         uuid: '00000000-0000-4000-8000-000000000002',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
@@ -5151,6 +5287,7 @@ describe('normalizedCacheExchange', () => {
         const rollback = vi.spyOn(host, 'rollbackOptimisticWrite');
         if (path !== 'foreground') {
           host.seedQueued({
+            generation: cacheSessionGeneration.capture(),
             uuid: '00000000-0000-4000-8000-000000000002',
             query: stringifyDocument(SaveEmailDraftDocument),
             operationName: 'SaveEmailDraft',
@@ -5393,6 +5530,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({
+        generation: cacheSessionGeneration.capture(),
         uuid: '00000000-0000-4000-8000-000000000003',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
@@ -6374,6 +6512,7 @@ describe('normalizedCacheExchange', () => {
           if (failures > 0) {
             host.seedQueued(
               {
+                generation: cacheSessionGeneration.capture(),
                 uuid: crypto.randomUUID(),
                 query: stringifyDocument(MUTATION),
                 data: optimistic,
@@ -6612,6 +6751,7 @@ describe('normalizedCacheExchange', () => {
     it('uses the persisted budget on replay, records exhaustion and revalidates', async () => {
       host.seedQueued(
         {
+          generation: cacheSessionGeneration.capture(),
           uuid: crypto.randomUUID(),
           query: stringifyDocument(MUTATION),
           data: optimistic,

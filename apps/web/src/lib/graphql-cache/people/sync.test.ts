@@ -36,6 +36,7 @@ vi.mock('../worker/wasm-module', async () => {
   };
 });
 
+import { TEST_AUTHORITY_GENERATION } from '../authority-fixture';
 import { createRetirableCacheHost } from '../host/retirable-host';
 import { createTauriCacheHost } from '../host/tauri-host';
 import { isCacheRequest } from '../worker/coordinator-protocol';
@@ -118,6 +119,7 @@ it('preserves contact fences through native hydration and never downgrades rejec
   expect(guarded).toEqual({ ...scope, contactFence: fence });
   await expect(
     host.hydrateQuery({
+      generation: (await host.authority!.current()).generation,
       query: '{user{id}}',
       data: {},
       identity: scope.identity,
@@ -181,6 +183,7 @@ it('worker reconciliation fans out removed-record invalidation, not just a hydra
   await core.handleRequest(port, {
     id: 2,
     kind: 'contact-reconcile',
+    generation: TEST_AUTHORITY_GENERATION,
     request: reconcile,
   });
   expect(contactReconcile).toHaveBeenCalledWith(reconcile);

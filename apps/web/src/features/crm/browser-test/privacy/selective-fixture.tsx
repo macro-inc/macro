@@ -35,17 +35,20 @@ const groups = SETTINGS_TAB_GROUPS.filter(
 );
 export function SelectiveSettingsFixture() {
   const [open, setOpen] = createSignal(true);
+  const [retired, setRetired] = createSignal(false);
   const params = new URLSearchParams(location.search);
   const content = () => (
     <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
       <Show when={params.has('retirement')}>
         <Button
           onClick={async () => {
+            setRetired(false);
             await cacheSessionGeneration.transition(async () => {
               await queryClient.cancelQueries();
               await queryPersistence.retire(crmProtectedQueryKey);
             });
             await queryClient.refetchQueries({ type: 'active' });
+            setRetired(true);
           }}
         >
           Retire CRM cache
@@ -76,6 +79,9 @@ export function SelectiveSettingsFixture() {
       </output>
       <output hidden data-testid="last-change">
         {lastChange()}
+      </output>
+      <output hidden data-testid="retirement-complete">
+        {String(retired())}
       </output>
       <Show
         when={!isTouchDevice()}

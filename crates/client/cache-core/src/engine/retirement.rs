@@ -18,6 +18,7 @@ impl<S: Storage> Engine<S> {
             .await
             .map_err(EngineError::Storage)?;
         let mut retired_projection_owners = BTreeSet::new();
+        let mut affected_projection_keys = BTreeSet::new();
         for entry in &mut queued {
             let mut source = decode_optimistic_source(&entry.optimistic.optimistic_data_json)
                 .map_err(|detail| EngineError::InvalidQueuedMutation {
@@ -27,9 +28,16 @@ impl<S: Storage> Engine<S> {
             if !selected(entry, &mut source) {
                 continue;
             }
+            affected_projection_keys.extend(
+                source
+                    .projection_mutations
+                    .iter()
+                    .map(|mutation| mutation.record_key().clone()),
+            );
             source.mutation_data = Json::Object(Default::default());
             source.link_patches.clear();
-            source.revalidations.clear();
+            // Revalidation descriptors perform fresh authorized reads. Retain
+            // them so settlement repairs parent edges whose copied recipe retired.
             source.projection_mutations.clear();
             source.uncertain_calendar_event_keys.clear();
             entry.optimistic = PersistedOptimisticLayer {
@@ -46,6 +54,35 @@ impl<S: Storage> Engine<S> {
             .map(|entry| (entry.id, entry.optimistic.clone()))
             .collect::<Vec<_>>();
         let rebuilt = self.rebuild_queued_layers(queued).await?;
+        // A shadow's owner is only its last contributor. Recompose every key
+        // touched by a retired layer from its base and all surviving layers.
+        let affected_projection_keys = affected_projection_keys.into_iter().collect::<Vec<_>>();
+        let authoritative = self
+            .storage
+            .load_projection_states(&affected_projection_keys)
+            .await
+            .map_err(EngineError::Storage)?;
+        if authoritative.len() != affected_projection_keys.len() {
+            return Err(EngineError::InvalidOptimisticProjection(
+                "storage returned misaligned authoritative projection states".into(),
+            ));
+        }
+        let remaining = rebuilt
+            .iter()
+            .filter(|layer| !layer.superseded)
+            .map(|layer| ProjectionMutationLayer {
+                owner: layer.id,
+                mutations: &layer.projection_mutations,
+            })
+            .collect::<Vec<_>>();
+        let projections = affected_projection_keys
+            .iter()
+            .zip(&authoritative)
+            .filter_map(|(key, base)| {
+                compose_effective_optimistic_projection(key, base.as_ref(), &remaining).transpose()
+            })
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| EngineError::InvalidOptimisticProjection(error.to_string()))?;
         let replacements = persisted
             .into_iter()
             .zip(rebuilt)
@@ -60,10 +97,7 @@ impl<S: Storage> Engine<S> {
             })
             .collect::<Vec<_>>();
         self.storage
-            .replace_optimistic_layers(
-                &replacements,
-                &retired_projection_owners.into_iter().collect::<Vec<_>>(),
-            )
+            .replace_optimistic_layers(&replacements, &affected_projection_keys, &projections)
             .await
             .map_err(EngineError::Storage)?;
         self.refresh_optimistic_queue().await

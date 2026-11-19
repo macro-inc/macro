@@ -194,7 +194,8 @@ export function withoutOptimisticSnapshot(operation: Operation): Operation {
       snapshotRejected: true,
       optimisticResponse: undefined,
       linkPatches: [],
-      revalidations: [],
+      // Fresh server reads repair parents whose copied link recipes were retired.
+      // Their request and response use the new generation like any other query.
       uncertainCalendarEventKeys: [],
     },
   });

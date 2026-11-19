@@ -55,7 +55,8 @@ export const queryPersistence = setupQueryPersistence({
   scopes: createQueryPersistenceScopes(buster),
   exclude: (key) =>
     crmProtectedQueryKey(key) &&
-    crmAccessAuthority.snapshot()?.policy?.endsWith(':denied') === true,
+    (crmAccessAuthority.state() === 'denied' ||
+      crmAccessAuthority.snapshot()?.policy?.endsWith(':denied') === true),
 });
 
 // Subscribe to query cache events for automatic normalization of soup entities

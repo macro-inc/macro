@@ -93,6 +93,7 @@ test('keeps the open sharing draft through CRM access retirement', async ({
     '{"schema_version":1,"include":[{"kind":"domain","domain":"draft.example.com"}]}';
   await draft.fill(edited);
   await page.getByRole('button', { name: 'Retire CRM cache' }).click();
+  await expect(page.getByTestId('retirement-complete')).toHaveText('true');
   await expect(draft).toHaveValue(edited);
   await expect(page.getByTestId('policy-calls')).not.toContainText('replace');
 });

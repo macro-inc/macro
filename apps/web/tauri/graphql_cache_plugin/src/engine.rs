@@ -465,7 +465,8 @@ impl EngineHandle {
                 .filter(|c| *c > 0)
                 .map_or(cache_core::engine::DEFAULT_HOT_CAPACITY, |c| c as usize),
             schema,
-        );
+        )
+        .with_response_records(soup_filter_cache_adapter::permissions::response_property_owners);
         EngineHandle {
             generation: None,
             authority_listener: None,
@@ -731,7 +732,7 @@ impl EngineHandle {
             identity.as_deref(),
         )
         .await?;
-        let mut result = engine
+        let result = engine
             .write_query_with_registration_and_projections(
                 origin,
                 registration
@@ -751,19 +752,8 @@ impl EngineHandle {
             )
             .await
             .map_err(|e| e.to_string())?;
-        if let Ok(revision) = soup_filter_cache_adapter::permissions::remember_property_owners(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-        )
-        .await
-        {
-            result.revision_advanced |= result.revision != revision;
-            result.revision = revision;
-        }
-        self.publish_bound_generation(engine).await?;
+
+        self.publish_bound_generation(engine);
         Ok(wire_write_result(ops, result))
     }
 
@@ -790,7 +780,7 @@ impl EngineHandle {
             identity.as_deref(),
         )
         .await?;
-        let mut result = match hydration_scope {
+        let result = match hydration_scope {
             Some(scope) => {
                 engine
                     .hydrate_query_in_scope(
@@ -820,24 +810,13 @@ impl EngineHandle {
             }
         }
         .map_err(|error| error.to_string())?;
-        if let Ok(revision) = soup_filter_cache_adapter::permissions::remember_property_owners(
-            engine,
-            &query,
-            operation_name.as_deref(),
-            &variables,
-            &data,
-        )
-        .await
-        {
-            result.write_result.revision_advanced |= result.write_result.revision != revision;
-            result.write_result.revision = revision;
-        }
+
         // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
         let unchanged_views = engine
             .unchanged_observed_windows()
             .await
             .unwrap_or_default();
-        self.publish_bound_generation(engine).await?;
+        self.publish_bound_generation(engine);
         Ok(HydrationWriteResultWire {
             unchanged_views,
             search_changed_buckets: result.search_changed_buckets,
@@ -893,16 +872,15 @@ impl EngineHandle {
         } else {
             Vec::new()
         };
-        let empty = serde_json::json!({});
         let input = BeginOptimisticWrite {
             client_metadata: client_metadata.as_ref(),
             uuid: &uuid,
             query: &query,
             operation_name: operation_name.as_deref(),
             variables: &variables,
-            data: if admitted { &data } else { &empty },
-            link_patches: if admitted { &link_patches } else { &[] },
-            revalidations: if admitted { &revalidations } else { &[] },
+            data: &data,
+            link_patches: &link_patches,
+            revalidations: &revalidations,
             created_at_ms,
             identity_bindings: &identity_bindings,
         };
@@ -916,12 +894,15 @@ impl EngineHandle {
             .map(|key| EntityKey(key.into()))
             .collect();
         let result = engine
-            .enqueue_optimistic_mutation_with_calendar(
+            .enqueue_optimistic_mutation_in_generation(
                 origin,
                 input,
                 claim,
-                projections,
-                if admitted { uncertain } else { Vec::new() },
+                cache_core::engine::authority::OptimisticEffects {
+                    projections,
+                    uncertain_calendar_event_keys: uncertain,
+                },
+                self.generation,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -1048,7 +1029,7 @@ impl EngineHandle {
             Vec::new()
         };
         let result = engine
-            .settle_optimistic_response(
+            .commit_optimistic_write_in_generation(
                 transaction,
                 claim,
                 NetworkWrite {
@@ -1059,23 +1040,11 @@ impl EngineHandle {
                     identity: None,
                 },
                 projections,
-                admitted,
+                self.generation,
             )
             .await
             .map_err(|e| e.to_string())?;
-        let revision = if admitted && !matches!(&result, CommitOptimisticWriteResult::Failed(_)) {
-            soup_filter_cache_adapter::permissions::remember_property_owners(
-                engine,
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-            )
-            .await
-            .ok()
-        } else {
-            None
-        };
+
         match result {
             CommitOptimisticWriteResult::Failed(result) => {
                 Ok(CommitOptimisticWriteResultWire::Failed {
@@ -1086,21 +1055,12 @@ impl EngineHandle {
                     result: wire_write_result(ops, result.write_result),
                 })
             }
-            CommitOptimisticWriteResult::Committed(mut result) => {
-                if let Some(revision) = revision {
-                    result.revision_advanced |= result.revision != revision;
-                    result.revision = revision;
-                }
+            CommitOptimisticWriteResult::Committed(result) => {
                 Ok(CommitOptimisticWriteResultWire::Committed {
                     result: wire_write_result(ops, result),
                 })
             }
-            CommitOptimisticWriteResult::CommittedSuperseded(mut result) => {
-                if let Some(revision) = revision {
-                    result.write_result.revision_advanced |=
-                        result.write_result.revision != revision;
-                    result.write_result.revision = revision;
-                }
+            CommitOptimisticWriteResult::CommittedSuperseded(result) => {
                 Ok(CommitOptimisticWriteResultWire::CommittedSuperseded {
                     replacement_transaction_id: result.replacement_transaction_id.to_string(),
                     result: wire_write_result(ops, result.write_result),

@@ -17,8 +17,8 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   cancel: vi.fn(),
 }));
-vi.mock('@service-auth/client', () => ({
-  authServiceClient: { getLegacyUserPermissions: mocks.auth },
+vi.mock('@queries/auth/user-info', () => ({
+  fetchUserInfo: mocks.auth,
 }));
 vi.mock('./client', () => ({ dssFetch: mocks.proof }));
 vi.mock('@queries/client', () => ({
@@ -199,6 +199,21 @@ it('refetches only after the latest overlapping retirement finishes', async () =
   expect(mocks.refetch).toHaveBeenCalledOnce();
 });
 
+it('refetches live reads after disk retirement fails while retaining the proven denial', async () => {
+  await boot();
+  mocks.refetch.mockClear();
+  mocks.retire.mockRejectedValue(new Error('IndexedDB unavailable'));
+  mocks.proof.mockResolvedValue(ok({ team_id: TEAM, allowed: false }));
+
+  await expect(crmAccessAuthority.refresh()).rejects.toThrow(
+    'IndexedDB unavailable'
+  );
+
+  expect(crmAccessAuthority.state()).toBe('denied');
+  expect(cacheSessionGeneration.state().paused).toBe(false);
+  expect(mocks.refetch).toHaveBeenCalledOnce();
+});
+
 it.each(['pending', 'failed'] as const)(
   'does not delay signature, mark-read, star or folder writes while the first proof is %s',
   async (mode) => {
@@ -269,6 +284,74 @@ it('retires on a mismatched hint in the background and does not retry per respon
   await crmAccessAuthority.refresh();
   expect(crmAccessAuthority.state()).toBe('denied');
   expect(mocks.retire).toHaveBeenCalledOnce();
+  const matches = mocks.retire.mock.calls[0][0];
+  for (const key of [
+    'history',
+    'reminders',
+    'entity',
+    'databases',
+    'graphql-soup',
+    'contacts',
+  ])
+    expect(matches([key])).toBe(true);
+});
+
+it('rereads a mismatched hint that arrived while an older allowed proof was in flight', async () => {
+  await boot();
+  const first = Promise.withResolvers<ReturnType<typeof allowed>>();
+  const started = Promise.withResolvers<void>();
+  const fresh = Promise.withResolvers<void>();
+  mocks.proof
+    .mockImplementationOnce(() => {
+      started.resolve();
+      return first.promise;
+    })
+    .mockImplementationOnce(async () => {
+      fresh.resolve();
+      return ok({ team_id: TEAM, allowed: false });
+    });
+  const refreshing = crmAccessAuthority.refresh();
+  await started.promise;
+  prepareResponseObservers('http://localhost/dss/crm/companies')(
+    new Response(null, { headers: { 'x-macro-crm-access': `${TEAM}:denied` } })
+  );
+  first.resolve(allowed());
+  await refreshing;
+  await fresh.promise;
+  await vi.waitFor(() => expect(crmAccessAuthority.state()).toBe('denied'));
+  expect(mocks.proof).toHaveBeenCalledTimes(3);
+});
+
+it('retries a repeated mismatched hint after a failed proof and a bounded cooldown', async () => {
+  await boot();
+  const failed = Promise.withResolvers<void>();
+  mocks.proof.mockImplementationOnce(async () => {
+    failed.resolve();
+    return err([{ code: 'SERVER_ERROR' }]);
+  });
+  const hint = () =>
+    prepareResponseObservers('http://localhost/dss/crm/companies')(
+      new Response(null, {
+        headers: { 'x-macro-crm-access': `${TEAM}:denied` },
+      })
+    );
+  hint();
+  await failed.promise;
+  // Await only the proof already dispatched by the hint, never initiate one.
+  await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+  vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 10_000);
+  const retried = Promise.withResolvers<void>();
+  mocks.proof.mockImplementationOnce(async () => {
+    retried.resolve();
+    return ok({ team_id: TEAM, allowed: false });
+  });
+  try {
+    hint();
+    await retried.promise;
+    await vi.waitFor(() => expect(crmAccessAuthority.state()).toBe('denied'));
+  } finally {
+    vi.mocked(Date.now).mockRestore();
+  }
 });
 
 it('rejects an older REST read after retirement while preserving a write outcome', async () => {
@@ -312,21 +395,32 @@ it('retries an initial failed proof on reconnect without holding mailbox respons
   setCrmAccessSession('viewer');
   await expect(crmAccessAuthority.refresh()).rejects.toThrow();
   expect(crmAccessAuthority.state()).toBe('error');
-  mocks.proof.mockResolvedValue(allowed());
+  const recovered = Promise.withResolvers<void>();
+  mocks.proof.mockImplementationOnce(async () => {
+    recovered.resolve();
+    return allowed();
+  });
   onlineManager.setOnline(false);
   onlineManager.setOnline(true);
-  await crmAccessAuthority.refresh();
-  expect(crmAccessAuthority.state()).toBe('allowed');
+  await recovered.promise;
+  await vi.waitFor(() => expect(crmAccessAuthority.state()).toBe('allowed'));
   expect(mocks.proof).toHaveBeenCalledTimes(2);
 });
 
 it('refreshes after a CRM 403 while keeping the last policy on a failed proof', async () => {
   await boot();
-  mocks.proof.mockResolvedValue(err([{ code: 'SERVER_ERROR' }]));
+  const started = Promise.withResolvers<void>();
+  const response = Promise.withResolvers<ReturnType<typeof allowed>>();
+  mocks.proof.mockImplementationOnce(() => {
+    started.resolve();
+    return response.promise;
+  });
   const guard = await prepareResponseObservers(
     'http://localhost/dss/crm/companies'
   );
   guard(new Response(null, { status: 403 }));
-  await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+  await started.promise;
+  response.reject(new Error('proof unavailable'));
+  await response.promise.catch(() => {});
   expect(crmAccessAuthority.state()).toBe('allowed');
 });

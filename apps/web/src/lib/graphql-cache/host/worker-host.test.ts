@@ -253,7 +253,11 @@ describe('createWorkerCacheHost', () => {
       kind: 'miss',
     });
     await expect(
-      host.writeQuery({ query: '{ x }', data: { x: 1 } })
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        query: '{ x }',
+        data: { x: 1 },
+      })
     ).resolves.toEqual(EMPTY_WRITE);
   });
 
@@ -274,6 +278,7 @@ describe('createWorkerCacheHost', () => {
 
     await expect(
       host.hydrateQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         query: 'query Backfill { items @cacheOnly { id } cursor }',
         data: { items: [{ id: '1' }], cursor: 'next' },
         identity: 'user-1',
@@ -482,6 +487,7 @@ describe('createWorkerCacheHost', () => {
         nowMs: 123,
       }),
       host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         opKey: 8,
         registerDependencies: true,
         query: 'query Read { user { id } }',
@@ -498,6 +504,7 @@ describe('createWorkerCacheHost', () => {
       }),
       host.enqueueOptimisticMutation(
         {
+          generation: TEST_AUTHORITY_GENERATION,
           uuid: '00000000-0000-4000-8000-000000000005',
           opKey: 9,
           query: 'mutation Rename { rename { id } }',
@@ -517,6 +524,7 @@ describe('createWorkerCacheHost', () => {
       host.claimNextMutation('runner', 200, 1_200),
       host.deferOptimisticWrite('1', claim, 2_000, 'offline'),
       host.commitOptimisticWrite('1', claim, {
+        generation: TEST_AUTHORITY_GENERATION,
         query: 'mutation Rename { rename { id } }',
         data: { rename: { id: 'doc-1' } },
       }),
@@ -536,7 +544,11 @@ describe('createWorkerCacheHost', () => {
     ]) {
       expect(
         requests.find((request) => request.kind === kind)?.generation
-      ).toBe(UNKNOWN_CACHE_GENERATION);
+      ).toBe(
+        kind === 'delete-records'
+          ? UNKNOWN_CACHE_GENERATION
+          : TEST_AUTHORITY_GENERATION
+      );
     }
     expect(
       requests.find((request) => request.kind === 'rollback-optimistic-write')
@@ -802,6 +814,7 @@ describe('createWorkerCacheHost', () => {
       const rejected = expect(read).rejects.toThrow('owner handoff timeout');
       const mutation = host.enqueueOptimisticMutation(
         {
+          generation: TEST_AUTHORITY_GENERATION,
           uuid: '00000000-0000-4000-8000-000000000100',
           query: 'mutation Update { update }',
           data: { update: true },
@@ -964,6 +977,7 @@ describe('createWorkerCacheHost', () => {
     adapter.options.onCacheReadAvailabilityChanged?.('waiting');
     const read = host.readQuery({ opKey: 7, query: 'query Parked { user }' });
     const write = host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Parked { user }',
       data: { user: true },
     });
@@ -995,6 +1009,7 @@ describe('createWorkerCacheHost', () => {
     });
     const read = host.readQuery({ query: 'query Initial { user }' });
     const write = host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Initial { user }',
       data: { user: true },
     });
@@ -1031,6 +1046,7 @@ describe('createWorkerCacheHost', () => {
       const read = host.readQuery({ opKey: 4, query: 'query Read { user }' });
       const mutation = host.enqueueOptimisticMutation(
         {
+          generation: TEST_AUTHORITY_GENERATION,
           uuid: '00000000-0000-4000-8000-000000000100',
           query: 'mutation Update { update }',
           data: { update: true },
@@ -1099,6 +1115,7 @@ describe('createWorkerCacheHost', () => {
     const read = host.readQuery({ opKey: 44, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -1188,6 +1205,7 @@ describe('createWorkerCacheHost', () => {
     const read = host.readQuery({ query: 'query Read { user { id } }' });
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000006',
         query: 'mutation Rename { rename { id } }',
         data: { rename: { id: 'doc-1' } },
@@ -1249,6 +1267,7 @@ describe('createWorkerCacheHost', () => {
     const read = host.readQuery({ opKey: 44, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -1357,6 +1376,7 @@ describe('createWorkerCacheHost', () => {
     await Promise.all([
       host.readQuery({ opKey: 7, query: 'query Seven { seven }' }),
       host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
         opKey: 9,
         registerDependencies: true,
         query: 'query Nine { nine }',
@@ -1578,6 +1598,7 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ query: 'query Read { user }' });
     const write = host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Read { user }',
       data: { user: null },
     });
@@ -1621,6 +1642,7 @@ describe('createWorkerCacheHost', () => {
     const adapter = requireAdapter();
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -1826,6 +1848,7 @@ describe('createWorkerCacheHost', () => {
     adapter.ignoredKinds.add('read');
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000101',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -1997,6 +2020,7 @@ describe('createWorkerCacheHost', () => {
     adapter.dispose.mockImplementationOnce(async () => await draining);
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -2138,6 +2162,7 @@ describe('createWorkerCacheHost', () => {
     adapter.dispose.mockImplementationOnce(async () => await draining);
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -2172,6 +2197,7 @@ describe('createWorkerCacheHost', () => {
     const adapter = requireAdapter();
     adapter.ignoredKinds.add('write');
     const args = {
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'subscription Updates { update }',
       data: { update: 1 },
     };
@@ -2351,6 +2377,7 @@ describe('createWorkerCacheHost', () => {
     const host = createWorkerCacheHost({ scope: 'scope-1' });
     await host.currentRevision();
     const stale = host.writeQuery({
+      generation: TEST_AUTHORITY_GENERATION,
       query: 'query Value { value }',
       data: { value: 'stale' },
     });
@@ -2372,6 +2399,7 @@ describe('createWorkerCacheHost', () => {
     old.ignoredKinds.add('enqueue-optimistic-mutation');
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
@@ -2406,6 +2434,7 @@ describe('createWorkerCacheHost', () => {
     const adapter = requireAdapter();
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },

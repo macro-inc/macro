@@ -98,6 +98,9 @@ export function createCrmAccessAuthority(options: Options) {
   let observationVersion = 0;
   let earlyProofStarted = false;
   let earlyAccess: 'allowed' | 'denied' | undefined;
+  // A server denial remains authoritative if writing its durable marker fails.
+  // Only a successfully committed fresh grant may reopen this login.
+  let deniedProof = false;
 
   function observe(next: CacheAuthority, retryRetirement = false) {
     const previous = observed;
@@ -120,10 +123,9 @@ export function createCrmAccessAuthority(options: Options) {
         return;
       }
     } else if (isCrmPolicy(next.policy)) {
-      if (next.policy.endsWith(':denied') || next.policy === 'none')
-        setState('denied');
+      if (deniedProof || next.policy.endsWith(':denied')) setState('denied');
       else setState(next.ready ? (earlyAccess ?? 'allowed') : 'pending');
-    } else setState(earlyAccess ?? 'pending');
+    } else setState(deniedProof ? 'denied' : (earlyAccess ?? 'pending'));
     observed = next;
     if (!initialized) {
       initialized = true;
@@ -211,7 +213,7 @@ export function createCrmAccessAuthority(options: Options) {
           if (!current() || version !== observationVersion) return;
           if (!isCrmPolicy(policy))
             throw new Error('Invalid CRM access policy');
-          earlyAccess = policy.endsWith(':allowed') ? 'allowed' : 'denied';
+          earlyAccess = policy.endsWith(':denied') ? 'denied' : 'allowed';
           setState(earlyAccess);
         }),
         'crm.access.startup_hint'
@@ -242,14 +244,19 @@ export function createCrmAccessAuthority(options: Options) {
           if (!current()) return;
           if (!isCrmPolicy(policy))
             throw new Error('Invalid CRM access policy');
+          if (observed && observed.generation !== before.generation)
+            throw new StaleCacheAuthorityError();
           earlyAccess = undefined;
           // A proven denial hides entry points even if local disk cleanup fails.
-          if (policy.endsWith(':denied') || policy === 'none')
+          if (policy.endsWith(':denied')) {
+            deniedProof = true;
             setState('denied');
+          }
           const result = await span.span('crm.access.transition', () =>
             target.transition(before.generation, policy)
           );
           if (!current()) return;
+          deniedProof = policy.endsWith(':denied');
           span.run(() => observe(result.authority));
           await retiring;
           return;
@@ -320,6 +327,7 @@ export function createCrmAccessAuthority(options: Options) {
       if (earlyAccess) setState('pending');
       earlyAccess = undefined;
       loginEpoch = epoch;
+      deniedProof = false;
       session = Symbol();
       pending = undefined;
       initialization = undefined;
@@ -332,8 +340,12 @@ export function createCrmAccessAuthority(options: Options) {
         hint?.account === next &&
         hint.ready &&
         isCrmPolicy(hint.policy) &&
-        hint.policy.endsWith(':allowed');
-      setState(hintedAllowed ? 'allowed' : 'pending');
+        !hint.policy.endsWith(':denied');
+      const hintedDenied =
+        next !== undefined &&
+        hint?.account === next &&
+        hint.policy?.endsWith(':denied');
+      setState(hintedDenied ? 'denied' : hintedAllowed ? 'allowed' : 'pending');
       if (!shared) {
         owner = memoryAuthority(
           account,
@@ -365,7 +377,8 @@ export const crmAccessAuthority = createCrmAccessAuthority({
   bindAccount: (owner, generation, account) =>
     configured.bindAccount?.(owner, generation, account) ?? Promise.resolve(),
 });
-export const crmAccessAllowed = crmAccessAuthority.allowed;
+/** Entry points keep their existing behavior until access is proven denied. */
+export const crmAccessAllowed = () => crmAccessAuthority.state() !== 'denied';
 export const crmAccessState = crmAccessAuthority.state;
 export function configureCrmAccessAuthority(options: Options) {
   configured = options;

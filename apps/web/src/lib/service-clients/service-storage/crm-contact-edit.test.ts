@@ -1,4 +1,5 @@
 import { externalWriteVersion } from '@graphql-cache/exchange/external-writes';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import { createTauriCacheHost } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -115,9 +116,10 @@ it('repairs only the affected contact on cache failure without reporting a commi
   await expect(
     prepareCrmContactEdit().commit(contact, null)
   ).resolves.toBeUndefined();
-  expect(mocks.host.deleteRecords).toHaveBeenCalledWith([
-    'GraphqlSoupCrmContact:contact-1',
-  ]);
+  expect(mocks.host.deleteRecords).toHaveBeenCalledWith(
+    ['GraphqlSoupCrmContact:contact-1'],
+    UNKNOWN_CACHE_GENERATION
+  );
 });
 
 it('fences and invalidates an uncertain contact without crossing a replaced session', async () => {
@@ -126,9 +128,10 @@ it('fences and invalidates an uncertain contact without crossing a replaced sess
   const before = externalWriteVersion(host);
   await writer.invalidate(contact.id);
   expect(externalWriteVersion(host)).toBeGreaterThan(before);
-  expect(mocks.host.deleteRecords).toHaveBeenCalledExactlyOnceWith([
-    'GraphqlSoupCrmContact:contact-1',
-  ]);
+  expect(mocks.host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
+    ['GraphqlSoupCrmContact:contact-1'],
+    UNKNOWN_CACHE_GENERATION
+  );
   mocks.client = {};
   await writer.invalidate('contact-2');
   expect(mocks.host.deleteRecords).toHaveBeenCalledTimes(1);

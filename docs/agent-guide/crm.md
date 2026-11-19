@@ -662,11 +662,14 @@ list, pipeline, or record, and highlights its sidebar item. The back arrow
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
-Members without CRM access keep their email contribution controls. Revoke access
-while this page is open: **Stages** and **Email sync** disappear while contribution
-settings remain usable, including the owner’s excluded-thread list and email mentions.
-Open an excluded thread and remove its exclusion while CRM access is denied; no CRM
-record data is required. Restoring access returns Stages and Email sync.
+Proven denial closes these in-workspace settings and hides their sidebar entry;
+individually shared pipelines remain reachable. Members without CRM access keep
+their email contribution controls in **Settings > CRM**. Revoke access while that
+separate settings page is open: **Stages** and **Email sync** disappear while
+contribution settings remain usable, including the owner’s excluded-thread list
+and email mentions. Open an excluded thread and remove its exclusion while CRM
+access is denied; no CRM record data is required. Restoring access returns
+Stages and Email sync.
 
 CRM access does not require contributing email. The banner **Your emails aren’t
 contributing to CRM** opens **Review and opt in**. The dialog shows the exact
@@ -830,8 +833,9 @@ once, while terminal proof errors do not retry automatically.
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
 server memoization never applies to record checks or this fresh endpoint. The
-next opted-in request after expiry observes the change; idle/offline clients have
-no fixed retirement deadline. The client sends that opt-in for storage requests
+next opted-in request after expiry can signal the change, but the server may omit
+the hint when its lookup times out or admission is limited. Idle/offline clients
+have no fixed retirement deadline. The client sends that opt-in for storage requests
 except the fresh authority endpoint. Changed hints, CRM access-denied responses,
 boot, focus and reconnect trigger a background proof. Ordinary requests, response
 frames and cached reads never wait for it. A transient failure retains the last
@@ -849,6 +853,9 @@ are discarded after retirement. Queued writes still settle their identity and
 draft journal without restoring the retired response. Company/contact create forms close after a successful
 write even if the later proof fails; revocation closes the record view without
 reporting the completed creation as failed or offering a duplicate retry.
+When verifying revocation, explicitly trigger a fresh proof and wait for local
+retirement to finish before checking that protected cached content disappeared;
+an ordinary request without a hint is not evidence that proof or retirement ran.
 
 After denial, company/contact routes and contact pages, CRM lists, search, CRM
 activity, references, and CRM-derived email thread grants require current access
@@ -868,8 +875,9 @@ Delivered CRM discussion notifications retain their text, and a queued one can
 still arrive under the existing notification policy. Opening the record requires
 current access. Exercise denial and regrant through direct API and agent requests
 as well as the UI. At desktop and phone widths, open records and an individually
-shared pipeline before denial, make another request in each view, then verify
-record access is denied while the pipeline's own values remain visible. Check
+shared pipeline before denial, trigger fresh proof in each view and wait for local
+retirement, then verify record access is denied while the pipeline's own values
+remain visible. Check
 Quick Access, email, references, and structured agent activity for stale results.
 Regrant and verify fresh results return. Offline authored drafts and unrelated
 documents must survive this transition. Native verification requires a binary

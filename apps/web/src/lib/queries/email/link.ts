@@ -74,6 +74,8 @@ export function emailLinksQueryOptions(
     enabled: !!account && enabled,
     staleTime: LINK_STALE_TIME,
     refetchOnWindowFocus: 'always' as const,
+    // Startup recovery and focus refreshes must preserve the open inbox editor.
+    reconcile: 'id' as const,
   };
 }
 export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {

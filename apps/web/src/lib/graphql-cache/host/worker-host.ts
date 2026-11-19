@@ -13,6 +13,7 @@ import {
   type AuthorityTransition,
   cacheAuthorityError,
   createAuthorityObserver,
+  StaleCacheAuthorityError,
 } from '../authority';
 import { UNKNOWN_CACHE_GENERATION } from '../generation-mirror';
 import { deleteLegacyNormalizedCacheIdb } from '../legacy-idb-cleanup';
@@ -55,7 +56,6 @@ import {
   type SearchCachePage,
   validateCacheSearchArgs,
   validateRecordSelectionKeys,
-  type WorkerMessage,
   type WriteResult,
 } from '../protocol';
 import { quarantineCacheScope } from '../scope';
@@ -301,11 +301,15 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     });
   };
 
-  const onMessage = (event: MessageEvent<WorkerMessage>) => {
+  const onMessage = (event: MessageEvent<unknown>) => {
     const msg = event.data;
     if (isCachePush(msg)) {
       if (msg.kind === 'authority-changed') {
-        authorityObserver.observe(msg.authority);
+        try {
+          authorityObserver.observe(msg.authority);
+        } catch (error) {
+          Telemetry.error(error);
+        }
         return;
       }
       const currentAuthority =
@@ -387,6 +391,17 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
     }
     pending.delete(msg.id);
     if (entry.timer !== undefined) clearTimeout(entry.timer);
+    if (
+      isReadOnlyCacheRequest(entry.kind) &&
+      (msg.authorityGeneration ?? entry.authorityGeneration) !==
+        authorityObserver.snapshot()?.generation
+    ) {
+      const error = new StaleCacheAuthorityError();
+      recordRequestOutcome(entry, 'error', error);
+      entry.reject(error);
+      finishGracefulDisposeIfDrained();
+      return;
+    }
     if (
       (entry.kind === 'read' || entry.kind === 'write') &&
       entry.opKey !== undefined &&
@@ -1341,7 +1356,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
         kind: 'current-authority',
         identity: options.scope,
       });
-      const _observed = authorityObserver.observe(authority, version);
+      authorityObserver.observeCurrent(authority, version);
     })();
     const handshake = ready.then(
       () => {
@@ -1421,7 +1436,14 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       ...msg,
       generation:
         msg.generation ??
-        authorityObserver.snapshot()?.generation ??
+        (![
+          'write',
+          'hydrate',
+          'enqueue-optimistic-mutation',
+          'commit-optimistic-write',
+        ].includes(msg.kind)
+          ? authorityObserver.snapshot()?.generation
+          : undefined) ??
         UNKNOWN_CACHE_GENERATION,
     };
     const generation = transportGeneration;
@@ -1447,7 +1469,7 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
       kind: 'current-authority',
       identity: options.scope,
     });
-    const observed = authorityObserver.observe(value, version);
+    const observed = authorityObserver.observeCurrent(value, version);
     return observed;
   }
 
@@ -1477,7 +1499,9 @@ export function createWorkerCacheHost(options: WorkerHostOptions): CacheHost {
             policy,
             traceparent: span.traceparent(),
           })) as AuthorityTransition;
-          span.run(() => authorityObserver.observe(result.authority, version));
+          span.run(() =>
+            authorityObserver.observe(result.authority, version, 'transition')
+          );
           span.setAttr('crm.access.changed', result.changed);
           return result;
         });

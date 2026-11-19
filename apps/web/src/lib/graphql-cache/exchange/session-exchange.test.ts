@@ -7,7 +7,7 @@ import {
 } from '@urql/core';
 import type { Client as GraphqlWsClient } from 'graphql-ws';
 import { afterEach, expect, it, vi } from 'vitest';
-import { filter, makeSubject, mergeMap, pipe } from 'wonka';
+import { empty, filter, makeSubject, mergeMap, pipe, subscribe } from 'wonka';
 import { cacheSessionGeneration } from '../session-generation';
 import {
   cacheSessionExchange,
@@ -226,4 +226,26 @@ it('restarts subscription sources once and discards late frames from the retired
     cacheSessionGeneration.capture()
   );
   subscription.unsubscribe();
+});
+
+it('removes the generation listener when the exchange is disposed', () => {
+  const released = vi.fn();
+  const listen = vi
+    .spyOn(cacheSessionGeneration, 'onChanged')
+    .mockReturnValue(released);
+  try {
+    const operations = makeSubject<Operation>();
+    const subscription = pipe(
+      cacheSessionExchange({
+        client: createClient({ url: 'http://test', exchanges: [] }),
+        forward: () => empty,
+        dispatchDebug: () => {},
+      })(operations.source),
+      subscribe(() => {})
+    );
+    subscription.unsubscribe();
+    expect(released).toHaveBeenCalledOnce();
+  } finally {
+    listen.mockRestore();
+  }
 });

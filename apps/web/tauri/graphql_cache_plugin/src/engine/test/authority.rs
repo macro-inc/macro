@@ -19,57 +19,6 @@ async fn bind(handle: &EngineHandle) {
 }
 
 #[test]
-fn native_legacy_wire_calls_without_authority_preserve_cache_reads_and_writes() {
-    block_on(async {
-        let handle = spawn_handle();
-        // The deployed JS sends these top-level write arguments without authority.
-        let wire = json!({
-            "query": QUERY,
-            "operationName": "Soup",
-            "variables": variables(),
-            "data": soup_data(false),
-            "identity": "user-1"
-        });
-        assert!(wire.get("authority").is_none());
-        let generation: Option<uuid::Uuid> =
-            serde_json::from_value(wire["authority"].clone()).unwrap();
-        let legacy = handle.clone().with_generation(generation);
-        legacy
-            .write(WriteRequest {
-                origin_op_id: None,
-                registration: None,
-                query: wire["query"].as_str().unwrap().into(),
-                operation_name: Some(wire["operationName"].as_str().unwrap().into()),
-                variables: wire["variables"].as_object().unwrap().clone(),
-                data: wire["data"].clone(),
-                identity: Some(wire["identity"].as_str().unwrap().into()),
-            })
-            .await
-            .expect("an omitted authority argument must keep the deployed write contract");
-        let result = legacy
-            .read(None, QUERY.into(), Some("Soup".into()), variables(), vec![])
-            .await
-            .expect("an omitted authority argument must keep the deployed read contract");
-        assert!(matches!(result, ReadResultWire::Hit { data } if data == soup_data(false)));
-        assert!(matches!(
-            legacy
-                .watch(
-                    "legacy:watch".into(),
-                    QUERY.into(),
-                    Some("Soup".into()),
-                    variables(),
-                    vec![],
-                    None
-                )
-                .await
-                .unwrap(),
-            cache_core::engine::watch_query::QueryUpdate::Hit { .. }
-        ));
-        legacy.teardown("legacy:watch".into()).await.unwrap();
-    });
-}
-
-#[test]
 fn native_implicit_retirement_notifies_other_windows_before_returning_content() {
     block_on(async {
         let (first, first_events) = std::sync::mpsc::channel();

@@ -20,6 +20,7 @@ const variables = {
 
 async function write(endsAt: string) {
   await host.writeQuery({
+    generation: (await host.authority!.current()).generation,
     query,
     variables,
     data: {

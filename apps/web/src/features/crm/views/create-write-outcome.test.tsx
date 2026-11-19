@@ -9,7 +9,7 @@ import {
 } from '@solidjs/testing-library';
 import { QueryClient } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import { createSignal, type ParentProps, Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { CrmRecordDependencies } from '../queries/dependencies';
 
@@ -72,22 +72,6 @@ vi.mock('../context/crm-context', async () => {
     }),
   };
 });
-vi.mock('@components/app/side-panel', () => ({
-  SidePanel: { Root: (props: ParentProps) => <>{props.children}</> },
-}));
-vi.mock('@app/components/view-shell/create-frame-width', () => ({
-  createFrameWidth: () => () => 1200,
-}));
-vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
-vi.mock('./record-header-actions', () => ({ RecordHeaderActions: () => null }));
-vi.mock('../components/record-tabs', () => ({ RecordTabs: () => null }));
-vi.mock('./company-detail', () => ({
-  Company: () => <p>Opened company content</p>,
-}));
-vi.mock('./contact-detail', () => ({
-  Contact: () => <p>Opened contact content</p>,
-}));
-vi.mock('@solidjs/router', () => ({ useSearchParams: () => [{}] }));
 
 import { crmAccessAuthority } from '@service-storage/crm-access-authority';
 import {
@@ -97,7 +81,6 @@ import {
 import { crmKeys } from '../queries/keys';
 import { CreateCompanyModal } from './create-company';
 import { CreateContactModal } from './create-contact';
-import { CrmRecordDetail } from './record-detail';
 
 const team = '00000000-0000-4000-8000-000000000001';
 let client: QueryClient;
@@ -164,17 +147,6 @@ it.each([
     const [open, setOpen] = createSignal(true);
     render(() => (
       <>
-        <CrmRecordDetail
-          records={[
-            { type: 'company', id: 'open-company', name: 'Opened company' },
-          ]}
-          section={undefined}
-          viewName="Customers"
-          onOpen={() => {}}
-          onSectionChange={() => {}}
-          onClose={() => {}}
-          navigation={null}
-        />
         <Show
           when={kind === 'company'}
           fallback={
@@ -195,7 +167,6 @@ it.each([
         </Show>
       </>
     ));
-    expect(screen.getByText('Opened company content')).toBeTruthy();
     fireEvent.input(
       screen.getByRole('textbox', {
         name: kind === 'company' ? 'Company name' : 'Contact name',
@@ -220,26 +191,21 @@ it.each([
         { id: `${kind}-created`, name: 'Created once' },
         {
           status: 201,
-          headers:
-            proofState === 'revoked'
-              ? { 'x-macro-crm-access': `${team}:denied` }
-              : {},
+          headers: { 'x-macro-crm-access': `${team}:denied` },
         }
       )
     );
     await waitFor(() =>
       expect(created).toHaveBeenCalledExactlyOnceWith(`${kind}-created`)
     );
+    await waitFor(() => expect(fixtures.proof).toHaveBeenCalled());
     expect(screen.queryByText(/Try again/i)).toBeNull();
     await waitFor(() => expect(screen.queryByRole('form')).toBeNull());
     expect(open()).toBe(false);
     if (proofState === 'revoked') {
       await waitFor(() => expect(crmAccessAuthority.state()).toBe('denied'));
-      expect(screen.queryByText('Opened company content')).toBeNull();
-      expect(screen.getByText("You don't have access to CRM")).toBeTruthy();
     } else {
-      expect(screen.getByText('Opened company content')).toBeTruthy();
-      expect(screen.queryByText("You don't have access to CRM")).toBeNull();
+      expect(crmAccessAuthority.state()).toBe('allowed');
     }
     const cached = client.getQueryData(
       (kind === 'company' ? crmKeys.company : crmKeys.contact)(

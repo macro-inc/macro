@@ -33,7 +33,6 @@ import {
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
 import {
-  crmAccessAllowed,
   crmAccessAuthority,
   crmAccessState,
 } from '@service-storage/crm-access-authority';
@@ -219,7 +218,7 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
-    canAccess: crmAccessAllowed,
+    canAccess: crmAccessAuthority.allowed,
     accessState: crmAccessState,
     retryAccess: crmAccessAuthority.refresh,
     createEmailPolicy: () => {

@@ -3,6 +3,207 @@ use crate::store::InMemoryStorage;
 use pollster::block_on;
 use serde_json::json;
 
+#[test]
+fn stale_commands_keep_fresh_revalidations_through_retirement_and_settlement() {
+    block_on(async {
+        for enqueue_stale in [false, true] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let initial = engine.current_authority("profile").await.unwrap();
+            let query = "mutation Save($input: SaveEmailDraftInput!) { saveEmailDraft(input: $input) { thread { __typename id name } } }";
+            let variables = json!({"input":{"threadId":"thread","bodyText":"authored"}});
+            let data = json!({"saveEmailDraft":{"thread":{"__typename":"GraphqlSoupEmailThread","id":"thread","name":"retired"}}});
+            let repair = QueryRevalidation {
+                query: "{ user { id } }".into(),
+                operation_name: None,
+                variables_json: "{}".into(),
+                only_on_link_failure: true,
+            };
+            let queued = engine
+                .enqueue_optimistic_mutation_in_generation(
+                    None,
+                    BeginOptimisticWrite {
+                        client_metadata: None,
+                        identity_bindings: &[],
+                        uuid: "00000000-0000-4000-8000-000000000080",
+                        query,
+                        operation_name: Some("Save"),
+                        variables: variables.as_object().unwrap(),
+                        data: &data,
+                        link_patches: &[],
+                        revalidations: std::slice::from_ref(&repair),
+                        created_at_ms: 1,
+                    },
+                    MutationClaimRequest {
+                        owner: "writer".into(),
+                        now_ms: 2,
+                        lease_expires_at_ms: 100,
+                    },
+                    OptimisticEffects::default(),
+                    Some(if enqueue_stale {
+                        Uuid::nil()
+                    } else {
+                        initial.generation
+                    }),
+                )
+                .await
+                .unwrap();
+            let InitialClaimOutcome::Claimed(claimed) = queued.initial_claim else {
+                panic!("command must be claimed")
+            };
+            engine
+                .retire_optimistic_snapshots_where(|_, _| true)
+                .await
+                .unwrap();
+            let stored = engine.storage().load_mutation_queue().await.unwrap();
+            let source =
+                decode_optimistic_source(&stored[0].optimistic.optimistic_data_json).unwrap();
+            assert_eq!(source.revalidations, vec![repair.clone()]);
+            assert_eq!(source.mutation_data, json!({}));
+            let result = engine
+                .commit_optimistic_write_in_generation(
+                    queued.transaction_id,
+                    MutationClaimToken {
+                        owner: "writer".into(),
+                        generation: claimed.lease_generation,
+                    },
+                    NetworkWrite {
+                        query,
+                        operation_name: Some("Save"),
+                        variables: variables.as_object().unwrap(),
+                        data: &data,
+                        identity: None,
+                    },
+                    vec![],
+                    Some(Uuid::nil()),
+                )
+                .await
+                .unwrap();
+            let CommitOptimisticWriteResult::Committed(result) = result else {
+                panic!("must settle")
+            };
+            assert_eq!(result.revalidations, vec![repair]);
+            assert!(
+                engine
+                    .storage()
+                    .load_mutation_queue()
+                    .await
+                    .unwrap()
+                    .is_empty()
+            );
+            assert!(
+                engine
+                    .storage()
+                    .get_batch(&[EntityKey("GraphqlSoupEmailThread:thread".into())])
+                    .await
+                    .unwrap()[0]
+                    .is_none()
+            );
+        }
+    });
+}
+
+#[test]
+fn retirement_recomposes_shared_projection_shadows_in_both_layer_orders() {
+    block_on(async {
+        use predicate_index::{
+            IndexDocument, IntegerAttributePatch, OptimisticProjectionMutation,
+            OptimisticProjectionState, Profile, RecordKey, Token,
+        };
+        for retired_index in [0, 1] {
+            let mut engine = Engine::new(InMemoryStorage::new());
+            let key = RecordKey::new("GraphqlSoupDocument:shared").unwrap();
+            let profile = Profile::new(Token::new("retirement-test").unwrap());
+            let partition = Token::new("documents").unwrap();
+            engine
+                .put_records_with_projections(
+                    None,
+                    vec![],
+                    vec![ProjectionMutation::Replace(IndexDocument {
+                        record_key: key.clone(),
+                        profile: profile.clone(),
+                        partition: partition.clone(),
+                        exact_facts: vec![],
+                        integer_facts: vec![],
+                        sort_facts: vec![],
+                    })],
+                )
+                .await
+                .unwrap();
+            let mut ids = Vec::new();
+            for (index, attribute) in ["older", "newer"].into_iter().enumerate() {
+                let result = engine.begin_optimistic_write_with_projections(None, BeginOptimisticWrite {
+                    client_metadata: None, identity_bindings: &[], uuid: &format!("00000000-0000-4000-8000-00000000009{index}"),
+                    query: "mutation Rename($inputs: [RenameEntityInput!]!) { renameEntities(inputs: $inputs) { results { __typename } } }",
+                    operation_name: Some("Rename"), variables: json!({"inputs":[]}).as_object().unwrap(), data: &json!({}),
+                    link_patches: &[], revalidations: &[], created_at_ms: 1,
+                }, vec![OptimisticProjectionMutation::Patch {
+                    record_key: key.clone(), profile: profile.clone(), partition: partition.clone(),
+                    exact: vec![], integers: vec![IntegerAttributePatch { attribute: Token::new(attribute).unwrap(), values: vec![1] }], sorts: vec![],
+                }]).await.unwrap();
+                ids.push(result.0);
+            }
+            engine
+                .retire_optimistic_snapshots_where(|entry, _| entry.id == ids[retired_index])
+                .await
+                .unwrap();
+            let reopened = Engine::new(engine.into_storage());
+            let shadows = reopened
+                .storage()
+                .load_optimistic_projections(&[key])
+                .await
+                .unwrap();
+            let shadow = shadows[0]
+                .as_ref()
+                .expect("surviving layer must remain projected");
+            assert_eq!(shadow.owner, ids[1 - retired_index]);
+            let OptimisticProjectionState::Complete(document) = &shadow.state else {
+                panic!("base remains complete")
+            };
+            assert_eq!(document.integer_facts.len(), 1);
+            assert_eq!(
+                document.integer_facts[0].attribute,
+                Token::new(["newer", "older"][retired_index]).unwrap()
+            );
+        }
+    });
+}
+
+#[test]
+fn malformed_authority_is_not_a_fresh_unproven_cache() {
+    block_on(async {
+        for state in [
+            CacheValue::String("wrong type".into()),
+            CacheValue::Opaque("{broken".into()),
+        ] {
+            let mut storage = InMemoryStorage::new();
+            let marker = Record {
+                fields: [(AUTHORITY_FIELD.into(), state)].into(),
+            };
+            storage
+                .put_batch(vec![(EntityKey(AUTHORITY_KEY.into()), marker.clone())])
+                .await
+                .unwrap();
+            let mut engine = Engine::new(storage);
+            assert!(matches!(
+                engine.current_authority("profile").await,
+                Err(EngineError::InvalidAuthority)
+            ));
+            assert!(matches!(
+                engine.unfinished_retirement().await,
+                Err(EngineError::InvalidAuthority)
+            ));
+            assert_eq!(
+                engine
+                    .storage()
+                    .get_batch(&[EntityKey(AUTHORITY_KEY.into())])
+                    .await
+                    .unwrap(),
+                vec![Some(marker)]
+            );
+        }
+    });
+}
+
 impl<S: Storage> Engine<S> {
     async fn check_snapshot_generation(
         &mut self,

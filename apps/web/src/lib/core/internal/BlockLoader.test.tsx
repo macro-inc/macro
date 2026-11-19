@@ -10,6 +10,22 @@ import { err, ok } from 'neverthrow';
 import { createEffect, createSignal, on, Show } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
+const publicationBarrier = vi.hoisted(() => ({
+  wait: undefined as (() => Promise<void>) | undefined,
+}));
+vi.mock('@solidjs/router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@solidjs/router')>();
+  return {
+    ...actual,
+    createAsync: (load: () => Promise<unknown>) =>
+      actual.createAsync(async () => {
+        const result = await load();
+        await publicationBarrier.wait?.();
+        return result;
+      }),
+  };
+});
+
 vi.mock('@core/context/user', () => ({ useIsAuthenticated: () => () => true }));
 
 let nested = true;
@@ -68,6 +84,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 beforeEach(() => {
+  publicationBarrier.wait = undefined;
   disposeTelemetry = initializeUiOperationTelemetry();
   nested = true;
   analytics.track.mockClear();
@@ -84,7 +101,15 @@ beforeEach(() => {
 it('recovers a cold file load once from its identity after missing-mirror retirement', async () => {
   const body = Promise.withResolvers<void>();
   const cleanup = Promise.withResolvers<void>();
+  const nextCleanup = Promise.withResolvers<void>();
+  const nextCleanupStarted = Promise.withResolvers<void>();
   const loaded = Promise.withResolvers<void>();
+  const recovering = Promise.withResolvers<void>();
+  const settled = cacheSessionGeneration.settled;
+  vi.spyOn(cacheSessionGeneration, 'settled').mockImplementation(() => {
+    recovering.resolve();
+    return settled();
+  });
   const origin = { type: 'dss' as const, id: 'document' };
   const source = { type: 'preload' as const, origin, token: 'discarded-token' };
   const load = vi.fn(async () => {
@@ -118,9 +143,20 @@ it('recovers a cold file load once from its identity after missing-mirror retire
   });
   const retirement = cacheSessionGeneration.transition(() => cleanup.promise);
   body.resolve();
+  await recovering.promise;
+  const nextRetirement = cacheSessionGeneration.transition(() => {
+    nextCleanupStarted.resolve();
+    return nextCleanup.promise;
+  });
   expect(load).toHaveBeenCalledOnce();
+  expect(invalidateBundle).not.toHaveBeenCalled();
   cleanup.resolve();
+  await nextCleanupStarted.promise;
+  expect(invalidateBundle).not.toHaveBeenCalled();
+  expect(load).toHaveBeenCalledOnce();
+  nextCleanup.resolve();
   await retirement;
+  await nextRetirement;
   await loaded.promise;
   expect(load).toHaveBeenCalledTimes(2);
   expect(load).toHaveBeenNthCalledWith(1, source, 'initial', expect.anything());
@@ -131,6 +167,106 @@ it('recovers a cold file load once from its identity after missing-mirror retire
     refetchType: 'none',
   });
   expect(blockErrorSignal.get()).toBeNull();
+});
+
+it('rechecks the generation when an accepted result reaches the resource publication', async () => {
+  const accepted = Promise.withResolvers<void>();
+  const deliver = Promise.withResolvers<void>();
+  const published = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  publicationBarrier.wait = () => {
+    accepted.resolve();
+    return deliver.promise;
+  };
+  const load = vi
+    .fn()
+    .mockResolvedValueOnce(
+      ok({ id: 'retired', syncSource: { cleanup: cleanupSource } })
+    )
+    .mockResolvedValue(ok({ id: 'current' }));
+  const seen: unknown[] = [];
+  render(() => {
+    createEffect(
+      on(blockDataSignal.get, (data) => {
+        if (data) {
+          seen.push(data);
+          published.resolve();
+        }
+      })
+    );
+    return (
+      <BlockLoader
+        id="document"
+        source={{ type: 'dss', id: 'document' }}
+        definition={{
+          name: 'md',
+          description: 'Document',
+          accepted: {},
+          component: () => null,
+          load,
+        }}
+      />
+    );
+  });
+  await accepted.promise;
+  await cacheSessionGeneration.transition(async () => {});
+  publicationBarrier.wait = undefined;
+  deliver.resolve();
+  await published.promise;
+  expect(seen).toEqual([expect.objectContaining({ id: 'current' })]);
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(cleanupSource).toHaveBeenCalledOnce();
+});
+
+it('does not reset the retry budget when both resource deliveries are retired', async () => {
+  const accepted = [
+    Promise.withResolvers<void>(),
+    Promise.withResolvers<void>(),
+  ];
+  const deliver = [
+    Promise.withResolvers<void>(),
+    Promise.withResolvers<void>(),
+  ];
+  const failed = Promise.withResolvers<void>();
+  const cleanupSource = vi.fn();
+  let delivery = 0;
+  publicationBarrier.wait = () => {
+    const index = delivery++;
+    accepted[index]?.resolve();
+    return deliver[index]?.promise ?? Promise.resolve();
+  };
+  const load = vi.fn(async () =>
+    ok({ syncSource: { cleanup: cleanupSource } })
+  );
+  render(() => {
+    createEffect(
+      on(blockErrorSignal.get, (error) => {
+        if (error === 'INVALID') failed.resolve();
+      })
+    );
+    return (
+      <BlockLoader
+        id="document"
+        source={{ type: 'dss', id: 'document' }}
+        definition={{
+          name: 'md',
+          description: 'Document',
+          accepted: {},
+          component: () => null,
+          load,
+        }}
+      />
+    );
+  });
+  for (let index = 0; index < 2; index++) {
+    await accepted[index].promise;
+    await cacheSessionGeneration.transition(async () => {});
+    deliver[index].resolve();
+  }
+  await failed.promise;
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(cleanupSource).toHaveBeenCalledTimes(2);
+  expect(blockDataSignal.get()).toBeUndefined();
 });
 
 it('cleans a stale successful load and honors a fresh denial after one recovery', async () => {

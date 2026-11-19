@@ -1,5 +1,6 @@
 import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import { recordExternalWrite } from '@graphql-cache/exchange/external-writes';
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import { recordSessionCacheWrite } from '@graphql-cache/lifecycle';
 import { captureCacheWriteSession } from '@graphql-cache/session-writes';
 import { Telemetry } from '@macro-inc/observability';
@@ -17,7 +18,8 @@ export function prepareCrmContactEdit() {
   const session = captureCacheWriteSession();
   const client = getGraphqlSoupClient();
   const host = getGraphqlSoupCacheHost();
-  const generation = host?.authority?.snapshot()?.generation;
+  const generation =
+    host?.authority?.snapshot()?.generation ?? UNKNOWN_CACHE_GENERATION;
   const isCurrent = () =>
     canCache() &&
     session.isCurrent() &&
@@ -30,7 +32,10 @@ export function prepareCrmContactEdit() {
         if (!host || host.disabled || !isCurrent()) return;
         recordExternalWrite(host, ['GraphqlSoupCrmContact']);
         try {
-          await host.deleteRecords([`GraphqlSoupCrmContact:${contactId}`]);
+          await host.deleteRecords(
+            [`GraphqlSoupCrmContact:${contactId}`],
+            generation
+          );
         } catch (error) {
           Telemetry.error(error);
         }
@@ -71,7 +76,10 @@ export function prepareCrmContactEdit() {
           // The server committed; cache repair must never turn that into a failed save.
           if (isCurrent()) {
             try {
-              await host.deleteRecords([`GraphqlSoupCrmContact:${contact.id}`]);
+              await host.deleteRecords(
+                [`GraphqlSoupCrmContact:${contact.id}`],
+                generation
+              );
             } catch (error) {
               Telemetry.error(error);
             }

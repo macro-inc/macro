@@ -4,8 +4,15 @@ CRM company and contact screens, settings, filters, saved views, lists, import,
 export, and company actions belong here. The dependency rules are enforced by
 `architecture.test.ts` and the feature rules in `rules/ast-grep`.
 
-Read `crmAccessAllowed` for app-wide navigation, search, Quick Access, and actions;
-pass the same authority through `CrmContext.canAccess` for CRM-owned views.
+Read `crmAccessAllowed` for navigation and create entry points: pending or failed
+proofs keep them visible, while proven denial hides them. Pass
+`crmAccessAuthority.allowed` through `CrmContext.canAccess` for record data and
+CRM-owned views; the workspace retains its loading, retry, and denied states.
+Keep individually shared pipeline navigation available after CRM denial, but
+do not open a referenced company or contact. The workspace owns the record
+detail gate and unmounts its content on denial; standalone record views retain
+their own gate. Close global company/contact creation dialogs on proven denial
+and do not navigate to a late successful creation after access has been lost.
 The retired CRM/activity/pipeline rollout flags never replace this access gate.
 Keep owner-scoped email privacy controls, excluded-thread lists, and email mentions
 available after CRM viewing access is revoked. The context always supplies the plain
@@ -58,6 +65,8 @@ cached by pipeline and view. Move results update the originating view's cache,
 even if the viewer switches boards while saving. The adapter supplies the selected
 view ID so switching boards also retires unfinished visual moves and sort prompts.
 `browser-test/board.tsx` exercises shared cards, lane composition, and saved ordering with synthetic data.
+Refresh current pipeline queries after a committed create, rename, trash, or
+sharing change even when retirement prevents applying the old response locally.
 
 Selective email settings use generated storage-service schemas through the
 storage client. The owner/session/team query scope retires drafts on account

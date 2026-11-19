@@ -1,3 +1,4 @@
+import type { JSHandle } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { fileIntoDrive } from './harness/ways-faults';
@@ -83,9 +84,34 @@ for (const mobile of [false, true]) {
         });
       });
 
-      await mailbox.open(`/app/code/${copy}`);
+      let textWatch:
+        | JSHandle<{ retired: boolean; stop: () => void }>
+        | undefined;
       try {
+        await mailbox.open(`/app/code/${copy}`);
         await firstBody.promise;
+        textWatch = await page.evaluateHandle(() => {
+          const result = { retired: false, stop: () => observer.disconnect() };
+          const inspect = (text: string | null) => {
+            if (text?.includes('Discarded file content.'))
+              result.retired = true;
+          };
+          const observer = new MutationObserver((records) => {
+            for (const record of records) {
+              inspect(record.oldValue);
+              inspect(record.target.textContent);
+              for (const node of [...record.addedNodes, ...record.removedNodes])
+                inspect(node.textContent);
+            }
+          });
+          observer.observe(document.body, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            characterDataOldValue: true,
+          });
+          return result;
+        });
         await expect
           .poll(() =>
             page.evaluate(() => {
@@ -115,6 +141,7 @@ for (const mobile of [false, true]) {
           .toBe(`${team}:denied`);
         releaseBody.resolve();
         await expect(page.locator('.cm-content')).toHaveText(file.text);
+        expect(await textWatch.evaluate((watch) => watch.retired)).toBe(false);
         await expect(
           page.getByText('Discarded file content.', { exact: true })
         ).toHaveCount(0);
@@ -122,6 +149,8 @@ for (const mobile of [false, true]) {
         expect(metadata).toBeGreaterThan(before);
       } finally {
         releaseBody.resolve();
+        await textWatch?.evaluate((watch) => watch.stop()).catch(() => {});
+        await textWatch?.dispose();
       }
     });
   });

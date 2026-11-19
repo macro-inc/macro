@@ -149,6 +149,7 @@ describe('coordinator registration retry', () => {
   it('spaces both retries and exhausts once without admitting or replaying a mutation', async () => {
     const mutation = host.enqueueOptimisticMutation(
       {
+        generation: TEST_AUTHORITY_GENERATION,
         uuid: '00000000-0000-4000-8000-000000000100',
         query: 'mutation Update { update }',
         data: { update: true },
