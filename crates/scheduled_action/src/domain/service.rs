@@ -38,7 +38,7 @@ use super::ports::{
 
 mod sub_routines;
 use super::target_validation::{
-    ModelOnlyTargets, refuse_fields_beside_agent, require_explicit_selection,
+    ModelOnlyTargets, require_explicit_selection, without_fields_beside_agent,
 };
 
 #[cfg(test)]
@@ -413,7 +413,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             .validate()
             .map_err(ActionPolicyError::InvalidAppearance)?;
         let mut input = input;
-        input.task = named_steps(&input.task);
+        input.task = without_fields_beside_agent(&named_steps(&input.task));
         let description = description(&input.description)?;
         self.check_event_management(&input.trigger, owner_user)
             .await?;
@@ -430,7 +430,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         if sub_routine.is_none() && SubRoutineCopy::from_task(&input.task).is_some() {
             return Err(ActionPolicyError::CopyOutsideRun.into());
         }
-        refuse_fields_beside_agent(&input.task)?;
         self.validate_targets(&input.task, owner_user).await?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
@@ -484,7 +483,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Rollout: EventRoutineRollout,
     {
         let mut input = input;
-        input.task = named_steps(&input.task);
+        input.task = without_fields_beside_agent(&named_steps(&input.task));
         let mut problems = Vec::new();
         let mut steps = Vec::new();
         let found = [
@@ -492,7 +491,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             self.check_event_management(&input.trigger, owner).await,
             self.check_conditions(&input.trigger),
             self.check_sub_routines(&input.task, owner).await,
-            refuse_fields_beside_agent(&input.task).map_err(Into::into),
             self.targets.validate_task(&input.task, owner).await,
         ];
         for result in found {
@@ -716,9 +714,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         Rollout: EventRoutineRollout,
     {
         require_explicit_selection(&action.task, &input.task)?;
-        input.task = named_steps(&input.task);
-        // Clients don't echo the SDK the stored code was checked against.
-        if same_task(&action.task, &input.task) {
+        input.task = without_fields_beside_agent(&named_steps(&input.task));
+        // Clients don't echo the SDK the stored code was checked against. A
+        // stored single agent keeps fields its parser skips until its task
+        // changes; sending them back, or not, changes nothing.
+        if same_task(&without_fields_beside_agent(&action.task), &input.task) {
             input.task = action.task.clone();
         }
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
@@ -748,12 +748,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             // already, or when it is made standalone, which needs none, so
             // switching the rollout off strands no copy.
             let from_copy = SubRoutineCopy::from_task(&action.task).is_some();
-            if !same_task(&action.task, &input.task) {
-                if !from_copy {
-                    self.check_sub_routines(&input.task, action.owner_user()?)
-                        .await?;
-                }
-                refuse_fields_beside_agent(&input.task)?;
+            if !same_task(&action.task, &input.task) && !from_copy {
+                self.check_sub_routines(&input.task, action.owner_user()?)
+                    .await?;
             }
             self.validate_targets(&input.task, action.owner_user()?)
                 .await?;

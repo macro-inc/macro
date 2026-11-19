@@ -32,11 +32,6 @@ pub enum TargetValidationError {
         "this routine defines sub-routines or inputs; reload or upgrade your client before updating"
     )]
     ExplicitSubRoutinesRequired,
-    /// A task without steps is the single agent, whose parser skips fields
-    /// it doesn't know: definitions or inputs beside it would be saved
-    /// unchecked.
-    #[error("a routine's sub-routines and inputs are saved with its steps")]
-    SubRoutinesWithoutSteps,
 }
 
 /// Default acceptance policy for composition roots without a session domain.
@@ -125,20 +120,21 @@ pub(super) fn parse_program(task: &Value) -> Result<RoutineProgram, TargetValida
     Ok(program)
 }
 
-/// Refuse a single agent task carrying a field only a task with steps keeps,
-/// which its parser would skip unchecked. Only for a new or changed task: a
-/// stored one with such a field still runs, and is renamed or resumed with
-/// its task sent back as it is.
-pub(super) fn refuse_fields_beside_agent(task: &Value) -> Result<(), TargetValidationError> {
+/// `task` without the fields only a task with steps or a copy keeps, when it
+/// is a single agent's: its parser skips them, so they would be stored
+/// unchecked and mean nothing. Main kept them, and clients send a stored
+/// task back as they loaded it, so they are dropped rather than refused.
+pub(super) fn without_fields_beside_agent(task: &Value) -> Value {
+    let mut task = task.clone();
     if task.get("steps").is_none()
-        && SubRoutineCopy::from_task(task).is_none()
-        && ["sub_routines", "inputs", "sub_routine"]
-            .iter()
-            .any(|field| task.get(field).is_some())
+        && SubRoutineCopy::from_task(&task).is_none()
+        && let Value::Object(fields) = &mut task
     {
-        return Err(TargetValidationError::SubRoutinesWithoutSteps);
+        for field in ["sub_routines", "inputs", "sub_routine"] {
+            fields.remove(field);
+        }
     }
-    Ok(())
+    task
 }
 
 /// The raw JSON preserves absent versus explicit null without changing stored contracts.
@@ -169,12 +165,13 @@ pub(super) fn require_explicit_selection(previous: &Value, incoming: &Value) -> 
     }
     // A client that predates sub-routines rebuilds the task from what it
     // knows, so saving would delete the definitions its copies run, or the
-    // inputs a detached copy's code reads.
+    // inputs a detached copy's code reads. A single agent's are neither.
     for field in ["sub_routines", "inputs"] {
-        if previous
-            .get(field)
-            .and_then(Value::as_array)
-            .is_some_and(|items| !items.is_empty())
+        if previous.get("steps").is_some_and(|steps| !steps.is_null())
+            && previous
+                .get(field)
+                .and_then(Value::as_array)
+                .is_some_and(|items| !items.is_empty())
             && incoming.get(field).is_none()
         {
             return Err(TargetValidationError::ExplicitSubRoutinesRequired.into());

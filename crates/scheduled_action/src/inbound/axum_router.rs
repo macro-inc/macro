@@ -986,8 +986,7 @@ impl IntoResponse for ScheduledActionApiError {
             let status = match validation {
                 TargetValidationError::InvalidTask
                 | TargetValidationError::InvalidProgram(_)
-                | TargetValidationError::SessionsUnavailable
-                | TargetValidationError::SubRoutinesWithoutSteps => StatusCode::BAD_REQUEST,
+                | TargetValidationError::SessionsUnavailable => StatusCode::BAD_REQUEST,
                 TargetValidationError::ExplicitAgentRequired
                 | TargetValidationError::ExplicitAppsRequired
                 | TargetValidationError::ExplicitStepsRequired

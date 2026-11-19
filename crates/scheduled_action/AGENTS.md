@@ -308,13 +308,14 @@ each run.
   `enable-sub-routines` flag (`EventRoutineRollout::sub_routines_enabled_for`,
   `SubRoutinesDisabled`), and an update that omits a non-empty
   `sub_routines` or `inputs` is refused (`ExplicitSubRoutinesRequired`,
-  409), so a client that predates them can't drop them. A new or changed
-  single agent task can't carry `sub_routines`, `inputs` or `sub_routine`
-  (`refuse_fields_beside_agent`, `SubRoutinesWithoutSteps`); one stored
-  with them still runs, and is renamed or resumed as it is. Code reads its
-  values as `inputs`; an Ask AI step gets them as data after its
-  instructions. Span: `routine.schedule` (parent, run, keyed, input count,
-  outcome).
+  409), so a client that predates them can't drop them. A single agent
+  task's `sub_routines`, `inputs` or `sub_routine`, which its parser skips
+  and main kept, are dropped from a new or changed task
+  (`without_fields_beside_agent`); one stored with them still runs, and is
+  renamed or resumed as it is. Code reads its values as `inputs`; an Ask AI
+  step gets them as data after its instructions. Span: `routine.schedule`
+  (parent, run, keyed, input count, outcome: `created`, `updated`, or a
+  `refused_*` naming the check).
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

@@ -378,10 +378,10 @@ async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them()
 }
 
 /// The single agent's parser skips fields it doesn't know, so what it would
-/// skip is checked before it: a NUL anywhere, and, in a new or changed task,
-/// definitions or inputs that only a task with steps keeps.
+/// skip is handled before it: a NUL anywhere is refused, and definitions or
+/// inputs that only a task with steps keeps are dropped.
 #[tokio::test]
-async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
+async fn a_single_agent_loses_the_fields_its_parser_would_skip_unchecked() {
     let sessions = Arc::new(Sessions::default());
     let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
     let validator = TargetValidation::new(sessions.clone());
@@ -407,21 +407,15 @@ async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
         with("sub_routines", json!([])),
         with("sub_routine", json!("remind")),
     ] {
-        assert_eq!(
-            refuse_fields_beside_agent(&task),
-            Err(TargetValidationError::SubRoutinesWithoutSteps)
-        );
+        assert_eq!(without_fields_beside_agent(&task), agent_task());
         // Stored that way it still runs, so its agent is still checked.
         validator.validate_task(&task, &owner).await.unwrap();
     }
-    // The single agent alone, a program and a copy carry none.
-    assert_eq!(refuse_fields_beside_agent(&agent_task()), Ok(()));
-    assert_eq!(
-        refuse_fields_beside_agent(&json!({ "steps": [], "inputs": [] })),
-        Ok(())
-    );
-    assert_eq!(
-        refuse_fields_beside_agent(&json!({ "sub_routine": "remind", "inputs": {} })),
-        Ok(())
-    );
+    // A program's and a copy's are theirs.
+    for task in [
+        json!({ "steps": [], "inputs": [] }),
+        json!({ "sub_routine": "remind", "inputs": {} }),
+    ] {
+        assert_eq!(without_fields_beside_agent(&task), task);
+    }
 }
