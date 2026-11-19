@@ -11,7 +11,7 @@ import { fixedClock } from '../../../context/test/fakes.ts';
 import { secretsHandlers } from '../../../events/handlers/secrets.ts';
 import { pollEvery, pollSchedule } from '../config.ts';
 import { secretsContext } from '../context.ts';
-import { secretsCapabilities } from '../index.ts';
+import { secretsModule } from '../index.ts';
 import { polling } from '../ports.ts';
 
 // Never called: it only has to compile, as behavior/index.ts will compose it.
@@ -23,7 +23,7 @@ export const composed = (
     .decorate(base)
     .use(scheduled)
     .use(secretsContext(base, scheduled.decorations.schedules))
-    .use(secretsCapabilities)
+    .capability(secretsModule)
     .use(secretsHandlers(scheduled));
 
 test('polling is one schedule, set once while anything is pending and removed after', async () => {

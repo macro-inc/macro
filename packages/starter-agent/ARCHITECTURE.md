@@ -48,8 +48,10 @@ in `behavior/index.ts`:
 2. **Capabilities** — `capabilities/<area>/index.ts` exports the area's
    functions, ordinary typed functions of the context and one input object;
    one `module({ name, summary, docs, file: import.meta.path, functions })`
-   that lists them; and
-   `<area>Capabilities = behavior<<Area>Context>().capability(<module>)`.
+   that lists them. The module goes in `capabilityModules` in
+   `behavior/index.ts`, the catalog's one list: the behavior lists exactly
+   those, and what reads the catalog without building the behavior uses it
+   too.
    A function's doc comment and its types are its documentation: `describe`
    reads both from the code. There are no input or output schemas. `tasks`
    is the worked example of this part.

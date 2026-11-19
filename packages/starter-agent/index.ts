@@ -27,6 +27,7 @@ import { agentClaude, capabilityServer } from './behavior/agent/claude.ts';
 import { guards } from './behavior/agent/guards/index.ts';
 import { profile } from './behavior/agent/profile.ts';
 import { restarter } from './behavior/capabilities/heartbeat/restart.ts';
+import type { PeopleClaude } from './behavior/capabilities/people/ask.ts';
 import { childEnvironment, claude } from './behavior/context/children.ts';
 import { base as makeBase } from './behavior/context/index.ts';
 import { timedOut } from './behavior/context/shell.ts';
@@ -248,15 +249,18 @@ export const agent = authorized({
   authority: base.authority,
 });
 
+/** How areas other than the wake run Claude Code: as a wake does, on the same ledger. */
+const claudeRuns: PeopleClaude = {
+  executable: claude,
+  environment: claudeEnvironment,
+  sandbox: claudeSandbox,
+  spend,
+};
+
+/** Whether the agent runs on a computer of its own, from that computer's enrollment. */
+// The enrollment's credentials file is the hosted signal: only a Macro
+// computer's launcher (start-agent) passes one; a self-hosted agent uses sops.
+const hosted = started.credentials.kind === 'file';
+
 // An appraisal of people runs Claude Code as a wake does, on the same ledger.
-export const assistant = makeAgent(
-  base,
-  agent,
-  {
-    executable: claude,
-    environment: claudeEnvironment,
-    sandbox: claudeSandbox,
-    spend,
-  },
-  restart
-);
+export const assistant = makeAgent(base, agent, claudeRuns, hosted, restart);

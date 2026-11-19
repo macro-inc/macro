@@ -2,11 +2,10 @@
  * Browser use: your own Chromium, on your computer's screen, with a profile
  * that stays signed in to what you sign in to.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Target } from '@macro-inc/muppet/utilities/browser';
-import { type Stepped, step } from './browse.ts';
 import { defaultBrowser, variables } from '../../context/startup.ts';
+import { type Stepped, step } from './browse.ts';
 import type { BrowserContext } from './context.ts';
 
 type Needs = Pick<BrowserContext, 'browser' | 'trace' | 'join' | 'clock'>;
@@ -106,6 +105,3 @@ Logging in: typeInto the username, then copySecret (or copySecretCode) and paste
     screenshotPage,
   },
 });
-
-export const browserCapabilities =
-  behavior<BrowserContext>().capability(browserModule);

@@ -45,6 +45,8 @@ export type Ask = (
     /** Replaces the model's system prompt. */
     readonly system?: string;
     readonly timeoutMs?: number;
+    /** False answers without extended thinking: for a short reply someone is waiting on. */
+    readonly thinking?: boolean;
   }
 ) => Promise<string>;
 

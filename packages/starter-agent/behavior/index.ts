@@ -6,25 +6,31 @@
 import type { Agent } from '@macro-inc/muppet/core/agent';
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import type { Script as ScriptOf } from '@macro-inc/muppet/core/code';
-import { fileStore, scheduling } from '@macro-inc/muppet/utilities/schedules';
+import { greeting } from '@macro-inc/muppet/utilities/greeting';
+import {
+  fileStore,
+  scheduleControl,
+  scheduling,
+} from '@macro-inc/muppet/utilities/schedules';
 import { browserContext } from './capabilities/browser/context.ts';
-import { browserCapabilities } from './capabilities/browser/index.ts';
+import { browserModule } from './capabilities/browser/index.ts';
 import { callsContext } from './capabilities/calls/context.ts';
-import { callsCapabilities } from './capabilities/calls/index.ts';
+import { callsModule } from './capabilities/calls/index.ts';
 import { chatContext } from './capabilities/chat/context.ts';
-import { chatCapabilities } from './capabilities/chat/index.ts';
+import { chatModule } from './capabilities/chat/index.ts';
 import { heartbeatContext } from './capabilities/heartbeat/context.ts';
-import { heartbeatCapabilities } from './capabilities/heartbeat/index.ts';
-import { identityCapabilities } from './capabilities/identity/index.ts';
+import { heartbeatModule } from './capabilities/heartbeat/index.ts';
+import { identityContext } from './capabilities/identity/context.ts';
+import { identityModule } from './capabilities/identity/index.ts';
 import { laterContext } from './capabilities/later/context.ts';
-import { laterCapabilities } from './capabilities/later/index.ts';
+import { laterModule } from './capabilities/later/index.ts';
 import type { PeopleClaude } from './capabilities/people/ask.ts';
 import { peopleContext } from './capabilities/people/context.ts';
-import { peopleCapabilities } from './capabilities/people/index.ts';
+import { peopleModule } from './capabilities/people/index.ts';
 import { secretsContext } from './capabilities/secrets/context.ts';
-import { secretsCapabilities } from './capabilities/secrets/index.ts';
+import { secretsModule } from './capabilities/secrets/index.ts';
 import { toolsContext } from './capabilities/tools/context.ts';
-import { toolsCapabilities } from './capabilities/tools/index.ts';
+import { toolsModule } from './capabilities/tools/index.ts';
 import type { Base } from './context/index.ts';
 import { callsHandlers } from './events/handlers/calls.ts';
 import { chatHandlers } from './events/handlers/chat.ts';
@@ -37,6 +43,26 @@ import { secretsHandlers } from './events/handlers/secrets.ts';
 import { callsSources } from './events/sources/calls.ts';
 import { chatSources } from './events/sources/chat.ts';
 
+/**
+ * The agent's catalog: every capability module. `assistant` lists each of
+ * these, and `scheduling()` registers `scheduleControl` too, so the built
+ * catalog is exactly this list (a subprocess test checks it), and what reads
+ * the catalog without building the behavior (the greeting's tests) sees the
+ * same.
+ */
+export const capabilityModules = [
+  scheduleControl,
+  chatModule,
+  identityModule,
+  laterModule,
+  peopleModule,
+  heartbeatModule,
+  toolsModule,
+  callsModule,
+  browserModule,
+  secretsModule,
+] as const;
+
 /** The owner of the schedules' state. */
 const schedulesOwner = 'schedules';
 const schedulesFile = 'schedules.json';
@@ -46,6 +72,8 @@ export const assistant = (
   agent: Agent,
   /** How areas other than the wake run Claude Code: as a wake does. */
   claude: PeopleClaude,
+  /** Whether the agent runs on a computer of its own. */
+  hosted: boolean,
   /** Restarts the agent onto code that landed; none outside a supervisor. */
   restart?: () => Promise<void>
 ) => {
@@ -77,37 +105,52 @@ export const assistant = (
   const tools = toolsContext(base);
   const browser = browserContext(base);
   const secrets = secretsContext(base, scheduled.decorations.schedules);
-  return behavior()
+  const identity = identityContext(base, {
+    chat: chat.decorations.chat,
+    typing: chat.decorations.typingIndicators,
+    claude,
+    hosted,
+    vault: secrets.decorations.secrets.vault,
+  });
+  const composed = behavior()
     .decorate(base)
     .decorate({ agent })
     .use(failureHandlers())
     .use(scheduled)
     .use(chat)
     .use(chatEvents)
-    .use(chatCapabilities)
     .use(chatHandlers(chatEvents))
-    .use(identityCapabilities)
     .use(identityHandlers())
     .use(later)
-    .use(laterCapabilities)
     .use(laterHandlers(chatEvents))
     .use(people)
-    .use(peopleCapabilities)
     .use(peopleHandlers())
     .use(heartbeat)
-    .use(heartbeatCapabilities)
     .use(heartbeatHandlers(scheduled))
     .use(tools)
-    .use(toolsCapabilities)
     .use(calls)
     .use(callsEvents)
-    .use(callsCapabilities)
     .use(callsHandlers(callsEvents))
     .use(browser)
-    .use(browserCapabilities)
     .use(secrets)
-    .use(secretsCapabilities)
-    .use(secretsHandlers(scheduled));
+    .use(secretsHandlers(scheduled))
+    .use(identity);
+  // The catalog is exactly `capabilityModules`.
+  const built = capabilityModules.reduce(
+    (listing, capability) => listing.capability(capability),
+    composed
+  );
+  // A new agent greets its owner the moment it runs, with what it has.
+  return built.use(
+    greeting(
+      (context: typeof identity.decorations) =>
+        context.greeterOf(built.capabilities),
+      {
+        around: (context) => context.greetingParent.around,
+        done: (context) => context.greetingDone,
+      }
+    )
+  );
 };
 
 export type Assistant = ReturnType<typeof assistant>;

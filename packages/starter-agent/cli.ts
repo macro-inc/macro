@@ -50,7 +50,6 @@ import {
   exitCodes,
   startOrExit,
 } from './behavior/context/startup.ts';
-import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
 import {
   assistant,
   base,
@@ -149,10 +148,10 @@ const run = async (): Promise<void> => {
         await phase('agent.start.schedules', () =>
           ensureSchedules(assistant.decorations.schedules)
         );
-        // A new agent's first wake is to ask its owner who it is.
-        await phase('agent.start.introduction', () =>
-          ensureIntroduction(base, assistant.decorations.schedules)
-        );
+        // A new agent's first hello ends its setup: its span goes under this
+        // one. It isn't waited for: agent.start ends at a healthy boot, and
+        // agent.greeting, its child, may end a few seconds after.
+        assistant.decorations.greetingParent.set(Telemetry.captureContext());
         const systemPrompt = await phase(
           'agent.start.charter',
           async () => (await base.disk.read(base.config.charter)) ?? ''

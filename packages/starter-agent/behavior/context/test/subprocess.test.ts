@@ -9,6 +9,7 @@ import { mkdtemp, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { inSubprocess } from '@macro-inc/muppet/core/code';
+import { capabilityModules } from '../../index.ts';
 import { childEnvironment } from '../children.ts';
 import { type Relay, startRelay } from '../relay.ts';
 
@@ -210,4 +211,34 @@ test('a missing variable, or a credential file it can’t read, exits 78 and say
     code: 78,
     stderr: expect.stringContaining('MUPPET_MCP_SERVERS_JSON'),
   });
+}, 60_000);
+
+test('the catalog the agent builds is exactly capabilityModules', async () => {
+  const credentials = join(workspace, 'agent-list.env');
+  await Bun.write(
+    credentials,
+    'MACRO_API_KEY="mak_real"\nMACRO_GATEWAY="https://gateway.example.com"\n'
+  );
+  const child = Bun.spawn(
+    [process.execPath, join(workspace, 'cli.ts'), 'list'],
+    {
+      cwd: workspace,
+      stdout: 'pipe',
+      stderr: 'pipe',
+      env: {
+        PATH: process.env.PATH ?? '',
+        AGENT_WORKSPACE: workspace,
+        MUPPET_CREDENTIALS_FILE: credentials,
+      },
+    }
+  );
+  const [stdout, code] = await Promise.all([
+    new Response(child.stdout).text(),
+    child.exited,
+  ]);
+  expect(code).toBe(0);
+  const listed = [...stdout.matchAll(/^- (\S+) \(/gm)].map(([, name]) => name);
+  expect(listed.sort()).toEqual(
+    capabilityModules.map(({ name }) => name).sort()
+  );
 }, 60_000);

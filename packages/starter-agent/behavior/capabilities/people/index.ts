@@ -3,7 +3,6 @@
  * next to this file. Everything here stays on this machine: nothing these
  * return goes in notes, tasks, issues, PRs, commits, or Macro docs.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import { z } from 'zod';
@@ -172,6 +171,3 @@ export const peopleModule = module({
     appraiseCall,
   },
 });
-
-export const peopleCapabilities =
-  behavior<PeopleContext>().capability(peopleModule);

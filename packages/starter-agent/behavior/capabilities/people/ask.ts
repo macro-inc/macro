@@ -11,8 +11,8 @@ import type { agentClaude, Query } from '../../agent/claude.ts';
 import type { Ask } from './appraise.ts';
 import { askTimeoutMs } from './config.ts';
 
-/** The ledger's name for what an appraisal spent. */
-const spendEvent = 'people.ask';
+/** The ledger's name for what an appraisal spent, unless the caller names its own. */
+const appraisalEvent = 'people.ask';
 
 /** How the area runs Claude Code: what the agent's own wakes run it with. */
 export type PeopleClaude = {
@@ -41,12 +41,15 @@ export const sdkAsk =
     query,
     defaultModel,
     claude,
+    spendEvent = appraisalEvent,
   }: {
     readonly query: Query;
     readonly defaultModel: string;
     readonly claude: PeopleClaude;
+    /** What the ledger calls this spend. */
+    readonly spendEvent?: string;
   }): Ask =>
-  async (prompt, { model, system, timeoutMs } = {}) => {
+  async (prompt, { model, system, timeoutMs, thinking } = {}) => {
     const abort = new AbortController();
     const timer = setTimeout(() => abort.abort(), timeoutMs ?? askTimeoutMs);
     const { argv, spawn } = claude.sandbox;
@@ -69,6 +72,7 @@ export const sdkAsk =
                   spawn([...argv, command, ...args], options),
               }),
           ...(system === undefined ? {} : { systemPrompt: system }),
+          ...(thinking === false ? { thinking: { type: 'disabled' } } : {}),
         },
       })) {
         if (message.type !== 'result') continue;

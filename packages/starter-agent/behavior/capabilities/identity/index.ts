@@ -2,7 +2,6 @@
  * Identity: who the agent is, as its owner told it. One markdown file in its
  * memory, which the agent writes whole and is shown on every wake.
  */
-import { behavior } from '@macro-inc/muppet/core/behavior';
 import { module } from '@macro-inc/muppet/core/capability';
 import type { Base } from '../../context/index.ts';
 
@@ -57,5 +56,3 @@ export const identityModule = module({
   file: import.meta.path,
   functions: { readIdentity, writeIdentity },
 });
-
-export const identityCapabilities = behavior<Base>().capability(identityModule);
