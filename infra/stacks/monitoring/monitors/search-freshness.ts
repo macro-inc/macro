@@ -112,10 +112,10 @@ const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:un
 const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen} by {entity_type}.as_count()`;
 const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
 
-// The probe runs in prod once its prod user's key is in Doppler
-// (services/search_freshness_probe/AGENTS.md). Until then a heartbeat would
-// report it silent every hour, so it is declared only from then; the other
-// probe monitors stay quiet without data.
+// The probe runs in prod only once RUNS_IN_PROD is set in
+// infra/stacks/search-freshness-probe/service.ts. Until then a heartbeat
+// would report it silent every hour, so it is declared only from then; the
+// other probe monitors stay quiet without data.
 const PROBE_RUNS_IN_PROD = false;
 
 const TITLES = {

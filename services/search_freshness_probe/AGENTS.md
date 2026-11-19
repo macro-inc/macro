@@ -31,16 +31,16 @@ API besides `GET /health`.
 
 ## Config (Doppler project `search-freshness-probe`, `dev` and `prd`)
 
-`PROBE_USER_API_KEY`: a user API key (`mak_...`) of the probe user in that
-environment. Required, no fallback. Dev runs as a test account until a
-dedicated one exists. `ENVIRONMENT` picks the gateway (`ApiGatewayUrl`);
-`OVERRIDE_API_GATEWAY_URL` points it elsewhere.
+`PROBE_USER_API_KEY`: a user API key (`mak_...`) of the environment's
+dedicated probe user. Required, no fallback. `ENVIRONMENT` picks the gateway
+(`ApiGatewayUrl`); `OVERRIDE_API_GATEWAY_URL` points it elsewhere.
 
 ## Recipes
 
-- Seed the fixtures once per probe user: an agent session, and a call record
-  with a transcript (one without is never indexed), each titled `Search probe`.
-  Until one exists, that type's rounds are `write_failed` (`NoFixture`).
+- Seed a call record once per probe user: one with a transcript (one without
+  is never indexed), titled `Search probe`. Until one exists, call rounds are
+  `write_failed` (`NoFixture`). The probe creates its agent session itself
+  when search shows none, once per process; an idle session costs nothing.
 - Run it against dev from a machine, with the key of a user no running probe
   acts as (see Gotchas): `ENVIRONMENT=dev PORT=<free port>
   PROBE_USER_API_KEY=... RUST_LOG=search_freshness_probe=debug cargo run -p
@@ -51,6 +51,12 @@ dedicated one exists. `ENVIRONMENT` picks the gateway (`ApiGatewayUrl`);
 - `cargo test -p search_freshness_probe` (no database needed; `SQLX_OFFLINE=true`)
 
 ## Gotchas
+
+- Nothing the probe makes may be shared: the probe user may belong to a team.
+  A new document or project starts with the team's default link share, so the
+  probe turns it off right after creating one, and deletes one it cannot. Its
+  channel is private with no other member, its property definition is
+  user-scoped, sessions start unshared, and it never @mentions anyone.
 
 - Never run two probes as one user at once: each renames the same fixtures, so
   each sees the other's title and counts a miss. The stack deploys with

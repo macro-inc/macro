@@ -18549,6 +18549,7 @@ dependencies = [
  "macro_tower_layers",
  "messages",
  "model",
+ "models_permissions",
  "models_properties",
  "models_search",
  "opentelemetry",

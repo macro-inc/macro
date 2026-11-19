@@ -184,8 +184,9 @@ dropped, or indexed wrongly, or search no longer finds the entity.
 More than half of one type's rounds in 15 minutes failed to write or to
 search. Freshness of that type is not measured meanwhile.
 
-- `write_failed` with `NoFixture`: the probe user has no agent session or call
-  record titled `Search probe`; seed one (see the probe's AGENTS.md).
+- `write_failed` with `NoFixture`: the probe user has no call record titled
+  `Search probe`; seed one (see the probe's AGENTS.md). The probe creates its
+  agent session itself.
 - Other write failures: the `search.freshness_probe.request` span names the
   route and status. A 401 means the probe user's key was revoked.
 - `search_failed`: searches failed for 30 s in a row, so `POST /dss/search`

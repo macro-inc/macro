@@ -17,6 +17,10 @@ import {
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
+// Prod stays off until its probe user is ready: then set this, and
+// PROBE_RUNS_IN_PROD in infra/stacks/monitoring/monitors/search-freshness.ts.
+const RUNS_IN_PROD = false;
+
 // Shutdown waits for a write in progress (up to two 10 s requests), then
 // deletes what the probe created (a project takes two), so 30 s can be short.
 const STOP_TIMEOUT_SECONDS = 60;
@@ -127,7 +131,7 @@ export class SearchFreshnessProbe extends pulumi.ComponentResource {
       BASE_NAME,
       {
         cluster: args.ecsClusterArn,
-        desiredCount: 1,
+        desiredCount: stack === 'prod' && !RUNS_IN_PROD ? 0 : 1,
         // Stop the old task before starting the new one: two probes renaming
         // the same fixture would each see the other's title and count a miss.
         deploymentMinimumHealthyPercent: 0,

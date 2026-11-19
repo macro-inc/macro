@@ -9,9 +9,9 @@ is 443 only.
 
 ## Config (Doppler project `search-freshness-probe`, `dev` and `prd`)
 
-`PROBE_USER_API_KEY`, the probe user's key in that environment. This stack
-writes nothing to Doppler. `bootstrap_pending` in `.github/services-config.json`
-keeps it undeployed until both configs hold the key.
+`PROBE_USER_API_KEY`, the key of the environment's dedicated probe user. This
+stack writes nothing to Doppler. Prod runs no task until `RUNS_IN_PROD` in
+`service.ts` is set.
 
 ## Checks
 

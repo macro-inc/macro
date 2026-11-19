@@ -18,13 +18,31 @@ async fn server() -> (MockServer, MacroApi, UnifiedSearch) {
 }
 
 #[tokio::test]
-async fn no_marked_session_means_no_fixture() {
+async fn with_no_session_titled_for_it_the_probe_creates_one_once() {
+    let (server, api, search) = server().await;
+    let session = Uuid::new_v4();
+    Mock::given(method("POST"))
+        .and(path("/agent-harness/agent-sessions"))
+        .and(body_json(json!({})))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({"session": {"id": session}})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let mut sessions = AgentSessions::new(api, search);
+
+    let found = sessions.find().await.expect("created");
+    // Search does not show the new session yet; it is not created twice.
+    let again = sessions.find().await.expect("the same one");
+
+    assert_eq!(found, Some(EntityId(session)));
+    assert_eq!(again, found);
+}
+
+#[tokio::test]
+async fn no_marked_call_record_means_no_fixture() {
     let (_server, api, search) = server().await;
 
-    let found = AgentSessions::new(api, search)
-        .find()
-        .await
-        .expect("searched");
+    let found = Calls::new(api, search).find().await.expect("searched");
 
     assert_eq!(found, None);
 }

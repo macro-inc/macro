@@ -13,6 +13,7 @@ use channels::domain::models::{ChannelType, CreateChannelRequest};
 use messages::domain::models::PostMessage;
 use messages::domain::ports::MessagePatch;
 use model::project::request::{CreateProjectRequest, PatchProjectRequestV2};
+use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use reqwest::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -65,6 +66,26 @@ struct ReplaceMarkdown<'a> {
     expected_revision: String,
 }
 
+/// No link share and no team share: only the probe user can open the entity.
+/// A new document or project starts with the owner's team's default link
+/// share, which lets anyone in that team open it by id.
+fn private() -> UpdateSharePermissionRequestV2 {
+    UpdateSharePermissionRequestV2 {
+        link_share: Some(None),
+        link_share_access_level: None,
+        team_share_access_level: Some(None),
+        channel_share_permissions: None,
+    }
+}
+
+/// Mirrors `documents::domain::models::EditDocumentServiceArgs`'
+/// `sharePermission` field.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ShareDocument {
+    share_permission: UpdateSharePermissionRequestV2,
+}
+
 /// Mirrors `documents::domain::models::EditDocumentServiceArgs`' name field.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -72,7 +93,8 @@ struct RenameDocument {
     document_name: String,
 }
 
-/// Creates a markdown document titled with `title`, holding `markdown`.
+/// Creates a markdown document titled with `title`, holding `markdown`,
+/// shared with no one. One that cannot be made private is deleted.
 pub(super) async fn create_markdown(
     api: &MacroApi,
     title: &Token,
@@ -91,7 +113,28 @@ pub(super) async fn create_markdown(
             }),
         )
         .await?;
-    Ok(EntityId(created.document_id))
+    let id = EntityId(created.document_id);
+
+    let shared = api
+        .send_done(
+            Call::new(
+                Method::PATCH,
+                "/dss/documents/{document_id}",
+                format!("/dss/documents/{id}"),
+            ),
+            Some(&ShareDocument {
+                share_permission: private(),
+            }),
+            &[],
+        )
+        .await;
+    if let Err(error) = shared {
+        if let Err(purge) = purge_document(api, id).await {
+            tracing::warn!(error = ?purge, entity_id = %id, "the probe could not delete a document it could not make private");
+        }
+        return Err(error);
+    }
+    Ok(id)
 }
 
 /// Deletes a document for good. A trashed document stays in search.
@@ -362,7 +405,33 @@ impl CreatedWrites for Projects {
                 }),
             )
             .await?;
-        Ok(EntityId(created.data.id))
+        let id = EntityId(created.data.id);
+
+        // Shared with no one, like the probe's documents; one that cannot be
+        // made private is deleted.
+        let shared = self
+            .api
+            .send_done(
+                Call::new(
+                    Method::PATCH,
+                    "/dss/v2/projects/{project_id}",
+                    format!("/dss/v2/projects/{id}"),
+                ),
+                Some(&PatchProjectRequestV2 {
+                    name: None,
+                    project_parent_id: None,
+                    share_permission: Some(private()),
+                }),
+                &[],
+            )
+            .await;
+        if let Err(error) = shared {
+            if let Err(delete) = self.delete(id).await {
+                tracing::warn!(error = ?delete, entity_id = %id, "the probe could not delete a project it could not make private");
+            }
+            return Err(error);
+        }
+        Ok(id)
     }
 
     async fn set(&mut self, id: EntityId, _: Title, token: &Token) -> Result<(), ApiError> {

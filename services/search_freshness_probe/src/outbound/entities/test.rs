@@ -4,6 +4,11 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::*;
 
+/// The share settings that leave an entity to its owner alone.
+static PRIVATE: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(
+    || json!({"linkShare": null, "teamShareAccessLevel": null, "channelSharePermissions": null}),
+);
+
 async fn server() -> (MockServer, MacroApi) {
     let server = MockServer::start().await;
     let api = MacroApi::new(&server.uri(), "mak_key").expect("a valid key");
@@ -33,6 +38,13 @@ async fn a_document_is_created_with_its_title_and_body_tokens() {
         .expect(1)
         .mount(&server)
         .await;
+    Mock::given(method("PATCH"))
+        .and(path(format!("/dss/documents/{}", id(1))))
+        .and(body_json(json!({"sharePermission": PRIVATE.clone()})))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
 
     let created = Documents::new(api)
         .create(&[(TitleOrBody::Body, body), (TitleOrBody::Title, title)])
@@ -40,6 +52,37 @@ async fn a_document_is_created_with_its_title_and_body_tokens() {
         .expect("created");
 
     assert_eq!(created, EntityId(id(1)));
+}
+
+#[tokio::test]
+async fn a_document_that_cannot_be_made_private_is_deleted_and_fails_the_create() {
+    let (server, api) = server().await;
+    Mock::given(method("POST"))
+        .and(path("/dss/documents/create_markdown"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "documentId": id(1),
+            "documentMetadata": {},
+            "token": "t",
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("PATCH"))
+        .and(path(format!("/dss/documents/{}", id(1))))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path(format!("/dss/documents/{}/permanent", id(1))))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let created = Documents::new(api)
+        .create(&[(TitleOrBody::Title, Token::random())])
+        .await;
+
+    assert!(created.is_err());
 }
 
 #[tokio::test]
@@ -186,7 +229,7 @@ async fn a_project_is_created_renamed_and_purged() {
     Mock::given(method("PATCH"))
         .and(path(format!("/dss/v2/projects/{}", id(4))))
         .respond_with(ResponseTemplate::new(200))
-        .expect(1)
+        .expect(2)
         .mount(&server)
         .await;
     Mock::given(method("DELETE"))
@@ -211,11 +254,14 @@ async fn a_project_is_created_renamed_and_purged() {
     projects.delete(project).await.expect("purged");
 
     let requests = server.received_requests().await.expect("recorded");
-    let rename: serde_json::Value = requests[1].body_json().expect("a JSON body");
+    let share: serde_json::Value = requests[1].body_json().expect("a JSON body");
+    assert_eq!(share["sharePermission"], *PRIVATE);
+    assert_eq!(share["name"], serde_json::Value::Null);
+    let rename: serde_json::Value = requests[2].body_json().expect("a JSON body");
     assert_eq!(rename["name"], renamed.title());
     // The purge route skips a project not in the trash, so it is trashed
     // first.
-    let deletes: Vec<_> = requests[2..]
+    let deletes: Vec<_> = requests[3..]
         .iter()
         .map(|request| request.url.path().to_owned())
         .collect();

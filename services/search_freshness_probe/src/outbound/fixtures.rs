@@ -1,14 +1,16 @@
-//! The fixtures: an agent session and a call record seeded once for the probe
-//! user and titled with the probe's marker. Creating a session provisions a
-//! runtime, and a call record exists only once a call with a transcript is
-//! archived, so the probe renames them instead.
+//! The fixtures: an agent session and a call record of the probe user, titled
+//! with the probe's marker, renamed every round rather than created. A call
+//! record exists only once a call with a transcript is archived, so it is
+//! seeded by hand; the probe creates its agent session itself when it has
+//! none, once, and a session starts shared with no one.
 //!
 //! A fixture is found through search, by its title, and looked up again after
 //! a rename fails. Their rename bodies are spelled out here for the same reason as
 //! in `entities.rs`.
 
 use reqwest::Method;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use super::macro_api::{ApiError, Call, MacroApi};
 use super::search::UnifiedSearch;
@@ -17,6 +19,22 @@ use crate::domain::ports::FixtureWrites;
 
 #[cfg(test)]
 mod test;
+
+/// A session with the deployment's default persona and no prompt: it stays
+/// idle. Every field of the create request is optional.
+#[derive(Serialize)]
+struct CreateSession {}
+
+/// The id of the session created.
+#[derive(Deserialize)]
+struct CreatedSession {
+    session: CreatedSessionId,
+}
+
+#[derive(Deserialize)]
+struct CreatedSessionId {
+    id: Uuid,
+}
 
 /// Mirrors `agent_session::inbound::axum_router`'s rename request.
 #[derive(Serialize)]
@@ -35,12 +53,18 @@ struct RenameCall {
 pub struct AgentSessions {
     api: MacroApi,
     search: UnifiedSearch,
+    /// The session this process created, which search may not show yet.
+    created: Option<EntityId>,
 }
 
 impl AgentSessions {
     /// Sessions renamed through `api` and found through `search`.
     pub fn new(api: MacroApi, search: UnifiedSearch) -> Self {
-        Self { api, search }
+        Self {
+            api,
+            search,
+            created: None,
+        }
     }
 }
 
@@ -50,12 +74,33 @@ impl FixtureWrites for AgentSessions {
     const ENTITY_TYPE: EntityType = EntityType::AgentSession;
 
     async fn find(&mut self) -> Result<Option<EntityId>, ApiError> {
-        Ok(self
+        if let Some(found) = self
             .search
             .fixtures(Self::ENTITY_TYPE)
             .await?
             .first()
-            .copied())
+            .copied()
+        {
+            return Ok(Some(found));
+        }
+        if let Some(created) = self.created {
+            return Ok(Some(created));
+        }
+
+        let created: CreatedSession = self
+            .api
+            .json(
+                Call::new(
+                    Method::POST,
+                    "/agent-harness/agent-sessions",
+                    "/agent-harness/agent-sessions".to_owned(),
+                ),
+                Some(&CreateSession {}),
+            )
+            .await?;
+        let id = EntityId(created.session.id);
+        self.created = Some(id);
+        Ok(Some(id))
     }
 
     async fn rename(&mut self, id: EntityId, title: &Token) -> Result<(), ApiError> {
