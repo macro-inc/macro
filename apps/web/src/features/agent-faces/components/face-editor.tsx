@@ -11,6 +11,10 @@ import {
   partsOfTab,
 } from '../core/face-tabs';
 import type { FaceDraft } from '../primitives/create-face-draft';
+import {
+  createFaceSuggestions,
+  sameFace,
+} from '../primitives/create-face-suggestions';
 import { FaceImage } from './face-image';
 
 const PREVIEW_SIZE = 32;
@@ -44,8 +48,9 @@ const PART_LABEL: Record<FacePart, TranslationKey> = {
 };
 
 /**
- * The parts of a face, a tab at a time: pick an option to pin it, Shuffle for
- * a new face keeping the pins, Reset to unpin everything, or a photo instead.
+ * Eight suggested faces to pick from (New faces replaces them; the chosen face
+ * stays chosen), then the chosen face's parts, a tab at a time: pick an option
+ * to pin it, Reset to unpin everything, or a photo instead.
  * While a photo is chosen it offers to replace it or go back to the face.
  */
 export function FaceEditor(props: {
@@ -55,6 +60,7 @@ export function FaceEditor(props: {
   fullWidthTabs?: boolean;
 }) {
   const [tab, setTab] = createSignal<FaceTab>('head');
+  const suggestions = createFaceSuggestions();
   let picker: HTMLInputElement | undefined;
 
   return (
@@ -75,6 +81,43 @@ export function FaceEditor(props: {
         when={props.draft.photo()}
         fallback={
           <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1.5" data-face-suggestions>
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs text-ink-muted">
+                  {t('agentFaces.suggestions')}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => suggestions.regenerate()}
+                >
+                  <ArrowsClockwiseIcon class="size-4" />
+                  {t('agentFaces.newFaces')}
+                </Button>
+              </div>
+              <div class="grid grid-cols-8 gap-1.5 max-sm:grid-cols-4">
+                <Index each={suggestions.faces()}>
+                  {(face, index) => (
+                    <button
+                      type="button"
+                      aria-label={t('agentFaces.suggestion', {
+                        number: index + 1,
+                      })}
+                      aria-pressed={sameFace(face(), props.draft.face())}
+                      class="flex items-center justify-center rounded-full outline-2 outline-offset-1 outline-transparent aria-pressed:outline-ink focus-visible:ring-2 focus-visible:ring-edge-focus touch:min-h-[44px]"
+                      onClick={() => props.draft.choose(face())}
+                    >
+                      <FaceImage
+                        face={face()}
+                        size={36}
+                        initials={props.initials}
+                      />
+                    </button>
+                  )}
+                </Index>
+              </div>
+            </div>
             <Tabs
               aria-label={t('agentFaces.part')}
               size="sm"
@@ -99,15 +142,6 @@ export function FaceEditor(props: {
               </For>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => props.draft.shuffle()}
-              >
-                <ArrowsClockwiseIcon class="size-4" />
-                {t('agentFaces.shuffle')}
-              </Button>
               <Button
                 type="button"
                 variant="ghost"

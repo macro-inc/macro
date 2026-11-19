@@ -256,16 +256,18 @@ see only the people invite. Each entry opens its own form: **Invite Human** and
 **Invite your team** the people invite, **Invite Agent** and **Invite agents**
 the agent form, and neither has a People/Agent switch. **Invite an agent**
 asks only for a name and the agent's computer size, with no explanatory text
-around them: a 64px picture at the top left, beside the field labelled
-**Name your agent teammate**, then **Computer** (layout A,
+around them: a 64px picture at the top left, beside the field headed
+**Name it**, then **Give it a computer** (layout A,
 `components/agent-invite-layout-a.tsx`; the form hands it named parts so
 another layout can replace it). Voice and role come later, and the agent asks
 what to take on once it is online. With `ENABLE_AGENT_FACES`, each opening
 starts with a random face in that picture. **Shuffle face** changes its seed
-and keeps pinned parts. **Edit picture** opens tabs for Head, Hair, Face,
-Extras and Outfit; choosing a part pins it, **Any** unpins just that part,
+and keeps pinned parts. **Edit picture** opens eight suggested faces at the
+top: tapping one chooses it, and **New faces** replaces the eight while the
+chosen face stays chosen. Below them, tabs for Head, Hair, Face, Extras and
+Outfit; choosing a part pins it, **Any** unpins just that part,
 and **Reset** clears all pins. Desktop uses a popover; phones stack a picture
-sheet over the invite. **Upload photo** replaces the preview and hides Shuffle;
+sheet over the invite. **Upload photo** replaces the preview and hides **Shuffle face**;
 **Use a generated face** brings back the same draft face. Add saves the face
 recipe and uploads a PNG for other clients; a failed PNG upload still saves
 the recipe. A failed photo upload still adds the agent and reports the failure.

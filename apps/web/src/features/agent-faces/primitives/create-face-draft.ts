@@ -21,6 +21,8 @@ export type FaceDraft = {
   photo: Accessor<FacePhoto | undefined>;
   /** A new seed; pinned parts stay. */
   shuffle: () => void;
+  /** Use `face` as it is: a suggestion the viewer picked. */
+  choose: (face: AgentFace) => void;
   /** Fix `part` to its option at `index`. */
   pin: (part: FacePart, index: number) => void;
   /** Let the seed choose this part again. */
@@ -51,6 +53,7 @@ export function createFaceDraft(
     face,
     photo,
     shuffle: () => setFace((current) => shuffleFace(current)),
+    choose: (chosen) => setFace(chosen),
     pin: (part, index) =>
       setFace((current) => ({
         ...current,

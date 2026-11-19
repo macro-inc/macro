@@ -1,6 +1,8 @@
 export default {
   editFace: 'Edit picture',
-  shuffle: 'Shuffle',
+  suggestions: 'Faces',
+  newFaces: 'New faces',
+  suggestion: 'Face {{number}}',
   shuffleFace: 'Shuffle face',
   reset: 'Reset',
   any: 'Any',

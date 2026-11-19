@@ -490,9 +490,7 @@ async function openInviteAgent(page: Page) {
 
 async function fillAda(page: Page) {
   const dialog = page.getByRole('dialog');
-  await dialog
-    .getByRole('textbox', { name: 'Name your agent teammate' })
-    .fill('Ada');
+  await dialog.getByRole('textbox', { name: 'Name it' }).fill('Ada');
 }
 
 test('adding an agent waits in the dialog until it is online, then closes into its DM', async ({
@@ -505,7 +503,7 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   // Add is always pressable: with no name it marks the field and focuses it.
   const add = dialog.getByRole('button', { name: /^Add/ });
   const nameField = dialog.getByRole('textbox', {
-    name: 'Name your agent teammate',
+    name: 'Name it',
   });
   await screenshot(page, testInfo, 'add-agent-empty');
   await add.click();
@@ -1122,22 +1120,40 @@ test('a DM with an agent teammate that is not running says so', async ({
 });
 
 for (const dark of [false, true]) {
-  test(`face editor keeps pinned choices through shuffle and restores the face after a photo (${dark ? 'dark' : 'light'})`, async ({
+  test(`face editor picks a suggested face, keeps it through New faces and restores it after a photo (${dark ? 'dark' : 'light'})`, async ({
     page,
   }, testInfo) => {
     await scriptAuthService(page);
     await page.goto(dark ? '/?dark' : '/');
     const dialog = await openInviteAgent(page);
-    await dialog
-      .getByRole('textbox', { name: 'Name your agent teammate' })
-      .fill('Ada');
+    await dialog.getByRole('textbox', { name: 'Name it' }).fill('Ada');
     await dialog
       .getByRole('button', { name: 'Edit picture', exact: true })
       .click();
     const editor = page.locator('[data-face-editor]');
+    const preview = page.locator('[data-face-slot] img').first();
+    const suggestions = editor.locator('[data-face-suggestions]');
+    await expect(
+      suggestions.getByRole('button', { name: /^Face \d$/ })
+    ).toHaveCount(8);
+    // Picking a suggestion chooses that face.
+    const third = suggestions.getByRole('button', {
+      name: 'Face 3',
+      exact: true,
+    });
+    await third.click();
+    await expect(third).toHaveAttribute('aria-pressed', 'true');
+    const chosen = await preview.getAttribute('src');
+    // New faces replaces the eight; the chosen face stays chosen.
+    await suggestions
+      .getByRole('button', { name: 'New faces', exact: true })
+      .click();
+    await expect(preview).toHaveAttribute('src', chosen ?? '');
+    await expect(
+      suggestions.getByRole('button', { name: /^Face \d$/ })
+    ).toHaveCount(8);
     const shape = editor.locator('[data-face-part="head"]');
     await shape.getByRole('button', { name: 'Shape 2', exact: true }).click();
-    await editor.getByRole('button', { name: 'Shuffle', exact: true }).click();
     await expect(
       shape.getByRole('button', { name: 'Shape 2', exact: true })
     ).toHaveAttribute('aria-pressed', 'true');
@@ -1148,7 +1164,6 @@ for (const dark of [false, true]) {
     await expect(
       shape.getByRole('button', { name: 'Any Shape', exact: true })
     ).toHaveAttribute('aria-pressed', 'true');
-    const preview = page.locator('[data-face-slot] img').first();
     const faceBeforePhoto = await preview.getAttribute('src');
     await editor.locator('[data-face-photo-input]').setInputFiles({
       name: 'photo.png',

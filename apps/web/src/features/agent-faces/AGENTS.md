@@ -11,7 +11,8 @@ draws them everywhere else. Behind `ENABLE_AGENT_FACES` (env-only, on in dev).
 
 - `face-slot.tsx`: the device switch; desktop popover in `views/face-slot.tsx`,
   touch sheet in `views/mobile/face-slot.tsx`.
-- `components/face-editor.tsx`: tabs of parts, Shuffle / Upload photo / Reset.
+- `components/face-editor.tsx`: eight suggested faces (`primitives/create-face-suggestions.ts`;
+  New faces replaces them, the chosen face stays), tabs of parts, Upload photo / Reset.
 - `primitives/create-face-draft.ts`: the face or photo being chosen.
 - `primitives/upload-agent-picture.ts`: PNG + static upload; a face never fails.
 - `views/change-picture-dialog.tsx`: edit later, saved on Save.
@@ -37,5 +38,6 @@ draws them everywhere else. Behind `ENABLE_AGENT_FACES` (env-only, on in dev).
   controls while saving and abort writes when their account scope retires.
 - Saved photos use a saved URL draft and are not uploaded again; only object
   URLs created for picked files are revoked on replacement or cleanup.
-- Each part can be unpinned independently with Any; Shuffle keeps other pins.
+- Each part can be unpinned independently with Any; the slot's ↻ (Shuffle face) keeps pins.
+- Choosing a suggestion replaces the face, pins included; New faces never changes the chosen face.
 - Every part needs a tab in `core/face-tabs.ts`; the type fails otherwise.
