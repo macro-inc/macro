@@ -10,6 +10,7 @@ import {
   makeCreateReminderAction,
   makeFavoriteAction,
   makeMuteAction,
+  notificationSettingsMenuFor,
 } from '@app/features/next-soup/actions';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { EntityTagSubmenu } from '@app/features/property/tags/EntityTagSubmenu';
@@ -59,6 +60,12 @@ import {
   NotificationMuteMenu,
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
+import {
+  NotificationSettingsMenu,
+  NotificationSettingsPage,
+  NotificationSettingsSummary,
+} from '@notifications/components/NotificationSettingsMenu';
+import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 
 import type { ItemType } from '@service-storage/itemType';
 import { Key } from '@solid-primitives/keyed';
@@ -203,6 +210,14 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
             />
           )}
         </Match>
+        <Match when={action().notificationSettingsMenu}>
+          {(menu) => (
+            <NotificationSettingsMenu
+              {...menu()}
+              onActionComplete={() => props.onOpenChange(false)}
+            />
+          )}
+        </Match>
         <Match when={action().copy}>
           <Dropdown.CopyItem
             icon={<Dynamic component={action().icon ?? Copy} class="size-4" />}
@@ -277,15 +292,20 @@ function MobileRender(
 ) {
   const [expandedSubmenu, setExpandedSubmenu] = createSignal<string | number>();
   const sections = () => getSplitFileMenuActionSections(props.groups);
-  const [muting, setMuting] = createSignal(false);
+  // A drill-in page that replaces the actions: mute choices or settings.
+  const [page, setPage] = createSignal<'mute' | 'settings'>();
+  const actions = () => sections().flatMap((section) => section.actions);
   const muteMenu = () =>
-    muting()
-      ? sections()
-          .flatMap((section) => section.actions)
-          .find((action) => action.muteMenu)?.muteMenu
+    page() === 'mute'
+      ? actions().find((action) => action.muteMenu)?.muteMenu
+      : undefined;
+  const settingsMenu = () =>
+    page() === 'settings'
+      ? actions().find((action) => action.notificationSettingsMenu)
+          ?.notificationSettingsMenu
       : undefined;
   const close = () => {
-    setMuting(false);
+    setPage(undefined);
     props.onOpenChange(false);
   };
 
@@ -302,7 +322,7 @@ function MobileRender(
             if (action().muteMenu?.muted) {
               action().muteMenu?.onMute(false);
               close();
-            } else setMuting(true);
+            } else setPage('mute');
           }}
         >
           <Dynamic
@@ -315,6 +335,21 @@ function MobileRender(
           <Show when={!action().muteMenu?.muted}>
             <CaretRight class="size-3.5" />
           </Show>
+        </MobileDrawer.Item>
+      );
+    }
+    if (action().notificationSettingsMenu) {
+      return (
+        <MobileDrawer.Item
+          disabled={action().notificationSettingsMenu?.disabled}
+          onClick={() => setPage('settings')}
+        >
+          <BellSimple class="size-4 shrink-0" />
+          {action().label}
+          <Show when={action().notificationSettingsMenu}>
+            {(menu) => <NotificationSettingsSummary preset={menu().preset} />}
+          </Show>
+          <CaretRight class="size-3.5 shrink-0" />
         </MobileDrawer.Item>
       );
     }
@@ -404,7 +439,7 @@ function MobileRender(
       side="bottom"
       open={props.open}
       onOpenChange={(open) => {
-        if (!open) setMuting(false);
+        if (!open) setPage(undefined);
         props.onOpenChange(open);
       }}
       preventScroll={false}
@@ -416,7 +451,7 @@ function MobileRender(
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
             <Show
-              when={muteMenu()}
+              when={page()}
               fallback={
                 <>
                   <Show when={props.views}>
@@ -499,13 +534,28 @@ function MobileRender(
                 </>
               }
             >
-              {(menu) => (
-                <NotificationMutePage
-                  {...menu()}
-                  onBack={() => setMuting(false)}
-                  onActionComplete={close}
-                />
-              )}
+              <Show
+                when={settingsMenu()}
+                fallback={
+                  <Show when={muteMenu()}>
+                    {(menu) => (
+                      <NotificationMutePage
+                        {...menu()}
+                        onBack={() => setPage(undefined)}
+                        onActionComplete={close}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                {(menu) => (
+                  <NotificationSettingsPage
+                    {...menu()}
+                    onBack={() => setPage(undefined)}
+                    onActionComplete={close}
+                  />
+                )}
+              </Show>
             </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
@@ -556,8 +606,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
   const notificationSource = useGlobalNotificationSource();
+  const channelSettings = useChannelNotificationSettings();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
+    channelSettings,
   });
   const createReminderAction = makeCreateReminderAction({
     onEmailSaved: props.onEmailReminderSaved,
@@ -648,24 +700,39 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     };
   };
 
+  const notificationSettingsOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    const menu =
+      entity && notificationSettingsMenuFor(channelSettings, [entity]);
+    if (!menu) return undefined;
+    return {
+      id: 'notification-settings',
+      label: t('channelSections.notificationSettings'),
+      icon: BellSimple,
+      notificationSettingsMenu: menu,
+      group: 'notifications' as const,
+    };
+  };
+
   const muteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
     if (!entity || !muteAction.canExecute(entity)) return undefined;
+    // With Notification Settings, Mute joins it in a section of its own.
+    const hasSettings = notificationSettingsMenuFor(channelSettings, [entity]);
     const muted = muteAction.isMuted(entity);
+    const muteMenu = muteAction.menu([entity]);
     return {
       id: 'mute',
-      label: muted
-        ? t('entityActions.unmuteNotifications')
-        : t('entityActions.muteNotifications'),
+      label: muted ? muteMenu.unmuteLabel : muteMenu.label,
       icon: muted ? BellSimple : BellSlash,
-      muteMenu: muteAction.menu([entity]),
+      muteMenu,
       action: () => {
         fireAndForget(muteAction.execute([entity]), 'entity-actions');
       },
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
       },
-      group: 'macro' as const,
+      group: hasSettings ? ('notifications' as const) : ('macro' as const),
     };
   };
 
@@ -891,6 +958,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return [
       favoriteOp(),
       muteOp(),
+      notificationSettingsOp(),
       reminderOp(),
       addTagOp(),
       ...(props.entityKind === 'task' &&
@@ -952,6 +1020,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       sender: [],
       sharing: [],
       macro: [],
+      notifications: [],
       file: [],
       delete: [],
     };

@@ -40,6 +40,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { isModality } from '@core/mobile/inputModality';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import type { ChannelEntity, WithNotification } from '@entity';
+import { createChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 import { useCachedChannelsByIds } from '@queries/channel/by-ids';
 import { hydrateChannelNotificationSelection } from '@queries/channel/notification-selection';
 import { fetchChannelSelectionById } from '@queries/channel/selection-by-id';
@@ -1211,6 +1212,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
     favorites,
     dialogOwner: labelDialogOwner,
   });
+  const channelNotifications = createChannelNotificationSettings({
+    labels,
+    resolveConflictChannels: true,
+    favoriteChannelIds: () =>
+      new Set(
+        favorites()
+          .filter((favorite) => favorite.entityType === 'channel')
+          .map((favorite) => favorite.entityId)
+      ),
+  });
 
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
@@ -1420,6 +1431,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     muteSection,
     snoozeSection,
     sectionNotificationsDisabled,
+    channelNotifications,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
     sectionOrder: () => state.sectionOrder,
