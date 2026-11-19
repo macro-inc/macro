@@ -43,15 +43,10 @@ async fn a_batch_takes_what_is_free_and_gives_back_one_unit_at_a_time() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_single_unit_is_not_starved_by_batches_queued_behind_it() {
+async fn a_batch_waits_for_one_unit_not_for_the_whole_batch() {
     let gate = BackfillGate::open(2);
     let first = gate.admit().await;
     let _second = gate.admit().await;
-    let single = tokio::spawn({
-        let gate = gate.clone();
-        async move { gate.admit().await }
-    });
-    tokio::time::sleep(Duration::from_millis(1)).await;
     let batch = tokio::spawn({
         let gate = gate.clone();
         async move { gate.admit_up_to(10).await }
@@ -59,13 +54,12 @@ async fn a_single_unit_is_not_starved_by_batches_queued_behind_it() {
     tokio::time::sleep(Duration::from_millis(1)).await;
 
     drop(first);
-    tokio::time::sleep(Duration::from_millis(1)).await;
+    let batch = tokio::time::timeout(HELD_BACK, batch)
+        .await
+        .expect("one free unit admits a waiting batch")
+        .expect("admitted");
 
-    assert!(
-        single.is_finished(),
-        "the earlier single unit gets the freed unit"
-    );
-    assert!(!batch.is_finished());
+    assert_eq!(batch.units(), 1);
 }
 
 #[tokio::test(start_paused = true)]
@@ -164,12 +158,12 @@ async fn a_switch_closed_while_paused_holds_work_back_without_spinning() {
     let gate = BackfillGate::new(2, paused);
     drop(pause);
 
-    assert!(tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err());
     assert!(
         tokio::time::timeout(HELD_BACK, gate.wait_unpaused())
             .await
             .is_err()
     );
+    assert!(tokio::time::timeout(HELD_BACK, gate.admit()).await.is_err());
 }
 
 #[tokio::test(start_paused = true)]

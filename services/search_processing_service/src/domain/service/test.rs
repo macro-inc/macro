@@ -987,17 +987,18 @@ async fn a_property_page_cancelled_while_paused_is_not_counted() {
     let (progress, cancel) = detached();
     let (pause, paused) = tokio::sync::watch::channel(false);
     let gate = BackfillGate::new(20, paused);
-    // The pause arrives after the page boundary, so the page's writes wait.
-    pause.send_replace(true);
     let canceller = cancel.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_secs(30)).await;
         canceller.cancel();
     });
 
+    // The pause arrives while the page is fetched, after the page boundary,
+    // so the page's writes wait on it.
     let receipt = tokio::time::timeout(
         std::time::Duration::from_secs(60),
         drain_property_source(&indexer, &gate, &progress, &cancel, |offset| {
+            pause.send_replace(true);
             source.fetch_page(offset)
         }),
     )
