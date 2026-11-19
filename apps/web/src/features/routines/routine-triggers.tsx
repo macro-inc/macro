@@ -145,13 +145,18 @@ export function RoutineTriggers(props: {
               )}
             </Show>
             <Show when={eventScopeKind(trigger()) === 'WEBHOOK'}>
-              <RoutineWebhookUrl
-                state={
-                  props.routineId && hasWebhookTrigger(props.triggers)
-                    ? webhook()
-                    : undefined
-                }
-              />
+              <Show when={!webhooks().loading}>
+                <RoutineWebhookUrl
+                  off={!webhooks().enabled}
+                  state={
+                    webhooks().enabled &&
+                    props.routineId &&
+                    hasWebhookTrigger(props.triggers)
+                      ? webhook()
+                      : undefined
+                  }
+                />
+              </Show>
               <RoutinePayloadTests
                 subject="JSON body"
                 pathPlaceholder="status"

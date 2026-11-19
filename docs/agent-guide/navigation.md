@@ -1492,24 +1492,29 @@ routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
 **Webhooks** (**Webhook received**) is offered while `enable-routine-webhooks`
-is on (on by default in development), whatever `enable-event-routines` says:
-the server serves webhook routines without either flag. A saved webhook trigger
+is on, whatever `enable-event-routines` says. The server checks the same flag
+for the routine's owner on every webhook route and delivery, so it follows
+PostHog in development too (`VITE_ENABLE_ROUTINE_WEBHOOKS` overrides only the
+menu). While it is off, a saved webhook trigger's panel reads **Webhooks
+aren’t available on your account yet, so this trigger doesn’t run. You can
+still remove it.** A saved webhook trigger
 reads **Webhook received at its URL**, where **its URL** reopens its panel;
 the panel shows **Webhook URL** and **Only when the JSON
 body…** rows (the GitHub payload rows, over the POSTed JSON). Until the
 routine is saved with the trigger (in the **Add trigger** panel too) it says
 **Add this trigger and save the routine to get its URL.**; then **Create
 URL** in the saved trigger's panel mints one (routine owner with edit access, in a person's own session;
-the server answers 409 until a webhook trigger is saved). The URL, a curl
-example with a JSON body, and under **Keep the secret out of the URL** the
-bearer address and secret, each with **Copy**, show only until the panel
-closes. Afterwards it reads **Made <date>, last used <date>** with **New URL**
-(the old one stops working at once) and **Delete URL**. A POST
-(`/scheduled-action/hooks/<hook>/<secret>`, or `/scheduled-action/hooks/<hook>` with
-`Authorization: Bearer <secret>`) answers 202 `{"runId"}`, 200 `{"runId":
-null}` when the body fails the trigger's tests, 409 while the routine is
-paused, and 404 for any wrong, rotated or removed URL. Bodies are UTF-8 text
-up to 64 KiB; a code step reads JSON as `trigger.item.webhook.json`.
+the server answers 409 until a webhook trigger is saved). The URL and its
+**Secret**, each with **Copy**, and a curl example that sends the secret as
+`Authorization: Bearer` with a JSON body, show only until the panel closes.
+Afterwards it reads **Made <date>, last used <date>** with **New URL** (the
+old one stops working at once) and **Delete URL**. A POST to
+`/scheduled-action/hooks/<hook>` with `Authorization: Bearer <secret>` answers
+202 `{"runId"}`, 200 `{"runId": null}` when the body fails the trigger's
+tests, 409 while the routine is paused, and an empty 404 for any wrong,
+rotated or removed secret, while the owner's flag is off, and for a secret
+put in the path (`/hooks/<hook>/<secret>`), as for any unknown route.
+Bodies are UTF-8 text up to 64 KiB; a code step reads JSON as `trigger.item.webhook.json`.
 
 Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email

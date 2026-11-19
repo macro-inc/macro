@@ -59,6 +59,8 @@ function CopyRow(props: { label: string; value: string }) {
 export function RoutineWebhookUrl(props: {
   /** Undefined until the routine is saved with a webhook trigger. */
   state: RoutineWebhookState | undefined;
+  /** Webhooks are off for the person, so the trigger never runs. */
+  off?: boolean;
 }) {
   // Loads once per saved panel: the state changes with every read, but
   // a reload would drop the secret shown since the last one.
@@ -72,6 +74,12 @@ export function RoutineWebhookUrl(props: {
     <div class="grid min-w-0 gap-2">
       <span class="text-xs font-medium text-ink-muted">Webhook URL</span>
       <Switch>
+        <Match when={props.off}>
+          <p class="text-xs text-ink-muted">
+            Webhooks aren’t available on your account yet, so this trigger
+            doesn’t run. You can still remove it.
+          </p>
+        </Match>
         <Match when={!props.state}>
           <p class="text-xs text-ink-muted">
             Add this trigger and save the routine to get its URL.
