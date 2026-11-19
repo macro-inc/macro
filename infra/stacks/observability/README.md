@@ -267,6 +267,12 @@ OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
 Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
 ```
 
+The ALB no longer sends `grafana.` or `otlp.macro-internal.com` here: the
+observability EKS cluster serves them (`infra/k8s/observability`, whose
+OpenTofu layer adds their listener rules on this stack's HTTPS listener). The
+host's Grafana and backends stay reachable over SSM until a host change removes
+them.
+
 - One `m7i.xlarge` (4 vCPU / 16 GiB) in a new VPC's private `us-east-2a`
   subnet in Ohio, separate from production in `us-east-1`. This is a provisional
   pilot size, not a capacity commitment.
@@ -524,9 +530,9 @@ to roll out. The steps, all in `deploy/release.ts`:
    permission fails here instead of after the old host is gone.
 6. **Roll out** (not in a dry run). `pulumi up --target <instance> --target-dependents`,
    so nothing else changes even if the stack moved since the preview. Then it waits
-   up to 25 minutes for the new instance to pass both target groups' health
-   checks and for `https://grafana.macro-internal.com/api/health`, and prints how
-   long the update took.
+   up to 25 minutes for the new instance to pass the on-call target group's
+   health check and for `https://oncall.macro-internal.com/health`, and prints
+   how long the update took.
 
 One rollout runs at a time (concurrency group `deploy-observability-prod`,
 never cancelled). When a pull request changes the image, `PR CI` (the `run-ci`

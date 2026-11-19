@@ -25,7 +25,9 @@ export const STACK = 'macro-inc/observability/prod';
 export const IMAGE_BUCKET = 'macro-observability-images-569036502058-us-east-2';
 export const IMPORT_ROLE = 'macro-observability-vmimport';
 export const STACK_PATHS = ['infra/stacks/observability'];
-const GRAFANA_HEALTH = 'https://grafana.macro-internal.com/api/health';
+// Grafana is the observability cluster's; through the ALB this host serves
+// only GoAlert.
+const GOALERT_HEALTH = 'https://oncall.macro-internal.com/health';
 
 const stackDir = process.cwd();
 
@@ -222,11 +224,11 @@ async function waitHealthy(started: number): Promise<void> {
     );
   }
   await waitFor(
-    'Grafana to answer through the load balancer',
+    'GoAlert to answer through the load balancer',
     300,
     10,
     async () => {
-      const response = await fetch(GRAFANA_HEALTH).catch(() => undefined);
+      const response = await fetch(GOALERT_HEALTH).catch(() => undefined);
       return response?.ok ? true : undefined;
     }
   );
