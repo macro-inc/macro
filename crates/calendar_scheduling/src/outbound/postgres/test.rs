@@ -590,6 +590,19 @@ async fn a_move_waiting_on_the_calendar_holds_a_place_on_both_days(pool: PgPool)
                 .unwrap(),
             1
         );
+        // The booking being moved never takes a place from itself.
+        assert_eq!(
+            repo.daily_bookings(
+                p.id,
+                event_type,
+                start,
+                start + Duration::days(1),
+                Some(moving.booking.id)
+            )
+            .await
+            .unwrap(),
+            0
+        );
     }
     // A refusal would put the move back on its first day, so that day is
     // still full: neither a new booking nor another move may take it.

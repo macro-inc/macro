@@ -1281,12 +1281,21 @@ async fn reschedule_offers_no_times_on_a_day_already_at_its_limit() {
     p.event_types[0].daily_limit = Some(1);
     let p = service.save("admin", None, p).await.unwrap();
     let event = p.event_types[0].id;
-    let full = service.book(p.id, event, request()).await.unwrap();
+    let first_day = request();
     let mut later = request();
     later.starts_at += Duration::days(1);
     let moving = service.book(p.id, event, later).await.unwrap();
-    let full_day = full.booking.starts_at.date_naive();
+    let full_day = first_day.starts_at.date_naive();
     let own_day = moving.booking.starts_at.date_naive();
+    // Before anyone books it, the other day offers replacement times.
+    assert!(
+        !service
+            .replacement_slots(moving.booking.id, moving.token, full_day, None)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let full = service.book(p.id, event, first_day).await.unwrap();
     // The full day offers nothing and refuses the move; the booking's own day
     // still offers other times, since it never takes a place from itself.
     assert!(
