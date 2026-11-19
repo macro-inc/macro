@@ -56,6 +56,7 @@ import type {
   TeamSource,
   TeamViewsSource,
 } from './crm-sources';
+import type { EmailPolicySource } from './email-policy';
 import type {
   AddToPipelineSource,
   PipelineEditor,
@@ -66,6 +67,7 @@ import type {
 } from './pipelines';
 
 export type CrmContext = {
+  createEmailPolicy(): EmailPolicySource;
   EmailThreadMention: Component<{
     threadId: string;
     subject: string;

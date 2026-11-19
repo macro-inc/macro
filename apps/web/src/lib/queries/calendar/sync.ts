@@ -20,6 +20,7 @@ export function invalidateCalendarViews(): void {
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars._def,
   });
+  queryClient.invalidateQueries({ queryKey: calendarKeys.firstSync._def });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,
   });
@@ -81,6 +82,7 @@ export function handleRefreshCalendar(payload: unknown): void {
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars._def,
   });
+  queryClient.invalidateQueries({ queryKey: calendarKeys.firstSync._def });
   queryClient.invalidateQueries({
     queryKey: calendarKeys.joinRequests._def,
   });
