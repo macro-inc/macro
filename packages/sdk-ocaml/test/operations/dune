@@ -1,0 +1,19 @@
+; Every operation in packages/sdk/specs, called with sample arguments and
+; checked against the spec (test_operations.ml). cases.ml is generated from
+; the specs at build time; the specs live outside this dune project, so the
+; rule always reruns.
+
+(rule
+ (targets cases.ml)
+ (deps %{exe:../../gen/main.exe} (universe))
+ (action
+  (system
+   "%{exe:../../gen/main.exe} cases --specs \"$DUNE_SOURCEROOT/../sdk/specs\" --out . --library Macro_sdk --format-as \"$DUNE_SOURCEROOT/test\" > /dev/null")))
+
+(test
+ (name test_operations)
+ (modules cases_support spec_check cases test_operations)
+ (deps (universe))
+ (libraries macro_sdk macro_sdk.runtime yojson uri)
+ (flags
+  (:standard -w -30)))

@@ -38,6 +38,8 @@ const GENERATOR_INPUTS: [&str; 18] = [
 
 fn main() {
     println!("cargo::rerun-if-env-changed={PREBUILT}");
+    // Read by `option_env!` in lib.rs.
+    println!("cargo::rerun-if-env-changed=CODE_MODE_OCAML_DIR");
 
     let directory = match env::var_os(PREBUILT) {
         Some(directory) => PathBuf::from(directory),

@@ -1,9 +1,10 @@
-# JavaScript execution
+# Code execution
 
 ## Scope
 
-Runs a bounded JavaScript program in a fresh Deno process inside the calling
-service. Session authentication, token issuance and execution storage belong to
+Runs a bounded JavaScript program, or an OCaml program compiled to
+WebAssembly first, in a fresh Deno process inside the calling service.
+Session authentication, token issuance and execution storage belong to
 `crates/agent_code_mode` and its composition root.
 
 ## Start here
@@ -16,6 +17,12 @@ service. Session authentication, token issuance and execution storage belong to
 - `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs,
   removing every way to the network but `fetch`, and final JSON protocol.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
+- `src/outbound/ocaml.rs`: the OCaml bundle and the compile step;
+  `src/outbound/ocaml/check.rs`: type-checking OCaml;
+  `src/outbound/ocaml/analyze.rs`: `OcamlAnalyzer`, the `ProgramAnalyzer`
+  that lists the SDK calls (`SdkCall`: service, raw operationId, method,
+  route) a program may call, with the bundle's `macro_sdk_calls`, for the
+  agent permissions gate.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.
 
@@ -77,6 +84,23 @@ with an outline and preview, keeping `reviews`; the frame limit stays the backst
 An unattended result is never summarized: later routine steps read it whole, so
 one over the limit fails the run with a message saying so.
 
+OCaml programs compile against the bundle `code_mode_assets::OCAML_BUNDLE`
+names (`CODE_MODE_OCAML_DIR` at build time, `nix build .#code-mode-ocaml`);
+without one they fail saying so. The bootstrap evaluates wasm_of_ocaml's
+loader by splitting it after its first statement (`(Object));`), so a
+wasm_of_ocaml upgrade that changes the loader's shape fails every OCaml test
+with "unexpected wasm_of_ocaml loader shape". `RunEnvironment::allowed_operations`
+(set by the permission gate, OCaml only; a JavaScript run carrying it fails)
+makes the bootstrap refuse any OCaml request whose `macroSdkOperation`
+service, raw `operationId`, method, host and route don't match one of them,
+or whose path a more specific rival route also matches (a parameter equal to a
+sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
+the analyzer lists each call's `rivals`, from the SDK's routes only: a
+route a service serves outside its OpenAPI spec is not one), reporting it as
+`refused` activity; `None` sends everything as before. The policy check
+(`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
+flags the boundary for OCaml as for JavaScript.
+
 Every Deno child's `code_execution.process` span records how it ended:
 `process.exit_code` or `process.signal`, `process.wall_ms`, `process.cpu_ms`
 and `process.peak_rss_kib` (`outbound/deno/exit.rs`). Peak memory is `VmHWM`
@@ -92,3 +116,8 @@ frame logs one `Deno child ended abnormally` warning with the same fields.
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository
   root with Deno available; real-process tests exercise permissions and cleanup.
+  The OCaml tests (`src/outbound/deno/test/ocaml.rs`) also need the bundle:
+  `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
+  set for the build. Every isolation test of the JavaScript path has an OCaml
+  twin there or is listed as not applying in that file's header; add one
+  with each new one.

@@ -70,6 +70,21 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   agent's own account; a deleted creator falls back to the team owner; no
   provider, no one to follow or a failed load refuses with
   403). Agent git and agent MCP keys share the same check.
+- `src/tool_permissions.rs`: the adapters `crates/agent_permissions` needs
+  (who may edit an agent from `BotService::manageable_agent`, a session's
+  agent and owner from the session repo); its routes
+  (`/agent-tool-permissions/catalog`, `/agents/{id}/tool-permissions[/tighten]`,
+  `/agent-sessions/{id}/tool-permissions`) answer 404 unless the caller has
+  both `enable-ocaml-code-mode` and `enable-agent-permissions`
+  (`code_mode::PermissionsFlag`; off without PostHog).
+  The same service gates OCaml `ExecuteCode` programs
+  (`src/code_mode/permissions.rs`, `PermissionGate`, wired into
+  `RunCredentials` where the build has the OCaml bundle): for an owner with
+  both flags it analyzes the program (`OcamlAnalyzer`), refuses it on any
+  `never` operation or when it can't be analyzed, holds it for the run's
+  account on any `ask` (`macro-sdk` approval), then runs it limited to every
+  analyzed call (`allowed_operations`). Flags off, or JavaScript: nothing
+  changes. `ShowPermissions` is offered by the internal MCP only then.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,

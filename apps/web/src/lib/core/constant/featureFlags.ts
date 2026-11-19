@@ -152,6 +152,27 @@ export const macroConnect = defineFlag({
   env: 'ENABLE_MACRO_CONNECT',
 });
 
+/**
+ * OCaml programs in agents' code mode. The harness reads the same key; the
+ * web reads it only because agent permissions build on it.
+ */
+export const enableOcamlCodeMode = defineFlag({
+  key: 'enable-ocaml-code-mode',
+  env: 'ENABLE_OCAML_CODE_MODE',
+  default: onInDev,
+});
+
+/**
+ * Per-agent permissions for what its code-mode programs may call (Settings →
+ * Agents → an agent → Permissions). Needs `enableOcamlCodeMode` too; the
+ * harness reads the same key and answers 404 while it is off.
+ */
+export const enableAgentPermissions = defineFlag({
+  key: 'enable-agent-permissions',
+  env: 'ENABLE_AGENT_PERMISSIONS',
+  default: onInDev,
+});
+
 /** Browser-style tabs in the macOS desktop title bar; each tab holds a split layout. */
 export const enableDesktopTabs = defineFlag({
   key: 'enable-desktop-tabs',

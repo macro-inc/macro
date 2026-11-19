@@ -1,0 +1,30 @@
+; The policy check on a program it must pass and one it must refuse.
+
+(rule
+ (targets allowed.out)
+ (deps allowed.ml)
+ (action
+  (progn
+   (run %{ocamlc} -bin-annot -w -a -c allowed.ml)
+   (with-stdout-to
+    allowed.out
+    (run %{exe:../code_mode_policy.exe} allowed.cmt)))))
+
+(rule
+ (targets rejected.out)
+ (deps rejected.ml)
+ (action
+  (progn
+   (run %{ocamlc} -bin-annot -w -a -c rejected.ml)
+   (with-stdout-to
+    rejected.out
+    (with-accepted-exit-codes
+     1
+     (run %{exe:../code_mode_policy.exe} rejected.cmt))))))
+
+(rule
+ (alias runtest)
+ (action
+  (progn
+   (diff allowed.expected allowed.out)
+   (diff rejected.expected rejected.out))))

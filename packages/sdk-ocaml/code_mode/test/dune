@@ -1,0 +1,89 @@
+; Code_mode's contract, run under Deno by run.mjs (the bootstrap's side).
+; sample.ml is also the program the bundle check compiles without dune
+; (code-mode-ocaml-sample in nix/cloud-storage.nix).
+
+(executables
+ (names sample raises nan denied)
+ (modes wasm)
+ (enabled_if
+  (= %{profile} wasm))
+ (libraries macro_sdk macro_sdk.runtime macro_sdk_fetch code_mode))
+
+(rule
+ (alias runtest)
+ (enabled_if
+  (= %{profile} wasm))
+ (deps
+  run.mjs
+  (glob_files *.expected.json)
+  (glob_files_rec *.bc.wasm.assets/**))
+ (action
+  (progn
+   (run
+    deno
+    run
+    --no-prompt
+    --no-config
+    --no-lock
+    --no-remote
+    --deny-env
+    --deny-write
+    --deny-run
+    --deny-ffi
+    --deny-sys
+    --allow-read=.
+    --allow-net=127.0.0.1
+    run.mjs
+    %{dep:sample.bc.wasm.js}
+    sample.expected.json)
+   (run
+    deno
+    run
+    --no-prompt
+    --no-config
+    --no-lock
+    --no-remote
+    --deny-env
+    --deny-write
+    --deny-run
+    --deny-ffi
+    --deny-sys
+    --allow-read=.
+    --allow-net=127.0.0.1
+    run.mjs
+    %{dep:raises.bc.wasm.js}
+    raises.expected.json)
+   (run
+    deno
+    run
+    --no-prompt
+    --no-config
+    --no-lock
+    --no-remote
+    --deny-env
+    --deny-write
+    --deny-run
+    --deny-ffi
+    --deny-sys
+    --allow-read=.
+    --allow-net=127.0.0.1
+    run.mjs
+    %{dep:nan.bc.wasm.js}
+    nan.expected.json)
+   (run
+    deno
+    run
+    --no-prompt
+    --no-config
+    --no-lock
+    --no-remote
+    --deny-env
+    --deny-write
+    --deny-run
+    --deny-ffi
+    --deny-sys
+    --allow-read=.
+    --allow-net=127.0.0.1
+    run.mjs
+    %{dep:denied.bc.wasm.js}
+    denied.expected.json))))

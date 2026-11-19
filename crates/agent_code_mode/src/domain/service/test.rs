@@ -74,6 +74,7 @@ impl ExecutionCredentials for Credentials {
         &self,
         identity: &ExecutionIdentity,
         _: &str,
+        _: ProgramLanguage,
         _: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
         self.0
@@ -154,6 +155,7 @@ fn request() -> ExecuteRequest {
     ExecuteRequest {
         source: "export async function main() { return {data: 42, reviews: []}; }".into(),
         timeout_ms: 1000,
+        language: code_execution::domain::Language::Javascript,
     }
 }
 #[tokio::test]
@@ -314,12 +316,15 @@ async fn unfinished_journal_reads_and_retries_report_uncertainty_without_replayi
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: id,
         source: request().source,
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,
         calls: Vec::new(),
         activity: Vec::new(),
         activity_truncated: false,
+        permission: None,
     };
     store.create(session.id, &record).await.unwrap();
     let access = EntityAccessReceipt::dangerously_assert_authenticated_user(
@@ -530,12 +535,15 @@ fn activity_rejects_unknown_operations_and_is_bounded() {
         turn_id: Some(macro_uuid::Uuid::from_u128(1)),
         execution_id: ExecutionId::mint(),
         source: String::new(),
+        language: Default::default(),
+        sdk_fingerprint: None,
         status: ExecutionStatus::Running,
         result: None,
         error: None,
         calls: vec![],
         activity: vec![],
         activity_truncated: false,
+        permission: None,
     };
     super::super::activity::observe(
         &mut record.activity,
@@ -789,5 +797,271 @@ async fn an_unreadable_returned_image_is_reported_without_pixels() {
     assert_eq!(
         json["error"],
         "main succeeded, but image missing could not be shown: return a PNG from the SDK, such as await canvas.render()."
+    );
+}
+
+struct Rollout(bool);
+#[async_trait]
+impl OcamlRollout for Rollout {
+    async fn enabled(&self, _: &macro_user_id::user_id::MacroUserIdStr<'static>) -> bool {
+        self.0
+    }
+}
+
+fn with_ocaml(service: CodeModeService, on: bool) -> CodeModeService {
+    service.with_ocaml(OcamlPrograms {
+        fingerprint: "0.1.0+fixture".into(),
+        rollout: Arc::new(Rollout(on)),
+        permissions: None,
+    })
+}
+
+fn ocaml_request() -> ExecuteRequest {
+    ExecuteRequest {
+        source: "let () = Code_mode.run (fun _ -> `Assoc [(\"data\", `Int 42)])".into(),
+        timeout_ms: 1000,
+        language: code_execution::domain::Language::Ocaml,
+    }
+}
+
+async fn run(
+    service: &CodeModeService,
+    session: &AgentSession,
+    id: ExecutionId,
+    request: ExecuteRequest,
+) -> Result<ExecutionReceipt, CodeModeError> {
+    service
+        .execute(
+            session,
+            id,
+            ai_toolset::actor::ToolActor::Owner,
+            macro_uuid::Uuid::from_u128(1),
+            request,
+            CancellationToken::new(),
+        )
+        .await
+}
+
+#[tokio::test]
+async fn ocaml_is_refused_before_credentials_without_the_bundle_or_the_rollout() {
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    let (no_bundle, credentials, _, _) = service();
+    assert!(!no_bundle.ocaml_enabled(&session).await);
+    let refused = run(&no_bundle, &session, ExecutionId::mint(), ocaml_request()).await;
+    assert!(
+        matches!(refused, Err(CodeModeError::Invalid(message)) if message.contains("OCaml programs are not available"))
+    );
+    let off = with_ocaml(no_bundle, false);
+    assert!(!off.ocaml_enabled(&session).await);
+    assert!(matches!(
+        run(&off, &session, ExecutionId::mint(), ocaml_request()).await,
+        Err(CodeModeError::Invalid(_))
+    ));
+    assert!(credentials.0.lock().unwrap().is_empty());
+    // JavaScript is unaffected by the rollout.
+    let receipt = run(&off, &session, ExecutionId::mint(), request())
+        .await
+        .unwrap();
+    assert_eq!(receipt.status, ExecutionStatus::Succeeded);
+
+    let (service, _, _, _) = service();
+    let no_runner = CodeModeService::new(
+        None,
+        Arc::clone(&service.0.credentials),
+        Arc::clone(&service.0.store),
+        Arc::clone(&service.0.turns),
+        Arc::clone(&service.0.images),
+    );
+    assert!(!with_ocaml(no_runner, true).ocaml_enabled(&session).await);
+}
+
+#[tokio::test]
+async fn ocaml_runs_record_language_and_fingerprint_and_retries_match_language() {
+    let (service, credentials, store, _) = service();
+    let service = with_ocaml(service, true);
+    let session = test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+    assert!(service.ocaml_enabled(&session).await);
+    let id = ExecutionId::mint();
+    let receipt = run(&service, &session, id, ocaml_request()).await.unwrap();
+    assert_eq!(receipt.execution_id, id);
+    let record = store.get(session.id, id).await.unwrap();
+    assert_eq!(record.language, ProgramLanguage::Ocaml);
+    assert_eq!(record.sdk_fingerprint.as_deref(), Some("0.1.0+fixture"));
+    let stored = serde_json::to_value(&record).unwrap();
+    assert_eq!(stored["language"], "ocaml");
+    assert_eq!(stored["sdkFingerprint"], "0.1.0+fixture");
+
+    // The same ID and source is the saved run only in the same language.
+    let retry = run(&service, &session, id, ocaml_request()).await.unwrap();
+    assert_eq!(retry.execution_id, id);
+    assert_eq!(credentials.0.lock().unwrap().len(), 1);
+    let mut javascript = ocaml_request();
+    javascript.language = code_execution::domain::Language::Javascript;
+    let other = run(&service, &session, id, javascript).await.unwrap();
+    assert_ne!(other.execution_id, id);
+    assert_eq!(credentials.0.lock().unwrap().len(), 2);
+    let record = store.get(session.id, other.execution_id).await.unwrap();
+    assert_eq!(record.language, ProgramLanguage::Javascript);
+    assert_eq!(record.sdk_fingerprint, None);
+    // A JavaScript record serializes as before languages: no language, no
+    // fingerprint.
+    let stored = serde_json::to_value(&record).unwrap();
+    assert!(stored.get("sdkFingerprint").is_none());
+    assert!(stored.get("language").is_none(), "{stored}");
+    let read: ExecutionRecord = serde_json::from_value(stored).unwrap();
+    assert_eq!(read.language, ProgramLanguage::Javascript);
+}
+
+#[test]
+fn records_saved_before_languages_read_as_javascript() {
+    let record: ExecutionRecord = serde_json::from_value(json!({
+        "executionId": ExecutionId::mint(),
+        "source": "export async function main() {}",
+        "status": "succeeded",
+        "result": null,
+        "error": null,
+        "calls": [],
+    }))
+    .unwrap();
+    assert_eq!(record.language, ProgramLanguage::Javascript);
+    assert_eq!(record.sdk_fingerprint, None);
+}
+
+/// Credentials that check the program and refuse to run it.
+struct NotRunCredentials(Option<ExecutionPermission>);
+#[async_trait]
+impl ExecutionCredentials for NotRunCredentials {
+    async fn issue(
+        &self,
+        _: &ExecutionIdentity,
+        _: &str,
+        _: ProgramLanguage,
+        _: CancellationToken,
+    ) -> Result<IssuedRun, CodeModeError> {
+        Err(CodeModeError::NotRun(NotRun {
+            message: "This OCaml program did not run.".into(),
+            permission: self.0.clone(),
+        }))
+    }
+}
+
+fn blocked() -> ExecutionPermission {
+    ExecutionPermission::Blocked {
+        operations: vec![GatedOperation {
+            service: "email".into(),
+            operation: "send_message".into(),
+            label: "Send an email".into(),
+            group: "email".into(),
+            group_name: "Email".into(),
+            action: Some(agent_permission_registry::Action::Send),
+            state: agent_permissions::domain::model::PermissionState::Never,
+            origin: agent_permissions::domain::model::Origin::GroupAction,
+        }],
+    }
+}
+
+#[tokio::test]
+async fn a_program_its_permissions_stop_is_recorded_as_failed_with_why() {
+    for permission in [Some(blocked()), None] {
+        let store = Arc::new(MemoryStore::default());
+        let service = with_ocaml(
+            CodeModeService::new(
+                Some(Arc::new(Executor)),
+                Arc::new(NotRunCredentials(permission.clone())),
+                store.clone(),
+                Arc::new(TestTurns::default()),
+                Arc::new(Pixels),
+            ),
+            true,
+        );
+        let session =
+            test_agent_session(AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()));
+        let receipt = run(&service, &session, ExecutionId::mint(), ocaml_request())
+            .await
+            .expect("a receipt, not an error");
+        assert_eq!(receipt.status, ExecutionStatus::Failed);
+        assert_eq!(
+            receipt.error.as_deref(),
+            Some("This OCaml program did not run.")
+        );
+        assert_eq!(receipt.permission, permission);
+        assert_eq!(receipt.result, None);
+        let record = store.get(session.id, receipt.execution_id).await.unwrap();
+        assert_eq!(record.status, ExecutionStatus::Failed);
+        assert_eq!(record.permission, permission);
+        let stored = serde_json::to_value(&record).unwrap();
+        let read: ExecutionRecord = serde_json::from_value(stored.clone()).unwrap();
+        assert_eq!(read.permission, permission);
+        if permission.is_some() {
+            assert_eq!(stored["permission"]["outcome"], "blocked");
+            assert_eq!(
+                serde_json::to_value(&receipt).unwrap()["permission"]["outcome"],
+                "blocked"
+            );
+        }
+    }
+}
+
+#[test]
+fn records_and_receipts_without_a_permission_serialize_as_before() {
+    let id = ExecutionId::from_uuid(macro_uuid::Uuid::from_u128(7));
+    let record = ExecutionRecord {
+        execution_id: id,
+        acting_as: None,
+        turn_id: None,
+        source: "export async function main() {}".into(),
+        language: ProgramLanguage::Javascript,
+        sdk_fingerprint: None,
+        status: ExecutionStatus::Succeeded,
+        result: Some(json!({"data": 1})),
+        error: None,
+        calls: Vec::new(),
+        activity: Vec::new(),
+        activity_truncated: false,
+        permission: None,
+    };
+    assert_eq!(
+        serde_json::to_value(&record).unwrap(),
+        json!({
+            "executionId": "00000000-0000-0000-0000-000000000007",
+            "actingAs": null,
+            "turnId": null,
+            "source": "export async function main() {}",
+            "status": "succeeded",
+            "result": {"data": 1},
+            "error": null,
+            "calls": [],
+            "activity": [],
+            "activityTruncated": false,
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(receipt(&record)).unwrap(),
+        json!({
+            "executionId": "00000000-0000-0000-0000-000000000007",
+            "status": "succeeded",
+            "activity": [],
+            "result": {"data": 1},
+            "error": null,
+        })
+    );
+}
+
+#[test]
+fn a_request_the_gate_refused_is_recorded_as_refused() {
+    let mut activity = Vec::new();
+    let mut truncated = false;
+    super::super::activity::observe(
+        &mut activity,
+        &mut truncated,
+        json!({"id": 1, "service": "contacts", "operation": "getContacts", "status": "refused"}),
+    );
+    assert_eq!(activity.len(), 1);
+    assert_eq!(activity[0].status, RecordedCallStatus::Refused);
+    super::super::activity::finish(&mut activity);
+    assert_eq!(activity[0].status, RecordedCallStatus::Refused);
+    assert_eq!(
+        serde_json::to_value(&activity[0]).unwrap()["status"],
+        "refused"
     );
 }

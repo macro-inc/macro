@@ -8,14 +8,42 @@ use uuid::Uuid;
 #[serde(transparent)]
 pub struct RunId(pub Uuid);
 
-/// A JavaScript ES module exporting an async `main` function.
+/// A program to run: a JavaScript ES module exporting an async `main`
+/// function, or an OCaml `main.ml` calling `Code_mode.run`.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
-    /// Complete JavaScript module, including imports and `export async function main`.
+    /// The complete program: a JavaScript module, including imports and
+    /// `export async function main`, or an OCaml compilation unit.
     pub source: String,
-    /// Total budget including queueing and API requests.
+    /// Total budget including queueing, compiling and API requests.
     pub timeout_ms: u64,
+    /// The language `source` is written in.
+    #[serde(default)]
+    pub language: Language,
+}
+
+/// The language a program is written in.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Language {
+    /// A JavaScript ES module (TypeScript for an unattended program), run by
+    /// Deno directly.
+    #[default]
+    Javascript,
+    /// An OCaml program written against the OCaml SDK and `Code_mode`,
+    /// compiled to WebAssembly against the prebuilt bundle, then run by Deno.
+    Ocaml,
+}
+
+impl Language {
+    /// Its name in spans and the bootstrap's context.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Javascript => "javascript",
+            Self::Ocaml => "ocaml",
+        }
+    }
 }
 
 /// Run-only credentials and destinations supplied by the authenticated host.
@@ -42,6 +70,12 @@ pub struct RunEnvironment {
     /// sees only the hosts it may reach.
     #[serde(skip)]
     pub egress: Egress,
+    /// OCaml only: the only requests the program may send, as the permission
+    /// gate admitted them. The bootstrap refuses any other SDK request, and
+    /// any authenticated request that doesn't name its operation. `None`
+    /// sends every request, as before the gate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allowed_operations: Option<Vec<SdkCall>>,
 }
 
 /// How a program's requests reach the SDK hosts.
@@ -182,7 +216,8 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// Legacy source compilation failure retained for persisted outcomes.
+    /// The program didn't compile, or failed the policy check (OCaml).
+    /// Older persisted outcomes use it for JavaScript too.
     Compile,
     /// Program threw or exited without a result.
     Runtime,
@@ -324,4 +359,74 @@ pub enum CheckError {
     /// The checker process failed or ran out of time.
     #[error("type checking failed to run")]
     Internal,
+}
+
+/// One Macro SDK operation, by the OpenAPI spec it comes from and its raw
+/// `operationId`: the key the permission registry uses.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkOperation {
+    /// The spec's name, such as `storage`.
+    pub service: String,
+    /// The raw `operationId`, such as `create_task_handler`.
+    pub operation_id: String,
+}
+
+impl std::fmt::Display for SdkOperation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{}", self.service, self.operation_id)
+    }
+}
+
+/// One request a program may send: its operation and the route the SDK
+/// sends it to. Two SDK values can share an `operationId` on different routes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkCall {
+    /// The operation, by service and raw `operationId`.
+    #[serde(flatten)]
+    pub operation: SdkOperation,
+    /// HTTP method, uppercase.
+    pub method: String,
+    /// The path below the service's host, `{}` for each parameter segment,
+    /// such as `/documents/{}/markdown`.
+    pub route: String,
+    /// Other operations' routes with this method that a request on `route`
+    /// could also match (`/documents/system_skills` for `/documents/{}`).
+    /// The backstop refuses a request that a more specific one of them
+    /// matches, since the server would route it there.
+    #[serde(default)]
+    pub rivals: Vec<SdkRoute>,
+}
+
+/// A route of a service, `{}` for each parameter segment.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct SdkRoute {
+    /// The service's spec name.
+    pub service: String,
+    /// The path below the service's host.
+    pub route: String,
+}
+
+/// Where a program reaches SDK operations the analysis cannot see.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AnalysisReason {
+    /// What the program does there.
+    pub message: String,
+    /// 1-based line in the program.
+    pub line: u32,
+    /// 1-based column in the program.
+    pub column: u32,
+}
+
+/// Which SDK operations a program may call, read from it without running it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Analysis {
+    /// Every operation the program names, in any branch. May be empty.
+    Calls(std::collections::BTreeSet<SdkCall>),
+    /// The program can reach operations the analysis cannot see; it must be
+    /// rewritten before it can run.
+    CannotAnalyze(Vec<AnalysisReason>),
+    /// The program does not compile, or the policy check refuses it.
+    Diagnostics(Vec<Diagnostic>),
 }

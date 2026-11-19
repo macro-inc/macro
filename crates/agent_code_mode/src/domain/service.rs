@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use agent_session::domain::model::{AgentSession, AgentSessionId};
 use async_trait::async_trait;
-use code_execution::domain::{ExecuteRequest, Limits, Outcome, ProgramExecutor};
+use code_execution::domain::{ExecuteRequest, Language, Limits, Outcome, ProgramExecutor};
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::Semaphore;
@@ -30,6 +30,27 @@ pub trait SessionCodeMode: Send + Sync + 'static {
         access: &EntityAccessReceipt<ViewAccessLevel>,
         execution: ExecutionId,
     ) -> Result<ExecutionRecord, CodeModeError>;
+    /// Whether `session` may run OCaml programs: this deployment has the OCaml
+    /// bundle and the session owner has the rollout. Off when either is missing
+    /// or the flag cannot be read.
+    async fn ocaml_enabled(&self, session: &AgentSession) -> bool;
+    /// Whether the agent's permissions gate `session`'s OCaml programs: OCaml
+    /// is on and the owner has the permissions rollout too.
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        let _ = session;
+        false
+    }
+}
+
+/// OCaml programs, offered when the runner has the OCaml bundle.
+pub struct OcamlPrograms {
+    /// The bundle's SDK fingerprint, recorded on every OCaml execution.
+    pub fingerprint: String,
+    /// The per-owner rollout.
+    pub rollout: Arc<dyn OcamlRollout>,
+    /// The per-owner rollout of agent permissions, which gate OCaml programs;
+    /// `None` where they are not wired.
+    pub permissions: Option<Arc<dyn OcamlRollout>>,
 }
 
 struct Inner {
@@ -39,6 +60,7 @@ struct Inner {
     turns: Arc<dyn ExecutionTurns>,
     images: Arc<dyn ModelImages>,
     admission: Arc<Semaphore>,
+    ocaml: Option<Arc<OcamlPrograms>>,
 }
 
 /// Code-mode policy over interchangeable execution, credential, and storage capabilities.
@@ -62,6 +84,7 @@ impl CodeModeService {
             turns,
             images,
             admission: Arc::new(Semaphore::new(limits.max_running + limits.max_queued)),
+            ocaml: None,
         }))
     }
 
@@ -99,6 +122,27 @@ impl CodeModeService {
         }
     }
 
+    /// Offer OCaml programs to sessions whose owner has the rollout.
+    pub fn with_ocaml(self, ocaml: OcamlPrograms) -> Self {
+        Self(Arc::new(Inner {
+            executor: self.0.executor.clone(),
+            credentials: Arc::clone(&self.0.credentials),
+            store: Arc::clone(&self.0.store),
+            turns: Arc::clone(&self.0.turns),
+            images: Arc::clone(&self.0.images),
+            admission: Arc::clone(&self.0.admission),
+            ocaml: Some(Arc::new(ocaml)),
+        }))
+    }
+
+    /// The OCaml bundle's fingerprint, recorded with an OCaml execution.
+    fn sdk_fingerprint(&self, language: ProgramLanguage) -> Option<String> {
+        match language {
+            ProgramLanguage::Javascript => None,
+            ProgramLanguage::Ocaml => self.0.ocaml.as_ref().map(|ocaml| ocaml.fingerprint.clone()),
+        }
+    }
+
     async fn run(
         &self,
         mut identity: ExecutionIdentity,
@@ -111,12 +155,15 @@ impl CodeModeService {
             acting_as: Some(identity.acting_as),
             turn_id: Some(identity.turn),
             source: request.source.clone(),
+            language: request.language.into(),
+            sdk_fingerprint: self.sdk_fingerprint(request.language.into()),
             status: ExecutionStatus::Running,
             result: None,
             error: None,
             calls: Vec::new(),
             activity: Vec::new(),
             activity_truncated: false,
+            permission: None,
         };
         match self.0.store.create(identity.session, &record).await {
             Ok(()) => {}
@@ -124,6 +171,7 @@ impl CodeModeService {
                 match self.0.store.get(identity.session, execution).await {
                     Ok(existing)
                         if existing.source == request.source
+                            && existing.language == record.language
                             && existing.acting_as == Some(identity.acting_as)
                             && existing.turn_id == Some(identity.turn) =>
                     {
@@ -161,10 +209,36 @@ impl CodeModeService {
         } = match self
             .0
             .credentials
-            .issue(&identity, &request.source, cancel.clone())
+            .issue(&identity, &request.source, record.language, cancel.clone())
             .await
         {
-            Ok(issued) => issued,
+            Ok(issued) => {
+                tracing::Span::current().record(
+                    "permission",
+                    if issued.environment.allowed_operations.is_some() {
+                        "admitted"
+                    } else {
+                        "off"
+                    },
+                );
+                issued
+            }
+            // Checked and not run: the program's outcome, not the service's.
+            Err(CodeModeError::NotRun(not_run)) => {
+                tracing::Span::current().record(
+                    "permission",
+                    match &not_run.permission {
+                        Some(ExecutionPermission::Blocked { .. }) => "blocked",
+                        Some(ExecutionPermission::Declined { .. }) => "declined",
+                        None => "cannot_analyze",
+                    },
+                );
+                record.status = ExecutionStatus::Failed;
+                record.error = Some(not_run.message);
+                record.permission = not_run.permission;
+                self.0.store.save(identity.session, &record).await?;
+                return Ok((receipt(&record), None));
+            }
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
@@ -491,6 +565,13 @@ impl SessionCodeMode for CodeModeService {
             .map_err(|_| CodeModeError::Forbidden)?
             .clone();
         validate_request(&request)?;
+        if request.language == Language::Ocaml && !self.ocaml_enabled(session).await {
+            return Err(CodeModeError::Invalid(
+                "OCaml programs are not available in this session; write a JavaScript module."
+                    .into(),
+            ));
+        }
+        let language = ProgramLanguage::from(request.language);
         let permit = Arc::clone(&self.0.admission)
             .try_acquire_owned()
             .map_err(|_| CodeModeError::Busy)?;
@@ -511,9 +592,12 @@ impl SessionCodeMode for CodeModeService {
             execution_id = %execution,
             assigned_execution_id = tracing::field::Empty,
             source_bytes = request.source.len(),
+            language = request.language.as_str(),
+            sdk_fingerprint = self.sdk_fingerprint(language).as_deref(),
             status = tracing::field::Empty,
             activity = tracing::field::Empty,
             result_bytes = tracing::field::Empty,
+            permission = tracing::field::Empty,
         );
         // Finish the journal even when the MCP request future is dropped. The drop
         // guard cancels the runner; its final cleanup then persists the outcome.
@@ -570,6 +654,34 @@ impl SessionCodeMode for CodeModeService {
         // survived. Expose the same uncertainty on journal reads and retries.
         record.error = execution_error(&record);
         Ok(record)
+    }
+
+    async fn ocaml_enabled(&self, session: &AgentSession) -> bool {
+        let (Some(ocaml), Some(_)) = (&self.0.ocaml, &self.0.executor) else {
+            return false;
+        };
+        match session.owner_user() {
+            Ok(owner) => ocaml.rollout.enabled(owner).await,
+            Err(_) => false,
+        }
+    }
+
+    async fn permissions_enabled(&self, session: &AgentSession) -> bool {
+        let Some(permissions) = self
+            .0
+            .ocaml
+            .as_ref()
+            .and_then(|ocaml| ocaml.permissions.clone())
+        else {
+            return false;
+        };
+        if !self.ocaml_enabled(session).await {
+            return false;
+        }
+        match session.owner_user() {
+            Ok(owner) => permissions.enabled(owner).await,
+            Err(_) => false,
+        }
     }
 }
 
@@ -666,7 +778,10 @@ pub(super) fn validate_request(request: &ExecuteRequest) -> Result<(), CodeModeE
         || request.timeout_ms == 0
         || request.timeout_ms > 30_000
     {
-        return Err(CodeModeError::Invalid("Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.".into()));
+        return Err(CodeModeError::Invalid(match request.language {
+            Language::Javascript => "Provide a nonempty JavaScript module exporting main() of at most 64 KiB and timeout_ms between 1 and 30000.",
+            Language::Ocaml => "Provide a nonempty OCaml program calling Code_mode.run of at most 64 KiB and timeout_ms between 1 and 30000.",
+        }.into()));
     }
     Ok(())
 }
@@ -679,6 +794,7 @@ fn receipt(record: &ExecutionRecord) -> ExecutionReceipt {
         result: record.result.clone(),
         error: execution_error(record),
         model_media: Vec::new(),
+        permission: record.permission.clone(),
     }
 }
 

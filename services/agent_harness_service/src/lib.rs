@@ -44,6 +44,7 @@ mod runtime_commands;
 mod runtime_gauges;
 mod scheduling;
 mod speech_gateway;
+mod tool_permissions;
 mod trigger;
 mod voice_gateway;
 
@@ -683,6 +684,9 @@ pub async fn run() -> anyhow::Result<()> {
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
     let code_scratch = tempfile::tempdir()?;
+    // Lists the SDK operations an OCaml program may call, for the permission
+    // gate; only with the OCaml bundle.
+    let mut ocaml_analyzer: Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> = None;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
             let runner = code_execution::outbound::deno::DenoRunner::new(
@@ -692,6 +696,21 @@ pub async fn run() -> anyhow::Result<()> {
             )
             .await
             .map_err(|error| anyhow::anyhow!("invalid Deno runtime: {error}"))?;
+            // OCaml programs need the bundle this build names, if any.
+            let ocaml_fingerprint = runner
+                .ocaml_bundle()
+                .map(|bundle| bundle.fingerprint().to_owned());
+            if let Some(bundle) = runner.ocaml_bundle() {
+                let analyzer = code_execution::outbound::ocaml::analyze::OcamlAnalyzer::new(
+                    Arc::clone(bundle),
+                    code_scratch.path().join("analyses"),
+                    8,
+                    code_execution::domain::Limits::default().max_source_bytes,
+                )
+                .await
+                .map_err(|error| anyhow::anyhow!("invalid OCaml analyzer: {error}"))?;
+                ocaml_analyzer = Some(Arc::new(analyzer));
+            }
             let runner: Arc<dyn code_execution::domain::CodeRunner> = Arc::new(runner);
             // Public MCP runs get their own admission budget so external
             // clients cannot exhaust the slots agent sessions rely on.
@@ -735,6 +754,7 @@ pub async fn run() -> anyhow::Result<()> {
                 public,
                 routines,
                 Arc::new(checker),
+                ocaml_fingerprint,
             ))
         }
         None => None,
@@ -758,7 +778,7 @@ pub async fn run() -> anyhow::Result<()> {
     let code_egress = code_mode::EgressRollout::new(feature_flags.clone());
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(
+        Some((_, _, routines, checker, _)) => Some(
             routine_code::SdkRoutineCode::new(
                 Arc::new(routines.clone()),
                 Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
@@ -821,7 +841,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
     });
     let public_code_mode = match &code_runner {
-        Some((_, public, _, _)) => Some(public_mcp::PublicCodeMode {
+        Some((_, public, _, _, _)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -885,7 +905,7 @@ pub async fn run() -> anyhow::Result<()> {
             ),
             scopes: Arc::clone(&session_scopes),
         });
-    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -934,31 +954,75 @@ pub async fn run() -> anyhow::Result<()> {
         agent_code_mode::domain::ui_commands::NavigableRoutes::generated()
             .context("the generated agent route table does not parse")?,
     );
-    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> =
-        Arc::new(agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                egress: code_egress.clone(),
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
-            }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
-        ));
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    // Its routes and the OCaml gate share it.
+    let agent_permissions_service: Arc<dyn agent_permissions::domain::service::AgentPermissions> =
+        Arc::new(
+            agent_permissions::domain::service::AgentPermissionsService::new(
+                agent_permissions::outbound::pg::PgPermissionStore::new(pool.clone()),
+                tool_permissions::BotsAgentDirectory(bots::domain::service::BotServiceImpl::new(
+                    PgBotsRepo::new(pool.clone()),
+                    broker.clone(),
+                    computers::harness_service(&pool),
+                )),
+                tool_permissions::RepoSessionDirectory(session_repo.clone()),
+                code_mode::PermissionsFlag(feature_flags.clone()),
+                Arc::new(agent_permissions::outbound::registry::registry_catalog()),
+            ),
+        );
+    // The gate on OCaml programs, where this build can run them.
+    let permission_gate = ocaml_analyzer.map(|analyzer| {
+        Arc::new(code_mode::permissions::PermissionGate {
+            analyzer,
+            permissions: Arc::clone(&agent_permissions_service),
+            holds: tool_approvals.clone(),
+            rollout: Arc::new(code_mode::PermissionsFlag(feature_flags.clone())),
+            prompters: Arc::new(session_repo.clone()),
+        })
+    });
+    let session_code_mode = agent_code_mode::domain::CodeModeService::new(
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            egress: code_egress.clone(),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+            permissions: permission_gate.clone(),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
+    // OCaml programs, for owners with the rollout, when this build has the bundle.
+    let session_code_mode = match code_runner
+        .as_ref()
+        .and_then(|(_, _, _, _, fingerprint)| fingerprint.clone())
+    {
+        Some(fingerprint) => session_code_mode.with_ocaml(agent_code_mode::domain::OcamlPrograms {
+            fingerprint,
+            rollout: Arc::new(code_mode::OcamlFlag(feature_flags.clone())),
+            permissions: permission_gate.is_some().then(
+                || -> Arc<dyn agent_code_mode::domain::OcamlRollout> {
+                    Arc::new(code_mode::PermissionsFlag(feature_flags.clone()))
+                },
+            ),
+        }),
+        None => session_code_mode,
+    };
+    let code_mode: Arc<dyn agent_code_mode::domain::SessionCodeMode> = Arc::new(session_code_mode);
     let session_metadata_realtime = WorkRegistrationRealtime::new(
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
@@ -1021,6 +1085,7 @@ pub async fn run() -> anyhow::Result<()> {
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
             app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
+            permissions: Some(Arc::clone(&agent_permissions_service)),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -2151,6 +2216,15 @@ pub async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     ));
+    // Agent permissions (`enable-agent-permissions`): who may edit an agent
+    // is the bots service's rule, and the catalog is the checked-in registry.
+    let agent_tool_permissions = agent_permissions::inbound::axum_router::router(
+        agent_permissions::inbound::axum_router::AgentPermissionsRouterState::new(
+            Arc::clone(&agent_permissions_service),
+            entity_access.clone(),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let notification_service = Arc::new(agent_session::domain::notifications::NotificationService(
         Arc::new(agent_session::outbound::notifications::PgNotificationStore(
             pool.clone(),
@@ -2240,6 +2314,7 @@ pub async fn run() -> anyhow::Result<()> {
             .with_auto_archive(auto_archive)
             .with_work_registrations(work_registrations)
             .with_tool_approvals(tool_approval_answers)
+            .with_agent_tool_permissions(agent_tool_permissions)
             .with_app_connections(app_connections)
             .with_code_executions(code_executions)
             .with_notifications(notification_ingress)
@@ -2740,7 +2815,7 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public, routines, _)) = &code_runner {
+    if let Some((sessions, public, routines, _, _)) = &code_runner {
         tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
     }
     let stop_failures = container_shutdown.shutdown_all().await;

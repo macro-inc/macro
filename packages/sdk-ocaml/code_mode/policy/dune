@@ -1,0 +1,7 @@
+; Code mode's policy check (code_mode_policy.ml): a native tool the bundle
+; ships in bin/; the harness runs it on each program's .cmt. Needs only
+; the compiler's own libraries, so it builds in every profile.
+
+(executable
+ (name code_mode_policy)
+ (libraries compiler-libs.common))

@@ -1,6 +1,7 @@
 //! Composition of code execution credentials with the harness's owner approval gate.
 use agent_code_mode::domain::{
-    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, UserExecutionCredentials,
+    CodeModeError, ExecutionCredentials, ExecutionIdentity, IssuedRun, ProgramLanguage,
+    UserExecutionCredentials,
 };
 use agent_correlation::domain::{CorrelationRepository, SessionScope};
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, SignedCorrelation};
@@ -105,6 +106,9 @@ pub struct RunCredentials {
     pub gate: Arc<dyn NativeToolGate>,
     pub endpoints: SdkEndpoints,
     pub scopes: Arc<dyn SessionScopes>,
+    /// The agent permissions gate on OCaml programs; `None` where the runner
+    /// has no OCaml bundle, and then every program runs as before.
+    pub permissions: Option<Arc<permissions::PermissionGate>>,
 }
 
 /// Which narrower scope a session's code runs in, decided where its
@@ -228,9 +232,19 @@ impl ExecutionCredentials for RunCredentials {
         &self,
         identity: &ExecutionIdentity,
         source: &str,
+        language: ProgramLanguage,
         cancel: CancellationToken,
     ) -> Result<IssuedRun, CodeModeError> {
-        let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
+        // Refused or rewritten before anyone is asked anything.
+        let checked = match &self.permissions {
+            Some(gate) => gate.check(identity, source, language).await?,
+            None => None,
+        };
+        let actor = approve_run(self.gate.as_ref(), identity, source, language, &cancel).await?;
+        if let (Some(gate), Some(checked)) = (&self.permissions, &checked) {
+            gate.hold(checked, identity, &actor, source, &cancel)
+                .await?;
+        }
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
         let correlation = self
             .correlations
@@ -273,6 +287,8 @@ impl ExecutionCredentials for RunCredentials {
                 execution_id: Some(identity.execution.as_uuid()),
                 unattended: None,
                 egress: self.egress.egress(&actor).await,
+                // The whole analyzed set, not only what was asked about.
+                allowed_operations: checked.map(|checked| checked.calls.into_iter().collect()),
             },
             acting_user: actor,
         })
@@ -346,6 +362,7 @@ impl UserExecutionCredentials for UserRunCredentials {
             execution_id: None,
             unattended: None,
             egress: self.egress.egress(user).await,
+            allowed_operations: None,
         })
     }
 }
@@ -363,6 +380,71 @@ pub(crate) fn trace_headers() -> BTreeMap<String, String> {
                 .map(|value| (name.to_string(), value.to_owned()))
         })
         .collect()
+}
+
+/// The backend rollout for OCaml programs in `ExecuteCode`. Off everywhere
+/// until the flag is created in PostHog (at 0%) and targeted.
+pub const OCAML_FLAG: &str = "enable-ocaml-code-mode";
+
+/// [`OCAML_FLAG`] for a session owner. Without a flag client (local stacks
+/// without PostHog) or when the flags can't be read, it is off.
+pub struct OcamlFlag<Flags>(pub Option<Flags>);
+
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+    for OcamlFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        let Some(flags) = &self.0 else {
+            return false;
+        };
+        flags
+            .load(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the OCaml code mode flag");
+            })
+            .is_ok_and(|snapshot| snapshot.is_enabled(OCAML_FLAG))
+    }
+}
+
+/// The backend rollout for agent permissions, on top of [`OCAML_FLAG`]:
+/// permissions apply to OCaml programs only. Off everywhere until the flag is
+/// created in PostHog and targeted.
+pub const PERMISSIONS_FLAG: &str = "enable-agent-permissions";
+
+/// [`PERMISSIONS_FLAG`] and [`OCAML_FLAG`] for a user. Without a flag client
+/// (local stacks without PostHog) or when the flags can't be read, it is off.
+pub struct PermissionsFlag<Flags>(pub Option<Flags>);
+
+impl<Flags: feature_flags::FeatureFlags + 'static>
+    agent_permissions::domain::ports::PermissionsRollout for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, user: &MacroUserIdStr<'static>) -> bool {
+        let Some(flags) = &self.0 else {
+            return false;
+        };
+        flags
+            .load(user)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(error = ?error, "could not read the agent permissions flag");
+            })
+            .is_ok_and(|snapshot| {
+                snapshot.is_enabled(OCAML_FLAG) && snapshot.is_enabled(PERMISSIONS_FLAG)
+            })
+    }
+}
+
+/// The same rollout, as code mode and the OCaml gate ask it of a session
+/// owner.
+#[async_trait]
+impl<Flags: feature_flags::FeatureFlags + 'static> agent_code_mode::domain::OcamlRollout
+    for PermissionsFlag<Flags>
+{
+    async fn enabled(&self, owner: &MacroUserIdStr<'static>) -> bool {
+        agent_permissions::domain::ports::PermissionsRollout::enabled(self, owner).await
+    }
 }
 
 macro_env_var::env_var! { struct DocumentStorageServiceCloudfrontDistributionUrl; }
@@ -436,6 +518,7 @@ pub fn sdk_endpoints() -> anyhow::Result<SdkEndpoints> {
 
 pub mod connected_apps;
 pub mod images;
+pub mod permissions;
 pub mod reviews;
 pub mod ui_commands;
 
@@ -443,9 +526,15 @@ async fn approve_run(
     gate: &dyn NativeToolGate,
     identity: &ExecutionIdentity,
     source: &str,
+    language: ProgramLanguage,
     cancel: &CancellationToken,
 ) -> Result<macro_user_id::user_id::MacroUserIdStr<'static>, CodeModeError> {
-    let args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    let mut args = serde_json::json!({"source": source, "acting_as": identity.acting_as, "turn_id": identity.turn});
+    // The approver sees what the source is written in. JavaScript, the
+    // default, is left out, so its hold reads as it did before OCaml.
+    if language != ProgramLanguage::Javascript {
+        args["language"] = serde_json::json!(language);
+    }
     let verdict = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Err(CodeModeError::Forbidden),

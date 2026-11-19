@@ -8,6 +8,7 @@ import {
   programFailures,
   programSteps,
 } from '../state/code-execution';
+import { parseExecutionPermission } from '../state/permission-approval';
 import { isToolActive } from '../ui/types';
 
 /**
@@ -60,7 +61,12 @@ export function useCodeExecutionRecord(
         ...(saved?.calls ?? []).map((call) => call.status),
       ],
       ended: ended(),
-      cancelled: (saved?.status ?? receipt()?.status) === 'cancelled',
+      // A program its permissions stopped didn't fail: it never ran, and
+      // its own row says why.
+      cancelled:
+        (saved?.status ?? receipt()?.status) === 'cancelled' ||
+        parseExecutionPermission(saved?.permission ?? receipt()?.permission) !==
+          undefined,
     });
   };
 

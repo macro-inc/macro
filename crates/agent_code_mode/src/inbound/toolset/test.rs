@@ -1,5 +1,7 @@
 use super::*;
 
+mod ocaml;
+
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|fixture@example.com").unwrap()
 }
@@ -231,4 +233,169 @@ fn symbols_from_an_index_read_as_their_own_references() {
             .read()
             .is_err()
     );
+}
+
+#[test]
+fn ocaml_execute_code_extends_the_javascript_tool_without_changing_it() {
+    let plain = &toolset().tools["ExecuteCode"];
+    let ocaml = &toolset_with_ocaml().tools["ExecuteCode"];
+    let plain_schema = serde_json::to_value(&plain.input_schema).unwrap();
+    let ocaml_schema = serde_json::to_value(&ocaml.input_schema).unwrap();
+    assert!(plain_schema["properties"].get("language").is_none());
+    assert!(!plain.description.contains("OCaml"));
+    assert!(!plain_schema.to_string().contains("OCaml"));
+    // The OCaml tool is the JavaScript one plus a language and the OCaml section.
+    assert_eq!(
+        ocaml.description,
+        format!(
+            "{}\n{}",
+            plain.description,
+            include_str!("session/ocaml.md")
+        )
+    );
+    assert!(ocaml.description.contains("Code_mode.run"));
+    let mut properties = ocaml_schema["properties"].as_object().unwrap().clone();
+    let language = properties.remove("language").unwrap();
+    assert!(language.to_string().contains("javascript"));
+    assert!(language.to_string().contains("ocaml"));
+    let plain_properties = plain_schema["properties"].as_object().unwrap();
+    let names = |object: &serde_json::Map<String, serde_json::Value>| {
+        let mut names: Vec<String> = object.keys().cloned().collect();
+        names.sort();
+        names
+    };
+    assert_eq!(names(&properties), names(plain_properties));
+    assert_eq!(ocaml_schema["required"], plain_schema["required"]);
+
+    let call = serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "let () = Code_mode.run (fun _ -> `Null)",
+        "language": "ocaml",
+    });
+    assert!(serde_json::from_value::<ExecuteCode>(call.clone()).is_err());
+    let parsed: ExecuteCodeWithOcaml = serde_json::from_value(call).unwrap();
+    assert_eq!(parsed.language, ProgramLanguage::Ocaml);
+    let parsed: ExecuteCodeWithOcaml = serde_json::from_value(serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "export async function main() { return {data: 1}; }",
+    }))
+    .unwrap();
+    assert_eq!(parsed.language, ProgramLanguage::Javascript);
+}
+
+#[test]
+fn the_permissions_tool_is_the_ocaml_tool_plus_its_paragraph() {
+    let ocaml = &toolset_with_ocaml().tools["ExecuteCode"];
+    let gated = &toolset_with_ocaml_permissions().tools["ExecuteCode"];
+    assert_eq!(
+        gated.description,
+        format!(
+            "{}\n{}",
+            ocaml.description,
+            include_str!("session/ocaml_permissions.md")
+        )
+    );
+    assert_eq!(
+        serde_json::to_value(&gated.input_schema).unwrap()["properties"],
+        serde_json::to_value(&ocaml.input_schema).unwrap()["properties"]
+    );
+    assert!(!ocaml.description.contains("ShowPermissions"));
+}
+
+/// Session code mode that records the language each call asked for.
+struct Languages {
+    ocaml: bool,
+    permissions: bool,
+    seen: std::sync::Mutex<Vec<Language>>,
+}
+
+#[async_trait]
+impl SessionCodeMode for Languages {
+    async fn execute(
+        &self,
+        _: &AgentSession,
+        execution: ExecutionId,
+        _: ai_toolset::actor::ToolActor,
+        _: macro_uuid::Uuid,
+        request: ExecuteRequest,
+        _: CancellationToken,
+    ) -> Result<ExecutionReceipt, CodeModeError> {
+        self.seen.lock().unwrap().push(request.language);
+        Ok(ExecutionReceipt {
+            execution_id: execution,
+            status: crate::domain::ExecutionStatus::Succeeded,
+            activity: Vec::new(),
+            result: None,
+            error: None,
+            model_media: Vec::new(),
+            permission: None,
+        })
+    }
+    async fn read(
+        &self,
+        _: &entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::ViewAccessLevel,
+        >,
+        _: ExecutionId,
+    ) -> Result<crate::domain::ExecutionRecord, CodeModeError> {
+        Err(CodeModeError::NotFound)
+    }
+    async fn ocaml_enabled(&self, _: &AgentSession) -> bool {
+        self.ocaml
+    }
+    async fn permissions_enabled(&self, _: &AgentSession) -> bool {
+        self.permissions
+    }
+}
+
+#[tokio::test]
+async fn sessions_see_and_call_ocaml_only_with_the_rollout() {
+    use ai_toolset::ToolSet as _;
+    let session = agent_session::testing::test_agent_session(
+        agent_session::domain::model::AgentSessionId::new(),
+    );
+    let call = serde_json::json!({
+        "acting_as": "requester",
+        "turn_id": "00000000-0000-0000-0000-000000000001",
+        "source": "let () = Code_mode.run (fun _ -> `Null)",
+        "language": "ocaml",
+    });
+    for (ocaml, permissions) in [(false, false), (false, true), (true, false), (true, true)] {
+        let service = Arc::new(Languages {
+            ocaml,
+            permissions,
+            seen: Default::default(),
+        });
+        let tools = session_toolset(service.as_ref(), &session).await;
+        let schema = serde_json::to_value(&tools.tools["ExecuteCode"].input_schema).unwrap();
+        assert_eq!(schema["properties"].get("language").is_some(), ocaml);
+        assert_eq!(
+            tools.tools["ExecuteCode"]
+                .description
+                .contains("ShowPermissions"),
+            ocaml && permissions
+        );
+        let result = tools
+            .try_tool_call(
+                CodeModeToolContext {
+                    service: service.clone(),
+                    session: session.clone(),
+                    cognition: None,
+                },
+                RequestContext::new(user()),
+                "ExecuteCode",
+                &call,
+            )
+            .await;
+        if ocaml {
+            assert!(result.unwrap().is_ok());
+            assert_eq!(*service.seen.lock().unwrap(), [Language::Ocaml]);
+        } else {
+            // Today's tool has no language: the call is refused unrun.
+            assert!(result.is_err());
+            assert!(service.seen.lock().unwrap().is_empty());
+        }
+    }
 }

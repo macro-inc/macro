@@ -305,6 +305,7 @@ fn searchable_text_leaves_out_what_cards_and_lines_keep_behind_a_disclosure() {
             tool_name: "create_issue".to_owned(),
             arguments: json!({ "title": "Hidden argument" }),
             requested_by: None,
+            approver: None,
             status: ToolApprovalStatus::Approved,
             resolved_by: None,
             remembered: false,

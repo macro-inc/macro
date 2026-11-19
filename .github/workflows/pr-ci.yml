@@ -26,6 +26,7 @@ jobs:
       node_modules_nix: ${{ steps.filter.outputs.node_modules_nix }}
       tauri_lockfiles: ${{ steps.filter.outputs.tauri_lockfiles }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      sdk_ocaml: ${{ steps.filter.outputs.sdk_ocaml }}
       observability_image: ${{ steps.filter.outputs.observability_image }}
       macrod_update: ${{ steps.filter.outputs.macrod_update }}
     timeout-minutes: 5
@@ -544,6 +545,15 @@ jobs:
             - 'packages/sdk/**'
             - 'bun.lock'
             - '.github/workflows/sdk-check.yml'
+          sdk_ocaml:
+            - 'packages/sdk-ocaml/**'
+            - 'packages/sdk/specs/**'
+            - 'packages/sdk/src/config.ts'
+            - 'packages/sdk/generated/*/sdk.gen.ts'
+            - 'crates/agent_permission_registry/registry.json'
+            - 'flake.lock'
+            - 'nix/cloud-storage.nix'
+            - '.github/workflows/sdk-ocaml-check.yml'
           observability_image:
             - 'infra/stacks/observability/flake.nix'
             - 'infra/stacks/observability/flake.lock'
@@ -621,6 +631,13 @@ jobs:
     name: SDK
     uses: ./.github/workflows/sdk-check.yml
     secrets: inherit
+  sdk-ocaml:
+    needs:
+    - start
+    if: needs.start.outputs.sdk_ocaml == 'true'
+    name: OCaml SDK
+    uses: ./.github/workflows/sdk-ocaml-check.yml
+    secrets: inherit
   observability-image:
     needs:
     - start
@@ -648,6 +665,7 @@ jobs:
     - node-modules-nix
     - tauri-lockfiles
     - sdk
+    - sdk-ocaml
     - observability-image
     - macrod-update
     if: '!cancelled() && needs.start.result != ''skipped'''

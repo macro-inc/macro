@@ -1,0 +1,4 @@
+(library
+ (name macro_sdk_runtime)
+ (public_name macro_sdk.runtime)
+ (libraries yojson uri))

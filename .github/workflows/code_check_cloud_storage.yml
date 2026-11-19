@@ -63,6 +63,7 @@ jobs:
             - 'packages/sdk/**'
             - 'packages/sdk-docs/**'
             - 'packages/code-mode-sdk/**'
+            - 'packages/sdk-ocaml/**'
             - '.github/actions/setup-nix/**'
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
@@ -923,6 +924,15 @@ jobs:
         else
           echo "::warning::Could not save code-mode assets to the remote cache"
         fi
+    - name: Build code mode's OCaml bundle
+      if: env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')
+      run: |
+        set -euo pipefail
+
+        # The bundle's store path is baked into code_mode_assets at build time, so set
+        # it before the first cargo build of the job.
+        bundle="$(nix build --no-link --print-out-paths --print-build-logs .#code-mode-ocaml)"
+        echo "CODE_MODE_OCAML_DIR=$bundle" >> "$GITHUB_ENV"
     - name: configure postgres for concurrent tests
       run: |
         postgres_container="$(docker ps --format '{{.ID}} {{.Image}}' | awk '$2 == "pgvector/pgvector:pg14" { print $1; exit }')"

@@ -1,8 +1,8 @@
 //! SDK discovery and one awaited code execution exposed as ordinary tools.
 use crate::domain::{
-    CodeModeError, ExecutionId, ExecutionReceipt, SessionCodeMode, SymbolReferences,
-    TaskDocumentation, UserCodeMode, UserExecutionReceipt, documentation_for_task, read_symbols,
-    with_attached_skill,
+    CodeModeError, ExecutionId, ExecutionReceipt, ProgramLanguage, SessionCodeMode,
+    SymbolReferences, TaskDocumentation, UserCodeMode, UserExecutionReceipt,
+    documentation_for_task, read_symbols, with_attached_skill,
 };
 use agent_session::domain::model::AgentSession;
 use ai_toolset::{
@@ -10,7 +10,7 @@ use ai_toolset::{
     ToolCallError, ToolResult,
 };
 use async_trait::async_trait;
-use code_execution::domain::ExecuteRequest;
+use code_execution::domain::{ExecuteRequest, Language};
 use cognition::domain::Cognition;
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
@@ -38,6 +38,40 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
         .add_tool::<ExecuteCode, CodeModeToolContext>()
         .add_tool::<DescribeCodeTools, CodeModeToolContext>()
         .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// [`toolset`] for a session that may also run OCaml programs
+/// ([`SessionCodeMode::ocaml_enabled`]): its `ExecuteCode` takes a `language`.
+pub fn toolset_with_ocaml() -> AsyncToolCollection<CodeModeToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<ExecuteCodeWithOcaml, CodeModeToolContext>()
+        .add_tool::<DescribeCodeTools, CodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// [`toolset_with_ocaml`] for a session whose OCaml programs the agent's
+/// permissions gate ([`SessionCodeMode::permissions_enabled`]): its
+/// description says how.
+pub fn toolset_with_ocaml_permissions() -> AsyncToolCollection<CodeModeToolContext> {
+    AsyncToolCollection::new()
+        .add_tool::<ExecuteCodeWithOcamlPermissions, CodeModeToolContext>()
+        .add_tool::<DescribeCodeTools, CodeModeToolContext>()
+        .add_tool::<ReadCodeDocs, CodeModeToolContext>()
+}
+
+/// The session's code-mode tools: with OCaml when the session may run it,
+/// and the permissions paragraph when they gate it.
+pub async fn session_toolset(
+    service: &dyn SessionCodeMode,
+    session: &AgentSession,
+) -> AsyncToolCollection<CodeModeToolContext> {
+    if !service.ocaml_enabled(session).await {
+        toolset()
+    } else if service.permissions_enabled(session).await {
+        toolset_with_ocaml_permissions()
+    } else {
+        toolset_with_ocaml()
+    }
 }
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
@@ -149,21 +183,147 @@ impl AsyncTool<CodeModeToolContext> for ExecuteCode {
         context: ServiceContext<CodeModeToolContext>,
         request: RequestContext,
     ) -> ToolResult<Self::Output> {
-        context
-            .service
-            .execute(
-                &context.session,
-                self.execution_id.unwrap_or_else(ExecutionId::mint),
-                self.acting_as,
-                self.turn_id,
-                ExecuteRequest {
-                    source: self.source.clone(),
-                    timeout_ms: self.timeout_ms,
-                },
-                request.cancel,
-            )
-            .await
-            .map_err(tool_error)
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: Language::Javascript,
+            },
+        )
+        .await
+    }
+}
+
+async fn execute_in_session(
+    context: &CodeModeToolContext,
+    request: RequestContext,
+    execution_id: Option<ExecutionId>,
+    acting_as: ai_toolset::actor::ToolActor,
+    turn_id: macro_uuid::Uuid,
+    program: ExecuteRequest,
+) -> ToolResult<ExecutionReceipt> {
+    context
+        .service
+        .execute(
+            &context.session,
+            execution_id.unwrap_or_else(ExecutionId::mint),
+            acting_as,
+            turn_id,
+            program,
+            request.cancel,
+        )
+        .await
+        .map_err(tool_error)
+}
+
+/// [`ExecuteCode`] for a session that may run OCaml programs: the same tool,
+/// with a `language` and the OCaml contract added to its description.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ExecuteCode",
+    description = format!(
+        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}",
+        SESSION_PRESENT.trim_end(),
+        dynamic_ui::present_view_schema(),
+        include_str!("toolset/session/ocaml.md"),
+    )
+)]
+pub struct ExecuteCodeWithOcaml {
+    /// As [`ExecuteCode::execution_id`].
+    #[serde(default)]
+    #[schemars(
+        description = "Optional; usually omit it. The server assigns an ID and the receipt reports it as executionId. Pass a new random UUID only when a repeated write would be harmful: if the reply is lost, resending the same execution_id with identical source and language returns the saved receipt instead of running again. Never use an example or placeholder UUID or an ID from another session; an ID already taken runs under a new ID."
+    )]
+    pub execution_id: Option<ExecutionId>,
+    /// Choose whose account authenticates every SDK operation in this execution.
+    pub acting_as: ai_toolset::actor::ToolActor,
+    /// Copy the current server-issued turn_id from the prompt's execution context.
+    /// Never reuse an ID from another turn or discover a replacement for a stale call.
+    pub turn_id: macro_uuid::Uuid,
+    /// The program's language.
+    #[serde(default)]
+    #[schemars(
+        description = "The language of source: javascript (the default) or ocaml. Omit it for JavaScript."
+    )]
+    pub language: ProgramLanguage,
+    /// A JavaScript ES module, or an OCaml program.
+    #[schemars(
+        description = "The program, at most 64 KiB. JavaScript (the default): import { Macro } from '@macro-inc/sdk' and Handlebars from 'handlebars'. Export async function main({token, hosts, webAppUrl}) { const macro = new Macro({token, hosts, webAppUrl}); return {data: ...}; }. The optional reviews array defaults to empty. Dependencies are preinstalled; no TypeScript syntax or package downloads. The token, hosts and webAppUrl are supplied by the runner; never return or log the token. OCaml (language ocaml): main.ml calling Code_mode.run once and returning `Assoc [(\"data\", ...)], as the description's OCaml section shows."
+    )]
+    pub source: String,
+    /// Deadline including queueing and API calls.
+    #[serde(default = "default_timeout")]
+    #[schemars(
+        description = "Total deadline in milliseconds, from 1 to 30000; defaults to 30000."
+    )]
+    pub timeout_ms: u64,
+}
+
+impl ToolAnnotated for ExecuteCodeWithOcaml {
+    const ANNOTATIONS: ToolAnnotations = ExecuteCode::ANNOTATIONS;
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcaml {
+    type Output = ExecutionReceipt;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        execute_in_session(
+            &context,
+            request,
+            self.execution_id,
+            self.acting_as,
+            self.turn_id,
+            ExecuteRequest {
+                source: self.source.clone(),
+                timeout_ms: self.timeout_ms,
+                language: self.language.into(),
+            },
+        )
+        .await
+    }
+}
+
+/// [`ExecuteCodeWithOcaml`] for a session whose OCaml programs the agent's
+/// permissions gate: the same tool, with the permissions paragraph.
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ExecuteCode",
+    description = format!(
+        "{SESSION_EXECUTE_CODE}\n{} {SESSION_CHECK_BACK}\n{PROGRAM}\n{RUNTIME}\nPresentView schema; execution.views.present(view) takes its view property:\n{}\n\n{}\n{}",
+        SESSION_PRESENT.trim_end(),
+        dynamic_ui::present_view_schema(),
+        include_str!("toolset/session/ocaml.md"),
+        include_str!("toolset/session/ocaml_permissions.md"),
+    )
+)]
+pub struct ExecuteCodeWithOcamlPermissions(ExecuteCodeWithOcaml);
+
+impl ToolAnnotated for ExecuteCodeWithOcamlPermissions {
+    const ANNOTATIONS: ToolAnnotations = ExecuteCode::ANNOTATIONS;
+}
+
+#[async_trait]
+impl AsyncTool<CodeModeToolContext> for ExecuteCodeWithOcamlPermissions {
+    type Output = ExecutionReceipt;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodeModeToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        self.0.call(context, request).await
     }
 }
 
@@ -217,6 +377,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
                 ExecuteRequest {
                     source: self.source.clone(),
                     timeout_ms: self.timeout_ms,
+                    language: Language::Javascript,
                 },
                 request.cancel,
             )

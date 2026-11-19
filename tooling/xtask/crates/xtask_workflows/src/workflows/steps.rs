@@ -516,6 +516,13 @@ pub fn code_mode_assets() -> Step<Run> {
     Step::new("Build code-mode assets").run(include_str!("scripts/code_mode_assets.sh"))
 }
 
+/// Build code mode's OCaml bundle (`nix build .#code-mode-ocaml`) and point
+/// later cargo steps at it with `CODE_MODE_OCAML_DIR`, which
+/// `crates/code_mode_assets` reads at build time.
+pub fn code_mode_ocaml() -> Step<Run> {
+    Step::new("Build code mode's OCaml bundle").run(include_str!("scripts/code_mode_ocaml.sh"))
+}
+
 /// Start the server before parallel compiler invocations can race to launch it.
 /// Keep this in a separate step after remote configuration so `GITHUB_ENV`
 /// has supplied the selected backend's credentials to the process.

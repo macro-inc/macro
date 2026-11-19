@@ -15,7 +15,7 @@ use agent::{Message, PredefinedModel};
 use agent_code_mode::domain::symbol_reference;
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
-    CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
+    CheckError, ExecuteRequest, Language, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
     SdkEndpoints, SourceFile, Unattended, operations, sdk_declaration_files, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
@@ -330,6 +330,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 dry_run: run.dry_run,
             }),
             egress: self.egress.egress(owner).await,
+            allowed_operations: None,
         };
         let (progress, mut updates) = tokio::sync::mpsc::channel(512);
         let started = Instant::now();
@@ -338,6 +339,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
             ExecuteRequest {
                 source: run.step.source.clone(),
                 timeout_ms: STEP_TIMEOUT_MS,
+                language: Language::Javascript,
             },
             environment,
             CancellationToken::new(),

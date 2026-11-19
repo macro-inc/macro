@@ -232,6 +232,40 @@ fn a_held_tool_call_blocks_the_turn_until_it_is_resolved() {
 }
 
 #[test]
+fn a_permission_hold_names_who_may_answer_it() {
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    let mut held = tool_approval("pending", None);
+    held["params"]["serverSlug"] = json!("macro-sdk");
+    held["params"]["approver"] = json!("macro|wolf@macro.com");
+    assert!(push(&mut machine, "to_server", held));
+    let [PendingInteraction::ToolApproval(pending)] =
+        machine.metadata().pending_interactions.as_slice()
+    else {
+        panic!("one held program is pending");
+    };
+    assert_eq!(pending.approver.as_deref(), Some("macro|wolf@macro.com"));
+    let part = approval_part(&machine);
+    assert!(matches!(
+        &part,
+        MessagePart::ToolApproval { approver: Some(by), .. } if by == "macro|wolf@macro.com"
+    ));
+    assert_eq!(
+        serde_json::to_value(&part).unwrap()["approver"],
+        "macro|wolf@macro.com"
+    );
+
+    // Any other hold names none: its approver is the session's owner.
+    let mut machine = FoldMachineImpl::new();
+    prompt(&mut machine, "p");
+    push(&mut machine, "to_server", tool_approval("pending", None));
+    assert!(matches!(
+        approval_part(&machine),
+        MessagePart::ToolApproval { approver: None, .. }
+    ));
+}
+
+#[test]
 fn a_held_tool_call_approved_for_good_says_so() {
     let mut machine = FoldMachineImpl::new();
     prompt(&mut machine, "p");
