@@ -63,6 +63,20 @@ export const toolPermissionsClient = {
     );
   },
 
+  /**
+   * The permissions that apply in an agent session: its agent's, with the
+   * agent's limits on itself for this session.
+   */
+  session(sessionId: string) {
+    return fetchWithToken<AgentToolPermissions, typeof TOOL_PERMISSION_REFUSED>(
+      `${host}/agent-sessions/${encodeURIComponent(sessionId)}/tool-permissions`,
+      {
+        errorResponseHandler: toolPermissionError,
+        trace: FEATURE_OFF_IS_EXPECTED,
+      }
+    );
+  },
+
   /** Applies the changes in order and answers the new view. */
   set(
     agentId: string,

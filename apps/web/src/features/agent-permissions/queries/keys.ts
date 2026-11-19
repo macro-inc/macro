@@ -5,5 +5,6 @@ export const agentToolPermissionKeys = createQueryKeys(
   {
     catalog: null,
     agent: (agentId: string) => [agentId],
+    session: (sessionId: string) => [sessionId],
   }
 );

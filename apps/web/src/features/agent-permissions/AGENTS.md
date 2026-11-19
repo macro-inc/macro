@@ -14,12 +14,19 @@ shows a tool's override or its action's state.
 - `core/model.ts`: changes, group summaries, search, counts (pure, tested).
 - `views/agent-permissions-page.tsx`: the page, its states and Reset.
 - `views/agent-permissions-list.tsx`: the group rows; reusable in chat cards.
-- `queries/permissions.ts`: catalog and per-agent queries, set/reset
-  mutations. A 404 (feature off for the caller) reads as `null`: hide the UI.
+- `queries/permissions.ts`: catalog, per-agent and per-session queries,
+  set/reset mutations (a save re-reads every session view). A 404 (feature
+  off for the caller) reads as `null`: hide the UI.
+- Chat: `components/gated-operation-list.tsx` and
+  `blocked-by-permissions-card.tsx` (held or refused operations),
+  `views/show-permissions-card.tsx` (the ShowPermissions card, same rows and
+  saving as the page), `views/open-agent-permissions.ts` (opens the page beside
+  the chat). `block-agent` wires them into the transcript.
 
 ## Scope
 
-- Owns: the permissions page, the editor's Permissions section, the list.
+- Owns: the permissions page, the editor's Permissions section, the list,
+  and the chat's blocked and ShowPermissions cards.
 - Not here: the registry of operations → `crates/agent_permission_registry`;
   the API, resolution and tighten-only rules → `crates/agent_permissions`
   (agent harness `/agent-tool-permissions`, `/agents/{id}/tool-permissions`).
@@ -39,7 +46,10 @@ shows a tool's override or its action's state.
 ## Checks
 
 - `bun run test -- src/features/agent-permissions src/features/settings/Agents.test.tsx`
+- `bunx playwright test --config src/features/block-agent/browser-test/permissions.playwright.config.ts`
 
 ## Related
 
-- Rules: `.agents/rules/web/` · Walkthrough: `docs/agent-guide/settings.md` (Agent permissions)
+- Rules: `.agents/rules/web/` · Walkthroughs: `docs/agent-guide/settings.md`
+  (Agent permissions), `docs/agent-guide/ai-chat.md` (Agent permissions in a
+  session)
