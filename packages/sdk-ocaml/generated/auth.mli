@@ -544,6 +544,45 @@ val make_computer_status :
   computer_status
 (** A computer as its team sees it. *)
 
+type nonrec usage_point = {
+  cpu_percent : float option;
+      (** Share of its CPUs in use, 0 to 100. Absent until a second reading
+of the same run measures it: a computer's first reading after it
+starts or wakes has memory only. *)
+  memory_bytes : int64;
+      (** Memory only it holds, in bytes; memory shared with its image is not
+counted. *)
+}
+(** A computer's use at one point of the graph. *)
+
+val usage_point_of_yojson : Yojson.Safe.t -> usage_point
+val yojson_of_usage_point : usage_point -> Yojson.Safe.t
+
+val make_usage_point :
+  ?cpu_percent:float -> memory_bytes:int64 -> unit -> usage_point
+(** A computer's use at one point of the graph. *)
+
+type nonrec computer_usage = {
+  computer_id : string;  (** The computer. *)
+  latest : usage_point option;
+  points : usage_point option list;
+      (** The last 24 hours in 15-minute steps, oldest first: average CPU and
+highest memory of each step, absent where the computer has no
+reading (it did not run). *)
+}
+(** A computer's CPU and memory over the last day. *)
+
+val computer_usage_of_yojson : Yojson.Safe.t -> computer_usage
+val yojson_of_computer_usage : computer_usage -> Yojson.Safe.t
+
+val make_computer_usage :
+  computer_id:string ->
+  ?latest:usage_point ->
+  points:usage_point option list ->
+  unit ->
+  computer_usage
+(** A computer's CPU and memory over the last day. *)
+
 type nonrec create_account_merge_request = {
   email : string;  (** The email address to generate the merge link for. *)
 }
@@ -4244,6 +4283,13 @@ val get_team_computer_rollout :
 
 Whether the caller sees computers: the same rollout check purchases and
 offers make, so the web never shows computers the backend would refuse. *)
+
+val list_team_computer_usage :
+  unit -> (computer_usage list, error_response) Macro_sdk_runtime.Request.t
+(** [GET /team/computers/usage]
+
+Each of the team's computers' CPU and memory over the last day, in the
+list's order. *)
 
 val cancel_team_computer :
   computer_id:string ->

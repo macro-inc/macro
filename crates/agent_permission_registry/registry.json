@@ -175,6 +175,7 @@
       "list_team_agents": {"group": "agents", "action": "read", "label": "List team agents"},
       "list_team_computer_offers": {"group": "agents", "action": "read", "label": "List team computer offers"},
       "list_team_computer_purchase_offers": {"group": "agents", "action": "read", "label": "List team computer purchase offers"},
+      "list_team_computer_usage": {"group": "agents", "action": "read", "label": "List team computer usage"},
       "list_team_computers": {"group": "agents", "action": "read", "label": "List team computers"},
       "logout": {"group": "account", "action": "update", "label": "Sign out"},
       "macro_api_token": {"group": "account", "action": "read", "label": "Get API token"},

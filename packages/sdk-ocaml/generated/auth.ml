@@ -998,6 +998,73 @@ let make_computer_status ~(agent_count : int) ?billing ~(can_restore : bool)
    }
     : computer_status)
 
+type nonrec usage_point = {
+  cpu_percent : float option;
+      (** Share of its CPUs in use, 0 to 100. Absent until a second reading
+of the same run measures it: a computer's first reading after it
+starts or wakes has memory only. *)
+  memory_bytes : int64;
+      (** Memory only it holds, in bytes; memory shared with its image is not
+counted. *)
+}
+(** A computer's use at one point of the graph. *)
+
+let usage_point_of_yojson : Yojson.Safe.t -> usage_point =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    cpu_percent = Json.optional fields "cpuPercent" Json.float;
+    memory_bytes = Json.required fields "memoryBytes" Json.int64;
+  }
+
+and yojson_of_usage_point : usage_point -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("cpuPercent", Option.map Json.of_float value.cpu_percent);
+      ("memoryBytes", Some (Json.of_int64 value.memory_bytes));
+    ]
+
+let make_usage_point ?cpu_percent ~(memory_bytes : int64) () =
+  ({ cpu_percent; memory_bytes } : usage_point)
+
+type nonrec computer_usage = {
+  computer_id : string;  (** The computer. *)
+  latest : usage_point option;
+  points : usage_point option list;
+      (** The last 24 hours in 15-minute steps, oldest first: average CPU and
+highest memory of each step, absent where the computer has no
+reading (it did not run). *)
+}
+(** A computer's CPU and memory over the last day. *)
+
+let computer_usage_of_yojson : Yojson.Safe.t -> computer_usage =
+ fun json ->
+  let fields = Json.obj json in
+  {
+    computer_id = Json.required fields "computerId" Json.string;
+    latest = Json.optional fields "latest" usage_point_of_yojson;
+    points =
+      Json.required fields "points"
+        (Json.list (Json.option usage_point_of_yojson));
+  }
+
+and yojson_of_computer_usage : computer_usage -> Yojson.Safe.t =
+ fun value ->
+  Json.record
+    [
+      ("computerId", Some (Json.of_string value.computer_id));
+      ("latest", Option.map yojson_of_usage_point value.latest);
+      ( "points",
+        Some
+          ((Json.of_list (Json.of_option yojson_of_usage_point)) value.points)
+      );
+    ]
+
+let make_computer_usage ~(computer_id : string) ?latest
+    ~(points : usage_point option list) () =
+  ({ computer_id; latest; points } : computer_usage)
+
 type nonrec create_account_merge_request = {
   email : string;  (** The email address to generate the merge link for. *)
 }
@@ -8306,6 +8373,27 @@ let get_team_computer_rollout () =
     : ( computer_rollout,
         Macro_sdk_runtime.Request.no_error )
       Macro_sdk_runtime.Request.t)
+
+(** [GET /team/computers/usage]
+
+Each of the team's computers' CPU and memory over the last day, in the
+list's order. *)
+let list_team_computer_usage () =
+  ({
+     Request.service = "auth";
+     operation = "list_team_computer_usage";
+     meth = `GET;
+     path = "/team/computers/usage";
+     query = List.filter (fun (_, values) -> values <> []) [];
+     headers =
+       List.concat_map
+         (fun (name, values) -> List.map (fun v -> (name, v)) values)
+         [];
+     body = None;
+     decode_reply = Request.json (Json.list computer_usage_of_yojson);
+     decode_error = Request.error_json [ 401; 403 ] error_response_of_yojson;
+   }
+    : (computer_usage list, error_response) Macro_sdk_runtime.Request.t)
 
 (** [POST /team/computers/{computer_id}/cancel]
 
