@@ -294,6 +294,13 @@ fn recording_send(sent: Sent) -> SendAgent {
     })
 }
 
+/// The dial macrod holds open on this replica throughout a test.
+fn dial() -> agent_harness::domain::ports::RuntimeConnectionId {
+    static DIAL: std::sync::LazyLock<agent_harness::domain::ports::RuntimeConnectionId> =
+        std::sync::LazyLock::new(agent_harness::domain::ports::RuntimeConnectionId::generate);
+    *DIAL
+}
+
 fn hand_off() -> DeliverAgent {
     DeliverAgent::new(
         AGENT_HARNESS,
@@ -311,7 +318,7 @@ async fn the_replica_holding_the_socket_issues_the_agent_and_sends_it_down() {
         hand_off(),
         agents.clone(),
         Arc::default(),
-        Arc::new(|harness| harness == AGENT_HARNESS),
+        Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
         recording_send(Arc::clone(&sent)),
     )
     .await;
@@ -345,7 +352,7 @@ async fn a_replica_without_the_socket_issues_nothing() {
         hand_off(),
         agents.clone(),
         Arc::default(),
-        Arc::new(|_| false),
+        Arc::new(|_| None),
         recording_send(Arc::clone(&sent)),
     )
     .await;
@@ -394,7 +401,7 @@ async fn a_repeated_hand_off_sends_the_same_environment_without_issuing_again() 
             hand_off(),
             agents.clone(),
             Arc::clone(&issued),
-            Arc::new(|harness| harness == AGENT_HARNESS),
+            Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
             recording_send(Arc::clone(&sent)),
         )
         .await;
@@ -421,7 +428,7 @@ async fn hand_offs_racing_for_one_enrollment_issue_it_once() {
             hand_off(),
             agents.clone(),
             Arc::clone(&issued),
-            Arc::new(|harness| harness == AGENT_HARNESS),
+            Arc::new(|harness| (harness == AGENT_HARNESS).then_some(dial())),
             recording_send(Arc::clone(&sent)),
         )
     };
@@ -432,4 +439,28 @@ async fn hand_offs_racing_for_one_enrollment_issue_it_once() {
     let sent = sent.lock().unwrap();
     assert_eq!(sent.len(), 2);
     assert_eq!(sent[0], sent[1]);
+}
+
+/// macrod redialing while its agent starts may have met another replica,
+/// which issued and so revoked the key kept here: a new dial issues again.
+#[tokio::test]
+async fn a_hand_off_on_a_new_dial_issues_again() {
+    let agents = Arc::new(AdaAgent::default());
+    let issued = Arc::new(IssuedAgents::default());
+    let sent = Sent::default();
+    let redial = agent_harness::domain::ports::RuntimeConnectionId::generate();
+
+    for connection in [dial(), redial] {
+        deliver_agent_to_runtime(
+            hand_off(),
+            agents.clone(),
+            Arc::clone(&issued),
+            Arc::new(move |harness| (harness == AGENT_HARNESS).then_some(connection)),
+            recording_send(Arc::clone(&sent)),
+        )
+        .await;
+    }
+
+    assert_eq!(agents.issued.lock().unwrap().len(), 2);
+    assert_eq!(sent.lock().unwrap().len(), 2);
 }

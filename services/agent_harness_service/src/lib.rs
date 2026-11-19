@@ -1818,9 +1818,9 @@ pub async fn run() -> anyhow::Result<()> {
                                     "an agent hand-off reached a deployment without a fleet; ignoring it");
                                 return Box::pin(async {});
                             };
-                            let connected = {
+                            let connection_of = {
                                 let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness| runtimes.is_connected(harness))
+                                Arc::new(move |harness| runtimes.connection_of(harness))
                             };
                             let send: runtime_commands::SendAgent = {
                                 let runtimes = Arc::clone(&runtimes);
@@ -1835,7 +1835,7 @@ pub async fn run() -> anyhow::Result<()> {
                                 request,
                                 agents,
                                 Arc::clone(&issued),
-                                connected,
+                                connection_of,
                                 send,
                             ))
                         })

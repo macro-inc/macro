@@ -125,6 +125,11 @@ where
         self.connections.contains_key(&harness)
     }
 
+    /// The dial a harness's runtime is connected on here, if any.
+    pub fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.connections.get(&harness).map(|listed| listed.id)
+    }
+
     /// Ask a harness's live runtime to probe a fresh ACP process.
     ///
     /// Returns `None` when no live connection exists. The caller owns the

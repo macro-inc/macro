@@ -103,16 +103,25 @@ pub(crate) async fn deliver_agent_to_runtime(
     request: DeliverAgent,
     agents: Arc<dyn hosted_runtimes::domain::agent::AgentEnrollmentSource>,
     issued: Arc<IssuedAgents>,
-    connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
+    connection_of: Arc<
+        dyn Fn(HarnessId) -> Option<agent_harness::domain::ports::RuntimeConnectionId>
+            + Send
+            + Sync,
+    >,
     send: SendAgent,
 ) {
-    if !connected(request.deliver_agent_harness) {
+    let Some(connection) = connection_of(request.deliver_agent_harness) else {
         return;
-    }
+    };
     let span = request.span();
     async move {
         let Some(environment) = issued
-            .get_or_issue(request.computer_id, request.generation, &*agents)
+            .get_or_issue(
+                request.computer_id,
+                request.generation,
+                connection,
+                &*agents,
+            )
             .await
         else {
             return;
@@ -133,33 +142,38 @@ const ISSUED_AGENT_KEPT_FOR: std::time::Duration = std::time::Duration::from_sec
 /// already holds. Kept only for [`ISSUED_AGENT_KEPT_FOR`]; values are wiped
 /// when dropped.
 #[derive(Default)]
-pub(crate) struct IssuedAgents(
-    tokio::sync::Mutex<
-        std::collections::HashMap<
-            (
-                hosted_runtimes::domain::ids::ComputerId,
-                hosted_runtimes::domain::enrollment::EnrollmentGeneration,
-            ),
-            (
-                std::time::Instant,
-                agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
-            ),
-        >,
-    >,
+pub(crate) struct IssuedAgents(tokio::sync::Mutex<std::collections::HashMap<Enrollment, Issued>>);
+
+/// One creation of a computer's guest.
+type Enrollment = (
+    hosted_runtimes::domain::ids::ComputerId,
+    hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+);
+
+/// When and on which dial an environment was issued, and the environment.
+type Issued = (
+    std::time::Instant,
+    agent_harness::domain::ports::RuntimeConnectionId,
+    agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
 );
 
 impl IssuedAgents {
-    /// The environment kept for the enrollment, issued first if none is. The
-    /// lock spans `issue`, so hand-offs racing for one enrollment issue once.
+    /// The environment kept for the enrollment on this dial, issued first if
+    /// none is. A redial issues again: another replica may have issued, and
+    /// so revoked the kept key, while macrod was away. The lock spans
+    /// `issue`, so hand-offs racing for one enrollment issue once.
     async fn get_or_issue(
         &self,
         computer_id: hosted_runtimes::domain::ids::ComputerId,
         generation: hosted_runtimes::domain::enrollment::EnrollmentGeneration,
+        connection: agent_harness::domain::ports::RuntimeConnectionId,
         agents: &dyn hosted_runtimes::domain::agent::AgentEnrollmentSource,
     ) -> Option<agent_runtime_protocol::domain::schema::v0::AgentEnvironment> {
         let mut issued = self.0.lock().await;
-        issued.retain(|_, (at, _)| at.elapsed() < ISSUED_AGENT_KEPT_FOR);
-        if let Some((_, environment)) = issued.get(&(computer_id, generation)) {
+        issued.retain(|_, (at, _, _)| at.elapsed() < ISSUED_AGENT_KEPT_FOR);
+        if let Some((_, kept_on, environment)) = issued.get(&(computer_id, generation))
+            && *kept_on == connection
+        {
             return Some(environment.clone());
         }
         let enrollment = match agents.issue(computer_id, generation).await {
@@ -183,7 +197,7 @@ impl IssuedAgents {
         );
         issued.insert(
             (computer_id, generation),
-            (std::time::Instant::now(), environment.clone()),
+            (std::time::Instant::now(), connection, environment.clone()),
         );
         Some(environment)
     }
