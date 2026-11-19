@@ -75,8 +75,13 @@ test('the answer buttons fit inside their line', async ({ page, isMobile }) => {
 // The added row that follows an approval already names who let them in.
 test('an approved request shows no answer', async ({ page }) => {
   await page.goto('/access-request.html');
-  await page.evaluate(() => window.update({ outcome: { kind: 'approved' } }));
   const row = page.locator('[data-system-activity]');
+  await page.evaluate(() =>
+    window.update({ outcome: { kind: 'pending', canAnswer: true } })
+  );
+  await expect(row.getByRole('button', { name: 'Approve' })).toBeVisible();
+
+  await page.evaluate(() => window.update({ outcome: { kind: 'approved' } }));
   await expect(row).toContainText('asked to join the channel');
   await expect(row).not.toContainText('Approved');
   await expect(row.getByRole('button')).toHaveCount(0);
