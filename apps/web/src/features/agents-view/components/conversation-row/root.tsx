@@ -2,7 +2,6 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { pressHandlers, Tooltip } from '@ui';
 import { ConversationRowContext, type ConversationRowProps } from './context';
-import './conversation-row.css';
 
 export function ConversationRowRoot(props: ConversationRowProps) {
   const description = () => {
@@ -20,7 +19,7 @@ export function ConversationRowRoot(props: ConversationRowProps) {
       <ViewSidebar.Item
         as="div"
         active={props.active}
-        class="conversation-row relative text-ink"
+        class="group/conversation relative text-ink [--conversation-row-surface:var(--color-hover)] aria-[current=page]:[--conversation-row-surface:var(--color-active)] not-aria-[current=page]:focus-within:bg-hover"
         data-agent-session-row={props.id}
         data-kind={props.kind}
         data-session-state={props.state}

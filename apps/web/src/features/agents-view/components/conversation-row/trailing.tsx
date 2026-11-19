@@ -10,7 +10,7 @@ export function ConversationRowTrailing(props: {
       class="conversation-trailing pointer-events-none ml-auto flex size-4 shrink-0 items-center justify-end"
       data-has-code={content.toArray().length ? '' : undefined}
     >
-      <span class="conversation-age pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center rounded-r-lg pl-8 pr-(--sidebar-item-inset) text-xs text-ink-extra-muted tabular-nums">
+      <span class="pointer-events-none absolute inset-y-0 right-0 z-10 flex items-center rounded-r-lg bg-[linear-gradient(to_right,transparent,var(--conversation-row-surface)_2rem)] pl-8 pr-(--sidebar-item-inset) text-xs text-ink-extra-muted tabular-nums opacity-0 transition-opacity duration-120 ease-out group-hover/conversation:opacity-100 group-focus-within/conversation:opacity-100 motion-reduce:transition-none">
         {props.age}
       </span>
       <Show when={content.toArray().length}>

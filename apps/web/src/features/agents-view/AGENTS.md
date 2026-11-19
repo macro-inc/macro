@@ -59,7 +59,6 @@ From `apps/web`:
 - `bun run test --project app src/features/agents-view`
 - `bun run test --project app src/lib/i18n`
 - `bun run type-check`
-- `bunx playwright test --config src/features/agents-view/browser-test/playwright.config.ts`: timestamp overlay geometry, hover/focus, and active-surface regression.
 
 From the repository root, run `just check`. Exercise the sidebar, archive actions, PR/branch previews, phone flows, and unchanged Home consumers before release.
 
