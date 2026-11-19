@@ -1213,6 +1213,7 @@ export const settings = {
       state: 'result: the switch shows the chosen setting, also after a reload',
       trigger: 'after the action succeeds',
       source: ['src/features/settings/email-settings.tsx'],
+      needs: 'the notification service',
     },
     {
       id: 'STX-963',

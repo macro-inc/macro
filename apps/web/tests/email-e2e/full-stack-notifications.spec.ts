@@ -1,12 +1,14 @@
 // New mail as the notification service tells it, on the local stack: the
 // open list shows a message that arrives without a reload, the Notifications
-// inbox lists it and opens its thread, and the "New email" switch in Settings
-// is kept by the service.
+// inbox lists it and opens its thread, the "New email" switch in Settings
+// is kept by the service, and the Mail badge counts only mail that arrived
+// while that switch was on.
 
 import type { Page } from '@playwright/test';
 import { loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { focusRow } from './harness/list';
+import { localStackAddresses } from './harness/local-stack';
 import { anInbox, PROVIDERS } from './harness/providers';
 import { notice } from './harness/send';
 import { confirmed, did, saw } from './ledger/record';
@@ -32,6 +34,63 @@ async function disabledTypes(mailbox: Mailbox): Promise<string[]> {
   expect(answer.status).toBe(200);
   const body = (await answer.json()) as { disabled_types: string[] };
   return body.disabled_types;
+}
+
+/**
+ * The queues a new mail's notification passes through: Gmail's sync hands it
+ * on as it finishes the queue message that stored the thread, and the
+ * notification service reads the user's types as it takes it off its own.
+ */
+const NOTIFYING_QUEUES = [
+  'email-service-gmail-inbox-sync-queue',
+  'email-service-gmail-inbox-retry-queue',
+  'notification-ingress-queue',
+];
+
+/**
+ * Whether the services have decided if a thread's new mail notifies, which
+ * happens after the thread is listed. Outlook's sync hands the mail on from
+ * its projection, whose outbox row for the thread goes when it is done; then
+ * every queue on the way must be empty. The local stack's queues are shared,
+ * so this also waits for other tests' mail.
+ */
+async function decided(mailbox: Mailbox, threadId: string): Promise<boolean> {
+  const [outbox] = await mailbox.stack.sql<{ waiting: number }>(
+    `SELECT count(*)::int AS waiting FROM email_projection_outbox
+     WHERE link_id = '${mailbox.inbox.linkId}' AND payload->>'thread_id' = '${threadId}'`
+  );
+  if ((outbox?.waiting ?? 0) > 0) return false;
+  for (const queue of NOTIFYING_QUEUES) {
+    if (await queueBusy(queue)) return false;
+  }
+  return true;
+}
+
+/** Whether a queue of the local stack holds a message, waiting or taken. */
+async function queueBusy(queue: string): Promise<boolean> {
+  const sqs = localStackAddresses()?.sqsUrl;
+  if (!sqs)
+    throw new Error(
+      "EMAIL_E2E_STACK_SQS_URL is not set: the address of the stack's LocalStack"
+    );
+  const answer = await fetch(`${sqs}/000000000000/${queue}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      Action: 'GetQueueAttributes',
+      Version: '2012-11-05',
+      'AttributeName.1': 'All',
+    }),
+  });
+  const text = await answer.text();
+  expect(answer.status, text).toBe(200);
+  const counts = [
+    ...text.matchAll(
+      /<Name>ApproximateNumberOfMessages\w*<\/Name>\s*<Value>(\d+)<\/Value>/g
+    ),
+  ];
+  expect(counts, text).toHaveLength(3);
+  return counts.some(([, count]) => count !== '0');
 }
 
 /** The ids of what the user muted, as the notification service keeps them. */
@@ -190,6 +249,61 @@ for (const provider of PROVIDERS) {
         .poll(() => disabledTypes(mailbox))
         .not.toContain('new_email');
       confirmed('F-162');
+    });
+
+    // Class notify-badge-ignores-preference: when this fails, mail that
+    // arrives while "New email" notifications are off still lights the Mail
+    // badge, so someone who asked not to be told about new mail is told.
+    // The badge counts the Notifications inbox's unread mail rows, and the
+    // service makes no row for a type the user turned off.
+    test('the Mail badge counts only mail that arrives while new-email notifications are on', async ({
+      page,
+      mailbox,
+    }) => {
+      const badge = page.locator('[data-sidebar-next-item="mail"]');
+      await mailbox.deliver({
+        from: 'Linus <linus@example.com>',
+        subject: 'Dinner instead',
+        text: 'Seven at the pier.',
+      });
+      const announced = await mailbox.synced('Dinner instead');
+      await expect
+        .poll(async () =>
+          (await notifications(mailbox)).map(
+            (each) => `${each.notification_event_type} ${each.entity_id}`
+          )
+        )
+        .toContain(`new_email ${announced.id}`);
+      await mailbox.open('/app/mail/~/settings/notifications');
+      await expect(badge).toHaveAttribute('data-unread');
+      await expect(badge).toHaveAttribute('data-unread-count', '1');
+      saw('STX-032');
+
+      // The switch stays off from here on: the notification service reads it
+      // when it takes the mail, after the mail is listed.
+      await expect(newEmailSwitch(page)).toBeEnabled();
+      await setNewEmail(page, false);
+      await expect.poll(() => disabledTypes(mailbox)).toContain('new_email');
+      confirmed('F-162');
+      await mailbox.deliver({
+        from: 'Grace <grace@example.com>',
+        subject: 'Lunch?',
+        text: 'Noon at the quarry?',
+      });
+      const unannounced = await mailbox.synced('Lunch?');
+      await expect
+        .poll(() => decided(mailbox, unannounced.id), { timeout: 60_000 })
+        .toBe(true);
+      expect(
+        (await notifications(mailbox)).map((each) => each.entity_id)
+      ).not.toContain(unannounced.id);
+
+      // Both threads are unread; only the one that arrived with the type on
+      // is counted. A load reads the count afresh: the count stream starts
+      // from the service's own count.
+      await mailbox.open('/app/mail');
+      await expect(badge).toHaveAttribute('data-unread-count', '1');
+      saw('STX-032');
     });
 
     // When this fails, muting a thread from the list does not reach the

@@ -482,12 +482,14 @@ export const elsewhere = {
       id: 'AX-063',
       surface: 'SX-29',
       fn: ['F-162'],
-      action: 'Toggle "New email" notifications (also hides the Mail badge)',
+      action:
+        'Toggle "New email" notifications (mail that arrives while off is not counted on the Mail badge)',
       trigger: 'switch on the row "New email" ("When a new email arrives")',
       source: [
         'src/features/settings/Notifications.tsx',
         'src/features/notifications/notification-event-catalog.ts',
       ],
+      needs: 'the notification service',
     },
     {
       id: 'AX-324',
@@ -526,9 +528,14 @@ export const elsewhere = {
       surface: 'SX-17',
       fn: ['F-042'],
       state:
-        'Unread mark on the Mail navigation entry; hidden when "New email" notifications are off',
-      trigger: 'an unread, not-done Signal thread in the loaded page',
-      source: ['src/components/app/use-navigation-unread.ts'],
+        'Unread count on the Mail navigation entry: unread mail that arrived while "New email" notifications were on',
+      trigger:
+        'an unread thread with a new-email row in the Notifications inbox (the server counts them)',
+      source: [
+        'src/components/app/use-navigation-unread.ts',
+        'src/features/notifications-inbox/queries/inbox-unread.ts',
+      ],
+      needs: 'the notification service',
     },
     {
       id: 'STX-300',

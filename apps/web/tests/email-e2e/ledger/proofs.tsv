@@ -500,7 +500,7 @@ F-038	j and k do not move the cursor
 F-039	a row's checkbox selects nothing
 F-040	the reading pane never opens
 F-041	a row shows another subject
-F-042	the Mail badge never lights
+F-042	use-navigation-unread.ts counts no rows for the Mail entry, so the Mail badge never lights however much new mail is unread.
 F-043	Try again on a failed list does nothing
 F-044	undo of Done does nothing
 F-045	saving a new view from the builder fails
@@ -1075,7 +1075,7 @@ STX-027	The toast after an administrator's approval reads "Tenant approved" inst
 STX-028	The reconnect prompt's text reads "Sync paused for <address>." instead of "Sync stopped for <address>. Reconnect to restore … sync." in GmailReauthenticationPrompt.tsx.
 STX-030	not shown as the row says (Persistent toast "Email access required": "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected."): its rendering is switched off or changed in src/features/auth/EmailAuth.tsx
 STX-031	The sign-out dialog's title "Sign out and remove local drafts?" is shortened to "Sign out?" in logout.ts.
-STX-032	The rail item in sidebar-next/list-nav.tsx never sets data-unread on the Mail entry, so unread mail shows no mark on the Mail navigation item.
+STX-032	The rail item in sidebar-next/list-nav.tsx never sets data-unread or data-unread-count on the Mail entry, so unread mail shows no mark or count on the Mail navigation item.
 STX-033	not shown as the row says (Validation line: "Choose Email", "Connect or choose an email account", "Choose a specific recipient for …", "Add a subject", "Attached context is supported for AI. Remove it or choose AI."; buttons disabled): its rendering is switched off or changed in src/features/universal-input/core/input.ts, src/features/universal-input/views/universal-composer.tsx, src/features/universal-input/actions.ts
 STX-200	not shown as the row says (Connect rows hidden once an inbox is connected without enable-multi-inbox; Outlook row hidden when not offered): its rendering is switched off or changed in src/features/settings/Email.tsx
 STX-201	not shown as the row says (Force sync button disabled while the inbox is syncing): its rendering is switched off or changed in src/features/settings/Email.tsx
