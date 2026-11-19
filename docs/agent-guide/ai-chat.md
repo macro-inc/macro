@@ -649,6 +649,9 @@ the shimmer.
   does not reorder the sections. Root search includes all models and agent names. The compact borderless search
   field receives focus when the selector opens or reopens. Its opaque header
   meets the top of the scroll area so rows cannot show through above it.
+  All models focuses its search on hover or keyboard opening. ArrowDown/ArrowUp
+  move from search to the first/last matching model; ArrowLeft returns to the
+  parent trigger. Subsequent model navigation keeps focus on the chosen row.
   **Built-in**, **Your agents**, and **Needs connection** groups follow when
   they have entries. Each agent row shows its runtime and model, or its setup
   action/availability reason. **Create agent** uses the shared rounded pill

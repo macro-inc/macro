@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { keepSearchFocused } from '@core/component/AI/component/input/model-catalog-search';
 import type { CatalogModelOption } from '@core/component/AI/component/input/modelCatalog';
 import { ModelIcon } from '@core/component/AI/component/ProviderIcon';
 import Check from '@icon/system/regular/check.svg';
@@ -21,12 +22,10 @@ export function AllModelsMenu(props: {
     () => modelSelection(catalog(), [], query()).allProviders
   );
   let search: HTMLInputElement | undefined;
-  onMount(() =>
-    requestAnimationFrame(() => search?.isConnected && search.focus())
-  );
+  onMount(() => keepSearchFocused(() => search));
 
   return (
-    <>
+    <div>
       <div class="flex h-10 shrink-0 items-center gap-2 px-3.5">
         <Search class="size-4 shrink-0 text-ink-extra-muted" />
         <input
@@ -36,7 +35,21 @@ export function AllModelsMenu(props: {
           value={query()}
           onInput={(event) => setQuery(event.currentTarget.value)}
           onKeyDown={(event) => {
-            if (event.key !== 'Escape') event.stopPropagation();
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              event.stopPropagation();
+              const menu = event.currentTarget.closest('[role="menu"]');
+              const rows = menu?.querySelectorAll<HTMLElement>(
+                '[role="menuitemradio"]:not([data-disabled]):not([aria-disabled="true"])'
+              );
+              const row =
+                event.key === 'ArrowDown' ? rows?.[0] : rows?.[rows.length - 1];
+              row?.focus();
+              return;
+            }
+            if (event.key !== 'Escape' && event.key !== 'ArrowLeft') {
+              event.stopPropagation();
+            }
           }}
           class="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-ink-extra-muted"
         />
@@ -73,6 +86,6 @@ export function AllModelsMenu(props: {
           {t('agentControls.noMatches')}
         </p>
       </Show>
-    </>
+    </div>
   );
 }
