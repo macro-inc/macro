@@ -13,6 +13,7 @@ import type {
 } from '@app/features/saved-views/context/saved-views-source';
 import {
   createSavedViewCreation,
+  type NewSavedView,
   type SavedViewCreation,
 } from '@app/features/saved-views/primitives/create-saved-view-creation';
 import { normalizeFacetSelection } from '@app/features/soup';
@@ -149,7 +150,8 @@ export type TasksViewContext = {
     config?: TaskSavedViewConfig,
     name?: string,
     afterStart?: () => void,
-    changed?: boolean
+    changed?: boolean,
+    appearance?: NewSavedView['appearance']
   ) => void;
   selectSavedView: (id: string) => void;
   selectCreatedSavedView: (id: string) => void;
@@ -396,7 +398,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     config?: TaskSavedViewConfig,
     name = t('viewMenus.newView'),
     afterStart?: () => void,
-    changed = false
+    changed = false,
+    appearance?: NewSavedView['appearance']
   ) => {
     const start = () => {
       batch(() => {
@@ -420,7 +423,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         setNewSavedView(true);
         const captured = savedViews?.capture();
         if (captured?.isOk())
-          savedViewCreation?.begin(captured.value, name, changed);
+          savedViewCreation?.begin(captured.value, name, changed, appearance);
         savedViewCreation?.internalNavigation(() =>
           navigateSavedView(undefined)
         );

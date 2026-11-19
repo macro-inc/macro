@@ -14,6 +14,7 @@ import type {
 } from '@app/features/saved-views/context/saved-views-source';
 import {
   createSavedViewCreation,
+  type NewSavedView,
   type SavedViewCreation,
 } from '@app/features/saved-views/primitives/create-saved-view-creation';
 import {
@@ -194,7 +195,8 @@ export type EmailViewContext = {
     filters: EmailSavedViewFilters,
     name?: string,
     afterStart?: () => void,
-    changed?: boolean
+    changed?: boolean,
+    appearance?: NewSavedView['appearance']
   ) => void;
   /** Present only where the host mounts saved views. */
   savedViews?: EmailSavedViewDraft;
@@ -693,7 +695,8 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     filters: EmailSavedViewFilters,
     name = t('viewMenus.newView'),
     afterStart?: () => void,
-    changed = false
+    changed = false,
+    appearance?: NewSavedView['appearance']
   ) => {
     const start = () => {
       const config: EmailSavedViewConfig = {
@@ -703,7 +706,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       };
       batch(() => {
         applySavedView(materializeEmailSavedView(config));
-        savedViewCreation?.begin(config, name, changed);
+        savedViewCreation?.begin(config, name, changed, appearance);
         setSavedViewNavigation({});
         savedViewCreation?.internalNavigation(() =>
           fireAndForget(navigateToList(undefined), 'email-view')

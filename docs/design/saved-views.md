@@ -258,6 +258,10 @@ format or new settings for already-shipped clients without this write guard,
 require a backend write-version check or update those clients first; the generic
 backend currently stores opaque JSON and does not enforce reader capabilities.
 
+## Appearance
+
+Saved definitions share the entity-appearance icon and color contract, stored outside their consumer-owned filter configuration. Only the owner can change appearance. Everyone who can read a shared definition sees its appearance, including when `enableEntityAppearance` is off; that flag gates editing only. Without an override, rows and breadcrumbs retain the bookmark default. Sidebar and header action menus reuse the desktop embedded picker and touch sheet. Each selection saves immediately without changing filters, the configuration revision, or content timestamps. Creation accepts optional initial appearance so duplication copies it atomically; blank creation keeps the defaults.
+
 ## Ownership, sharing, and lifecycle
 
 A caller can read a definition when they own it, or when its effective team share

@@ -43,12 +43,26 @@ preview remains available at the existing preview address.
 
 - Removed project-route parsing and the project foreground hook from the
   generic mobile creation controls.
-- Project detail owns its fallback accessory through `FloatRegion`; the page's
-  task menu takes precedence when available. Loading and read-only pages retain
-  clearance without exposing unrelated creation actions.
+- The existing page Task menu owns the accessory through `FloatRegion`; the
+  shared action returns when the page contribution is unavailable. No project
+  placeholder suppresses the shared fallback.
 - Retained the existing floating-region priority and pane-lifetime behavior;
   no new shared registry or feature-specific option was added.
-- Local validation: 165 test files and 1,343 tests passed, web checks and
-  `just check` passed, and review found no concrete regression.
+- Latest local validation: 376 test files and 3,048 tests passed after the main
+  merge, together with web checks and `just check`.
 - Browser/device verification remains assigned to the user. The hosted preview
   stays running, and CI is requested for the final pushed commit.
+
+## Saved-view appearance merge
+
+- CI could not start after main advanced; merged `origin/main` at `907ceac49c`.
+- Preserved draft ordering and leave guards alongside shared appearance editing.
+  Saved rows keep keyed identity, and live icon/color updates do not reset dirty
+  filters. Duplicates copy appearance once when the draft starts.
+- Resolved conflicts in the shared saved-view list, menu, and dialogs; Email's
+  saved-view page and guide; Tasks' header, draft adapter, saved-view page, and
+  guide; and the task agent guide.
+- Initial verification hit unresolved markers and type mismatches; those are
+  resolved, and the final local checks above pass.
+- The ordinary global action intentionally returns when a project action is
+  unavailable; no project-specific placeholder suppresses it.

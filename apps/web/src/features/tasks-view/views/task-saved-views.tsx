@@ -34,6 +34,7 @@ import {
   useUpdateSavedView,
 } from '../../saved-views/queries/saved-view-actions';
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -209,6 +210,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
         existing: creation?.persisted(),
         name: draft.name,
         sharedTeamId: draft.sharedTeamId,
+        appearance: draft.appearance,
         config: savedViews.capture().unwrapOr(draft.config),
         title: 'Save view',
         submitLabel: 'Save view',
@@ -253,7 +255,8 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
           record ? readTaskSavedView(record.config).issues : undefined
         );
       },
-      true
+      true,
+      record?.appearance
     );
     return handle;
   };
@@ -323,9 +326,12 @@ function TaskSavedViewMenuItems(props: {
   return (
     <SavedViewMenuItems
       mobile={props.mobile}
-      editLabel="Rename"
+      editLabel={t('viewMenus.editView')}
       deleteLabel="Delete"
       owned={props.record.ownerId === viewerId()}
+      appearance={
+        <SavedViewAppearanceMenu view={props.record} defer={props.defer} />
+      }
       onEdit={edit}
       onDelete={remove}
       onDuplicate={() => {
@@ -365,14 +371,14 @@ export function TaskSavedViewsList() {
             <SavedViewListEntries entries={entries()} onDraftSelect={closeTask}>
               {(record) => (
                 <SavedViewListRow
-                  view={record}
+                  view={record()}
                   touchActions={isTouchDevice()}
-                  selected={selectedId() === record.id}
+                  selected={selectedId() === record().id}
                   scopeKey={viewerId()}
-                  onSelect={() => selectSavedView(record.id)}
+                  onSelect={() => selectSavedView(record().id)}
                   menu={(defer) => (
                     <TaskSavedViewMenuItems
-                      record={record}
+                      record={record()}
                       mobile={isTouchDevice()}
                       owner={owner}
                       defer={defer}

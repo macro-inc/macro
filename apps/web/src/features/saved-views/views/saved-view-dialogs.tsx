@@ -61,6 +61,7 @@ export function SavedViewDialog(
           sharedTeamId?: string | null;
           /** A first save succeeded while newer local edits were still pending. */
           existing?: SavedView;
+          appearance?: SavedView['appearance'];
         }
       // Edit renames and shares; a consumer that edits filters too passes
       // the replacement configuration, read when the form submits.
@@ -97,6 +98,7 @@ export function SavedViewDialog(
         name,
         config: props.config,
         sharedTeamId,
+        appearance: props.appearance,
       });
       if (!result.error && result.data?.createSavedView)
         record = toSavedView(result.data.createSavedView);

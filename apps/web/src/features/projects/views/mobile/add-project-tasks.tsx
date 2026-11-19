@@ -1,8 +1,11 @@
 import { t } from '@app/lib/i18n';
+import { activeElement } from '@app/signal/focus';
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { MobileCreateMenu } from '@components/app/mobile/MobileCreateMenu';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { isEditableInput } from '@core/util/isEditableInput';
 import ListPlusIcon from '@icon/system/regular/list-plus.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import type { AddProjectTasksViewProps } from '../../add-project-tasks';
@@ -10,7 +13,12 @@ import type { AddProjectTasksViewProps } from '../../add-project-tasks';
 export function MobileAddProjectTasks(props: AddProjectTasksViewProps) {
   return (
     <>
-      <FloatRegion region="accessory">
+      <FloatRegion
+        region="accessory"
+        active={() =>
+          !virtualKeyboardVisible() && !isEditableInput(activeElement())
+        }
+      >
         <div class="flex h-(--mobile-chrome-button-size) justify-end px-(--mobile-chrome-gutter) pointer-events-auto">
           <MobileCreateMenu
             label={t('viewMenus.task')}

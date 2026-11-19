@@ -1,3 +1,4 @@
+import { deepEqual } from '@core/util/compareUtils';
 import {
   type Accessor,
   createEffect,
@@ -5,7 +6,7 @@ import {
   on,
   onCleanup,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
+import { createStore, unwrap } from 'solid-js/store';
 import { v4 as uuid } from 'uuid';
 import {
   appendSavedViewDraft,
@@ -63,13 +64,19 @@ export function createSavedViewCreation(options: {
     })
   );
   const current = () => state.draft;
-  const begin = (config: unknown, name: string, changed = false) => {
+  const begin = (
+    config: unknown,
+    name: string,
+    changed = false,
+    appearance?: NewSavedView['appearance']
+  ) => {
     const draft: NewSavedView = {
       id: uuid(),
       kind: options.kind,
       config,
       name,
       sharedTeamId: null,
+      appearance: structuredClone(unwrap(appearance)),
     };
     setState({
       draft,
@@ -112,6 +119,7 @@ export function createSavedViewCreation(options: {
     const matches =
       draft.name.trim() === record.name &&
       draft.sharedTeamId === record.sharedTeamId &&
+      deepEqual(draft.appearance ?? null, record.appearance ?? null) &&
       options.equal(options.capture(), record.config);
     if (!matches) {
       // The first write succeeded, but newer edits still belong to this draft.

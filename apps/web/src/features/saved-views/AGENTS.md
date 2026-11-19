@@ -25,6 +25,7 @@ Reusable named view definitions. Consumers are main Tasks, Projects, and Email; 
 - A consumer that edits definitions in the dialog passes `fields`, `invalid`, and a replacement `config`; edit without `config` keeps renaming and sharing only. `hint` renders the consumer's note under the name (Email uses it on create).
 - Do not migrate CRM's legacy personal views or team settings into this consumer.
 - Share definitions, not access to their matching entities; the backend owns authorization.
+- Store icon and color on the shared definition, outside consumer config; only owners edit through the entity-appearance picker. Gate editing with `enableEntityAppearance`, never rendering, and preserve appearance through list/detail reads and temporary filter edits.
 - Rebuild loaded cursor chains after confirmed membership changes; never invent permission state or splice a full page.
 - Keep consumer edits on failed or stale saves; if edits arrive during initial creation, retain the draft and retry with the confirmed record's revision. Only matching confirmed writes replace the baseline, and Reset adopts the latest authorized definition withheld during editing.
 - Keep same-viewer confirmed definitions through transient read errors; explicit unavailable data and account changes must hide the previous definition.

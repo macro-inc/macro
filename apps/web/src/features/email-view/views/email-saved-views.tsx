@@ -58,6 +58,7 @@ import {
 } from '../../saved-views/queries/saved-view-actions';
 
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -141,6 +142,7 @@ type BuilderProps = ManagedDialogProps & {
         mode: 'create';
         id: string;
         name: string;
+        appearance?: SavedView['appearance'];
         title?: string;
         submitLabel?: string;
         source: 'builder' | 'save_filters' | 'duplicate';
@@ -200,6 +202,7 @@ function EmailSavedViewDialog(props: BuilderProps) {
       existing={props.existing}
       name={props.name}
       sharedTeamId={props.sharedTeamId}
+      appearance={props.appearance}
       config={config()}
       title={props.title}
       submitLabel={props.submitLabel}
@@ -278,6 +281,7 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
           existing: creation.persisted(),
           name: draft.name,
           sharedTeamId: draft.sharedTeamId,
+          appearance: draft.appearance,
           title: opening.copyOf ? t('emailViews.duplicateTitle') : undefined,
           submitLabel: opening.copyOf ? t('emailViews.duplicate') : undefined,
           source: opening.copyOf
@@ -313,7 +317,8 @@ function useOpenEmailSavedViewBuilder(owner: Owner | null = getOwner()) {
       () => {
         handle = openNew();
       },
-      Boolean(opening.copyOf || opening.fromFilters)
+      Boolean(opening.copyOf || opening.fromFilters),
+      opening.copyOf?.appearance
     );
     return handle;
   };
@@ -390,6 +395,9 @@ function EmailSavedViewMenuItems(props: {
   return (
     <SavedViewMenuItems
       owned={props.record.ownerId === viewerId()}
+      appearance={
+        <SavedViewAppearanceMenu view={props.record} defer={props.defer} />
+      }
       onEdit={() => {
         const record = props.record;
         props.defer(() =>
@@ -570,18 +578,18 @@ function EmailSavedViewRows(props: {
       {(record) => {
         const row = (reorderItem?: SavedViewRowReorder) => (
           <EmailSavedViewRow
-            record={record}
+            record={record()}
             run={run}
             owner={owner}
             reorder={reorderItem}
-            onMoveUp={draggable ? undefined : order.step(record.id, -1)}
-            onMoveDown={draggable ? undefined : order.step(record.id, 1)}
+            onMoveUp={draggable ? undefined : order.step(record().id, -1)}
+            onMoveDown={draggable ? undefined : order.step(record().id, 1)}
           />
         );
         if (!draggable) return row();
         // Drag items need the provider, which only the desktop list mounts.
         return row(
-          createReorderItem(record.id, {
+          createReorderItem(record().id, {
             canDrag: () => order.items().length > 1 && !order.busy(),
             // Presses on the row's menu trigger never drag.
             ignore: '[aria-haspopup]',

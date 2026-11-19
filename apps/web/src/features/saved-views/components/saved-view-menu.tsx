@@ -16,6 +16,7 @@ export function SavedViewMenuItems(props: {
   onEdit: () => void;
   editLabel?: string;
   deleteLabel?: string;
+  appearance?: JSX.Element;
   onDuplicate: () => void;
   /** Offered only by consumers whose links can open the view for someone. */
   onCopyLink?: () => void | boolean | Promise<void | boolean>;
@@ -64,6 +65,7 @@ export function SavedViewMenuItems(props: {
             {props.editLabel ?? t('viewMenus.editView')}
           </Item>
         </Show>
+        {props.appearance}
         <Item disabled={props.disabled} onSelect={props.onDuplicate}>
           <CopyIcon class="size-4" />
           {t('viewMenus.duplicate')}

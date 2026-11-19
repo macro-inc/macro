@@ -62,7 +62,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep embedded Project/CRM task consumers free of saved-view management.
 - Show filled Save view and Save changes actions; place mobile creation in a borderless, edge-to-edge info banner overlaying filter content immediately above the footer with unpunctuated copy and a leading bookmark icon on its button only when filters, due date, layout, grouping, or sort differ from the built-in tab defaults, excluding search.
 - Render Save view and draft Cancel as separate standalone buttons; preserve their existing dialog and cancellation behavior.
-- Keep sidebar actions targeted to their own record; Rename opens naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
+- Keep sidebar actions targeted to their own record; Edit combines naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
+- Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep saved-view names and menus in the sidebar; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.
 - Keep saved-view selection and creation in the shared sidebar on desktop and touch; omit header pickers and duplicate built-in tabs, and isolate Create view's keyboard scope from task-list shortcuts.
 - Render touch task controls through `MobileListLayout`, reserve its top inset inside `ListViewport`, and leave the greater of bottom safe area and floating chrome plus 16px after the final row; keep touch column headings and warning rows inside the scroller.

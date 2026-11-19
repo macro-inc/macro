@@ -19,6 +19,7 @@ import {
   useUpdateSavedView,
 } from '../../saved-views/queries/saved-view-actions';
 import { toSavedView } from '../../saved-views/queries/saved-views';
+import { SavedViewAppearanceMenu } from '../../saved-views/saved-view-appearance';
 import {
   DeleteSavedViewDialog,
   SavedViewDialog,
@@ -117,6 +118,7 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
         existing: views.creation.persisted(),
         name: draft.name,
         sharedTeamId: draft.sharedTeamId,
+        appearance: draft.appearance,
         config: views.draft.capture().unwrapOr(draft.config),
         title: t('viewMenus.saveView'),
         submitLabel: t('viewMenus.saveView'),
@@ -155,7 +157,8 @@ function createProjectViewDialogs(views: ProjectViews, owner = getOwner()) {
       () => {
         handle = open();
       },
-      true
+      true,
+      record?.appearance
     );
     return handle;
   };
@@ -211,20 +214,23 @@ export function ProjectSavedViewsList() {
         >
           {(record) => (
             <SavedViewListRow
-              view={record}
+              view={record()}
               touchActions={isTouchDevice()}
-              selected={views.active() && views.selectedId() === record.id}
+              selected={views.active() && views.selectedId() === record().id}
               scopeKey={views.viewerId()}
-              onSelect={() => views.select(record.id)}
+              onSelect={() => views.select(record().id)}
               menu={(defer) => (
                 <SavedViewMenuItems
                   mobile={isTouchDevice()}
-                  editLabel={t('common.rename')}
+                  editLabel={t('viewMenus.editView')}
                   deleteLabel={t('common.delete')}
-                  owned={record.ownerId === views.viewerId()}
-                  onEdit={() => defer(() => dialogs.edit(record))}
-                  onDuplicate={() => defer(() => dialogs.create(record))}
-                  onDelete={() => defer(() => dialogs.remove(record))}
+                  owned={record().ownerId === views.viewerId()}
+                  appearance={
+                    <SavedViewAppearanceMenu view={record()} defer={defer} />
+                  }
+                  onEdit={() => defer(() => dialogs.edit(record()))}
+                  onDuplicate={() => defer(() => dialogs.create(record()))}
+                  onDelete={() => defer(() => dialogs.remove(record()))}
                 />
               )}
             />

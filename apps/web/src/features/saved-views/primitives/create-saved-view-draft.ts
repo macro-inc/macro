@@ -151,6 +151,7 @@ export function createSavedViewDraft<Config, Issue>(options: {
         message: 'This saved view is unavailable or you no longer have access.',
       };
     const snapshot = state.confirmed;
+    const identity = currentViewer ? options.source.data() : undefined;
     if (
       options.viewerId() &&
       snapshot?.record.id === id &&
@@ -158,7 +159,12 @@ export function createSavedViewDraft<Config, Issue>(options: {
     )
       return {
         kind: 'saved',
-        record: snapshot.record,
+        record:
+          !options.source.error() &&
+          identity?.id === id &&
+          identity.revision >= snapshot.record.revision
+            ? { ...snapshot.record, appearance: identity.appearance }
+            : snapshot.record,
         dirty: dirty(),
         issues: snapshot.issues,
       };

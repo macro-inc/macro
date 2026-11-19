@@ -16,7 +16,10 @@ import {
   type ParentProps,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { createSavedViewCreation } from '../saved-views/primitives/create-saved-view-creation';
+import {
+  createSavedViewCreation,
+  type NewSavedView,
+} from '../saved-views/primitives/create-saved-view-creation';
 import { createSavedViewDraft } from '../saved-views/primitives/create-saved-view-draft';
 import {
   useSavedView,
@@ -166,7 +169,8 @@ export function createProjectSavedViews(props: {
     config?: ProjectSavedViewConfig,
     name = t('viewMenus.newView'),
     afterStart?: () => void,
-    changed = false
+    changed = false,
+    appearance?: NewSavedView['appearance']
   ) =>
     creation.run(() => {
       batch(() => {
@@ -178,7 +182,8 @@ export function createProjectSavedViews(props: {
           scope: config?.scope ?? 'all',
         });
         const captured = captureProjectSavedView(state.settings, state.scope);
-        if (captured.isOk()) creation.begin(captured.value, name, changed);
+        if (captured.isOk())
+          creation.begin(captured.value, name, changed, appearance);
       });
       afterStart?.();
     });

@@ -5,6 +5,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@core/component/ContextMenu';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { touchHandler } from '@core/directive/touchHandler';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -12,12 +13,13 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import UsersIcon from '@phosphor/users.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Dropdown } from '@ui';
 import {
+  type Accessor,
   children,
   createRenderEffect,
   createSignal,
-  For,
   type JSX,
   on,
   onCleanup,
@@ -151,24 +153,34 @@ function Draft(props: {
 export function SavedViewListEntries(props: {
   entries: readonly SavedViewEntry[];
   onDraftSelect: () => void;
-  children: (record: SavedView) => JSX.Element;
+  children: (record: Accessor<SavedView>) => JSX.Element;
 }) {
   return (
-    <For each={props.entries}>
-      {(entry) => (
-        <Show
-          when={entry.kind === 'saved' ? entry.record : undefined}
-          fallback={
-            <Draft
-              name={entry.kind === 'draft' ? entry.draft.name : undefined}
-              onSelect={props.onDraftSelect}
-            />
-          }
-        >
-          {(record) => props.children(record())}
-        </Show>
-      )}
-    </For>
+    <Key
+      each={props.entries}
+      by={(entry) =>
+        entry.kind === 'saved' ? entry.record.id : entry.draft.id
+      }
+    >
+      {(entry) => {
+        const record = () => {
+          const value = entry();
+          return value.kind === 'saved' ? value.record : undefined;
+        };
+        const name = () => {
+          const value = entry();
+          return value.kind === 'draft' ? value.draft.name : undefined;
+        };
+        return (
+          <Show
+            when={record()}
+            fallback={<Draft name={name()} onSelect={props.onDraftSelect} />}
+          >
+            {(record) => props.children(record)}
+          </Show>
+        );
+      }}
+    </Key>
   );
 }
 
@@ -338,7 +350,11 @@ export function SavedViewListRow(props: {
                 aria-label={label()}
               >
                 <ViewSidebar.Icon>
-                  <BookmarkIcon class="size-4" />
+                  <EntityIcon
+                    targetType="saved_view"
+                    appearance={props.view.appearance}
+                    size="xs"
+                  />
                 </ViewSidebar.Icon>
                 <span class="truncate">{props.view.name}</span>
               </ViewSidebar.Item>
@@ -351,7 +367,11 @@ export function SavedViewListRow(props: {
               onClick={select}
               class="h-12 gap-3 pr-24 text-base aria-[current=page]:bg-accent/15 aria-[current=page]:text-accent"
             >
-              <BookmarkIcon class="size-5 shrink-0" />
+              <EntityIcon
+                targetType="saved_view"
+                appearance={props.view.appearance}
+                size="sm"
+              />
               <span class="min-w-0 flex-1 truncate">{props.view.name}</span>
               <Show when={props.selected}>
                 <CheckIcon class="size-5 shrink-0" />

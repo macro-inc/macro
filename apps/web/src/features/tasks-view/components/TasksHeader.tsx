@@ -10,9 +10,9 @@ import {
 import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
 import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
-import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import { Show } from 'solid-js';
 import { TASK_TABS } from '../constants';
 import { taskSavedViewTitle } from '../primitives/create-task-saved-view-draft';
@@ -47,6 +47,10 @@ export function TaskViewBreadcrumbItem() {
       TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? t('nav.tasks')
     );
   };
+  const appearance = () => {
+    const view = projectSavedView() ?? savedViews?.view();
+    return view?.kind === 'saved' ? view.record.appearance : undefined;
+  };
 
   return (
     <ViewBreadcrumbs.Item
@@ -58,7 +62,11 @@ export function TaskViewBreadcrumbItem() {
         const label = () => (
           <>
             <Show when={savedViewActive()}>
-              <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+              <EntityIcon
+                targetType="saved_view"
+                appearance={appearance()}
+                size="xs"
+              />
             </Show>
             <span class="truncate">{tabTitle()}</span>
           </>

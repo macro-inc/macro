@@ -1,3 +1,4 @@
+import type { EntityAppearance } from '../../entity-appearance/core/appearance';
 /** A saved definition grants access to its filters, never to matching items. */
 export type SavedView = {
   id: string;
@@ -6,6 +7,7 @@ export type SavedView = {
   config: unknown;
   sharedTeamId: string | null;
   revision: number;
+  appearance?: EntityAppearance | null;
 };
 
 export type SavedViewError = { code: string; message: string };
@@ -14,8 +16,12 @@ export type CreateSavedView = {
   name: string;
   config: unknown;
   sharedTeamId: string | null;
+  appearance?: EntityAppearance | null;
 };
-export type UpdateSavedView = Omit<CreateSavedView, 'sharedTeamId'> & {
+export type UpdateSavedView = Omit<
+  CreateSavedView,
+  'sharedTeamId' | 'appearance'
+> & {
   sharedTeamId?: string | null;
   expectedRevision: number;
 };
@@ -27,6 +33,8 @@ export type NewSavedView = {
   name: string;
   sharedTeamId: string | null;
   config: unknown;
+  /** Copied at creation; later changes use the entity-appearance writer. */
+  readonly appearance?: EntityAppearance | null;
 };
 export type SavedViewEntry =
   | { kind: 'saved'; record: SavedView }

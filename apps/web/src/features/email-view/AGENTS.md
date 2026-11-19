@@ -55,6 +55,7 @@ the Soup-backed thread list, and saved email views.
 ## Gotchas
 
 - Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
+- Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
   sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions

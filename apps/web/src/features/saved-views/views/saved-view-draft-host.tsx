@@ -43,6 +43,7 @@ export function SavedViewDraftHost(props: {
         name: draft.name,
         config: draft.config,
         sharedTeamId: draft.sharedTeamId,
+        appearance: draft.appearance,
       });
       if (result.error)
         throw new Error(

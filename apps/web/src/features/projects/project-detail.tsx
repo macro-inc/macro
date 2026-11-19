@@ -10,8 +10,6 @@ import {
   projectTaskRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
-import { activeElement } from '@app/signal/focus';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { useSplitHeaderScope } from '@components/app/SplitHeaderScope';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -21,9 +19,7 @@ import {
 import { createOpenTracker } from '@core/internal/open-tracker';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { isEditableInput } from '@core/util/isEditableInput';
 import { type Accessor, Match, Show, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { TaskCreateOptions } from '../tasks-view/types';
@@ -159,19 +155,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   };
   return (
     <>
-      <Show when={isMobile()}>
-        <FloatRegion
-          region="accessory"
-          // Own the page action while loading or read-only; the Task menu (0)
-          // replaces this fallback and screen composers keep their precedence.
-          priority={-0.5}
-          active={() =>
-            !virtualKeyboardVisible() && !isEditableInput(activeElement())
-          }
-        >
-          <div aria-hidden="true" class="h-(--mobile-chrome-button-size)" />
-        </FloatRegion>
-      </Show>
       {/* Phones own one combined task menu in their one-page workspace.
           Tablets still need creation from Overview, outside the task list. */}
       <Show
