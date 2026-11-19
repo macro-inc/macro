@@ -73,6 +73,7 @@ async fn an_inbox_filter_names_only_inboxes_its_owner_receives_mail_in() {
             &user_principal(),
             picking(&[SOMEONE_ELSES]),
             Vec::new(),
+            Vec::new(),
             None,
         )
         .await
