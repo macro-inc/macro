@@ -725,9 +725,14 @@ flag-off-as-all-mail turns a rollout control into a disclosure.
    message/recipient expansion when both need participants. This does not bound
    long threads or dense fallback work. Bound later candidate/message/recipient/fallback
    work before activation; discovery alone does not establish those properties.
-   General's existing all-mail timeout is tracked separately from the snapshot
-   fix. Retain the deterministic all-mail/selected snapshot-transition
-   regressions added in PR 2.
+   ViewedUpdated record pages now use the optimized reader: sparse matches
+   look up saved views by primary key, while dense pages merge viewed and
+   never-viewed sources and refill within the same snapshot and deadline.
+   Saved view times override newer mail; competing-copy priority and every
+   privacy veto remain cursor-independent. This does not bound rejected source
+   rows, timestamp ties or every unsupported General shape. Retain the
+   deterministic all-mail/selected snapshot-transition regressions added in
+   PR 2 and the full-page ViewedUpdated parity tests.
    CRM-scoped email search is deferred: email search rejects CRM filters with
    HTTP 400 and reads no team mail. **If CRM-scoped search ships before selected
    activation**, it becomes a fourth contribution reader and must enforce the
