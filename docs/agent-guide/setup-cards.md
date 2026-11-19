@@ -92,9 +92,9 @@ card sits above **Settings**, outside the scrolling list.
   calendar** for calendar access never granted (or turned off), **Calendar
   stopped syncing** with **Reconnect calendar** for one that lost its access
   (shown even after the card was dismissed), and **Reconnect calendar** for an
-  expired grant. Otherwise **Connect a calendar** adds another account (mail
-  and calendar, like **Connect another account**; plans without multi-inbox see
-  the paywall) through the provider
+  expired grant, with or without calendar access. Otherwise **Connect a
+  calendar** adds another account (mail and calendar, like **Connect another
+  account**; plans without multi-inbox see the paywall) through the provider
   chooser, which offers Google, and Microsoft when the server offers this user
   Outlook. The pitch names no provider; the card shows the Google Calendar
   logo, joined by Outlook's while Outlook is offered. The card hides once two

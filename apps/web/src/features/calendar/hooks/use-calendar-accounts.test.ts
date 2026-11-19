@@ -67,18 +67,28 @@ describe('toCalendarAccounts', () => {
     expect(toCalendarAccounts(links, 'macro|self')[0]?.action).toBe('enable');
   });
 
-  it.each([false, true])(
-    'explicitly enables calendar when a revoked inbox has calendar_disabled=%s',
-    (disabled) => {
+  it.each([
+    {
+      case: 'never had it',
+      calendar_disabled: false,
+      has_calendar_data: false,
+    },
+    { case: 'lost it', calendar_disabled: false, has_calendar_data: true },
+    { case: 'turned it off', calendar_disabled: true, has_calendar_data: true },
+  ])(
+    'offers reconnect for a revoked inbox without calendar access that $case',
+    ({ calendar_disabled, has_calendar_data }) => {
       const links = [
         link('a', {
           needs_reauth: true,
           needs_calendar_permission: true,
-          calendar_disabled: disabled,
+          calendar_disabled,
+          has_calendar_data,
         }),
       ];
       expect(toCalendarAccounts(links, 'macro|self')[0]).toMatchObject({
-        action: 'enable',
+        action: 'reconnect',
+        stoppedSyncing: false,
         consentScopes: 'gmail_and_calendar',
       });
     }
