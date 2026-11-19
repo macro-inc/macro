@@ -215,21 +215,31 @@ async fn run_cases(cases: &[Case], crowded_prefixes: &[&str]) -> anyhow::Result<
     );
     let entities = seeded_entities(crowded_prefixes);
 
-    remove_seeded(&raw, &entities).await?;
+    // Nothing is written or deleted on a cluster that holds anything but this
+    // test's own documents, which a run that stopped part way leaves behind.
     for kind in KINDS {
         let index = kind.index().index_name();
-        let count = count_documents(&raw, index).await?;
-        if count != 0 {
+        let others = count_documents(&raw, index, other_than(kind, &entities)).await?;
+        if others != 0 {
             bail!(
-                "`{index}` at {url} holds {count} documents; this test writes to the search \
-                 aliases, so it needs an OpenSearch with empty search indices"
+                "`{index}` at {url} holds {others} documents this test did not write; it \
+                 writes to the search aliases, so it needs an OpenSearch with empty search indices"
             );
         }
     }
+    remove_seeded(&raw, &entities).await?;
 
     let result = seed_and_search(&client, &raw, &entities, cases).await;
-    remove_seeded(&raw, &entities).await?;
-    let failures = result?;
+    let removed = remove_seeded(&raw, &entities).await;
+    let failures = match (result, removed) {
+        (Err(error), Err(cleanup)) => {
+            bail!("{error:#}; removing what it seeded also failed: {cleanup:#}")
+        }
+        (result, removed) => {
+            removed?;
+            result?
+        }
+    };
     assert!(
         failures.is_empty(),
         "{} of {} searches returned other entities than their rules match:\n{}",
@@ -537,30 +547,52 @@ async fn refresh(raw: &OpenSearch, index: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn count_documents(raw: &OpenSearch, index: &str) -> anyhow::Result<u64> {
+/// How many documents of `index` match `query`, from every shard: a count
+/// some shards failed to give proves nothing.
+async fn count_documents(
+    raw: &OpenSearch,
+    index: &str,
+    query: serde_json::Value,
+) -> anyhow::Result<u64> {
     let body: serde_json::Value = raw
         .count(CountParts::Index(&[index]))
+        .body(serde_json::json!({ "query": query }))
         .send()
         .await?
         .error_for_status_code()?
         .json()
         .await?;
+    if body["_shards"]["failed"].as_u64() != Some(0) {
+        bail!("`{index}` answered a count with failed shards: {body}");
+    }
     body["count"]
         .as_u64()
         .with_context(|| format!("no count in {body}"))
 }
 
-/// Remove everything this test writes, by the ids it writes: parents by their
-/// own id, chunks by their document's, messages and segments by their own.
+/// The `entity_id` of every document this test writes to `kind`'s index:
+/// parents and chunks carry their document's id, messages and segments their
+/// own.
+fn seeded_ids(kind: Kind, entities: &[Seeded]) -> Vec<String> {
+    let mut ids = Vec::new();
+    for entity in entities.iter().filter(|entity| entity.kind == kind) {
+        ids.push(entity.id.to_string());
+        if kind != Kind::Document {
+            ids.extend(entity.parts.iter().map(|(part_id, _)| part_id.clone()));
+        }
+    }
+    ids
+}
+
+/// Every document of `kind`'s index that this test did not write.
+fn other_than(kind: Kind, entities: &[Seeded]) -> serde_json::Value {
+    serde_json::json!({ "bool": { "must_not": [{ "terms": { "entity_id": seeded_ids(kind, entities) } }] } })
+}
+
+/// Remove everything this test writes, by the ids it writes.
 async fn remove_seeded(raw: &OpenSearch, entities: &[Seeded]) -> anyhow::Result<()> {
     for kind in KINDS {
-        let mut ids: Vec<String> = Vec::new();
-        for entity in entities.iter().filter(|entity| entity.kind == kind) {
-            ids.push(entity.id.to_string());
-            if kind != Kind::Document {
-                ids.extend(entity.parts.iter().map(|(part_id, _)| part_id.clone()));
-            }
-        }
+        let ids = seeded_ids(kind, entities);
         let index = kind.index().index_name();
         // A seed that failed part way has written documents no search sees
         // until a refresh, and the delete finds only what a search sees.

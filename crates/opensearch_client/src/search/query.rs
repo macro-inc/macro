@@ -81,8 +81,10 @@ const MAX_TOKEN_LEN: usize = 255;
 /// `東京` and `gab@macro.com` are several. They disagree on what surrounds a
 /// word (the tokenizer keeps an emoji as a token, `unicode_words` drops it) and
 /// on scripts written without spaces (a Thai run is one token and many
-/// words), so a word counts only with nothing but ASCII punctuation around
-/// it, and only when it fits in one token.
+/// words), and UAX #29 keeps an emoji joined to a word by a zero-width joiner
+/// in it. So a word counts only when it holds nothing but letters, digits,
+/// ASCII punctuation and `’`, has nothing but ASCII punctuation around it,
+/// and fits in one token.
 fn single_word(term: &str) -> Option<&str> {
     let mut words = term.unicode_word_indices();
     let (start, word) = words.next()?;
@@ -90,12 +92,15 @@ fn single_word(term: &str) -> Option<&str> {
         return None;
     }
 
+    let letters_and_digits = word
+        .chars()
+        .all(|c| c.is_alphanumeric() || c.is_ascii_punctuation() || c == '’');
     let mut around = term[..start]
         .chars()
         .chain(term[start + word.len()..].chars());
     let only_punctuation = around.all(|c| c.is_ascii_punctuation());
     let one_token = word.encode_utf16().count() <= MAX_TOKEN_LEN;
-    (only_punctuation && one_token).then_some(word)
+    (letters_and_digits && only_punctuation && one_token).then_some(word)
 }
 
 /// A prefix query over every token of `field` that starts with `term`'s one

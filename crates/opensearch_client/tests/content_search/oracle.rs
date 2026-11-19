@@ -172,23 +172,42 @@ impl Oracle {
 
 /// The per-term rule of every content search. An exact search, or a term
 /// holding whitespace (a quoted phrase), matches as a phrase. A term the
-/// analyzer reads as one token is a prefix when that token has three or more
-/// characters (`c++` is the token `c`, so it is exact). A term of several
-/// tokens, or none, is a prefix when the term as typed has three or more
-/// characters.
+/// analyzer reads as one token with nothing but ASCII punctuation around it is
+/// a prefix when that token has three or more characters (`c++` is the token
+/// `c`, so it is exact). Any other term (several tokens, none, or one inside
+/// other characters, such as `「q3」`) is a prefix when the term as typed has
+/// three or more characters.
 async fn content_term(
     raw: &OpenSearch,
     kind: Kind,
     term: &str,
     match_type: &str,
 ) -> anyhow::Result<Term> {
-    let tokens = analyze(raw, kind, CONTENT_FIELD, term).await?;
-    let long_enough = match tokens.as_slice() {
-        [token] => token.chars().count() >= 3,
-        _ => term.chars().count() >= 3,
+    let analyzed = analyze_with_offsets(raw, kind, CONTENT_FIELD, term).await?;
+    let one_word = match analyzed.as_slice() {
+        [(token, start, end)] if only_ascii_punctuation_around(term, *start, *end) => Some(token),
+        _ => None,
+    };
+    let long_enough = match one_word {
+        Some(token) => token.chars().count() >= 3,
+        None => term.chars().count() >= 3,
     };
     let prefix = match_type != "exact" && !term.chars().any(char::is_whitespace) && long_enough;
+    let tokens = analyzed.into_iter().map(|(token, _, _)| token).collect();
     Ok(Term { tokens, prefix })
+}
+
+/// Whether `text` holds nothing but ASCII punctuation outside the token at
+/// `start..end`, offsets in UTF-16 units as the analyzer gives them.
+fn only_ascii_punctuation_around(text: &str, start: usize, end: usize) -> bool {
+    let units: Vec<u16> = text.encode_utf16().collect();
+    let (Some(before), Some(after)) = (units.get(..start), units.get(end..)) else {
+        return false;
+    };
+    String::from_utf16_lossy(before)
+        .chars()
+        .chain(String::from_utf16_lossy(after).chars())
+        .all(|c| c.is_ascii_punctuation())
 }
 
 /// The terms `DocumentTermMatching::Dynamic` counts and how many of them one
@@ -258,6 +277,17 @@ async fn analyze(
     field: &str,
     text: &str,
 ) -> anyhow::Result<Vec<String>> {
+    let analyzed = analyze_with_offsets(raw, kind, field, text).await?;
+    Ok(analyzed.into_iter().map(|(token, _, _)| token).collect())
+}
+
+/// [`analyze`], with each token's start and end offset in `text`.
+async fn analyze_with_offsets(
+    raw: &OpenSearch,
+    kind: Kind,
+    field: &str,
+    text: &str,
+) -> anyhow::Result<Vec<(String, usize, usize)>> {
     let body: serde_json::Value = raw
         .indices()
         .analyze(IndicesAnalyzeParts::Index(kind.index().index_name()))
@@ -277,10 +307,18 @@ async fn analyze(
         if token["position"].as_u64() != Some(u64::try_from(expected_position)?) {
             bail!("`{text}` analyzed to tokens at other than consecutive positions: {body}");
         }
+        let offsets = (token["start_offset"].as_u64(), token["end_offset"].as_u64());
+        let (Some(start), Some(end)) = offsets else {
+            bail!("a token without offsets in {body}");
+        };
         let token = token["token"]
             .as_str()
             .with_context(|| format!("a token without text in {body}"))?;
-        ordered.push(token.to_string());
+        ordered.push((
+            token.to_string(),
+            usize::try_from(start)?,
+            usize::try_from(end)?,
+        ));
     }
     Ok(ordered)
 }

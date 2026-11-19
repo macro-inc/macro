@@ -83,6 +83,20 @@ pub(crate) const FIXTURES: &[Fixture] = &[
         parts: &["Shared conveyor manual"],
         deleted: Deleted::Nothing,
     },
+    // `con` only in the name, and only in the content: a name search finds
+    // the first, a content search the second.
+    Fixture {
+        name: "contract draft",
+        access: Access::Own,
+        parts: &["Terms for the new lease"],
+        deleted: Deleted::Nothing,
+    },
+    Fixture {
+        name: "meeting notes",
+        access: Access::Own,
+        parts: &["The conference starts at nine"],
+        deleted: Deleted::Nothing,
+    },
     // Two words: `auto-con` keeps them adjacent and expands `con` capped.
     Fixture {
         name: "auto-conveyor",
@@ -329,6 +343,14 @@ pub(crate) const CASES: &[Case] = &[
     },
     Case {
         terms: &["q3"],
+        match_type: "partial",
+        matching: DocumentTermMatching::All,
+        mode: Mode::Content,
+    },
+    // Not one word to the builders (non-ASCII brackets around it), so the
+    // short-term rule counts the term as typed: a prefix, which finds `Q34`.
+    Case {
+        terms: &["「q3」"],
         match_type: "partial",
         matching: DocumentTermMatching::All,
         mode: Mode::Content,
