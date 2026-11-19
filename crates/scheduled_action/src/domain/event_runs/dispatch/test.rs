@@ -204,6 +204,31 @@ async fn claim_race_never_executes_but_disable_after_start_does_not_undo_run() {
     assert_eq!(executor.calls.lock().unwrap().len(), 1);
 }
 
+/// A run and the write that records it are found together, under the
+/// firing they belong to.
+#[tokio::test]
+async fn a_run_and_its_bookkeeping_are_spans_of_one_firing() {
+    let (repo, access, executor, pending) = setup();
+    let service = EventDispatchService::new(repo, access, executor, ROLLED_OUT);
+    let (spans, _spans) = crate::domain::test_spans::Spans::capture();
+
+    assert_eq!(
+        dispatch(&service, pending).await.unwrap(),
+        DispatchResult::Finished(FinalizationResult::Finalized)
+    );
+
+    assert_eq!(spans.parents("routine.event_run"), [None]);
+    assert_eq!(
+        spans.parents("routine.execute"),
+        [Some("routine.event_run")]
+    );
+    assert_eq!(
+        spans.parents("routine.event_run.finalize"),
+        [Some("routine.event_run")]
+    );
+    assert_eq!(spans.outcomes("routine.event_run.finalize"), ["finalized"]);
+}
+
 #[tokio::test]
 async fn two_events_queue_during_execution_then_failure_does_not_block_next() {
     let (repo, access, executor, first) = setup();

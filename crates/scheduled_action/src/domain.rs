@@ -17,3 +17,5 @@ pub mod suggestions;
 pub mod target_runner;
 pub mod target_validation;
 pub mod templates;
+#[cfg(test)]
+pub(crate) mod test_spans;

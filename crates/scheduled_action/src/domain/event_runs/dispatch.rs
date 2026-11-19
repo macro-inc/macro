@@ -219,10 +219,18 @@ impl<
         };
         // The committed claim is the linearization point. Do not reload config
         // or undo execution for a disable/update after this point.
-        // A sub-routine's run names the routine and run that made it, as a
-        // clock-driven one does.
+        // One span per firing holds the run and the write that records it,
+        // so both are found by the event that fired it. A sub-routine's run
+        // names the routine and run that made it, as a clock-driven one does.
+        let key = run.run.pending.key();
+        let firing = tracing::info_span!(
+            "routine.event_run",
+            action_id = %key.action_id,
+            event_id = %macro_uuid::Uuid::from(key.event_id),
+        );
         let link = run.action.sub_routine.as_ref();
         let span = tracing::info_span!(
+            parent: &firing,
             "routine.execute",
             action_id = run.action.id.map(tracing::field::display),
             trigger = "event",
@@ -249,13 +257,14 @@ impl<
         // a slow or failed write shows apart from the run.
         drop(span);
         let span = tracing::info_span!(
+            parent: &firing,
             "routine.event_run.finalize",
             action_id = run.action.id.map(tracing::field::display),
             outcome = tracing::field::Empty,
         );
         let finalized = tracing::Instrument::instrument(
             self.repository.finalize(FinalizeEventRun {
-                key: run.run.pending.key(),
+                key,
                 token: run.token,
                 finished_at: Utc::now(),
                 execution,
