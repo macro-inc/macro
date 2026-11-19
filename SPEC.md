@@ -30,8 +30,17 @@ and the Macro draft [transport recommendation](https://macro.com/app/md/01a1f585
 
 **Permissions already modelled:** `HarnessPermission::View` is documented as *"Read the runtime and watch its screen"*
 and `Use` as *"Run agents or control the runtime screen"* (`crates/harnesses/src/domain/models.rs:156-158`).
-`authorize_harness` maps View → any access (Owner/User/Read) and Use → Owner or User. No route uses them for a
-screen yet. `crates/agent_preview` has the lease, hashed-ticket and viewer-auth pattern we want to copy.
+`authorize_harness` maps View → any access (Owner/User/Read) and Use → Owner or User
+(`crates/harnesses/src/domain/service.rs:706-711`). No route uses them for a screen yet. `crates/agent_preview` has
+the lease, hashed-ticket and viewer-auth pattern we want to copy.
+
+**Who has which access on an agent's computer today** (`harness_access_level`,
+`crates/macro_db_client/migrations/20261111230600_macro_computers.sql`; `crates/harnesses/AGENTS.md` Scope):
+a Macro computer's harness belongs to the **computer's team**. The team owner and team admins are Owner. **Every
+other team member is User** (`edit`). Nobody outside the team has access, and direct shares and team-access
+changes are refused (`HarnessError::ComputerHarness`), so nobody is ever Read on a computer. The person who bought
+the computer, or who created the agent, gets nothing extra. So with no change, `View`/`Use` would let **every member
+of the team watch and take over** an agent's screen.
 
 ## 2. User experience (design option A, plus two pieces from B and C)
 
@@ -57,8 +66,8 @@ screen yet. `crates/agent_preview` has the lease, hashed-ticket and viewer-auth 
 
 - **Treat take-over like a shell.** Whoever drives has the agent's logged-in browser sessions, its mail, and
   anything else on the desktop.
-- **Who:** checked in the harness on every ticket, using the existing `authorize_harness`. Watch = `View`,
-  drive = `Use`, unless Wolf narrows it (decision D1).
+- **Who:** checked in the harness on every ticket, using the existing `authorize_harness`. Today that means every
+  team member is User. Watch = `View` and drive = `Manage` (team owner and admins), unless Wolf decides otherwise (D1).
 - **Tickets:** `POST /computers/{id}/screen/tickets` returns a ticket for one user, one computer and one mode
   (view or drive). It is single use, valid for 60 s and stored hashed. The browser opens the WebSocket with it.
   Sockets close when access is revoked or the computer is released, hibernated or moved.
@@ -67,7 +76,7 @@ screen yet. `crates/agent_preview` has the lease, hashed-ticket and viewer-auth 
   from the browser. The driver lease is one Postgres row per computer, so it works across harness replicas.
 - **The agent is blocked, not just told:** while a human drives, the agent's `computer-use` and `chrome-devtools`
   tool calls are refused in code. We also send the agent a runtime notification ("A human is driving" / "handed
-  back, re-observe before acting"). Where the block sits is an open question for t2j2 (Q1).
+  back, re-observe before acting"). Where the block sits is decision D7.
 - **Credentials on screen:** whatever the agent can see, a watcher can see too. Mitigations: only people who may
   watch get a thumbnail, the chip does not widen access, and no video is recorded in v1. We do not try to redact.
 - **Hostile guest:** the bytes come from a computer the agent controls, so noVNC runs in a sandboxed iframe on a
@@ -119,10 +128,13 @@ measurements show VNC is not good enough.
 
 ## 6. Decisions for Wolf
 
-- **D1 Who may watch, and who may drive?** The code's existing model says View (Owner/User/Read) watches and Use
-  (Owner/User) drives. The tech recommendation said owner only for both. The design recommendation said Read and
-  User watch, owner drives. **My recommendation:** watch = `View` (as the code already says). Drive = owner only by
-  default, with an owner setting that lets Users drive as well. Read never drives.
+- **D1 Who may watch, and who may drive?** On an agent's computer every team member is User today, and admins are
+  Owner (section 1). The tech recommendation said only the agent's owner. The design recommendation said Users watch
+  and the owner drives. The code's own comment says Use may control the screen. **My recommendation:** watch =
+  `View` (every team member, no change). Drive = `Manage` (team owner and admins), not `Use`, because driving is a
+  shell on the agent's logged-in accounts. A per-agent "let members take over" switch can come later. The agent's
+  creator gets nothing beyond their team role. That matches how the computer is authorized now, so we add no new
+  ownership concept.
 - **D2 Viewer placement:** a side panel with a pop-out button (A, my recommendation), a theater modal (B), or its
   own window (C).
 - **D3 Share chip in v1, or phase 3?** I recommend phase 3: watching and taking over fix B7 without it.
@@ -130,13 +142,15 @@ measurements show VNC is not good enough.
   static chip?
 - **D5 Recording:** no video in v1, audit rows only. Later, take-overs only?
 - **D6 Phone:** watch only in v1?
-
-## 7. Open questions (to t2j2)
-
-- **Q1** Where should the "agent blocked while a human drives" gate live? `computer-use-linux` and
-  `chrome-devtools` are MCP servers in the guest, not muppet tools. Options: (a) the harness holds or denies
-  those tool calls, reusing the owner-approval held-tool-call path; (b) a guest-side wrapper around the MCP
-  servers checks a root-owned flag (not in `/run/macro-agent`, which the agent's desktop can write to).
-  I lean to (a).
-- **Q2** On an agent computer, who actually has User or Read access today: team members through team access, or
-  only the owner?
+- **D7 Where the "agent blocked while a human drives" gate lives.** `computer-use-linux` and `chrome-devtools` are
+  MCP servers in the guest (`_agent.nix:140-146`), not muppet tools, so "muppet refuses" does not apply as written.
+  - **(a) Harness gate (recommended):** the harness holds or denies those tool calls while the lease is held,
+    reusing the owner-approval held-tool-call path. One place, it can't be bypassed from the guest, and the lease
+    is already in the harness. Trade-off: it only blocks calls that go through ACP. A shell command like
+    `xdotool` run from the agent's Bash tool would get through, unless Bash is also held while a human drives.
+  - **(b) Guest wrapper:** a wrapper around the MCP servers refuses while a root-owned flag is set (not in
+    `/run/macro-agent`, which the agent's desktop can write to). Trade-off: it needs a guest image change, and the
+    agent could still drive X directly.
+  - In both, the hard limit is the same: the agent's own processes can reach `:1`. Only holding every tool call
+    while a human drives closes that. I recommend (a), holding all tool calls during a take-over, which is the
+    simplest rule anyway.
