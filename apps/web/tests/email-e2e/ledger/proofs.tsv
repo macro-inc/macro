@@ -270,6 +270,8 @@ AL-135	pressing f in an open thread does not forward the message
 AL-136	The thread's b hotkey is swallowed without opening the event composer: its keyDownHandler in emailHotkeys.ts is replaced by one that only returns true.
 AL-137	e in an inline thread is swallowed without marking it done: the thread's e handler in emailHotkeys.ts, and the list's e handler in use-entity-action-hotkeys.ts that shares the split's hotkey scope and the markDone token (whichever registered last answers), return true without archiving.
 AL-138	pressing Shift+E in an open done thread does not bring it back to the inbox
+AL-139	Resetting the open thread's local read toggle on its own unread write leaves the envelope offering Mark as unread after u has made the thread unread at the provider.
+AL-140	Swallowing Shift+U in the open thread leaves it unread at the provider and produces no read notice.
 AL-141	The thread's ArrowUp/p and ArrowDown/n hotkeys are swallowed without moving between messages: their keyDownHandlers in emailHotkeys.ts return true without calling the navigation.
 AL-142	The thread's o hotkey is swallowed without opening or closing the focused message: its keyDownHandler in emailHotkeys.ts returns true without calling expandFocusedMessage.
 AL-143	pressing Shift+O in an open thread does not open its hidden messages

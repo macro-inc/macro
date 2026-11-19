@@ -250,7 +250,7 @@ export const thread = {
       id: 'AL-139',
       surface: 'SL-28',
       fn: ['F-069'],
-      action: 'mark as unread (returns to list)',
+      action: 'mark as unread (keeps the thread open)',
       trigger: 'hotkey u',
       source: [HOTKEYS, READ],
       registered: ['entity.action.markUnread'],
