@@ -49,12 +49,15 @@ impl UsageHistory for FakeRepo {
         Ok(computers
             .iter()
             .flat_map(|computer_id| {
-                usage
+                let mut readings: Vec<StoredSample> = usage
                     .get(computer_id)
                     .into_iter()
                     .flatten()
-                    .filter(|reading| reading.sampled_at >= since)
-                    .map(|reading| (*computer_id, *reading))
+                    .filter(|reading| minute_of(reading.sampled_at) >= since)
+                    .copied()
+                    .collect();
+                readings.sort_by_key(|reading| reading.sampled_at);
+                readings.into_iter().map(|reading| (*computer_id, reading))
             })
             .collect())
     }
@@ -64,7 +67,7 @@ impl UsageHistory for FakeRepo {
         let mut deleted = 0;
         for readings in usage.values_mut() {
             let kept = readings.len();
-            readings.retain(|reading| reading.sampled_at >= before);
+            readings.retain(|reading| minute_of(reading.sampled_at) >= before);
             deleted += (kept - readings.len()) as u64;
         }
         Ok(deleted)

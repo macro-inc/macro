@@ -43,7 +43,8 @@ fn cpu_is_the_counters_growth_as_a_share_of_the_computers_cpus() {
 #[test]
 fn a_bucket_averages_cpu_and_keeps_the_highest_memory() {
     let now = Utc.with_ymd_and_hms(2026, 11, 18, 12, 0, 0).unwrap();
-    // Three readings a minute apart, an hour ago: 100 % then 0 % of 1 vCPU.
+    // Three readings an hour ago: 100 % of 1 vCPU for a minute, then 0 % for
+    // 20 seconds. The longer measurement weighs more: 60 s of CPU in 80 s.
     let samples = [
         StoredSample {
             sampled_at: now - Duration::minutes(62),
@@ -56,7 +57,7 @@ fn a_bucket_averages_cpu_and_keeps_the_highest_memory() {
             memory_bytes: 5 * GIB,
         },
         StoredSample {
-            sampled_at: now - Duration::minutes(60) - Duration::seconds(1),
+            sampled_at: now - Duration::minutes(60) - Duration::seconds(40),
             cpu_usage_microseconds: 60_000_000,
             memory_bytes: 2 * GIB,
         },
@@ -68,7 +69,7 @@ fn a_bucket_averages_cpu_and_keeps_the_highest_memory() {
     assert_eq!(
         usage.points[91],
         Some(UsagePoint {
-            cpu_percent: Some(50.0),
+            cpu_percent: Some(75.0),
             memory_bytes: 5 * GIB,
         })
     );

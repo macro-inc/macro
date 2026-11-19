@@ -21,7 +21,8 @@ prometheus.scrape "host" {
 
 // One cgroup per VM at <unit>/vms/c-<computer id without dashes>, under the
 // parent that holds every VM together. A series without `computer_id` is the
-// parent's.
+// parent's. `diskIO` has no series until the agent turns the `io` controller
+// on for these cgroups.
 prometheus.exporter.cadvisor "computers" {
 	raw_cgroup_prefix_allowlist = ["/system.slice/firecracker-host.service/vms"]
 	docker_only                 = false

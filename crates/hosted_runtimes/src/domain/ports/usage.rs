@@ -24,15 +24,15 @@ pub trait UsageHistory: Send + Sync {
         samples: &[UsageSample],
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 
-    /// Every reading of `computers` since `since`, each computer's oldest
-    /// first.
+    /// Every reading of `computers` whose minute starts at or after `since`,
+    /// each computer's oldest first.
     fn usage_since(
         &self,
         computers: &[ComputerId],
         since: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<(ComputerId, StoredSample)>, Self::Err>> + Send;
 
-    /// Delete readings measured before `before`; returns how many.
+    /// Delete readings whose minute starts before `before`; returns how many.
     fn prune_usage(
         &self,
         before: DateTime<Utc>,

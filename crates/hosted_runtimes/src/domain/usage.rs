@@ -90,20 +90,40 @@ pub struct ComputerUsage {
     pub points: Vec<Option<UsagePoint>>,
 }
 
-/// CPU use between two readings as a share of `vcpus`, 0 to 100. `None`
-/// when the counter went back (a new process) or the readings are too far
-/// apart to be one run.
-fn cpu_percent(earlier: &StoredSample, later: &StoredSample, vcpus: u32) -> Option<f64> {
+/// The CPU time used and the time passed between two readings of one run,
+/// both in microseconds. None when the counter went down (the computer
+/// restarted) or the readings are too far apart to be one run.
+fn cpu_interval(earlier: &StoredSample, later: &StoredSample) -> Option<CpuInterval> {
     let elapsed = later.sampled_at - earlier.sampled_at;
     if elapsed <= Duration::zero() || elapsed > MAX_GAP {
         return None;
     }
-    let used = later
-        .cpu_usage_microseconds
-        .checked_sub(earlier.cpu_usage_microseconds)?;
-    let elapsed_microseconds = elapsed.num_microseconds()? as f64;
-    let percent = used as f64 / elapsed_microseconds / f64::from(vcpus.max(1)) * 100.0;
-    Some(percent.clamp(0.0, 100.0))
+    Some(CpuInterval {
+        used_microseconds: later
+            .cpu_usage_microseconds
+            .checked_sub(earlier.cpu_usage_microseconds)?,
+        elapsed_microseconds: u64::try_from(elapsed.num_microseconds()?).ok()?,
+    })
+}
+
+/// CPU time used over a stretch of time.
+#[derive(Clone, Copy, Default)]
+struct CpuInterval {
+    used_microseconds: u64,
+    elapsed_microseconds: u64,
+}
+
+impl CpuInterval {
+    /// The share of `vcpus` it used, 0 to 100. None over no time.
+    fn percent(self, vcpus: u32) -> Option<f64> {
+        (self.elapsed_microseconds > 0).then(|| {
+            let percent = self.used_microseconds as f64
+                / self.elapsed_microseconds as f64
+                / f64::from(vcpus.max(1))
+                * 100.0;
+            percent.clamp(0.0, 100.0)
+        })
+    }
 }
 
 /// One bucket of the graph while it is filled.
@@ -113,9 +133,9 @@ struct Bucket {
     readings: u32,
     /// Their highest memory.
     memory_bytes: u64,
-    /// The sum and count of the CPU measurements that ended in it.
-    cpu_percent_sum: f64,
-    cpu_measurements: u32,
+    /// The CPU measurements that ended in it, added up, so a long
+    /// measurement weighs more than a short one.
+    cpu: CpuInterval,
 }
 
 /// The graph of `computer_id` at `now` from its readings, oldest first.
@@ -136,23 +156,23 @@ pub fn history(
         if since_start < Duration::zero() || sample.sampled_at > now {
             continue;
         }
-        let cpu_percent = index
+        let cpu = index
             .checked_sub(1)
             .and_then(|earlier| samples.get(earlier))
-            .and_then(|earlier| cpu_percent(earlier, sample, vcpus));
+            .and_then(|earlier| cpu_interval(earlier, sample));
 
         let position = (since_start.num_seconds() / BUCKET.num_seconds()) as usize;
         if let Some(bucket) = buckets.get_mut(position.min(BUCKETS - 1)) {
             bucket.readings += 1;
             bucket.memory_bytes = bucket.memory_bytes.max(sample.memory_bytes);
-            if let Some(cpu_percent) = cpu_percent {
-                bucket.cpu_percent_sum += cpu_percent;
-                bucket.cpu_measurements += 1;
+            if let Some(cpu) = cpu {
+                bucket.cpu.used_microseconds += cpu.used_microseconds;
+                bucket.cpu.elapsed_microseconds += cpu.elapsed_microseconds;
             }
         }
         if now - sample.sampled_at <= LATEST_MAX_AGE {
             latest = Some(UsagePoint {
-                cpu_percent,
+                cpu_percent: cpu.and_then(|cpu| cpu.percent(vcpus)),
                 memory_bytes: sample.memory_bytes,
             });
         }
@@ -162,8 +182,7 @@ pub fn history(
         .into_iter()
         .map(|bucket| {
             (bucket.readings > 0).then(|| UsagePoint {
-                cpu_percent: (bucket.cpu_measurements > 0)
-                    .then(|| bucket.cpu_percent_sum / f64::from(bucket.cpu_measurements)),
+                cpu_percent: bucket.cpu.percent(vcpus),
                 memory_bytes: bucket.memory_bytes,
             })
         })
