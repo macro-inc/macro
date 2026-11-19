@@ -1144,24 +1144,28 @@ pub trait CodeUpgrades: Send + Sync + 'static {
         task: &serde_json::Value,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Pause the routine for its owner, with why and the rewrite that
-    /// failed its checks, if there was one.
+    /// Record that the routine's code needs its owner, with why and the
+    /// rewrite that failed its checks, if there was one. With `pause`, the
+    /// routine and its sub-routines stay off until the owner switches it
+    /// back on.
     fn needs_update(
         &self,
         action: &ScheduledAction,
         sdk: &routine_program::SdkFingerprint,
         reason: &str,
         proposal: Option<&serde_json::Value>,
+        pause: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Up to `limit` enabled routines with code steps last checked against
-    /// another SDK than `sdk`, by id after `after`.
+    /// One batch of a sweep: the next `scan` routines by id after `after`,
+    /// and which of them are enabled with code steps last checked against
+    /// another SDK than `sdk`.
     fn stale_routines(
         &self,
         sdk: &routine_program::SdkFingerprint,
-        after: Option<Uuid>,
-        limit: u16,
-    ) -> impl Future<Output = Result<Vec<Uuid>>> + Send;
+        after: Uuid,
+        scan: u16,
+    ) -> impl Future<Output = Result<super::code_upgrade::StalePage>> + Send;
 
     /// The routine's upgrades, newest first.
     fn list_upgrades(

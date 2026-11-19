@@ -1957,6 +1957,7 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
         _: &routine_program::SdkFingerprint,
         _: &str,
         _: Option<&serde_json::Value>,
+        _: bool,
     ) -> Result<()> {
         Ok(())
     }
@@ -1964,10 +1965,10 @@ impl crate::domain::ports::CodeUpgrades for Rewritten {
     async fn stale_routines(
         &self,
         _: &routine_program::SdkFingerprint,
-        _: Option<Uuid>,
+        _: Uuid,
         _: u16,
-    ) -> Result<Vec<Uuid>> {
-        Ok(Vec::new())
+    ) -> Result<crate::domain::code_upgrade::StalePage> {
+        Ok(Default::default())
     }
 
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {

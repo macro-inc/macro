@@ -126,6 +126,8 @@ enum Recorded {
 struct Upgrades {
     claimable: bool,
     recorded: Mutex<Vec<Recorded>>,
+    /// Whether each update the code needs paused the routine.
+    paused: Mutex<Vec<bool>>,
 }
 
 impl Default for Upgrades {
@@ -133,6 +135,7 @@ impl Default for Upgrades {
         Self {
             claimable: true,
             recorded: Mutex::default(),
+            paused: Mutex::default(),
         }
     }
 }
@@ -173,21 +176,18 @@ impl CodeUpgrades for Upgrades {
         _: &SdkFingerprint,
         reason: &str,
         proposal: Option<&Value>,
+        pause: bool,
     ) -> Result<()> {
         self.recorded
             .lock()
             .unwrap()
             .push(Recorded::NeedsUpdate(reason.into(), proposal.cloned()));
+        self.paused.lock().unwrap().push(pause);
         Ok(())
     }
 
-    async fn stale_routines(
-        &self,
-        _: &SdkFingerprint,
-        _: Option<Uuid>,
-        _: u16,
-    ) -> Result<Vec<Uuid>> {
-        Ok(Vec::new())
+    async fn stale_routines(&self, _: &SdkFingerprint, _: Uuid, _: u16) -> Result<StalePage> {
+        Ok(StalePage::default())
     }
 
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
@@ -331,7 +331,30 @@ async fn a_rewrite_that_fails_its_checks_pauses_the_routine_with_it() {
         assert_eq!(*recorded_reason, reason);
         // A rewrite that exists is kept for the owner to review.
         assert_eq!(proposal.is_some(), !code.rewrite_fails);
+        assert_eq!(*upgrades.paused.lock().unwrap(), [true]);
     }
+}
+
+/// Code only a sub-routine holds runs in its copies: a routine whose own
+/// steps are an agent's keeps running, and so do its other copies.
+#[tokio::test]
+async fn code_only_a_sub_routine_holds_waits_without_pausing_the_routine() {
+    let code = Code {
+        rewrite_fails: true,
+        ..Code::default()
+    };
+    let parent = action(json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "file",
+            "title": "File it",
+            "steps": [{ "type": "code", "title": "File invoices", "source": "tasks.create" }],
+        }],
+    }));
+    let upgrades = Upgrades::default();
+    let error = upgrade(&code, &upgrades, &parent).await.unwrap_err();
+    assert!(error.downcast_ref::<NeedsUpdate>().is_some());
+    assert_eq!(*upgrades.paused.lock().unwrap(), [false]);
 }
 
 #[tokio::test]

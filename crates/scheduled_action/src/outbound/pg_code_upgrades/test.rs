@@ -144,6 +144,7 @@ async fn needing_an_update_pauses_the_routine_with_the_reason(pool: PgPool) {
             &new,
             "the update failed a dry run",
             Some(&proposal),
+            true,
         )
         .await
         .unwrap();
@@ -155,6 +156,23 @@ async fn needing_an_update_pauses_the_routine_with_the_reason(pool: PgPool) {
         Some("the update failed a dry run")
     );
     assert_eq!(history[0].task.as_ref(), Some(&proposal));
+
+    // Code only its sub-routines' copies run is recorded, and the routine
+    // keeps running.
+    let mut running = sample_action(user_owner(USER_A), "Remind");
+    running.task = action.task.clone();
+    let running = test_repo(pool.clone())
+        .create_action(running)
+        .await
+        .unwrap();
+    upgrades.claim_rewrite(&running, &new).await.unwrap();
+    upgrades
+        .needs_update(&running, &new, "the update failed", None, false)
+        .await
+        .unwrap();
+    assert!(stored(&pool, &running).await.enabled);
+    let history = upgrades.list_upgrades(running.id.unwrap()).await.unwrap();
+    assert_eq!(history[0].outcome, UpgradeOutcome::NeedsUpdate);
 }
 
 /// Checks pass for every source; no runs, no rewrites.
@@ -279,16 +297,21 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
         .await
         .unwrap();
 
-    let mut stale = upgrades
-        .stale_routines(&sdk("0.3.0+new"), None, 1)
-        .await
-        .unwrap();
-    stale.extend(
-        upgrades
-            .stale_routines(&sdk("0.3.0+new"), stale.last().copied(), 10)
+    // Batches of two of the six routines, whether or not they have code,
+    // until one comes back empty.
+    let (mut stale, mut after, mut batches) = (Vec::new(), Uuid::nil(), 0);
+    loop {
+        let page = upgrades
+            .stale_routines(&sdk("0.3.0+new"), after, 2)
             .await
-            .unwrap(),
-    );
+            .unwrap();
+        let Some(last) = page.last else { break };
+        assert!(page.stale.iter().all(|id| *id > after && *id <= last));
+        stale.extend(page.stale);
+        after = last;
+        batches += 1;
+    }
+    assert_eq!(batches, 3);
     let mut expected = vec![
         nested.id.unwrap(),
         never_checked.id.unwrap(),
@@ -313,9 +336,10 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
     assert_eq!(stored(&pool, &no_code).await.task.get("sdk"), None);
     assert!(
         upgrades
-            .stale_routines(&sdk("0.3.0+new"), None, 10)
+            .stale_routines(&sdk("0.3.0+new"), Uuid::nil(), 10)
             .await
             .unwrap()
+            .stale
             .is_empty()
     );
 }

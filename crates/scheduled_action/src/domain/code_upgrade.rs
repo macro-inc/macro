@@ -6,7 +6,9 @@
 //! the routine is paused for its owner with the reason and the rewrite. Code
 //! that writes as its owner (`dangerously_operate_as_user`) is never
 //! rewritten: unreviewed code must not act under their name, so the routine
-//! is paused for them with its code as it was.
+//! is paused for them with its code as it was. A routine whose own steps run
+//! no code, only its sub-routines' copies, keeps running: those copies fail
+//! until the owner updates the code.
 
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
@@ -15,6 +17,7 @@ use macro_uuid::Uuid;
 use routine_program::{CodeIdentity, RoutineProgram, SdkFingerprint};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use tracing::Instrument;
 use utoipa::ToSchema;
 
 use super::models::ScheduledAction;
@@ -25,6 +28,16 @@ mod test;
 
 /// Longest reason kept for the owner.
 const MAX_REASON_CHARS: usize = 2_000;
+
+/// One batch of the routines a sweep reads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct StalePage {
+    /// The batch's last routine, where the next one starts; none once
+    /// there are no more.
+    pub last: Option<Uuid>,
+    /// The batch's routines whose code was checked against another SDK.
+    pub stale: Vec<Uuid>,
+}
 
 /// One time a routine's code was brought to a new SDK.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
@@ -59,7 +72,8 @@ pub enum UpgradeOutcome {
     Checked,
     /// A model's rewrite passed its checks and was saved.
     Rewritten,
-    /// The routine was paused for its owner.
+    /// The code waits for its owner: the routine was paused, unless only its
+    /// sub-routines' copies run that code.
     NeedsUpdate,
 }
 
@@ -120,9 +134,12 @@ pub async fn current_code(
             "This routine's code doesn't work with Macro's current SDK. It is being updated, or is waiting for review on the routine's page.".to_owned()
         })));
     }
+    // A routine whose own steps run no code keeps running, and so do its
+    // other copies; the copies that run this code fail until it is updated.
+    let pause = program.runs_code();
     if let Some(reason) = owner_reason {
         upgrades
-            .needs_update(action, &version, &reason, None)
+            .needs_update(action, &version, &reason, None, pause)
             .await?;
         span.record("outcome", "owner_identity");
         bail!(NeedsUpdate(reason))
@@ -136,7 +153,7 @@ pub async fn current_code(
         Err((reason, proposal)) => {
             let reason = bounded(reason);
             upgrades
-                .needs_update(action, &version, &reason, proposal.as_ref())
+                .needs_update(action, &version, &reason, proposal.as_ref(), pause)
                 .await?;
             span.record("outcome", "needs_update");
             bail!(NeedsUpdate(reason))
@@ -312,17 +329,13 @@ impl CodeUpgrades for NoCodeUpgrades {
         _: &SdkFingerprint,
         _: &str,
         _: Option<&Value>,
+        _: bool,
     ) -> Result<()> {
         Ok(())
     }
 
-    async fn stale_routines(
-        &self,
-        _: &SdkFingerprint,
-        _: Option<Uuid>,
-        _: u16,
-    ) -> Result<Vec<Uuid>> {
-        Ok(Vec::new())
+    async fn stale_routines(&self, _: &SdkFingerprint, _: Uuid, _: u16) -> Result<StalePage> {
+        Ok(StalePage::default())
     }
 
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
@@ -356,8 +369,8 @@ pub(crate) fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'st
     context
 }
 
-/// Routines one sweep page reads.
-const SWEEP_PAGE: u16 = 50;
+/// Routines one sweep batch reads, whether or not they have code.
+const SWEEP_BATCH: u16 = 1_000;
 
 /// What a sweep did.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -386,12 +399,17 @@ pub async fn sweep(
     let Some(sdk) = code.sdk() else {
         return Ok(done);
     };
-    let mut after = None;
+    let mut after = Uuid::nil();
     while !stop.is_cancelled() {
-        let page = upgrades.stale_routines(&sdk, after, SWEEP_PAGE).await?;
-        let Some(last) = page.last() else { break };
-        after = Some(*last);
-        for id in page {
+        let span = tracing::info_span!("routine.code_sweep.batch", stale = tracing::field::Empty,);
+        let page = upgrades
+            .stale_routines(&sdk, after, SWEEP_BATCH)
+            .instrument(span.clone())
+            .await?;
+        span.record("stale", page.stale.len());
+        let Some(last) = page.last else { break };
+        after = last;
+        for id in page.stale {
             if stop.is_cancelled() {
                 break;
             }

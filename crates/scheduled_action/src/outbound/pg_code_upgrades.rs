@@ -6,7 +6,7 @@ use routine_program::SdkFingerprint;
 use serde_json::Value;
 use sqlx::PgPool;
 
-use crate::domain::code_upgrade::{CodeUpgrade, UpgradeOutcome};
+use crate::domain::code_upgrade::{CodeUpgrade, StalePage, UpgradeOutcome};
 use crate::domain::models::ScheduledAction;
 use crate::domain::ports::CodeUpgrades;
 
@@ -168,22 +168,28 @@ impl CodeUpgrades for PgCodeUpgrades {
         sdk: &SdkFingerprint,
         reason: &str,
         proposal: Option<&Value>,
+        pause: bool,
     ) -> Result<()> {
         let (id, revision) = identity(action)?;
         let mut transaction = self.pool.begin().await?;
-        let paused = sqlx::query!(
-            r#"
-            UPDATE scheduled_action SET enabled = false, updated_at = now()
-            WHERE id = $1 AND configuration_revision = $2
-            "#,
-            id,
-            revision,
-        )
-        .execute(&mut *transaction)
-        .await?;
+        let paused = if pause {
+            sqlx::query!(
+                r#"
+                UPDATE scheduled_action SET enabled = false, updated_at = now()
+                WHERE id = $1 AND configuration_revision = $2
+                "#,
+                id,
+                revision,
+            )
+            .execute(&mut *transaction)
+            .await?
+            .rows_affected()
+        } else {
+            0
+        };
         // Its sub-routines pause with it, and resume when the owner switches
         // it back on.
-        if paused.rows_affected() != 0 {
+        if paused != 0 {
             sqlx::query!(
                 r#"
                 UPDATE scheduled_action
@@ -216,28 +222,39 @@ impl CodeUpgrades for PgCodeUpgrades {
     async fn stale_routines(
         &self,
         sdk: &SdkFingerprint,
-        after: Option<Uuid>,
-        limit: u16,
-    ) -> Result<Vec<Uuid>> {
-        Ok(sqlx::query_scalar!(
+        after: Uuid,
+        scan: u16,
+    ) -> Result<StalePage> {
+        // A range of the primary key, so each batch reads `scan` rows however
+        // few of them have code; only enabled ones' tasks are read.
+        let page = sqlx::query!(
             r#"
-            SELECT id FROM scheduled_action
-            WHERE enabled
-              AND task->>'sdk' IS DISTINCT FROM $1
-              AND (
-                  jsonb_path_exists(task, '$.steps.** ? (@.type == "code")')
-                  OR jsonb_path_exists(task, '$.sub_routines.steps.** ? (@.type == "code")')
-              )
-              AND ($2::uuid IS NULL OR id > $2)
-            ORDER BY id
-            LIMIT $3
+            WITH batch AS (
+                SELECT id,
+                       enabled
+                       AND task->>'sdk' IS DISTINCT FROM $1
+                       AND (
+                           jsonb_path_exists(task, '$.steps.** ? (@.type == "code")')
+                           OR jsonb_path_exists(task, '$.sub_routines.steps.** ? (@.type == "code")')
+                       ) AS stale
+                FROM scheduled_action
+                WHERE id > $2
+                ORDER BY id
+                LIMIT $3
+            )
+            SELECT (SELECT id FROM batch ORDER BY id DESC LIMIT 1) AS last,
+                   ARRAY(SELECT id FROM batch WHERE stale ORDER BY id) AS "stale!"
             "#,
             sdk.as_str(),
             after,
-            i64::from(limit),
+            i64::from(scan),
         )
-        .fetch_all(&self.pool)
-        .await?)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(StalePage {
+            last: page.last,
+            stale: page.stale,
+        })
     }
 
     async fn list_upgrades(&self, action_id: Uuid) -> Result<Vec<CodeUpgrade>> {

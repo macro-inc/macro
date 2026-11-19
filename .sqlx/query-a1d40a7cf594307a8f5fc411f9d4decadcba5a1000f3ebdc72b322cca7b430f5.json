@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH batch AS (\n                SELECT id,\n                       enabled\n                       AND task->>'sdk' IS DISTINCT FROM $1\n                       AND (\n                           jsonb_path_exists(task, '$.steps.** ? (@.type == \"code\")')\n                           OR jsonb_path_exists(task, '$.sub_routines.steps.** ? (@.type == \"code\")')\n                       ) AS stale\n                FROM scheduled_action\n                WHERE id > $2\n                ORDER BY id\n                LIMIT $3\n            )\n            SELECT (SELECT id FROM batch ORDER BY id DESC LIMIT 1) AS last,\n                   ARRAY(SELECT id FROM batch WHERE stale ORDER BY id) AS \"stale!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "stale!",
+        "type_info": "UuidArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "a1d40a7cf594307a8f5fc411f9d4decadcba5a1000f3ebdc72b322cca7b430f5"
+}
