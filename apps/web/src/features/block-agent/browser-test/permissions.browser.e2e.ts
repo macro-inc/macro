@@ -1,0 +1,125 @@
+import { expect, test } from '@playwright/test';
+
+const SHOTS = process.env.PERMISSIONS_SCREENSHOT_DIR;
+/** `light` renders the fixture in Macro Light, for screenshots. */
+const THEME = process.env.PERMISSIONS_THEME;
+
+function fixture(query = '') {
+  const params = new URLSearchParams(query);
+  if (THEME) params.set('theme', THEME);
+  const search = params.toString();
+  return `/permissions.html${search ? `?${search}` : ''}`;
+}
+
+async function shot(
+  page: import('@playwright/test').Page,
+  name: string,
+  isMobile: boolean
+) {
+  const path = SHOTS
+    ? `${SHOTS}/${name}-${isMobile ? 'mobile' : 'desktop'}-${THEME ?? 'dark'}.png`
+    : test.info().outputPath(`${name}.png`);
+  // The transcript scrolls inside the page, as in the app: grow the window
+  // to the whole session for the picture, then put it back.
+  const size = page.viewportSize();
+  const height = await page.evaluate(() => {
+    const transcript = document.querySelector('[aria-label="Agent session"]');
+    const main = document.querySelector('main');
+    if (!transcript || !main) return 0;
+    return (
+      main.scrollHeight - transcript.clientHeight + transcript.scrollHeight
+    );
+  });
+  if (size && height > size.height) {
+    await page.setViewportSize({ width: size.width, height });
+  }
+  await page.screenshot({ path });
+  if (size) await page.setViewportSize(size);
+}
+
+test('a blocked program says what was refused and links to the permissions', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto(fixture());
+  const blocked = page.getByRole('region', { name: 'Blocked by permissions' });
+  await expect(blocked).toBeVisible();
+  await expect(blocked).toContainText(
+    'Nothing ran. This program could delete email, and Scout is never allowed to.'
+  );
+  await expect(blocked).toContainText('Delete email filter');
+  // A blocked program stands alone; a declined one is a quiet row in its
+  // tool group, which doesn't count it as failed.
+  await page.getByRole('button', { name: 'Used 1 tool' }).click();
+  await expect(
+    page.getByText('Didn’t run a program that may send email').first()
+  ).toBeVisible();
+  await expect(page.getByText('Allowed for this session by you')).toBeVisible();
+  await blocked.getByRole('button', { name: 'Review permissions' }).click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-opened-settings',
+    'Agents'
+  );
+  await shot(page, 'blocked', isMobile);
+});
+
+test('the approver approves a held program', async ({ page, isMobile }) => {
+  await page.goto(fixture());
+  const request = page.getByRole('region', {
+    name: 'Permission approval request',
+  });
+  await expect(request).toContainText('Approval needed');
+  await expect(request).toContainText('Scout wants to run a program that may:');
+  await expect(request).toContainText('Rename document');
+  await request.getByRole('button', { name: 'View program' }).click();
+  await expect(request).toContainText('Email.send_message');
+  await request.getByRole('button', { name: 'Hide program' }).click();
+  await shot(page, 'approval', isMobile);
+  await request.getByRole('button', { name: 'Approve', exact: true }).click();
+  await expect(request).toHaveCount(0);
+});
+
+test('a ShowPermissions card saves a change', async ({ page, isMobile }) => {
+  await page.goto(fixture('pending=0'));
+  const card = page.getByRole('region', { name: 'Scout’s permissions' });
+  await expect(card).toContainText(
+    '“I need to send the weekly report to the team, but sending email is set to Ask.”'
+  );
+  const send = card.getByRole('radiogroup', { name: 'Email: Send' });
+  await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();
+  await shot(page, 'show-permissions', isMobile);
+  await send.getByText('Allow', { exact: true }).click();
+  await expect(page.locator('body')).toHaveAttribute(
+    'data-saved',
+    /"email.destroy":"never"/
+  );
+  await expect(page.locator('body')).not.toHaveAttribute(
+    'data-saved',
+    /email.send/
+  );
+  await expect(send.getByRole('radio', { name: 'Allow' })).toBeChecked();
+});
+
+test('someone else sees the cards read-only and can only stop waiting', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto(fixture('viewer=other'));
+  const request = page.getByRole('region', {
+    name: 'Permission approval request',
+  });
+  await expect(request).toContainText('Waiting for Dana to approve');
+  await expect(
+    request.getByRole('button', { name: 'Approve', exact: true })
+  ).toHaveCount(0);
+  await expect(request.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  await expect(
+    page.getByText('Only people who can edit Scout can change these.')
+  ).toBeVisible();
+  await expect(
+    page.getByText('Only people who can edit Scout can change this.')
+  ).toBeVisible();
+  const send = page.getByRole('radiogroup', { name: 'Email: Send' });
+  await expect(send.getByRole('radio', { name: 'Never' })).toBeDisabled();
+  await shot(page, 'readonly', isMobile);
+});

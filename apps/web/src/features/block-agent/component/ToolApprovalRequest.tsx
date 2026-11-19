@@ -1,16 +1,30 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ToolApprovalAnswerDto } from '@service-agent-harness/generated/schemas';
+import { Show } from 'solid-js';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
 import type { HeldToolApproval } from '../primitives/create-tool-approval-controller';
+import { PERMISSION_HOLD_SLUG } from '../state/permission-approval';
 import {
   describeStandingApproval,
   describeToolCall,
   possessive,
 } from '../state/tool-approval-wording';
 import { ToolApprovalCard } from '../ui/ToolApprovalCard';
+import { PermissionApprovalRequest } from './PermissionApprovalRequest';
 
 /** A held tool call above the composer, said as what the agent wants to do. */
 export function ToolApprovalRequest(props: { request: HeldToolApproval }) {
+  return (
+    <Show
+      when={props.request.serverSlug === PERMISSION_HOLD_SLUG}
+      fallback={<HeldToolCallRequest request={props.request} />}
+    >
+      <PermissionApprovalRequest request={props.request} />
+    </Show>
+  );
+}
+
+function HeldToolCallRequest(props: { request: HeldToolApproval }) {
   const session = useOptionalAgentSession();
   const name = (userId: string | null | undefined) =>
     userId ? (session?.displayName(userId) ?? userId) : undefined;
@@ -21,7 +35,7 @@ export function ToolApprovalRequest(props: { request: HeldToolApproval }) {
     name: props.request.serverName,
   });
   const whose = () =>
-    approvals()?.canApprove() ? 'your' : possessive(owner());
+    approvals()?.canApprove(props.request) ? 'your' : possessive(owner());
   const action = () =>
     describeToolCall(server(), props.request.toolName, whose());
   // Only a person can be remembered, not a bot acting on nobody's behalf.
@@ -44,7 +58,7 @@ export function ToolApprovalRequest(props: { request: HeldToolApproval }) {
         props.request.requestedBy === session?.session()?.ownerId
       }
       owner={owner()}
-      canApprove={approvals()?.canApprove() === true}
+      canApprove={approvals()?.canApprove(props.request) === true}
       canCancel={approvals()?.canCancel() === true}
       disabled={approvals()?.answering(props.request.approvalId)}
       onApprove={() => answer('approve')}

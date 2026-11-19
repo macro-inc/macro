@@ -54,6 +54,22 @@ export function agentToolPermissionsQueryOptions(
   });
 }
 
+export function sessionToolPermissionsQueryOptions(
+  sessionId: string,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: agentToolPermissionKeys.session(sessionId).queryKey,
+    queryFn: () =>
+      orUnavailable(() =>
+        throwOnErr(() => toolPermissionsClient.session(sessionId))
+      ),
+    enabled,
+    // Nothing pushes changes; a person may have changed them elsewhere.
+    refetchOnWindowFocus: true,
+  });
+}
+
 /** Every group, its tools and the five actions; `null` when unavailable. */
 export function useToolPermissionCatalogQuery(
   enabled: Accessor<boolean> = () => true
@@ -69,11 +85,30 @@ export function useAgentToolPermissionsQuery(
   return useQuery(() => agentToolPermissionsQueryOptions(agentId(), enabled()));
 }
 
+/**
+ * The permissions that apply in an agent session (what its chat cards
+ * show); `null` when unavailable.
+ */
+export function useSessionToolPermissionsQuery(
+  sessionId: Accessor<string>,
+  enabled: Accessor<boolean> = () => true
+) {
+  return useQuery(() =>
+    sessionToolPermissionsQueryOptions(sessionId(), enabled())
+  );
+}
+
 function storeView(view: AgentToolPermissions) {
   queryClient.setQueryData(
     agentToolPermissionKeys.agent(view.agentId).queryKey,
     view
   );
+  // A session's view layers its own limits over the agent's, so it is read
+  // again rather than patched. The save settles once that read lands, so a
+  // control reading the session view never shows the old state between.
+  return queryClient.invalidateQueries({
+    queryKey: agentToolPermissionKeys.session._def,
+  });
 }
 
 export type SetPermissionsVariables = {

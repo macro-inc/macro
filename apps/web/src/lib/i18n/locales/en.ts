@@ -3,6 +3,7 @@ import agentAutoArchive from './en/agent-auto-archive';
 import agentControls from './en/agent-controls';
 import agentNavigation from './en/agent-navigation';
 import agentPermissions from './en/agent-permissions';
+import agentPermissionsChat from './en/agent-permissions-chat';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
@@ -56,6 +57,7 @@ export default {
   agentControls,
   agentNavigation,
   agentPermissions,
+  agentPermissionsChat,
   accountManager,
   agentSetup,
   agentWork,
