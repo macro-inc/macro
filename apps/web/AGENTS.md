@@ -408,9 +408,12 @@ and the outside-message popup:
 The same fixture exercises the real call panel and resize hosts with empty/populated
 threads, tab changes, and reopening; check composer geometry in the browser, not jsdom.
 With `?drag=true` it hosts the app's `ItemDndProvider` and a list row: a row dropped
-anywhere on the channel becomes a mention in its composer. Create a solid-dnd
-droppable in the component that renders its element (`ChannelDropZone`): it
-registers when its creating owner mounts, so one created above a load gate never does.
+anywhere on the channel, or on the call panel, becomes a mention in the composer
+showing there. Each channel composer (its input, the unified reply and edit inputs)
+registers with `setEntityMentionInputHandlers` from `onReady` and releases on unmount.
+Create a solid-dnd droppable in the component that renders its element
+(`ChannelDropZone`): it registers when its creating owner mounts, so one created
+above a load gate never does.
 Set `CALL_FULL_HOST=true` for the real CallOverlay host, Work gating against
 `origin/main`, and desktop toggle geometry; only call media and Work transport
 boundaries are substituted. No hosted account data is accessed.

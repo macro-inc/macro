@@ -20,6 +20,8 @@ import {
 import type { NotificationSource } from '@notifications';
 import { authKeys, type UserInfoData } from '@queries/auth/user-info';
 import { queryClient } from '@queries/client';
+import type { PreviewItem } from '@queries/preview';
+import { previewKeys } from '@queries/preview/keys';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { DragDropProvider } from '@thisbeyond/solid-dnd';
 import { createSignal, type JSXElement, Show, Suspense } from 'solid-js';
@@ -52,9 +54,6 @@ queryClient.setQueryData(authKeys.userInfo.queryKey, {
 const CHANNEL_ID = '00000000-0000-7000-8000-00000000c0c0';
 const CALL_ID = '00000000-0000-7000-8000-0000000ca110';
 const DRAG = new URLSearchParams(location.search).get('drag') === 'true';
-// A dropped item becomes a mention chip, which renders through the app's
-// decorator registry.
-if (DRAG) initializeLexical();
 const DRAGGED_DOCUMENT: DocumentEntity = {
   id: '00000000-0000-7000-8000-00000000d0c0',
   type: 'document',
@@ -62,6 +61,21 @@ const DRAGGED_DOCUMENT: DocumentEntity = {
   name: 'Launch plan',
   ownerId: 'macro|me@example.com',
 };
+
+// A dropped item becomes a mention chip, which renders through the app's
+// decorator registry and reads its name from the document's preview.
+if (DRAG) {
+  initializeLexical();
+  queryClient.setQueryData(previewKeys.item(DRAGGED_DOCUMENT.id).queryKey, {
+    id: DRAGGED_DOCUMENT.id,
+    type: 'document',
+    fileType: 'md',
+    name: DRAGGED_DOCUMENT.name,
+    rawName: DRAGGED_DOCUMENT.name,
+    access: 'access',
+    loading: false,
+  } satisfies PreviewItem);
+}
 
 /** `?drag=true` hosts the app's item drag provider, as the app shell does. */
 function DragHost(props: { children: JSXElement }) {

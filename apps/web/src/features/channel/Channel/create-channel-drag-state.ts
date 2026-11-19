@@ -19,22 +19,29 @@ export type ChannelDragState = {
   entityDrop: ChannelEntityDropHandlers;
   attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
   setAttachFilesToChannel: (fn: (files: File[]) => Promise<void>) => void;
-  setEntityMentionInputHandlers: (handlers: {
-    insertEntityMention?: (
-      entity: EntityData,
-      coordinates?: EntityDropCoordinates
-    ) => void;
-    previewEntityMentionInsertion?: (
-      coordinates: EntityDropCoordinates
-    ) => void;
-    clearEntityMentionInsertionPreview?: () => void;
-  }) => void;
+  /**
+   * Makes `handlers` the composer that takes dropped entities as mentions.
+   * The channel shows one composer at a time (its own input, or the unified
+   * reply or edit input), and each registers when it mounts. Call the returned
+   * release when that composer unmounts, so a drop never reaches a composer
+   * that is gone; releasing a composer that was already replaced does nothing.
+   */
+  setEntityMentionInputHandlers: (
+    handlers: EntityMentionInputHandlers
+  ) => () => void;
+};
+
+type EntityMentionInputHandlers = {
+  insertEntityMention?: (
+    entity: EntityData,
+    coordinates?: EntityDropCoordinates
+  ) => void;
+  previewEntityMentionInsertion?: (coordinates: EntityDropCoordinates) => void;
+  clearEntityMentionInsertionPreview?: () => void;
 };
 
 export function createChannelDragState(): ChannelDragState {
-  let entityMentionInputHandlers: Parameters<
-    ChannelDragState['setEntityMentionInputHandlers']
-  >[0] = {};
+  let entityMentionInputHandlers: EntityMentionInputHandlers = {};
 
   const entityDrop: ChannelEntityDropHandlers = {
     onDropEntity: (entity, coordinates) =>
@@ -57,6 +64,11 @@ export function createChannelDragState(): ChannelDragState {
     },
     setEntityMentionInputHandlers: (handlers) => {
       entityMentionInputHandlers = handlers;
+      return () => {
+        if (entityMentionInputHandlers === handlers) {
+          entityMentionInputHandlers = {};
+        }
+      };
     },
   };
 }

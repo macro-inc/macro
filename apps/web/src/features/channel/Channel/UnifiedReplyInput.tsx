@@ -1,5 +1,5 @@
 import { type JSX, Show } from 'solid-js';
-import { InputFlag } from '../Input';
+import { InputFlag, type InputHandle } from '../Input';
 import type { MessageData } from '../Message';
 import { SenderName } from '../Message/SenderName';
 import type { ThreadState } from '../Thread';
@@ -32,6 +32,8 @@ export function UnifiedReplyInput(props: {
   placeholder?: string;
   onNavigateToTarget: () => void;
   onExit: () => void;
+  /** Called with the reply composer's handle once it is ready. */
+  onReady?: (handle: InputHandle) => void;
 }) {
   return (
     <div
@@ -83,6 +85,7 @@ export function UnifiedReplyInput(props: {
         placeholder={props.placeholder}
         collapsible
         onExit={() => props.onExit()}
+        onReady={(handle) => props.onReady?.(handle)}
       />
     </div>
   );
