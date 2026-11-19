@@ -1601,7 +1601,9 @@ describe('sub-routines defined once', () => {
       setListStatus('success');
     });
     render(() => <Routine />);
-    fireEvent.click(screen.getByRole('button', { name: 'Retry definition' }));
+    const retry = screen.getByRole('button', { name: 'Retry definition' });
+    expect(retry.classList.contains('touch:min-h-[44px]')).toBe(true);
+    fireEvent.click(retry);
     expect(mocks.refetchList).toHaveBeenCalledOnce();
     expect(screen.getByRole('group', { name: 'Remind me' })).toBeTruthy();
   });
@@ -1974,6 +1976,48 @@ describe('sub-routines defined once', () => {
         .getByRole('button', { name: 'Edit in Due reminders' })
         .classList.contains('touch:min-h-[44px]')
     ).toBe(true);
+  });
+
+  it('wraps a copy’s interpolated sentence and fallback summary in a narrow pane', () => {
+    const note = 'A'.repeat(120);
+    const summary = 'B'.repeat(120);
+    setSchedules([
+      copy,
+      {
+        ...parent,
+        task: {
+          steps: [],
+          sub_routines: [
+            {
+              ...remind,
+              steps: [
+                {
+                  type: 'code',
+                  title: 'Read note',
+                  source: 'export function main() {}',
+                  sentence: 'Read {note}.',
+                  knobs: [
+                    { type: 'text', name: 'note', label: 'Note', value: note },
+                  ],
+                },
+                {
+                  type: 'code',
+                  title: 'Write note',
+                  source: 'export function main() {}',
+                  summary,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    for (const content of [`Read ${note}.`, summary]) {
+      expect(
+        screen.getByText(content).classList.contains('wrap-anywhere')
+      ).toBe(true);
+    }
   });
 
   it('offers manual steps only when a detached program has input values', () => {

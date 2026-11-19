@@ -44,7 +44,7 @@ export function StepSentence(props: {
       {(parts) => (
         <p
           class={cn(
-            'text-ink-muted',
+            'min-w-0 wrap-anywhere text-ink-muted',
             props.size === 'sm'
               ? 'text-[13px] leading-[22px]'
               : props.size === 'xs'

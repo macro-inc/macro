@@ -66,7 +66,11 @@ export function CodeStepBody(props: {
           when={sentence()}
           fallback={
             <Show when={props.step.summary.trim()}>
-              {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
+              {(summary) => (
+                <p class="min-w-0 wrap-anywhere text-sm text-ink-muted">
+                  {summary()}
+                </p>
+              )}
             </Show>
           }
         >

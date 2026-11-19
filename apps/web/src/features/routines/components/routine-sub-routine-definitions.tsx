@@ -224,6 +224,7 @@ export function SubRoutineCopySteps(props: {
             <Button
               variant="secondary"
               size="sm"
+              class="touch:min-h-[44px]"
               onClick={() => props.onRetryParent?.()}
             >
               {t('subRoutines.retryDefinition')}
