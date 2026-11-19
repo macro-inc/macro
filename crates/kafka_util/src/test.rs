@@ -141,3 +141,70 @@ async fn bounded_prefetch_keeps_a_quiet_partition_close_behind_a_backlog() {
         "{backlog_received} backlog records arrived before the quiet record"
     );
 }
+
+#[tokio::test]
+async fn position_and_cached_watermarks_show_records_not_yet_received() {
+    use rdkafka::mocking::MockCluster;
+    use rdkafka::producer::{FutureProducer, FutureRecord};
+
+    let cluster = MockCluster::new(1).expect("mock broker");
+    cluster.create_topic("position-test", 1, 1).expect("topic");
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", cluster.bootstrap_servers())
+        .create()
+        .expect("producer");
+    for _ in 0..3 {
+        producer
+            .send(
+                FutureRecord::to("position-test")
+                    .key("key")
+                    .payload("payload"),
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("publish");
+    }
+    let consumer: StreamConsumer<_> =
+        grouped_config::<TestConsumerGroup>(&cluster.bootstrap_servers())
+            .create_with_context(StatisticsContext {
+                inner: DefaultConsumerContext,
+                observer: None,
+            })
+            .expect("consumer");
+    let mut assignment = TopicPartitionList::new();
+    assignment
+        .add_partition_offset("position-test", 0, Offset::Beginning)
+        .expect("assignment");
+    consumer.assign(&assignment).expect("manual assignment");
+    let consumer = KafkaEventConsumer::<TestConsumerGroup> {
+        consumer: ConsumerTransport(Either::Left(consumer)),
+        marker: PhantomData,
+    };
+
+    let before = consumer.position().expect("position");
+    assert_eq!(
+        before
+            .find_partition("position-test", 0)
+            .map(|partition| partition.offset()),
+        Some(Offset::Invalid),
+        "nothing received yet"
+    );
+    drop(
+        tokio::time::timeout(Duration::from_secs(5), consumer.recv())
+            .await
+            .expect("receive deadline")
+            .expect("message"),
+    );
+
+    let after = consumer.position().expect("position");
+    assert_eq!(
+        after
+            .find_partition("position-test", 0)
+            .map(|partition| partition.offset()),
+        Some(Offset::Offset(1))
+    );
+    let (_, high) = consumer
+        .cached_watermarks("position-test", 0)
+        .expect("watermarks");
+    assert_eq!(high, 3, "two fetched records are still unreceived");
+}
