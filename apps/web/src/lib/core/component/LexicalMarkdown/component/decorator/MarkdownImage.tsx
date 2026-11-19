@@ -360,6 +360,12 @@ export function MarkdownImage(props: ImageDecoratorProps) {
             // copied from its URL.
             if (interactable() && editor()?.isEditable())
               e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
+            // A native app shows a blob URL that dies with this image; carry
+            // the image's own URL out instead.
+            if (shownUrl().startsWith('blob:') && props.srcType === 'url') {
+              e.dataTransfer?.setData('text/uri-list', props.url);
+              e.dataTransfer?.setData('text/plain', props.url);
+            }
           }}
           ref={imageRef}
           src={shownUrl()}

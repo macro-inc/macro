@@ -139,7 +139,8 @@ describe('markdown images in the native apps', () => {
     expect(fetchImage.mock.calls[0]![1].signal.aborted).toBe(true);
 
     first.resolve(imageResponse());
-    await Promise.resolve();
+    // Let the superseded fetch run to completion before checking it was dropped.
+    await new Promise((resolve) => setTimeout(resolve, 20));
     expect(created).toEqual(['blob:test/1']);
     expect(image.getAttribute('src')).toBe('blob:test/1');
   });

@@ -2,7 +2,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isImageProxyUrl } from '@core/util/imageProxy';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { ResultAsync } from 'neverthrow';
+import { Telemetry } from '@macro-inc/observability';
+import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -64,16 +65,40 @@ export function createNativeImageSrc(
   return () => (needsNativeFetch(src()) ? blobUrl() : src());
 }
 
-function fetchImageBlob(url: string, signal: AbortSignal) {
-  return ResultAsync.fromPromise(
-    (async () => {
-      const response = await platformFetch(url, { signal });
-      const contentType = response.headers.get('content-type') ?? '';
-      if (!response.ok || !contentType.startsWith('image/')) {
-        throw new Error(`image proxy answered ${response.status}`);
-      }
-      return response.blob();
-    })(),
-    () => ({ kind: 'fetch-failed' as const })
-  );
+type NativeImageError =
+  | { kind: 'network' }
+  | { kind: 'status'; status: number }
+  | { kind: 'not-image' };
+
+/** Fetches a proxied image with the native session, recording the outcome. */
+function fetchImageBlob(
+  url: string,
+  signal: AbortSignal
+): Promise<Result<Blob, NativeImageError>> {
+  return Telemetry.span('markdown.native_image_fetch', async (span) => {
+    const fail = (error: NativeImageError) => {
+      span.setAttr('image.failure', error.kind);
+      if (!signal.aborted)
+        span.error(`native image fetch failed: ${error.kind}`);
+      return err(error);
+    };
+    const response = await ResultAsync.fromPromise(
+      platformFetch(url, { signal }),
+      () => ({ kind: 'network' }) as const
+    );
+    if (response.isErr()) return fail(response.error);
+    const { status, headers } = response.value;
+    span.setAttr('http.status_code', status);
+    if (!response.value.ok) return fail({ kind: 'status', status });
+    if (!(headers.get('content-type') ?? '').startsWith('image/')) {
+      return fail({ kind: 'not-image' });
+    }
+    const blob = await ResultAsync.fromPromise(
+      response.value.blob(),
+      () => ({ kind: 'network' }) as const
+    );
+    if (blob.isErr()) return fail(blob.error);
+    span.setAttr('image.bytes', blob.value.size);
+    return ok(blob.value);
+  });
 }
