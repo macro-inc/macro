@@ -12,7 +12,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -26,7 +26,6 @@ jobs:
       query_data: ${{ steps.filter.outputs.query_data }}
       rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
       skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
-      attested: ${{ steps.attested.outputs.attested }}
     timeout-minutes: 10
     steps:
     - name: Checkout
@@ -325,89 +324,10 @@ jobs:
       shell: bash
       env:
         FILTER_CACHE_DIR: /home/runner/.cache/macro-nextest-filter
-    - id: attested
-      name: Accept attested checks
-      if: inputs.attested != '' && inputs.attested != '[]'
-      run: |
-        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
-        // Runs last in a called workflow's `path-check`: decides which attested checks
-        // this run may skip. `PR CI`'s Start accepted each entry of `ATTESTED` for the
-        // job it names; this accepts it for what the job would run on here.
-        //
-        // An entry is `<check>@<digest>`, the digest being over the `path-check`
-        // outputs that check's job reads, as `cargo x attest` computed them on the
-        // developer's machine. The same digest over this run's outputs
-        // (`OUTPUT_<name>`) means the attested run covered what this one selects: the
-        // same packages, the same conditional steps. Any other entry is dropped and its
-        // job runs here.
-
-        import { createHash } from 'node:crypto';
-        import { appendFileSync } from 'node:fs';
-
-        /// The digest of the outputs a job reads. `cargo x attest` computes the same
-        /// (`xtask_attest`'s `inputs_digest`): sorted `name=value` lines, SHA-256,
-        /// 16 hex digits.
-        export function inputsDigest(inputs: Record<string, string>): string {
-          const lines = Object.keys(inputs)
-            .sort()
-            .map((name) => `${name}=${inputs[name]}\n`)
-            .join('');
-          return createHash('sha256').update(lines).digest('hex').slice(0, 16);
-        }
-
-        /// The checks whose attestation ran on the outputs this run computed.
-        export function acceptedChecks(
-          attested: string[],
-          checkInputs: Record<string, string[]>,
-          outputs: Record<string, string>,
-        ): string[] {
-          return Object.entries(checkInputs)
-            .filter(([id, names]) => {
-              const read = Object.fromEntries(names.map((name) => [name, outputs[name] ?? '']));
-              return attested.includes(`${id}@${inputsDigest(read)}`);
-            })
-            .map(([id]) => id);
-        }
-
-        export function main() {
-          const attested: string[] = JSON.parse(process.env.ATTESTED || '[]');
-          const checkInputs: Record<string, string[]> = JSON.parse(process.env.CHECK_INPUTS || '{}');
-
-          const prefix = 'OUTPUT_';
-          const outputs = Object.fromEntries(
-            Object.entries(process.env)
-              .filter(([name]) => name.startsWith(prefix))
-              .map(([name, value]) => [name.slice(prefix.length), value ?? '']),
-          );
-
-          const accepted = acceptedChecks(attested, checkInputs, outputs);
-          for (const id of Object.keys(checkInputs)) {
-            const offered = attested.some((entry) => entry.startsWith(`${id}@`));
-            if (accepted.includes(id)) {
-              console.log(`${id}: attested for this selection; its job is skipped`);
-            } else if (offered) {
-              console.log(`${id}: attested for a different selection; its job runs here`);
-            }
-          }
-
-          appendFileSync(process.env.GITHUB_OUTPUT!, `attested=${JSON.stringify(accepted)}\n`);
-        }
-
-        await main();
-        NODE_SCRIPT
-      shell: bash
-      env:
-        ATTESTED: ${{ inputs.attested }}
-        CHECK_INPUTS: '{"cloud-storage/build-service-bins":["query_data","rust_packages","should_run","skip_tests"],"cloud-storage/check":["query_data","rust_packages","should_run"],"cloud-storage/graphql-schema-compat":["graphql_schema","should_run"]}'
-        OUTPUT_graphql_schema: ${{ steps.filter.outputs.graphql_schema }}
-        OUTPUT_query_data: ${{ steps.filter.outputs.query_data }}
-        OUTPUT_rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
-        OUTPUT_should_run: ${{ steps.filter.outputs.should_run }}
-        OUTPUT_skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
   check:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'cloud-storage/check')
+    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(inputs.attested || '[]'), 'cloud-storage/check')
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_TARGET_REBUILD_ALL: ${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}
@@ -1176,7 +1096,7 @@ jobs:
   build-service-bins:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))) && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'cloud-storage/build-service-bins')
+    if: (needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))) && !contains(fromJSON(inputs.attested || '[]'), 'cloud-storage/build-service-bins')
     runs-on: namespace-profile-linux-large-build;overrides.cache-tag=sccache-ci
     env:
       CARGO_TARGET_REBUILD_ALL: ${{ needs.path-check.outputs.query_data == 'true' && 'the pull request changes query data' || '' }}
@@ -1358,7 +1278,7 @@ jobs:
   graphql-schema-compat:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'cloud-storage/graphql-schema-compat')
+    if: needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'
     runs-on: namespace-profile-linux-small
     timeout-minutes: 15
     steps:

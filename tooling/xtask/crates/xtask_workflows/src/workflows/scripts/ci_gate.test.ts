@@ -4,11 +4,10 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {
   acceptedAttestations,
-  alreadyAudited,
   auditFailures,
   ciSourceChanges,
   CONFLICTS,
-  contradicted,
+  drawAudits,
   labelBlocker,
   newestJobs,
   STALE_MERGE,
@@ -17,6 +16,7 @@ import {
   forkRunDistrust,
   GATE_JOB,
   gateOutcome,
+  inputsHash,
   isOpenRequest,
   PR_CI_PATH,
   skippedAttested,
@@ -218,15 +218,38 @@ describe('labelBlocker', () => {
 });
 
 const ATTESTABLE = [
-  { id: 'cloud-storage/check', fingerprint: 'aaaaaaaaaaaaaaaa', selected: true },
-  { id: 'conventions/ast-grep', fingerprint: 'bbbbbbbbbbbbbbbb', selected: false },
+  { id: 'cloud-storage/check', fingerprint: 'aaaaaaaaaaaaaaaa', inputs: ['Cargo.lock', 'crates'] },
+  { id: 'conventions/ast-grep', fingerprint: 'bbbbbbbbbbbbbbbb', inputs: ['rules'] },
 ];
-// The commit of the base branch in the merge commit the run tests.
-const BASE = '1a2b3c4d'.repeat(5);
+// The hash of each check's inputs in the merge commit the run tests.
+const SOURCES = {
+  'cloud-storage/check': '1111111111111111',
+  'conventions/ast-grep': '2222222222222222',
+};
 const GATE_CHECKS = [
-  { id: 'cloud-storage/check', name: 'Cloud Storage / check', matrix: false },
-  { id: 'web-app/test', name: 'Web App / Test (', matrix: true },
+  { id: 'cloud-storage/check', name: 'Cloud Storage / check' },
+  { id: 'web-app/cycles', name: 'Web App / Cycles Import Check' },
 ];
+
+describe('inputsHash', () => {
+  // The value `xtask_attest`'s test pins for the same paths and objects.
+  test('hashes each path with the object it holds, in path order', () => {
+    const objects = { 'Cargo.lock': 'a'.repeat(40), crates: 'b'.repeat(40) };
+
+    assert.equal(inputsHash(['flake.nix', 'crates', 'Cargo.lock'], objects), '33252c129f983e54');
+    assert.equal(inputsHash(['Cargo.lock', 'crates', 'flake.nix'], objects), '33252c129f983e54');
+  });
+
+  test('changes when a file under an input does, or when one appears', () => {
+    const before = inputsHash(['crates', 'flake.nix'], { crates: 'b'.repeat(40) });
+
+    assert.notEqual(inputsHash(['crates', 'flake.nix'], { crates: 'c'.repeat(40) }), before);
+    assert.notEqual(
+      inputsHash(['crates', 'flake.nix'], { crates: 'b'.repeat(40), 'flake.nix': 'd'.repeat(40) }),
+      before,
+    );
+  });
+});
 
 describe('acceptedAttestations', () => {
   const status = (check: string, description: string, state = 'success') => ({
@@ -234,141 +257,129 @@ describe('acceptedAttestations', () => {
     state,
     description,
   });
+  const accepted = (statuses: { context: string; state: string; description: string | null }[]) =>
+    acceptedAttestations(statuses, ATTESTABLE, 'attested/', SOURCES);
 
-  test('accepts a passing attestation of the job as this run defines it', () => {
-    const entries = acceptedAttestations(
-      [
-        status('cloud-storage/check', `fp=aaaaaaaaaaaaaaaa in=0123456789abcdef base=${BASE}`),
-        status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb in=- base=${BASE}`),
-      ],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
+  test('accepts a pass of the check as this run defines it, on the files this run tests', () => {
+    const entries = accepted([
+      status('cloud-storage/check', 'fp=aaaaaaaaaaaaaaaa src=1111111111111111'),
+      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+    ]);
 
-    assert.deepEqual(entries, ['cloud-storage/check@0123456789abcdef', 'conventions/ast-grep@-']);
+    assert.deepEqual(entries, ['cloud-storage/check', 'conventions/ast-grep']);
   });
 
-  test('drops an attestation of a job that changed since', () => {
-    const entries = acceptedAttestations(
-      [status('conventions/ast-grep', `fp=cccccccccccccccc in=- base=${BASE}`)],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
+  test('drops a pass on other files: a commit or main changed an input since', () => {
+    const entries = accepted([status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=9999999999999999')]);
 
     assert.deepEqual(entries, []);
   });
 
-  test('drops an attestation made on another merge with the base branch', () => {
-    const entries = acceptedAttestations(
-      [status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb in=- base=${'9'.repeat(40)}`)],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
+  test('drops a pass of a check that was defined differently', () => {
+    const entries = accepted([status('conventions/ast-grep', 'fp=cccccccccccccccc src=2222222222222222')]);
 
     assert.deepEqual(entries, []);
   });
 
-  test('drops an attestation that names no full base commit', () => {
-    const entries = acceptedAttestations(
-      [
-        status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb in=- base=1a2b3c4'),
-        status('cloud-storage/check', `fp=aaaaaaaaaaaaaaaa in=0123456789abcdef base=${BASE} extra`),
-      ],
-      ATTESTABLE,
-      'attested/',
-      BASE,
+  test('a failure on the same files is final, whatever was posted before or after', () => {
+    const pass = status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222');
+    const fail = status(
+      'conventions/ast-grep',
+      'fp=bbbbbbbbbbbbbbbb src=2222222222222222 failed on a runner',
+      'failure',
     );
 
-    assert.deepEqual(entries, []);
+    assert.deepEqual(accepted([fail, pass]), []);
+    assert.deepEqual(accepted([pass, fail, pass]), []);
+  });
+
+  test('a failure on other files withdraws nothing here', () => {
+    const entries = accepted([
+      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=9999999999999999 failed on a runner', 'failure'),
+      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+    ]);
+
+    assert.deepEqual(entries, ['conventions/ast-grep']);
   });
 
   test('reads a context in another case as the same check, as GitHub does', () => {
-    const entries = acceptedAttestations(
-      [
-        { context: 'Attested/Conventions/ast-grep', state: 'failure', description: 'withdrawn' },
-        status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb in=- base=${BASE}`),
-      ],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
-
-    assert.deepEqual(entries, []);
-  });
-
-  test('takes the newest status, so a later failure withdraws an attestation', () => {
-    const entries = acceptedAttestations(
-      [
-        status('conventions/ast-grep', 'withdrawn', 'failure'),
-        status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb in=- base=${BASE}`),
-      ],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
-
-    assert.deepEqual(entries, []);
-  });
-
-  test('drops a selected job attested without a digest, and a digest on an unselected job', () => {
-    const entries = acceptedAttestations(
-      [
-        status('cloud-storage/check', `fp=aaaaaaaaaaaaaaaa in=- base=${BASE}`),
-        status('conventions/ast-grep', `fp=bbbbbbbbbbbbbbbb in=0123456789abcdef base=${BASE}`),
-      ],
-      ATTESTABLE,
-      'attested/',
-      BASE,
-    );
+    const entries = accepted([
+      {
+        context: 'Attested/Conventions/ast-grep',
+        state: 'failure',
+        description: 'fp=bbbbbbbbbbbbbbbb src=2222222222222222',
+      },
+      status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222'),
+    ]);
 
     assert.deepEqual(entries, []);
   });
 
   test('ignores statuses that are not attestations of a known check', () => {
+    const entries = accepted([
+      { context: 'CI gate', state: 'success', description: 'fp=aaaaaaaaaaaaaaaa src=1111111111111111' },
+      status('cloud-storage/test', 'fp=aaaaaaaaaaaaaaaa src=1111111111111111'),
+      status('conventions/ast-grep', 'looks good to me'),
+      status('cloud-storage/check', 'fp=aaaaaaaaaaaaaaaa src=11111111'),
+    ]);
+
+    assert.deepEqual(entries, []);
+  });
+
+  test('accepts nothing for a check whose inputs could not be hashed', () => {
     const entries = acceptedAttestations(
-      [
-        { context: 'CI gate', state: 'success', description: 'fp=aaaaaaaaaaaaaaaa in=-' },
-        status('cloud-storage/test', 'fp=aaaaaaaaaaaaaaaa in=0123456789abcdef'),
-        status('conventions/ast-grep', 'looks good to me'),
-      ],
+      [status('conventions/ast-grep', 'fp=bbbbbbbbbbbbbbbb src=2222222222222222')],
       ATTESTABLE,
       'attested/',
-      BASE,
+      {},
     );
 
     assert.deepEqual(entries, []);
   });
 });
 
-describe('skippedAttested', () => {
-  test('names an accepted check whose jobs were all skipped', () => {
-    const skipped = skippedAttested(
-      ['cloud-storage/check@0123456789abcdef', 'web-app/test@0123456789abcdef'],
-      GATE_CHECKS,
-      [
-        { name: 'Cloud Storage / check', conclusion: 'skipped' },
-        { name: 'Web App / Test (1/6)', conclusion: 'skipped' },
-        { name: 'Web App / Test (2/6)', conclusion: 'skipped' },
-      ],
-    );
+describe('drawAudits', () => {
+  const accepted = ['cloud-storage/check', 'conventions/ast-grep', 'web-app/cycles'];
 
-    assert.deepEqual(skipped, ['cloud-storage/check', 'web-app/test']);
+  test('draws each check by itself, and runs the drawn ones on runners', () => {
+    const rolls = [3, 0, 7];
+    const drawn = drawAudits(accepted, 10, () => rolls.shift() ?? 1);
+
+    assert.deepEqual(drawn, {
+      attested: ['cloud-storage/check', 'web-app/cycles'],
+      audited: ['conventions/ast-grep'],
+    });
   });
 
-  test('leaves out a check path-check sent to a runner after all', () => {
-    const skipped = skippedAttested(['cloud-storage/check@0123456789abcdef'], GATE_CHECKS, [
-      { name: 'Cloud Storage / check', conclusion: 'success' },
+  test('asks for a number below the rate', () => {
+    const asked: number[] = [];
+    drawAudits(accepted, 10, (below) => {
+      asked.push(below);
+      return 1;
+    });
+
+    assert.deepEqual(asked, [10, 10, 10]);
+  });
+
+  test('audits nothing when nothing was accepted', () => {
+    assert.deepEqual(drawAudits([], 10, () => 0), { attested: [], audited: [] });
+  });
+});
+
+describe('skippedAttested', () => {
+  test('names an accepted check whose job was skipped', () => {
+    const skipped = skippedAttested(['cloud-storage/check', 'web-app/cycles'], GATE_CHECKS, [
+      { name: 'Cloud Storage / check', conclusion: 'skipped' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'skipped' },
     ]);
 
-    assert.deepEqual(skipped, []);
+    assert.deepEqual(skipped, ['cloud-storage/check', 'web-app/cycles']);
   });
 
-  test('leaves out a skipped job nobody attested', () => {
-    const skipped = skippedAttested([], GATE_CHECKS, [
-      { name: 'Cloud Storage / check', conclusion: 'skipped' },
+  test('leaves out a check that ran here, and a skipped job nobody attested', () => {
+    const skipped = skippedAttested(['cloud-storage/check'], GATE_CHECKS, [
+      { name: 'Cloud Storage / check', conclusion: 'success' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'skipped' },
     ]);
 
     assert.deepEqual(skipped, []);
@@ -377,24 +388,21 @@ describe('skippedAttested', () => {
 
 describe('auditFailures', () => {
   test('names an attested check that failed when the audit ran it', () => {
-    const failures = auditFailures(['cloud-storage/check', 'web-app/test'], GATE_CHECKS, [
+    const failures = auditFailures(['cloud-storage/check', 'web-app/cycles'], GATE_CHECKS, [
       { name: 'Cloud Storage / check', conclusion: 'success' },
-      { name: 'Web App / Test (1/6)', conclusion: 'success' },
-      { name: 'Web App / Test (2/6)', conclusion: 'failure' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'failure' },
     ]);
 
-    assert.deepEqual(failures, ['web-app/test']);
+    assert.deepEqual(failures, ['web-app/cycles']);
   });
 
   test('counts a job that timed out or was cancelled, and not one the change skips', () => {
-    const failures = auditFailures(['cloud-storage/check', 'web-app/test'], GATE_CHECKS, [
+    const failures = auditFailures(['cloud-storage/check', 'web-app/cycles'], GATE_CHECKS, [
       { name: 'Cloud Storage / check', conclusion: 'skipped' },
-      { name: 'Web App / Test (1/6)', conclusion: 'success' },
-      { name: 'Web App / Test (2/6)', conclusion: 'timed_out' },
-      { name: 'Web App / Test (3/6)', conclusion: 'cancelled' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'timed_out' },
     ]);
 
-    assert.deepEqual(failures, ['web-app/test']);
+    assert.deepEqual(failures, ['web-app/cycles']);
   });
 
   test('does not blame a failing job nobody attested', () => {
@@ -406,60 +414,33 @@ describe('auditFailures', () => {
   });
 });
 
-describe('alreadyAudited', () => {
-  test('finds the mark an earlier audit left on the commit', () => {
-    const statuses = [{ context: 'Attestation Audit', state: 'success', description: null }];
-
-    assert.equal(alreadyAudited(statuses, 'attestation audit'), true);
-    assert.equal(alreadyAudited([], 'attestation audit'), false);
-  });
-});
-
 describe('withdrawnAttestations', () => {
-  const entries = ['cloud-storage/check@0123456789abcdef', 'conventions/ast-grep@-'];
+  const entries = ['cloud-storage/check', 'conventions/ast-grep'];
 
-  test('names a check whose attestation is gone or replaced', () => {
-    const withdrawn = withdrawnAttestations(entries, ['cloud-storage/check@fedcba9876543210']);
-
-    assert.deepEqual(withdrawn, ['cloud-storage/check', 'conventions/ast-grep']);
+  test('names a check whose attestation no longer holds', () => {
+    assert.deepEqual(withdrawnAttestations(entries, ['cloud-storage/check']), ['conventions/ast-grep']);
   });
 
   test('names nothing while every attestation Start accepted still holds', () => {
-    assert.deepEqual(withdrawnAttestations(entries, [...entries, 'web-app/test@-']), []);
-  });
-});
-
-describe('contradicted', () => {
-  test('withdraws a failed check whose attestation still stands for this merge', () => {
-    const withdrawn = contradicted(
-      ['web-app/test', 'cloud-storage/check'],
-      ['web-app/test@0123456789abcdef', 'conventions/ast-grep@-'],
-    );
-
-    assert.deepEqual(withdrawn, ['web-app/test']);
-  });
-
-  test('leaves an attestation posted since for another merge', () => {
-    assert.deepEqual(contradicted(['web-app/test'], []), []);
+    assert.deepEqual(withdrawnAttestations(entries, [...entries, 'web-app/cycles']), []);
   });
 });
 
 describe('trustedEntries', () => {
-  const entries = ['cloud-storage/check@0123456789abcdef', 'web-app/test@0123456789abcdef'];
+  const entries = ['cloud-storage/check', 'web-app/cycles'];
 
   test('leaves out a check that ran and passed here after all', () => {
     const trusted = trustedEntries(entries, GATE_CHECKS, [
       { name: 'Cloud Storage / check', conclusion: 'success' },
-      { name: 'Web App / Test (1/6)', conclusion: 'skipped' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'skipped' },
     ]);
 
-    assert.deepEqual(trusted, ['web-app/test@0123456789abcdef']);
+    assert.deepEqual(trusted, ['web-app/cycles']);
   });
 
-  test('keeps a check whose job is skipped, failed, partly run or not listed', () => {
+  test('keeps a check whose job is skipped, failed or not listed', () => {
     const trusted = trustedEntries(entries, GATE_CHECKS, [
-      { name: 'Web App / Test (1/6)', conclusion: 'success' },
-      { name: 'Web App / Test (2/6)', conclusion: 'skipped' },
+      { name: 'Web App / Cycles Import Check', conclusion: 'failure' },
     ]);
 
     assert.deepEqual(trusted, entries);
@@ -500,11 +481,11 @@ describe('newestJobs', () => {
 
   test('an audit still names its failure when only the gate runs again', () => {
     const jobs = newestJobs([
-      { name: 'Web App / Test (2/6)', conclusion: 'failure', run_attempt: 1 },
+      { name: 'Web App / Cycles Import Check', conclusion: 'failure', run_attempt: 1 },
       { name: 'CI gate', conclusion: null, run_attempt: 2 },
     ]);
 
-    assert.deepEqual(auditFailures(['web-app/test'], GATE_CHECKS, jobs), ['web-app/test']);
+    assert.deepEqual(auditFailures(['web-app/cycles'], GATE_CHECKS, jobs), ['web-app/cycles']);
   });
 });
 

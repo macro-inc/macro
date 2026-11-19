@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -31,4 +31,4 @@ jobs:
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check
     - name: verify kafka cluster topics are up to date
       run: cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''generated-workflows/check-workflows@-'')'
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''generated-workflows/check-workflows'')'

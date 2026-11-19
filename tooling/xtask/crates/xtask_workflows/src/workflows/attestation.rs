@@ -1,41 +1,43 @@
-//! Attested checks: `PR CI` jobs a developer may run on their own machine
-//! instead of on a runner.
+//! Attested checks: `PR CI` jobs whose pass on a developer's machine counts.
 //!
-//! `cargo x attest` (`xtask_attest`) runs a job's own steps on the pull
-//! request's merge with `main` and, when they pass, posts a commit status
-//! named [`STATUS_PREFIX`] plus the check's id on the PR head. `PR CI`'s
-//! `Start` reads those statuses and hands the accepted ones to the workflows
-//! it calls, where each attested job is skipped. A job with no attestation
-//! runs as before.
+//! Each job `PR CI` runs is declared here once: in [`CHECKS`] with the steps
+//! that are the check, or in [`NOT_ATTESTABLE`] with the reason. From a check
+//! the generator derives everything else:
 //!
-//! An attestation is accepted only for the job it ran, on the tree it ran on:
+//! - the scripts a machine runs. They are the job's own `run` steps, copied
+//!   into [`MANIFEST_FILE`] as generated, so a runner and `cargo x attest`
+//!   (`xtask_attest`) execute the same text. A step that needs more than a
+//!   shell (a condition, an expression, an action) fails generation instead of
+//!   being imitated;
+//! - the check's inputs ([`inputs`]): the paths that already decide whether
+//!   `PR CI` runs the job, widened to whole directories;
+//! - the skip clause on the job, and what `Start` and the gate need.
 //!
-//! - its `base` is the commit of `main` in the merge commit this run tests.
-//!   With the head the status sits on, that fixes the tree;
-//! - its `fp` is the [`fingerprint`] of the job as this tree defines it, so a
-//!   job that changed since (here or on `main`) runs on a runner;
-//! - its `in` is a digest of the `path-check` outputs the job reads, compared
-//!   by `path-check` itself ([`ACCEPT_STEP`]), so tests attested for one set of
-//!   packages are never skipped for another.
+//! A pass is recorded for what the check read. `cargo x attest` hashes the
+//! inputs as they are in the working tree, and posts a commit status named
+//! [`STATUS_PREFIX`] plus the check's id that carries that hash (`src`) and
+//! the check's [`fingerprint`] (`fp`). `Start` hashes the same paths in the
+//! merge commit it tests and accepts a status that names both. So a pass
+//! survives any commit, and any move of `main`, that leaves the inputs as they
+//! were, and stops counting the moment one of them changes.
 //!
-//! One request in [`AUDIT_ONE_IN`] ignores every attestation and runs every
-//! job the change selects, and the gate names an attested check that failed
-//! there. Nothing else runs these jobs for a pull request, so that is the only
-//! independent check of what a machine attested. An audit marks the commit
-//! with the [`AUDIT_CONTEXT`] status and every later run on it is an audit
-//! too, so a failed one can't be requested again into a pass.
+//! A machine always runs the whole check: where a runner would lint the
+//! packages a pull request touches, a machine lints them all
+//! ([`Check::local_env`]). A pass therefore covers whatever a run selects.
 //!
-//! A check is a job listed in [`CHECKS`] with the steps that are the check.
-//! Every other step of the job must be runner upkeep ([`RUNNER_STEPS`],
-//! [`RUNNER_ACTIONS`]): the tests fail on a step nobody classified. The
-//! generator writes what `cargo x attest` needs to [`MANIFEST_FILE`].
+//! Each accepted check has one chance in [`AUDIT_ONE_IN`] of running on a
+//! runner anyway. Nothing else runs these jobs for a pull request, so that is
+//! the only independent check of what a machine attested. A check that fails
+//! there is withdrawn for the inputs it failed on.
 
-use anyhow::{Context, Result};
+use std::collections::BTreeMap;
+
+use anyhow::{Context, Result, bail};
 use lazy_regex::regex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::workflows::{pr_ci, steps};
+use crate::workflows::pr_ci;
 
 #[cfg(test)]
 mod test;
@@ -43,12 +45,8 @@ mod test;
 /// The commit status of an attested check is this plus the check's id.
 pub const STATUS_PREFIX: &str = "attested/";
 
-/// One requested run in this many runs the attested jobs on runners too.
+/// An accepted check runs on a runner anyway in one request out of this many.
 pub const AUDIT_ONE_IN: u32 = 10;
-
-/// The commit status an audit leaves on the head: later runs on that commit
-/// are audits too.
-pub const AUDIT_CONTEXT: &str = "attestation audit";
 
 /// Written next to the workflows; read by `cargo x attest`.
 pub const MANIFEST_FILE: &str = "attestable-checks.json";
@@ -56,8 +54,20 @@ pub const MANIFEST_FILE: &str = "attestable-checks.json";
 /// The job whose outputs decide which jobs run and on what.
 const SELECTOR_JOB: &str = "path-check";
 
-/// The `path-check` step that accepts attestations for this run's selection.
-const ACCEPT_STEP: &str = "Accept attested checks";
+/// The action a selector job decides its outputs with.
+const FILTER_ACTION: &str = "dorny/paths-filter";
+
+/// Every check runs in the dev shell these define, whatever else it reads.
+const ALWAYS_READ: &[&str] = &["flake.lock", "flake.nix"];
+
+/// The action that enters a dev shell; its `shell` input names which. A job
+/// without it runs on a machine in the default one, which holds the tools the
+/// job's other setup actions install.
+const DEV_SHELL_ACTION: &str = "./.github/actions/setup-nix-dev-shell";
+const DEFAULT_DEV_SHELL: &str = "default";
+
+/// Where a runner keeps its caches; a machine has no such directory.
+const RUNNER_HOME: &str = "/home/runner";
 
 /// `run` steps that keep a runner's caches and never decide a check's result.
 pub const RUNNER_STEPS: &[&str] = &[
@@ -67,27 +77,21 @@ pub const RUNNER_STEPS: &[&str] = &[
     "Configure Namespace remote sccache",
     "Start sccache server",
     "show sccache stats",
-    ACCEPT_STEP,
 ];
 
-/// Actions that prepare a runner. `cargo x attest` runs in the repository's
-/// dev shell instead, which pins the same tools.
+/// Actions that prepare a runner and change nothing a check reads. A machine
+/// runs in the repository's dev shell, which pins the same tools. An action
+/// that is not one of these makes its job [`NOT_ATTESTABLE`].
 pub const RUNNER_ACTIONS: &[&str] = &[
     "actions/checkout",
     "actions/setup-node",
     "oven-sh/setup-bun",
     "namespacelabs/nscloud-cache-action",
-    "runs-on/cache/restore",
-    "runs-on/cache/save",
     "./.github/actions/setup-nix",
     "./.github/actions/setup-nix-dev-shell",
     "./.github/actions/setup-rust",
-    "./.github/actions/setup-sccache",
     "./.github/actions/teardown-nix",
 ];
-
-/// The action `cargo x attest` emulates: it decides outputs from changed paths.
-pub const FILTER_ACTION: &str = "dorny/paths-filter";
 
 /// A `PR CI` job that can be attested.
 pub struct Check {
@@ -97,24 +101,35 @@ pub struct Check {
     pub job: &'static str,
     /// The `run` steps that are the check, by name.
     pub steps: &'static [&'static str],
+    /// What a machine sets for the variables a runner computes from the pull
+    /// request (`${{ … }}`). It must be the widest choice a run can make, so
+    /// that a pass on a machine covers every run.
+    pub local_env: &'static [(&'static str, &'static str)],
 }
 
 impl Check {
-    /// `<call>/<job>`: `web-app/test`.
+    /// `<call>/<job>`: `web-app/cycles`.
     pub fn id(&self) -> String {
         format!("{}/{}", self.call, self.job)
     }
 }
 
-/// Every job that can be attested. A job is left out when a developer's
-/// machine can't run it as the runner does: it needs a secret
-/// (`doppler-config`, the web `build` and its preview), service containers
-/// (the Rust `test`), system packages (`functional`, `browser`), another
-/// operating system, or the pull request's labels and store state (the native
-/// checks). So is a job another job needs: skipping it would skip that job
-/// too. And so is a job whose verdict is not decided by the tree alone:
-/// `cargo-deny` reads the advisory database of the day it runs, and a status
-/// outlives that day.
+/// A `PR CI` job a machine's pass can't stand in for, and why.
+pub struct NotAttestable {
+    pub call: &'static str,
+    pub job: &'static str,
+    pub why: &'static str,
+}
+
+/// The Rust jobs lint or build the packages a pull request touches; a machine
+/// takes them all. The kept cargo target of a runner is rebuilt when query
+/// data changes; a machine has no kept target to rebuild.
+const EVERY_RUST_PACKAGE: &[(&str, &str)] =
+    &[("RUST_PACKAGES", "all"), ("CARGO_TARGET_REBUILD_ALL", "")];
+
+/// Every job that can be attested: its steps are plain scripts, it runs on
+/// Linux with nothing but the dev shell, and the tree alone decides its
+/// verdict.
 pub const CHECKS: &[Check] = &[
     Check {
         call: "cloud-storage",
@@ -125,37 +140,13 @@ pub const CHECKS: &[Check] = &[
             "unused dependencies",
             "clippy",
         ],
+        local_env: EVERY_RUST_PACKAGE,
     },
     Check {
         call: "cloud-storage",
         job: "build-service-bins",
         steps: &["Build code-mode assets", "build service binaries"],
-    },
-    Check {
-        call: "cloud-storage",
-        job: "graphql-schema-compat",
-        steps: &["Check GraphQL schema compatibility"],
-    },
-    Check {
-        call: "web-app",
-        job: "typescript",
-        steps: &[
-            "Install SDK Documentation Dependencies",
-            "Build SDK",
-            "Run checks",
-        ],
-    },
-    Check {
-        call: "web-app",
-        job: "generated-code",
-        steps: &[
-            "Build code-mode assets",
-            "Build schema binaries",
-            "Generate API Types",
-            "Regenerate SDK code",
-            "Verify SDK generated code is fresh",
-            "Check Specta Types",
-        ],
+        local_env: EVERY_RUST_PACKAGE,
     },
     Check {
         call: "web-app",
@@ -165,15 +156,7 @@ pub const CHECKS: &[Check] = &[
             "Run Collaboration Package Biome",
             "Check Browser Floor and Native Permissions",
         ],
-    },
-    Check {
-        call: "web-app",
-        job: "test",
-        steps: &[
-            "Build agent-fold WASM for tests",
-            "Build natural-time WASM for tests",
-            "Test",
-        ],
+        local_env: &[],
     },
     Check {
         call: "web-app",
@@ -182,31 +165,37 @@ pub const CHECKS: &[Check] = &[
             "Cycles Import Check",
             "Collaboration Package Cycles Import Check",
         ],
+        local_env: &[],
     },
     Check {
         call: "infra",
         job: "biome-check",
         steps: &["Run Biome"],
+        local_env: &[],
     },
     Check {
         call: "infra",
         job: "check",
         steps: &["install", "check"],
+        local_env: &[],
     },
     Check {
         call: "conventions",
         job: "ast-grep",
         steps: &["Run ast-grep"],
+        local_env: &[],
     },
     Check {
         call: "workspace-dependencies",
         job: "dependency-check",
         steps: &["install tool", "check"],
+        local_env: &[],
     },
     Check {
         call: "workspace-dependencies",
         job: "hakari-and-dep-closures",
         steps: &["generated dependency artifacts are up to date"],
+        local_env: &[],
     },
     Check {
         call: "generated-workflows",
@@ -215,11 +204,13 @@ pub const CHECKS: &[Check] = &[
             "verify workflows are up to date",
             "verify kafka cluster topics are up to date",
         ],
+        local_env: &[],
     },
     Check {
         call: "node-modules-nix",
         job: "check-linux-node-modules-nix",
         steps: &["verify js node_modules derivation is up to date"],
+        local_env: &[],
     },
     Check {
         call: "sdk",
@@ -231,11 +222,13 @@ pub const CHECKS: &[Check] = &[
             "Check endpoint coverage",
             "Check packed SDK",
         ],
+        local_env: &[],
     },
     Check {
         call: "observability-image",
         job: "build-image",
         steps: &["Build the NixOS image"],
+        local_env: &[],
     },
     Check {
         call: "macrod-update",
@@ -245,8 +238,126 @@ pub const CHECKS: &[Check] = &[
             "Self-update end to end",
             "Installer in bash, zsh and fish",
         ],
+        local_env: &[],
     },
 ];
+
+const SELECTS: &str = "decides what the other jobs run, and they wait for it";
+const WEB_SETUP: &str =
+    "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take";
+const OTHER_SYSTEM: &str = "runs on another operating system";
+const PULL_REQUEST_STATE: &str = "reads the pull request's labels and the app stores' state";
+
+/// Every other job `PR CI` runs. The tests hold the two lists to the jobs
+/// that exist, so a new job is in neither until someone decides.
+pub const NOT_ATTESTABLE: &[NotAttestable] = &[
+    NotAttestable {
+        call: "cloud-storage",
+        job: "path-check",
+        why: SELECTS,
+    },
+    NotAttestable {
+        call: "cloud-storage",
+        job: "test",
+        why: "needs service containers on fixed ports",
+    },
+    NotAttestable {
+        call: "cloud-storage",
+        job: "doppler-config",
+        why: "reads secrets",
+    },
+    NotAttestable {
+        call: "cloud-storage",
+        job: "graphql-schema-compat",
+        why: "compares the schema with the base of the merge commit (`HEAD^1`), which a working tree does not have",
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "path-check",
+        why: SELECTS,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "typescript",
+        why: WEB_SETUP,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "generated-code",
+        why: WEB_SETUP,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "test",
+        why: WEB_SETUP,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "build",
+        why: "reads secrets and deploys a preview",
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "functional",
+        why: "needs browsers and system packages a dev shell does not install",
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "browser",
+        why: "needs browsers and system packages a dev shell does not install",
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "android-native-check",
+        why: PULL_REQUEST_STATE,
+    },
+    NotAttestable {
+        call: "web-app",
+        job: "ios-native-check",
+        why: PULL_REQUEST_STATE,
+    },
+    NotAttestable {
+        call: "cargo-deny",
+        job: "cargo-deny",
+        why: "reads the advisory database of the day it runs, so the tree alone does not decide its verdict",
+    },
+    NotAttestable {
+        call: "node-modules-nix",
+        job: "check-darwin-node-modules-nix",
+        why: OTHER_SYSTEM,
+    },
+    NotAttestable {
+        call: "tauri-lockfiles",
+        job: "check-tauri-lockfiles",
+        why: SELECTS,
+    },
+    NotAttestable {
+        call: "tauri-lockfiles",
+        job: "check-tauri-vendoring",
+        why: "waits for `check-tauri-lockfiles`, which decides whether it runs",
+    },
+    NotAttestable {
+        call: "macrod-update",
+        job: "macos",
+        why: OTHER_SYSTEM,
+    },
+    NotAttestable {
+        call: "macrod-update",
+        job: "windows",
+        why: OTHER_SYSTEM,
+    },
+];
+
+/// One script of a check, as a runner and a machine both run it.
+pub struct Step {
+    pub name: String,
+    pub run: String,
+    /// Relative to the repository's root.
+    pub working_directory: Option<String>,
+    /// A step that names `bash` gets `-o pipefail` from a runner.
+    pub pipefail: bool,
+    pub env: BTreeMap<String, String>,
+}
 
 /// A check as `PR CI` and `cargo x attest` need it.
 pub struct Described {
@@ -255,28 +366,26 @@ pub struct Described {
     /// The called workflow's file.
     pub workflow: &'static str,
     pub job: &'static str,
-    /// The job's name in a `PR CI` run: `Web App / Typecheck`. A matrix job's
-    /// name stops where its matrix value starts.
+    /// The job's name in a `PR CI` run: `Web App / Biome Check`.
     pub name: String,
-    pub matrix: bool,
-    /// The job's own condition, before the attestation clause.
-    pub condition: Option<String>,
-    /// The `path-check` outputs the job reads, sorted.
+    /// The paths the check reads, sorted; `.` is the whole tree.
     pub inputs: Vec<String>,
-    /// Whether `path-check` selects the job, so an attestation carries a digest.
-    pub selected: bool,
-    pub steps: &'static [&'static str],
+    /// The Nix dev shell the steps run in.
+    pub dev_shell: String,
+    /// The workflow's and the job's environment.
+    pub env: BTreeMap<String, String>,
+    pub steps: Vec<Step>,
     pub fingerprint: String,
 }
 
 fn checks_of(file_name: &str) -> impl Iterator<Item = &'static Check> {
     CHECKS
         .iter()
-        .filter(move |check| call_of(check).is_some_and(|call| call.file == file_name))
+        .filter(move |check| call_of(check.call).is_some_and(|call| call.file == file_name))
 }
 
-fn call_of(check: &Check) -> Option<&'static pr_ci::Call> {
-    pr_ci::CALLS.iter().find(|call| call.id == check.call)
+fn call_of(id: &str) -> Option<&'static pr_ci::Call> {
+    pr_ci::CALLS.iter().find(|call| call.id == id)
 }
 
 /// Whether `PR CI` hands this called workflow its attestations.
@@ -294,39 +403,196 @@ fn job<'a>(
         .with_context(|| format!("{file_name} has no job `{id}`"))
 }
 
-/// Whether the job waits for `path-check`.
-fn is_selected(job: &serde_yaml::Value) -> bool {
-    job["needs"]
-        .as_sequence()
-        .is_some_and(|needs| needs.iter().any(|need| need.as_str() == Some(SELECTOR_JOB)))
-}
-
-/// The `path-check` outputs a job reads, anywhere in its definition.
-fn inputs_of(job: &serde_yaml::Value) -> Result<Vec<String>> {
-    let text = serde_yaml::to_string(job).context("serializing a job")?;
-
-    let mut names: Vec<String> = regex!(r"needs\.path-check\.outputs\.([a-z_]+)")
-        .captures_iter(&text)
-        .map(|capture| capture[1].to_owned())
-        .filter(|name| name != "attested")
-        .collect();
-    names.sort();
-    names.dedup();
-    Ok(names)
-}
-
-/// What an attestation entry looks like where the job's condition reads it.
-fn skip_clause(id: &str, selected: bool) -> String {
-    if selected {
-        format!("!contains(fromJSON(needs.{SELECTOR_JOB}.outputs.attested || '[]'), '{id}')")
-    } else {
-        format!("!contains(fromJSON(inputs.attested || '[]'), '{id}@-')")
+fn scalar(value: &serde_yaml::Value) -> Option<String> {
+    match value {
+        serde_yaml::Value::String(text) => Some(text.clone()),
+        serde_yaml::Value::Bool(flag) => Some(flag.to_string()),
+        serde_yaml::Value::Number(number) => Some(number.to_string()),
+        _ => None,
     }
 }
 
+/// The directory or file a path pattern stays inside: everything before its
+/// first wildcard segment. `crates/**/Cargo.toml` reads somewhere in `crates`;
+/// a pattern that starts with a wildcard can read anywhere (`.`).
+pub fn widen(pattern: &str) -> String {
+    let literal: Vec<&str> = pattern
+        .split('/')
+        .take_while(|segment| !segment.contains(['*', '?', '[', '{']))
+        .collect();
+    if literal.is_empty() {
+        ".".to_owned()
+    } else {
+        literal.join("/")
+    }
+}
+
+/// Sorted, and without a path that another one already holds.
+fn without_nested(mut paths: Vec<String>) -> Vec<String> {
+    paths.sort();
+    paths.dedup();
+    if paths.iter().any(|path| path == ".") {
+        return vec![".".to_owned()];
+    }
+    let all = paths.clone();
+    paths.retain(|path| {
+        !all.iter()
+            .any(|other| path.starts_with(&format!("{other}/")))
+    });
+    paths
+}
+
+/// The patterns of each filter a selector job decides its outputs with.
+fn selector_filters(root: &serde_yaml::Value) -> Result<BTreeMap<String, Vec<String>>> {
+    let filters = root["jobs"][SELECTOR_JOB]["steps"]
+        .as_sequence()
+        .into_iter()
+        .flatten()
+        .find(|step| {
+            step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with(FILTER_ACTION))
+        })
+        .and_then(|step| step["with"]["filters"].as_str())
+        .context("the selector job has no path filter")?;
+    serde_yaml::from_str(filters).context("a path filter is not a list of patterns per name")
+}
+
+/// The paths a check reads: the ones that already decide whether `PR CI` runs
+/// its job, each widened to the directory it stays inside, plus the dev
+/// shell's. For a path-filtered call they are the call's paths; otherwise the
+/// selector's filters that the job's condition reads. A job nothing filters
+/// reads the whole tree.
+///
+/// Today a pull request that leaves these paths alone skips the job, on the
+/// strength of `main` having passed it. An attestation rests on the same
+/// claim: the job's verdict is decided by these paths.
+pub fn inputs(root: &serde_yaml::Value, call: &pr_ci::Call, job_id: &str) -> Result<Vec<String>> {
+    let patterns: Vec<String> = match call.paths {
+        Some(paths) => paths.iter().map(|path| path.as_str().to_owned()).collect(),
+        None => {
+            let condition = job(root, job_id, call.file)?["if"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let filters = selector_filters(root)?;
+            let read: Vec<String> = regex!(r"needs\.path-check\.outputs\.([a-z_]+)")
+                .captures_iter(&condition)
+                .filter_map(|capture| filters.get(&capture[1]).cloned())
+                .flatten()
+                .collect();
+            if read.is_empty() {
+                vec!["**".to_owned()]
+            } else {
+                read
+            }
+        }
+    };
+
+    Ok(without_nested(
+        patterns
+            .iter()
+            .map(|pattern| widen(pattern))
+            .chain(ALWAYS_READ.iter().map(|path| (*path).to_owned()))
+            .collect(),
+    ))
+}
+
+/// An environment as a machine sets it: literal values as written, and the
+/// check's own value for each one a runner computes.
+fn environment(
+    env: &serde_yaml::Value,
+    check: &Check,
+    owner: &str,
+) -> Result<BTreeMap<String, String>> {
+    let mut resolved = BTreeMap::new();
+    for (name, value) in env.as_mapping().into_iter().flatten() {
+        let name = name.as_str().context("an environment name is not text")?;
+        let value = scalar(value).with_context(|| format!("{owner}: `{name}` is not a scalar"))?;
+
+        let local = check
+            .local_env
+            .iter()
+            .find(|(declared, _)| *declared == name);
+        let value = match local {
+            Some((_, local)) => (*local).to_owned(),
+            None if value.contains("${{") || value.contains(RUNNER_HOME) => bail!(
+                "{owner}: a runner computes `{name}` (`{value}`); give it a value in the check's `local_env`"
+            ),
+            None => value,
+        };
+        resolved.insert(name.to_owned(), value);
+    }
+    Ok(resolved)
+}
+
+/// A check step as a plain script. Anything a shell alone can't do is refused:
+/// a machine would have to imitate the runner to follow it.
+fn plain_step(step: &serde_yaml::Value, check: &Check) -> Result<Step> {
+    let id = check.id();
+    let name = step["name"]
+        .as_str()
+        .context("a check step has no name")?
+        .to_owned();
+    let run = step["run"]
+        .as_str()
+        .with_context(|| format!("{id}: `{name}` is not a `run` step"))?
+        .to_owned();
+
+    if run.contains("${{") {
+        bail!("{id}: `{name}` has an expression in its script; pass the value through `env`");
+    }
+    for refused in ["if", "continue-on-error"] {
+        if step.get(refused).is_some() {
+            bail!("{id}: `{name}` sets `{refused}`, which only a runner follows");
+        }
+    }
+    let pipefail = match step["shell"].as_str() {
+        None => false,
+        Some("bash") => true,
+        Some(other) => bail!("{id}: `{name}` runs in {other}"),
+    };
+    let working_directory = match step.get("working-directory") {
+        None => None,
+        Some(directory) => {
+            let directory = directory
+                .as_str()
+                .with_context(|| format!("{id}: `{name}` has an odd working directory"))?;
+            if directory.contains("${{") || directory.starts_with('/') {
+                bail!(
+                    "{id}: `{name}` works in `{directory}`, which is not a path in the repository"
+                );
+            }
+            Some(directory.to_owned())
+        }
+    };
+
+    Ok(Step {
+        env: environment(&step["env"], check, &format!("{id} `{name}`"))?,
+        name,
+        run,
+        working_directory,
+        pipefail,
+    })
+}
+
+/// What a job must be for its steps to be the whole story.
+fn plain_job(definition: &serde_yaml::Value, id: &str) -> Result<()> {
+    for refused in ["services", "container", "strategy", "defaults"] {
+        if definition.get(refused).is_some() {
+            bail!("{id} sets `{refused}`, which a machine does not provide");
+        }
+    }
+    Ok(())
+}
+
+/// What an attestation entry looks like where the job's condition reads it.
+fn skip_clause(id: &str) -> String {
+    format!("!contains(fromJSON(inputs.attested || '[]'), '{id}')")
+}
+
 /// Make the attested jobs of a called workflow skippable: declare the
-/// `attested` input, have `path-check` accept the entries that match this
-/// run's selection, and add the skip clause to each job's condition. Other
+/// `attested` input and add the skip clause to each job's condition. Other
 /// workflows come back unchanged.
 pub fn patch(file_name: &str, yaml: String) -> Result<String> {
     let checks: Vec<&Check> = checks_of(file_name).collect();
@@ -346,22 +612,15 @@ pub fn patch(file_name: &str, yaml: String) -> Result<String> {
         "inputs".into(),
         crate::workflows::yaml_fragment(indoc::indoc! {r#"
             attested:
-              description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+              description: 'JSON list of the checks PR CI accepted an attestation for, by id'
               type: string
               required: false
               default: '[]'
         "#})?,
     );
 
-    let mut selected_inputs: Vec<(String, Vec<String>)> = Vec::new();
     for check in &checks {
-        let definition = job(&root, check.job, file_name)?;
-        let selected = is_selected(definition);
-        if selected {
-            selected_inputs.push((check.id(), inputs_of(definition)?));
-        }
-
-        let clause = skip_clause(&check.id(), selected);
+        let clause = skip_clause(&check.id());
         let job = crate::workflows::job_mut(&mut root, check.job)?;
         let condition = match job.get("if").and_then(serde_yaml::Value::as_str) {
             Some(own) => format!("({own}) && {clause}"),
@@ -370,76 +629,7 @@ pub fn patch(file_name: &str, yaml: String) -> Result<String> {
         job.insert("if".into(), condition.into());
     }
 
-    if !selected_inputs.is_empty() {
-        accept_in_selector(&mut root, &selected_inputs)?;
-    }
-
     serde_yaml::to_string(&root).with_context(|| format!("serializing {file_name}"))
-}
-
-/// Add [`ACCEPT_STEP`] and its output to `path-check`. The step hashes, for
-/// each check, the outputs that check reads and accepts the attestation that
-/// carries the same digest.
-fn accept_in_selector(
-    root: &mut serde_yaml::Value,
-    checks: &[(String, Vec<String>)],
-) -> Result<()> {
-    let selector = crate::workflows::job_mut(root, SELECTOR_JOB)?;
-    let outputs = selector
-        .get("outputs")
-        .and_then(serde_yaml::Value::as_mapping)
-        .cloned()
-        .context("path-check has no outputs")?;
-
-    let mut env = serde_yaml::Mapping::new();
-    env.insert("ATTESTED".into(), "${{ inputs.attested }}".into());
-    let check_inputs: serde_json::Map<String, serde_json::Value> = checks
-        .iter()
-        .map(|(id, inputs)| (id.clone(), json!(inputs)))
-        .collect();
-    env.insert(
-        "CHECK_INPUTS".into(),
-        serde_json::to_string(&check_inputs)?.into(),
-    );
-
-    let mut names: Vec<&String> = checks.iter().flat_map(|(_, inputs)| inputs).collect();
-    names.sort();
-    names.dedup();
-    for name in names {
-        let value = outputs
-            .get(name.as_str())
-            .with_context(|| format!("path-check has no output `{name}`"))?;
-        env.insert(format!("OUTPUT_{name}").into(), value.clone());
-    }
-
-    let mut step = serde_yaml::Mapping::new();
-    step.insert("id".into(), "attested".into());
-    step.insert("name".into(), ACCEPT_STEP.into());
-    step.insert(
-        "if".into(),
-        "inputs.attested != '' && inputs.attested != '[]'".into(),
-    );
-    step.insert(
-        "run".into(),
-        steps::node_script(include_str!("scripts/accept_attested_checks.ts")).into(),
-    );
-    step.insert("shell".into(), "bash".into());
-    step.insert("env".into(), env.into());
-
-    selector
-        .get_mut("steps")
-        .and_then(serde_yaml::Value::as_sequence_mut)
-        .context("path-check has no steps")?
-        .push(step.into());
-    selector
-        .get_mut("outputs")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .context("path-check has no outputs")?
-        .insert(
-            "attested".into(),
-            "${{ steps.attested.outputs.attested }}".into(),
-        );
-    Ok(())
 }
 
 /// The workflow a call runs: as its module builds it, or as generated.
@@ -453,62 +643,104 @@ fn rendered(file_name: &str, patched: bool) -> Result<serde_yaml::Value> {
     serde_yaml::from_str(&yaml).with_context(|| format!("parsing {file_name}"))
 }
 
-/// What identifies the job an attestation ran: the job, the `path-check` it
-/// reads, the workflow's environment, and the steps that are the check.
-fn fingerprint(root: &serde_yaml::Value, check: &Check, selected: bool) -> Result<String> {
+/// What identifies the check a pass was for: the job as its module builds it,
+/// the workflow's environment, the steps that are the check, what a machine
+/// sets in a runner's place, and the paths it reads.
+fn fingerprint(root: &serde_yaml::Value, check: &Check, inputs: &[String]) -> Result<String> {
     let identity = json!({
         "job": serde_json::to_value(&root["jobs"][check.job])?,
-        "selector": if selected {
-            serde_json::to_value(&root["jobs"][SELECTOR_JOB])?
-        } else {
-            serde_json::Value::Null
-        },
         "env": serde_json::to_value(&root["env"])?,
         "steps": check.steps,
+        "local_env": check.local_env,
+        "inputs": inputs,
     });
     let digest = Sha256::digest(serde_json::to_string(&identity)?);
     Ok(hex::encode(&digest[..8]))
 }
 
-/// Every check, read from the workflows as generated.
-pub fn described() -> Result<Vec<Described>> {
-    CHECKS
+fn describe(check: &Check) -> Result<Described> {
+    let id = check.id();
+    let call =
+        call_of(check.call).with_context(|| format!("PR CI has no call `{}`", check.call))?;
+    let root = rendered(call.file, false)?;
+    let definition = job(&root, check.job, call.file)?;
+    plain_job(definition, &id)?;
+
+    let own_name = definition["name"].as_str().unwrap_or(check.job);
+    if own_name.contains("${{") {
+        bail!("{id} is named by an expression");
+    }
+
+    let listed = definition["steps"]
+        .as_sequence()
+        .with_context(|| format!("{id} has no steps"))?;
+    // A step in neither list is one nobody decided about: skipped, it would
+    // let a machine attest a job without running part of it.
+    for step in listed {
+        if let Some(uses) = step["uses"].as_str() {
+            let action = uses.split_once('@').map_or(uses, |(action, _)| action);
+            if !RUNNER_ACTIONS.contains(&action) {
+                bail!("{id} uses {action}; is it runner setup, or is the job not attestable?");
+            }
+            continue;
+        }
+        let name = step["name"].as_str().unwrap_or_default();
+        if !check.steps.contains(&name) && !RUNNER_STEPS.contains(&name) {
+            bail!("{id}: is `{name}` part of the check or runner upkeep?");
+        }
+    }
+    let steps = check
+        .steps
         .iter()
-        .map(|check| {
-            let call =
-                call_of(check).with_context(|| format!("PR CI has no call `{}`", check.call))?;
-            let root = rendered(call.file, true)?;
-            let definition = job(&root, check.job, call.file)?;
-            let selected = is_selected(definition);
-
-            let own_name = definition["name"].as_str().unwrap_or(check.job);
-            let (name, matrix) = match own_name.split_once("${{") {
-                Some((before, _)) => (before, true),
-                None => (own_name, false),
-            };
-
-            // The condition `cargo x attest` evaluates is the job's own: the
-            // attestation clause is about the run, not about the job.
-            let own = rendered(call.file, false)?;
-            let condition = job(&own, check.job, call.file)?["if"]
-                .as_str()
-                .map(str::to_owned);
-
-            Ok(Described {
-                id: check.id(),
-                call: check.call,
-                workflow: call.file,
-                job: check.job,
-                name: format!("{} / {name}", call.name),
-                matrix,
-                condition,
-                inputs: inputs_of(definition)?,
-                selected,
-                steps: check.steps,
-                fingerprint: fingerprint(&root, check, selected)?,
-            })
+        .map(|name| {
+            let step = listed
+                .iter()
+                .find(|step| step["name"].as_str() == Some(name))
+                .with_context(|| format!("{id} has no step `{name}`"))?;
+            plain_step(step, check)
         })
-        .collect()
+        .collect::<Result<Vec<Step>>>()?;
+
+    let dev_shell = listed
+        .iter()
+        .find(|step| {
+            step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with(DEV_SHELL_ACTION))
+        })
+        .and_then(|step| step["with"]["shell"].as_str())
+        .unwrap_or(DEFAULT_DEV_SHELL)
+        .to_owned();
+
+    let mut env = environment(&root["env"], check, &id)?;
+    env.extend(environment(&definition["env"], check, &id)?);
+
+    // A value for a variable no one sets is a declaration gone stale.
+    for (name, _) in check.local_env {
+        let set = env.contains_key(*name) || steps.iter().any(|step| step.env.contains_key(*name));
+        if !set {
+            bail!("{id} declares a local `{name}`, which neither the job nor its steps set");
+        }
+    }
+
+    let inputs = inputs(&root, call, check.job)?;
+    Ok(Described {
+        fingerprint: fingerprint(&root, check, &inputs)?,
+        id,
+        call: check.call,
+        workflow: call.file,
+        job: check.job,
+        name: format!("{} / {own_name}", call.name),
+        inputs,
+        dev_shell,
+        env,
+        steps,
+    })
+}
+
+/// Every check, read from the workflows as their modules build them.
+pub fn described() -> Result<Vec<Described>> {
+    CHECKS.iter().map(describe).collect()
 }
 
 /// [`MANIFEST_FILE`]'s contents.
@@ -516,36 +748,49 @@ pub fn manifest() -> Result<String> {
     let checks: Vec<serde_json::Value> = described()?
         .iter()
         .map(|check| {
+            let steps: Vec<serde_json::Value> = check
+                .steps
+                .iter()
+                .map(|step| {
+                    json!({
+                        "name": step.name,
+                        "run": step.run,
+                        "working_directory": step.working_directory,
+                        "pipefail": step.pipefail,
+                        "env": step.env,
+                    })
+                })
+                .collect();
             json!({
                 "id": check.id,
                 "call": check.call,
                 "workflow": check.workflow,
                 "job": check.job,
-                "if": check.condition,
-                "inputs": check.inputs,
-                "selected": check.selected,
-                "steps": check.steps,
+                "name": check.name,
                 "fingerprint": check.fingerprint,
+                "inputs": check.inputs,
+                "dev_shell": check.dev_shell,
+                "env": check.env,
+                "steps": steps,
             })
         })
         .collect();
+    let not_attestable: Vec<serde_json::Value> = NOT_ATTESTABLE
+        .iter()
+        .map(|job| json!({ "id": format!("{}/{}", job.call, job.job), "why": job.why }))
+        .collect();
 
     let manifest = json!({
-        "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run.",
+        "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run, with the scripts a runner runs.",
         "status_prefix": STATUS_PREFIX,
-        "caller": pr_ci::FILE,
-        "caller_start_job": pr_ci::START_ID,
-        "selector_job": SELECTOR_JOB,
-        "filter_action": FILTER_ACTION,
-        "runner_steps": RUNNER_STEPS,
-        "runner_actions": RUNNER_ACTIONS,
         "checks": checks,
+        "not_attestable": not_attestable,
     });
     Ok(format!("{}\n", serde_json::to_string_pretty(&manifest)?))
 }
 
-/// What `Start` needs to accept a status: the check, its fingerprint, and
-/// whether its attestation carries a digest.
+/// What `Start` needs to accept a status: the check, its fingerprint, and the
+/// paths to hash in the merge commit.
 pub fn start_checks() -> Result<String> {
     let checks: Vec<serde_json::Value> = described()?
         .iter()
@@ -553,18 +798,18 @@ pub fn start_checks() -> Result<String> {
             json!({
                 "id": check.id,
                 "fingerprint": check.fingerprint,
-                "selected": check.selected,
+                "inputs": check.inputs,
             })
         })
         .collect();
     Ok(serde_json::to_string(&checks)?)
 }
 
-/// What the gate needs to find a check's jobs in the finished run.
+/// What the gate needs to find a check's job in the finished run.
 pub fn gate_checks() -> Result<String> {
     let checks: Vec<serde_json::Value> = described()?
         .iter()
-        .map(|check| json!({ "id": check.id, "name": check.name, "matrix": check.matrix }))
+        .map(|check| json!({ "id": check.id, "name": check.name }))
         .collect();
     Ok(serde_json::to_string(&checks)?)
 }

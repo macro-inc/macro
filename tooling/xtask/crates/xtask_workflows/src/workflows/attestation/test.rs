@@ -19,13 +19,43 @@ fn run_steps(job: &serde_yaml::Value) -> Vec<&str> {
         .collect()
 }
 
-/// `cargo x attest` runs the listed steps and skips the runner's. A step in
-/// neither list is one nobody decided about: skipped, it would let a machine
-/// attest a job without running part of it.
+/// A job in neither list is one nobody decided about, and a job in a list
+/// that no longer exists is a decision about nothing.
+#[test]
+fn every_job_pr_ci_runs_is_attestable_or_says_why_not() {
+    let mut exist = BTreeSet::new();
+    for call in pr_ci::CALLS {
+        let root = rendered(call.file, false).expect("workflow renders");
+        for (id, _) in root["jobs"].as_mapping().expect("jobs") {
+            exist.insert(format!("{}/{}", call.id, id.as_str().expect("a job id")));
+        }
+    }
+
+    let attestable: BTreeSet<String> = CHECKS.iter().map(Check::id).collect();
+    let not: BTreeSet<String> = NOT_ATTESTABLE
+        .iter()
+        .map(|job| format!("{}/{}", job.call, job.job))
+        .collect();
+
+    assert_eq!(attestable.len(), CHECKS.len(), "a check is listed twice");
+    assert_eq!(not.len(), NOT_ATTESTABLE.len(), "a job is listed twice");
+    assert_eq!(
+        attestable.intersection(&not).collect::<Vec<_>>(),
+        Vec::<&String>::new(),
+        "a job is in both lists"
+    );
+    let decided: BTreeSet<String> = attestable.union(&not).cloned().collect();
+    assert_eq!(decided, exist);
+    assert!(NOT_ATTESTABLE.iter().all(|job| !job.why.is_empty()));
+}
+
+/// A machine runs the listed steps and skips the runner's. A step in neither
+/// list is one nobody decided about: skipped, it would let a machine attest a
+/// job without running part of it.
 #[test]
 fn every_step_of_an_attested_job_is_the_check_or_runner_upkeep() {
     for check in CHECKS {
-        let call = call_of(check).expect("the check's call exists");
+        let call = call_of(check.call).expect("the check's call exists");
         let root = rendered(call.file, true).expect("workflow renders");
         let definition = job(&root, check.job, call.file).expect("job exists");
         let ran = run_steps(definition);
@@ -43,30 +73,21 @@ fn every_step_of_an_attested_job_is_the_check_or_runner_upkeep() {
     }
 }
 
-/// An action `cargo x attest` skips must only prepare a runner; one it can't
-/// classify could be the check itself. It runs the repository's own composite
-/// actions and emulates the path filter.
+/// An action a machine skips must only prepare a runner. One that changes
+/// what the check reads, or that is the check, has no script to run instead.
 #[test]
-fn every_action_of_an_attested_job_is_one_cargo_x_attest_handles() {
+fn every_action_of_an_attested_job_only_prepares_a_runner() {
     for check in CHECKS {
-        let call = call_of(check).expect("the check's call exists");
+        let call = call_of(check.call).expect("the check's call exists");
         let root = rendered(call.file, true).expect("workflow renders");
-        let mut jobs = vec![check.job];
-        if is_selected(&root["jobs"][check.job]) {
-            jobs.push(SELECTOR_JOB);
-        }
 
-        for id in jobs {
-            for step in steps_of(&root["jobs"][id]) {
-                let Some(action) = action(step) else { continue };
-                assert!(
-                    RUNNER_ACTIONS.contains(&action)
-                        || action == FILTER_ACTION
-                        || action.starts_with("./.github/actions/"),
-                    "{} job {id} uses {action}, which cargo x attest can't stand in for",
-                    call.file
-                );
-            }
+        for step in steps_of(&root["jobs"][check.job]) {
+            let Some(action) = action(step) else { continue };
+            assert!(
+                RUNNER_ACTIONS.contains(&action),
+                "{} uses {action}; is it runner setup, or is the job not attestable?",
+                check.id()
+            );
         }
     }
 }
@@ -76,11 +97,11 @@ fn every_action_of_an_attested_job_is_one_cargo_x_attest_handles() {
 #[test]
 fn an_attested_job_needs_nothing_a_machine_lacks() {
     for check in CHECKS {
-        let call = call_of(check).expect("the check's call exists");
+        let call = call_of(check.call).expect("the check's call exists");
         let root = rendered(call.file, true).expect("workflow renders");
         let definition = &root["jobs"][check.job];
 
-        // The runner's own steps may: `cargo x attest` never runs them.
+        // The runner's own steps may: a machine never runs them.
         let mut read_by_the_check = vec![definition["env"].clone(), definition["if"].clone()];
         read_by_the_check.extend(
             steps_of(definition)
@@ -93,21 +114,11 @@ fn an_attested_job_needs_nothing_a_machine_lacks() {
         );
         let text = serde_yaml::to_string(&read_by_the_check).expect("steps serialize");
         assert!(!text.contains("secrets."), "{} reads a secret", check.id());
-        assert!(
-            definition.get("services").is_none(),
-            "{} needs service containers",
-            check.id()
-        );
 
-        let needs: Vec<&str> = definition["needs"]
-            .as_sequence()
-            .into_iter()
-            .flatten()
-            .filter_map(serde_yaml::Value::as_str)
-            .collect();
+        let runner = definition["runs-on"].as_str().unwrap_or_default();
         assert!(
-            needs.iter().all(|need| *need == SELECTOR_JOB),
-            "{} needs {needs:?}; cargo x attest runs only path-check first",
+            !runner.contains("macos") && !runner.contains("windows"),
+            "{} runs on {runner}",
             check.id()
         );
 
@@ -125,62 +136,50 @@ fn an_attested_job_needs_nothing_a_machine_lacks() {
     }
 }
 
+/// The manifest is what a machine runs. It holds the job's steps as written,
+/// with nothing left for a runner to fill in.
 #[test]
-fn every_attested_job_skips_on_its_own_entry() {
-    let checks = described().expect("checks render");
-    let ids: BTreeSet<&str> = checks.iter().map(|check| check.id.as_str()).collect();
-    assert_eq!(ids.len(), checks.len(), "two checks share an id");
-
-    for check in &checks {
+fn a_machine_runs_the_scripts_the_workflow_holds() {
+    for check in described().expect("checks render") {
         let root = rendered(check.workflow, true).expect("workflow renders");
-        let condition = root["jobs"][check.job]["if"]
-            .as_str()
-            .expect("an attested job has a condition");
-        let clause = skip_clause(&check.id, check.selected);
+        let generated = &root["jobs"][check.job];
 
-        assert!(
-            condition.ends_with(&clause),
-            "{}: `{condition}` does not end with `{clause}`",
-            check.id
-        );
-        if let Some(own) = &check.condition {
-            assert_eq!(condition, format!("({own}) && {clause}"));
+        for step in &check.steps {
+            let listed = steps_of(generated)
+                .find(|listed| listed["name"].as_str() == Some(&step.name))
+                .expect("the step is in the generated job");
+            assert_eq!(listed["run"].as_str(), Some(step.run.as_str()));
+        }
+
+        let values = check
+            .env
+            .values()
+            .chain(check.steps.iter().flat_map(|step| step.env.values()));
+        for value in values {
+            assert!(
+                !value.contains("${{") && !value.contains(RUNNER_HOME),
+                "{}: `{value}` is a runner's to set",
+                check.id
+            );
         }
     }
 }
 
-/// `path-check` hashes the outputs a job reads; one it can't see would hash as
-/// empty on both sides and accept an attestation for any selection.
 #[test]
-fn path_check_hashes_every_output_a_selected_job_reads() {
-    for check in described().expect("checks render") {
-        if !check.selected {
-            assert!(check.inputs.is_empty(), "{} reads path-check", check.id);
-            continue;
-        }
+fn every_attested_job_skips_on_its_own_entry() {
+    let checks = described().expect("checks render");
 
+    for check in &checks {
         let root = rendered(check.workflow, true).expect("workflow renders");
-        let accept = steps_of(&root["jobs"][SELECTOR_JOB])
-            .find(|step| step["name"].as_str() == Some(ACCEPT_STEP))
-            .expect("path-check accepts attested checks");
-        let listed: serde_json::Value = serde_json::from_str(
-            accept["env"]["CHECK_INPUTS"]
-                .as_str()
-                .expect("CHECK_INPUTS is set"),
-        )
-        .expect("CHECK_INPUTS is JSON");
+        let own = rendered(check.workflow, false).expect("workflow renders");
+        let condition = root["jobs"][check.job]["if"]
+            .as_str()
+            .expect("an attested job has a condition");
+        let clause = skip_clause(&check.id);
 
-        assert!(
-            !check.inputs.is_empty(),
-            "{} waits for path-check without reading it",
-            check.id
-        );
-        assert_eq!(listed[&check.id], serde_json::json!(check.inputs));
-        for input in &check.inputs {
-            assert!(
-                accept["env"][format!("OUTPUT_{input}")].as_str().is_some(),
-                "path-check does not pass `{input}` to the accept step"
-            );
+        match own["jobs"][check.job]["if"].as_str() {
+            Some(own) => assert_eq!(condition, format!("({own}) && {clause}")),
+            None => assert_eq!(condition, clause),
         }
     }
 }
@@ -205,24 +204,86 @@ fn pr_ci_hands_attestations_to_exactly_the_workflows_with_checks() {
 }
 
 #[test]
-fn the_accept_script_contains_no_actions_expressions() {
-    assert!(!include_str!("../scripts/accept_attested_checks.ts").contains("${{"));
+fn a_pattern_widens_to_the_directory_it_stays_inside() {
+    assert_eq!(widen("Cargo.lock"), "Cargo.lock");
+    assert_eq!(widen("crates/**"), "crates");
+    assert_eq!(widen("crates/**/Cargo.toml"), "crates");
+    assert_eq!(widen("nix-support/node_modules*"), "nix-support");
+    assert_eq!(widen("tooling/xtask/src/**"), "tooling/xtask/src");
+    assert_eq!(widen("**/Cargo.toml"), ".");
+    assert_eq!(widen("*.md"), ".");
 }
 
 #[test]
-fn accept_script_scenarios() {
-    let output = std::process::Command::new("node")
-        .args(["--test", "accept_attested_checks.test.ts"])
-        .current_dir(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/src/workflows/scripts"
-        ))
-        .output()
-        .expect("run the accept scenarios with Node");
-    assert!(
-        output.status.success(),
-        "accept scenarios failed:\n{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
+fn inputs_drop_what_a_listed_directory_already_holds() {
+    let paths = [
+        "crates/a",
+        "crates",
+        "flake.nix",
+        "crates/b/c",
+        "crates-extra",
+    ];
+
+    assert_eq!(
+        without_nested(paths.iter().map(|path| (*path).to_owned()).collect()),
+        vec!["crates", "crates-extra", "flake.nix"]
     );
+    assert_eq!(
+        without_nested(vec!["crates".to_owned(), ".".to_owned()]),
+        vec!["."]
+    );
+}
+
+/// The inputs must hold every path that makes `PR CI` run the job: a path
+/// outside them could change the verdict and leave the hash as it was.
+#[test]
+fn a_checks_inputs_hold_every_path_that_makes_its_job_run() {
+    for check in described().expect("checks render") {
+        let call = call_of(check.call).expect("the check's call exists");
+        let root = rendered(call.file, false).expect("workflow renders");
+        let patterns: Vec<String> = match call.paths {
+            Some(paths) => paths.iter().map(|path| path.as_str().to_owned()).collect(),
+            None => selector_filters(&root).expect("a selector")["should_run"].clone(),
+        };
+
+        assert!(!patterns.is_empty(), "{} is filtered by nothing", check.id);
+        for pattern in patterns {
+            let inside = widen(&pattern);
+            assert!(
+                check.inputs.iter().any(|input| {
+                    input == "." || *input == inside || inside.starts_with(&format!("{input}/"))
+                }),
+                "{}: `{pattern}` is not among its inputs",
+                check.id
+            );
+        }
+        for always in ALWAYS_READ {
+            assert!(
+                check
+                    .inputs
+                    .iter()
+                    .any(|input| input == always || input == ".")
+            );
+        }
+    }
+}
+
+/// A job a selector decides must read that decision in its own condition:
+/// the inputs are taken from there.
+#[test]
+fn a_selected_check_reads_the_filter_its_inputs_come_from() {
+    for check in CHECKS {
+        let call = call_of(check.call).expect("the check's call exists");
+        if call.paths.is_some() {
+            continue;
+        }
+        let root = rendered(call.file, false).expect("workflow renders");
+        let condition = root["jobs"][check.job]["if"].as_str().unwrap_or_default();
+
+        assert!(
+            condition.contains("needs.path-check.outputs.should_run"),
+            "{}: `{condition}` does not read should_run",
+            check.id()
+        );
+    }
 }

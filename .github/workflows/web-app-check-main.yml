@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -19,7 +19,6 @@ jobs:
       i18n_changed: ${{ steps.filter.outputs.i18n_changed }}
       database_grid_changed: ${{ steps.filter.outputs.database_grid_changed }}
       calendar_details_changed: ${{ steps.filter.outputs.calendar_details_changed }}
-      attested: ${{ steps.attested.outputs.attested }}
     timeout-minutes: 10
     steps:
     - name: Checkout Repo
@@ -143,82 +142,6 @@ jobs:
         result "No changed Rust file names a schema item." false
       env:
         CODEGEN_INPUTS: ${{ steps.filter.outputs.codegen_inputs }}
-    - id: attested
-      name: Accept attested checks
-      if: inputs.attested != '' && inputs.attested != '[]'
-      run: |
-        node --disable-warning=ExperimentalWarning --input-type=module-typescript <<'NODE_SCRIPT'
-        // Runs last in a called workflow's `path-check`: decides which attested checks
-        // this run may skip. `PR CI`'s Start accepted each entry of `ATTESTED` for the
-        // job it names; this accepts it for what the job would run on here.
-        //
-        // An entry is `<check>@<digest>`, the digest being over the `path-check`
-        // outputs that check's job reads, as `cargo x attest` computed them on the
-        // developer's machine. The same digest over this run's outputs
-        // (`OUTPUT_<name>`) means the attested run covered what this one selects: the
-        // same packages, the same conditional steps. Any other entry is dropped and its
-        // job runs here.
-
-        import { createHash } from 'node:crypto';
-        import { appendFileSync } from 'node:fs';
-
-        /// The digest of the outputs a job reads. `cargo x attest` computes the same
-        /// (`xtask_attest`'s `inputs_digest`): sorted `name=value` lines, SHA-256,
-        /// 16 hex digits.
-        export function inputsDigest(inputs: Record<string, string>): string {
-          const lines = Object.keys(inputs)
-            .sort()
-            .map((name) => `${name}=${inputs[name]}\n`)
-            .join('');
-          return createHash('sha256').update(lines).digest('hex').slice(0, 16);
-        }
-
-        /// The checks whose attestation ran on the outputs this run computed.
-        export function acceptedChecks(
-          attested: string[],
-          checkInputs: Record<string, string[]>,
-          outputs: Record<string, string>,
-        ): string[] {
-          return Object.entries(checkInputs)
-            .filter(([id, names]) => {
-              const read = Object.fromEntries(names.map((name) => [name, outputs[name] ?? '']));
-              return attested.includes(`${id}@${inputsDigest(read)}`);
-            })
-            .map(([id]) => id);
-        }
-
-        export function main() {
-          const attested: string[] = JSON.parse(process.env.ATTESTED || '[]');
-          const checkInputs: Record<string, string[]> = JSON.parse(process.env.CHECK_INPUTS || '{}');
-
-          const prefix = 'OUTPUT_';
-          const outputs = Object.fromEntries(
-            Object.entries(process.env)
-              .filter(([name]) => name.startsWith(prefix))
-              .map(([name, value]) => [name.slice(prefix.length), value ?? '']),
-          );
-
-          const accepted = acceptedChecks(attested, checkInputs, outputs);
-          for (const id of Object.keys(checkInputs)) {
-            const offered = attested.some((entry) => entry.startsWith(`${id}@`));
-            if (accepted.includes(id)) {
-              console.log(`${id}: attested for this selection; its job is skipped`);
-            } else if (offered) {
-              console.log(`${id}: attested for a different selection; its job runs here`);
-            }
-          }
-
-          appendFileSync(process.env.GITHUB_OUTPUT!, `attested=${JSON.stringify(accepted)}\n`);
-        }
-
-        await main();
-        NODE_SCRIPT
-      shell: bash
-      env:
-        ATTESTED: ${{ inputs.attested }}
-        CHECK_INPUTS: '{"web-app/biome-check":["should_run"],"web-app/cycles":["should_run"],"web-app/generated-code":["codegen_changed"],"web-app/test":["should_run"],"web-app/typescript":["should_run"]}'
-        OUTPUT_codegen_changed: ${{ steps.codegen.outputs.codegen_changed }}
-        OUTPUT_should_run: ${{ steps.filter.outputs.should_run }}
   android-native-check:
     name: Android Native Check
     runs-on: namespace-profile-linux-tiny-no-cache
@@ -428,7 +351,7 @@ jobs:
   typescript:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'web-app/typescript')
+    if: needs.path-check.outputs.should_run == 'true'
     name: Typecheck
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 15
@@ -511,7 +434,7 @@ jobs:
   generated-code:
     needs:
     - path-check
-    if: (needs.path-check.outputs.codegen_changed == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'web-app/generated-code')
+    if: needs.path-check.outputs.codegen_changed == 'true'
     name: Generated Code Check
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-codegen
     env:
@@ -687,7 +610,7 @@ jobs:
   biome-check:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'web-app/biome-check')
+    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(inputs.attested || '[]'), 'web-app/biome-check')
     name: Biome Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 20
@@ -729,7 +652,7 @@ jobs:
   test:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'web-app/test')
+    if: needs.path-check.outputs.should_run == 'true'
     name: Test (${{ matrix.shard }}/6)
     runs-on: namespace-profile-linux-mid;overrides.cache-tag=web-ci
     timeout-minutes: 20
@@ -1015,7 +938,7 @@ jobs:
   cycles:
     needs:
     - path-check
-    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(needs.path-check.outputs.attested || '[]'), 'web-app/cycles')
+    if: (needs.path-check.outputs.should_run == 'true') && !contains(fromJSON(inputs.attested || '[]'), 'web-app/cycles')
     name: Cycles Import Check
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15

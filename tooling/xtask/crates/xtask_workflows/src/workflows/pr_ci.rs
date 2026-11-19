@@ -52,10 +52,8 @@ pub const GATE_DOCS_URL: &str =
 
 const REQUESTED: &str = "github.event.label.name == 'run-ci'";
 
-/// The generated file, and the id of the job whose outputs gate the calls;
-/// `cargo x attest` reads both to tell which calls a change runs.
-pub const FILE: &str = "pr-ci.yml";
-pub const START_ID: &str = "start";
+/// The id of the job whose outputs gate the calls.
+const START_ID: &str = "start";
 
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
 const START_JOB: &str = "Start";
@@ -68,7 +66,7 @@ pub(crate) struct Call {
     pub(crate) name: &'static str,
     pub(crate) file: &'static str,
     /// Files that make it run; `None` runs it on every request.
-    paths: Option<&'static [RepoGlob<'static>]>,
+    pub(crate) paths: Option<&'static [RepoGlob<'static>]>,
 }
 
 pub(crate) const CALLS: &[Call] = &[
@@ -241,13 +239,12 @@ fn start() -> Result<Job> {
                 .add_env(("MERGE_SHA", "${{ github.sha }}"))
                 .add_env(("ATTESTABLE_CHECKS", attestation::start_checks()?))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
-                .add_env(("AUDIT_CONTEXT", attestation::AUDIT_CONTEXT))
                 .add_env(("AUDIT_ONE_IN", attestation::AUDIT_ONE_IN.to_string())),
         )
         .add_step(paths_filter())
         .add_output("attested", "${{ steps.attestations.outputs.attested }}")
         .add_output("audited", "${{ steps.attestations.outputs.audited }}")
-        .add_output("base", "${{ steps.attestations.outputs.base }}");
+        .add_output("sources", "${{ steps.attestations.outputs.sources }}");
 
     Ok(CALLS
         .iter()
@@ -329,13 +326,12 @@ fn gate() -> Job {
                 .add_env(("NEEDS", "${{ toJSON(needs) }}"))
                 .add_env(("ATTESTED", "${{ needs.start.outputs.attested }}"))
                 .add_env(("AUDITED", "${{ needs.start.outputs.audited }}"))
-                .add_env(("BASE_SHA", "${{ needs.start.outputs.base }}"))
+                .add_env(("SOURCES", "${{ needs.start.outputs.sources }}"))
                 .add_env((
                     "ATTESTABLE_CHECKS",
                     attestation::start_checks().expect("the attested checks render"),
                 ))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
-                .add_env(("AUDIT_CONTEXT", attestation::AUDIT_CONTEXT))
                 .add_env((
                     "GATE_CHECKS",
                     attestation::gate_checks().expect("the attested checks render"),

@@ -1,313 +1,705 @@
 {
-  "caller": "pr-ci.yml",
-  "caller_start_job": "start",
   "checks": [
     {
       "call": "cloud-storage",
-      "fingerprint": "065ba1daef305049",
+      "dev_shell": "default",
+      "env": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "limited",
+        "CARGO_PROFILE_TEST_DEBUG": "limited",
+        "CARGO_TARGET_REBUILD_ALL": "",
+        "CARGO_TERM_COLOR": "always",
+        "RUSTDOCFLAGS": "-Dwarnings",
+        "RUSTFLAGS": "-Dwarnings -Dclippy::disallowed_methods -C link-arg=-fuse-ld=mold",
+        "RUST_BACKTRACE": "1",
+        "SQLX_OFFLINE": "true"
+      },
+      "fingerprint": "df5a31057cfa2f1f",
       "id": "cloud-storage/check",
-      "if": "needs.path-check.outputs.should_run == 'true'",
       "inputs": [
-        "query_data",
-        "rust_packages",
-        "should_run"
+        ".cargo",
+        ".config",
+        ".github/actions/setup-nix",
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/setup-sccache",
+        ".github/actions/teardown-nix",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+        ".sqlx",
+        "Cargo.lock",
+        "Cargo.toml",
+        "Cross.toml",
+        "bun.lock",
+        "clippy.toml",
+        "crates",
+        "deny.toml",
+        "flake.lock",
+        "flake.nix",
+        "nix",
+        "nix-support",
+        "packages/code-mode-sdk",
+        "packages/sdk",
+        "packages/sdk-docs",
+        "rust-toolchain.toml",
+        "services",
+        "static_assets",
+        "tooling/xtask"
       ],
       "job": "check",
-      "selected": true,
+      "name": "Cloud Storage / check",
       "steps": [
-        "Build code-mode assets",
-        "fmt",
-        "unused dependencies",
-        "clippy"
+        {
+          "env": {},
+          "name": "Build code-mode assets",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Build the code-mode assets once per SDK state, not once per job. Cache volumes\n# are forks of past jobs, so most jobs miss the store path another job just built.\n# The key is the store path, which covers every input of the build.\nassets=\"$(nix eval --raw .#code-mode-assets.outPath)\"\necho \"CODE_MODE_ASSETS_DIR=$assets\" >> \"$GITHUB_ENV\"\n\nif nix-store --check-validity \"$assets\" 2>/dev/null; then\n  echo \"Code-mode assets already in the store\"\n  exit 0\nfi\n\n# Forks have no remote cache credentials.\nif [ -z \"${SCCACHE_WEBDAV_ENDPOINT:-}\" ]; then\n  nix build --no-link --print-build-logs .#code-mode-assets\n  exit 0\nfi\n\ncache_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$assets\").closure.gz\"\n\n# The token goes through a config descriptor so it stays out of curl's arguments.\ncache_request() {\n  curl --fail --silent --show-error --max-time 30 --retry 2 \\\n    -K <(printf 'header = \"Authorization: Bearer %s\"\\n' \"$SCCACHE_WEBDAV_TOKEN\") \"$@\"\n}\n\nif cache_request \"$cache_url\" | gunzip | nix-store --import; then\n  echo \"Code-mode assets restored from the remote cache\"\n  exit 0\nfi\n\n# Installing node_modules is most of a build and changes far less often than the SDK,\n# so it has its own entry.\nmodules=\"$(nix eval --raw .#macro-js-node-modules.outPath)\"\nmodules_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$modules\").zst\"\nsave_modules=false\n\nif ! nix-store --check-validity \"$modules\" 2>/dev/null; then\n  # No retries: a retry would restart the stream into the same pipe, and past the limit\n  # a rebuild is faster.\n  if cache_request --retry 0 --max-time 60 \"$modules_url\" | zstd -d | nix-store --import; then\n    echo \"node_modules restored from the remote cache\"\n  else\n    save_modules=true\n  fi\nfi\n\nnix build --no-link --print-build-logs .#code-mode-assets\n\nif [ \"$save_modules\" = true ] \\\n  && ! nix-store --export \"$modules\" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - \"$modules_url\"; then\n  echo \"::warning::Could not save node_modules to the remote cache\"\nfi\n\n# Losing the upload costs the next job a rebuild, not a failure.\nif nix-store --export \"$assets\" | gzip | cache_request --upload-file - \"$cache_url\"; then\n  echo \"Code-mode assets saved to the remote cache\"\nelse\n  echo \"::warning::Could not save code-mode assets to the remote cache\"\nfi\n",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "fmt",
+          "pipefail": false,
+          "run": "cargo fmt --check",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "unused dependencies",
+          "pipefail": false,
+          "run": "cargo shear --format github",
+          "working_directory": null
+        },
+        {
+          "env": {
+            "RUST_PACKAGES": "all"
+          },
+          "name": "clippy",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Mirrors run_tests.sh package selection so clippy only lints the crates this\n# PR can actually affect. `all` keeps the historical workspace invocation,\n# including sync_service's special-cased feature set.\n\npackages=\"${RUST_PACKAGES:-}\"\n\nclippy_sync_service() {\n  cargo clippy -p sync_service -- \\\n    -A clippy::unnecessary_map_or \\\n    -A clippy::collapsible_if\n}\n\n# Most of soup's dependents build it without `outbound` (no features, or\n# `ports` alone), where helpers only the service or the Postgres repository\n# call are dead code that --all-features hides.\nclippy_soup_without_outbound() {\n  cargo clippy -p soup --no-default-features\n  cargo clippy -p soup --no-default-features --features ports\n}\n\nif [ -z \"$packages\" ] || [ \"$packages\" = \"all\" ]; then\n  cargo clippy --workspace --all-features --exclude sync_service\n  clippy_sync_service\n  clippy_soup_without_outbound\n  exit 0\nfi\n\nif [ \"$packages\" = \"none\" ]; then\n  echo \"No Rust packages to lint\"\n  exit 0\nfi\n\nsync=false\nsoup=false\npkg_args=()\nfor p in $packages; do\n  if [ \"$p\" = \"sync_service\" ]; then\n    sync=true\n  else\n    pkg_args+=(-p \"$p\")\n  fi\n  if [ \"$p\" = \"soup\" ]; then\n    soup=true\n  fi\ndone\n\nif [ \"${#pkg_args[@]}\" -gt 0 ]; then\n  cargo clippy --all-features \"${pkg_args[@]}\"\nfi\n\nif [ \"$sync\" = true ]; then\n  clippy_sync_service\nfi\n\nif [ \"$soup\" = true ]; then\n  clippy_soup_without_outbound\nfi\n",
+          "working_directory": null
+        }
       ],
       "workflow": "code_check_cloud_storage.yml"
     },
     {
       "call": "cloud-storage",
-      "fingerprint": "fec49558ae8bcac7",
+      "dev_shell": "default",
+      "env": {
+        "CARGO_INCREMENTAL": "0",
+        "CARGO_PROFILE_DEV_DEBUG": "0",
+        "CARGO_PROFILE_TEST_DEBUG": "0",
+        "CARGO_TARGET_REBUILD_ALL": "",
+        "CARGO_TERM_COLOR": "always",
+        "RUSTFLAGS": "-Dwarnings -C link-arg=-fuse-ld=mold",
+        "RUST_BACKTRACE": "1",
+        "RUST_PACKAGES": "all",
+        "SQLX_OFFLINE": "true"
+      },
+      "fingerprint": "612602551e625f30",
       "id": "cloud-storage/build-service-bins",
-      "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))",
       "inputs": [
-        "query_data",
-        "rust_packages",
-        "should_run",
-        "skip_tests"
+        ".cargo",
+        ".config",
+        ".github/actions/setup-nix",
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/setup-sccache",
+        ".github/actions/teardown-nix",
+        ".github/services-config.json",
+        ".github/workflows/code_check_cloud_storage.yml",
+        ".sqlx",
+        "Cargo.lock",
+        "Cargo.toml",
+        "Cross.toml",
+        "bun.lock",
+        "clippy.toml",
+        "crates",
+        "deny.toml",
+        "flake.lock",
+        "flake.nix",
+        "nix",
+        "nix-support",
+        "packages/code-mode-sdk",
+        "packages/sdk",
+        "packages/sdk-docs",
+        "rust-toolchain.toml",
+        "services",
+        "static_assets",
+        "tooling/xtask"
       ],
       "job": "build-service-bins",
-      "selected": true,
+      "name": "Cloud Storage / build-service-bins",
       "steps": [
-        "Build code-mode assets",
-        "build service binaries"
-      ],
-      "workflow": "code_check_cloud_storage.yml"
-    },
-    {
-      "call": "cloud-storage",
-      "fingerprint": "203eac08236dd412",
-      "id": "cloud-storage/graphql-schema-compat",
-      "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'",
-      "inputs": [
-        "graphql_schema",
-        "should_run"
-      ],
-      "job": "graphql-schema-compat",
-      "selected": true,
-      "steps": [
-        "Check GraphQL schema compatibility"
+        {
+          "env": {},
+          "name": "Build code-mode assets",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n# Build the code-mode assets once per SDK state, not once per job. Cache volumes\n# are forks of past jobs, so most jobs miss the store path another job just built.\n# The key is the store path, which covers every input of the build.\nassets=\"$(nix eval --raw .#code-mode-assets.outPath)\"\necho \"CODE_MODE_ASSETS_DIR=$assets\" >> \"$GITHUB_ENV\"\n\nif nix-store --check-validity \"$assets\" 2>/dev/null; then\n  echo \"Code-mode assets already in the store\"\n  exit 0\nfi\n\n# Forks have no remote cache credentials.\nif [ -z \"${SCCACHE_WEBDAV_ENDPOINT:-}\" ]; then\n  nix build --no-link --print-build-logs .#code-mode-assets\n  exit 0\nfi\n\ncache_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$assets\").closure.gz\"\n\n# The token goes through a config descriptor so it stays out of curl's arguments.\ncache_request() {\n  curl --fail --silent --show-error --max-time 30 --retry 2 \\\n    -K <(printf 'header = \"Authorization: Bearer %s\"\\n' \"$SCCACHE_WEBDAV_TOKEN\") \"$@\"\n}\n\nif cache_request \"$cache_url\" | gunzip | nix-store --import; then\n  echo \"Code-mode assets restored from the remote cache\"\n  exit 0\nfi\n\n# Installing node_modules is most of a build and changes far less often than the SDK,\n# so it has its own entry.\nmodules=\"$(nix eval --raw .#macro-js-node-modules.outPath)\"\nmodules_url=\"$SCCACHE_WEBDAV_ENDPOINT/code-mode-assets/$(basename \"$modules\").zst\"\nsave_modules=false\n\nif ! nix-store --check-validity \"$modules\" 2>/dev/null; then\n  # No retries: a retry would restart the stream into the same pipe, and past the limit\n  # a rebuild is faster.\n  if cache_request --retry 0 --max-time 60 \"$modules_url\" | zstd -d | nix-store --import; then\n    echo \"node_modules restored from the remote cache\"\n  else\n    save_modules=true\n  fi\nfi\n\nnix build --no-link --print-build-logs .#code-mode-assets\n\nif [ \"$save_modules\" = true ] \\\n  && ! nix-store --export \"$modules\" | zstd -T0 -3 | cache_request --max-time 120 --upload-file - \"$modules_url\"; then\n  echo \"::warning::Could not save node_modules to the remote cache\"\nfi\n\n# Losing the upload costs the next job a rebuild, not a failure.\nif nix-store --export \"$assets\" | gzip | cache_request --upload-file - \"$cache_url\"; then\n  echo \"Code-mode assets saved to the remote cache\"\nelse\n  echo \"::warning::Could not save code-mode assets to the remote cache\"\nfi\n",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "build service binaries",
+          "pipefail": false,
+          "run": "set -euo pipefail\n\n: \"${RUST_PACKAGES:?RUST_PACKAGES is required}\"\n\n# The test job never compiles these services' `run` bodies: each is an `impl\n# Future` polled only by the bin's `main`, and a bin's test target doesn't call\n# `main`. Clippy stops before monomorphization. So a failure only a real build\n# finds, such as a recursion limit overflow while instantiating, shows up here.\nselected=()\nfor service in document_storage_service email_service authentication_service; do\n  if [ \"$RUST_PACKAGES\" = \"all\" ] || [[ \" $RUST_PACKAGES \" == *\" $service \"* ]]; then\n    selected+=(\"$service\")\n  fi\ndone\n\nif [ \"${#selected[@]}\" -eq 0 ]; then\n  echo \"No service binaries were affected\"\n  exit 0\nfi\n\n# The same packages and features as run_tests.sh. Building each service's\n# `service_binary_builds` test target, which nothing runs, makes cargo build the\n# real binaries under the features `cargo test` resolves, so every other unit is\n# one the test job builds too and both jobs share sccache entries. `cargo build`\n# would resolve without dev-dependency features and rebuild most of the workspace.\nif [ \"$RUST_PACKAGES\" = \"all\" ]; then\n  package_args=(--workspace --exclude sync_service)\nelse\n  package_args=()\n  for package in $RUST_PACKAGES; do\n    [ \"$package\" = \"sync_service\" ] || package_args+=(-p \"$package\")\n  done\nfi\n\ncargo test --no-run --locked --all-features \\\n  --config 'profile.dev.package.\"*\".debug=false' \"${package_args[@]}\" \\\n  --test service_binary_builds\n",
+          "working_directory": null
+        }
       ],
       "workflow": "code_check_cloud_storage.yml"
     },
     {
       "call": "web-app",
-      "fingerprint": "31d70f45dd208042",
-      "id": "web-app/typescript",
-      "if": "needs.path-check.outputs.should_run == 'true'",
-      "inputs": [
-        "should_run"
-      ],
-      "job": "typescript",
-      "selected": true,
-      "steps": [
-        "Install SDK Documentation Dependencies",
-        "Build SDK",
-        "Run checks"
-      ],
-      "workflow": "web-app-check-main.yml"
-    },
-    {
-      "call": "web-app",
-      "fingerprint": "41cc8313cb599742",
-      "id": "web-app/generated-code",
-      "if": "needs.path-check.outputs.codegen_changed == 'true'",
-      "inputs": [
-        "codegen_changed"
-      ],
-      "job": "generated-code",
-      "selected": true,
-      "steps": [
-        "Build code-mode assets",
-        "Build schema binaries",
-        "Generate API Types",
-        "Regenerate SDK code",
-        "Verify SDK generated code is fresh",
-        "Check Specta Types"
-      ],
-      "workflow": "web-app-check-main.yml"
-    },
-    {
-      "call": "web-app",
-      "fingerprint": "0497cd2ef9db3066",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "7c6bdd05dc42b726",
       "id": "web-app/biome-check",
-      "if": "needs.path-check.outputs.should_run == 'true'",
       "inputs": [
-        "should_run"
+        ".github/actions/setup-reqs-web",
+        "Cargo.lock",
+        "Cargo.toml",
+        "apps/web",
+        "bun.lock",
+        "crates/agent_code_mode/SKILL.md",
+        "crates/agent_runtime_protocol",
+        "crates/client/cache-core",
+        "crates/client/cache-turso",
+        "crates/client/cache-wasm",
+        "crates/client/turso-opfs",
+        "crates/database_sql",
+        "crates/filter_ast",
+        "crates/folds/agent_fold",
+        "crates/item_filters",
+        "crates/natural_time",
+        "crates/password_import",
+        "crates/password_import_wasm",
+        "flake.lock",
+        "flake.nix",
+        "package.json",
+        "packages",
+        "rust-toolchain.toml",
+        "services/ai-editing-worker",
+        "services/lexical-service",
+        "services/mcp-chatgpt-worker",
+        "static_assets/schema.graphql",
+        "tooling/icons",
+        "tooling/scripts/starter-agent-lock.sh"
       ],
       "job": "biome-check",
-      "selected": true,
+      "name": "Web App / Biome Check",
       "steps": [
-        "Run Biome",
-        "Run Collaboration Package Biome",
-        "Check Browser Floor and Native Permissions"
+        {
+          "env": {},
+          "name": "Run Biome",
+          "pipefail": false,
+          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
+          "working_directory": "apps/web"
+        },
+        {
+          "env": {},
+          "name": "Run Collaboration Package Biome",
+          "pipefail": false,
+          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
+          "working_directory": "packages/collaboration"
+        },
+        {
+          "env": {},
+          "name": "Check Browser Floor and Native Permissions",
+          "pipefail": false,
+          "run": "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
+          "working_directory": null
+        }
       ],
       "workflow": "web-app-check-main.yml"
     },
     {
       "call": "web-app",
-      "fingerprint": "740c7186273ed5cd",
-      "id": "web-app/test",
-      "if": "needs.path-check.outputs.should_run == 'true'",
-      "inputs": [
-        "should_run"
-      ],
-      "job": "test",
-      "selected": true,
-      "steps": [
-        "Build agent-fold WASM for tests",
-        "Build natural-time WASM for tests",
-        "Test"
-      ],
-      "workflow": "web-app-check-main.yml"
-    },
-    {
-      "call": "web-app",
-      "fingerprint": "03e9d70e92bf9827",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "4b2780af28e859ab",
       "id": "web-app/cycles",
-      "if": "needs.path-check.outputs.should_run == 'true'",
       "inputs": [
-        "should_run"
+        ".github/actions/setup-reqs-web",
+        "Cargo.lock",
+        "Cargo.toml",
+        "apps/web",
+        "bun.lock",
+        "crates/agent_code_mode/SKILL.md",
+        "crates/agent_runtime_protocol",
+        "crates/client/cache-core",
+        "crates/client/cache-turso",
+        "crates/client/cache-wasm",
+        "crates/client/turso-opfs",
+        "crates/database_sql",
+        "crates/filter_ast",
+        "crates/folds/agent_fold",
+        "crates/item_filters",
+        "crates/natural_time",
+        "crates/password_import",
+        "crates/password_import_wasm",
+        "flake.lock",
+        "flake.nix",
+        "package.json",
+        "packages",
+        "rust-toolchain.toml",
+        "services/ai-editing-worker",
+        "services/lexical-service",
+        "services/mcp-chatgpt-worker",
+        "static_assets/schema.graphql",
+        "tooling/icons",
+        "tooling/scripts/starter-agent-lock.sh"
       ],
       "job": "cycles",
-      "selected": true,
+      "name": "Web App / Cycles Import Check",
       "steps": [
-        "Cycles Import Check",
-        "Collaboration Package Cycles Import Check"
+        {
+          "env": {},
+          "name": "Cycles Import Check",
+          "pipefail": false,
+          "run": "biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles",
+          "working_directory": "apps/web"
+        },
+        {
+          "env": {},
+          "name": "Collaboration Package Cycles Import Check",
+          "pipefail": false,
+          "run": "biome lint --changed --no-errors-on-unmatched --only=suspicious/noImportCycles",
+          "working_directory": "packages/collaboration"
+        }
       ],
       "workflow": "web-app-check-main.yml"
     },
     {
       "call": "infra",
-      "fingerprint": "34e2c148759cb623",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "0eb840e46467c4a0",
       "id": "infra/biome-check",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_infra.yml",
+        "flake.lock",
+        "flake.nix",
+        "infra"
+      ],
       "job": "biome-check",
-      "selected": false,
+      "name": "Infra / Biome Check",
       "steps": [
-        "Run Biome"
+        {
+          "env": {},
+          "name": "Run Biome",
+          "pipefail": false,
+          "run": "biome ci --changed --no-errors-on-unmatched --error-on-warnings",
+          "working_directory": "infra"
+        }
       ],
       "workflow": "code_check_infra.yml"
     },
     {
       "call": "infra",
-      "fingerprint": "562033a58f014aad",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "46960cebf4f00350",
       "id": "infra/check",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/actions/setup-nix-dev-shell",
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_infra.yml",
+        "flake.lock",
+        "flake.nix",
+        "infra"
+      ],
       "job": "check",
-      "selected": false,
+      "name": "Infra / check",
       "steps": [
-        "install",
-        "check"
+        {
+          "env": {},
+          "name": "install",
+          "pipefail": false,
+          "run": "bun install --frozen-lockfile",
+          "working_directory": "infra"
+        },
+        {
+          "env": {},
+          "name": "check",
+          "pipefail": false,
+          "run": "bun run check",
+          "working_directory": "infra"
+        }
       ],
       "workflow": "code_check_infra.yml"
     },
     {
       "call": "conventions",
-      "fingerprint": "5b669fc64fc53477",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "187ed5eb239cd4e4",
       "id": "conventions/ast-grep",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/actions/teardown-nix",
+        ".github/workflows/code_check_conventions.yml",
+        "apps/web",
+        "crates",
+        "flake.lock",
+        "flake.nix",
+        "packages",
+        "rules",
+        "services",
+        "sgconfig.yml",
+        "tooling/xtask"
+      ],
       "job": "ast-grep",
-      "selected": false,
+      "name": "Conventions / ast-grep Conventions",
       "steps": [
-        "Run ast-grep"
+        {
+          "env": {},
+          "name": "Run ast-grep",
+          "pipefail": false,
+          "run": "bunx --yes @ast-grep/cli@0.44.1 scan",
+          "working_directory": null
+        }
       ],
       "workflow": "code_check_conventions.yml"
     },
     {
       "call": "workspace-dependencies",
-      "fingerprint": "0104d4dbfae83eee",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "cf70cc5e3606b4b4",
       "id": "workspace-dependencies/dependency-check",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".config/hakari.toml",
+        ".github/workspace-dep-closures.json",
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates",
+        "flake.lock",
+        "flake.nix",
+        "services",
+        "tooling/xtask"
+      ],
       "job": "dependency-check",
-      "selected": false,
+      "name": "Workspace dependencies / dependency-check",
       "steps": [
-        "install tool",
-        "check"
+        {
+          "env": {},
+          "name": "install tool",
+          "pipefail": false,
+          "run": "cargo install cargo-workspace-dependency-checker@1.0.1",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "check",
+          "pipefail": false,
+          "run": "# workspace-hack (generated, see xtask) re-declares third-party deps\n# with explicit versions by design — that is how it pins union\n# features. Drop it from the member list so this check only polices\n# human-written crates for duplicate dependencies.\nsed -i '/^  \"crates\\/workspace-hack\",$/d' Cargo.toml\ncargo-workspace-dependency-checker\n",
+          "working_directory": null
+        }
       ],
       "workflow": "cargo_workspace_dependency_check.yml"
     },
     {
       "call": "workspace-dependencies",
-      "fingerprint": "1c7d2e8d01111e6e",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "79aa4e26dd8f4019",
       "id": "workspace-dependencies/hakari-and-dep-closures",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".config/hakari.toml",
+        ".github/workspace-dep-closures.json",
+        "Cargo.lock",
+        "Cargo.toml",
+        "crates",
+        "flake.lock",
+        "flake.nix",
+        "services",
+        "tooling/xtask"
+      ],
       "job": "hakari-and-dep-closures",
-      "selected": false,
+      "name": "Workspace dependencies / hakari-and-dep-closures",
       "steps": [
-        "generated dependency artifacts are up to date"
+        {
+          "env": {},
+          "name": "generated dependency artifacts are up to date",
+          "pipefail": false,
+          "run": "cargo run -p xtask --locked -- deps --check\n",
+          "working_directory": null
+        }
       ],
       "workflow": "cargo_workspace_dependency_check.yml"
     },
     {
       "call": "generated-workflows",
-      "fingerprint": "c4a0806cd391570e",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "09b8670d12369215",
       "id": "generated-workflows/check-workflows",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/attestable-checks.json",
+        ".github/kafka-cluster-topics.json",
+        ".github/workflows",
+        "crates/macro_event_topics",
+        "flake.lock",
+        "flake.nix",
+        "tooling/xtask"
+      ],
       "job": "check-workflows",
-      "selected": false,
+      "name": "Generated workflows / check-workflows",
       "steps": [
-        "verify workflows are up to date",
-        "verify kafka cluster topics are up to date"
+        {
+          "env": {},
+          "name": "verify workflows are up to date",
+          "pipefail": false,
+          "run": "cargo run --manifest-path tooling/xtask/Cargo.toml -- workflows --check",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "verify kafka cluster topics are up to date",
+          "pipefail": false,
+          "run": "cargo run --manifest-path tooling/xtask/Cargo.toml -- kafka-topics --check",
+          "working_directory": null
+        }
       ],
       "workflow": "check_generated.yml"
     },
     {
       "call": "node-modules-nix",
-      "fingerprint": "2b5862faacd585ef",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "8b09f135adb988de",
       "id": "node-modules-nix/check-linux-node-modules-nix",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/workflows/check_node_modules_nix.yml",
+        "apps",
+        "bun.lock",
+        "flake.lock",
+        "flake.nix",
+        "nix-support/node_modules-hashes.json",
+        "nix-support/node_modules.nix",
+        "nix/tauri-desktop.nix",
+        "package.json",
+        "packages",
+        "services",
+        "tooling/scripts/update-node-modules-hash.sh"
+      ],
       "job": "check-linux-node-modules-nix",
-      "selected": false,
+      "name": "node_modules nix / check Linux node_modules nix",
       "steps": [
-        "verify js node_modules derivation is up to date"
+        {
+          "env": {},
+          "name": "verify js node_modules derivation is up to date",
+          "pipefail": false,
+          "run": "# A fixed-output derivation already in the store is accepted without\n# running it, whatever bun.lock now says, so only then does the check\n# need a rebuild. On a store without it, the first build is the check.\nout=$(nix eval --raw .#js-node-modules.outPath)\nif nix-store --check-validity \"$out\" 2>/dev/null; then\n  nix build .#js-node-modules --no-link --rebuild\nelse\n  nix build .#js-node-modules --no-link\nfi\n",
+          "working_directory": null
+        }
       ],
       "workflow": "check_node_modules_nix.yml"
     },
     {
       "call": "sdk",
-      "fingerprint": "4e8720c0910fa094",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "53e0dd6df6487b9c",
       "id": "sdk/check-package",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/workflows/sdk-check.yml",
+        "bun.lock",
+        "flake.lock",
+        "flake.nix",
+        "packages/sdk"
+      ],
       "job": "check-package",
-      "selected": false,
+      "name": "SDK / SDK Package Check",
       "steps": [
-        "Install dependencies",
-        "Typecheck SDK",
-        "Test SDK",
-        "Check endpoint coverage",
-        "Check packed SDK"
+        {
+          "env": {},
+          "name": "Install dependencies",
+          "pipefail": false,
+          "run": "bun install --frozen-lockfile",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Typecheck SDK",
+          "pipefail": false,
+          "run": "bun run check",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Test SDK",
+          "pipefail": false,
+          "run": "bun test",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Check endpoint coverage",
+          "pipefail": false,
+          "run": "bun run coverage",
+          "working_directory": "packages/sdk"
+        },
+        {
+          "env": {},
+          "name": "Check packed SDK",
+          "pipefail": false,
+          "run": "bun run build && bun run check:pack",
+          "working_directory": "packages/sdk"
+        }
       ],
       "workflow": "sdk-check.yml"
     },
     {
       "call": "observability-image",
-      "fingerprint": "55845a34f6912e2d",
+      "dev_shell": "default",
+      "env": {},
+      "fingerprint": "80c6dd2e5bfa7974",
       "id": "observability-image/build-image",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/workflows/observability_image.yml",
+        "flake.lock",
+        "flake.nix",
+        "infra/stacks/observability/assets",
+        "infra/stacks/observability/flake.lock",
+        "infra/stacks/observability/flake.nix",
+        "infra/stacks/observability/nixos"
+      ],
       "job": "build-image",
-      "selected": false,
+      "name": "Observability image / Build observability image",
       "steps": [
-        "Build the NixOS image"
+        {
+          "env": {},
+          "name": "Build the NixOS image",
+          "pipefail": true,
+          "run": "set -euo pipefail\nif [ -e /dev/kvm ]; then\n  echo \"KVM is available\"\nelse\n  echo \"::warning::No /dev/kvm: the image builds under QEMU emulation\"\nfi\nfeatures=\"$(nix config show system-features) kvm\"\ntime nix build . --option system-features \"$features\" --print-build-logs --out-link result\ndu -shL result/*.vhd\n",
+          "working_directory": "infra/stacks/observability"
+        }
       ],
       "workflow": "observability_image.yml"
     },
     {
       "call": "macrod-update",
-      "fingerprint": "3b3764213d51cdaf",
+      "dev_shell": "agent-daemon",
+      "env": {},
+      "fingerprint": "bff918e9c5ea39ca",
       "id": "macrod-update/linux",
-      "if": null,
-      "inputs": [],
+      "inputs": [
+        ".github/workflows/test_macrod_update.yml",
+        "crates/coding_agent_worker",
+        "flake.lock",
+        "flake.nix"
+      ],
       "job": "linux",
-      "selected": false,
+      "name": "macrod update / macrod update (linux)",
       "steps": [
-        "Build two tagged releases",
-        "Self-update end to end",
-        "Installer in bash, zsh and fish"
+        {
+          "env": {
+            "AWS_LC_SYS_CMAKE_BUILDER": "1",
+            "CARGO_BUILD": "cargo zigbuild",
+            "SQLX_OFFLINE": "true",
+            "TARGET": "x86_64-unknown-linux-musl"
+          },
+          "name": "Build two tagged releases",
+          "pipefail": true,
+          "run": "crates/coding_agent_worker/e2e/build_releases.sh \"$RUNNER_TEMP/releases\" v2000.1.1.1 v2000.1.1.2",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "Self-update end to end",
+          "pipefail": true,
+          "run": "python3 crates/coding_agent_worker/e2e/update_e2e.py --releases \"$RUNNER_TEMP/releases\" --v1 v2000.1.1.1 --v2 v2000.1.1.2",
+          "working_directory": null
+        },
+        {
+          "env": {},
+          "name": "Installer in bash, zsh and fish",
+          "pipefail": true,
+          "run": "nix shell nixpkgs#zsh nixpkgs#fish --command crates/coding_agent_worker/e2e/installer_test.sh \"$RUNNER_TEMP/releases\" v2000.1.1.1",
+          "working_directory": null
+        }
       ],
       "workflow": "test_macrod_update.yml"
     }
   ],
-  "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run.",
-  "filter_action": "dorny/paths-filter",
-  "runner_actions": [
-    "actions/checkout",
-    "actions/setup-node",
-    "oven-sh/setup-bun",
-    "namespacelabs/nscloud-cache-action",
-    "runs-on/cache/restore",
-    "runs-on/cache/save",
-    "./.github/actions/setup-nix",
-    "./.github/actions/setup-nix-dev-shell",
-    "./.github/actions/setup-rust",
-    "./.github/actions/setup-sccache",
-    "./.github/actions/teardown-nix"
+  "comment": "Generated by `cargo x workflows`; do not edit. The PR CI jobs `cargo x attest` can run, with the scripts a runner runs.",
+  "not_attestable": [
+    {
+      "id": "cloud-storage/path-check",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "cloud-storage/test",
+      "why": "needs service containers on fixed ports"
+    },
+    {
+      "id": "cloud-storage/doppler-config",
+      "why": "reads secrets"
+    },
+    {
+      "id": "cloud-storage/graphql-schema-compat",
+      "why": "compares the schema with the base of the merge commit (`HEAD^1`), which a working tree does not have"
+    },
+    {
+      "id": "web-app/path-check",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "web-app/typescript",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/generated-code",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/test",
+      "why": "its setup rewrites `bunfig.toml` and replaces `node_modules`, which a working tree can't take"
+    },
+    {
+      "id": "web-app/build",
+      "why": "reads secrets and deploys a preview"
+    },
+    {
+      "id": "web-app/functional",
+      "why": "needs browsers and system packages a dev shell does not install"
+    },
+    {
+      "id": "web-app/browser",
+      "why": "needs browsers and system packages a dev shell does not install"
+    },
+    {
+      "id": "web-app/android-native-check",
+      "why": "reads the pull request's labels and the app stores' state"
+    },
+    {
+      "id": "web-app/ios-native-check",
+      "why": "reads the pull request's labels and the app stores' state"
+    },
+    {
+      "id": "cargo-deny/cargo-deny",
+      "why": "reads the advisory database of the day it runs, so the tree alone does not decide its verdict"
+    },
+    {
+      "id": "node-modules-nix/check-darwin-node-modules-nix",
+      "why": "runs on another operating system"
+    },
+    {
+      "id": "tauri-lockfiles/check-tauri-lockfiles",
+      "why": "decides what the other jobs run, and they wait for it"
+    },
+    {
+      "id": "tauri-lockfiles/check-tauri-vendoring",
+      "why": "waits for `check-tauri-lockfiles`, which decides whether it runs"
+    },
+    {
+      "id": "macrod-update/macos",
+      "why": "runs on another operating system"
+    },
+    {
+      "id": "macrod-update/windows",
+      "why": "runs on another operating system"
+    }
   ],
-  "runner_steps": [
-    "Prepare the blobless checkout",
-    "Reuse the kept cargo target",
-    "Seal the kept cargo target",
-    "Configure Namespace remote sccache",
-    "Start sccache server",
-    "show sccache stats",
-    "Accept attested checks"
-  ],
-  "selector_job": "path-check",
   "status_prefix": "attested/"
 }

@@ -12,7 +12,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -53,7 +53,7 @@ jobs:
     - name: Check packed SDK
       run: bun run build && bun run check:pack
       working-directory: packages/sdk
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''sdk/check-package@-'')'
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''sdk/check-package'')'
 concurrency:
   group: sdk-check-${{ github.event_name == 'pull_request' && github.run_id || github.ref }}
   cancel-in-progress: true

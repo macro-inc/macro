@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -97,7 +97,7 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''macrod-update/linux@-'')'
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''macrod-update/linux'')'
   macos:
     name: macrod update (macos)
     runs-on: nscloud-macos-sequoia-arm64-6x14

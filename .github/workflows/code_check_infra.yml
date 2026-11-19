@@ -5,7 +5,7 @@ on:
   workflow_call:
     inputs:
       attested:
-        description: 'JSON list of the attested checks PR CI accepted: `<check>@<digest of the path-check outputs it ran on>`'
+        description: JSON list of the checks PR CI accepted an attestation for, by id
         type: string
         required: false
         default: '[]'
@@ -42,7 +42,7 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/biome-check@-'')'
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/biome-check'')'
   check:
     runs-on: namespace-profile-linux-small;overrides.cache-tag=web-ci
     timeout-minutes: 15
@@ -71,4 +71,4 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/check@-'')'
+    if: '!contains(fromJSON(inputs.attested || ''[]''), ''infra/check'')'
