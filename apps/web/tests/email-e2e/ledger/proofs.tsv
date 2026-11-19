@@ -961,7 +961,7 @@ STL-611	not shown as the row says (thread closes back to the list): its renderin
 STL-614	not shown as the row says ("Previous item" / "Next item" disabled at the ends of the list): its rendering is switched off or changed in src/components/app/split-layout/components/SplitHeader.tsx
 STL-615	not shown as the row says (toast "Link copied to clipboard." / "Could not copy link"): its rendering is switched off or changed in src/lib/core/util/useCopyLink.ts
 STL-616	not shown as the row says (toast "Failed to move to Trash"): its rendering is switched off or changed in src/features/block-email/component/useEmailThreadTools.tsx
-STL-617	not shown as the row says (thread closes (inline view returns to the list)): its rendering is switched off or changed in src/features/email-view/components/EmailDetailView.tsx
+STL-617	Removing the title-menu Delete navigation leaves the trashed thread's messages open. Desktop Mail and the phone's Mail and Search cases each return to the list that opened the thread. Search restores its query and results.
 STL-618	The thread title menu's "Delete" entry in useEmailThreadTools.tsx is offered on a thread the viewer does not own.
 STL-619	not shown as the row says (menu shows as a bottom sheet without hotkey hints): its rendering is switched off or changed in src/components/app/split-layout/components/SplitFileMenu.tsx
 STL-620	not shown as the row says (References section with a count, only when the thread has any): its rendering is switched off or changed in src/features/block-email/component/sidepanel/EmailSidePanelSections.tsx
