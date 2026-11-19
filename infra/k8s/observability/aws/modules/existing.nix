@@ -68,19 +68,36 @@ in
         error_message = "Expected exactly one bucket of the observability stack named ${prefix}*, for the host's ${kind}.";
       }) existing.bucketPrefixes;
     };
+  }
+  // lib.optionalAttrs settings.switched {
+    # The host's instance role, which writes its Prometheus blocks into Mimir's
+    # bucket at the switch (modules/buckets.nix).
+    aws_iam_roles.host = {
+      name_regex = existing.hostRoleNameRegex;
+      lifecycle.postcondition = [
+        {
+          condition = "\${length(self.arns) == 1}";
+          error_message = "Expected exactly one IAM role matching ${existing.hostRoleNameRegex}, the observability host's.";
+        }
+      ];
+    };
   };
 
-  locals = {
-    # The host's bucket ARNs by kind (`logs`, `traces`).
-    host_bucket_arns = lib.mapAttrs (
-      _: prefix:
-      ref "one([for r in data.aws_resourcegroupstaggingapi_resources.host_buckets.resource_tag_mapping_list : r.resource_arn if startswith(r.resource_arn, \"arn:aws:s3:::${prefix}\")])"
-    ) existing.bucketPrefixes;
-    alb_security_group_id = ref "one(data.aws_lb.observability.security_groups)";
-    private_subnet_ids = [
-      (ref "data.aws_subnet.private_a.id")
-      (ref "aws_subnet.private_b.id")
-      (ref "aws_subnet.private_c.id")
-    ];
-  };
+  locals =
+    lib.optionalAttrs settings.switched {
+      host_role_arn = ref "one(data.aws_iam_roles.host.arns)";
+    }
+    // {
+      # The host's bucket ARNs by kind (`logs`, `traces`).
+      host_bucket_arns = lib.mapAttrs (
+        _: prefix:
+        ref "one([for r in data.aws_resourcegroupstaggingapi_resources.host_buckets.resource_tag_mapping_list : r.resource_arn if startswith(r.resource_arn, \"arn:aws:s3:::${prefix}\")])"
+      ) existing.bucketPrefixes;
+      alb_security_group_id = ref "one(data.aws_lb.observability.security_groups)";
+      private_subnet_ids = [
+        (ref "data.aws_subnet.private_a.id")
+        (ref "aws_subnet.private_b.id")
+        (ref "aws_subnet.private_c.id")
+      ];
+    };
 }

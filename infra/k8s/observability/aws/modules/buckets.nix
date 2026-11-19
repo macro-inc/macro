@@ -6,6 +6,32 @@ let
   inherit (lib.tf) ref;
   bucketRef = name: attr: ref "aws_s3_bucket.${name}.${attr}";
   forBuckets = f: lib.mapAttrs f settings.buckets;
+
+  # At the switch the host copies its Prometheus blocks straight into Mimir's
+  # bucket (cluster README "The switch"): its role may list and write Mimir's
+  # tenant prefix, nothing else.
+  backfill = settings.mimirBackfill;
+  backfillStatements = lib.optionals settings.switched [
+    {
+      Sid = "HostBackfillList";
+      Effect = "Allow";
+      Principal.AWS = ref "local.host_role_arn";
+      Action = "s3:ListBucket";
+      Resource = bucketRef "mimir" "arn";
+      Condition.StringLike."s3:prefix" = [ "${backfill.prefix}*" ];
+    }
+    {
+      Sid = "HostBackfillWrite";
+      Effect = "Allow";
+      Principal.AWS = ref "local.host_role_arn";
+      Action = [
+        "s3:PutObject"
+        "s3:AbortMultipartUpload"
+        "s3:ListMultipartUploadParts"
+      ];
+      Resource = "${bucketRef "mimir" "arn"}/${backfill.prefix}*";
+    }
+  ];
 in
 {
   resource = {
@@ -58,7 +84,8 @@ in
               ];
               Condition.Bool."aws:SecureTransport" = "false";
             }
-          ];
+          ]
+          ++ lib.optionals (name == "mimir") backfillStatements;
         };
         depends_on = [ "aws_s3_bucket_public_access_block.${name}" ];
       }

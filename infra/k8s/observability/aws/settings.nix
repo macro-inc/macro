@@ -48,6 +48,9 @@ rec {
       logs = "observability-logs-";
       traces = "observability-traces-";
     };
+    # The host's instance role (Pulumi `observability-host` plus a random
+    # suffix), which at the switch writes its Prometheus blocks into Mimir.
+    hostRoleNameRegex = "^observability-host-[0-9a-f]{7}$";
   };
 
   # New private subnets; with the existing 2a subnet the cluster spans 3 AZs.
@@ -166,6 +169,11 @@ rec {
   # the target-group alarms. The Pulumi stack's rule (priority 1) still wins
   # until it drops these hostnames, so applying this alone moves no traffic.
   switched = false;
+
+  # Where the host's Prometheus blocks go in Mimir's bucket: Mimir's
+  # `blocks_storage.storage_prefix`, then the tenant (`anonymous` with
+  # multitenancy off). Change it with ../cluster's modules/backends/mimir.nix.
+  mimirBackfill.prefix = "blocks/anonymous/";
 
   alarms.target5xxPer5Min = 25;
 }
