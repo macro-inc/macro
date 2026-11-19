@@ -29139,6 +29139,86 @@
         }
       }
     },
+    "/saved_views/definitions/{saved_view_id}/appearance": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "set_saved_view_appearance",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views/exclude_default": {
       "post": {
         "tags": ["saved_views"],
@@ -39116,6 +39196,17 @@
         "type": "object",
         "required": ["name", "config"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Optional initial icon and color metadata; retries retain the original value."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
@@ -60658,6 +60749,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Icon and color metadata, separate from configuration."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
@@ -68457,6 +68559,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Validated icon and color metadata, independent of configuration revisions."
+              }
+            ]
+          },
           "config": {
             "description": "It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux."
           },

@@ -683,6 +683,7 @@ use email_policy::EmailPolicySchemas;
         saved_views::definitions::get_handler,
         saved_views::definitions::create_handler,
         saved_views::definitions::update_handler,
+        saved_views::definitions::appearance_handler,
         saved_views::definitions::delete_handler,
         saved_views::definitions::reorder_handler,
 

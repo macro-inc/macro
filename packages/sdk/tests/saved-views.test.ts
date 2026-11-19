@@ -169,4 +169,45 @@ describe('saved views', () => {
       ids: [OTHER, VIEW],
     });
   });
+
+  test('creates appearance atomically and replaces it without changing the filter revision', async () => {
+    const appearance = {
+      icon: { kind: 'emoji' as const, value: '📚' },
+      color: 'blue' as const,
+    };
+    const { macro, requests } = serve(
+      Response.json(record({ appearance }), { status: 201 }),
+      Response.json(record({ appearance: {} })),
+      Response.json(record({ name: 'Bills', appearance: {}, revision: 4 })),
+    );
+    const view = await macro.savedViews.create({
+      name: 'Invoices',
+      config: { kind: 'email', version: 1, filters: {} },
+      appearance,
+    });
+    expect(await view.appearance()).toEqual(appearance);
+    expect((await requests[0].json()).appearance).toEqual(appearance);
+    expect(await view.setAppearance({})).toEqual({});
+    expect(requests[1].method).toBe('PUT');
+    expect(new URL(requests[1].url).pathname).toBe(
+      `/saved_views/definitions/${VIEW}/appearance`,
+    );
+    expect(await requests[1].json()).toEqual({});
+    expect(await view.revision()).toBe(3);
+    await view.edit({ name: 'Bills' });
+    expect((await requests[2].json()).expectedRevision).toBe(3);
+  });
+
+  test('retains the loaded appearance when the owner-only write is refused', async () => {
+    const appearance = { icon: { kind: 'emoji' as const, value: '📚' } };
+    const { macro } = serve(
+      Response.json(record({ appearance })),
+      Response.json({ message: 'not found' }, { status: 404 }),
+    );
+    const view = macro.savedViews.byId(VIEW);
+    expect(await view.appearance()).toEqual(appearance);
+    await expect(view.setAppearance({})).rejects.toMatchObject({ status: 404 });
+    expect(await view.appearance()).toEqual(appearance);
+    expect(await view.revision()).toBe(3);
+  });
 });

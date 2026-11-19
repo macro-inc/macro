@@ -18319,6 +18319,7 @@ dependencies = [
  "chrono",
  "macro_db_migrator",
  "macro_uuid",
+ "model-entity",
  "rootcause",
  "serde",
  "serde_json",

@@ -253,6 +253,7 @@ reqwest = { workspace = true }
 rootcause = { workspace = true }
 sha2 = { workspace = true }
 s3_key = { path = "../../crates/s3_key" }
+model_entity = { package = "model-entity", path = "../../crates/model-entity" }
 saved_views = { path = "../../crates/saved_views" }
 scheduled_action = { path = "../../crates/scheduled_action" }
 schemars = { workspace = true }
