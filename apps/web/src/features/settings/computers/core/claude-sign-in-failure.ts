@@ -23,7 +23,7 @@ export type ClaudeSignInRecovery =
   | 'new_link'
   /** Send the same request again. */
   | 'retry'
-  /** Paste the code again; the sign-in is still waiting. */
+  /** Send the code again; the computer may still be signing in or have finished. */
   | 'repaste';
 
 export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
@@ -42,8 +42,8 @@ export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
 
 /**
  * How to recover. Starting a sign-in is safe to repeat, so any failure to
- * start retries; once a code was sent, only a failure that leaves the
- * computer's sign-in waiting lets the user paste again.
+ * start retries; once a code was sent, let the user send it again if the
+ * computer may still be signing in or have finished without answering.
  */
 export function claudeSignInRecovery(
   phase: 'start' | 'complete',

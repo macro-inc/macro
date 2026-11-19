@@ -302,9 +302,10 @@ link…" until the computer has made the link, then the link; **Open again**
 once used), then the code field with **Complete sign-in**, which is primary
 only once a code is typed and says "Checking with Claude. This can take a minute." while it runs.
 A failure shows one inline alert with its way out: **Get a new link** (link
-expired, code rejected, including the CLI's own "Invalid code"), **Try
-again** (couldn't get a link), or send the code again (malformed code,
-computer busy, timed out: the computer may still have finished). The footer's one action is
+expired, code rejected, including the CLI's own "Invalid code", or the
+computer's sign-in timed out), **Try again** (couldn't get a link), or send
+the code again (malformed code, computer busy, or the service timed out
+waiting for the computer, which may still have finished). The footer's one action is
 **Keep using Macro credits** (closes), or **Switch to Macro credits** (a
 confirmation, then sign-out) when the agent is on its plan; closing while a
 code is checked lets it finish, with a toast either way. Owners and admins
