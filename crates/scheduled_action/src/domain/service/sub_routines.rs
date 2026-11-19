@@ -6,10 +6,91 @@ use std::collections::HashMap;
 
 use tracing::Instrument;
 
-use routine_program::SubRoutineName;
+use routine_program::{CopyError, SubRoutineName};
 
+use super::configuration::Replacement;
 use super::*;
 use crate::domain::models::{ActionExecutionRecord, CreatedRoutine, ScheduleSubRoutine};
+use crate::domain::target_validation::defines_steps;
+
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
+{
+    /// A task that defines sub-routines, holds inputs or is a copy needs the
+    /// owner's rollout; a flag that cannot be read counts as off.
+    pub(super) async fn check_sub_routines(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<()>
+    where
+        Rollout: EventRoutineRollout,
+    {
+        let uses = |field: &str| {
+            task.get(field)
+                .and_then(serde_json::Value::as_array)
+                .is_some_and(|items| !items.is_empty())
+        };
+        if !uses("sub_routines") && !uses("inputs") && SubRoutineCopy::from_task(task).is_none() {
+            return Ok(());
+        }
+        let enabled = self
+            .rollout
+            .sub_routines_enabled_for(owner)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(?error, "feature flags unavailable; sub-routines stay off");
+            })
+            .unwrap_or(false);
+        if !enabled {
+            return Err(ActionPolicyError::SubRoutinesDisabled.into());
+        }
+        Ok(())
+    }
+
+    /// The program a sub-routine's copy runs, read from its parent now;
+    /// `None` when `task` isn't a copy's.
+    pub(super) async fn copy_program(
+        &self,
+        task: &serde_json::Value,
+        parent_id: Option<Uuid>,
+    ) -> Result<Option<RoutineProgram>> {
+        let Some(copy) = SubRoutineCopy::from_task(task) else {
+            return Ok(None);
+        };
+        let parent_id = parent_id.ok_or(ActionPolicyError::CopyOutsideRun)?;
+        let parent = self
+            .repo
+            .get_action(&parent_id)
+            .await?
+            .ok_or(ActionPolicyError::NotFound)?;
+        let program = RoutineProgram::from_task(&parent.task)
+            .map_err(|_| ActionPolicyError::UnknownSubRoutine)?
+            .copy_program(&copy)
+            .map_err(|error| match error {
+                CopyError::UnknownSubRoutine(_) => ActionPolicyError::UnknownSubRoutine,
+                CopyError::Inputs(error) => ActionPolicyError::SubRoutineInputs(error.to_string()),
+            })?;
+        Ok(Some(program))
+    }
+
+    /// Authorize `task`'s agents and apps for `owner`. A copy's are its
+    /// definition's, authorized whenever its parent is saved and on every
+    /// run, so not again for each copy.
+    pub(super) async fn validate_targets(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> Result<()>
+    where
+        Targets: TaskTargetValidator,
+    {
+        if SubRoutineCopy::from_task(task).is_some() {
+            return Ok(());
+        }
+        self.targets.validate_task(task, owner).await
+    }
+}
 
 impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
     ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades, Rollout>
@@ -407,6 +488,16 @@ where
 
 /// Name the run a create comes from on the request's span, before anything
 /// can refuse it.
+/// Whether `task` defines sub-routines. A single agent task's stray
+/// `sub_routines` define none: its parser skips them, and a save drops them.
+pub(super) fn defines_sub_routines(task: &serde_json::Value) -> bool {
+    defines_steps(task)
+        && task
+            .get("sub_routines")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|definitions| !definitions.is_empty())
+}
+
 fn record_run(run: &RunningRun, parent_id: Uuid) {
     let span = tracing::Span::current();
     span.record("routine.parent_id", tracing::field::display(parent_id));
