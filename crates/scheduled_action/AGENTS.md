@@ -308,7 +308,10 @@ each run.
   `enable-sub-routines` flag (`EventRoutineRollout::sub_routines_enabled_for`,
   `SubRoutinesDisabled`), and an update that omits a non-empty
   `sub_routines` or `inputs` is refused (`ExplicitSubRoutinesRequired`,
-  409), so a client that predates them can't drop them. Code reads its
+  409), so a client that predates them can't drop them. A new or changed
+  single agent task can't carry `sub_routines`, `inputs` or `sub_routine`
+  (`refuse_fields_beside_agent`, `SubRoutinesWithoutSteps`); one stored
+  with them still runs, and is renamed or resumed as it is. Code reads its
   values as `inputs`; an Ask AI step gets them as data after its
   instructions. Span: `routine.schedule` (parent, run, keyed, input count,
   outcome).

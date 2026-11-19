@@ -339,12 +339,13 @@ impl RoutineProgram {
     /// Read a stored task: a program (`{"steps": [...]}`), or the single agent
     /// task written before routines had steps, which becomes one agent step.
     /// A sub-routine's copy is neither: its steps are read from its parent
-    /// ([`Self::copy_program`]).
+    /// ([`Self::copy_program`]). A single agent stored with a stray
+    /// `sub_routine` beside its own fields is no copy, and still runs.
     pub fn from_task(task: &Value) -> Result<Self, InvalidTask> {
         if task.get("steps").is_some() {
             return Ok(serde_json::from_value(task.clone())?);
         }
-        if task.get("sub_routine").is_some() {
+        if crate::SubRoutineCopy::from_task(task).is_some() {
             return Err(InvalidTask(serde::de::Error::custom(
                 "a sub-routine's copy runs the steps its parent defines",
             )));

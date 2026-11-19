@@ -378,8 +378,8 @@ async fn a_program_hands_its_apps_to_its_agent_and_an_update_must_restate_them()
 }
 
 /// The single agent's parser skips fields it doesn't know, so what it would
-/// skip is checked before it: a NUL anywhere, and definitions or inputs
-/// that only a task with steps keeps.
+/// skip is checked before it: a NUL anywhere, and, in a new or changed task,
+/// definitions or inputs that only a task with steps keeps.
 #[tokio::test]
 async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
     let sessions = Arc::new(Sessions::default());
@@ -398,6 +398,7 @@ async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
         nul.downcast_ref(),
         Some(&TargetValidationError::InvalidProgram(ProgramError::Nul))
     );
+    assert!(sessions.validations.lock().unwrap().is_empty());
     for task in [
         with(
             "inputs",
@@ -406,16 +407,21 @@ async fn a_single_agent_is_refused_fields_its_parser_would_skip_unchecked() {
         with("sub_routines", json!([])),
         with("sub_routine", json!("remind")),
     ] {
-        let error = validator.validate_task(&task, &owner).await.unwrap_err();
         assert_eq!(
-            error.downcast_ref(),
-            Some(&TargetValidationError::SubRoutinesWithoutSteps)
+            refuse_fields_beside_agent(&task),
+            Err(TargetValidationError::SubRoutinesWithoutSteps)
         );
+        // Stored that way it still runs, so its agent is still checked.
+        validator.validate_task(&task, &owner).await.unwrap();
     }
-    assert!(sessions.validations.lock().unwrap().is_empty());
-    // The single agent alone still saves.
-    validator
-        .validate_task(&agent_task(), &owner)
-        .await
-        .unwrap();
+    // The single agent alone, a program and a copy carry none.
+    assert_eq!(refuse_fields_beside_agent(&agent_task()), Ok(()));
+    assert_eq!(
+        refuse_fields_beside_agent(&json!({ "steps": [], "inputs": [] })),
+        Ok(())
+    );
+    assert_eq!(
+        refuse_fields_beside_agent(&json!({ "sub_routine": "remind", "inputs": {} })),
+        Ok(())
+    );
 }

@@ -6,7 +6,7 @@ use agent_session::domain::routines::{RoutineSessions, ValidateRoutineSession};
 use anyhow::Result;
 use bots::domain::models::AgentMcpServer;
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{AgentStep, ProgramError, RoutineProgram, Step};
+use routine_program::{AgentStep, ProgramError, RoutineProgram, Step, SubRoutineCopy};
 use serde_json::Value;
 
 use super::{models::ResolvedTaskTarget, ports::TaskTargetValidator};
@@ -116,14 +116,6 @@ pub(super) fn parse_program(task: &Value) -> Result<RoutineProgram, TargetValida
     if routine_program::holds_nul(task) {
         return Err(ProgramError::Nul.into());
     }
-    // Only at save: a stored single agent with such a field still runs.
-    if task.get("steps").is_none()
-        && ["sub_routines", "inputs", "sub_routine"]
-            .iter()
-            .any(|field| task.get(field).is_some())
-    {
-        return Err(TargetValidationError::SubRoutinesWithoutSteps);
-    }
     let program =
         RoutineProgram::from_task(task).map_err(|_| TargetValidationError::InvalidTask)?;
     program.validate()?;
@@ -131,6 +123,22 @@ pub(super) fn parse_program(task: &Value) -> Result<RoutineProgram, TargetValida
         ResolvedTaskTarget::of(step).map_err(|_| TargetValidationError::InvalidTask)?;
     }
     Ok(program)
+}
+
+/// Refuse a single agent task carrying a field only a task with steps keeps,
+/// which its parser would skip unchecked. Only for a new or changed task: a
+/// stored one with such a field still runs, and is renamed or resumed with
+/// its task sent back as it is.
+pub(super) fn refuse_fields_beside_agent(task: &Value) -> Result<(), TargetValidationError> {
+    if task.get("steps").is_none()
+        && SubRoutineCopy::from_task(task).is_none()
+        && ["sub_routines", "inputs", "sub_routine"]
+            .iter()
+            .any(|field| task.get(field).is_some())
+    {
+        return Err(TargetValidationError::SubRoutinesWithoutSteps);
+    }
+    Ok(())
 }
 
 /// The raw JSON preserves absent versus explicit null without changing stored contracts.

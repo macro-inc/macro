@@ -120,6 +120,21 @@ fn a_copy_is_its_own_task_form_not_a_program() {
         RoutineTask::Copy(_)
     ));
     assert_eq!(SubRoutineCopy::from_task(&parent()), None);
+
+    // A single agent stored with stray fields of the same names, which
+    // older builds kept unread, still runs as the agent it is.
+    let agent = json!({
+        "model": "m",
+        "prompt": "",
+        "user_prompt": "Summarize my inbox",
+        "sub_routine": "remind",
+        "inputs": [],
+        "sub_routines": [],
+    });
+    assert_eq!(SubRoutineCopy::from_task(&agent), None);
+    let program = RoutineProgram::from_task(&agent).unwrap();
+    assert!(program.single_agent_task);
+    assert!(program.inputs.is_empty() && program.sub_routines.is_empty());
 }
 
 #[test]

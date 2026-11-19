@@ -1539,6 +1539,90 @@ async fn configuration_updates_that_omit_activation_keep_it() {
     }
 }
 
+/// Older builds kept fields a single agent doesn't read. One stored with
+/// fields only a task with steps keeps still runs, so renaming or resuming
+/// it, which sends its task back as it is, saves; a changed task can't
+/// carry them, nor a new one.
+#[tokio::test]
+async fn a_single_agent_stored_with_stray_fields_is_renamed_and_resumed() {
+    let svc = service(true);
+    let id = svc
+        .create_action(&user_principal(), configuration(false))
+        .await
+        .unwrap()
+        .id
+        .unwrap();
+    let stored = json!({
+        "model": "model",
+        "prompt": "summarize",
+        "user_prompt": "task",
+        "inputs": [],
+        "sub_routine": "remind",
+    });
+    svc.repo.actions.lock().unwrap()[0].task = stored.clone();
+    let update = |name: &str, task: &serde_json::Value| {
+        serde_json::from_value::<ActionConfigurationUpdate>(json!({
+            "name": name,
+            "kind": "Agent",
+            "trigger": {"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"},
+            "task": task,
+        }))
+        .unwrap()
+    };
+
+    let renamed = svc
+        .update_action(
+            edit_receipt(id),
+            update("renamed", &stored),
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    assert_eq!(renamed.name, "renamed");
+    // Saved as an empty list is saved as none, as for any task.
+    assert_eq!(renamed.task.get("inputs"), None);
+    // Still the agent it was: no copy.
+    assert!(
+        RoutineProgram::from_task(&renamed.task)
+            .unwrap()
+            .leading_agent()
+            .is_some()
+    );
+    svc.set_enabled(edit_receipt(id), false, Requester::Person)
+        .await
+        .unwrap();
+    let resumed = svc
+        .set_enabled(edit_receipt(id), true, Requester::Person)
+        .await
+        .unwrap();
+    assert!(resumed.enabled);
+
+    let mut changed = stored.clone();
+    changed["user_prompt"] = json!("another task");
+    let error = svc
+        .update_action(
+            edit_receipt(id),
+            update("renamed", &changed),
+            Requester::Person,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::SubRoutinesWithoutSteps)
+    );
+    let mut config = configuration(false);
+    config.task = stored;
+    let error = svc
+        .create_action(&user_principal(), config)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        error.downcast_ref(),
+        Some(&TargetValidationError::SubRoutinesWithoutSteps)
+    );
+}
+
 #[tokio::test]
 async fn editing_an_overdue_one_off_keeps_its_unconsumed_firing() {
     let svc = service(false);
