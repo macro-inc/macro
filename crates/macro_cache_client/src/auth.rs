@@ -94,9 +94,12 @@ return {refresh_token, expires_at_ms}
 /// deadline, unless that has passed or the code exists again. PEXPIREAT
 /// pins the deadline; should it fail, the record is deleted and the error
 /// returned, so the code stays spent rather than outliving its deadline.
-/// An unbound write also carries a relative expiry in case that delete
-/// fails too, since a server that predates the deadline checks redeems an
-/// unbound record without one; the takes here refuse it.
+/// An unbound write also carries the deadline in case that delete fails
+/// too, since a server that predates the deadline checks redeems an unbound
+/// record without one; the takes here refuse it. Before Redis 7.0 it carries
+/// the time left instead, which can run past the deadline by the time between
+/// TIME and SET. The take that preceded this restore ran DEL, so a delete
+/// fails only if Redis's permissions changed in between.
 /// KEYS: the session's key. ARGV: the refresh token, the deadline, then for
 /// a bound code the record's fields and challenge.
 const RESTORE_MOBILE_LOGIN_SESSION: &str = r"
@@ -110,6 +113,8 @@ if ttl_ms <= 0 then
 end
 if ARGV[3] then
   redis.call('HSET', KEYS[1], ARGV[3], ARGV[1], ARGV[4], ARGV[5])
+elseif (redis.REDIS_VERSION_NUM or 0) >= 0x070000 then
+  redis.call('SET', KEYS[1], ARGV[1], 'PXAT', ARGV[2])
 else
   redis.call('SET', KEYS[1], ARGV[1], 'PX', ttl_ms)
 end
