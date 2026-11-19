@@ -4,6 +4,7 @@ use crate::domain::event_runs::{
 };
 use crate::domain::event_trigger::{EventName, EventReference};
 use crate::domain::models::{ActionKind, ExecutionResourceType, RunVisibility};
+use crate::domain::test_spans::Spans;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::{Uuid, generate_uuid_v7};
@@ -12,7 +13,7 @@ use model_owner::Owner;
 use serde_json::json;
 use std::sync::{
     Mutex,
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
 const USER: &str = "macro|runner@macro.com";
@@ -229,6 +230,10 @@ struct Repo {
     fail_reschedule: bool,
     /// The routine a sub-routine's copy reads its definition from.
     parent: Mutex<Option<ScheduledAction>>,
+    /// The next read of the parent never returns.
+    stall_parent_read: AtomicBool,
+    /// Signalled when a read of the parent stalls.
+    parent_read_stalled: tokio::sync::Notify,
 }
 
 impl ScheduledActionRepo for Repo {
@@ -286,8 +291,12 @@ impl ScheduledActionRepo for Repo {
         unimplemented!()
     }
     async fn get_action(&self, id: &Uuid) -> Result<Option<ScheduledAction>> {
-        let parent = self.parent.lock().unwrap();
-        Ok(parent.clone().filter(|parent| parent.id == Some(*id)))
+        if self.stall_parent_read.swap(false, Ordering::SeqCst) {
+            self.parent_read_stalled.notify_one();
+            std::future::pending::<()>().await;
+        }
+        let parent = self.parent.lock().unwrap().clone();
+        Ok(parent.filter(|parent| parent.id == Some(*id)))
     }
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
@@ -1181,44 +1190,13 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
     );
 }
 
-/// Collects every `outcome` a span records, in order.
-#[derive(Default)]
-struct Outcomes(Mutex<Vec<String>>);
-
-impl tracing::field::Visit for &Outcomes {
-    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
-        if field.name() == "outcome" {
-            self.0.lock().unwrap().push(value.to_owned());
-        }
-    }
-
-    fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
-}
-
-impl tracing::Subscriber for Outcomes {
-    fn enabled(&self, _: &tracing::Metadata<'_>) -> bool {
-        true
-    }
-    fn new_span(&self, _: &tracing::span::Attributes<'_>) -> tracing::span::Id {
-        tracing::span::Id::from_u64(1)
-    }
-    fn record(&self, _: &tracing::span::Id, values: &tracing::span::Record<'_>) {
-        values.record(&mut &*self);
-    }
-    fn record_follows_from(&self, _: &tracing::span::Id, _: &tracing::span::Id) {}
-    fn event(&self, _: &tracing::Event<'_>) {}
-    fn enter(&self, _: &tracing::span::Id) {}
-    fn exit(&self, _: &tracing::span::Id) {}
-}
-
 /// The outcomes a span recorded while `body` ran with it.
 fn outcomes_of(body: impl FnOnce(tracing::Span)) -> Vec<String> {
-    let outcomes = Arc::new(Outcomes::default());
-    tracing::subscriber::with_default(Arc::clone(&outcomes), || {
+    let spans = Arc::new(Spans::default());
+    tracing::subscriber::with_default(Arc::clone(&spans), || {
         body(tracing::info_span!("read", outcome = tracing::field::Empty));
     });
-    let recorded = outcomes.0.lock().unwrap().clone();
-    recorded
+    spans.outcomes("read")
 }
 
 #[test]
@@ -1233,21 +1211,43 @@ fn a_dropped_read_ends_its_span_interrupted_once() {
     );
 }
 
+/// A copy's run stopped while it reads its parent drops the read, which
+/// ends the read's span `interrupted`; nothing runs.
 #[tokio::test]
-async fn a_copy_whose_parent_read_is_cancelled_records_it_interrupted() {
-    let outcomes = Arc::new(Outcomes::default());
-    let dispatch = tracing::Dispatch::new(Arc::clone(&outcomes));
-    let span = tracing::dispatcher::with_default(&dispatch, || {
-        tracing::info_span!("read", outcome = tracing::field::Empty)
+async fn a_copy_stopped_while_reading_its_parent_records_the_read_interrupted() {
+    let mut parent = action();
+    parent.task = json!({
+        "steps": [{ "type": "agent", "model": "test", "instructions": "List what is due" }],
+        "sub_routines": [{
+            "name": "remind",
+            "title": "Remind me",
+            "steps": [{ "type": "agent", "model": "test", "instructions": "Remind me" }],
+        }],
     });
-    let pending = {
-        let outcome = OutcomeOnce::new(span, "interrupted");
-        async move {
-            std::future::pending::<()>().await;
-            outcome.record("resolved");
-        }
+    let mut copy = action();
+    copy.task = json!({ "sub_routine": "remind" });
+    copy.sub_routine = Some(crate::domain::models::SubRoutine {
+        parent_id: parent.id.unwrap(),
+        created_by_run_id: generate_uuid_v7(),
+        key: None,
+        paused_by_parent: false,
+    });
+    let repo = Repo::default();
+    *repo.parent.lock().unwrap() = Some(parent);
+    repo.stall_parent_read.store(true, Ordering::SeqCst);
+    let executor = executor(repo, Runner::default());
+    let (spans, _spans) = Spans::capture();
+
+    let stop = async {
+        executor.repo.parent_read_stalled.notified().await;
+        executor.cancellation.cancel();
     };
-    // A deadline drops the read before it returns.
-    let _ = tokio::time::timeout(Duration::from_millis(1), pending).await;
-    assert_eq!(*outcomes.0.lock().unwrap(), ["interrupted"]);
+    let _ = tokio::join!(executor.execute_action(copy), stop);
+    drain(&executor).await;
+
+    assert_eq!(
+        spans.outcomes("routine.copy.read_definition"),
+        ["interrupted"]
+    );
+    assert_eq!(executor.runner.calls.load(Ordering::SeqCst), 0);
 }
