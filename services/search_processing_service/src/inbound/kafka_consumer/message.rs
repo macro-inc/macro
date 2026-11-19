@@ -10,7 +10,7 @@ use opensearch_client::OpensearchClient;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::{EventOutcome, MAX_PROCESSING_ATTEMPTS, PROCESSING_RETRY_BASE_DELAY, retry_processing};
+use super::{Attempted, Attempts, Handled};
 use crate::process::channel::{process_channel_message_update, process_remove_channel_message};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,7 +115,8 @@ pub(super) async fn process_message_event(
     event: &MessageMacroEvent,
     partition: i32,
     offset: i64,
-) -> EventOutcome {
+    attempts: &Attempts,
+) -> Attempted {
     let description = describe_message_event(&event.event().event);
     if description.action == MessageIndexAction::Ignore {
         tracing::trace!(
@@ -125,56 +126,24 @@ pub(super) async fn process_message_event(
             offset,
             "ignoring message event without a search-index action"
         );
-        return EventOutcome::Ignored;
+        return Ok((Handled::Ignored, 0));
     }
 
     let action = description.action;
-    let result = retry_processing(|attempt| {
-        let description = &description;
-        async move {
-            tracing::trace!(
-                parent = ?description.parent,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempt,
-                "processing message search-index event"
-            );
-            process_message_index_action(db, opensearch_client, action)
-                .await
-                .inspect_err(|error| {
-                    if attempt < MAX_PROCESSING_ATTEMPTS {
-                        let retry_delay =
-                            PROCESSING_RETRY_BASE_DELAY * 2u32.pow(attempt.saturating_sub(1));
-                        tracing::warn!(
-                            error = ?error,
-                            parent = ?description.parent,
-                            event_type = description.event_type,
-                            partition,
-                            offset,
-                            attempt,
-                            delay_secs = retry_delay.as_secs(),
-                            "message search-index processing failed, retrying"
-                        );
-                    }
-                })
-        }
-    })
-    .await;
-
-    match result {
-        Ok(()) => EventOutcome::Indexed,
-        Err(error) => {
-            tracing::error!(
-                error = ?error,
-                parent = ?description.parent,
-                event_type = description.event_type,
-                partition,
-                offset,
-                attempts = MAX_PROCESSING_ATTEMPTS,
-                "dropping message event after processing retries were exhausted"
-            );
-            EventOutcome::Dropped
-        }
-    }
+    attempts
+        .run(|attempt| {
+            let description = &description;
+            async move {
+                tracing::trace!(
+                    parent = ?description.parent,
+                    event_type = description.event_type,
+                    partition,
+                    offset,
+                    attempt,
+                    "processing message search-index event"
+                );
+                process_message_index_action(db, opensearch_client, action).await
+            }
+        })
+        .await
 }

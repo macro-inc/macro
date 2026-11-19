@@ -446,12 +446,17 @@ async function notify(page: Page, outcome: 'ready' | 'failed') {
 }
 
 async function openInviteAgent(page: Page) {
+  // The fixture's first, cold load can take longer than an expect's default.
   await expect(
     page.getByText('maya@example.com', { exact: false }).first()
+  ).toBeVisible({ timeout: 15_000 });
+  // Members' own button for agents; Invite Human opens the people form.
+  await expect(
+    page.getByRole('button', { name: 'Invite Human' })
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Invite', exact: true }).click();
+  await page.getByRole('button', { name: 'Invite Agent' }).click();
   const dialog = page.getByRole('dialog');
-  await dialog.getByText('Agent', { exact: true }).click();
+  await expect(dialog).toContainText('Invite an agent');
   return dialog;
 }
 
@@ -913,6 +918,13 @@ test('a member hears the agent is ready, without Connect Claude plan', async ({
   });
   await page.goto(`/?viewer=${encodeURIComponent(MEMBER)}`);
   await expect(page.locator('[data-member-kind="agent"]')).toContainText('Ada');
+  // Members invite people; only admins and owners add agents.
+  await expect(
+    page.getByRole('button', { name: 'Invite Human' })
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Invite Agent' })).toHaveCount(
+    0
+  );
 
   await notify(page, 'ready');
   await expect(page.getByText('Ada is ready')).toBeVisible();

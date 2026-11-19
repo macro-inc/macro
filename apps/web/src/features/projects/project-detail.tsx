@@ -24,6 +24,7 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
@@ -217,6 +218,7 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
+  createOpenTracker('initiative', () => source.project()?.id);
   useSplitDisplayName(
     () => source.project()?.name ?? t('tabs.projectFallbackName')
   );

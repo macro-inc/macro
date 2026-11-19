@@ -496,6 +496,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   survive. Any other state is catching up and marks it `syncing`: a first import,
   a retry, or a return from `disabled` or `reauth_required`. The web's
   `Syncing your calendar…` banner and its 5 second poll read that state.
+- A Google grant has the calendar capability only with both scopes in
+  `GOOGLE_CALENDAR_SCOPES`. The broad `calendar` scope that grants from before
+  the August 2026 narrowing still report never counts (`GOOGLE_CALENDAR_FULL_SCOPE`),
+  so nothing syncs such an account. The sync scheduler's hourly round
+  (`services/calendar_service/src/calendar_outbox.rs`) turns it off as a grant
+  that loses calendar does (`disable_calendar_capability_tx`: account
+  `disabled`, local copy removed), the maintenance Outlook runs on each claim.
+  The calendar view names the inbox with a Reconnect prompt even while another
+  inbox works, and a new grant re-imports it.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
   the viewer's teammates and reaches sources through
   `calendar_event_sources_out_of_office_idx` on the source's typed

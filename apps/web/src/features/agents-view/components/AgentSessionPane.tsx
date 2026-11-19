@@ -1,3 +1,4 @@
+import { DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS } from '@app/components/view-shell/view-shell-layout';
 import { AgentSessionProvider } from '@app/features/block-agent/agent-session-provider';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentConnections } from '@app/features/block-agent/component/AgentConnections';
@@ -47,6 +48,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableAgentSessionActivity } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
@@ -129,6 +131,15 @@ function SessionContent(props: {
   } = useAgentSession();
   const searchTarget = createAgentRouteTarget();
   const panel = useSplitPanelOrThrow();
+  // A narrow touch pane hands the session to the agent block once measured,
+  // and BlockLoader records that open; record here only where the pane stays.
+  const paneStays = () =>
+    !isTouchDevice() ||
+    (panel.panelSize?.width ?? 0) >
+      DEFAULT_VIEW_SHELL_BREAKPOINT_THRESHOLDS.narrow;
+  createOpenTracker('agent', () =>
+    paneStays() && session() ? sessionId() : undefined
+  );
   const userId = useUserId();
   const activityFlag = useFeatureFlag(enableAgentSessionActivity);
   const persistentFloating = () => activityFlag().enabled;

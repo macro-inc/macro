@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT account.email_link_id\n            FROM calendar_accounts account\n            JOIN email_link_google_scopes scopes ON scopes.link_id = account.email_link_id\n            WHERE account.provider = 'google'\n              AND account.sync_status <> 'disabled'\n              AND NOT scopes.granted_scopes @> $1::text[]\n            ORDER BY account.email_link_id\n            LIMIT 10\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9d15e41b36d0c45d57353500c43ebc8aad25d92a47bb17ffed26a4c7c2b44b4c"
+}
