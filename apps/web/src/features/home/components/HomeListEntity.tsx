@@ -151,15 +151,16 @@ export function HomeListEntity(props: HomeListEntityProps) {
                   </Show>
                 }
               >
-                {/* One slot for both, so nothing moves as the row is hovered. */}
-                <span class="flex size-5 shrink-0 items-center justify-center">
+                {/* One slot for both, so nothing moves as the row is hovered.
+                    The action stays in the tab order, shown while focused. */}
+                <span class="relative flex size-5 shrink-0 items-center justify-center">
                   <Show when={unread()}>
                     <span
                       aria-label="Unread"
-                      class="size-1.5 rounded-full bg-accent group-hover/home-item:hidden"
+                      class="size-1.5 rounded-full bg-accent group-focus-within/home-item:hidden group-hover/home-item:hidden"
                     />
                   </Show>
-                  <span class="hidden group-hover/home-item:flex">
+                  <span class="invisible absolute inset-0 flex items-center justify-center group-focus-within/home-item:visible group-hover/home-item:visible">
                     {hoverAction()}
                   </span>
                 </span>

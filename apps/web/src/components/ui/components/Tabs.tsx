@@ -473,7 +473,7 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                 value={option.value}
                 disabled={option.disabled}
                 class={cn(
-                  'inline-flex min-w-0 items-center rounded-full touch:min-h-8',
+                  'relative inline-flex min-w-0 items-center rounded-full touch:min-h-8',
                   props.iconOnly && option.icon !== undefined
                     ? iconControlSizes[size()]
                     : labeledControlFrames[size()],

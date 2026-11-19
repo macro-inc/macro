@@ -88,7 +88,8 @@ function matchesCapabilities(
 function matchesTab(
   entity: EntityData,
   tab: HomeTab,
-  notifications: () => UnifiedNotification[]
+  notifications: () => UnifiedNotification[],
+  searching: boolean
 ): boolean {
   const notDone = () =>
     entity.type === 'email'
@@ -116,12 +117,14 @@ function matchesTab(
       .with('noise', () => noiseFilter(entity) && notDone())
       // The viewer's own activity: cache inserts from other users carry no
       // touch, and only server-classified Signal mail enters, as in Home's
-      // merged recents.
+      // merged recents. A search finds beyond it, as Home's search does:
+      // its service hits carry no touch.
       .with(
         'recent',
         () =>
-          homeTimestamp(entity.touchedAt) !== undefined &&
-          (entity.type !== 'email' || entity.isSignal === true)
+          searching ||
+          (homeTimestamp(entity.touchedAt) !== undefined &&
+            (entity.type !== 'email' || entity.isSignal === true))
       )
       .exhaustive(() => false)
   );
@@ -135,7 +138,7 @@ function homeTabInsertFilter(tab: HomeTab): SoupApiItemFilter {
 
 /** Shared feed membership for the Home list and its sidebar unread indicator. */
 export function useHomeEntitiesQuery(
-  state: Pick<HomeDataSourceInput, 'tab' | 'facets'>,
+  state: Pick<HomeDataSourceInput, 'tab' | 'facets'> & { search?: string },
   options: { enabled?: () => boolean } = {}
 ) {
   const notificationSource = useGlobalNotificationSource();
@@ -182,6 +185,7 @@ export function useHomeEntitiesQuery(
     };
   });
 
+  const searching = () => Boolean(state.search?.trim());
   const scopedNotifications = (entity: EntityData) =>
     getEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
@@ -191,7 +195,12 @@ export function useHomeEntitiesQuery(
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
       .filter((entity) =>
-        matchesTab(entity, context.tab, () => scopedNotifications(entity))
+        matchesTab(
+          entity,
+          context.tab,
+          () => scopedNotifications(entity),
+          searching()
+        )
       );
   };
 
@@ -204,7 +213,9 @@ export function useHomeEntitiesQuery(
       // same scoped snapshot, but later calls still observe optimistic changes.
       let snapshot: UnifiedNotification[] | undefined;
       const notifications = () => (snapshot ??= scopedNotifications(entity));
-      if (!matchesTab(entity, context.tab, notifications)) return false;
+      if (!matchesTab(entity, context.tab, notifications, searching())) {
+        return false;
+      }
       return unreadFilterFn({ ...entity, notifications });
     });
   };
@@ -213,12 +224,13 @@ export function useHomeEntitiesQuery(
     withEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
     });
-  // Recent rows sort, bucket and show the time of the viewer's last touch.
+  // Recent rows sort, bucket and show the time of the viewer's last touch,
+  // or, for a search hit without one, of the item's last change.
   const transformEntities = (entities: EntityData[]) =>
     filterEntities(entities).map((entity) =>
       attachNotifications(
         viewContext().tab === 'recent'
-          ? { ...entity, sortTs: entity.touchedAt }
+          ? { ...entity, sortTs: entity.touchedAt ?? homeSortTimestamp(entity) }
           : entity
       )
     );

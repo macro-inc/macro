@@ -34,9 +34,10 @@ export function NewHomeTabBar(props: {
   const unread = useNavigationUnread();
   const goTo = useNewHomeNavigation();
 
+  // The split in use decides the tab New Home opens on next.
   createEffect(() => {
     const id = userId();
-    if (id) saveNewHomeTab(id, props.tab);
+    if (id && panel.isPanelActive()) saveNewHomeTab(id, props.tab);
   });
 
   const showStatus = (status: InboxStatus) => {
