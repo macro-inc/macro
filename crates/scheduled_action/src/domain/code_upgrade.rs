@@ -398,6 +398,7 @@ pub struct Sweep {
 #[tracing::instrument(name = "routine.code_sweep", skip_all, fields(
     upgraded = tracing::field::Empty,
     waiting = tracing::field::Empty,
+    outcome = tracing::field::Empty,
 ), err)]
 pub async fn sweep(
     code: &impl RoutineCode,
@@ -410,27 +411,57 @@ pub async fn sweep(
         return Ok(done);
     };
     let mut after = Uuid::nil();
-    while !stop.is_cancelled() {
-        let (batch, last) = sweep_batch(code, upgrades, repo, stop, &sdk, after).await?;
+    let ended = loop {
+        if stop.is_cancelled() {
+            break Ok(SweepEnd::Cancelled);
+        }
+        let (batch, ended) = sweep_batch(code, upgrades, repo, stop, &sdk, after).await;
         done.upgraded += batch.upgraded;
         done.waiting += batch.waiting;
-        let Some(last) = last else { break };
-        after = last;
-    }
-    let span = tracing::Span::current();
-    span.record("upgraded", done.upgraded);
-    span.record("waiting", done.waiting);
-    Ok(done)
+        match ended {
+            Ok(SweepEnd::Next(last)) => after = last,
+            ended => break ended,
+        }
+    };
+    // What was done counts even when the sweep stops partway.
+    record_sweep(&tracing::Span::current(), done, &ended);
+    ended.map(|_| done)
 }
 
-/// Upgrade the batch of routines after `after`, and say where the next
-/// batch starts: none once there are no more routines.
+/// Where a sweep batch left off.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SweepEnd {
+    /// The next batch starts after this routine.
+    Next(Uuid),
+    /// There are no more routines.
+    Completed,
+    /// Asked to stop partway.
+    Cancelled,
+}
+
+fn record_sweep(span: &tracing::Span, done: Sweep, ended: &Result<SweepEnd>) {
+    span.record("upgraded", done.upgraded);
+    span.record("waiting", done.waiting);
+    span.record(
+        "outcome",
+        match ended {
+            Ok(SweepEnd::Next(_) | SweepEnd::Completed) => "completed",
+            Ok(SweepEnd::Cancelled) => "cancelled",
+            Err(_) => "failed",
+        },
+    );
+}
+
+/// Upgrade the batch of routines after `after`: what it did, even when it
+/// stopped partway, and where the next batch starts.
 #[tracing::instrument(name = "routine.code_sweep.batch", skip_all, fields(
     after = %after,
     stale = tracing::field::Empty,
     upgraded = tracing::field::Empty,
     waiting = tracing::field::Empty,
-), err)]
+    outcome = tracing::field::Empty,
+    otel.status_code = tracing::field::Empty,
+))]
 async fn sweep_batch(
     code: &impl RoutineCode,
     upgrades: &impl CodeUpgrades,
@@ -438,30 +469,52 @@ async fn sweep_batch(
     stop: &tokio_util::sync::CancellationToken,
     sdk: &SdkFingerprint,
     after: Uuid,
-) -> Result<(Sweep, Option<Uuid>)> {
-    let mut done = Sweep::default();
-    let page = upgrades.stale_routines(sdk, after, SWEEP_BATCH).await?;
+) -> (Sweep, Result<SweepEnd>) {
     let span = tracing::Span::current();
-    span.record("stale", page.stale.len());
-    for id in page.stale {
-        if stop.is_cancelled() {
-            break;
+    let mut done = Sweep::default();
+    let ended = async {
+        let page = upgrades.stale_routines(sdk, after, SWEEP_BATCH).await?;
+        span.record("stale", page.stale.len());
+        for id in page.stale {
+            if stop.is_cancelled() {
+                return Ok(SweepEnd::Cancelled);
+            }
+            match sweep_one(code, upgrades, repo, id).await? {
+                Some(true) => done.upgraded += 1,
+                Some(false) => done.waiting += 1,
+                None => {}
+            }
         }
-        let Some(action) = repo.get_action(&id).await? else {
-            continue;
-        };
-        let Ok(program) = RoutineProgram::from_task(&action.task) else {
-            continue;
-        };
-        let owner = action.owner_user()?.clone();
-        let context = sweep_context(&action, &owner);
-        match current_code(code, upgrades, &owner, &action, program, &context).await {
-            Ok(_) => done.upgraded += 1,
-            Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => done.waiting += 1,
-            Err(error) => return Err(error),
-        }
+        Ok(page.last.map_or(SweepEnd::Completed, SweepEnd::Next))
     }
-    span.record("upgraded", done.upgraded);
-    span.record("waiting", done.waiting);
-    Ok((done, page.last))
+    .await;
+    record_sweep(&span, done, &ended);
+    // The sweep's span logs the error itself.
+    if ended.is_err() {
+        span.record("otel.status_code", "ERROR");
+    }
+    (done, ended)
+}
+
+/// Bring one routine to the current SDK: whether it is there now, or waits
+/// for its owner or a run; none for a routine gone or without a program.
+async fn sweep_one(
+    code: &impl RoutineCode,
+    upgrades: &impl CodeUpgrades,
+    repo: &impl ScheduledActionRepo,
+    id: Uuid,
+) -> Result<Option<bool>> {
+    let Some(action) = repo.get_action(&id).await? else {
+        return Ok(None);
+    };
+    let Ok(program) = RoutineProgram::from_task(&action.task) else {
+        return Ok(None);
+    };
+    let owner = action.owner_user()?.clone();
+    let context = sweep_context(&action, &owner);
+    match current_code(code, upgrades, &owner, &action, program, &context).await {
+        Ok(_) => Ok(Some(true)),
+        Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => Ok(Some(false)),
+        Err(error) => Err(error),
+    }
 }

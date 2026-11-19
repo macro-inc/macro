@@ -133,6 +133,10 @@ struct Upgrades {
     recorded: Mutex<Vec<Recorded>>,
     /// Whether each update the code needs paused the routine.
     paused: Mutex<Vec<bool>>,
+    /// The routines a sweep finds stale, in one batch.
+    stale: Vec<Uuid>,
+    /// Claiming a rewrite fails, as a lost database connection would.
+    claim_fails: bool,
 }
 
 impl Default for Upgrades {
@@ -141,6 +145,8 @@ impl Default for Upgrades {
             claimable: true,
             recorded: Mutex::default(),
             paused: Mutex::default(),
+            stale: Vec::new(),
+            claim_fails: false,
         }
     }
 }
@@ -159,6 +165,9 @@ impl CodeUpgrades for Upgrades {
             .lock()
             .unwrap()
             .push(Recorded::Claimed(sdk.to_string()));
+        if self.claim_fails {
+            bail!("connection reset");
+        }
         Ok(self.claimable)
     }
 
@@ -195,8 +204,15 @@ impl CodeUpgrades for Upgrades {
         Ok(())
     }
 
-    async fn stale_routines(&self, _: &SdkFingerprint, _: Uuid, _: u16) -> Result<StalePage> {
-        Ok(StalePage::default())
+    async fn stale_routines(&self, _: &SdkFingerprint, after: Uuid, _: u16) -> Result<StalePage> {
+        Ok(if after.is_nil() {
+            StalePage {
+                last: self.stale.last().copied(),
+                stale: self.stale.clone(),
+            }
+        } else {
+            StalePage::default()
+        })
     }
 
     async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
@@ -518,4 +534,43 @@ fn a_sweeps_dry_run_gets_the_inputs_the_routine_holds() {
         sweep_context(&action, &owner)["inputs"],
         json!({ "taskId": "t-1" })
     );
+}
+
+/// A batch that fails or is stopped partway still says what it did before:
+/// its span records it, and so does the sweep's.
+#[tokio::test]
+async fn a_sweep_batch_stopped_partway_keeps_what_it_did() {
+    let repo = crate::domain::service::test::FakeRepo::default();
+    let checks = repo
+        .create_action(routine("tasks.add", Some("0.2.0+old")))
+        .await
+        .unwrap();
+    let broken = repo
+        .create_action(routine("tasks.create", Some("0.2.0+old")))
+        .await
+        .unwrap();
+    let upgrades = Upgrades {
+        stale: vec![checks.id.unwrap(), broken.id.unwrap()],
+        claim_fails: true,
+        ..Upgrades::default()
+    };
+    let sdk: SdkFingerprint = CURRENT.to_owned().try_into().unwrap();
+    let code = Code::default();
+    let stop = tokio_util::sync::CancellationToken::new();
+
+    let (done, ended) = sweep_batch(&code, &upgrades, &repo, &stop, &sdk, Uuid::nil()).await;
+    assert_eq!(
+        done,
+        Sweep {
+            upgraded: 1,
+            waiting: 0
+        }
+    );
+    assert!(ended.is_err());
+    assert!(sweep(&code, &upgrades, &repo, &stop).await.is_err());
+
+    stop.cancel();
+    let (done, ended) = sweep_batch(&code, &upgrades, &repo, &stop, &sdk, Uuid::nil()).await;
+    assert_eq!(done, Sweep::default());
+    assert_eq!(ended.unwrap(), SweepEnd::Cancelled);
 }
