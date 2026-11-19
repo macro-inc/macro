@@ -44,6 +44,7 @@ pub enum OpensearchOperation {
     ReconcileAgentSessionBulk,
     ReconcileAgentSessionPrune,
     DeleteDocumentById,
+    DeleteStaleDocumentChunks,
     DeleteDocumentByOwnerId,
     DeleteChannelById,
     DeleteChannelMessageById,

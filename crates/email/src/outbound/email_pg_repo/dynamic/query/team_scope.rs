@@ -24,8 +24,15 @@
 //!   pages neither repeat nor skip a conversation.
 //!
 //! A probe counts the superset up to `superset_limit` to choose the stream.
-//! The inbox stream's page is final when its window filled the page;
-//! otherwise the superset stream reads it.
+//! For non-viewed sorts, the inbox stream's page is final when its window
+//! filled the page; otherwise the superset stream reads it.
+//!
+//! ViewedUpdated instead merges saved views with never-viewed threads in
+//! their respective index orders. A saved view overrides message recency,
+//! even when it is older. Underfilled windows continue below their last raw
+//! candidate in the same snapshot and within the same request deadline.
+//! Source filters and timestamp ties can inspect more rows than a window
+//! emits; the window is not a physical-work bound.
 
 use crate::outbound::email_pg_repo::{PreviewReadError, RuleDiscoveryPort};
 use crm::domain::email_rule_discovery::EmailRuleDiscoveryRequest;
@@ -45,22 +52,29 @@ use super::super::filters::{
 };
 use super::super::resolve::{can_short_circuit, resolve_filters_on};
 use super::{
-    QueryParams, begin_snapshot, build_query, dedupe_key_sql, limit_statement_time, map_row,
-    push_page_head, push_page_tail, uses_view_history,
+    QueryParams, begin_snapshot, build_query, dedupe_key_sql, filter_uses_view_history,
+    limit_statement_time, map_row, push_page_head, push_page_tail,
 };
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use crate::outbound::email_pg_repo::db_types::ThreadPreviewCursorDbRow;
 
 #[cfg(test)]
 mod test;
+mod viewed;
 
 /// How long a Team page may run across all its statements, under the web
 /// client's 12-second request timeout. The database enforces the bound even
 /// if the caller disconnects.
 const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
 
-/// Resolve contributor modes and read the optimized page in one snapshot.
-/// With no selected contributors, the generated page SQL stays unchanged.
+/// Resolve contributor modes, discover rules and read any Team page in one snapshot.
+/// All-mail contributors skip rule discovery.
+#[tracing::instrument(
+    name = "crm.team_email_read",
+    skip_all,
+    fields(team_id = Empty, sort = %params.sort_method_str, path = Empty, rows = Empty),
+    err
+)]
 pub(super) async fn read_team_page(
     pool: &PgPool,
     view: &PreviewView,
@@ -69,8 +83,14 @@ pub(super) async fn read_team_page(
     tuning: Option<TeamReadTuning>,
     discovery: Option<&RuleDiscoveryPort>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
+    let span = tracing::Span::current();
+    if let Some(team_id) = params.team_id {
+        span.record("team_id", tracing::field::display(team_id));
+    }
     let deadline = Instant::now() + TEAM_READ_BUDGET;
-    let mut transaction = begin_snapshot(pool).await?;
+    let mut transaction = begin_snapshot(pool).await.inspect_err(|_| {
+        span.record("path", "resolving");
+    })?;
     params.resolved = resolve_filters_on(
         &mut transaction,
         &params.link_ids,
@@ -78,8 +98,13 @@ pub(super) async fn read_team_page(
         email_filter,
         Some(deadline),
     )
-    .await?;
+    .await
+    .inspect_err(|_| {
+        span.record("path", "resolving");
+    })?;
     if can_short_circuit(email_filter, &params.resolved) {
+        span.record("path", "empty");
+        span.record("rows", 0_i64);
         transaction.commit().await?;
         return Ok(Vec::new());
     }
@@ -91,8 +116,12 @@ pub(super) async fn read_team_page(
         None => Err(Box::new(params)),
     };
     let rows = match team_read {
-        Ok(read) => read.fetch(&mut transaction, deadline, discovery).await?,
+        Ok(read) => {
+            span.record("path", "optimized");
+            read.fetch(&mut transaction, deadline, discovery).await?
+        }
         Err(params) => {
+            span.record("path", "general");
             // A top-level Owner conjunction can exclude a selected mailbox
             // entirely. Its live growth must not block another owner's page.
             let owners = top_level_owners(email_filter);
@@ -118,10 +147,9 @@ pub(super) async fn read_team_page(
                     )
                     .await?;
             }
-            // General reads retain their existing ordinary transaction and
-            // recheck eligibility in their single page statement.
-            transaction.commit().await?;
-            transaction = pool.begin().await?;
+            // Keep the page with the mode decision and discovery. A new
+            // snapshot could see selected rules that were never checked, or
+            // a different policy from the one whose discovery completed.
             limit_statement_time(&mut transaction, deadline).await?;
             let mut qb = build_query(view, email_filter, *params);
             qb.build()
@@ -131,6 +159,7 @@ pub(super) async fn read_team_page(
                 .await?
         }
     };
+    span.record("rows", rows.len() as i64);
     transaction.commit().await?;
     Ok(rows)
 }
@@ -171,6 +200,11 @@ enum Stream {
     /// All-mail contributors' record matches plus selected contributors'
     /// positive targets. A capped probe chooses this for sparse selections.
     Selection,
+    /// Viewed and never-viewed threads merged in ViewedUpdated order.
+    ViewedUpdated {
+        window: i64,
+        below: Option<viewed::Below>,
+    },
 }
 
 /// `crm_email_thread_allowed` for thread `t`, set-based: the
@@ -229,7 +263,8 @@ impl<'a> TeamRead<'a> {
         let covered = matches!(
             view,
             PreviewView::StandardLabel(PreviewViewStandardLabel::All)
-        ) && !uses_view_history(email_filter, &params.sort_method_str)
+        ) && params.sort_method_str != "viewed_at"
+            && !filter_uses_view_history(email_filter)
             && matches!(params.shared, SharedEmailFilter::Exclude)
             && params.project_scope.is_none();
         let team_id = match params.team_id {
@@ -320,6 +355,7 @@ impl<'a> TeamRead<'a> {
             superset_rows = Empty,
             selection_rows = Empty,
             stream = Empty,
+            rounds = Empty,
             rows = Empty,
         ),
         err
@@ -395,6 +431,10 @@ impl<'a> TeamRead<'a> {
                 .await?;
             return Ok(("superset", rows));
         }
+        if self.viewed_updated() {
+            let rows = self.read_viewed(connection, deadline).await?;
+            return Ok(("viewed_updated", rows));
+        }
         let rows = self.page(connection, deadline, Stream::Inboxes).await?;
         if rows.len() as i64 >= self.params.query_limit {
             return Ok(("inboxes", rows));
@@ -409,8 +449,19 @@ impl<'a> TeamRead<'a> {
         deadline: Instant,
         stream: Stream,
     ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
+        self.page_with_limit(connection, deadline, stream, self.params.query_limit)
+            .await
+    }
+
+    async fn page_with_limit(
+        &self,
+        connection: &mut PgConnection,
+        deadline: Instant,
+        stream: Stream,
+        limit: i64,
+    ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
         limit_statement_time(connection, deadline).await?;
-        let mut builder = self.build_page(stream)?;
+        let mut builder = self.build_page_with_limit(stream, limit)?;
         Ok(builder
             .build()
             .persistent(false)
@@ -505,9 +556,18 @@ impl<'a> TeamRead<'a> {
         }
     }
 
+    #[cfg(test)]
     fn build_page(
         &self,
         stream: Stream,
+    ) -> Result<QueryBuilder<'static, Postgres>, PreviewReadError> {
+        self.build_page_with_limit(stream, self.params.query_limit)
+    }
+
+    fn build_page_with_limit(
+        &self,
+        stream: Stream,
+        limit: i64,
     ) -> Result<QueryBuilder<'static, Postgres>, PreviewReadError> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
         let mut builder = QueryBuilder::new("");
@@ -571,9 +631,12 @@ impl<'a> TeamRead<'a> {
                 ) AS copy
                 CROSS JOIN LATERAL (
                     SELECT * FROM email_threads WHERE id = copy.id OFFSET 0
-                ) AS t
-                WHERE t.id <> ranked.id AND t.link_id = ANY("#
+                ) AS t"#
         ));
+        if self.viewed_updated() {
+            viewed::push_history(&mut builder);
+        }
+        builder.push("\n                WHERE t.id <> ranked.id AND t.link_id = ANY(");
         builder.push_bind(self.inboxes.clone());
         builder.push(")");
         self.thread_terms
@@ -581,8 +644,9 @@ impl<'a> TeamRead<'a> {
             .push_into(&mut builder, &self.params.user_id);
         builder.push("\n                  AND (t.link_id = ANY(");
         builder.push_bind(self.params.link_ids.clone());
+        let copy_timestamp = self.effective_timestamp(sort_ts_field);
         builder.push(format!(
-            r#"), {sort_ts_field}, t.id)
+            r#"), {copy_timestamp}, t.id)
                       > (ranked.is_own_link, ranked.effective_ts, ranked.id)
                   AND {} = ranked.dedupe_key"#,
             dedupe_key_sql("t")
@@ -595,7 +659,7 @@ impl<'a> TeamRead<'a> {
             ORDER BY ranked.effective_ts DESC, ranked.id DESC
             LIMIT "#,
         );
-        builder.push_bind(self.params.query_limit);
+        builder.push_bind(limit);
         push_page_tail(
             &mut builder,
             self.view,
@@ -729,12 +793,15 @@ impl<'a> TeamRead<'a> {
                     FROM (SELECT DISTINCT thread_id FROM matching_threads) matched
                     CROSS JOIN LATERAL (
                         SELECT * FROM email_threads WHERE id = matched.thread_id OFFSET 0
-                    ) AS t
-                    WHERE t.link_id = ANY("#,
+                    ) AS t"#,
                 );
+                if self.viewed_updated() {
+                    viewed::push_history(builder);
+                }
+                builder.push("\n                    WHERE t.link_id = ANY(");
                 builder.push_bind(self.inboxes.clone());
                 builder.push(")");
-                self.push_stream_filters(builder, sort_ts_field);
+                self.push_stream_filters(builder, self.effective_timestamp(sort_ts_field));
                 builder.push(
                     r#"
                     ORDER BY effective_ts DESC, id DESC
@@ -742,6 +809,17 @@ impl<'a> TeamRead<'a> {
                 );
             }
             Stream::Inboxes => {
+                if self.viewed_updated() {
+                    self.push_viewed_stream(
+                        builder,
+                        self.params
+                            .query_limit
+                            .saturating_mul(self.tuning.window_per_row)
+                            .max(1),
+                        None,
+                    );
+                    return;
+                }
                 // One ordered, limited index walk per inbox: `link_id =
                 // ANY(…)` can't return index order, so it would read and sort
                 // every thread of every inbox.
@@ -775,16 +853,28 @@ impl<'a> TeamRead<'a> {
                 );
                 builder.push_bind(window);
             }
+            Stream::ViewedUpdated { window, below } => {
+                self.push_viewed_stream(builder, window, below);
+            }
         }
     }
 
     /// A stream's projected columns, before its source.
     fn push_stream_columns(&self, builder: &mut QueryBuilder<'static, Postgres>, ts: &str) {
+        self.push_stream_columns_with_sort(builder, ts, self.effective_timestamp(ts));
+    }
+
+    fn push_stream_columns_with_sort(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        ts: &str,
+        effective_ts: &str,
+    ) {
         builder.push(format!(
             r#"
                     SELECT t.id, t.provider_id, t.link_id, t.inbox_visible, t.is_read,
                            t.is_signal, t.project_id,
-                           {ts} AS created_at, {ts} AS updated_at, {ts} AS effective_ts"#
+                           {ts} AS created_at, {ts} AS updated_at, {effective_ts} AS effective_ts"#
         ));
     }
 
@@ -812,10 +902,16 @@ impl<'a> TeamRead<'a> {
     }
 
     fn push_allowed(&self, builder: &mut QueryBuilder<'static, Postgres>) {
-        builder.push(ALLOWED_HEAD);
         if !self.selected_inboxes.is_empty() {
+            // Inclusion and exclusions inspect the same full thread. Share
+            // its participants so long threads are not expanded twice for
+            // each candidate or competing copy. All-mail-only SQL is unchanged.
+            builder.push(include_str!("team_scope/selected_participants.sql"));
             builder.push(include_str!("team_scope/selected_match.sql"));
+            builder.push(include_str!("team_scope/selected_allowed.sql").trim_end());
+        } else {
+            builder.push(ALLOWED_HEAD);
+            builder.push(ALLOWED.trim_end());
         }
-        builder.push(ALLOWED.trim_end());
     }
 }

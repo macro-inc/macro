@@ -91,8 +91,10 @@ gateway `/calendar` prefix.
   sharing changes and uncertain sync results require `true`. An inbox refresh
   already refreshes its viewers' team views, so its teammate fan-out skips
   them; a sharing change also refreshes the sharer (`sharing_changed`).
-- One inbox refresh is one gateway request (`refresh_calendars`, a
-  `batch_send_unique`): the inbox's viewers get `synced` and their teammates
+- One inbox refresh is one gateway request (`calendar_events`'
+  `GatewayCalendarRefresh`, composed once in `main.rs` on
+  `event_broker_tracker` and awaited inline by the backfill): the inbox's
+  viewers get `synced` and their teammates
   `team_sharing_changed`, so a write by a member of a large team costs one
   request, not one per teammate. A viewer whose sharing setting is `none`
   shows teammates nothing, so their inbox's changes refresh none of that

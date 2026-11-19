@@ -623,6 +623,18 @@ pub enum PurchaseRefusalCode {
     InviteInProgress,
 }
 
+/// An agent teammate's computer as the team roster sees it.
+#[derive(Debug, Clone)]
+pub struct RosterStatus {
+    /// The computer's status.
+    pub status: ComputerStatus,
+    /// The fleet's current availability.
+    pub attachment: FleetAttachment,
+    /// Its first start waits on the agent reporting online. False for
+    /// computers bought before agents reported, which are up once ready.
+    pub awaiting_agent: bool,
+}
+
 /// The coarse status the team sees.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
