@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { createCiTelemetryRole } from './ci';
+import { backupStatements } from './host-policy';
 import { SOURCE_TAG_PREFIX, imageSourceKey } from './deploy/image-key';
 import { createNetwork } from './network';
 import { renderUserData } from './render';
@@ -182,53 +183,21 @@ const ssm = new aws.iam.RolePolicyAttachment('observability-ssm', {
   role: role.name,
   policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
 });
+// GoAlert's nightly dumps, its secrets and the CloudWatch agent's metrics.
+// Loki and Tempo, which wrote the rest of these buckets, run in the cluster
+// now. A change here is outside what Deploy Observability applies (README,
+// "Deploying").
 const policy = new aws.iam.RolePolicy('observability-storage', {
   role: role.id,
-  policy: pulumi.all([logs.arn, traces.arn]).apply((arns) =>
+  policy: logs.arn.apply((arn) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
-        {
-          Effect: 'Allow',
-          Action: [
-            's3:ListBucket',
-            's3:GetBucketLocation',
-            's3:ListBucketMultipartUploads',
-          ],
-          Resource: arns,
-        },
-        {
-          Effect: 'Allow',
-          Action: [
-            's3:GetObject',
-            's3:PutObject',
-            's3:DeleteObject',
-            's3:AbortMultipartUpload',
-            's3:ListMultipartUploadParts',
-          ],
-          Resource: arns.map((arn) => `${arn}/*`),
-        },
+        ...backupStatements(arn),
         {
           Effect: 'Allow',
           Action: ['secretsmanager:GetSecretValue'],
           Resource: secretArn,
-        },
-        {
-          Effect: 'Allow',
-          Action: [
-            'cloudwatch:ListMetrics',
-            'cloudwatch:GetMetricData',
-            'cloudwatch:GetMetricStatistics',
-          ],
-          Resource: '*',
-          Condition: {
-            StringEquals: { 'aws:RequestedRegion': ['us-east-1', 'us-east-2'] },
-          },
-        },
-        {
-          Effect: 'Allow',
-          Action: ['sns:Publish'],
-          Resource: alarmTopicArn,
         },
         {
           Effect: 'Allow',
