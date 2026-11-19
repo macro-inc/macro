@@ -342,6 +342,16 @@ async function scriptAuthService(
         scheduled_seat_plans: {},
       });
 
+    // Message <name> opens the agent's real DM, made on the spot.
+    if (
+      path.endsWith('/channels/get_or_create_dm') &&
+      request.method() === 'POST'
+    )
+      return json(200, {
+        action: 'created',
+        channel_id: `dm-${request.postDataJSON().recipient_id}`,
+      });
+
     // Nothing else is part of this flow.
     return json(404, { message: 'not scripted' });
   });
@@ -660,6 +670,13 @@ test('the inviter hears when the agent is ready: Message Ada, and Connect Claude
       )
     )
     .toContain('channel');
+  expect(
+    await page.evaluate(() =>
+      window.teamAgentsFixture.opened.find(
+        (content) => content.type === 'channel'
+      )
+    )
+  ).toEqual({ type: 'channel', id: `dm-${ADA}` });
 });
 
 test("an admin signs the agent's computer in to Claude from its row", async ({
@@ -880,6 +897,51 @@ test('a code that finishes after the dialog closed toasts, and leaves a reopened
   expect(backend.claudeCodes).toEqual(['slow#code']);
   // The late answer belongs to the closed dialog; the reopened one stays.
   await expect(reopened).toBeVisible();
+});
+
+test('a runtime outside the rollout says so, and Try again starts the sign-in', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 403, {
+    message: 'Macro computers are not enabled for this user',
+    code: 'rollout_disabled',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toHaveText(
+    /Computers aren't available for this account yet\./
+  );
+  await screenshot(page, testInfo, 'connect-claude-rollout-disabled');
+  await alert.getByRole('button', { name: 'Try again' }).click();
+  await expect(
+    dialog.getByRole('link', { name: 'Open claude.ai' })
+  ).toHaveAttribute('href', /claude\.com/);
+});
+
+test('a caller without rights to the computer is told so, with no way to retry', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 403, {
+    message: 'you cannot do that on this computer',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toHaveText(
+    /You can't change this computer\. Ask a team owner or admin\./
+  );
+  await screenshot(page, testInfo, 'connect-claude-forbidden');
+  await expect(alert.getByRole('button')).toHaveCount(0);
+  await expect(
+    dialog.getByRole('textbox', { name: 'Paste the code Claude showed you' })
+  ).toBeDisabled();
 });
 
 test('an unreachable computer says so, and Try again starts the sign-in', async ({

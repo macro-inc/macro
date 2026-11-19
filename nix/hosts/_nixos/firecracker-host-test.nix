@@ -239,6 +239,23 @@ pkgs.testers.runNixOSTest {
             assert actual == value, f"{key} = {actual}, wanted {value}"
         host.succeed("test \"$(cat /sys/kernel/mm/ksm/run)\" = 0")
 
+    with subtest("the only swap is zram"):
+        host.wait_until_succeeds("grep -q '^/dev/zram0 ' /proc/swaps", timeout=60)
+        swaps = host.succeed("tail -n +2 /proc/swaps").split()
+        devices = [field for field in swaps if field.startswith("/")]
+        assert devices == ["/dev/zram0"], devices
+
+    with subtest("a swap device on disk takes the VMs' swap away until it goes"):
+        vms = "/sys/fs/cgroup/system.slice/firecracker-host.service/vms"
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = max", timeout=60)
+        host.succeed(
+            "dd if=/dev/zero of=/var/swapfile bs=1M count=64 status=none"
+            " && chmod 600 /var/swapfile && mkswap -q /var/swapfile && swapon /var/swapfile"
+        )
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = 0", timeout=180)
+        host.succeed("swapoff /var/swapfile && rm /var/swapfile")
+        host.wait_until_succeeds(f"test \"$(cat {vms}/memory.swap.max)\" = max", timeout=180)
+
     with subtest("the ZFS dataset clones blocks"):
         host.succeed("test \"$(zfs get -H -o value mounted tank/firecracker)\" = yes")
         host.succeed("test \"$(zfs get -H -o value compression tank/firecracker)\" = lz4")
@@ -300,19 +317,32 @@ pkgs.testers.runNixOSTest {
                 timeout=900,
             )
             # The control plane's limits carry the sold /home sizes; the
-            # agent is ready once their templates exist.
+            # agent is ready once the golden's snapshot holds an empty /home
+            # of each.
             curl = "curl --fail --silent --show-error --cert ${credentials}/client.crt --key ${credentials}/client.key --cacert /tmp/server.crt"
             controlPlane.succeed(
                 f"{curl} -X PUT -H 'content-type: application/json' https://192.168.1.2:8444/v1/host/limits"
-                " --data '{\"guestMemoryMaxBytes\": 2147483648, \"squeezeAboveBytes\": null, \"squeezeBelowBytes\": null, \"homeDiskGib\": [1]}'"
+                " --data '{\"guestMemoryMaxBytes\": 2147483648, \"squeezeAboveBytes\": 68719476736, \"squeezeBelowBytes\": 103079215104, \"homeDiskGib\": [1]}'"
             )
+            # The squeeze window (far above this VM's memory, so it never
+            # squeezes) needs swap: ready only because zram is there.
             controlPlane.wait_until_succeeds(f"{curl} https://192.168.1.2:8444/health", timeout=300)
+            golden = "tank/firecracker/goldens/test/1v-512m"
+            snapshot = host.succeed(f"zfs list -H -t snapshot -o name -s createtxg {golden} | tail -n 1").strip()
+            host.succeed(
+                f"test -f \"$(zfs get -H -o value mountpoint {golden})/.zfs/snapshot/{snapshot.split('@')[1]}/home-1g.ext4\""
+            )
+            # A create is a dataset clone: it adds no block clones.
+            bclone_before = host.succeed("zpool get -H -p -o value bcloneused tank").strip()
             computer = json.loads(client(
                 "create ${computerId} --image test --vcpus 1 --memory-mib 512"
                 " --root-disk-gib 2 --home-disk-gib 1 --pairing-id ${pairingId}"
             ))
             assert computer["state"] == "running", computer
             host.succeed("zfs list -H -o name | grep -q 'computers/${computerId}'")
+            home = host.succeed("zfs get -H -o value mountpoint tank/firecracker/computers/${computerId}").strip()
+            host.succeed(f"test -f {home}/home.ext4 && ! ls {home} | grep -q '^home-'")
+            assert host.succeed("zpool get -H -p -o value bcloneused tank").strip() == bclone_before
             client("exec ${computerId} --root test -e /run/macro-restored")
             client("exec ${computerId} --root sh -c 'echo kept > /home/marker && sync'")
 

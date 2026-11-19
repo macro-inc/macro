@@ -10,7 +10,13 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
-import { createSignal, type JSX, onMount, Show } from 'solid-js';
+import {
+  createSignal,
+  type JSX,
+  onMount,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -49,6 +55,7 @@ vi.mock('./create-frame-width', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
+  Layer: (props: ParentProps) => props.children,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
       aria-label={props['aria-label']}
