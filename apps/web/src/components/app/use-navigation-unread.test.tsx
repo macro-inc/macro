@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
   passwords: undefined as unknown as () => Flag,
   numbersEnabled: true,
   counts: undefined as unknown as () => readonly InboxUnreadCount[] | undefined,
+  mail: (() => 0) as () => number,
+  channels: (() => 0) as () => number,
   countStreams: 0,
+  viewSources: 0,
   presenceSources: 0,
   presence: ((_id: string) => false) as (id: string) => boolean,
 }));
@@ -37,6 +40,16 @@ vi.mock('@app/features/notifications-inbox/queries/inbox-unread', () => ({
     return () => mocks.counts();
   },
 }));
+vi.mock('./view-unread', () => ({
+  createMailUnread: () => {
+    mocks.viewSources += 1;
+    return () => mocks.mail();
+  },
+  createChannelsUnread: () => {
+    mocks.viewSources += 1;
+    return () => mocks.channels();
+  },
+}));
 vi.mock('./use-presence-unread', () => ({
   usePresenceUnread: () => {
     mocks.presenceSources += 1;
@@ -54,6 +67,7 @@ let dispose: VoidFunction;
 afterEach(() => {
   dispose?.();
   mocks.countStreams = 0;
+  mocks.viewSources = 0;
   mocks.presenceSources = 0;
   mocks.presence = () => false;
 });
@@ -63,22 +77,30 @@ function setup(options: {
   passwords?: boolean;
   numbersEnabled?: boolean;
   counts?: readonly InboxUnreadCount[];
+  mail?: number;
+  channels?: number;
   homeIsNotifications?: boolean;
 }) {
   return createRoot((disposer) => {
     dispose = disposer;
     const [unified, setUnified] = createSignal(options.unified);
     const [counts, setCounts] = createSignal(options.counts);
+    const [mail, setMail] = createSignal(options.mail ?? 0);
+    const [channels, setChannels] = createSignal(options.channels ?? 0);
     mocks.unified = unified;
     mocks.passwords = () => flag(options.passwords ?? false);
     mocks.numbersEnabled = options.numbersEnabled ?? true;
     mocks.counts = counts;
+    mocks.mail = mail;
+    mocks.channels = channels;
     return {
       unread: useNavigationUnread({
         homeIsNotifications: options.homeIsNotifications,
       }),
       setUnified,
       setCounts,
+      setMail,
+      setChannels,
     };
   });
 }
@@ -93,10 +115,12 @@ describe('useNavigationUnread with the unified Notifications view', () => {
   it.each([false, true])(
     'keeps live dots with numbers off (Home is Notifications: %s)',
     (homeIsNotifications) => {
-      const { unread, setCounts } = setup({
+      const { unread, setCounts, setMail, setChannels } = setup({
         unified: flag(true),
         numbersEnabled: false,
         counts: [row('email', 4), row('channel_mention', 1)],
+        mail: 2,
+        channels: 1,
         homeIsNotifications,
       });
 
@@ -109,13 +133,19 @@ describe('useNavigationUnread with the unified Notifications view', () => {
 
       setCounts([]);
       expect(unread.has('home')).toBe(false);
+      expect(unread.has('notifications')).toBe(false);
+      setMail(0);
       expect(unread.has('mail')).toBe(false);
+      setChannels(0);
+      expect(unread.has('channels')).toBe(false);
     }
   );
 
-  it('counts each section from its kinds of inbox row', () => {
+  it("counts Mail and Channels by their own views, not the inbox's rows", () => {
     const { unread } = setup({
       unified: flag(true),
+      // Mail with no notification, and three unread threads of one
+      // conversation: the inbox's rows say otherwise.
       counts: [
         row('email', 4),
         row('channel_mention', 1),
@@ -124,18 +154,20 @@ describe('useNavigationUnread with the unified Notifications view', () => {
         row('task', 5),
         row('other', 1),
       ],
+      mail: 7,
+      channels: 2,
     });
 
     expect(unread.count('notifications')).toBe(16);
-    expect(unread.count('channels')).toBe(6);
-    expect(unread.count('mail')).toBe(4);
-    expect(unread.has('channels')).toBe(true);
+    expect(unread.count('mail')).toBe(7);
+    expect(unread.count('channels')).toBe(2);
     // Home shares the inbox's dot without repeating its number.
     expect(unread.has('home')).toBe(true);
     expect(unread.count('home')).toBeUndefined();
-    // Sections with no rows of their own show nothing.
+    // Sections with no unread source show nothing.
     expect(unread.has('documents')).toBe(false);
     expect(unread.count('documents')).toBeUndefined();
+    expect(mocks.viewSources).toBe(2);
     expect(mocks.presenceSources).toBe(0);
   });
 
@@ -150,20 +182,24 @@ describe('useNavigationUnread with the unified Notifications view', () => {
     expect(unread.has('home')).toBe(true);
   });
 
-  it('follows the counts as they change, section by section', () => {
-    const { unread, setCounts } = setup({
+  it('follows each source as it changes', () => {
+    const { unread, setCounts, setMail, setChannels } = setup({
       unified: flag(true),
       counts: [row('email', 1), row('channel_thread', 1)],
+      mail: 1,
+      channels: 1,
     });
     expect(unread.count('notifications')).toBe(2);
 
-    // The viewer reads the channel thread: only mail is left.
+    // The viewer reads the conversation: Channels clears, mail is left.
+    setChannels(0);
     setCounts([row('email', 1)]);
     expect(unread.count('channels')).toBe(0);
     expect(unread.has('channels')).toBe(false);
     expect(unread.count('mail')).toBe(1);
     expect(unread.count('notifications')).toBe(1);
 
+    setMail(0);
     setCounts([]);
     expect(unread.has('mail')).toBe(false);
     expect(unread.has('notifications')).toBe(false);
@@ -203,22 +239,26 @@ describe('useNavigationUnread without the unified Notifications view', () => {
     expect(mocks.countStreams).toBe(0);
   });
 
-  it('starts neither source while the flag is undecided, then exactly one', () => {
+  it('starts neither mode while the flag is undecided, then exactly one', () => {
     mocks.presence = () => true;
     const { unread, setUnified } = setup({
       unified: flag(false, true),
       counts: [row('email', 2)],
+      mail: 3,
     });
     expect(unread.has('mail')).toBe(false);
-    expect(mocks.countStreams + mocks.presenceSources).toBe(0);
+    expect(mocks.countStreams + mocks.viewSources + mocks.presenceSources).toBe(
+      0
+    );
 
     setUnified(flag(true));
-    expect(unread.count('mail')).toBe(2);
+    expect(unread.count('mail')).toBe(3);
     expect(mocks.countStreams).toBe(1);
     expect(mocks.presenceSources).toBe(0);
 
     // The same decision delivered again starts nothing new.
     setUnified(flag(true));
     expect(mocks.countStreams).toBe(1);
+    expect(mocks.viewSources).toBe(2);
   });
 });
