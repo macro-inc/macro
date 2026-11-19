@@ -18,6 +18,7 @@ export type RoutineEditorSlots = {
   }>;
   ExecutionPicker: Component<{
     target: RoutineTarget;
+    readOnly?: boolean;
     onChange(target: RoutineTarget): void;
   }>;
   Triggers: Component<{

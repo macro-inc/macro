@@ -1,3 +1,4 @@
+import { catalogModelLabel } from '@core/component/AI/constant/model-label';
 import { buttonClasses } from '@ui';
 import {
   type Accessor,
@@ -15,6 +16,7 @@ import type { RoutineTarget } from '../core/routine-target';
 
 export type RoutineExecutionPickerProps = {
   target: RoutineTarget;
+  readOnly?: boolean;
   onChange: (target: RoutineTarget) => void;
 };
 
@@ -82,6 +84,15 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
     return target.kind === 'model' ? target.model : target.modelOverride;
   };
   const catalog = props.createModels(selected);
+  const selectionLabel = () => {
+    const agent = selected();
+    if (!agent) return savedSelection(props.target);
+    const id = model() ?? agent.defaultModel;
+    const label = id ? catalogModelLabel(id, catalog.models()) : '';
+    return agent.id === MACRO_PERSONA_ID
+      ? label || agent.name
+      : [agent.name, label].filter(Boolean).join(' · ');
+  };
   const warning = (): string | undefined => {
     if (props.rosterError) {
       return 'Could not load agents. Your saved selection is unchanged.';
@@ -122,25 +133,32 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       aria-label="Routine model or agent"
       class="min-w-0 max-w-full"
     >
-      <AgentPicker
-        showModelLabel
-        triggerClass={buttonClasses({
-          variant: 'secondary',
-          size: 'sm',
-          class: 'max-w-full',
-        })}
-        agents={props.roster}
-        selected={selected()}
-        modelOverride={model()}
-        loading={props.rosterLoading}
-        onSelect={select}
-        onConnect={props.onConnect}
-        onCreate={props.onCreate}
-      />
-      <Show when={!selected()}>
-        <p class="break-words text-xs text-ink-muted">
-          {savedSelection(props.target)}
-        </p>
+      <Show
+        when={!props.readOnly}
+        fallback={
+          <p class="break-words text-sm text-ink">{selectionLabel()}</p>
+        }
+      >
+        <AgentPicker
+          showModelLabel
+          triggerClass={buttonClasses({
+            variant: 'secondary',
+            size: 'sm',
+            class: 'max-w-full',
+          })}
+          agents={props.roster}
+          selected={selected()}
+          modelOverride={model()}
+          loading={props.rosterLoading}
+          onSelect={select}
+          onConnect={props.onConnect}
+          onCreate={props.onCreate}
+        />
+        <Show when={!selected()}>
+          <p class="break-words text-xs text-ink-muted">
+            {savedSelection(props.target)}
+          </p>
+        </Show>
       </Show>
       <Show when={warning()}>
         {(message) => (

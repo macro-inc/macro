@@ -23,6 +23,7 @@ export function StepNote(props: { children: JSX.Element }) {
  */
 export function CodeStepBody(props: {
   step: CodeStepDraft;
+  readOnly?: boolean;
   /** Whether it shows where to say what to change, from the step's Edit. */
   editing: boolean;
   onEditing(editing: boolean): void;
@@ -73,14 +74,17 @@ export function CodeStepBody(props: {
             <StepSentence
               sentence={sentence()}
               knobs={props.step.knobs}
-              onKnob={setKnob}
+              onKnob={props.readOnly ? undefined : setKnob}
             />
           )}
         </Show>
         <Show when={settings().length ? settings() : undefined}>
           {(knobs) => (
             <Field label="Settings">
-              <KnobSettings knobs={knobs()} onKnob={setKnob} />
+              <KnobSettings
+                knobs={knobs()}
+                onKnob={props.readOnly ? undefined : setKnob}
+              />
             </Field>
           )}
         </Show>
@@ -129,11 +133,16 @@ export function CodeStepBody(props: {
           >
             <code>{props.step.source}</code>
           </pre>
-          <StepNote>
-            Written by AI and checked against Macro’s SDK when saved. Change the
-            underlined values yourself; Edit in the step’s menu changes the
-            rest.
-          </StepNote>
+          <Show when={!props.readOnly}>
+            <StepNote>
+              Written by AI and checked against Macro’s SDK when saved. Change
+              the underlined values yourself.
+              <Show when={steps.author}>
+                {' '}
+                Edit in the step’s menu changes the rest.
+              </Show>
+            </StepNote>
+          </Show>
         </div>
       </Show>
     </div>

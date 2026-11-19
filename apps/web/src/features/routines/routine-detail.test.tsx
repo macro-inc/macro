@@ -1342,7 +1342,7 @@ describe('sub-routines defined once', () => {
     const values = screen.getByRole('definition');
     expect(values.textContent).toBe('Ship the deck');
     const steps = screen.getByRole('group', { name: 'Remind me' });
-    expect(steps.hasAttribute('disabled')).toBe(true);
+    expect(steps.closest('[inert]')).toBeNull();
     expect(
       (
         within(steps).getByRole('textbox', {
@@ -1387,6 +1387,46 @@ describe('sub-routines defined once', () => {
       screen.queryByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeNull();
     expect(mocks.detach).not.toHaveBeenCalled();
+  });
+
+  it('lets a copy expand the full prompt and source without editing the definition', () => {
+    const instructions =
+      'Remind me about the task.\nInclude the due date and next action.';
+    const source = 'export const task = inputs.taskId;';
+    setSchedules([
+      copy,
+      {
+        ...parent,
+        task: {
+          steps: [{ type: 'agent', model: 'model', instructions: 'Plan' }],
+          sub_routines: [
+            {
+              ...remind,
+              steps: [
+                { type: 'code', title: 'Read the task', source },
+                { type: 'agent', model: 'model', instructions },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    const ask = screen.getByRole('group', { name: 'Ask AI' });
+    const disclosure = within(ask).getByRole('button', { name: /Ask AI/ });
+    expect(disclosure.closest('[inert]')).toBeNull();
+    fireEvent.click(disclosure);
+    const editor = within(ask).getByRole<HTMLTextAreaElement>('textbox', {
+      name: 'Instructions',
+    });
+    expect(editor.value).toBe(instructions);
+    expect(editor.disabled).toBe(true);
+
+    const code = screen.getByRole('group', { name: 'Read the task' });
+    fireEvent.click(within(code).getByRole('button', { name: 'Show code' }));
+    expect(within(code).getByLabelText('Code').textContent).toBe(source);
+    expect(screen.queryByRole('button', { name: 'Step actions' })).toBeNull();
+    expect(mocks.update).not.toHaveBeenCalled();
   });
 
   it('keeps a copy whose definition still exists using detach', () => {

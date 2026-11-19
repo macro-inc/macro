@@ -260,6 +260,7 @@ export function RoutineDetailView(props: {
             }
           }
           onChange={setState}
+          stepsReadOnly={routine().isCopy}
           disabled={
             !isOwned() ||
             isRunning() ||

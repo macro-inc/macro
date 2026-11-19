@@ -110,6 +110,7 @@ export function RoutineEditor(props: {
   headerActions?: JSX.Element;
   /** What the routine does: its agent's instructions or its steps. */
   steps: JSX.Element;
+  stepsReadOnly?: boolean;
   /** The Then heading's controls, on its line. */
   stepsAside?: JSX.Element;
   /** The routine's sub-routines, each with its steps; absent with none. */
@@ -338,8 +339,8 @@ export function RoutineEditor(props: {
               <RoutineSection label="Steps" aside={props.stepsAside}>
                 {/* Each step is its own card. */}
                 <fieldset
-                  disabled={props.disabled}
-                  inert={props.disabled}
+                  disabled={props.disabled && !props.stepsReadOnly}
+                  inert={props.disabled && !props.stepsReadOnly}
                   class="min-w-0"
                   aria-label="Routine steps"
                 >

@@ -189,21 +189,16 @@ export function SubRoutineCopySteps(props: {
       <Switch>
         <Match when={props.definition}>
           {(definition) => (
-            <fieldset
-              disabled
-              inert
-              aria-label={definition().title}
-              class="min-w-0"
-            >
+            <div role="group" aria-label={definition().title} class="min-w-0">
               <RoutineSteps
                 steps={definition().steps}
                 onChange={() => undefined}
                 triggers={[]}
                 defaultTarget={props.defaultTarget}
-                slots={{ ...props.slots, createStepAuthor: undefined }}
+                slots={props.slots}
                 readOnly
               />
-            </fieldset>
+            </div>
           )}
         </Match>
         <Match when={props.missing}>

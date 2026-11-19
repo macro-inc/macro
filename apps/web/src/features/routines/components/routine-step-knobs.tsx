@@ -32,7 +32,7 @@ export type SentenceSize = 'md' | 'sm' | 'xs';
 export function StepSentence(props: {
   sentence: string;
   knobs: Knob[];
-  onKnob: KnobChange;
+  onKnob?: KnobChange;
   /** `md` on the routine page; `sm` and `xs` on cards. */
   size?: SentenceSize;
   /** Placement only, e.g. a fixed height on a card. */
@@ -70,7 +70,7 @@ export function StepSentence(props: {
 
 function SentencePiece(props: {
   part: SentencePart;
-  onKnob: KnobChange;
+  onKnob?: KnobChange;
   compact: boolean;
 }) {
   return (
@@ -80,11 +80,15 @@ function SentencePiece(props: {
       </Match>
       <Match when={props.part.kind === 'knob' && props.part}>
         {(part) => (
-          <KnobControl
-            knob={part().knob}
-            compact={props.compact}
-            onChange={(value) => props.onKnob(part().knob.name, value)}
-          />
+          <Show when={props.onKnob} fallback={knobText(part().knob)}>
+            {(change) => (
+              <KnobControl
+                knob={part().knob}
+                compact={props.compact}
+                onChange={(value) => change()(part().knob.name, value)}
+              />
+            )}
+          </Show>
         )}
       </Match>
     </Switch>
@@ -92,7 +96,7 @@ function SentencePiece(props: {
 }
 
 /** Knobs the sentence doesn't show, as a list of settings. */
-export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
+export function KnobSettings(props: { knobs: Knob[]; onKnob?: KnobChange }) {
   return (
     <dl class="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 text-sm">
       <For each={props.knobs}>
@@ -102,12 +106,16 @@ export function KnobSettings(props: { knobs: Knob[]; onKnob: KnobChange }) {
               {knob.type === 'question' ? 'AI decides whether' : knob.label}
             </dt>
             <dd class="min-w-0 text-right">
-              <KnobControl
-                knob={knob}
-                // The label is beside it already.
-                emptyText="Not set"
-                onChange={(value) => props.onKnob(knob.name, value)}
-              />
+              <Show when={props.onKnob} fallback={knobText(knob)}>
+                {(change) => (
+                  <KnobControl
+                    knob={knob}
+                    // The label is beside it already.
+                    emptyText="Not set"
+                    onChange={(value) => change()(knob.name, value)}
+                  />
+                )}
+              </Show>
             </dd>
           </>
         )}

@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { IS_MAC } from '@core/constant/isMac';
 import { isEditableInput } from '@core/util/isEditableInput';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
@@ -8,7 +9,7 @@ import DotsIcon from '@icon/system/regular/dots-three.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import { Badge, cn, Dropdown } from '@ui';
+import { Badge, Button, cn, Dropdown } from '@ui';
 import {
   type Accessor,
   type Component,
@@ -23,13 +24,9 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import type { StepAuthor } from '../context/routine-slots';
+import type { RoutineEditorSlots, StepAuthor } from '../context/routine-slots';
 import type { SubRoutineDraft } from '../core/draft';
-import type {
-  AgentStepDraft,
-  RoutineSoFar,
-  StepDraft,
-} from '../core/routine-steps';
+import type { AgentStepDraft, StepDraft } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
 import { copyStep } from '../core/step-edits';
@@ -39,18 +36,10 @@ import { CodeStepBody, StepNote } from './routine-code-step';
 import { RoutineSurface, RoutineTray } from './routine-editor';
 import { menuMount } from './routine-search-menu';
 
-export type RoutineStepSlots = {
-  PromptEditor: Component<{
-    initialValue: string;
-    onChange(value: string): void;
-  }>;
-  ExecutionPicker: Component<{
-    target: RoutineTarget;
-    onChange(target: RoutineTarget): void;
-  }>;
-  /** AI that adds and changes steps; without it, steps are added by hand. */
-  createStepAuthor?(routine: Accessor<RoutineSoFar>): StepAuthor;
-};
+export type RoutineStepSlots = Pick<
+  RoutineEditorSlots,
+  'PromptEditor' | 'ExecutionPicker' | 'createStepAuthor'
+>;
 
 type StepsContextValue = {
   /** The whole routine. */
@@ -79,7 +68,7 @@ export type RoutineStepsProps = {
   slots: RoutineStepSlots;
   /** What the routine's code can schedule, for AI writing its steps. */
   subRoutines?: SubRoutineDraft[];
-  /** Shown, not edited: no step can be added. */
+  /** Step contents can be inspected, and editing controls are absent. */
   readOnly?: boolean;
 };
 
@@ -87,11 +76,13 @@ export type RoutineStepsProps = {
 export function StepsProvider(
   props: RoutineStepsProps & { children: JSX.Element }
 ) {
-  const author = props.slots.createStepAuthor?.(() => ({
-    triggers: props.triggers,
-    steps: props.steps,
-    subRoutines: props.subRoutines,
-  }));
+  const author = props.readOnly
+    ? undefined
+    : props.slots.createStepAuthor?.(() => ({
+        triggers: props.triggers,
+        steps: props.steps,
+        subRoutines: props.subRoutines,
+      }));
   return (
     <StepsContext.Provider
       value={{
@@ -135,6 +126,7 @@ export function StepList(props: {
               {(step) => (
                 <StepCard
                   step={step()}
+                  readOnly={props.readOnly}
                   number={index() + 1}
                   first={index() === 0}
                   last={index() === props.steps.length - 1}
@@ -197,6 +189,7 @@ export function StepIcon(props: { step: StepDraft }) {
 
 type StepCardProps = {
   step: StepDraft;
+  readOnly?: boolean;
   number: number;
   first: boolean;
   last: boolean;
@@ -257,6 +250,7 @@ function StepCard(props: StepCardProps) {
         tabIndex={-1}
         class="@container/step group/step min-w-0 outline-none"
         onKeyDown={(event) => {
+          if (props.readOnly) return;
           if (!event.altKey) return;
           if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
           // Text fields keep ⌥↑/↓, and pickers portaled out of the card
@@ -289,20 +283,38 @@ function StepCard(props: StepCardProps) {
               {heading()}
             </button>
           </Show>
-          <StepMenu
-            {...props}
-            open={shown()}
-            onEdit={
-              isCode() && steps.author ? () => setEditing(true) : undefined
+          <Show
+            when={!props.readOnly}
+            fallback={
+              <Show when={isCode()}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={showCode()}
+                  onClick={() => setShowCode(!showCode())}
+                >
+                  {t(
+                    showCode() ? 'subRoutines.hideCode' : 'subRoutines.showCode'
+                  )}
+                </Button>
+              </Show>
             }
-            showCode={isCode() ? showCode() : undefined}
-            onShowCode={setShowCode}
-            onEditShown={() =>
-              group
-                ?.querySelector<HTMLInputElement>('[data-step-change]')
-                ?.focus()
-            }
-          />
+          >
+            <StepMenu
+              {...props}
+              open={shown()}
+              onEdit={
+                isCode() && steps.author ? () => setEditing(true) : undefined
+              }
+              showCode={isCode() ? showCode() : undefined}
+              onShowCode={setShowCode}
+              onEditShown={() =>
+                group
+                  ?.querySelector<HTMLInputElement>('[data-step-change]')
+                  ?.focus()
+              }
+            />
+          </Show>
         </div>
         <Show when={shown()}>
           {/* Fields keep the card's padding on every side. */}
@@ -314,6 +326,7 @@ function StepCard(props: StepCardProps) {
           >
             <StepBody
               step={props.step}
+              readOnly={props.readOnly}
               editing={editing()}
               onEditing={setEditing}
               showCode={showCode()}
@@ -431,6 +444,7 @@ function StepMenu(
 /** The editor for any step, wherever it sits. */
 export function StepBody(props: {
   step: StepDraft;
+  readOnly?: boolean;
   /** Whether a code step shows where to say what to change. */
   editing?: boolean;
   onEditing?(editing: boolean): void;
@@ -441,12 +455,19 @@ export function StepBody(props: {
   return (
     <Switch>
       <Match when={props.step.kind === 'agent' && props.step}>
-        {(step) => <AgentBody step={step()} onChange={props.onChange} />}
+        {(step) => (
+          <AgentBody
+            step={step()}
+            readOnly={props.readOnly}
+            onChange={props.onChange}
+          />
+        )}
       </Match>
       <Match when={props.step.kind === 'code' && props.step}>
         {(step) => (
           <CodeStepBody
             step={step()}
+            readOnly={props.readOnly}
             editing={props.editing ?? false}
             onEditing={(editing) => props.onEditing?.(editing)}
             showCode={props.showCode ?? false}
@@ -478,6 +499,7 @@ export function Field(props: {
 /** Ask AI: who runs it and what they're told. */
 function AgentBody(props: {
   step: AgentStepDraft;
+  readOnly?: boolean;
   onChange(step: StepDraft): void;
 }) {
   const steps = useSteps();
@@ -487,6 +509,7 @@ function AgentBody(props: {
         <div class="flex min-w-0">
           <steps.slots.ExecutionPicker
             target={props.step.target}
+            readOnly={props.readOnly}
             onChange={(target) => props.onChange({ ...props.step, target })}
           />
         </div>
@@ -495,6 +518,7 @@ function AgentBody(props: {
         <div class="min-w-0 rounded-xl border border-edge-frame bg-control px-3 py-2 focus-within:ring-2 focus-within:ring-edge-muted">
           <steps.slots.PromptEditor
             initialValue={props.step.instructions}
+            disabled={props.readOnly}
             onChange={(instructions) =>
               props.step.instructions === instructions
                 ? undefined
@@ -502,10 +526,12 @@ function AgentBody(props: {
             }
           />
         </div>
-        <StepNote>
-          Type @ to add context. It also sees what triggered the run and what
-          earlier steps did.
-        </StepNote>
+        <Show when={!props.readOnly}>
+          <StepNote>
+            Type @ to add context. It also sees what triggered the run and what
+            earlier steps did.
+          </StepNote>
+        </Show>
       </Field>
     </div>
   );
