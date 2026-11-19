@@ -6,11 +6,16 @@
 //! `PR CI` run then skips those jobs (`xtask_workflows`' `attestation`
 //! module has the rules). Without `--post` nothing leaves the machine.
 //!
-//! A check that fails here posts nothing: its job simply runs in `PR CI`.
+//! With `--post` the merge is the one GitHub built for the pull request, and
+//! the status names its base commit: `PR CI` accepts it for that merge only.
+//!
+//! A check that fails here posts no pass, so its job runs in `PR CI`; a pass
+//! posted for the same commit earlier is withdrawn.
 
 mod checkout;
 mod expression;
 mod file_commands;
+mod github;
 mod manifest;
 mod paths_filter;
 mod runner;
@@ -18,14 +23,14 @@ mod runner;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
-    process::{Command, ExitCode},
+    process::ExitCode,
 };
 
 use clap::{Parser, Subcommand};
 use rootcause::prelude::*;
 
 use crate::{
-    checkout::Checkout,
+    checkout::{Base, Checkout},
     manifest::{Check, Manifest},
     runner::{JobResult, Machine, Outputs, Plan},
 };
@@ -208,41 +213,20 @@ impl Session<'_> {
                     None => "-".to_owned(),
                 };
                 Ok(Verdict::Passed {
-                    description: format!(
-                        "fp={} in={digest} base={}",
-                        check.fingerprint,
-                        &self.base[..7]
-                    ),
+                    description: format!("fp={} in={digest} base={}", check.fingerprint, self.base),
                 })
             }
         }
     }
 }
 
-fn post(checkout: &Checkout, context: &str, description: &str) -> Result<(), Report> {
-    let output = Command::new("gh")
-        .args(["api", "--method", "POST"])
-        .arg(format!(
-            "repos/{}/statuses/{}",
-            checkout.repository, checkout.head
-        ))
-        .args(["-f", "state=success"])
-        .args(["-f", &format!("context={context}")])
-        .args(["-f", &format!("description={description}")])
-        .output()
-        .context("could not run gh")?;
-    if !output.status.success() {
-        bail!(
-            "could not post {context} on {}: {}\nis the commit pushed?",
-            &checkout.head[..10],
-            String::from_utf8_lossy(&output.stderr).trim()
-        );
-    }
-    Ok(())
-}
-
 fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool, Report> {
-    let checkout = checkout::prepare(&source_root()?, base_branch)?;
+    let base = if post_statuses {
+        Base::PullRequest
+    } else {
+        Base::Tip
+    };
+    let checkout = checkout::prepare(&source_root()?, base_branch, base)?;
     eprintln!(
         "attesting {} merged with origin/{base_branch} at {} in {}",
         &checkout.head[..10],
@@ -307,6 +291,14 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         verdicts.push((check, session.run(check)?));
     }
 
+    // A pass posted for this commit earlier no longer holds for a check that
+    // fails now.
+    let posted = if post_statuses {
+        github::newest_statuses(&checkout.repository, &checkout.head)?
+    } else {
+        BTreeMap::new()
+    };
+
     println!();
     let mut all_passed = true;
     for (check, verdict) in &verdicts {
@@ -316,9 +308,26 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
             }
             Verdict::Failed { step } => {
                 all_passed = false;
+                let context = format!("{}{}", manifest.status_prefix, check.id);
+                let withdrawn =
+                    posted.get(&context.to_lowercase()).map(String::as_str) == Some("success");
+                if withdrawn {
+                    github::post_status(
+                        &checkout.repository,
+                        &checkout.head,
+                        "failure",
+                        &context,
+                        &format!("`{step}` failed on the attesting machine"),
+                    )?;
+                }
                 println!(
-                    "FAIL  {}: `{step}` failed; its job will run in PR CI",
-                    check.id
+                    "FAIL  {}: `{step}` failed; its job will run in PR CI{}",
+                    check.id,
+                    if withdrawn {
+                        " (withdrew the earlier attestation)"
+                    } else {
+                        ""
+                    }
                 );
             }
             Verdict::Unavailable(why) => {
@@ -327,7 +336,13 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
             Verdict::Passed { description } => {
                 let context = format!("{}{}", manifest.status_prefix, check.id);
                 if post_statuses {
-                    post(&checkout, &context, description)?;
+                    github::post_status(
+                        &checkout.repository,
+                        &checkout.head,
+                        "success",
+                        &context,
+                        description,
+                    )?;
                     println!(
                         "pass  {}: posted {context} on {}",
                         check.id,

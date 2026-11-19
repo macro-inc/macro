@@ -236,10 +236,9 @@ impl Machine<'_> {
         }
 
         eprintln!("▶ entering the `{shell}` dev shell");
-        let output = Command::new("nix")
+        let output = crate::checkout::in_repository("nix", &self.workspace)
             .args(["print-dev-env", "--accept-flake-config"])
             .arg(format!(".#{shell}"))
-            .current_dir(&self.workspace)
             .stderr(std::process::Stdio::inherit())
             .output()
             .context(

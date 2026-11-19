@@ -8,17 +8,21 @@ those jobs.
 
 ## How it works
 
-`run` builds the merge of `HEAD` with `origin/main` in a checkout under
+`run` builds the merge of `HEAD` with `main` in a checkout under
 `~/.cache/macro-attest/`, reads `.github/attestable-checks.json` from that
 merge, decides what `PR CI` would run (the caller's path filters, then each
 workflow's `path-check`), runs each check's steps in the Nix dev shell, and
 with `--post` posts `fp=<fingerprint> in=<digest> base=<sha>` for each pass.
+With `--post` the base is the one in GitHub's merge commit for the open pull
+request, and the local merge must be the same tree; `PR CI` accepts the status
+for that base only.
 
 ## Start here
 
 - `src/main.rs`: the order of decisions for one check, and what is posted.
 - `src/runner.rs`: how a job's steps run, and what differs from a runner.
 - `src/checkout.rs`: the merge checkout and why it is not a worktree.
+- `src/github.rs`: what is asked of GitHub through `gh`.
 
 ## Scope
 
@@ -43,6 +47,8 @@ with `--post` posts `fp=<fingerprint> in=<digest> base=<sha>` for each pass.
   restored before every job, and takes its shallow boundary from the source.
 - The checkout reads the source repository's objects through alternates:
   don't write refs or objects into the source from here.
+- Run git through `checkout::in_repository`. A git hook exports `GIT_DIR`, and
+  the checkout's forced restore would otherwise land in the developer's clone.
 
 ## Related
 

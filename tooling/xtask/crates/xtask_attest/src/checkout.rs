@@ -7,6 +7,11 @@
 //! attestation is for the commit, not for uncommitted edits, and a job's
 //! steps fetch, clean and rewrite files as they would on a runner.
 //!
+//! Which commit of the base branch goes into the merge decides what is
+//! tested. A run that will post takes the one in the pull request's merge
+//! commit on GitHub ([`Base::PullRequest`]) and refuses a merge whose tree
+//! differs from GitHub's, so the attestation is for the tree `PR CI` runs.
+//!
 //! The checkout borrows the source repository's objects (git alternates), so
 //! it costs no clone, but it has its own refs, its own shallow boundary and
 //! its own build directories. One lock per source repository lets one
@@ -20,6 +25,34 @@ use std::{
 
 use rootcause::{option_ext::OptionExt, prelude::*};
 use sha2::{Digest, Sha256};
+
+use crate::github;
+
+#[cfg(test)]
+mod test;
+
+/// Variables that point git at a repository other than the one in its
+/// working directory. A git hook exports them; left set, the checkout's
+/// forced restore would land in the developer's own clone.
+const GIT_LOCATION: &[&str] = &[
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_PREFIX",
+];
+
+/// Which commit of the base branch the merge is built on.
+pub enum Base {
+    /// The branch's tip on the remote now. For a run that posts nothing.
+    Tip,
+    /// The one in the merge commit GitHub built for the open pull request
+    /// whose head is `HEAD`: the tree `PR CI` tests.
+    PullRequest,
+}
 
 /// The merge of a commit with its base, ready to run checks on.
 pub struct Checkout {
@@ -42,11 +75,21 @@ pub struct Checkout {
     _lock: File,
 }
 
+/// A command that acts on the repository `dir` is in, whatever repository the
+/// caller's environment names.
+pub fn in_repository(program: &str, dir: &Path) -> Command {
+    let mut command = Command::new(program);
+    command.current_dir(dir);
+    for variable in GIT_LOCATION {
+        command.env_remove(variable);
+    }
+    command
+}
+
 /// Run git and return its trimmed stdout.
 pub fn git(dir: &Path, args: &[&str]) -> Result<String, Report> {
-    let output = Command::new("git")
+    let output = in_repository("git", dir)
         .args(args)
-        .current_dir(dir)
         .output()
         .context("could not run git")?;
     if !output.status.success() {
@@ -128,6 +171,17 @@ impl Checkout {
     /// removed, history as the source has it. Ignored files (build output,
     /// installed packages) stay, as they do on a runner's cache volume.
     pub fn restore(&self) -> Result<(), Report> {
+        // What follows discards changes: only ever in the checkout itself.
+        let top = PathBuf::from(git(&self.dir, &["rev-parse", "--show-toplevel"])?);
+        let own = self.dir.canonicalize().context("the checkout is gone")?;
+        if top.canonicalize().ok().as_ref() != Some(&own) {
+            bail!(
+                "git works on {} from {}; refusing to restore it",
+                top.display(),
+                self.dir.display()
+            );
+        }
+
         take_shallow_boundary(&self.dir, &self.common_dir)?;
         git(
             &self.dir,
@@ -140,7 +194,7 @@ impl Checkout {
 
 /// Build the merge of `HEAD` with the remote's `base_branch` and check it out.
 /// `source` is any directory of the repository the commit lives in.
-pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
+pub fn prepare(source: &Path, base_branch: &str, base: Base) -> Result<Checkout, Report> {
     let head = git(source, &["rev-parse", "HEAD"])?;
     let common_dir = PathBuf::from(git(
         source,
@@ -155,8 +209,20 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
         );
     }
 
+    let repository = repository_of(&remote_url)?;
     git(source, &["fetch", "--quiet", "origin", base_branch])?;
-    let base = git(source, &["rev-parse", &format!("origin/{base_branch}")])?;
+    let github_merge = match base {
+        Base::Tip => None,
+        Base::PullRequest => Some(github::pull_request_merge(&repository, &head, base_branch)?),
+    };
+    let base = match &github_merge {
+        Some(merge) => merge.base.clone(),
+        None => git(source, &["rev-parse", &format!("origin/{base_branch}")])?,
+    };
+    git(source, &["cat-file", "-e", &format!("{base}^{{commit}}")]).context(format!(
+        "this clone does not have {base_branch}'s commit {}, which the pull request's merge commit is built on",
+        &base[..10]
+    ))?;
 
     let cache = cache_dir(&common_dir)?;
     std::fs::create_dir_all(&cache).context(format!("could not create {}", cache.display()))?;
@@ -175,7 +241,19 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
         "{} does not merge cleanly with origin/{base_branch}; PR CI could not run on it either",
         &head[..10]
     ))?;
-    let merge = Command::new("git")
+    if let Some(merge) = &github_merge
+        && merge.tree != tree
+    {
+        bail!(
+            "this machine's merge of {} with {} is tree {}, but GitHub's merge commit for #{} is tree {}; attesting it would vouch for another tree",
+            &head[..10],
+            &base[..10],
+            &tree[..10],
+            merge.number,
+            &merge.tree[..10]
+        );
+    }
+    let merge = in_repository("git", &dir)
         .args(["commit-tree", &tree, "-p", &base, "-p", &head, "-m"])
         .arg(format!("Merge {head} into {base}"))
         .envs([
@@ -184,7 +262,6 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
             ("GIT_COMMITTER_NAME", "cargo x attest"),
             ("GIT_COMMITTER_EMAIL", "attest@localhost"),
         ])
-        .current_dir(&dir)
         .output()
         .context("could not run git commit-tree")?;
     if !merge.status.success() {
@@ -221,7 +298,7 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
         base,
         merge,
         base_branch: base_branch.to_owned(),
-        repository: repository_of(&remote_url)?,
+        repository,
         shallow,
         changed_files,
         _lock: lock,
