@@ -355,11 +355,12 @@ let configured: Options = {
   },
   retire: async () => {},
 };
+// Native CRM email lists can restore REST pages independently of owner startup.
+// Web's persisted CRM reads observe the owner before their ready handshake.
+const allowEarlyAccess = !isTauri();
 export const crmAccessAuthority = createCrmAccessAuthority({
-  hint: startupAuthorityHint,
-  // Native-mobile Soup persistence can publish independently of owner startup.
-  // Web's normalized reads observe the owner before their ready handshake.
-  earlyProof: !isTauri(),
+  hint: allowEarlyAccess ? startupAuthorityHint : undefined,
+  earlyProof: allowEarlyAccess,
   initialize: (generation) => configured.initialize?.(generation),
   restore: (authority) => configured.restore?.(authority),
   fetchProof: (timeoutMs) => configured.fetchProof(timeoutMs),

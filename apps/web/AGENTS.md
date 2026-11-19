@@ -59,8 +59,8 @@ a stale generation hint changes only new write stamps: keep in-memory responses
 and recover rejected copied writes with fresh reads of their own queries. A
 changed account or policy retires visible content normally. Mirrors may lag
 across windows and never grant admission or replace the owner's fresh generation
-after reset. A ready allowed hint for the signed-in account may open CRM UI
-before the owner arrives; denied or mismatching hints stay pending. A missing
+after reset. On web, a ready allowed hint for the signed-in account may open CRM
+UI before the owner arrives; denied or mismatching hints stay pending. A missing
 hint requires the web's early server proof or the normal owner baseline.
 Keep `crm-access-authority.ts` as the policy state machine and
 `crm-access-cache.ts` as detection and visible/persisted retirement glue.

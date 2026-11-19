@@ -97,15 +97,17 @@ A deny-then-grant cycle during startup can return to the same account, team and
 allowed status. In-memory bodies fetched under that same access remain visible:
 they reveal nothing the member cannot currently access, with only possible
 staleness covered by normal refetching. Copied writes still require an exact
-generation match at the owner. A ready allowed mirror for the signed-in account
-may open CRM UI before storage is ready. On web, a missing mirror and unknown
+generation match at the owner. On web, a ready allowed mirror for the signed-in
+account may open CRM UI before storage is ready. A missing mirror and unknown
 owner also start a short, UI-only server proof in parallel with storage. Its
 result is bound to that login and host and cannot override an owner observation.
 It never commits policy: the normal proof starts after reading the owner's
 generation and commits under that generation check. This first launch uses two
-permission reads; returning launches normally use one. Native keeps the owner
-baseline gate because independent Soup persistence can restore before it. None
-of these UI paths changes storage admission or server authorization.
+permission reads; returning launches normally use one. Native uses neither early
+UI path because CRM email-list REST pages can restore independently from IndexedDB
+before the owner finishes interrupted cleanup. Its ready allowed local owner
+opens CRM without waiting for network proof. None of these UI paths changes
+storage admission or server authorization.
 
 An in-flight document or file load superseded by retirement retries its complete
 load once, from its source identity with fresh credentials. This includes direct

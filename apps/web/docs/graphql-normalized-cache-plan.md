@@ -947,14 +947,16 @@ First allowed/team-less proofs, first account binding without a policy, and
 unchanged ready boot/focus proofs without failed cleanup do not advance the owner
 generation or refetch. Unchanged proofs still retry failed local cleanup.
 
-A ready allowed mirror can open CRM UI before storage. On web with no mirror or
+On web, a ready allowed mirror can open CRM UI before storage. With no mirror or
 owner snapshot, a short UI-only proof runs in parallel with initialization and
 may also open CRM. Login/host changes and owner observations fence its completion;
 denial, unfinished cleanup and mismatching accounts override it. Only a separate
 proof dispatched after reading the owner generation can commit durable policy.
 This successful missing-mirror launch makes two permission reads, versus one on
-a normal returning launch with a valid mirror. Native retains the baseline gate
-because independent Soup persistence can restore before owner readiness.
+a normal returning launch with a valid mirror. Native uses neither early UI
+path: CRM email-list REST pages can restore independently from IndexedDB before
+the owner finishes interrupted cleanup. A ready allowed local owner still opens
+native CRM without waiting for a network proof.
 
 The shared owner persists the new policy and generation before selective
 retirement. The application adapter removes CRM records, derived email and
