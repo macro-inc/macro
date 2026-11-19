@@ -322,10 +322,11 @@ today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and
 with old Home beside it.
 
 Under its header (New Chat, then the tab's tools) New Home has Recent and
-Notifications tabs, icon-only when the list is narrower than 280px; the
-Notifications tab carries the rail's unread dot. Switching tabs is a history
-entry. `1` is Recent, `2` and `3` are Notifications at All and Unread, and
-Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
+Notifications tabs, labels only, or icons only when the list is narrower
+than 280px; the Notifications tab carries the rail's unread dot. Switching
+tabs is a history entry and keeps the list's width: both tabs share one
+saved width, which starts from old Home's. `1` is Recent, `2` and `3` are
+Notifications at All and Unread, and Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
 while nothing is open; a chat started from Notifications opens on Recent.
 
 - **Recent** is Home's list, rows and tools (Filter, Search, collapse) fed only
@@ -335,7 +336,7 @@ while nothing is open; a chat started from Notifications opens on Recent.
   tabs and Display options (sliders) in place of the settings button:
   **Condensed** (kept per user) and **Notification settings…**. Condensed
   rows are Home's rows for the same entity (icon and name; "who in #channel"
-  for a reply; "who commented on" for a comment); on hover the time shows
+  for any row about a thread: replies, mentions, reactions; "who commented on" for a comment); on hover the time shows
   and Mark done takes the unread dot's place. Condensed rows sit under Home's
   date dividers, and a condensed stack stays one row.
 
