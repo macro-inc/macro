@@ -5,6 +5,7 @@ import { type BaseFetchErrorCode, statusError } from '@core/util/safeFetch';
 import { ok } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -16,6 +17,7 @@ import {
 } from './purchase-refusal';
 
 export type {
+  AgentAvatar,
   AgentVoice,
   CreateTeamAgent,
   TeamAgent,
@@ -86,15 +88,6 @@ async function setVoiceError(
 const voiceUrl = (agentUserId: string) =>
   `${base}/${encodeURIComponent(agentUserId)}/voice`;
 
-/**
- * An agent's picture: a face with the PNG drawn from it (`url` null when that
- * PNG could not be saved), or a photo with no face.
- */
-export type TeamAgentAvatar = {
-  face: { v: 1; seed: string; pins: Partial<Record<string, number>> } | null;
-  url: string | null;
-};
-
 /** The caller's current team's agent teammates. Writes need team admin. */
 export const teamAgentsClient = {
   list: () => fetchWithToken<TeamAgents>(base),
@@ -123,11 +116,7 @@ export const teamAgentsClient = {
     return result;
   },
   /** Replaces the agent's picture; team admins only. */
-  setAvatar: (
-    agentUserId: string,
-    avatar: TeamAgentAvatar,
-    signal?: AbortSignal
-  ) =>
+  setAvatar: (agentUserId: string, avatar: AgentAvatar, signal?: AbortSignal) =>
     fetchWithToken(`${base}/${encodeURIComponent(agentUserId)}/avatar`, {
       method: 'PUT',
       signal,

@@ -33,8 +33,7 @@ export type ProfilePictureItem = {
 /** A cache entry from one row of `POST /user/profile_pictures`. */
 function pictureItem(picture: UserProfilePicture): ProfilePictureItem {
   // A face-only agent may have no PNG yet, so the url can be null.
-  const face =
-    'avatar_face' in picture ? parseAgentFace(picture.avatar_face) : undefined;
+  const face = parseAgentFace(picture.avatar_face);
   return {
     _createdAt: new Date(),
     id: picture.id,

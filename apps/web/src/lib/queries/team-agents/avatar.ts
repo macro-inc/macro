@@ -1,10 +1,7 @@
 import { refreshProfilePicture } from '@core/signal/profilePicture';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
-import {
-  type TeamAgentAvatar,
-  teamAgentsClient,
-} from '@service-auth/team-agents';
+import { type AgentAvatar, teamAgentsClient } from '@service-auth/team-agents';
 import {
   type MutationFunctionContext,
   useMutation,
@@ -17,7 +14,7 @@ import {
 } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 
-type SetAgentAvatarArgs = { userId: string; avatar: TeamAgentAvatar };
+type SetAgentAvatarArgs = { userId: string; avatar: AgentAvatar };
 
 function setAgentAvatar(
   { userId, avatar }: SetAgentAvatarArgs,
