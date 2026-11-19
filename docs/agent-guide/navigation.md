@@ -1290,18 +1290,23 @@ day before"). The routine's page and the draft's review list each definition
 after the steps under **Sub-routines** (**Scheduled once per item by this
 routine’s runs**): its title, the name its code schedules it by, **Each one is
 given** with each input's label and type, and its steps, edited like the
-routine's own (without the **Then…** box) and saved with the routine. A run's
+routine's own and saved with the routine. Definitions have manual step editing
+and can remove their connected apps. A definition with apps needs an **Ask AI**
+step. A run's
 code calls `macro.routines.schedule` with a trigger and the inputs; each copy
 it makes is a sub-routine as above that stores only the definition's name and
-those values. A copy's page shows **Runs “<title>” from <routine>. Its steps
-are edited there, and an edit reaches this routine until it runs.**, the
+those values. A copy's page shows **Runs “<title>” from <routine>. Each run uses
+the current definition.**, the
 values under **Given**, **Edit in <routine>**, which opens the parent, and the
-definition's steps read-only, as the copy will run them: an edit to the
-definition reaches every copy that hasn't run. If the parent no longer
-defines it, the page says so and the copy fails when it runs. **Keep as my
-routine** on a copy writes the definition's steps and its values into it
-first. With the `enable-sub-routines` flag off (PostHog), a routine with
-definitions can't be saved and runs schedule nothing.
+definition's steps read-only. Expand **Ask AI** to read its full instructions
+and select **Show code** to read a code step's source. Recurring copies resolve
+the definition again on each run. If the parent no longer defines it, the page
+says so and the copy fails when it runs. **Keep as my routine** is available
+when the definition exists. It writes the definition's steps and input values
+into the copy and makes it standalone. The owner's `enable-sub-routines` flag
+is required to schedule copies, create tasks with definitions or program input
+values, or change those tasks. A rename can still save the existing task
+unchanged.
 
 The list's top bar has **Routines** with **All** / **On** tabs (each with a
 count) on the left and **New** and search on the right; **Cmd/Ctrl+F** focuses
@@ -1350,15 +1355,16 @@ started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
 (the routine page's copy: same steps, triggers, description, run visibility and
 on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
 toast whose **Open** opens the duplicate) and, on a sub-routine, **Keep as my
-routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
-**Share** for publishing eligible templates; then **Delete**, which confirms
-first and names the sub-routines deleted with it. A routine someone else owns
-offers the open entries, **Copy Link** and **Copy ID**. A scheduled copy that
-reads its parent's definition has **Duplicate** disabled on its page, and
-duplicating it from the list is refused. On a phone a long press opens the
-same actions in a drawer under the routine's name, without the split and tab
-entries, in Agents and in **Settings → Routines** alike. Renaming and changing
-the icon stay on the routine's page.
+routine** (a scheduled copy offers it while its parent's definition exists);
+**Copy Link**, **Copy ID** and, with `enable-routine-sharing`, **Share** for
+publishing eligible templates; then **Delete**, which confirms first and names
+the sub-routines deleted with it. A routine someone else owns offers the open
+entries, **Copy Link** and **Copy ID**. A scheduled copy that reads its
+parent's definition can be duplicated only after **Keep as my routine** makes
+it standalone. On a phone a long press opens the same actions in a drawer under
+the routine's name, without the split and tab entries, in Agents and in
+**Settings → Routines** alike. Renaming and changing the icon stay on the
+routine's page.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's

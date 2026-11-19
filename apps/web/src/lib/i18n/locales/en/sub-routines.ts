@@ -38,7 +38,7 @@ export default {
   inputNumber: 'number',
   inputBoolean: 'yes or no',
   copySteps:
-    'Runs “{{title}}” from {{parent}}. Its steps are edited there, and an edit reaches this routine until it runs.',
+    'Runs “{{title}}” from {{parent}}. Each run uses the current definition.',
   copyStepsParentGone: 'Runs “{{title}}” from the routine that created it.',
   copyDefinitionGone:
     'Its routine no longer defines this, so it fails when it runs.',

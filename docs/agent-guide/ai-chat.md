@@ -1056,17 +1056,20 @@ adds a step at the end: AI writes it as code whenever code can do it
 (sending a message, changing items, with AI judging or writing the text
 inside the code) and as Ask AI only for open-ended work such as research,
 and a line says which and why, with **Ask AI each run instead** / **Write it once instead**
-and **Undo**. A closed step's line reads its sentence with the values
+and **Undo**. Definitions and standalone programs with stored input values
+offer manual step editing. A closed step's line reads its sentence with the values
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they
 start with an Ask AI step instead. When an SDK release breaks a routine's
 code and AI's update fails its checks, Macro pauses routines that run code
-in their own steps. An Ask AI parent with code only in its sub-routine
-definitions stays enabled. Copies that need the broken code fail until it
-is updated. A paused routine's Overview leads with **Paused: its code needs
-an update** and shows the reason. For a proposal that changes its own code steps,
-**Review the update** shows the changed steps and **Approve and resume**
-saves the update, checks it again and turns the routine on.
+in their own steps, and a paused routine's Overview leads with **Paused: its
+code needs an update** and shows the reason. A routine with code only in its
+sub-routine definitions stays active and shows **Its sub-routines’ code needs
+an update**; copies that need the broken code fail until it is updated.
+**Review the update** shows each changed step, including steps inside
+definitions. Approval waits for autosave and holds editing and activation
+controls while checking and saving. **Approve and resume** saves the update,
+checks it again and also turns a paused routine on.
 
 ## Routine run notifications and failures
 

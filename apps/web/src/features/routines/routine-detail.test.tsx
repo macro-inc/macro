@@ -1457,7 +1457,7 @@ describe('sub-routines defined once', () => {
     render(() => <Routine />);
     expect(
       screen.getByText(
-        'Runs “Remind me” from Due reminders. Its steps are edited there, and an edit reaches this routine until it runs.'
+        'Runs “Remind me” from Due reminders. Each run uses the current definition.'
       )
     ).toBeTruthy();
     const values = screen.getByRole('definition');
