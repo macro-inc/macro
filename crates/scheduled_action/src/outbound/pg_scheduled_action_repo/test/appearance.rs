@@ -259,9 +259,20 @@ async fn chosen_by_owner(pool: &PgPool, id: Uuid) -> bool {
     .unwrap()
 }
 
-/// Puts a routine back as it was before `appearance_chosen_by_owner`: its
-/// look as stored, and no choice recorded.
-async fn as_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
+/// Forgets that the owner chose `id`'s look, as before
+/// `appearance_chosen_by_owner`, keeping the look as stored.
+async fn as_before_the_column(pool: &PgPool, id: Uuid) {
+    sqlx::query!(
+        "UPDATE scheduled_action SET appearance_chosen_by_owner = false WHERE id = $1",
+        id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// Stores `appearance` on `id` as a write before the column did.
+async fn stored_before_the_column(pool: &PgPool, id: Uuid, appearance: Option<serde_json::Value>) {
     sqlx::query!(
         "UPDATE scheduled_action SET appearance = $2, appearance_chosen_by_owner = false WHERE id = $1",
         id,
@@ -287,28 +298,39 @@ async fn the_backfill_marks_every_look_the_owner_set_before_the_column(pool: PgP
     let [colored_one, reset, never, blank] = routines[..] else {
         panic!("four routines were created");
     };
-    as_before_the_column(&pool, colored_one, Some(json!({ "color": "blue" }))).await;
-    // Reset to no icon through the endpoint, which recorded both changes.
+    stored_before_the_column(&pool, colored_one, Some(json!({ "color": "blue" }))).await;
+    // Reset to no icon through the endpoint, which recorded both changes and
+    // stored the look it wrote for none.
     for look in [colored(AppearanceColor::Red), EntityAppearance::default()] {
         repo.set_appearance(change(reset, look, AppearanceChooser::Owner))
             .await
             .unwrap();
     }
-    as_before_the_column(&pool, reset, None).await;
-    as_before_the_column(&pool, never, None).await;
-    as_before_the_column(&pool, blank, Some(json!({ "icon": null, "color": null }))).await;
+    as_before_the_column(&pool, reset).await;
+    assert_eq!(
+        repo.get_action(&reset).await.unwrap().unwrap().appearance,
+        EntityAppearance::default(),
+        "only its activity says the owner chose"
+    );
+    stored_before_the_column(&pool, never, None).await;
+    stored_before_the_column(&pool, blank, Some(json!({ "icon": null, "color": null }))).await;
 
-    for _ in 0..2 {
-        sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
-            .execute(&pool)
-            .await
-            .unwrap();
-        assert!(chosen_by_owner(&pool, colored_one).await, "a look it has");
-        assert!(chosen_by_owner(&pool, reset).await, "a look reset to none");
-        assert!(!chosen_by_owner(&pool, never).await, "never given a look");
-        assert!(
-            !chosen_by_owner(&pool, blank).await,
-            "a look with nothing in it"
-        );
-    }
+    let marked = sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(marked.rows_affected(), 2);
+    assert!(chosen_by_owner(&pool, colored_one).await, "a look it has");
+    assert!(chosen_by_owner(&pool, reset).await, "a look reset to none");
+    assert!(!chosen_by_owner(&pool, never).await, "never given a look");
+    assert!(
+        !chosen_by_owner(&pool, blank).await,
+        "a look with nothing in it"
+    );
+
+    let again = sqlx::raw_sql(MARK_OWNER_CHOSEN_SQL)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(again.rows_affected(), 0, "a second run changes nothing");
 }
