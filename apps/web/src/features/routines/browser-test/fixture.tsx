@@ -29,11 +29,7 @@ function webhookState() {
     load: () => {},
     create: () => {
       setWebhook({ hookId: HOOK, createdAt: '2026-11-07T09:00:00Z' });
-      setCreated({
-        url: `${ADDRESS}/${SECRET}`,
-        bearerUrl: ADDRESS,
-        secret: SECRET,
-      });
+      setCreated({ url: ADDRESS, secret: SECRET });
     },
     remove: () => {
       setWebhook(null);

@@ -6,7 +6,7 @@ export type RoutineWebhookState = {
     | null
     | undefined;
   /** The URL just made, with its secret: shown only until the panel closes. */
-  created: { url: string; bearerUrl: string; secret: string } | undefined;
+  created: { url: string; secret: string } | undefined;
   failed: boolean;
   pending: boolean;
   /** Loads the URL until the calling owner is disposed. */

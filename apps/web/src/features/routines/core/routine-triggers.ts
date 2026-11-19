@@ -336,7 +336,7 @@ export const routineEvents: {
     label: 'Webhook received',
     group: 'Webhooks',
     description:
-      'Another app or script POSTs text to this routine’s secret URL, such as JSON, which code steps read as JSON.',
+      'Another app or script POSTs text, such as JSON, to this routine’s URL with its secret; code steps read JSON as JSON.',
   },
 ];
 

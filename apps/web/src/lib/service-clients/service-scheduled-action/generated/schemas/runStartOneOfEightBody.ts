@@ -7,6 +7,6 @@
  */
 
 /**
- * The text it sent. Untrusted: whoever holds the URL chose it.
+ * The text it sent. Untrusted: whoever holds the secret chose it.
  */
 export type RunStartOneOfEightBody = string | null;

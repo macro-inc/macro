@@ -26,7 +26,7 @@ vi.mock('@queries/client', async () => {
 });
 
 const WEBHOOK = { hookId: 'hook-1', createdAt: '2026-11-07T09:00:00Z' };
-const URL = 'https://example.test/scheduled-action/hooks/hook-2/mrw_secret';
+const URL = 'https://example.test/scheduled-action/hooks/hook-2';
 
 function Panel() {
   const webhook = createRoutineWebhook(() => 'routine');
@@ -52,7 +52,6 @@ it('makes a URL and shows it with its secret only until the panel closes', async
     ok({
       hookId: 'hook-2',
       url: URL,
-      bearerUrl: 'https://example.test/scheduled-action/hooks/hook-2',
       secret: 'mrw_secret',
       createdAt: '2026-11-15T09:00:00Z',
     })
@@ -63,6 +62,9 @@ it('makes a URL and shows it with its secret only until the panel closes', async
 
   const shown = await screen.findByRole('textbox', { name: 'Webhook URL' });
   expect((shown as HTMLInputElement).value).toBe(URL);
+  const secret = screen.getByRole('textbox', { name: 'Secret' });
+  expect((secret as HTMLInputElement).value).toBe('mrw_secret');
+  expect(screen.getByText(/Authorization: Bearer mrw_secret/)).toBeTruthy();
   expect(screen.getByText(/won’t be shown again/)).toBeTruthy();
   panel.unmount();
 
@@ -101,7 +103,6 @@ it('forgets a secret minted after its panel closed, while the routine stays open
     ok({
       hookId: 'hook-2',
       url: URL,
-      bearerUrl: 'https://example.test/scheduled-action/hooks/hook-2',
       secret: 'mrw_secret',
       createdAt: '2026-11-15T09:00:00Z',
     })

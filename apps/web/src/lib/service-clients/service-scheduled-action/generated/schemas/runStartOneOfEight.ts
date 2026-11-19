@@ -13,7 +13,7 @@ import type { RunStartOneOfEightKind } from './runStartOneOfEightKind';
  * Something POSTed to its webhook URL.
  */
 export type RunStartOneOfEight = {
-  /** The text it sent. Untrusted: whoever holds the URL chose it. */
+  /** The text it sent. Untrusted: whoever holds the secret chose it. */
   body?: RunStartOneOfEightBody;
   /** The sender's `Content-Type`, when it sent one. */
   content_type?: RunStartOneOfEightContentType;

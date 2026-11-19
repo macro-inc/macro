@@ -92,7 +92,7 @@ export function createRoutineWebhook(
       webhook: query.isPending ? undefined : query.data,
       created:
         fresh && fresh.scheduleId === id
-          ? { url: fresh.url, bearerUrl: fresh.bearerUrl, secret: fresh.secret }
+          ? { url: fresh.url, secret: fresh.secret }
           : undefined,
       failed: query.isError || create.isError || remove.isError,
       pending: create.isPending || remove.isPending,

@@ -558,8 +558,9 @@ await routine.update({
 ```
 
 A webhook trigger starts a run when another app or script POSTs to the
-routine's secret URL. The owner makes, replaces and deletes the URL on the
-routine's page in the app; the SDK can't, since anyone holding it can start runs.
+routine's URL with its secret as a bearer token. The owner makes, replaces and
+deletes the URL and secret on the routine's page in the app; the SDK can't,
+since anyone holding the secret can start runs.
 `match` tests a JSON body, and a code step reads it as
 `trigger.item.webhook.json` (other text as `trigger.item.webhook.body`):
 

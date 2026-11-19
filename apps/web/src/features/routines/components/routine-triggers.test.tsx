@@ -146,7 +146,7 @@ describe('routine triggers on the routine page', () => {
     press(item(/^Webhook received/), 'Enter');
     const panel = screen.getByRole('dialog', { name: 'Add trigger' });
     expect(
-      within(panel).getByText(/POSTs text to this routine’s secret URL/)
+      within(panel).getByText(/POSTs text, such as JSON, to this routine’s URL/)
     ).toBeTruthy();
     fireEvent.click(within(panel).getByRole('button', { name: 'Add trigger' }));
     expect(triggers()).toEqual([

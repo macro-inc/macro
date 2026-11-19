@@ -2641,8 +2641,8 @@ each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
 like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
 GitHub triggers are set on the routine's page, not through these tools. So are
 webhook triggers, which an agent's program can also save through
-`macro.routines`; only the owner makes the webhook's URL, on the routine's
-page, and no agent sees or mints it.
+`macro.routines`; only the owner makes the webhook's URL and secret, on the
+routine's page, and no agent sees or mints them.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a
 new conversation in a split with the skill and the routine already mentioned,

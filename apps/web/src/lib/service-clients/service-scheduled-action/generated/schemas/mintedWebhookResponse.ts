@@ -7,15 +7,13 @@
  */
 
 /**
- * A new webhook URL. Shown this once: Macro keeps only its secret's hash.
+ * A new webhook URL and its secret. The secret is shown this once: Macro
+keeps only its hash.
  */
 export interface MintedWebhookResponse {
-  /** Or POST here with `Authorization: Bearer <secret>`, which keeps the
-secret out of URLs and access logs. */
-  bearerUrl: string;
   createdAt: string;
   hookId: string;
   secret: string;
-  /** POST here to start a run; the secret is in the path. */
+  /** POST here with `Authorization: Bearer <secret>` to start a run. */
   url: string;
 }

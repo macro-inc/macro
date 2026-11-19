@@ -19,8 +19,8 @@ async function copy(text: string) {
 }
 
 /** How to call the URL, for the person to paste into a terminal or script. */
-function curlExample(url: string) {
-  return `curl -X POST '${url}' \\\n  -H 'Content-Type: application/json' \\\n  --data '{"status": "failed", "service": "api"}'`;
+function curlExample(url: string, secret: string) {
+  return `curl -X POST '${url}' \\\n  -H 'Authorization: Bearer ${secret}' \\\n  -H 'Content-Type: application/json' \\\n  --data '{"status": "failed", "service": "api"}'`;
 }
 
 function day(iso: string) {
@@ -52,8 +52,9 @@ function CopyRow(props: { label: string; value: string }) {
 }
 
 /**
- * A webhook trigger's secret URL: made once the routine is saved, shown in
- * full only right after it is made, then replaced or deleted.
+ * A webhook trigger's URL and the secret a sender presents as a bearer token:
+ * made once the routine is saved, the secret shown only right after it is
+ * made, then replaced or deleted.
  */
 export function RoutineWebhookUrl(props: {
   /** Undefined until the routine is saved with a webhook trigger. */
@@ -80,10 +81,13 @@ export function RoutineWebhookUrl(props: {
           {(created) => (
             <div class="grid min-w-0 gap-2">
               <CopyRow label="Webhook URL" value={created().url} />
+              <span class="text-xs font-medium text-ink-muted">Secret</span>
+              <CopyRow label="Secret" value={created().secret} />
               <p class="text-xs text-ink-muted">
-                Copy it now; it won’t be shown again. Anyone with this URL can
-                run this routine with what they send. JSON bodies reach code
-                steps as{' '}
+                Copy the secret now; it won’t be shown again. Send it in the
+                header <code class="font-mono">Authorization: Bearer</code>.
+                Anyone with it can run this routine with what they send. JSON
+                bodies reach code steps as{' '}
                 <code class="font-mono">trigger.item.webhook.json</code>.
               </p>
               <div class="grid min-w-0 gap-1">
@@ -94,26 +98,18 @@ export function RoutineWebhookUrl(props: {
                     tooltip="Copy example"
                     size="sm"
                     variant="ghost"
-                    onClick={() => copy(curlExample(created().url))}
+                    onClick={() =>
+                      copy(curlExample(created().url, created().secret))
+                    }
                   >
                     <CopyIcon class="size-3.5" />
                     Copy
                   </CopyButton>
                 </div>
                 <pre class="max-h-40 min-w-0 overflow-auto whitespace-pre-wrap wrap-anywhere rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs text-ink">
-                  {curlExample(created().url)}
+                  {curlExample(created().url, created().secret)}
                 </pre>
               </div>
-              <details class="grid gap-2 text-xs text-ink-muted">
-                <summary>Keep the secret out of the URL</summary>
-                <p class="py-1">
-                  POST to this address with the header{' '}
-                  <code class="font-mono">Authorization: Bearer</code> and the
-                  secret instead, so it stays out of logs that record URLs.
-                </p>
-                <CopyRow label="Address" value={created().bearerUrl} />
-                <CopyRow label="Secret" value={created().secret} />
-              </details>
             </div>
           )}
         </Match>

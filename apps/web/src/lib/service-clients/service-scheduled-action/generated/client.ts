@@ -95,92 +95,7 @@ export const scheduledActionHealth = async (
 };
 
 /**
- * As the URL with its secret in the path, with the secret sent as `Authorization: Bearer <secret>` instead.
- */
-export type deliverRoutineWebhookWithBearerResponse200 = {
-  data: WebhookDeliveryResponse;
-  status: 200;
-};
-
-export type deliverRoutineWebhookWithBearerResponse202 = {
-  data: WebhookDeliveryResponse;
-  status: 202;
-};
-
-export type deliverRoutineWebhookWithBearerResponse400 = {
-  data: void;
-  status: 400;
-};
-
-export type deliverRoutineWebhookWithBearerResponse404 = {
-  data: void;
-  status: 404;
-};
-
-export type deliverRoutineWebhookWithBearerResponse409 = {
-  data: void;
-  status: 409;
-};
-
-export type deliverRoutineWebhookWithBearerResponse413 = {
-  data: void;
-  status: 413;
-};
-
-export type deliverRoutineWebhookWithBearerResponse429 = {
-  data: void;
-  status: 429;
-};
-
-export type deliverRoutineWebhookWithBearerResponseSuccess = (
-  | deliverRoutineWebhookWithBearerResponse200
-  | deliverRoutineWebhookWithBearerResponse202
-) & {
-  headers: Headers;
-};
-export type deliverRoutineWebhookWithBearerResponseError = (
-  | deliverRoutineWebhookWithBearerResponse400
-  | deliverRoutineWebhookWithBearerResponse404
-  | deliverRoutineWebhookWithBearerResponse409
-  | deliverRoutineWebhookWithBearerResponse413
-  | deliverRoutineWebhookWithBearerResponse429
-) & {
-  headers: Headers;
-};
-
-export type deliverRoutineWebhookWithBearerResponse =
-  | deliverRoutineWebhookWithBearerResponseSuccess
-  | deliverRoutineWebhookWithBearerResponseError;
-
-export const getDeliverRoutineWebhookWithBearerUrl = (hookId: string) => {
-  return `/hooks/${hookId}`;
-};
-
-export const deliverRoutineWebhookWithBearer = async (
-  hookId: string,
-  deliverRoutineWebhookWithBearerBody: unknown | string,
-  options?: RequestInit
-): Promise<deliverRoutineWebhookWithBearerResponse> => {
-  const res = await fetch(getDeliverRoutineWebhookWithBearerUrl(hookId), {
-    ...options,
-    method: 'POST',
-    body: JSON.stringify(deliverRoutineWebhookWithBearerBody),
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: deliverRoutineWebhookWithBearerResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as deliverRoutineWebhookWithBearerResponse;
-};
-
-/**
- * Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.
+ * Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Send the webhook's secret as `Authorization: Bearer <secret>`. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, rotated or removed URL, a missing or wrong secret, or a routine whose owner has webhooks off is 404.
  */
 export type deliverRoutineWebhookResponse200 = {
   data: WebhookDeliveryResponse;
@@ -217,6 +132,11 @@ export type deliverRoutineWebhookResponse429 = {
   status: 429;
 };
 
+export type deliverRoutineWebhookResponse503 = {
+  data: void;
+  status: 503;
+};
+
 export type deliverRoutineWebhookResponseSuccess = (
   | deliverRoutineWebhookResponse200
   | deliverRoutineWebhookResponse202
@@ -229,6 +149,7 @@ export type deliverRoutineWebhookResponseError = (
   | deliverRoutineWebhookResponse409
   | deliverRoutineWebhookResponse413
   | deliverRoutineWebhookResponse429
+  | deliverRoutineWebhookResponse503
 ) & {
   headers: Headers;
 };
@@ -237,17 +158,16 @@ export type deliverRoutineWebhookResponse =
   | deliverRoutineWebhookResponseSuccess
   | deliverRoutineWebhookResponseError;
 
-export const getDeliverRoutineWebhookUrl = (hookId: string, token: string) => {
-  return `/hooks/${hookId}/${token}`;
+export const getDeliverRoutineWebhookUrl = (hookId: string) => {
+  return `/hooks/${hookId}`;
 };
 
 export const deliverRoutineWebhook = async (
   hookId: string,
-  token: string,
   deliverRoutineWebhookBody: unknown | string,
   options?: RequestInit
 ): Promise<deliverRoutineWebhookResponse> => {
-  const res = await fetch(getDeliverRoutineWebhookUrl(hookId, token), {
+  const res = await fetch(getDeliverRoutineWebhookUrl(hookId), {
     ...options,
     method: 'POST',
     body: JSON.stringify(deliverRoutineWebhookBody),
@@ -2268,7 +2188,7 @@ export const getScheduledActionWebhook = async (
 };
 
 /**
- * Mint the routine's webhook URL, replacing any it had: the old URL stops at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.
+ * Mint the routine's webhook URL and secret, replacing any it had: the old ones stop at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.
  */
 export type mintScheduledActionWebhookResponse201 = {
   data: MintedWebhookResponse;

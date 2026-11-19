@@ -949,19 +949,15 @@ export type LeftName = {
 };
 
 /**
- * A new webhook URL. Shown this once: Macro keeps only its secret's hash.
+ * A new webhook URL and its secret. The secret is shown this once: Macro
+ * keeps only its hash.
  */
 export type MintedWebhookResponse = {
-    /**
-     * Or POST here with `Authorization: Bearer <secret>`, which keeps the
-     * secret out of URLs and access logs.
-     */
-    bearerUrl: string;
     createdAt: string;
     hookId: string;
     secret: string;
     /**
-     * POST here to start a run; the secret is in the path.
+     * POST here with `Authorization: Bearer <secret>` to start a run.
      */
     url: string;
 };
@@ -1612,7 +1608,7 @@ export type RunStart = {
     kind: 'manual';
 } | {
     /**
-     * The text it sent. Untrusted: whoever holds the URL chose it.
+     * The text it sent. Untrusted: whoever holds the secret chose it.
      */
     body?: string | null;
     /**
@@ -2269,7 +2265,7 @@ export type ScheduledActionHealthResponses = {
 
 export type ScheduledActionHealthResponse = ScheduledActionHealthResponses[keyof ScheduledActionHealthResponses];
 
-export type DeliverRoutineWebhookWithBearerData = {
+export type DeliverRoutineWebhookData = {
     /**
      * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
      */
@@ -2290,46 +2286,6 @@ export type DeliverRoutineWebhookWithBearerData = {
     url: '/hooks/{hook_id}';
 };
 
-export type DeliverRoutineWebhookWithBearerErrors = {
-    400: unknown;
-    404: unknown;
-    409: unknown;
-    413: unknown;
-    429: unknown;
-};
-
-export type DeliverRoutineWebhookWithBearerResponses = {
-    200: WebhookDeliveryResponse;
-    202: WebhookDeliveryResponse;
-};
-
-export type DeliverRoutineWebhookWithBearerResponse = DeliverRoutineWebhookWithBearerResponses[keyof DeliverRoutineWebhookWithBearerResponses];
-
-export type DeliverRoutineWebhookData = {
-    /**
-     * Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code
-     */
-    body: unknown;
-    headers?: {
-        /**
-         * Up to 255 visible ASCII characters
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path: {
-        /**
-         * The webhook's public id
-         */
-        hook_id: string;
-        /**
-         * The webhook's secret
-         */
-        token: string;
-    };
-    query?: never;
-    url: '/hooks/{hook_id}/{token}';
-};
-
 export type DeliverRoutineWebhookErrors = {
     /**
      * The body is not UTF-8 text, or the key is invalid
@@ -2345,6 +2301,10 @@ export type DeliverRoutineWebhookErrors = {
      * Too many requests, or too many runs waiting
      */
     429: unknown;
+    /**
+     * Webhooks can't be checked right now; retry later
+     */
+    503: unknown;
 };
 
 export type DeliverRoutineWebhookResponses = {

@@ -34,7 +34,7 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
 
   const panel = page.getByRole('dialog', { name: 'Add trigger' });
   await expect(
-    panel.getByText(/POSTs text to this routine’s secret URL/)
+    panel.getByText(/POSTs text, such as JSON, to this routine’s URL/)
   ).toBeVisible();
   await expect(panel.getByText('Only when the JSON body')).toBeVisible();
   // The server makes a URL only for a routine saved with the trigger.
@@ -59,9 +59,13 @@ test('a webhook trigger is added from its own group and gets a URL', async ({
   await expect(saved.getByText('Only when the JSON body')).toBeVisible();
   await saved.getByRole('button', { name: 'Create URL' }).click();
   const url = saved.getByRole('textbox', { name: 'Webhook URL' });
-  await expect(url).toHaveValue(/\/scheduled-action\/hooks\/whk_\w+\/mrw_/);
+  await expect(url).toHaveValue(/\/scheduled-action\/hooks\/whk_\w+$/);
+  await expect(saved.getByRole('textbox', { name: 'Secret' })).toHaveValue(
+    /^mrw_\w+$/
+  );
   await expect(saved.getByText(/won’t be shown again/)).toBeVisible();
   await expect(saved.getByText(/curl -X POST/)).toBeVisible();
+  await expect(saved.getByText(/Authorization: Bearer mrw_/)).toBeVisible();
   await expect(saved.getByText(/application\/json/)).toBeVisible();
   // Nothing on the panel runs past a phone's width.
   const overflow = await saved.evaluate(

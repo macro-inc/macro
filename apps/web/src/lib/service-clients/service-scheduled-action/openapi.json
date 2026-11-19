@@ -31,100 +31,13 @@
     "/hooks/{hook_id}": {
       "post": {
         "tags": ["routine webhooks"],
-        "description": "As the URL with its secret in the path, with the secret sent as `Authorization: Bearer <secret>` instead.",
-        "operationId": "deliver_routine_webhook_with_bearer",
-        "parameters": [
-          {
-            "name": "hook_id",
-            "in": "path",
-            "description": "The webhook's public id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "description": "Up to 255 visible ASCII characters",
-            "required": false,
-            "schema": {
-              "type": ["string", "null"]
-            }
-          }
-        ],
-        "requestBody": {
-          "description": "Any UTF-8 text up to 64 KiB, of any content type; JSON is parsed for the payload tests and code",
-          "content": {
-            "application/json": {
-              "schema": {}
-            },
-            "text/plain": {
-              "schema": {
-                "type": "string"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WebhookDeliveryResponse"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": ""
-          },
-          "404": {
-            "description": ""
-          },
-          "409": {
-            "description": ""
-          },
-          "413": {
-            "description": ""
-          },
-          "429": {
-            "description": ""
-          }
-        }
-      }
-    },
-    "/hooks/{hook_id}/{token}": {
-      "post": {
-        "tags": ["routine webhooks"],
-        "description": "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, wrong, rotated or removed URL is 404.",
+        "description": "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Send the webhook's secret as `Authorization: Bearer <secret>`. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, rotated or removed URL, a missing or wrong secret, or a routine whose owner has webhooks off is 404.",
         "operationId": "deliver_routine_webhook",
         "parameters": [
           {
             "name": "hook_id",
             "in": "path",
             "description": "The webhook's public id",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "token",
-            "in": "path",
-            "description": "The webhook's secret",
             "required": true,
             "schema": {
               "type": "string"
@@ -189,6 +102,9 @@
           },
           "429": {
             "description": "Too many requests, or too many runs waiting"
+          },
+          "503": {
+            "description": "Webhooks can't be checked right now; retry later"
           }
         }
       }
@@ -2150,7 +2066,7 @@
       },
       "post": {
         "tags": ["scheduled actions"],
-        "description": "Mint the routine's webhook URL, replacing any it had: the old URL stops at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.",
+        "description": "Mint the routine's webhook URL and secret, replacing any it had: the old ones stop at once. The response is the only time the secret is shown. Only the routine's owner, signed in as themselves, may call it; agent sessions' code and routine runs are refused.",
         "operationId": "mint_scheduled_action_webhook",
         "parameters": [
           {
@@ -4957,13 +4873,9 @@
       },
       "MintedWebhookResponse": {
         "type": "object",
-        "description": "A new webhook URL. Shown this once: Macro keeps only its secret's hash.",
-        "required": ["hookId", "url", "bearerUrl", "secret", "createdAt"],
+        "description": "A new webhook URL and its secret. The secret is shown this once: Macro\nkeeps only its hash.",
+        "required": ["hookId", "url", "secret", "createdAt"],
         "properties": {
-          "bearerUrl": {
-            "type": "string",
-            "description": "Or POST here with `Authorization: Bearer <secret>`, which keeps the\nsecret out of URLs and access logs."
-          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -4977,7 +4889,7 @@
           },
           "url": {
             "type": "string",
-            "description": "POST here to start a run; the secret is in the path."
+            "description": "POST here with `Authorization: Bearer <secret>` to start a run."
           }
         }
       },
@@ -6010,7 +5922,7 @@
             "properties": {
               "body": {
                 "type": ["string", "null"],
-                "description": "The text it sent. Untrusted: whoever holds the URL chose it."
+                "description": "The text it sent. Untrusted: whoever holds the secret chose it."
               },
               "content_type": {
                 "type": ["string", "null"],

@@ -323,7 +323,6 @@ export const scheduledActionExcluded = [
   // What another app or script calls with the URL's secret; it carries no Macro
   // credentials, so it is no SDK call.
   'deliverRoutineWebhook',
-  'deliverRoutineWebhookWithBearer',
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
