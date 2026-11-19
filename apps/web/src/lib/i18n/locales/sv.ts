@@ -2290,7 +2290,7 @@ export default {
     movePickerSharedWithYou: 'Delade med dig',
     movePickerCreate: 'Ny mapp ”{{name}}”',
     movePickerLoading: 'Läser in mappar…',
-    movePickerEmpty: 'Inga mappar än. Skriv ett namn för att skapa en.',
+    movePickerEmpty: 'Inga mappar. Skriv ett namn för att skapa.',
     movePickerMoving: 'Flyttar…',
     movePickerKeyboardHint:
       '↑ ↓ för att välja · Enter för att flytta · Esc för att avbryta',

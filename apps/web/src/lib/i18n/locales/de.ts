@@ -2345,8 +2345,7 @@ export default {
     movePickerSharedWithYou: 'Mit Ihnen geteilt',
     movePickerCreate: 'Neuer Ordner „{{name}}“',
     movePickerLoading: 'Ordner werden geladen…',
-    movePickerEmpty:
-      'Noch keine Ordner. Geben Sie einen Namen ein, um einen zu erstellen.',
+    movePickerEmpty: 'Noch keine Ordner. Name eingeben.',
     movePickerMoving: 'Wird verschoben…',
     movePickerKeyboardHint:
       '↑ ↓ zum Auswählen · Enter zum Verschieben · Esc zum Abbrechen',
@@ -4247,7 +4246,7 @@ export default {
     groupList: 'Liste gruppieren',
     filterList: 'Liste filtern',
     clearFilters: 'Filter zurücksetzen',
-    showHiddenRoutineRuns: 'Ausgeblendete Routine-Ausführungen anzeigen',
+    showHiddenRoutineRuns: 'Verborgene Läufe zeigen',
     retryOptions: 'Optionen erneut laden',
     filter: 'Filter',
     filters: 'Filter',
@@ -4290,7 +4289,7 @@ export default {
     searchAssignees: 'Bearbeiter suchen...',
     searchAssigneesLabel: 'Bearbeiter suchen',
     loadingTeamMembers: 'Teammitglieder werden geladen…',
-    teamMembersUnavailable: 'Teammitglieder konnten nicht geladen werden.',
+    teamMembersUnavailable: 'Mitglieder nicht verfügbar.',
     createdBy: 'Erstellt von',
     searchCreators: 'Ersteller suchen...',
     searchCreatorsLabel: 'Ersteller suchen',

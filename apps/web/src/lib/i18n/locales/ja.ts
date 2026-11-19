@@ -2222,8 +2222,7 @@ export default {
     movePickerSharedWithYou: '共有されたもの',
     movePickerCreate: '新規フォルダ「{{name}}」',
     movePickerLoading: 'フォルダを読み込み中…',
-    movePickerEmpty:
-      'まだフォルダはありません。名前を入力して作成してください。',
+    movePickerEmpty: 'フォルダはありません。名前を入力して作成',
     movePickerMoving: '移動中…',
     movePickerKeyboardHint: '↑ ↓ で選択 · Enterで移動 · Escでキャンセル',
     movePickerTouchHint: '移動先のフォルダをタップ',

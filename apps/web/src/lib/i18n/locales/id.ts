@@ -2221,7 +2221,7 @@ export default {
     movePickerSharedWithYou: 'Dibagikan dengan Anda',
     movePickerCreate: 'Folder baru “{{name}}”',
     movePickerLoading: 'Memuat folder…',
-    movePickerEmpty: 'Belum ada folder. Ketik nama untuk membuatnya.',
+    movePickerEmpty: 'Belum ada folder. Ketik nama baru.',
     movePickerMoving: 'Memindahkan…',
     movePickerKeyboardHint:
       '↑ ↓ untuk memilih · Enter untuk memindahkan · Esc untuk membatalkan',

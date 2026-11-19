@@ -2285,7 +2285,7 @@ export default {
     movePickerSharedWithYou: 'Jaettu kanssasi',
     movePickerCreate: 'Uusi kansio ”{{name}}”',
     movePickerLoading: 'Ladataan kansioita…',
-    movePickerEmpty: 'Ei vielä kansioita. Luo kansio kirjoittamalla nimi.',
+    movePickerEmpty: 'Ei kansioita. Luo uusi kirjoittamalla nimi.',
     movePickerMoving: 'Siirretään…',
     movePickerKeyboardHint: '↑ ↓ valitse · Enter siirrä · Esc peruuta',
     movePickerTouchHint: 'Siirrä tähän napauttamalla kansiota',

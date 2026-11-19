@@ -2428,7 +2428,7 @@ export default {
     movePickerSharedWithYou: 'Доступно вам',
     movePickerCreate: 'Новая папка «{{name}}»',
     movePickerLoading: 'Загрузка папок…',
-    movePickerEmpty: 'Папок пока нет. Введите имя, чтобы создать.',
+    movePickerEmpty: 'Папок нет. Введите имя, чтобы создать.',
     movePickerMoving: 'Перемещение…',
     movePickerKeyboardHint:
       '↑ ↓ — выбрать · Enter — переместить · Esc — отмена',
@@ -4477,7 +4477,7 @@ export default {
     searchAssignees: 'Поиск исполнителей...',
     searchAssigneesLabel: 'Поиск исполнителей',
     loadingTeamMembers: 'Загрузка участников команды…',
-    teamMembersUnavailable: 'Не удалось загрузить участников команды.',
+    teamMembersUnavailable: 'Участники недоступны.',
     createdBy: 'Автор',
     searchCreators: 'Поиск авторов...',
     searchCreatorsLabel: 'Поиск авторов',

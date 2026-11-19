@@ -2191,7 +2191,7 @@ export default {
     movePickerSharedWithYou: '나와 공유됨',
     movePickerCreate: '새 폴더 “{{name}}”',
     movePickerLoading: '폴더 로드 중…',
-    movePickerEmpty: '아직 폴더가 없습니다. 이름을 입력해 만드세요.',
+    movePickerEmpty: '폴더 없음. 이름을 입력해 만드세요.',
     movePickerMoving: '이동 중…',
     movePickerKeyboardHint: '↑ ↓ 선택 · Enter 이동 · Esc 취소',
     movePickerTouchHint: '폴더를 탭하면 여기로 이동합니다',

@@ -2275,7 +2275,7 @@ export default {
     movePickerSharedWithYou: 'Delt med dig',
     movePickerCreate: 'Ny mappe »{{name}}«',
     movePickerLoading: 'Indlæser mapper…',
-    movePickerEmpty: 'Ingen mapper endnu. Skriv et navn for at oprette en.',
+    movePickerEmpty: 'Ingen mapper. Skriv et navn for at oprette.',
     movePickerMoving: 'Flytter…',
     movePickerKeyboardHint:
       '↑ ↓ for at vælge · Enter for at flytte · Esc for at annullere',

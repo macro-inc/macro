@@ -2233,7 +2233,7 @@ export default {
     movePickerSharedWithYou: 'आपके साथ शेयर किए गए',
     movePickerCreate: 'नया फ़ोल्डर “{{name}}”',
     movePickerLoading: 'फ़ोल्डर लोड हो रहे हैं…',
-    movePickerEmpty: 'अभी तक कोई फ़ोल्डर नहीं। नया बनाने के लिए नाम टाइप करें।',
+    movePickerEmpty: 'कोई फ़ोल्डर नहीं। नाम टाइप करके बनाएं।',
     movePickerMoving: 'ले जाया जा रहा है…',
     movePickerKeyboardHint: '↑ ↓ से चुनें · Enter से ले जाएं · Esc से रद्द करें',
     movePickerTouchHint: 'यहां ले जाने के लिए किसी फ़ोल्डर पर टैप करें',

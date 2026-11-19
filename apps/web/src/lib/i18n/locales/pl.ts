@@ -2423,7 +2423,7 @@ export default {
     movePickerSharedWithYou: 'Udostępnione Tobie',
     movePickerCreate: 'Nowy folder „{{name}}”',
     movePickerLoading: 'Ładowanie folderów…',
-    movePickerEmpty: 'Brak folderów. Wpisz nazwę, aby utworzyć folder.',
+    movePickerEmpty: 'Brak folderów. Wpisz nazwę nowego.',
     movePickerMoving: 'Przenoszenie…',
     movePickerKeyboardHint: '↑ ↓ wybór · Enter przeniesienie · Esc anulowanie',
     movePickerTouchHint: 'Stuknij folder, aby przenieść do niego',

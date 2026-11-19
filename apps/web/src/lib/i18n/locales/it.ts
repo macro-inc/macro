@@ -2369,7 +2369,7 @@ export default {
     movePickerSharedWithYou: 'Condivise con te',
     movePickerCreate: 'Nuova cartella «{{name}}»',
     movePickerLoading: 'Caricamento cartelle…',
-    movePickerEmpty: 'Ancora nessuna cartella. Digita un nome per crearne una.',
+    movePickerEmpty: 'Nessuna cartella. Digita un nome e creala.',
     movePickerMoving: 'Spostamento…',
     movePickerKeyboardHint:
       '↑ ↓ per scegliere · Invio per spostare · Esc per annullare',
