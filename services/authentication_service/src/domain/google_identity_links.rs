@@ -27,7 +27,7 @@ pub struct DueAttempt {
 
 /// What still depends on the identity link a due attempt created.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LinkUse {
+enum LinkUse {
     /// Nothing: release it.
     Unused,
     /// The address has an account of its own, whose sign-in it is, or the
@@ -41,10 +41,18 @@ pub enum LinkUse {
 pub trait IdentityLinkAttempts: Send + Sync {
     type Err: std::fmt::Debug;
     fn due(&self, limit: i64) -> impl Future<Output = Result<Vec<DueAttempt>, Self::Err>> + Send;
-    fn link_use(
+    /// Whether the requester has another attempt for the address past its
+    /// callback, neither refused nor lapsed.
+    fn retry_under_way(
         &self,
         attempt: &DueAttempt,
-    ) -> impl Future<Output = Result<LinkUse, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    /// Whether the address has an account of its own or the requester holds
+    /// a Gmail inbox for it.
+    fn link_backs_something(
+        &self,
+        attempt: &DueAttempt,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
     fn finish(&self, attempt: Uuid) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
@@ -90,6 +98,22 @@ pub async fn release_identity_links<A: IdentityLinkAttempts, R: IdentityLinkRemo
     Ok(round)
 }
 
+/// Reads the retry first: a retry that connects commits its inbox before it
+/// drops its attempt, so one gone by the second read is seen as that inbox.
+async fn link_use<A: IdentityLinkAttempts>(
+    attempts: &A,
+    attempt: &DueAttempt,
+) -> Result<LinkUse, A::Err> {
+    if attempts.retry_under_way(attempt).await? {
+        return Ok(LinkUse::Retrying);
+    }
+    Ok(if attempts.link_backs_something(attempt).await? {
+        LinkUse::Backing
+    } else {
+        LinkUse::Unused
+    })
+}
+
 enum Outcome {
     Released,
     /// Still needed: the attempt is dropped and the link kept.
@@ -105,7 +129,7 @@ async fn release<A: IdentityLinkAttempts, R: IdentityLinkRemover>(
     remover: &R,
     attempt: &DueAttempt,
 ) -> Outcome {
-    let link_use = match attempts.link_use(attempt).await {
+    let link_use = match link_use(attempts, attempt).await {
         Ok(link_use) => link_use,
         Err(error) => {
             tracing::warn!(?error, attempt = %attempt.id, "could not check whether an attempt's identity link is still needed");

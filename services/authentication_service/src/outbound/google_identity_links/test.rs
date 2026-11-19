@@ -90,28 +90,25 @@ async fn a_link_is_still_needed_by_the_addresss_account_or_the_requesters_inbox(
         email: email.into(),
     };
 
-    assert_eq!(
+    assert!(
         attempts
-            .link_use(&attempt("Own@Example.com"))
+            .link_backs_something(&attempt("Own@Example.com"))
             .await
             .unwrap(),
-        LinkUse::Backing,
         "the address's own account signs in with it, whatever the case"
     );
-    assert_eq!(
+    assert!(
         attempts
-            .link_use(&attempt("held@example.com"))
+            .link_backs_something(&attempt("held@example.com"))
             .await
             .unwrap(),
-        LinkUse::Backing,
         "the requester holds the inbox"
     );
-    assert_eq!(
-        attempts
-            .link_use(&attempt("refused@example.com"))
+    assert!(
+        !attempts
+            .link_backs_something(&attempt("refused@example.com"))
             .await
             .unwrap(),
-        LinkUse::Unused,
         "nothing else needs it"
     );
 }
@@ -165,9 +162,8 @@ async fn a_retry_of_the_same_address_defers_the_release_until_it_ends(pool: sqlx
         email: "retried@example.com".into(),
     };
 
-    assert_eq!(
-        attempts.link_use(&due).await.unwrap(),
-        LinkUse::Retrying,
+    assert!(
+        attempts.retry_under_way(&due).await.unwrap(),
         "the retry's /email/init may still connect with the link"
     );
 
@@ -178,9 +174,8 @@ async fn a_retry_of_the_same_address_defers_the_release_until_it_ends(pool: sqlx
     .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(
-        attempts.link_use(&due).await.unwrap(),
-        LinkUse::Unused,
+    assert!(
+        !attempts.retry_under_way(&due).await.unwrap(),
         "a lapsed retry, or another account's attempt, defers nothing"
     );
 
@@ -196,9 +191,8 @@ async fn a_retry_of_the_same_address_defers_the_release_until_it_ends(pool: sqlx
     )
     .await
     .unwrap();
-    assert_eq!(
-        attempts.link_use(&due).await.unwrap(),
-        LinkUse::Unused,
+    assert!(
+        !attempts.retry_under_way(&due).await.unwrap(),
         "a refused retry defers nothing"
     );
 }

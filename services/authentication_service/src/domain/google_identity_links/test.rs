@@ -6,6 +6,10 @@ struct Attempts {
     due: Vec<DueAttempt>,
     needed: Vec<Uuid>,
     retrying: Vec<Uuid>,
+    /// Connects right after its retry is read: the retry is gone and its
+    /// inbox committed by the next read.
+    connects_between_reads: Vec<Uuid>,
+    connected: Mutex<Vec<Uuid>>,
     unfinishable: Vec<Uuid>,
     finished: Mutex<Vec<Uuid>>,
 }
@@ -16,14 +20,15 @@ impl IdentityLinkAttempts for Attempts {
         assert_eq!(limit, 100);
         Ok(self.due.clone())
     }
-    async fn link_use(&self, attempt: &DueAttempt) -> Result<LinkUse, Self::Err> {
-        Ok(if self.needed.contains(&attempt.id) {
-            LinkUse::Backing
-        } else if self.retrying.contains(&attempt.id) {
-            LinkUse::Retrying
-        } else {
-            LinkUse::Unused
-        })
+    async fn retry_under_way(&self, attempt: &DueAttempt) -> Result<bool, Self::Err> {
+        if self.connects_between_reads.contains(&attempt.id) {
+            self.connected.lock().unwrap().push(attempt.id);
+        }
+        Ok(self.retrying.contains(&attempt.id))
+    }
+    async fn link_backs_something(&self, attempt: &DueAttempt) -> Result<bool, Self::Err> {
+        Ok(self.needed.contains(&attempt.id)
+            || self.connected.lock().unwrap().contains(&attempt.id))
     }
     async fn finish(&self, attempt: Uuid) -> Result<(), Self::Err> {
         if self.unfinishable.contains(&attempt) {
@@ -105,5 +110,29 @@ async fn only_unused_links_are_released_and_deferred_or_failed_attempts_stay_due
         *attempts.finished.lock().unwrap(),
         [Uuid::from_u128(1), Uuid::from_u128(2)],
         "an attempt whose release failed or was deferred stays due"
+    );
+}
+
+#[tokio::test]
+async fn a_retry_that_connects_between_the_reads_keeps_the_link() {
+    let attempts = Attempts {
+        due: vec![attempt(1, 11, "retried@example.com")],
+        connects_between_reads: vec![Uuid::from_u128(1)],
+        ..Attempts::default()
+    };
+    let remover = Remover::default();
+
+    let round = release_identity_links(&attempts, &remover).await.unwrap();
+
+    assert_eq!(
+        round,
+        ReleaseRound {
+            kept: 1,
+            ..ReleaseRound::default()
+        }
+    );
+    assert!(
+        remover.removed.lock().unwrap().is_empty(),
+        "the inbox the retry connected keeps the link"
     );
 }

@@ -1,9 +1,7 @@
 //! FusionAuth identity-link removal, and the connect attempts whose Google
 //! identity link is due for release.
 
-use crate::domain::google_identity_links::{
-    DueAttempt, IdentityLinkAttempts, IdentityLinkRemover, LinkUse,
-};
+use crate::domain::google_identity_links::{DueAttempt, IdentityLinkAttempts, IdentityLinkRemover};
 use fusionauth::FusionAuthClient;
 use fusionauth::error::FusionAuthClientError;
 use fusionauth::identity_provider::Link;
@@ -145,10 +143,20 @@ impl IdentityLinkAttempts for PgIdentityLinkAttempts {
         )
     }
 
-    async fn link_use(&self, attempt: &DueAttempt) -> Result<LinkUse, Self::Err> {
+    async fn retry_under_way(&self, attempt: &DueAttempt) -> Result<bool, Self::Err> {
+        macro_db_client::in_progress_user_link::has_live_attempt_for_address(
+            &self.0,
+            attempt.id,
+            attempt.fusionauth_user_id,
+            &attempt.email,
+        )
+        .await
+    }
+
+    async fn link_backs_something(&self, attempt: &DueAttempt) -> Result<bool, Self::Err> {
         // The address got an account of its own, whose sign-in the identity
         // now is, or the requester connected the inbox after all.
-        let backed = sqlx::query_scalar!(
+        Ok(sqlx::query_scalar!(
             r#"SELECT EXISTS(SELECT 1 FROM "User" WHERE lower(email) = lower($1))
                 OR EXISTS(SELECT 1 FROM email_links WHERE lower(email_address) = lower($1)
                     AND provider = 'GMAIL' AND fusionauth_user_id = $2) AS "backed!""#,
@@ -156,22 +164,7 @@ impl IdentityLinkAttempts for PgIdentityLinkAttempts {
             attempt.fusionauth_user_id.to_string()
         )
         .fetch_one(&self.0)
-        .await?;
-        if backed {
-            return Ok(LinkUse::Backing);
-        }
-        let retrying = macro_db_client::in_progress_user_link::has_live_attempt_for_address(
-            &self.0,
-            attempt.id,
-            attempt.fusionauth_user_id,
-            &attempt.email,
-        )
-        .await?;
-        Ok(if retrying {
-            LinkUse::Retrying
-        } else {
-            LinkUse::Unused
-        })
+        .await?)
     }
 
     async fn finish(&self, attempt: Uuid) -> Result<(), Self::Err> {

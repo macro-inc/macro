@@ -286,8 +286,9 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   address now has an account of its own or the requester holds the inbox, then
   drops the attempt. While the requester has another attempt for the address
   under way (past the callback, neither refused nor lapsed), the round defers:
-  that retry's callback found the link and may be connecting with it. A link
-  that existed before the attempt is never released.
+  that retry's callback found the link and may be connecting with it. Read the
+  retry before the inbox: a connect commits its inbox before it drops its
+  attempt. A link that existed before the attempt is never released.
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
