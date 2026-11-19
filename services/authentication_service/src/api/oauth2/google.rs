@@ -246,7 +246,7 @@ async fn link_user(
     // Stash the linked identity and Google's actual grant (which may be a
     // subset of what was requested). /email/init applies these capabilities
     // atomically to the durable link and schedules any newly unlocked work.
-    macro_db_client::in_progress_user_link::set_linked_google_grant(
+    if let Err(e) = macro_db_client::in_progress_user_link::set_linked_google_grant(
         &ctx.db,
         link_id,
         &user_info_email,
@@ -254,12 +254,25 @@ async fn link_user(
         identity_link_created,
     )
     .await
-    .map_err(|e| {
-        (
+    {
+        // Unrecorded, the link this attempt created would never be released.
+        if identity_link_created {
+            let _ = ctx
+                .auth_client
+                .unlink_user(&idp_link_owner, identity_provider_id, &user_info.sub)
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(
+                        ?error,
+                        "unable to undo the identity link of an unrecorded attempt"
+                    );
+                });
+        }
+        return Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("unable to record linked Google grant on in_progress_user_link {e}"),
-        )
-    })?;
+        ));
+    }
 
     tracing::Span::current().record("outcome", "linked");
     Ok(GoogleLinkOutcome::Linked)
