@@ -26,8 +26,39 @@ pub struct EgressRollout<Flags = feature_flags::outbound::posthog::PostHogFeatur
     /// Each user's answer for a while, so a run doesn't wait on PostHog: a
     /// read for [`EGRESS_FLAG_TTL`], a failed one (direct) for
     /// [`EGRESS_FLAG_FAILURE_TTL`].
-    cached:
-        Arc<std::sync::Mutex<std::collections::HashMap<String, (tokio::time::Instant, Egress)>>>,
+    cached: Arc<std::sync::Mutex<EgressCache>>,
+}
+
+/// Each user's egress until a time, and when expired entries were last
+/// dropped.
+#[derive(Default)]
+struct EgressCache {
+    entries: std::collections::HashMap<String, (tokio::time::Instant, Egress)>,
+    swept: Option<tokio::time::Instant>,
+}
+
+impl EgressCache {
+    /// Keep `egress` for `key` until `until`: drop expired entries at most
+    /// once per [`EGRESS_FLAG_TTL`], and everything if still full.
+    fn insert(
+        &mut self,
+        key: String,
+        until: tokio::time::Instant,
+        egress: Egress,
+        now: tokio::time::Instant,
+    ) {
+        let sweep_due = self
+            .swept
+            .is_none_or(|swept| now.duration_since(swept) >= EGRESS_FLAG_TTL);
+        if sweep_due || self.entries.len() >= EGRESS_FLAG_USERS {
+            self.entries.retain(|_, (until, _)| *until > now);
+            self.swept = Some(now);
+        }
+        if self.entries.len() >= EGRESS_FLAG_USERS {
+            self.entries.clear();
+        }
+        self.entries.insert(key, (until, egress));
+    }
 }
 
 /// How long a user's egress flags are reused.
@@ -65,7 +96,7 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
             .cached
             .lock()
             .ok()
-            .and_then(|cached| cached.get(&key).copied())
+            .and_then(|cached| cached.entries.get(&key).copied())
             .filter(|(until, _)| *until > now)
             .map(|(_, egress)| egress);
         if let Some(egress) = hit {
@@ -86,13 +117,7 @@ impl<Flags: FeatureFlags> EgressRollout<Flags> {
         };
         span.record("egress", tracing::field::debug(egress));
         if let Ok(mut cached) = self.cached.lock() {
-            if cached.len() >= EGRESS_FLAG_USERS {
-                cached.retain(|_, (until, _)| *until > now);
-                if cached.len() >= EGRESS_FLAG_USERS {
-                    cached.clear();
-                }
-            }
-            cached.insert(key, (now + ttl, egress));
+            cached.insert(key, now + ttl, egress, now);
         }
         egress
     }

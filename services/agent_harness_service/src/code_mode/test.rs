@@ -857,3 +857,30 @@ async fn the_egress_flag_is_read_once_per_user_for_a_while() {
     assert_eq!(rollout.egress(&user).await, Egress::Proxied);
     assert_eq!(loads.load(Ordering::SeqCst), 4);
 }
+
+/// The egress cache drops expired users at most once a minute as it fills,
+/// and never holds more than its bound.
+#[tokio::test(start_paused = true)]
+async fn the_egress_cache_sweeps_expired_users_and_stays_bounded() {
+    use code_execution::domain::Egress;
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    let rollout = EgressRollout::new(Some(FakeFeatureFlags::default()));
+    for index in 0..3 {
+        let id = format!("macro|user{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 3);
+    // Past their life, the next read drops them.
+    tokio::time::advance(std::time::Duration::from_secs(61)).await;
+    let late = MacroUserIdStr::parse_from_str("macro|late@example.com").unwrap();
+    assert_eq!(rollout.egress(&late).await, Egress::Direct);
+    assert_eq!(rollout.cached.lock().unwrap().entries.len(), 1);
+    // However many users read it, it holds at most its bound.
+    for index in 0..=EGRESS_FLAG_USERS {
+        let id = format!("macro|many{index}@example.com");
+        let user = MacroUserIdStr::parse_from_str(&id).unwrap();
+        rollout.egress(&user).await;
+    }
+    assert!(rollout.cached.lock().unwrap().entries.len() <= EGRESS_FLAG_USERS);
+}
