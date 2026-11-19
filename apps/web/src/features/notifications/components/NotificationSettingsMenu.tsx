@@ -12,8 +12,9 @@ import BellIcon from '@icon/system/regular/bell.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelNotificationKind } from '@service-notification/generated/schemas/channelNotificationKind';
-import { InlineCheckbox, SingleSelectCheck } from '@ui';
+import { Dropdown, InlineCheckbox, SingleSelectCheck } from '@ui';
 import { createSignal, For, onCleanup, Show, untrack } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { openCustomNotificationSettings } from '../CustomNotificationSettingsDialog';
 import {
   CHANNEL_NOTIFICATION_KINDS,
@@ -47,6 +48,8 @@ export type NotificationSettingsMenuProps = {
   /** Phone: save the Custom page's kinds once on leaving it, not per toggle. */
   saveCustomOnLeave?: boolean;
   onActionComplete?: () => void;
+  /** Match the desktop host's menu primitives. */
+  menu?: 'dropdown';
 };
 
 const PRESETS = ['all', 'involving', 'custom', 'nothing'] as const;
@@ -92,8 +95,87 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
     }
   };
 
+  const content = () => (
+    <>
+      <Show when={props.sectionDefault}>
+        {(sectionDefault) => (
+          <>
+            <Dynamic
+              component={props.menu === 'dropdown' ? Dropdown.Group : MenuGroup}
+            >
+              <Dynamic
+                component={
+                  props.menu === 'dropdown' ? Dropdown.Item : ContextMenu.Item
+                }
+                class={props.menu === 'dropdown' ? undefined : MENU_ITEM_CLASS}
+                disabled={props.disabled}
+                data-notification-section-default
+                onSelect={() => {
+                  sectionDefault().onSelect();
+                  props.onActionComplete?.();
+                }}
+              >
+                <LabelWithDescription
+                  label={t('channelSections.useSectionDefault')}
+                  description={sectionDefault().description}
+                />
+              </Dynamic>
+            </Dynamic>
+            <Show when={props.menu === 'dropdown'} fallback={<MenuSeparator />}>
+              <Dropdown.Separator class="my-1.5 h-px border-0 bg-edge-muted" />
+            </Show>
+          </>
+        )}
+      </Show>
+      <Show when={props.hint}>
+        {(hint) => (
+          <div class="truncate px-2 py-1 text-xs text-ink-extra-muted">
+            {hint()}
+          </div>
+        )}
+      </Show>
+      <Dynamic
+        component={props.menu === 'dropdown' ? Dropdown.Group : MenuGroup}
+      >
+        <Dynamic
+          component={
+            props.menu === 'dropdown'
+              ? Dropdown.RadioGroup
+              : ContextMenu.RadioGroup
+          }
+          value={props.preset}
+        >
+          <For each={PRESETS}>
+            {(preset) => (
+              <Dynamic
+                component={
+                  props.menu === 'dropdown'
+                    ? Dropdown.RadioItem
+                    : ContextMenu.RadioItem
+                }
+                class={props.menu === 'dropdown' ? undefined : MENU_ITEM_CLASS}
+                value={preset}
+                disabled={props.disabled}
+                data-notification-preset={preset}
+                closeOnSelect
+                onSelect={() => choose(preset)}
+              >
+                <span class="min-w-0 flex-1 truncate">
+                  {presetLabel(preset)}
+                </span>
+                <SingleSelectCheck active={props.preset === preset} />
+              </Dynamic>
+            )}
+          </For>
+        </Dynamic>
+      </Dynamic>
+    </>
+  );
+
   return (
-    <ContextMenu.Sub>
+    <Dynamic
+      component={props.menu === 'dropdown' ? Dropdown.Sub : ContextMenu.Sub}
+    >
       <SubTrigger
         text={
           <LabelWithDescription
@@ -103,61 +185,21 @@ export function NotificationSettingsMenu(props: NotificationSettingsMenuProps) {
         }
         icon={BellIcon}
         disabled={props.disabled}
+        menu={props.menu}
       />
-      <ContextMenuContent submenu class="min-w-60 max-w-80">
-        <Show when={props.sectionDefault}>
-          {(sectionDefault) => (
-            <>
-              <MenuGroup>
-                <ContextMenu.Item
-                  class={MENU_ITEM_CLASS}
-                  disabled={props.disabled}
-                  data-notification-section-default
-                  onSelect={() => {
-                    sectionDefault().onSelect();
-                    props.onActionComplete?.();
-                  }}
-                >
-                  <LabelWithDescription
-                    label={t('channelSections.useSectionDefault')}
-                    description={sectionDefault().description}
-                  />
-                </ContextMenu.Item>
-              </MenuGroup>
-              <MenuSeparator />
-            </>
-          )}
-        </Show>
-        <Show when={props.hint}>
-          {(hint) => (
-            <div class="truncate px-2 py-1 text-xs text-ink-extra-muted">
-              {hint()}
-            </div>
-          )}
-        </Show>
-        <MenuGroup>
-          <ContextMenu.RadioGroup value={props.preset}>
-            <For each={PRESETS}>
-              {(preset) => (
-                <ContextMenu.RadioItem
-                  class={MENU_ITEM_CLASS}
-                  value={preset}
-                  disabled={props.disabled}
-                  data-notification-preset={preset}
-                  closeOnSelect
-                  onSelect={() => choose(preset)}
-                >
-                  <span class="min-w-0 flex-1 truncate">
-                    {presetLabel(preset)}
-                  </span>
-                  <SingleSelectCheck active={props.preset === preset} />
-                </ContextMenu.RadioItem>
-              )}
-            </For>
-          </ContextMenu.RadioGroup>
-        </MenuGroup>
-      </ContextMenuContent>
-    </ContextMenu.Sub>
+      <Show
+        when={props.menu === 'dropdown'}
+        fallback={
+          <ContextMenuContent submenu class="min-w-60 max-w-80">
+            {content()}
+          </ContextMenuContent>
+        }
+      >
+        <Dropdown.SubContent class="min-w-60 max-w-80">
+          {content()}
+        </Dropdown.SubContent>
+      </Show>
+    </Dynamic>
   );
 }
 

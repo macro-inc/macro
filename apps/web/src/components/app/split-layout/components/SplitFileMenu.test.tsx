@@ -274,6 +274,29 @@ describe('SplitFileMenu notification actions', () => {
     expect(onPreset).toHaveBeenCalledExactlyOnceWith('nothing');
   });
 
+  it('opens notification settings in the desktop dropdown and applies a preset', async () => {
+    mocks.touch = false;
+    const onPreset = vi.fn();
+    mocks.settingsMenu.mockReturnValue({
+      preset: 'all',
+      enabled: new Set(),
+      targetName: 'General',
+      onPreset,
+      onSetKinds: vi.fn(),
+    });
+    const menu = renderMenu([], Permissions.OWNER, channel);
+    menu.open();
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', {
+        name: /channelSections.notificationSettings/,
+      }),
+      { key: 'ArrowRight' }
+    );
+    const choices = await screen.findAllByRole('menuitemradio');
+    fireEvent.keyDown(choices[choices.length - 1], { key: 'Enter' });
+    expect(onPreset).toHaveBeenCalledExactlyOnceWith('nothing');
+  });
+
   it('keeps Mute in State without Notification Settings', () => {
     mocks.canMute = true;
     renderMenu([], Permissions.OWNER, channel);

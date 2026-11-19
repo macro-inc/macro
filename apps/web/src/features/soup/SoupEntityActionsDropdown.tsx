@@ -77,6 +77,7 @@ export function SoupEntityActionsDropdown(
               viewContext={props.viewContext}
               onActionComplete={() => setOpen(false)}
               item={DropdownActionItem}
+              menu="dropdown"
               copyItem={DropdownCopyActionItem}
               separator={() => (
                 <Dropdown.Separator class="my-1.5 h-px border-0 bg-edge-muted" />

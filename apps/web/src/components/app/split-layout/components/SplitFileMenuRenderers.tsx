@@ -118,6 +118,7 @@ export function DesktopFileMenu(props: SplitFileMenuRenderProps) {
           {(menu) => (
             <NotificationSettingsMenu
               {...menu()}
+              menu="dropdown"
               onActionComplete={() => props.onOpenChange(false)}
             />
           )}

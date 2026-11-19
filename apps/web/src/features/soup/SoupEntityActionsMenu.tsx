@@ -37,6 +37,7 @@ interface SoupEntityActionsMenuProps {
   item?: Component<ComponentProps<typeof MenuItem>>;
   copyItem?: Component<ComponentProps<typeof CopyMenuItem>>;
   separator?: Component;
+  menu?: 'dropdown';
   viewContext: EntityActionViewContext;
   /**
    * Closes the host menu when an embedded picker (`menuItem`) is done with
@@ -170,7 +171,10 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                             </Show>
                           }
                         >
-                          <NotificationMuteMenu {...action().muteMenu!} />
+                          <NotificationMuteMenu
+                            {...action().muteMenu!}
+                            menu={props.menu}
+                          />
                         </Show>
                       }
                     >
@@ -186,6 +190,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
                   {(menu) => (
                     <NotificationSettingsMenu
                       {...menu()}
+                      menu={props.menu}
                       onActionComplete={props.onActionComplete}
                     />
                   )}
