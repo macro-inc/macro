@@ -1293,8 +1293,9 @@ given** with each input's label and type, and its steps, edited like the
 routine's own and saved with the routine. In a definition, **Add step** adds
 an **Ask AI** step. Its connected apps can be removed. Apps require **Ask AI**
 to use a model or a managed agent, both in the main routine and in each
-definition. The editor holds the save if a selected or inherited agent cannot
-use those apps. Change **Who** or remove the apps to save.
+definition. The editor waits to confirm that a selected or inherited agent
+can use those apps. To resolve an incompatible target, change **Who** or
+remove the apps. The required apps must be connected before the routine can run.
 A run's code calls `macro.routines.schedule` with a trigger
 and the inputs. Each copy
 it makes is a sub-routine as above that stores only the definition's name and

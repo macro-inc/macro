@@ -97,6 +97,8 @@ const mocks = vi.hoisted(() => ({
   connectedApps: (): ReadonlySet<string> | undefined => new Set(),
   realRoutineQuery: false,
   getRoutine: vi.fn(),
+  agentsPending: (): boolean => false,
+  agentHarness: (): string => 'macrod',
 }));
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
@@ -309,12 +311,18 @@ vi.mock('./queries/connected-apps', () => ({
 }));
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({
-    data: [
-      {
-        bot: { id: '12345678-1234-1234-1234-123456789abc' },
-        harness: 'macrod',
-      },
-    ],
+    get isPending() {
+      return mocks.agentsPending();
+    },
+    get data() {
+      if (mocks.agentsPending()) throw new Error('Read pending agents');
+      return [
+        {
+          bot: { id: '12345678-1234-1234-1234-123456789abc' },
+          harness: mocks.agentHarness(),
+        },
+      ];
+    },
   }),
 }));
 vi.mock('./routine-execution-picker', () => ({
@@ -515,6 +523,8 @@ beforeEach(() => {
   mocks.templateError = () => false;
   mocks.connectedApps = () => new Set();
   mocks.realRoutineQuery = false;
+  mocks.agentsPending = () => false;
+  mocks.agentHarness = () => 'macrod';
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1884,6 +1894,39 @@ describe('sub-routines defined once', () => {
     expect(
       screen.getByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeTruthy();
+  });
+
+  it('holds an app-backed edit while discovering the agent and saves when it is managed', async () => {
+    const [pending, setPending] = createSignal(true);
+    mocks.agentsPending = pending;
+    mocks.agentHarness = () => 'in-memory';
+    mocks.connectedApps = () => new Set(['example']);
+    setSchedules([
+      {
+        ...parent,
+        id: 'routine-id',
+        task: {
+          steps: [
+            {
+              type: 'agent',
+              agent: { bot_id: '12345678-1234-1234-1234-123456789abc' },
+              instructions: 'Remind me about the task.',
+            },
+          ],
+          mcp_servers: [{ app_slug: 'example', server_name: 'Example' }],
+        },
+      },
+    ]);
+    render(() => <Routine />);
+    fireEvent.input(screen.getByRole('textbox', { name: 'Instructions' }), {
+      target: { value: 'Remind me tomorrow.' },
+    });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).not.toHaveBeenCalled();
+
+    setPending(false);
+    await vi.advanceTimersByTimeAsync(300);
+    expect(mocks.update).toHaveBeenCalledOnce();
   });
 
   it('shows a copy its parent’s steps and its values, editing only its own settings', async () => {
