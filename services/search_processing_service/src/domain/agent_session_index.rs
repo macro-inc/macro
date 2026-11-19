@@ -202,6 +202,9 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
                 }
             }
         }
-        Ok(BackfillReceipt { enqueued })
+        Ok(BackfillReceipt {
+            enqueued,
+            ..BackfillReceipt::default()
+        })
     }
 }

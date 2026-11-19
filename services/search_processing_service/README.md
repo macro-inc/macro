@@ -230,7 +230,7 @@ Use `POST /internal/backfill/calls` after a rollback, a dropped upsert, or a sus
 
 ## Backfill HTTP Routes
 
-Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count; a resumable backfill also reports its `cursor` and update counts.
+Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count; a resumable backfill also reports its `cursor` and update counts. SQS can take a batch and refuse some of its entries; the backfill sends those again, twice at most (never an entry SQS blames on the request), and counts the ones it still refuses as `not_queued`, in messages, not source rows (one email message carries several threads). A job with any is `failed`, cancelled or not, so `completed` means every message reached the search event queue; the warning names up to 10 of the refused ids, so rerun them or the same scope.
 
 | Entity | Route | Body (fields optional unless marked) |
 |---|---|---|
