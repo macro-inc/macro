@@ -1835,7 +1835,7 @@ live mail with the viewer's access. See `docs/design/saved-views.md`.
   at the end of Saved views. Saving keeps its position; discarding removes it.
   Closing the builder retains the draft and its name, sharing, and filters.
   Leaving a dirty new view, opening a thread, switching views, or closing its pane
-  asks Save, Discard, or Cancel. Clean drafts and existing saved views do not ask.
+  asks **Discard** or **Keep editing**. Clean drafts and existing saved views do not ask.
   Browser close and reload use the browser's native unsaved-changes warning.
 - **Open.** The view opens on All with every condition in the Filters
   controls; the header shows its name and a

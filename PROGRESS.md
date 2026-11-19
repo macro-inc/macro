@@ -1,7 +1,7 @@
 # Project updates: round 5
 
 - [x] Fresh saved-view drafts for every creation entry, appended to the owning list.
-- [x] Save / Discard / Cancel before leaving dirty new drafts.
+- [x] Discard / Keep editing before leaving dirty new drafts.
 - [x] Desktop project task-list empty results retain Add task and Documentation.
 - [x] Local unit tests, repository checks, review fixes, and audit.
 - CI is requested after the final push; the PR's CI gate is the authoritative result.
@@ -66,3 +66,17 @@ preview remains available at the existing preview address.
   resolved, and the final local checks above pass.
 - The ordinary global action intentionally returns when a project action is
   unavailable; no project-specific placeholder suppresses it.
+
+## Saved-view leave confirmation
+
+- Simplify saved-view navigation to the split router's `useBeforeLeave` and the
+  existing imperative confirmation dialog: Discard continues; Keep editing stays.
+- Remove the extra draft-leave coordinator, shared three-choice dialog, and their
+  save path. Restore scheduling's existing behavior rather than retaining an
+  unrelated shared abstraction. Keep commit-only discard, draft-owned dialog
+  lifetime, and native browser unload confirmation.
+- Local validation: 209 test files and 1,603 tests passed, web checks, type-check,
+  `just check`, and PR privacy checks passed. Review found no concrete regression.
+- Initial validation failures were a keyed-Show callback type, test guard order,
+  and test import formatting; each was corrected and the affected checks rerun.
+- Browser and device verification remain assigned to the user.

@@ -1,76 +1,113 @@
 import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
-import { createDraftLeave } from '@core/util/create-draft-leave';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type ManagedDialogProps, openDialog, UnsavedChangesDialog } from '@ui';
+import { confirmDialog } from '@ui';
 import deepEqual from 'fast-deep-equal';
-import { createEffect, getOwner, on, onCleanup } from 'solid-js';
-import type { SavedViewLeaveSource } from '../context/saved-view-leave-source';
+import { createEffect, createRoot, getOwner, on, onCleanup } from 'solid-js';
+import type { SavedViewCreation } from '../primitives/create-saved-view-creation';
 
-/** Reuses the app's leave dialog for route, sidebar, pane, and window exits. */
+/** Mounted for one draft so its confirmation cannot outlive that draft. */
 export function SavedViewLeaveGuard(props: {
-  source: SavedViewLeaveSource;
-  /** Selection fields, not filter/layout fields, in each watched namespace. */
+  creation: SavedViewCreation;
+  discard: () => void;
   selection: Readonly<Record<string, readonly string[]>>;
+  registerLeave?: (run: (action: () => void) => void) => () => void;
 }) {
   const owner = getOwner();
-  const leave = createDraftLeave({
-    identity: props.source.identity,
-    scope: props.source.viewerId,
-    dirty: props.source.dirty,
-    busy: props.source.busy,
-    save: props.source.save,
-    discard: props.source.discard,
-    saveError: t('viewMenus.saveViewFailed'),
-    staysInDraft: ({ from, to }) => {
-      if (props.source.allowNavigation?.()) return true;
-      if (!to || !deepEqual(from.location.route, to.location.route))
-        return false;
-      return Object.entries(props.selection).every(([namespace, keys]) =>
-        keys.every((key) =>
-          deepEqual(
-            from.location.search?.[namespace]?.[key],
-            to.location.search?.[namespace]?.[key]
+  let alive = true;
+  let closeConfirmation: (() => void) | undefined;
+  onCleanup(() => {
+    alive = false;
+    closeConfirmation?.();
+  });
+
+  const confirmDiscard = async (signal?: AbortSignal) => {
+    if (
+      !alive ||
+      signal?.aborted ||
+      closeConfirmation ||
+      props.creation.saving()
+    )
+      return false;
+    if (!props.creation.dirty()) return true;
+
+    // Give the existing dialog a disposable owner for navigation cancellation.
+    const { confirmation, close } = createRoot(
+      (dispose) => ({
+        close: dispose,
+        confirmation: confirmDialog(
+          () => ({
+            title: t('viewMenus.leaveDraftTitle'),
+            body: t('viewMenus.leaveDraftDescription'),
+            confirmLabel: t('common.discard'),
+            cancelLabel: t('viewMenus.keepEditing'),
+            tone: 'danger',
+          }),
+          { owner: getOwner() }
+        ),
+      }),
+      owner
+    );
+    closeConfirmation = close;
+    signal?.addEventListener('abort', close, { once: true });
+    try {
+      return (await confirmation) && alive && !signal?.aborted;
+    } finally {
+      signal?.removeEventListener('abort', close);
+      close();
+      closeConfirmation = undefined;
+    }
+  };
+
+  useBeforeLeave(
+    async (context) => {
+      if (props.creation.isInternalNavigation()) return true;
+      const sameRoute =
+        context.to &&
+        deepEqual(context.from.location.route, context.to.location.route);
+      const sameSelection = Object.entries(props.selection).every(
+        ([namespace, keys]) =>
+          keys.every((key) =>
+            deepEqual(
+              context.from.location.search?.[namespace]?.[key],
+              context.to?.location.search?.[namespace]?.[key]
+            )
           )
-        )
       );
-    },
-  });
-  onCleanup(props.source.register(leave.run));
-  useBeforeLeave(leave.decide, {
-    search: Object.keys(props.selection),
-    descendants: true,
-  });
-  const LeaveDialog = (dialog: ManagedDialogProps) => (
-    <UnsavedChangesDialog
-      open={dialog.open}
-      pending={leave.busy()}
-      canSave={Boolean(props.source.identity())}
-      error={leave.error()}
-      title={t('viewMenus.leaveDraftTitle')}
-      description={t('viewMenus.leaveDraftDescription')}
-      cancelLabel={t('common.cancel')}
-      onKeepEditing={leave.keepEditing}
-      onDiscard={leave.discard}
-      onSave={() => fireAndForget(leave.save(), 'saved-view-leave')}
-    />
-  );
-  createEffect(
-    on(leave.open, (open) => {
-      if (!open) return;
-      const handle = openDialog(LeaveDialog, {}, { owner });
-      let active = true;
-      onCleanup(() => {
-        active = false;
-        handle.close();
+      if (sameRoute && sameSelection) return true;
+      const draftId = props.creation.current()?.id;
+      if (!(await confirmDiscard(context.signal))) return false;
+      context.onCommit(() => {
+        if (props.creation.current()?.id === draftId) props.discard();
       });
-      // Host dismissal must settle the pending navigation, but an older
-      // dialog must never cancel a newer leave request.
-      const finish = async () => {
-        await handle.closed;
-        if (active) leave.keepEditing();
+      return true;
+    },
+    { search: Object.keys(props.selection), descendants: true }
+  );
+
+  // Some view controls change local settings before publishing their route.
+  // Confirm first, then retire this draft before running that local action.
+  const run = (action: () => void) => {
+    const proceed = async () => {
+      if (!(await confirmDiscard()) || !alive) return;
+      props.discard();
+      action();
+    };
+    fireAndForget(proceed(), 'saved-view-leave');
+  };
+  onCleanup(props.creation.register(run));
+  const unregisterHost = props.registerLeave?.(run);
+  if (unregisterHost) onCleanup(unregisterHost);
+
+  createEffect(
+    on(props.creation.dirty, (dirty) => {
+      if (!dirty) return;
+      const warn = (event: BeforeUnloadEvent) => {
+        event.preventDefault();
+        event.returnValue = '';
       };
-      fireAndForget(finish(), 'saved-view-leave');
+      window.addEventListener('beforeunload', warn);
+      onCleanup(() => window.removeEventListener('beforeunload', warn));
     })
   );
   return null;

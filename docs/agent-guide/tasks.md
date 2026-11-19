@@ -1290,7 +1290,7 @@ On touch, hold a saved row for its options sheet; desktop keeps the hover More
 menu. Rename changes its name/sharing, Duplicate creates a private copy, and
 Delete requires confirmation.
 Every creation or duplication appends a new draft to Projects; it never reuses
-the current view. Dirty new project views use Save/Discard/Cancel before leaving,
+the current view. Dirty new project views ask **Discard** or **Keep editing** before leaving,
 while clean drafts and already-saved views do not prompt.
 Owners use Save changes for temporary setting edits; Reset restores the confirmed
 settings. Leaving the collection discards temporary edits without changing the

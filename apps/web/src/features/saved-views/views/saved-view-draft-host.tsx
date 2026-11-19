@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { onCleanup } from 'solid-js';
+import { onCleanup, Show } from 'solid-js';
 import type { SavedViewCreation } from '../primitives/create-saved-view-creation';
 import {
   savedViewErrorMessage,
@@ -55,25 +55,15 @@ export function SavedViewDraftHost(props: {
     })
   );
   return (
-    <SavedViewLeaveGuard
-      selection={props.selection}
-      source={{
-        identity: () => props.creation.current()?.id,
-        viewerId: props.creation.viewerId,
-        dirty: props.creation.dirty,
-        allowNavigation: props.creation.isInternalNavigation,
-        busy: props.creation.saving,
-        save: props.creation.save,
-        discard: props.discard,
-        register: (run) => {
-          const unregister = props.creation.register(run);
-          const unregisterHost = props.registerLeave?.(run);
-          return () => {
-            unregister();
-            unregisterHost?.();
-          };
-        },
-      }}
-    />
+    <Show when={props.creation.current()?.id} keyed>
+      {(_draftId) => (
+        <SavedViewLeaveGuard
+          creation={props.creation}
+          discard={props.discard}
+          selection={props.selection}
+          registerLeave={props.registerLeave}
+        />
+      )}
+    </Show>
   );
 }
