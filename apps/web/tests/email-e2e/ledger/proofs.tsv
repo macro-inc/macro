@@ -140,6 +140,7 @@ AC-911	The new-email composer's body change handler (onContentChange in email-co
 AC-912	The compose route in email-compose.tsx ignores the draft named in its URL (s0.email-compose.draft) when it mounts, so a reload opens an empty composer instead of the saved draft; a new composer, which has no draft id, is unaffected.
 AC-913	A Drafts row opens a standalone draft in the ordinary thread view instead of the composer: the Match in email-thread.tsx that renders EmailComposeView for a draft that replies to nothing is switched off.
 AC-914	A send the provider rejects is not reported to the composer: the 'failed' progress handler of announceQueuedSend in queued-send-notice.ts returns at once (no failure toast, Undo not withdrawn).
+AC-915	Cancelling a rejected Outlook schedule in scheduled.rs leaves the rejected operation active and the composer locked. scheduled-failure.spec.ts checks an edit saves to the same unscheduled draft and survives reopening.
 AC-916	The Retry send button of the message-operation notice does nothing: its onClick in message-operation-recovery.tsx returns for the 'retry_send' action (Check again and the other resolutions still work).
 AC-917	scrolling the recipient suggestions to their end does not read the next people into the list
 AL-001	the sidebar's Inbox item does not reopen the Inbox tab that was last open

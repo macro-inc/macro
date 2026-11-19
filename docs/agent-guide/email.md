@@ -1591,8 +1591,10 @@ label truncates while Cancel stays at its far edge; the bar never covers discard
 attachment, formatting, the clock, or the primary action. Reply recipients
 cannot be edited or dragged during a confirmed schedule or active delivery mutation.
 
-Scheduled delivery failures replace the time summary with **Send failed before
-delivery** and **Restore draft**. Restoration cancels delivery before unlocking the
+Gmail scheduled delivery failures replace the time summary with **Send failed
+before delivery** and **Restore draft**. A rejected Outlook schedule shows the
+provider rejection and **Retry send**. Use **Cancel scheduled send** to clear the
+rejection and edit the draft. Restoration cancels delivery before unlocking the
 message. **Delivery unconfirmed** explains that the email may already have been
 sent and offers **Check status**; it never offers restoration or automatic resend.
 The time picker stays disabled for failed, sending, and unconfirmed deliveries.
