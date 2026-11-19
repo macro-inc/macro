@@ -88,7 +88,7 @@ describe('AgentPermissionsPage', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /Its other programs, other tools and your connected apps work as before\./
+        /Scout’s other programs, other tools and your connected apps work as before\./
       )
     ).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/OCaml|JavaScript/);

@@ -12,7 +12,7 @@ export default {
   nothingToReset: 'Everything is already Always allow',
   scopeLead: 'Applies to checked programs only, for now.',
   scopeBody:
-    'They cover the programs Macro checks before {{agent}} runs them. Its other programs, other tools and your connected apps work as before.',
+    'They cover the programs Macro checks before {{agent}} runs them. {{agent}}’s other programs, other tools and your connected apps work as before.',
   readOnly: 'Only people who can edit {{agent}} can change these.',
   searchLabel: 'Search permissions',
   searchPlaceholder: 'Search groups and tools',
