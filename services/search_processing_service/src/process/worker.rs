@@ -30,6 +30,9 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                         last_heartbeat = std::time::Instant::now();
                     }
 
+                    // Taken before the receive, so a paused or capped worker
+                    // leaves messages on the queue instead of holding them.
+                    let _batch = ctx.backfill_gate.admit(ctx.messages_per_receive).await;
                     match ctx.worker.receive_messages().await {
                         Ok(messages) => {
                             if messages.is_empty() {

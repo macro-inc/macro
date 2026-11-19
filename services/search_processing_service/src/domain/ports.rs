@@ -35,6 +35,14 @@ pub trait SearchEventPublisher: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), BackfillError>> + Send;
 }
 
+/// The operator's switch that pauses every backfill, shared by every task.
+pub trait BackfillControl: Send + Sync + 'static {
+    /// Whether backfills are paused. A switch never set reads as not paused.
+    fn paused(&self) -> impl Future<Output = Result<bool, BackfillError>> + Send;
+
+    fn set_paused(&self, paused: bool) -> impl Future<Output = Result<(), BackfillError>> + Send;
+}
+
 /// Directly reindexes denormalized properties for one typed entity.
 pub trait PropertyBackfillIndexer: Send + Sync + 'static {
     /// Refetch and overwrite the indexed properties for an entity.

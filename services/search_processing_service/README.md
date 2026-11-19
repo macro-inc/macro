@@ -245,6 +245,12 @@ Every search-indexed entity has a POST endpoint on sps's internal surface. They 
 | Emails | `POST /internal/backfill/emails` | `{"thread_ids": ["<uuid>"], "since": "2026-03-16T00:00:00Z", "index_override": "emails_v2", "batch_size": 100}` |
 | Email attachment status | `POST /internal/backfill/email-attachment-status` | `{"after_document_id": "<cursor>", "page_size": 500, "docs_per_second": 100}` — `{}` = every document linked to an email attachment, updated directly; see below |
 
+### Backfill cap and pause
+
+Every backfill in a task shares one cap on the work it has in flight, `BACKFILL_MAX_IN_FLIGHT` (default 20): an SQS worker takes `QUEUE_MAX_MESSAGES` of it before each receive and holds it until the batch finishes, so with the defaults two of the ten workers run a batch at a time; direct backfills (agent sessions, properties, email attachment status) take one unit per write. The Kafka consumer does not take part: live events are never held back by backfills. The cap is per task, so the service-wide limit is the cap times the running task count.
+
+`PUT /internal/backfill/pause` with `{"paused": true}` pauses every backfill in every task, and `{"paused": false}` resumes them; `GET /internal/backfill/pause` reads the switch. It is one item (`control:backfills`) in the backfill jobs table, which each task rereads every 10 seconds, so a change takes effect within that. While paused, SQS workers take no messages, which wait on the queue (they still expire after its retention), and direct backfills wait before their next write; work already admitted finishes. A paused backfill job still reports `running`. A task that cannot read the switch keeps the state it last read, and a task that never read it starts unpaused.
+
 ### Email attachment status
 
 `is_email_attachment` on a `documents` parent is true exactly when a

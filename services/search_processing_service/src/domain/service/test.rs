@@ -1,3 +1,4 @@
+use crate::domain::backfill_gate::BackfillGate;
 use std::{
     collections::VecDeque,
     sync::{
@@ -595,9 +596,13 @@ async fn property_backfill_drains_multiple_pages() {
     let indexer = RecordingPropertyIndexer::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
@@ -626,9 +631,13 @@ async fn property_backfill_advances_offset_by_rows_consumed() {
     let indexer = RecordingPropertyIndexer::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
@@ -647,9 +656,13 @@ async fn property_backfill_updates_progress_after_successful_page() {
     let indexer = RecordingPropertyIndexer::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
@@ -664,9 +677,13 @@ async fn property_backfill_empty_page_indexes_nothing() {
     let indexer = RecordingPropertyIndexer::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
@@ -709,9 +726,13 @@ async fn property_backfill_cancellation_stops_between_pages() {
         indexed: AtomicUsize::new(0),
     };
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
@@ -743,9 +764,13 @@ async fn property_backfill_reindex_failure_propagates_without_progress() {
     let indexer = FailingPropertyIndexer;
     let (progress, cancel) = detached();
 
-    let error = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let error = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap_err();
 
@@ -789,13 +814,56 @@ async fn property_backfill_limits_reindexes_to_twenty_simultaneous_operations() 
     let indexer = ConcurrencyTrackingPropertyIndexer::default();
     let (progress, cancel) = detached();
 
-    let receipt = drain_property_source(&indexer, &progress, &cancel, |offset| {
-        source.fetch_page(offset)
-    })
+    let receipt = drain_property_source(
+        &indexer,
+        &BackfillGate::open(20),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
     .await
     .unwrap();
 
     assert_eq!(receipt.enqueued, 45);
     assert_eq!(indexer.completed.load(Ordering::SeqCst), 45);
     assert_eq!(indexer.maximum_active.load(Ordering::SeqCst), 20);
+}
+
+/// Records the most reindexes it ever ran at once.
+#[derive(Default)]
+struct ConcurrencyRecordingIndexer {
+    running: std::sync::atomic::AtomicUsize,
+    most: std::sync::atomic::AtomicUsize,
+}
+
+impl PropertyBackfillIndexer for ConcurrencyRecordingIndexer {
+    async fn reindex(&self, _: &str, _: EntityType) -> Result<(), BackfillError> {
+        use std::sync::atomic::Ordering::SeqCst;
+        let now = self.running.fetch_add(1, SeqCst) + 1;
+        self.most.fetch_max(now, SeqCst);
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        self.running.fetch_sub(1, SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn property_reindexes_share_the_backfill_cap() {
+    let entity_type = EntityType::Document;
+    let ids: Vec<String> = (0..40).map(|i| format!("doc-{i}")).collect();
+    let source = FakePropertySource::new(entity_type, vec![property_page(entity_type, ids, 40)]);
+    let indexer = ConcurrencyRecordingIndexer::default();
+    let (progress, cancel) = detached();
+
+    drain_property_source(
+        &indexer,
+        &BackfillGate::open(3),
+        &progress,
+        &cancel,
+        |offset| source.fetch_page(offset),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(indexer.most.load(std::sync::atomic::Ordering::SeqCst), 3);
 }

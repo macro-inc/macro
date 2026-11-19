@@ -1,5 +1,6 @@
 //! Reconcile the search projection from the owning agent-session domain service.
 
+use super::backfill_gate::BackfillGate;
 use std::{collections::HashSet, sync::Arc};
 
 use agent_session::domain::{
@@ -151,6 +152,7 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
     pub async fn backfill(
         &self,
         req: AgentSessionBackfillRequest,
+        gate: &BackfillGate,
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
@@ -164,6 +166,10 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
                 if !seen.insert(id) {
                     continue;
                 }
+                let _permit = tokio::select! {
+                    permit = gate.admit(1) => permit,
+                    () = cancel.cancelled() => break,
+                };
                 self.reconcile(
                     AgentSessionId::new_from_uuid(id),
                     req.index_override.as_deref(),
@@ -186,9 +192,10 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
                     break;
                 }
                 for id in ids {
-                    if cancel.is_cancelled() {
-                        break;
-                    }
+                    let _permit = tokio::select! {
+                        permit = gate.admit(1) => permit,
+                        () = cancel.cancelled() => break,
+                    };
                     self.reconcile(
                         AgentSessionId::new_from_uuid(id),
                         req.index_override.as_deref(),

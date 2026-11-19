@@ -1,3 +1,4 @@
+use crate::domain::backfill_gate::BackfillGate;
 use std::{collections::VecDeque, sync::Mutex};
 
 use super::*;
@@ -143,6 +144,7 @@ async fn sets_the_flag_on_every_live_linked_document_and_records_each_page() {
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&LINKED),
         FakeIndex::replying(vec![Reply::Missing(0), Reply::Missing(1)]),
+        BackfillGate::open(1),
     );
     let progress = Arc::new(JobProgress::detached());
 
@@ -184,8 +186,11 @@ async fn sets_the_flag_on_every_live_linked_document_and_records_each_page() {
 
 #[tokio::test(start_paused = true)]
 async fn resumes_after_the_given_document() {
-    let backfill =
-        EmailAttachmentStatusBackfill::new(FakeSource::new(&LINKED), FakeIndex::default());
+    let backfill = EmailAttachmentStatusBackfill::new(
+        FakeSource::new(&LINKED),
+        FakeIndex::default(),
+        BackfillGate::open(1),
+    );
 
     backfill
         .backfill(
@@ -208,6 +213,7 @@ async fn a_page_with_no_live_document_sends_nothing_and_moves_on() {
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&[("doc-a", false), ("doc-b", false), ("doc-c", true)]),
         FakeIndex::default(),
+        BackfillGate::open(1),
     );
     let progress = Arc::new(JobProgress::detached());
 
@@ -225,6 +231,7 @@ async fn a_refusal_stops_the_job_at_the_last_finished_page() {
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&LINKED),
         FakeIndex::replying(vec![Reply::Missing(0), Reply::Refuse]),
+        BackfillGate::open(1),
     );
     let progress = Arc::new(JobProgress::detached());
 
@@ -249,6 +256,7 @@ async fn a_page_with_failed_updates_stops_without_moving_the_cursor_past_it() {
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&LINKED),
         FakeIndex::replying(vec![Reply::Missing(0), Reply::Fail(1)]),
+        BackfillGate::open(1),
     );
     let progress = Arc::new(JobProgress::detached());
 
@@ -271,6 +279,7 @@ async fn a_refusal_on_the_first_page_keeps_the_requested_cursor() {
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&LINKED),
         FakeIndex::replying(vec![Reply::Refuse]),
+        BackfillGate::open(1),
     );
 
     let error = backfill
@@ -294,6 +303,7 @@ async fn cancellation_stops_after_the_page_in_flight_without_waiting_out_its_pau
     let backfill = EmailAttachmentStatusBackfill::new(
         FakeSource::new(&LINKED),
         FakeIndex::replying(vec![Reply::CancelJob(cancel.clone())]),
+        BackfillGate::open(1),
     );
     let progress = Arc::new(JobProgress::detached());
     let started = Instant::now();
@@ -320,8 +330,11 @@ async fn cancellation_stops_after_the_page_in_flight_without_waiting_out_its_pau
 
 #[tokio::test(start_paused = true)]
 async fn the_rate_bounds_documents_sent_per_second() {
-    let backfill =
-        EmailAttachmentStatusBackfill::new(FakeSource::new(&LINKED), FakeIndex::default());
+    let backfill = EmailAttachmentStatusBackfill::new(
+        FakeSource::new(&LINKED),
+        FakeIndex::default(),
+        BackfillGate::open(1),
+    );
     let started = Instant::now();
 
     backfill

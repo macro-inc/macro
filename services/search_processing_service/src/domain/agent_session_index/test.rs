@@ -121,6 +121,7 @@ async fn backfill_deduplicates_ids_and_full_scan_stops_at_end() {
                 agent_session_ids: vec![id, id],
                 index_override: None,
             },
+            &crate::domain::backfill_gate::BackfillGate::open(1),
             progress.clone(),
             CancellationToken::new(),
         )
@@ -131,6 +132,7 @@ async fn backfill_deduplicates_ids_and_full_scan_stops_at_end() {
     let receipt = service
         .backfill(
             AgentSessionBackfillRequest::default(),
+            &crate::domain::backfill_gate::BackfillGate::open(1),
             progress,
             CancellationToken::new(),
         )

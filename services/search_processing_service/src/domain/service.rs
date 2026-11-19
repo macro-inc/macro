@@ -7,6 +7,7 @@
 //! loops live here so they can be tested with in-memory fakes while adapters
 //! stay single-concern.
 
+use super::backfill_gate::BackfillGate;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -123,6 +124,7 @@ pub struct BackfillOrchestrator<S, P, I> {
     source: S,
     publisher: P,
     property_indexer: I,
+    gate: BackfillGate,
 }
 
 impl<S, P, I> BackfillOrchestrator<S, P, I>
@@ -131,11 +133,12 @@ where
     P: SearchEventPublisher,
     I: PropertyBackfillIndexer,
 {
-    pub fn new(source: S, publisher: P, property_indexer: I) -> Self {
+    pub fn new(source: S, publisher: P, property_indexer: I, gate: BackfillGate) -> Self {
         Self {
             source,
             publisher,
             property_indexer,
+            gate,
         }
     }
 }
@@ -185,6 +188,7 @@ where
 /// either completed and counted or fails without updating progress.
 async fn drain_property_source<Fut, I>(
     indexer: &I,
+    gate: &BackfillGate,
     progress: &JobProgress,
     cancel: &CancellationToken,
     fetch: impl Fn(usize) -> Fut,
@@ -214,7 +218,10 @@ where
         } = page;
 
         stream::iter(entity_ids)
-            .map(|entity_id| async move { indexer.reindex(&entity_id, entity_type).await })
+            .map(|entity_id| async move {
+                let _permit = gate.admit(1).await;
+                indexer.reindex(&entity_id, entity_type).await
+            })
             .buffer_unordered(20)
             .try_collect::<Vec<()>>()
             .await?;
@@ -302,9 +309,13 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_property_source(&self.property_indexer, &progress, &cancel, |offset| {
-            self.source.fetch_entity_properties(&req, offset)
-        })
+        drain_property_source(
+            &self.property_indexer,
+            &self.gate,
+            &progress,
+            &cancel,
+            |offset| self.source.fetch_entity_properties(&req, offset),
+        )
         .await
     }
 
