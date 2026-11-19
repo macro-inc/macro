@@ -268,6 +268,7 @@ function readSide(arg: string): RunFile {
   for (const field of ['section', 'set', 'judge'] as const) {
     if (new Set(runs.map((run) => run[field])).size > 1) throw new Error(`${arg} mixes ${field}s`);
   }
+  if (runs.length > 1 && runs.some((run) => !run.judge)) throw new Error(`${arg} joins runs with no judge recorded, which may come from different judges`);
   let offset = 0;
   const attempts = runs.flatMap((run) => {
     const shifted = run.attempts.map((attempt) => ({ ...attempt, rep: attempt.rep + offset }));
@@ -284,17 +285,17 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   const at = stack(values.instance!, values.tempo!);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
   // The judge must read what the generations read: the same workspace and mail, spelled the same.
-  for (const name of new Set(run.attempts.map((attempt) => attempt.persona))) {
+  const digests = run.personas;
+  if (!digests) throw new Error(`${path} predates persona digests, so what its generations read is unknown: run it again instead`);
+  const judged = [...new Set(run.attempts.map((attempt) => attempt.persona))].map((name) => {
     const persona = people.get(name);
     if (!persona) throw new Error(`${path}: set ${run.set} no longer has ${name}`);
-    const digest = run.personas?.[name];
-    if (digest ? digest !== personaDigest(persona) : persona.respelled > 0) {
-      throw new Error(
-        digest
-          ? `${path}: ${name}'s workspace or mail changed since this run: run it again instead`
-          : `${path} predates persona digests and ${name} has addresses spelled in ASCII, maybe not as they were then: run it again instead`,
-      );
-    }
+    if (digests[name] !== personaDigest(persona)) throw new Error(`${path}: ${name}'s workspace or mail changed since this run: run it again instead`);
+    return persona;
+  });
+  if (run.section === 'routines') {
+    const gaps = judged.flatMap((persona) => (persona.routinesTruth ? keyGaps(persona.routinesTruth) : ['is missing']).map((gap) => `${persona.name}'s routines answer key ${gap}`));
+    if (gaps.length) throw new Error(gaps.join('\n'));
   }
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
@@ -307,6 +308,8 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
       }),
     );
   });
+  const failed = run.attempts.filter((attempt) => attempt.benchError && !attempt.generation.error).length;
+  if (failed) throw new Error(`${path}: ${failed} attempts could not be judged, so the run file is left as it was`);
   run.judge = JUDGE;
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
   console.log(reportLines([run]).join('\n'));
@@ -316,7 +319,7 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
 function sameJudge(a: RunFile, b: RunFile) {
   for (const side of [a, b]) {
     // Runs from before the judge was recorded may come from different judges too.
-    if (!side.judge) throw new Error(`${side.label} has no judge recorded: rejudge it first`);
+    if (!side.judge) throw new Error(`${side.label} has no judge recorded, so its marks may come from another judge: run it again`);
   }
   if (a.judge !== b.judge) {
     throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);

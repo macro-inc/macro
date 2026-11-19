@@ -10,7 +10,7 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, namesFirstSeat, plainKey, recentMessages, scenario, scenarioName, seatOf, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, plainKey, recentMessages, renamesExactly, scenario, scenarioName, seatOf, truthAt } from './personas';
 import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
@@ -124,7 +124,7 @@ export async function judgeCost(at: Stack, grader: string, from: Date, to: Date)
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
-/** Mail text with any <mail> or </mail> in it opened by a look-alike, so it can't close the judge's own <mail> tag. */
+/** Mail text with any <mail> or </mail> in it opened by a look-alike, so it can't close the judge's own <mail> tag. A sender's address goes through it with its brackets. */
 const shown = (text: string) => text.replace(/<(\/?mail\b)/gi, '‹$1');
 
 /** The mailbox the generation read: the same copy, so addresses match what it quoted. */
@@ -132,7 +132,7 @@ const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
   recentMessages(persona, variant, now)
     .messages.map(
       (m, i) =>
-        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} <${shown(m.from.email)}> | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
+        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} ${shown(`<${m.from.email}>`)} | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
     )
     .join('\n\n');
 
@@ -226,19 +226,19 @@ export function describeRoutine(row: RoutineRow): string {
 /**
  * What a routines judgement reads of `persona`'s seat: its mail and its
  * suggestions. Every seat copies the first under a domain of its own, so
- * where renaming the seat's domain to the first seat's loses nothing (none of
- * its text names the first seat's domain already, and its mail renamed is the
- * first seat's mail exactly, though a snippet cut at 500 characters may cut a
- * longer domain's copy elsewhere), the judge reads the first seat's mail and
- * the suggestions renamed: the seats of one round then share that text word
- * for word (`shared`). Otherwise it reads the seat's own.
+ * where renaming the seat's domain to the first seat's loses nothing (all its
+ * text `renamesExactly`, and its mail renamed is the first seat's mail
+ * exactly, though a snippet cut at 500 characters may cut a longer domain's
+ * copy elsewhere), the judge reads the first seat's mail and the suggestions
+ * renamed: the seats of one round then share that text word for word
+ * (`shared`). Otherwise it reads the seat's own.
  */
 export function routinesEvidence(persona: Persona, generation: Generation): { mail: string; suggestions: string[]; shared: boolean } {
   const { variant, now } = generation;
   const own = inboxDigest(persona, variant, now);
   const described = generation.routines.map(describeRoutine);
   const firstMail = inboxDigest(seatOf(persona, 1), variant, now);
-  const shared = ![own, ...described].some((text) => namesFirstSeat(persona, variant, text)) && asFirstSeat(persona, variant, own) === firstMail;
+  const shared = [own, ...described].every((text) => renamesExactly(persona, variant, text)) && asFirstSeat(persona, variant, own) === firstMail;
   return shared
     ? { mail: firstMail, suggestions: described.map((text) => asFirstSeat(persona, variant, text)), shared }
     : { mail: own, suggestions: described, shared };

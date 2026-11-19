@@ -76,8 +76,6 @@ export type Persona = {
   inbox: Inbox;
   feedTruth?: FeedTruth;
   routinesTruth?: RoutinesTruth;
-  /** How many of its addresses are read spelled in ASCII (`asciiSpellings`). */
-  respelled: number;
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
@@ -87,8 +85,9 @@ export type Persona = {
 // its accents (and without the empty dot runs that can leave), or tagged with
 // its original spelling where that would leave it empty or the same as
 // another address of the persona. Files are parsed first, so an escaped
-// spelling ("in\\u00e8s") reads the same.
-const ADDRESS = /([^\s<>"',;:()@]+)@([\w.-]+\.\w+)/gu;
+// spelling ("in\\u00e8s") reads the same. An apostrophe inside a local part
+// ("o'neil") belongs to it; one around an address quotes it.
+const ADDRESS = /([^\s<>"',;:()@]+(?:'[^\s<>"',;:()@]+)*)@([\w.-]+\.\w+)/gu;
 const isAscii = (text: string) => /^[\x21-\x7e]*$/.test(text);
 
 const strings = (value: unknown): string[] => {
@@ -151,7 +150,6 @@ function load(dir: string, name: string, heldout: boolean): Persona {
     inbox: spellAddresses(inbox, spelled),
     feedTruth: spellAddresses(feedTruth, spelled),
     routinesTruth: spellAddresses(routinesTruth, spelled),
-    respelled: spelled.size,
   };
 }
 
@@ -218,20 +216,26 @@ export const slotName = (persona: Persona) => `${persona.name}${(persona.seat ??
 /** The owner's address in `variant`. */
 export const ownerEmail = (persona: Persona, variant: Variant) => variantOf(persona, variant).inbox.owner.email;
 
-const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/** `text` written about `persona`'s seat, with its addresses as the first seat's: every seat is a copy of the first, under a domain of its own. Domains match in any case. */
+/** `text` written about `persona`'s seat, with its addresses as the first seat's: every seat is a copy of the first, under a domain of its own. */
 export function asFirstSeat(persona: Persona, variant: Variant, text: string): string {
   const seat = domainOf(ownerEmail(persona, variant));
   const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
-  return seat === first ? text : text.replace(new RegExp(escaped(seat), 'gi'), first);
+  return seat === first ? text : text.replaceAll(seat, first);
 }
 
-/** Whether `text`, written about a later seat of `persona`, names the first seat's domain in any case, which renaming the seat's own to it would hide. */
-export function namesFirstSeat(persona: Persona, variant: Variant, text: string): boolean {
+/**
+ * Whether `asFirstSeat` keeps `text` as it was but for the seat's domain:
+ * `text` names the first seat's domain in no case, and its own only as it is
+ * spelled, so renaming neither merges two domains nor changes how one is
+ * written (a case-sensitive check against `ACME-S2.EXAMPLE` fails on the
+ * seat's mail, and would pass on the first seat's).
+ */
+export function renamesExactly(persona: Persona, variant: Variant, text: string): boolean {
   const seat = domainOf(ownerEmail(persona, variant));
   const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
-  return seat !== first && text.toLowerCase().includes(first.toLowerCase());
+  if (seat === first) return true;
+  const lower = text.toLowerCase();
+  return !lower.includes(first.toLowerCase()) && lower.split(seat.toLowerCase()).length === text.split(seat).length;
 }
 
 /** Minutes before the anchor a message arrived; at least one, as the seed CLI needs. */

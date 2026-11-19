@@ -102,12 +102,12 @@ single-session build 64.7 against 66.3) at about half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
-`compare` and `noise` refuse two sides judged by different judges, or a side
-whose judge wasn't recorded: `rejudge` that one first. A run also records a
-digest of each persona's workspace and mail as its generations read them, and
-`rejudge` refuses a run whose persona has changed since, so the judge reads
-what the generation read; a run from before the digest was kept is rejudged
-only when no address of its personas is respelled in ASCII.
+`compare` and `noise` refuse two sides judged by different judges (`rejudge`
+the older one) or a side whose judge wasn't recorded, and no side joins runs
+without one. A run also records a digest of each persona's
+workspace and mail as its generations read them, and `rejudge` refuses a run
+whose persona has changed since, or one from before the digest was kept, so
+the judge reads what the generation read: run that one again instead.
 
 ## Running it
 
