@@ -37,6 +37,11 @@ type HomeListEntityProps = BaseListEntityProps & {
    * inbox row about a thread does: it reads as Home's thread row.
    */
   thread?: boolean;
+  /**
+   * Name the item alone, as Recents does: the row is the viewer's own work,
+   * so no comment or join request renames it.
+   */
+  itemTitle?: boolean;
 };
 
 /** One compact, single-line Home item; the list owns focus and activation. */
@@ -49,10 +54,12 @@ export function HomeListEntity(props: HomeListEntityProps) {
   // A document announcing a comment reads like a thread row: the
   // comment glyph, who did what, and where. Opening it lands on the comment.
   const commentNotification = () =>
-    getDocumentCommentNotification(props.entity);
+    props.itemTitle ? undefined : getDocumentCommentNotification(props.entity);
   // A calendar event someone asked to join says who asked, like a comment.
   const joinRequestNotification = () =>
-    getCalendarJoinRequestNotification(props.entity);
+    props.itemTitle
+      ? undefined
+      : getCalendarJoinRequestNotification(props.entity);
   const unread = () => props.unread ?? unreadFilterFn(props.entity);
   // Resolved once: each read of a JSX prop would build the button again.
   const hoverAction = children(() => props.hoverAction);

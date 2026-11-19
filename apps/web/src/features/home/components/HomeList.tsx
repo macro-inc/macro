@@ -749,6 +749,7 @@ export function HomeList(props: HomeListProps) {
                                     when={isTouchDevice()}
                                     fallback={
                                       <HomeListEntity
+                                        itemTitle={state.tab === 'recent'}
                                         channelName={channelName(
                                           entityRow().entity
                                         )}
