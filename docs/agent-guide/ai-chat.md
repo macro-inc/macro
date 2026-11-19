@@ -1056,20 +1056,21 @@ adds a step at the end: AI writes it as code whenever code can do it
 (sending a message, changing items, with AI judging or writing the text
 inside the code) and as Ask AI only for open-ended work such as research,
 and a line says which and why, with **Ask AI each run instead** / **Write it once instead**
-and **Undo**. Definitions and standalone programs with stored input values
-offer manual step editing. A closed step's line reads its sentence with the values
+and **Undo**. Inside definitions and in standalone programs with stored input
+values, **Add step** adds an **Ask AI** step. A closed step's line reads its sentence with the values
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they
-start with an Ask AI step instead. When an SDK release breaks a routine's
-code and AI's update fails its checks, Macro pauses routines that run code
-in their own steps, and a paused routine's Overview leads with **Paused: its
-code needs an update** and shows the reason. A routine with code only in its
-sub-routine definitions stays active and shows **Its sub-routines’ code needs
-an update**; copies that need the broken code fail until it is updated.
-**Review the update** shows each changed step, including steps inside
-definitions. Approval waits for autosave and holds editing and activation
-controls while checking and saving. **Approve and resume** saves the update,
-checks it again and also turns a paused routine on.
+start with an Ask AI step instead. When an SDK release
+breaks a routine's own code and AI's update fails its checks, the routine pauses
+and its Overview leads with **Paused: its code needs an update**. If only its
+definitions' code needs updating and the routine is active, it stays active and
+shows **Its sub-routines’ code needs an update**. **Review the update** shows
+each changed step, including steps inside definitions. The notice disappears
+when the editor receives a saved task that differs from the task the proposal
+was made from. Approval waits for autosave and holds editing, settings and
+activation controls while checking and saving. **Approve and resume** turns a
+paused routine on after the code saves. A resume or review refresh failure
+after the save has its own message.
 
 ## Routine run notifications and failures
 
