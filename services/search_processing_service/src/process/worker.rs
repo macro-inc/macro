@@ -15,7 +15,8 @@ const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(30);
 /// How far each heartbeat pushes a message's visibility out.
 const VISIBILITY_EXTENSION_SECONDS: i32 = 120;
 /// How long one visibility change may take; the queue client has no timeout
-/// of its own, and a stalled change would hold the work and a stop up.
+/// of its own. It bounds a hand-back at a stop, and a stalled heartbeat gives
+/// way to the next one.
 const VISIBILITY_CALL_TIMEOUT: Duration = Duration::from_secs(3);
 /// How long the messages a worker holds may keep running after a stop before
 /// they are released to the queue. The task is killed 10 s after the stop.
@@ -150,6 +151,7 @@ async fn receive_and_process(ctx: &SearchProcessingContext, stop: &CancellationT
     // messages on the queue instead of holding them; the short wait keeps an
     // idle worker from holding units another backfill could use.
     let mut batch = tokio::select! {
+        biased;
         () = stop.cancelled() => return Round::Stopped,
         batch = ctx.backfill_gate.admit_up_to(ctx.messages_per_receive) => batch,
     };
@@ -320,16 +322,25 @@ async fn release_all(messages: &[impl MessageVisibility]) {
     futures::future::join_all(messages.iter().map(release)).await;
 }
 
-/// Extend `message`'s visibility every [`VISIBILITY_HEARTBEAT`]; it never
-/// ends, and is dropped with the work it keeps hidden.
-async fn keep_hidden(message: &impl MessageVisibility) -> std::convert::Infallible {
+/// Extend `message`'s visibility every [`VISIBILITY_HEARTBEAT`] until `stop`;
+/// it never ends, and is dropped with the work it keeps hidden. No heartbeat
+/// starts after the stop, so none can land after the hand-back; one already
+/// sent ends within [`VISIBILITY_CALL_TIMEOUT`], before [`DRAIN_GRACE`].
+async fn keep_hidden(
+    message: &impl MessageVisibility,
+    stop: &CancellationToken,
+) -> std::convert::Infallible {
     let mut heartbeat = tokio::time::interval_at(
         tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
         VISIBILITY_HEARTBEAT,
     );
     heartbeat.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        heartbeat.tick().await;
+        tokio::select! {
+            biased;
+            () = stop.cancelled() => return std::future::pending().await,
+            _ = heartbeat.tick() => {}
+        }
         if let Err(error) = hide(message, VISIBILITY_EXTENSION_SECONDS).await {
             tracing::warn!(error = ?error, "failed to extend a message's visibility");
         }
@@ -381,7 +392,7 @@ pub(crate) async fn supervise<T>(
             Supervised::Released
         }
         () = tokio::time::sleep(MESSAGE_PROCESSING_TIMEOUT) => Supervised::TimedOut,
-        never = keep_hidden(message) => match never {},
+        never = keep_hidden(message, stop) => match never {},
     }
 }
 

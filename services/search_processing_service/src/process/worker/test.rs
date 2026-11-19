@@ -279,3 +279,23 @@ async fn a_receive_without_a_stop_runs_to_its_deadline() {
     assert_eq!(received, Receive::TimedOut);
     assert_eq!(started.elapsed(), ADMITTED_RECEIVE_DEADLINE);
 }
+
+#[tokio::test(start_paused = true)]
+async fn no_heartbeat_is_sent_after_a_stop() {
+    let (message, calls) = message();
+    let stop = stop_after(Duration::from_secs(28));
+
+    let outcome = supervise(
+        async { tokio::time::sleep(Duration::from_secs(32)).await },
+        &message,
+        &stop,
+    )
+    .await;
+
+    assert_eq!(outcome, Supervised::Finished(()));
+    assert!(
+        calls.calls().is_empty(),
+        "a heartbeat after the stop could land after the hand-back: {:?}",
+        calls.calls()
+    );
+}
