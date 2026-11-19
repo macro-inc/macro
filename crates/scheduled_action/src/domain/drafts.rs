@@ -1283,28 +1283,26 @@ fn agent_task_steps(task: &Value) -> Option<Vec<Value>> {
 
 /// Sub-routines as a routine's task holds them once checked: parsed, with
 /// their code steps named (within each), so the same definitions compare
-/// equal however they were sent, and in name order, since copies find theirs
-/// by name. Without their apps, which the SDK a session checks with can't
-/// hold and no code reads: the step is applied to the routine as the editor
-/// holds it, apps and all.
+/// equal however they were sent, and in name order, inputs too, since copies
+/// find theirs, and steps their inputs, by name. Without their apps, which
+/// the SDK a session checks with can't hold and no code reads: the step
+/// is applied to the routine as the editor holds it, apps and all.
 fn checked_sub_routines(sub_routines: &[Value]) -> Value {
     let task = named_steps(&json!({ "steps": [], "sub_routines": sub_routines }));
     let mut definitions = task
         .get("sub_routines")
         .cloned()
         .unwrap_or_else(|| Value::Array(Vec::new()));
+    let name = |named: &Value| named.get("name").and_then(Value::as_str).map(str::to_owned);
     if let Value::Array(definitions) = &mut definitions {
         for definition in definitions.iter_mut() {
             if let Value::Object(fields) = definition {
                 fields.remove("mcp_servers");
+                if let Some(Value::Array(inputs)) = fields.get_mut("inputs") {
+                    inputs.sort_by_key(name);
+                }
             }
         }
-        let name = |definition: &Value| {
-            definition
-                .get("name")
-                .and_then(Value::as_str)
-                .map(str::to_owned)
-        };
         definitions.sort_by_key(name);
     }
     definitions

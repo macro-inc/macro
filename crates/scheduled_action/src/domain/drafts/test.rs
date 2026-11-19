@@ -1716,6 +1716,10 @@ async fn a_step_checked_with_the_routines_sub_routines_in_another_order_is_hande
         let mut check = routine.task["sub_routines"][0].clone();
         check["name"] = json!("check");
         check["title"] = json!("Check on a task");
+        check["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({ "type": "number", "name": "days", "label": "Days" }));
         routine.task["sub_routines"]
             .as_array_mut()
             .unwrap()
@@ -1727,9 +1731,14 @@ async fn a_step_checked_with_the_routines_sub_routines_in_another_order_is_hande
     let sessions = Arc::new(Sessions::new(
         &rows,
         Box::new(|_| {
-            // The session sent them back sorted, `check` before `remind`.
+            // The session sent them back sorted, `check` before `remind`,
+            // and `check`'s inputs sorted too.
             let mut routine = with_two();
             routine.task["sub_routines"]
+                .as_array_mut()
+                .unwrap()
+                .reverse();
+            routine.task["sub_routines"][0]["inputs"]
                 .as_array_mut()
                 .unwrap()
                 .reverse();
