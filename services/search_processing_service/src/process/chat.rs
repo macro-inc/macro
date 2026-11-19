@@ -39,7 +39,14 @@ pub(crate) async fn upsert_chat_message_by_ids(
         .context("failed to get chat message info")?;
 
     let Some(info) = info else {
-        return Ok(());
+        return remove_missing_chat_message(
+            opensearch_client,
+            db,
+            chat_id,
+            message_id,
+            index_override,
+        )
+        .await;
     };
 
     if info.deleted_at.is_some() {
@@ -81,6 +88,36 @@ pub(crate) async fn upsert_chat_message_by_ids(
     Ok(())
 }
 
+/// Removes a message whose row is gone from search, and its whole chat when
+/// the chat's row is gone too. A trashed chat keeps its other messages, since
+/// search keeps trashed chats until they are permanently deleted.
+async fn remove_missing_chat_message(
+    opensearch_client: &OpensearchClient,
+    db: &sqlx::Pool<sqlx::Postgres>,
+    chat_id: &str,
+    message_id: &str,
+    index_override: Option<&str>,
+) -> anyhow::Result<()> {
+    // The history query returns every chat row, trashed or not; the user id
+    // only joins view history, which is not read here.
+    let chat_exists =
+        macro_db_client::chat::get::get_chat_history_info(db, "", &[chat_id.to_owned()])
+            .await
+            .context("failed to check whether the chat still exists")?
+            .contains_key(chat_id);
+    if chat_exists {
+        tracing::info!(
+            chat_id,
+            message_id,
+            "chat message no longer exists; removing it from search"
+        );
+        remove_chat_message(opensearch_client, chat_id, Some(message_id), index_override).await
+    } else {
+        tracing::info!(chat_id, "chat no longer exists; removing it from search");
+        remove_chat_message(opensearch_client, chat_id, None, index_override).await
+    }
+}
+
 /// Removes a chat message or all messages for a chat from the search index.
 #[tracing::instrument(skip(opensearch_client), err)]
 pub(crate) async fn remove_chat_message(
@@ -103,3 +140,6 @@ pub(crate) async fn remove_chat_message(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

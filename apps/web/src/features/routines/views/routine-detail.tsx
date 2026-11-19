@@ -213,6 +213,7 @@ export function RoutineDetailView(props: {
                 ? 'You'
                 : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner',
             runsAsDescription: 'Steps and AI act with the owner’s access.',
+            unusableItems: props.source.unusableItems,
             unsupported: (
               <p class="text-sm text-ink-muted">
                 This routine has an unsupported task configuration.

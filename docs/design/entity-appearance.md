@@ -3,7 +3,7 @@
 ## Scope
 
 Customize routines, ordinary Markdown documents, snippets, task projects
-(initiatives), forms, and databases. Exclude tasks, skills, internal collab
+(initiatives), forms, databases, and saved views. Exclude tasks, skills, internal collab
 documents, Drive folders, and other file types.
 
 Appearance belongs to the shared entity, not the viewer. Every identity surface,

@@ -1,7 +1,7 @@
 use super::*;
 use std::sync::Arc;
 
-struct TestSecretManager;
+pub(crate) struct TestSecretManager;
 
 impl secretsmanager_client::SecretManager for TestSecretManager {
     type Err = std::io::Error;
@@ -18,7 +18,7 @@ impl secretsmanager_client::SecretManager for TestSecretManager {
     }
 }
 
-fn config_values() -> serde_json::Value {
+pub(crate) fn config_values() -> serde_json::Value {
     serde_json::json!({
         "ENVIRONMENT": "dev",
         "FUSIONAUTH_BASE_URL": "https://example.com",

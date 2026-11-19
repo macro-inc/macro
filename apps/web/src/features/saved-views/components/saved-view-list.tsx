@@ -4,6 +4,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from '@core/component/ContextMenu';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
@@ -163,7 +164,11 @@ export function SavedViewListRow(props: {
           aria-label={label()}
         >
           <ViewSidebar.Icon>
-            <BookmarkIcon class="size-4" />
+            <EntityIcon
+              targetType="saved_view"
+              appearance={props.view.appearance}
+              size="xs"
+            />
           </ViewSidebar.Icon>
           <span class="truncate">{props.view.name}</span>
         </ViewSidebar.Item>

@@ -108,7 +108,9 @@ Outlook (Microsoft Graph) outbound adapters.
   code, or request id; the others drop them.
 - `outlook.graph_request` is the Graph telemetry contract the Outlook sync
   monitors in `infra/stacks/monitoring` read. Every attempt records
-  `outlook.throttle_origin` (`gate`, `graph` or `none`); a gate refusal
+  `outlook.throttle_origin` (`gate`, `graph` or `none`), and a request Graph
+  refuses records its `graph.error_code`, never the error's message, which
+  can quote addresses; a gate refusal
   (`RateLimitOrigin::Gate` with its `GateLimit`) sent nothing, so it is not
   a span error and logs at DEBUG. The span sets `operation.name` because
   Datadog files a client span with an HTTP method as `http.client.request`,

@@ -31,6 +31,63 @@ pub trait TaskTargetValidator: Send + Sync + 'static {
         task: &serde_json::Value,
         owner: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The entity knobs of a saved task whose item its owner can't use now.
+    fn unusable_knobs(
+        &self,
+        task: &serde_json::Value,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
+}
+
+/// Whether a routine's owner can use the item an entity knob names: it
+/// exists, is of the knob's kind, and they can open it. `async_trait` keeps
+/// it object-safe; validation and the runner hold it as `Arc<dyn KnobEntities>`.
+#[async_trait::async_trait]
+pub trait KnobEntities: Send + Sync + 'static {
+    /// `Ok(false)` when it is gone or out of reach; `Err` only when that
+    /// couldn't be found out.
+    async fn usable(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        item: &routine_program::EntityValue,
+    ) -> Result<bool, Report>;
+}
+
+/// Compositions that can't look items up: every entity knob is refused.
+pub struct NoKnobEntities;
+
+#[async_trait::async_trait]
+impl KnobEntities for NoKnobEntities {
+    async fn usable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _item: &routine_program::EntityValue,
+    ) -> Result<bool, Report> {
+        Err(rootcause::report!(
+            "this scheduler cannot check the items routines use"
+        ))
+    }
+}
+
+/// Whether a person is a Macro user, for entity knobs that name a person.
+pub trait KnownPeople: Send + Sync + 'static {
+    fn exists(
+        &self,
+        user: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+}
+
+/// Whether an item its owner can open is still one an entity knob can use:
+/// not in the trash, and a task still a task. Documents, tasks, folders and
+/// chats go to the trash, where their owner can still open them; the other
+/// kinds are deleted outright, which the access check already catches.
+pub trait LiveItems: Send + Sync + 'static {
+    /// `Ok(false)` when it is trashed, gone, or no longer of its kind.
+    fn live(
+        &self,
+        item: &routine_program::EntityValue,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
 }
 
 pub trait ScheduledActionRepo: Send + Sync + 'static {
@@ -347,6 +404,13 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+
+    /// The routine's entity knobs whose item its owner can't use now, checked
+    /// as the owner, as its runs will be.
+    fn get_unusable_knobs(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<super::knob_entities::UnusableKnob>>> + Send;
 }
 
 /// A create's result: a new routine, or the sub-routine its key already named.
