@@ -9,7 +9,7 @@ import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
-import { untrack } from 'solid-js';
+import { Show, untrack } from 'solid-js';
 import { z } from 'zod';
 
 /** Accounts with calendar access at which the prompt has done its job. */
@@ -112,16 +112,24 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
         ),
     };
   };
+  // A card remembers whether it was shown under its id, so a new id gets a
+  // new card rather than one still remembering under the old id.
   return (
-    <SidebarPromotion
-      id={accountCase()?.copy.id ?? COPY.id}
-      applies={allOf(state() === undefined ? undefined : !state()?.satisfied)}
-      logos={logos()}
-      headline={headline()}
-      pitch={pitch()}
-      class={props.class}
-      dismissLabel={`Dismiss ${headline().toLowerCase()}`}
-      action={action()}
-    />
+    <Show when={accountCase()?.copy.id ?? COPY.id} keyed>
+      {(id) => (
+        <SidebarPromotion
+          id={id}
+          applies={allOf(
+            state() === undefined ? undefined : !state()?.satisfied
+          )}
+          logos={logos()}
+          headline={headline()}
+          pitch={pitch()}
+          class={props.class}
+          dismissLabel={`Dismiss ${headline().toLowerCase()}`}
+          action={action()}
+        />
+      )}
+    </Show>
   );
 }

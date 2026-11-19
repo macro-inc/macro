@@ -13,6 +13,9 @@ const host = vi.hoisted(() => ({
       }[]
     | undefined,
   dismissed: [] as string[],
+  dismissalsLoaded: true,
+  /** Tells the accounts accessor that `accounts` changed. */
+  bump: () => {},
   startAddInbox: vi.fn(),
   outlookOffered: false,
 }));
@@ -21,16 +24,23 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true }),
 }));
 vi.mock('@queries/prompt-dismissals', () => ({
-  usePromptDismissalsQuery: () => ({
-    isSuccess: true,
-    isError: false,
-    data: { dismissed: host.dismissed },
-  }),
+  usePromptDismissalsQuery: () =>
+    host.dismissalsLoaded
+      ? { isSuccess: true, isError: false, data: { dismissed: host.dismissed } }
+      : { isSuccess: false, isError: false, data: undefined },
   dismissPromptEverywhere: vi.fn(),
 }));
-vi.mock('@app/features/calendar/hooks/use-calendar-accounts', () => ({
-  useLoadedCalendarAccounts: () => () => host.accounts,
-}));
+vi.mock('@app/features/calendar/hooks/use-calendar-accounts', async () => {
+  const { createSignal } = await import('solid-js');
+  const [version, setVersion] = createSignal(0);
+  host.bump = () => setVersion((v) => v + 1);
+  return {
+    useLoadedCalendarAccounts: () => () => {
+      version();
+      return host.accounts;
+    },
+  };
+});
 vi.mock('@core/email-link', () => ({
   useAddInboxFlow: () => host.startAddInbox,
 }));
@@ -55,6 +65,7 @@ afterEach(() => {
   cleanup();
   host.accounts = [];
   host.dismissed = [];
+  host.dismissalsLoaded = true;
   host.startAddInbox.mockReset();
   host.outlookOffered = false;
   localStorage.clear();
@@ -156,6 +167,24 @@ describe('ConnectCalendarsPromotion', () => {
     });
     expect(
       screen.getByRole('button', { name: 'Dismiss calendar stopped syncing' })
+    ).toBeTruthy();
+  });
+
+  it('shows a calendar that stopped syncing at once after a reload', () => {
+    host.accounts = [account('work@example.com', 'enable')];
+    const view = render(() => <ConnectCalendarsPromotion />);
+    host.accounts = [account('work@example.com', 'reconnect', true)];
+    host.bump();
+    expect(
+      screen.getByRole('heading', { name: 'Calendar stopped syncing' })
+    ).toBeTruthy();
+    view.unmount();
+    // Reload: links and dismissals still loading.
+    host.accounts = undefined;
+    host.dismissalsLoaded = false;
+    render(() => <ConnectCalendarsPromotion />);
+    expect(
+      screen.getByRole('heading', { name: 'Calendar stopped syncing' })
     ).toBeTruthy();
   });
 
