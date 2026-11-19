@@ -198,6 +198,10 @@ export function useCodeUpgradesQuery(
     get isSuccess() {
       return query.isSuccess;
     },
+    /** Its last read failed; `data` keeps what an earlier one read. */
+    get isError() {
+      return query.isError;
+    },
     async refetch({
       parentSpan,
       ...options
