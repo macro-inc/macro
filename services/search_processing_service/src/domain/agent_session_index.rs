@@ -167,8 +167,9 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
                     continue;
                 }
                 let _permit = tokio::select! {
-                    permit = gate.admit() => permit,
+                    biased;
                     () = cancel.cancelled() => break,
+                    permit = gate.admit() => permit,
                 };
                 self.reconcile(
                     AgentSessionId::new_from_uuid(id),
@@ -193,8 +194,9 @@ impl<S: SearchSnapshotService, I: AgentSessionSearchIndex> AgentSessionIndexServ
                 }
                 for id in ids {
                     let _permit = tokio::select! {
-                        permit = gate.admit() => permit,
+                        biased;
                         () = cancel.cancelled() => break,
+                        permit = gate.admit() => permit,
                     };
                     self.reconcile(
                         AgentSessionId::new_from_uuid(id),

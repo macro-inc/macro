@@ -152,6 +152,68 @@ async fn the_watcher_follows_the_switch_and_keeps_the_last_state_on_a_failed_rea
     watcher.await.unwrap();
 }
 
+/// Hangs on the reads its script marks `None`, answers the others.
+struct StallingControl(Mutex<VecDeque<Option<bool>>>);
+
+impl BackfillControl for StallingControl {
+    async fn paused(&self) -> Result<bool, BackfillError> {
+        let answer = self.0.lock().unwrap().pop_front().flatten();
+        match answer {
+            Some(paused) => Ok(paused),
+            None => std::future::pending().await,
+        }
+    }
+
+    async fn set_paused(&self, _: bool) -> Result<(), BackfillError> {
+        Ok(())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stalled_read_gives_way_to_the_next_one() {
+    let control = StallingControl(Mutex::new(VecDeque::from([None, Some(true)])));
+    let (pause, mut paused) = watch::channel(false);
+    let stop = CancellationToken::new();
+    let watcher = tokio::spawn(watch_pause(
+        control,
+        pause,
+        PAUSE_POLL_INTERVAL,
+        stop.clone(),
+    ));
+
+    tokio::time::timeout(
+        PAUSE_POLL_INTERVAL * 2 + PAUSE_READ_TIMEOUT + Duration::from_millis(1),
+        paused.changed(),
+    )
+    .await
+    .expect("the read after a stalled one applies the switch")
+    .unwrap();
+    assert!(*paused.borrow());
+
+    stop.cancel();
+    watcher.await.unwrap();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_stop_ends_the_watcher_during_a_read() {
+    let control = StallingControl(Mutex::new(VecDeque::from([None])));
+    let (pause, _paused) = watch::channel(false);
+    let stop = CancellationToken::new();
+    let watcher = tokio::spawn(watch_pause(
+        control,
+        pause,
+        PAUSE_POLL_INTERVAL,
+        stop.clone(),
+    ));
+    tokio::time::sleep(PAUSE_POLL_INTERVAL + Duration::from_secs(1)).await;
+
+    stop.cancel();
+    tokio::time::timeout(Duration::from_millis(1), watcher)
+        .await
+        .expect("a stop does not wait for the read")
+        .unwrap();
+}
+
 #[tokio::test(start_paused = true)]
 async fn a_switch_closed_while_paused_holds_work_back_without_spinning() {
     let (pause, paused) = watch::channel(true);

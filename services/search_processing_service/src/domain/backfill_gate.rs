@@ -15,8 +15,11 @@ use tracing::{Instrument as _, field};
 use super::ports::BackfillControl;
 
 /// How often each task rereads the pause switch, so a flip reaches every task
-/// within this long.
+/// within this long plus one read.
 pub const PAUSE_POLL_INTERVAL: Duration = Duration::from_secs(10);
+/// How long one read of the pause switch may take before the task gives up
+/// on it.
+pub const PAUSE_READ_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Shared by every backfill path in a task; clones share the cap and the pause.
 #[derive(Clone)]
@@ -163,7 +166,7 @@ pub async fn read_pause<C: BackfillControl>(control: &C, timeout: Duration) -> b
 }
 
 /// Keep `paused` in step with the control store until `stop`: read it every
-/// `interval`. A failed read keeps the last state.
+/// `interval`. A failed or slow read keeps the last state.
 pub async fn watch_pause<C: BackfillControl>(
     control: C,
     paused: watch::Sender<bool>,
@@ -175,22 +178,38 @@ pub async fn watch_pause<C: BackfillControl>(
             () = stop.cancelled() => break,
             () = tokio::time::sleep(interval) => {}
         }
-        let span = tracing::info_span!("search.backfill_pause_read", paused = field::Empty);
-        async {
-            match control.paused().await {
-                Ok(now) => {
-                    tracing::Span::current().record("paused", now);
+        let span = tracing::info_span!(
+            "search.backfill_pause_read",
+            paused = field::Empty,
+            outcome = field::Empty,
+        );
+        let read = async {
+            match tokio::time::timeout(PAUSE_READ_TIMEOUT, control.paused()).await {
+                Ok(Ok(now)) => {
+                    tracing::Span::current()
+                        .record("paused", now)
+                        .record("outcome", "read");
                     if paused.send_replace(now) != now {
                         tracing::info!(paused = now, "backfill pause switch changed");
                     }
                 }
-                Err(error) => {
+                Ok(Err(error)) => {
+                    tracing::Span::current().record("outcome", "failed");
                     tracing::warn!(error = ?error, "failed reading the backfill pause switch; keeping the last state");
+                }
+                Err(_) => {
+                    tracing::Span::current().record("outcome", "timed_out");
+                    tracing::warn!(
+                        "reading the backfill pause switch timed out; keeping the last state"
+                    );
                 }
             }
         }
-        .instrument(span)
-        .await;
+        .instrument(span);
+        tokio::select! {
+            () = stop.cancelled() => break,
+            () = read => {}
+        }
     }
 }
 

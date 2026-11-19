@@ -8,6 +8,12 @@ pub(crate) const MESSAGE_PROCESSING_TIMEOUT: std::time::Duration =
 
 /// How long a worker holding backfill units waits for its first message.
 const ADMITTED_RECEIVE_WAIT_SECONDS: i32 = 2;
+/// How long a worker holding backfill units waits for its receive to answer,
+/// past the long-poll wait, before giving the units back. Messages a late
+/// answer carried come back after the visibility timeout, one receive closer
+/// to the dead-letter queue.
+const ADMITTED_RECEIVE_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(ADMITTED_RECEIVE_WAIT_SECONDS as u64 + 10);
 
 /// How long a worker that found the queue empty waits, holding no units,
 /// before it asks again: the rest of the queue's long-poll wait, so an idle
@@ -99,14 +105,20 @@ async fn receive_and_process(ctx: &SearchProcessingContext) -> Round {
         .admit_up_to(ctx.messages_per_receive)
         .await;
     let wanted = i32::try_from(batch.units()).unwrap_or(1);
-    let messages = match ctx
+    let receive = ctx
         .worker
-        .receive_messages_up_to(wanted, ADMITTED_RECEIVE_WAIT_SECONDS)
-        .await
-    {
-        Ok(messages) => messages,
-        Err(e) => {
+        .receive_messages_up_to(wanted, ADMITTED_RECEIVE_WAIT_SECONDS);
+    let messages = match tokio::time::timeout(ADMITTED_RECEIVE_DEADLINE, receive).await {
+        Ok(Ok(messages)) => messages,
+        Ok(Err(e)) => {
             tracing::error!(error=?e, "error receiving messages");
+            return Round::ReceiveFailed;
+        }
+        Err(_) => {
+            tracing::error!(
+                deadline_seconds = ADMITTED_RECEIVE_DEADLINE.as_secs(),
+                "receiving messages timed out"
+            );
             return Round::ReceiveFailed;
         }
     };
