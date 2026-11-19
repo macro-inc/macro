@@ -150,7 +150,7 @@ export const list = {
     {
       id: 'SL-27',
       name: 'Reading pane (thread beside list)',
-      opened: 'Header reading pane button or Shift+V',
+      opened: 'Header reading pane button, Space, or Shift+V',
       viewports: ['desktop'],
     },
     {
@@ -594,7 +594,7 @@ export const list = {
       surface: 'SL-27',
       fn: ['F-040'],
       action: 'toggle reading pane',
-      trigger: 'hotkey Shift+V',
+      trigger: 'hotkey Space or Shift+V',
       source: ['src/features/email-view/use-reading-pane-hotkey.ts'],
       registered: ['email.toggleReadingPane'],
     },

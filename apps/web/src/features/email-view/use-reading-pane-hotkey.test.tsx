@@ -15,13 +15,18 @@ afterEach(() => {
 });
 
 function press(key: string, init: KeyboardEventInit = {}) {
-  document.dispatchEvent(
-    new KeyboardEvent('keydown', { key, bubbles: true, ...init })
-  );
+  const keydown = new KeyboardEvent('keydown', {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  document.dispatchEvent(keydown);
   document.dispatchEvent(new KeyboardEvent('keyup', { key, bubbles: true }));
+  return keydown;
 }
 
-it('shows and hides the reading pane with Shift+V', () => {
+function renderEmail(readerHasKeyboard = () => false) {
   const [readingPane, setReadingPane] = createSignal(false);
   const view = render(() => {
     useHotKeyRoot();
@@ -31,6 +36,7 @@ it('shows and hides the reading pane with Shift+V', () => {
       enabled: () => true,
       readingPane,
       setReadingPane,
+      readerHasKeyboard,
     });
     return (
       <div ref={(element) => attachGlobalDOMScope(element)}>
@@ -39,9 +45,33 @@ it('shows and hides the reading pane with Shift+V', () => {
     );
   });
   view.getByTestId('email').focus();
+  return readingPane;
+}
+
+it('shows and hides the reading pane with Shift+V', () => {
+  const readingPane = renderEmail();
 
   press('V', { shiftKey: true });
   expect(readingPane()).toBe(true);
   press('V', { shiftKey: true });
   expect(readingPane()).toBe(false);
+});
+
+it('shows and hides the reading pane with Space', () => {
+  const readingPane = renderEmail();
+
+  expect(press(' ').defaultPrevented).toBe(true);
+  expect(readingPane()).toBe(true);
+  press(' ');
+  expect(readingPane()).toBe(false);
+});
+
+it('leaves Space to scroll the thread while the reader has the keyboard', () => {
+  const readingPane = renderEmail(() => true);
+
+  expect(press(' ').defaultPrevented).toBe(false);
+  expect(readingPane()).toBe(false);
+
+  press('V', { shiftKey: true });
+  expect(readingPane()).toBe(true);
 });

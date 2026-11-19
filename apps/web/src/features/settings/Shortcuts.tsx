@@ -1070,8 +1070,8 @@ const shortcutSections: ShortcutSection[] = [
         description: 'Jump to bottom of list',
       },
       {
-        keys: ['shift+v'],
-        codes: ['ShiftLeft', 'KeyV'],
+        keys: ['space', 'shift+v'],
+        codes: ['Space'],
         description: 'Show or hide the reading pane',
       },
     ],
