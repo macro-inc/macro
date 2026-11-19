@@ -367,6 +367,45 @@ async fn js_tools_without_the_rollout_is_refused_before_a_credential() {
     assert!(credentials.asked.lock().unwrap().is_empty());
 }
 
+/// Code mode that offers JS tools programs and OCaml as `main.rs` wires it,
+/// whichever is wired first: JS tools on its rollout alone, and then its
+/// permissions on too.
+#[tokio::test]
+async fn js_tools_and_ocaml_wire_in_either_order() {
+    let base = || {
+        CodeModeService::new(
+            Some(Arc::new(
+                ExecutionService::new(Arc::new(Never), Limits::default()).unwrap(),
+            )),
+            Arc::new(Credentials {
+                storage: "http://127.0.0.1:9".into(),
+                gate: Gate::Refuse,
+                asked: Mutex::default(),
+            }),
+            Arc::new(Store::default()),
+            Arc::new(Turn),
+        )
+    };
+    let ocaml = || crate::domain::OcamlPrograms {
+        fingerprint: "ocaml".into(),
+        rollout: Arc::new(Rollout(false)),
+        permissions: Some(Arc::new(Rollout(true))),
+    };
+    let js_tools = || JsToolsPrograms {
+        fingerprint: code_mode_assets::JS_TOOLS_FINGERPRINT.into(),
+        rollout: Arc::new(Rollout(true)),
+    };
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    for service in [
+        base().with_ocaml(ocaml()).with_js_tools(js_tools()),
+        base().with_js_tools(js_tools()).with_ocaml(ocaml()),
+    ] {
+        assert!(service.js_tools_enabled(&session).await);
+        assert!(!service.ocaml_enabled(&session).await);
+        assert!(service.permissions_enabled(&session).await);
+    }
+}
+
 /// A runner that is never reached.
 struct Never;
 #[async_trait]
