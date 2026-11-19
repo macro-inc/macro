@@ -72,6 +72,9 @@ pub const ALREADY_INITIALIZED_CODE: &str = "ALREADY_INITIALIZED";
 /// Stable machine-readable code for [`ConnectionError::NoGmailGrant`].
 pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
 
+/// Stable machine-readable code for [`InitializationError::InboxBeingRemoved`].
+pub const INBOX_BEING_REMOVED_CODE: &str = "INBOX_BEING_REMOVED";
+
 /// Structured 400 body carrying a machine-readable code. Clients branch on
 /// `code` instead of parsing the human message.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
@@ -87,7 +90,9 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
     match error {
         ConnectionError::MailboxInitialization(error) => match error {
             InitializationError::PaymentRequired => StatusCode::PAYMENT_REQUIRED,
-            InitializationError::InvalidAttempt => StatusCode::BAD_REQUEST,
+            InitializationError::InvalidAttempt | InitializationError::InboxBeingRemoved => {
+                StatusCode::BAD_REQUEST
+            }
             InitializationError::IdentityConflict
             | InitializationError::Changed
             | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
@@ -171,6 +176,14 @@ impl IntoResponse for InitError {
                 Json(InitErrorCodeResponse {
                     code: NO_GMAIL_GRANT_CODE.to_string(),
                     message: InitErrorKind::NoGmailGrant.to_string(),
+                }),
+            )
+                .into_response(),
+            InitErrorKind::MailboxInitialization(InitializationError::InboxBeingRemoved) => (
+                status_code,
+                Json(InitErrorCodeResponse {
+                    code: INBOX_BEING_REMOVED_CODE.to_string(),
+                    message: InitializationError::InboxBeingRemoved.to_string(),
                 }),
             )
                 .into_response(),

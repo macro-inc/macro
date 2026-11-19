@@ -98,15 +98,19 @@ pub trait Disks: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DriveBacking, Self::Err>> + Send;
 
     /// Freeze the golden rootfs after its snapshot: computers clone it and
-    /// nothing writes it again.
+    /// nothing writes it again. On ZFS the golden's disk set also gets an
+    /// empty `/home` of every size of the last [`Disks::prepare_home_templates`].
     fn seal_golden_rootfs(
         &self,
         key: &GoldenKey,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Make the empty `/home` templates of these sizes.
+    /// Make the empty `/home` of these sizes a create starts from: on XFS
+    /// one template file per size; on ZFS one file per size in the disk set
+    /// of each golden in `goldens`, so a computer's clone already holds it.
     fn prepare_home_templates(
         &self,
+        goldens: &[GoldenKey],
         sizes_gib: &[u32],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
@@ -119,8 +123,8 @@ pub trait Disks: Send + Sync + 'static {
         home_sizes_gib: &[u32],
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Whether the `/home` templates of these sizes exist.
-    fn home_templates_ready(&self, sizes_gib: &[u32]) -> bool;
+    /// Whether the empty `/home` of these sizes exist (for `goldens`, on ZFS).
+    fn home_templates_ready(&self, goldens: &[GoldenKey], sizes_gib: &[u32]) -> bool;
 
     /// Whether `key`'s sealed golden rootfs exists.
     fn golden_rootfs_present(&self, key: &GoldenKey) -> bool;
@@ -299,6 +303,11 @@ pub trait Machines: Send + Sync + 'static {
         bytes: u64,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Let all VMs swap, or none (`memory.swap.max` of their parent cgroup:
+    /// `max` or 0).
+    fn set_guest_swap(&self, swap: GuestSwap)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Set the VM cgroup's `cpu.weight` (1..=10000; the default is 100).
     fn set_cpu_weight(
         &self,
@@ -409,4 +418,13 @@ pub trait HostOperations: Send + Sync + 'static {
         &self,
         computer_id: ComputerId,
     ) -> impl Future<Output = Result<Self::GuestStream, HostError>> + Send;
+}
+
+/// Whether the VMs may swap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuestSwap {
+    /// As much as the kernel wants (all swap is in RAM).
+    Allowed,
+    /// Not at all (swap may reach a disk).
+    Off,
 }

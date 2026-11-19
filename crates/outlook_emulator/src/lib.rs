@@ -513,6 +513,13 @@ impl OutlookEmulator {
         })
     }
 
+    /// Deletes a folder for good, with its subfolders and their messages, as
+    /// if its owner had emptied it out of Deleted Items in Outlook. Its
+    /// messages are then read as Graph reads any message deleted for good.
+    pub fn delete_folder(&self, email: &str, folder: &str) -> Result<(), EmulatorError> {
+        self.with_state(|state| state.mailbox(email)?.remove_folder(folder))
+    }
+
     /// Drops a mailbox's sync state: its delta tokens answer 410, as after
     /// Graph expires them.
     pub fn expire_delta_tokens(&self, email: &str) -> Result<(), EmulatorError> {

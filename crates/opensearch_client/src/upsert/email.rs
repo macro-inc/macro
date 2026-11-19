@@ -206,7 +206,7 @@ pub(crate) async fn update_email_thread_properties(
                 "update_by_query reported failures updating email thread properties",
             );
             return Err(OpensearchClientError::Unknown {
-                details: format!("update_by_query failures: {failures:?}"),
+                details: serde_json::Value::from(failures.clone()).to_string(),
                 operation: OpensearchOperation::UpdateEmailThreadProperties,
             });
         }

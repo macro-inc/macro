@@ -23,7 +23,7 @@ import {
 } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { TeamInviteDetails } from '@service-auth/generated/schemas/teamInviteDetails';
-import { Button, cn, Dialog, Panel, Tabs, Tooltip } from '@ui';
+import { Button, cn, Dialog, Panel, Tooltip } from '@ui';
 import {
   type Accessor,
   createMemo,
@@ -49,7 +49,24 @@ const emailSchema = z.string().email();
 
 type InviteEntry = { email: string };
 
-type InviteKind = 'people' | 'agent';
+/** Which flow the invite dialog opens: people by email, or an agent teammate. */
+export type InviteKind = 'people' | 'agent';
+
+/**
+ * Whether the viewer may invite an agent teammate: team admins and owners,
+ * with agent teammates on and, because adding one buys its computer, Macro
+ * computers too. A flag still loading counts as off.
+ */
+export function useCanInviteAgents(isAdminOrOwner: () => boolean) {
+  const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const computersFlag = useMacroComputersRollout();
+  return () =>
+    isAdminOrOwner() &&
+    !agentFlag().loading &&
+    agentFlag().enabled &&
+    !computersFlag().loading &&
+    computersFlag().enabled;
+}
 
 const EMPTY_INVITE: InviteEntry = { email: '' };
 
@@ -462,32 +479,26 @@ export function CreateTeamDialog(props: {
 }
 
 /**
- * Invite people to an existing team by email. After sending, a second step
- * asks the inviter to give the invitees a heads-up with the team's invite
- * link: an email from someone they expect is far more likely to be opened.
+ * Invite people to an existing team by email, or (`kind="agent"`) add an
+ * agent teammate. After sending people invites, a second step asks the
+ * inviter to give the invitees a heads-up with the team's invite link: an
+ * email from someone they expect is far more likely to be opened.
  */
 export function InviteToTeamDialog(props: {
   teamId: string;
   /** Team admins and owners may reset or turn off the invite link. */
   canManageLink: boolean;
-  /** Team admins and owners may invite agent teammates, behind its flag. */
+  /** The flow to open; people unless the caller asks for an agent. */
+  kind?: InviteKind;
+  /** Whether the viewer may add agents (`useCanInviteAgents`). */
   canInviteAgents?: boolean;
   open: boolean;
   onClose: () => void;
 }) {
   const inviteToTeamMutation = useInviteToTeamMutation();
-  const agentFlag = useFeatureFlag(enableAgentTeammates);
-  // Adding an agent buys its computer, so it needs computers on too.
-  const computersFlag = useMacroComputersRollout();
-  const canInviteAgents = () =>
-    !!props.canInviteAgents &&
-    !agentFlag().loading &&
-    agentFlag().enabled &&
-    !computersFlag().loading &&
-    computersFlag().enabled;
-  const [chosenKind, setChosenKind] = createSignal<InviteKind>('people');
   // A rollout or role change that revokes agents falls back to people.
-  const kind = (): InviteKind => (canInviteAgents() ? chosenKind() : 'people');
+  const kind = (): InviteKind =>
+    props.kind === 'agent' && props.canInviteAgents ? 'agent' : 'people';
   // The addresses just invited; set once sending succeeds to show the
   // heads-up step.
   const [sent, setSent] = createSignal<string[]>();
@@ -516,7 +527,6 @@ export function InviteToTeamDialog(props: {
     setInvites([EMPTY_INVITE]);
     setInviteErrors([]);
     setSent(undefined);
-    setChosenKind('people');
     submission += 1;
     props.onClose();
   };
@@ -544,22 +554,6 @@ export function InviteToTeamDialog(props: {
     );
   };
 
-  const kindTabs = () => (
-    <Show when={canInviteAgents()}>
-      <Tabs
-        aria-label={t('teamAgents.inviteKind')}
-        touch="segmented"
-        fullWidth
-        options={[
-          { value: 'people', label: t('teamAgents.people') },
-          { value: 'agent', label: t('teamAgents.agent') },
-        ]}
-        value={kind()}
-        onChange={setChosenKind}
-      />
-    </Show>
-  );
-
   return (
     <Dialog open={props.open} onOpenChange={(open) => !open && close()}>
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
@@ -568,7 +562,14 @@ export function InviteToTeamDialog(props: {
             <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-base font-medium p-0 m-0">
-            <Show when={sent()} fallback="Invite to Team">
+            <Show
+              when={sent()}
+              fallback={
+                kind() === 'agent'
+                  ? t('teamAgents.inviteTitle')
+                  : 'Invite to Team'
+              }
+            >
               Let them know it's coming
             </Show>
           </Dialog.Title>
@@ -586,7 +587,6 @@ export function InviteToTeamDialog(props: {
         <Show when={!sent() && kind() === 'agent'}>
           <InviteAgentPanel
             teamId={props.teamId}
-            header={kindTabs()}
             onCancel={close}
             onInvited={close}
           />
@@ -594,7 +594,6 @@ export function InviteToTeamDialog(props: {
         <Show when={!sent() && kind() === 'people'}>
           <Panel.Body>
             <div class="flex flex-col gap-5 px-5 py-5">
-              {kindTabs()}
               <TeamInviteLinkSection
                 teamId={props.teamId}
                 canManage={props.canManageLink}
