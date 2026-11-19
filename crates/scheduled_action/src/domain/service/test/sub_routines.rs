@@ -307,6 +307,44 @@ async fn a_parent_switched_off_records_whether_its_sub_routines_followed() {
 }
 
 #[tokio::test]
+async fn a_sub_routine_that_cant_follow_its_parent_leaves_the_rest_to_follow() {
+    let (spans, _capture) = crate::domain::test_spans::Spans::capture();
+    let service = service(false);
+    let parent = top_level(&service, "parent").await;
+    start_run(&service, &parent, PARENT_RUN);
+    let stuck = create(&service, "stuck", from_code(&parent), Some("task-1"))
+        .await
+        .unwrap()
+        .into_action();
+    let follows = create(&service, "follows", from_code(&parent), Some("task-2"))
+        .await
+        .unwrap()
+        .into_action();
+
+    *service.repo.update_fails_for.lock().unwrap() = stuck.id;
+    service
+        .set_enabled(edit_receipt(parent.id.unwrap()), false, Requester::Person)
+        .await
+        .unwrap();
+
+    assert!(stored(&service, stuck.id.unwrap()).enabled);
+    assert!(!stored(&service, follows.id.unwrap()).enabled);
+    assert_eq!(spans.outcomes("routine.follow_parent"), ["partial"]);
+    assert_eq!(
+        spans.values("routine.follow_parent", "routine.sub_routines.failed"),
+        ["1"]
+    );
+    assert_eq!(
+        spans.values("routine.follow_parent", "routine.sub_routines.changed"),
+        ["1"]
+    );
+    assert_eq!(
+        spans.values("routine.follow_parent", "otel.status_code"),
+        ["ERROR"]
+    );
+}
+
+#[tokio::test]
 async fn a_run_of_a_paused_routine_creates_sub_routines_that_wait_for_it() {
     let service = service(false);
     let parent = top_level(&service, "parent").await;

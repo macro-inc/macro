@@ -54,13 +54,24 @@ impl UnusableItem {
 
     /// Why its step failed, for the run's history and the routine's page.
     pub fn run_failure(&self) -> String {
+        self.run_failure_in("the routine's settings")
+    }
+
+    /// Why a sub-routine copy's step failed: its knobs are its parent's
+    /// definition's, which only the parent's page edits.
+    pub fn copy_run_failure(&self) -> String {
+        self.run_failure_in("its parent routine's sub-routine")
+    }
+
+    /// Why its step failed, sending the owner to `place` for another item.
+    fn run_failure_in(&self, place: &str) -> String {
         let (noun, label) = (self.noun(), &self.label);
         if self.item.is_some() {
             format!(
-                "The {noun} picked for \"{label}\" was deleted or you no longer have access to it. Pick another in the routine's settings."
+                "The {noun} picked for \"{label}\" was deleted or you no longer have access to it. Pick another in {place}."
             )
         } else {
-            format!("No {noun} is picked for \"{label}\". Pick one in the routine's settings.")
+            format!("No {noun} is picked for \"{label}\". Pick one in {place}.")
         }
     }
 }
