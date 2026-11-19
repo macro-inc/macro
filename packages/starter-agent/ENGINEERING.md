@@ -42,9 +42,10 @@ does; `ARCHITECTURE.md` is how the code is laid out and the rules it keeps;
   itself after a landing (exit 75); a boot that comes up healthy records its
   HEAD as the last good one, which the supervisor rolls back to when boots
   keep failing. A broken `tsconfig.json` doesn't fail a boot (the script
-  checker is made on first use), so it is never rolled back: it fails each
-  script and `describe` until fixed, and `bun run check` is what catches it
-  before a land.
+  checker is made on first use), so it is never rolled back. Each process
+  that makes a checker after it broke (a script, or the agent's first
+  `describe`) fails until it is fixed; a checker the agent already made keeps
+  the configuration it read. `bun run check` is what catches it before a land.
 - An area keeps a short `DESIGN.md` next to its code where the why isn't
   obvious, so the next change doesn't repeat a dead end.
 - Don't patch around a design that keeps failing; rewrite it, with tests
