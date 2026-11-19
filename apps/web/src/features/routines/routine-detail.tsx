@@ -4,6 +4,7 @@ import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntity
 import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
+import { useFlowTrace } from '@app/observability/flow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -18,6 +19,7 @@ import {
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
 import { getOwner, onMount, Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
@@ -29,6 +31,10 @@ import {
 } from './queries/history-metadata';
 import { createRoutineAppTargetCheck } from './queries/routine-app-targets';
 import { createRoutineDetailSource } from './queries/routine-sources';
+import {
+  traceRoutineRequest,
+  withRoutineQueryTrace,
+} from './queries/routine-trace';
 import {
   useRoutineTemplateQuery,
   useUnshareTemplateMutation,
@@ -69,6 +75,7 @@ export function RoutineDetail(props: {
   onBack?: () => void;
   onOpen?: (id: string) => void;
 }) {
+  const flow = useFlowTrace();
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
@@ -177,6 +184,23 @@ export function RoutineDetail(props: {
     onSuccess: () => toast.success(t('subRoutines.stoppedSharing')),
     onError: () => toast.failure(t('subRoutines.stopSharingFailed')),
   });
+  const stopSharing = () => {
+    const parentSpan = flow?.run(() => Telemetry.captureContext());
+    unshare.mutate({
+      scheduleId: props.scheduleId,
+      ...(parentSpan && { parentSpan }),
+    });
+  };
+  const retrySharing = () => {
+    const span = Telemetry.span('routine.template.status.retry', {
+      attributes: { 'routine.id': props.scheduleId },
+    });
+    return traceRoutineRequest(span, () =>
+      withRoutineQueryTrace(span, (options) =>
+        published.refetch({ ...options, throwOnError: true })
+      )
+    );
+  };
   return (
     <Show
       when={ownedByViewer()}
@@ -234,14 +258,10 @@ export function RoutineDetail(props: {
         onShare={
           sharing().enabled && source.routine()?.shareable ? share : undefined
         }
-        onStopSharing={
-          hasPublishedSnapshot()
-            ? () => unshare.mutate({ scheduleId: props.scheduleId })
-            : undefined
-        }
+        onStopSharing={hasPublishedSnapshot() ? stopSharing : undefined}
         onRetrySharing={
           needsRevocation() && published.isError && !hasPublishedSnapshot()
-            ? () => fireAndForget(published.refetch(), 'routines')
+            ? () => fireAndForget(retrySharing(), 'routines')
             : undefined
         }
         stopSharingPending={unshare.isPending}

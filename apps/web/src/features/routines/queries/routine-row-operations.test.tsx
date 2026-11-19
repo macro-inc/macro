@@ -152,7 +152,7 @@ describe('routine row operations', () => {
 
     await vi.waitFor(() => expect(list.subRoutines()[0]?.id).toBe('digest'));
     expect(list.subRoutines()[0]?.canKeep).toBe(false);
-    setSlugs(new Set());
+    setSlugs(new Set<string>());
     expect(list.subRoutines()[0]?.canKeep).toBe(false);
     operations.keepAsOwn('digest');
     await Promise.resolve();

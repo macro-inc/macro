@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { usePending } from '@app/observability/flow';
+import { useFlowTrace, usePending } from '@app/observability/flow';
 import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -39,7 +39,7 @@ import {
   isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
-import { traceRoutineRequest } from './routine-trace';
+import { traceRoutineRequest, withRoutineQueryTrace } from './routine-trace';
 import { useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
@@ -131,6 +131,7 @@ export function createRoutineDetailSource(
   subRoutineWrites: Accessor<boolean | undefined>,
   connectedApps: Accessor<ReadonlySet<string> | undefined>
 ): RoutineDetailSource {
+  const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
   const raw = createMemo(
@@ -307,10 +308,24 @@ export function createRoutineDetailSource(
     parent,
     parentLoading,
     parentError: () => Boolean(parentId() && list.isError && !rawParent()),
-    refreshParent: () => list.refetch(),
+    refreshParent: () => {
+      const span = Telemetry.span('routine.parent_definition.retry', {
+        attributes: {
+          'routine.id': id(),
+          'routine.parent_id': parentId() ?? '',
+        },
+      });
+      return traceRoutineRequest(span, () =>
+        withRoutineQueryTrace(span, (options) =>
+          list.refetch({ ...options, throwOnError: true })
+        )
+      );
+    },
     canKeepAsOwn,
     keepAsOwn: () => {
-      if (canKeepAsOwn() && !keep.isPending) keep.mutate({ scheduleId: id() });
+      if (!canKeepAsOwn() || keep.isPending) return;
+      const parentSpan = flow?.run(() => Telemetry.captureContext());
+      keep.mutate({ scheduleId: id(), ...(parentSpan && { parentSpan }) });
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
@@ -333,9 +348,11 @@ export function createRoutineDetailSource(
       const draft = toRoutine(current).draft;
       if (!steps || !subRoutines || !draft) return;
       setApproving(true);
-      const approval = Telemetry.span('routine.code_approval', {
-        attributes: { 'routine.id': scheduleId },
-      });
+      const start = () =>
+        Telemetry.span('routine.code_approval', {
+          attributes: { 'routine.id': scheduleId },
+        });
+      const approval = flow ? flow.run(start) : start();
       const failed = (title: string, error: unknown) => {
         approval.error(title);
         callbacks.onError(title, error);
@@ -485,6 +502,7 @@ export function createRoutineRowOperations(
   callbacks: RowOperationCallbacks,
   subRoutineWrites: Accessor<boolean | undefined> = () => true
 ): RoutineRowOperations {
+  const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
   const connectedApps = createRoutineConnectedApps();
@@ -525,9 +543,13 @@ export function createRoutineRowOperations(
     const body = duplicateBody(id);
     if (body) await duplicate.mutateAsync({ body });
   });
-  const keeping = createPerRoutineMutation((id) =>
-    keep.mutateAsync({ scheduleId: id })
-  );
+  const keeping = createPerRoutineMutation((id) => {
+    const parentSpan = flow?.run(() => Telemetry.captureContext());
+    return keep.mutateAsync({
+      scheduleId: id,
+      ...(parentSpan && { parentSpan }),
+    });
+  });
   return {
     entity(id) {
       const schedule = find(id);

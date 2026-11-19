@@ -22,7 +22,11 @@ import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { scheduledActionKeys } from './keys';
 import { routineTargetKind } from './routine-draft';
-import { traceRoutineRequest } from './routine-trace';
+import {
+  routineQueryTrace,
+  traceRoutineRequest,
+  withRoutineQueryTrace,
+} from './routine-trace';
 
 const QUERY_REFETCH_BEHAVIOR = {
   refetchOnMount: 'always' as const,
@@ -102,6 +106,7 @@ export function useSchedulesQuery(enabled: Accessor<boolean>) {
     queryKey: scheduledActionKeys.list.queryKey,
     enabled: enabled(),
     queryFn: fetchSchedules,
+    behavior: routineQueryTrace,
     placeholderData: keepPreviousData,
     reconcile: 'id',
     ...QUERY_REFETCH_BEHAVIOR,
@@ -211,6 +216,7 @@ function childrenQueryOptions(scheduleId: string, enabled: boolean) {
   return queryOptions({
     queryKey: scheduledActionKeys.children({ scheduleId }).queryKey,
     enabled,
+    behavior: routineQueryTrace,
     queryFn: async () =>
       throwOnErr(
         async () => await scheduledActionClient.listChildren({ scheduleId })
@@ -250,27 +256,24 @@ export function useSubRoutinesQuery(enabled: Accessor<boolean>) {
     queryKey: scheduledActionKeys.subRoutines.queryKey,
     enabled: enabled(),
     queryFn: fetchSubRoutines,
+    behavior: routineQueryTrace,
     placeholderData: keepPreviousData,
     reconcile: 'id',
     ...QUERY_REFETCH_BEHAVIOR,
   }));
 }
 
-export function invalidateSchedules() {
-  return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: scheduledActionKeys.list.queryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: scheduledActionKeys.subRoutines.queryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: scheduledActionKeys.children._def,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: scheduledActionKeys.detail._def,
-    }),
-  ]);
+export function invalidateSchedules(parentSpan?: TraceContext) {
+  return withRoutineQueryTrace(parentSpan, (options) =>
+    Promise.all(
+      [
+        scheduledActionKeys.list.queryKey,
+        scheduledActionKeys.subRoutines.queryKey,
+        scheduledActionKeys.children._def,
+        scheduledActionKeys.detail._def,
+      ].map((queryKey) => queryClient.invalidateQueries({ queryKey }, options))
+    )
+  );
 }
 
 async function cacheDetachedSchedule(schedule: ScheduledAction) {
@@ -361,9 +364,7 @@ export function useUpdateScheduleMutation(
       {
         onSuccess: async (schedule, { parentSpan }) => {
           upsertSchedule(schedule);
-          await (parentSpan ?? Telemetry.captureContext()).run(
-            invalidateSchedules
-          );
+          await invalidateSchedules(parentSpan);
         },
       },
       callbacks
@@ -435,7 +436,7 @@ export function useSetScheduleEnabledMutation(
         },
         onSuccess: (schedule) => upsertSchedule(schedule),
         onSettled: (_schedule, _error, { parentSpan }) =>
-          (parentSpan ?? Telemetry.captureContext()).run(invalidateSchedules),
+          invalidateSchedules(parentSpan),
       },
       callbacks
     ),
@@ -447,25 +448,35 @@ export function useSetScheduleEnabledMutation(
  * leaves its parent's, so both are read again.
  */
 export function useDetachScheduleMutation(
-  callbacks?: MutationCallbacks<ScheduledAction, Error, { scheduleId: string }>
+  callbacks?: MutationCallbacks<
+    ScheduledAction,
+    Error,
+    { scheduleId: string; parentSpan?: TraceContext }
+  >
 ) {
   return useMutation(() => ({
-    mutationFn: (args: { scheduleId: string }) =>
-      traceRoutineRequest(
+    mutationFn: ({
+      scheduleId,
+      parentSpan,
+    }: {
+      scheduleId: string;
+      parentSpan?: TraceContext;
+    }) => {
+      const span = (parentSpan ?? Telemetry.captureContext()).run(() =>
         Telemetry.span('routine.detach', {
-          attributes: { 'routine.id': args.scheduleId },
-        }),
-        () => throwOnErr(() => scheduledActionClient.detach(args))
-      ),
-    ...withCallbacks(
-      {
-        onSuccess: async (schedule: ScheduledAction) => {
-          await cacheDetachedSchedule(schedule);
-          await invalidateSchedules();
-        },
-      },
-      callbacks
-    ),
+          attributes: { 'routine.id': scheduleId },
+        })
+      );
+      return traceRoutineRequest(span, async () => {
+        const schedule = await throwOnErr(() =>
+          scheduledActionClient.detach({ scheduleId })
+        );
+        await cacheDetachedSchedule(schedule);
+        await invalidateSchedules(span);
+        return schedule;
+      });
+    },
+    ...withCallbacks({}, callbacks),
   }));
 }
 

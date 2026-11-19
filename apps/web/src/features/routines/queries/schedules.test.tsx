@@ -1,3 +1,4 @@
+import { NOOP_SPAN, type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { QueryClientProvider } from '@tanstack/solid-query';
@@ -208,6 +209,79 @@ it('moves a detached copy out of both child caches when list refreshes fail', as
   expect(queryClient.getQueryData(activeKey)).toEqual([sibling]);
   expect(queryClient.getQueryData(detailKey)).toEqual(kept);
   expect(schedules()).toEqual([kept, routine, other]);
+});
+
+it('keeps detach open and parents both attempts of a child refresh', async () => {
+  queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+  const active: boolean[] = [];
+  let inDetach = false;
+  const end = vi.fn();
+  const span: Span = {
+    span: NOOP_SPAN.span,
+    error: NOOP_SPAN.error,
+    event: NOOP_SPAN.event,
+    setAttr: NOOP_SPAN.setAttr,
+    traceparent: NOOP_SPAN.traceparent,
+    injectTraceHeaders: NOOP_SPAN.injectTraceHeaders,
+    end,
+    run<T>(work: () => T): T {
+      const previous = inDetach;
+      inDetach = true;
+      try {
+        return work();
+      } finally {
+        inDetach = previous;
+      }
+    },
+  };
+  const start = vi.spyOn(Telemetry, 'span').mockReturnValue(span);
+  const childKey = scheduledActionKeys.subRoutines.queryKey;
+  listSubRoutines.mockResolvedValueOnce(ok([other]));
+  detach.mockResolvedValue(ok(routine));
+  let mutation!: ReturnType<typeof useDetachScheduleMutation>;
+  function Probe() {
+    useSubRoutinesQuery(() => true);
+    mutation = useDetachScheduleMutation();
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  try {
+    await vi.waitFor(() =>
+      expect(queryClient.getQueryData(childKey)).toEqual([other])
+    );
+    let finishRefresh!: () => void;
+    const response = new Promise((resolve) => {
+      finishRefresh = () => resolve(ok([other]));
+    });
+    listSubRoutines
+      .mockImplementationOnce(async () => {
+        active.push(inDetach);
+        return err([{ message: 'Try again' }]);
+      })
+      .mockImplementationOnce(() => {
+        active.push(inDetach);
+        return response;
+      });
+    const keeping = mutation.mutateAsync({ scheduleId: 'routine' });
+    try {
+      await vi.waitFor(() => expect(active).toHaveLength(2));
+      expect(active).toEqual([true, true]);
+      expect(end).not.toHaveBeenCalled();
+    } finally {
+      finishRefresh();
+      await keeping;
+    }
+    expect(end).toHaveBeenCalledOnce();
+  } finally {
+    start.mockRestore();
+  }
 });
 
 describe('routine activation', () => {

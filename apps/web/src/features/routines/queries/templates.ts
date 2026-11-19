@@ -25,7 +25,11 @@ import type { Accessor } from 'solid-js';
 import { sharesAsTemplate, templateShareBody } from '../core/template';
 import { scheduledActionKeys } from './keys';
 import { draftFromSchedule } from './routine-draft';
-import { traceRoutineRequest } from './routine-trace';
+import {
+  routineQueryTrace,
+  traceRoutineRequest,
+  withRoutineQueryTrace,
+} from './routine-trace';
 import { routineQueryOptions } from './routines';
 import { invalidateSchedules } from './schedules';
 
@@ -53,6 +57,7 @@ export function routineTemplateQueryOptions(
     }).queryKey,
     enabled: enabled && Boolean(scheduleId),
     queryFn: () => fetchTemplate(scheduleId!),
+    behavior: routineQueryTrace,
   });
 }
 
@@ -98,16 +103,29 @@ export async function publishRoutineTemplate(
 }
 
 export function useUnshareTemplateMutation(
-  callbacks?: MutationCallbacks<void, Error, { scheduleId: string }>
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    { scheduleId: string; parentSpan?: TraceContext }
+  >
 ) {
   return useMutation(() => ({
-    mutationFn: (args: { scheduleId: string }) =>
-      traceRoutineRequest(
+    mutationFn: ({
+      scheduleId,
+      parentSpan,
+    }: {
+      scheduleId: string;
+      parentSpan?: TraceContext;
+    }) => {
+      const span = (parentSpan ?? Telemetry.captureContext()).run(() =>
         Telemetry.span('routine.template.unshare', {
-          attributes: { 'routine.id': args.scheduleId },
-        }),
-        () => throwOnErr(() => scheduledActionClient.unshareTemplate(args))
-      ),
+          attributes: { 'routine.id': scheduleId },
+        })
+      );
+      return traceRoutineRequest(span, () =>
+        throwOnErr(() => scheduledActionClient.unshareTemplate({ scheduleId }))
+      );
+    },
     ...withCallbacks(
       { onSuccess: (_result, { scheduleId }) => setTemplate(scheduleId, null) },
       callbacks
@@ -142,14 +160,19 @@ export function useActivateTemplateMutation(
       ),
     ...withCallbacks(
       {
-        onSuccess: async (_routine, { templateId }) => {
+        onSuccess: async (_routine, { templateId, parentSpan }) => {
           await Promise.all([
-            invalidateSchedules(),
-            queryClient.invalidateQueries({
-              queryKey: scheduledActionKeys.template({
-                scheduleId: templateId,
-              }).queryKey,
-            }),
+            invalidateSchedules(parentSpan),
+            withRoutineQueryTrace(parentSpan, (options) =>
+              queryClient.invalidateQueries(
+                {
+                  queryKey: scheduledActionKeys.template({
+                    scheduleId: templateId,
+                  }).queryKey,
+                },
+                options
+              )
+            ),
           ]);
         },
       },

@@ -1772,7 +1772,7 @@ describe('sub-routines defined once', () => {
     expect(
       screen.queryByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeNull();
-    setConnections(new Set());
+    setConnections(new Set<string>());
     expect(
       screen.queryByRole('menuitem', { name: 'Keep as my routine' })
     ).toBeNull();
