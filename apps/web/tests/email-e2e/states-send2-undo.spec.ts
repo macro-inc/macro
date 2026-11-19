@@ -5,10 +5,10 @@
 // Gmail only: the reply composer decides this itself, the same for either
 // provider.
 
-import { loadAppSteadily } from './harness/drafts';
+import { graphqlOperation, loadAppSteadily } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
-import { notice } from './harness/send';
-import { replyBody } from './harness/states-send2';
+import { notice, threadMessages } from './harness/send';
+import { holdOperation, replyBody } from './harness/states-send2';
 import { replyTo, textOf } from './harness/ways-compose2';
 import {
   clock,
@@ -26,18 +26,23 @@ test.use({ provider: 'GMAIL' });
 test.use({ stackEnv: { SENT_UNDO_DELAY_SECS: '45' } });
 test.beforeEach(({ page }) => loadAppSteadily(page));
 
-// When this fails, Undo of a reply loses a newer reply being written to the
-// same message without a word (handoff undo-send-refuses-newer-reply): the
-// service refuses the newer reply's first save after the Undo, and nothing
-// says it was kept.
-test('known bug: undo-send-refuses-newer-reply: undo of a reply keeps a newer reply being written and says so @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
+// When this fails, Undo of a reply fails to acknowledge the newer reply, or
+// the newer reply fails to save once the service has restored the first one.
+test('undo of a reply keeps a newer reply being written and says so', async ({
+  page,
+  mailbox,
+}) => {
   const subject = 'Lunch plan';
-  await replyTo(page, mailbox, subject);
+  const thread = await replyTo(page, mailbox, subject);
   await replyBody(page).click();
   await page.keyboard.type('Noted.');
+  const accepted = page.waitForResponse(
+    (response) => graphqlOperation(response.request()) === 'SendEmailMessage'
+  );
   await page.getByRole('button', { name: 'Send email' }).click();
+  expect(await (await accepted).json()).toMatchObject({
+    data: { sendEmailMessage: { attempt: { status: 'ACCEPTED' } } },
+  });
   const sending = notice(page, 'Sending…');
   await expect(sending).toBeVisible();
 
@@ -57,15 +62,37 @@ test('known bug: undo-send-refuses-newer-reply: undo of a reply keeps a newer re
   await message.getByText(textOf(subject)).first().hover();
   await replyToIt.click();
   await replyBody(page).click();
+  const saving = await holdOperation(page, 'SaveEmailDraft');
   await page.keyboard.type('Newer.');
+  // Hold the first save until Undo has restored "Noted." on both sides.
+  const cancelled = page.waitForResponse(
+    (response) => graphqlOperation(response.request()) === 'CancelEmailSend'
+  );
   await sending.getByRole('button', { name: 'Undo' }).click();
   did('AC-059');
-  await expect(notice(page, KEPT)).toBeVisible();
+  expect(await (await cancelled).json()).toMatchObject({
+    data: { cancelEmailSend: { attempt: { status: 'CANCELLED' } } },
+  });
+  await expect(notice(page, 'Send cancelled')).toBeVisible();
+  await saving.arrived;
+  await saving.release();
+
+  await expect(notice(page, KEPT)).toBeVisible({ timeout: 6_000 });
   saw('STC-077');
   await expect(replyBody(page)).toHaveText('Newer.');
-  await expect(
-    page.getByText('Draft could not be synced', { exact: true })
-  ).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      (await threadMessages(mailbox, thread.id))
+        .filter((message) => message.is_draft)
+        .map(
+          (message) =>
+            message.body_html_sanitized?.match(/Newer\.|Noted\./)?.[0]
+        )
+        .sort()
+    )
+    .toEqual(['Newer.', 'Noted.']);
+  await page.reload();
+  await expect(replyBody(page)).toHaveText('Newer.');
 });
 
 // When this fails, Undo of a scheduled reply says a newer reply was kept

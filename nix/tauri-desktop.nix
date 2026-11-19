@@ -306,13 +306,6 @@
         package = "coding_agent_worker";
       };
 
-      # The agent sign-in daemon baked into the Macro computer image
-      # (nix/macro-box).
-      harnessdBinary = workspaceBinary {
-        pname = "harnessd";
-        package = "harnessd";
-      };
-
       # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
       # GET /v1/host reports the commit it was built from (`agentVersion`).
       firecrackerHostBinary =
@@ -1524,7 +1517,6 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
-        harnessd = harnessdBinary;
         firecracker-host = firecrackerHostBinary;
         firecracker-guest-agent = firecrackerGuestAgentBinary;
       }

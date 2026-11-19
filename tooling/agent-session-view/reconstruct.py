@@ -14,11 +14,11 @@ are built inline in a private function (the session note, the model id line,
 the opener note) are not rebuilt: only their size is shown.
 
 The commit: the span's ECS task family names the task definition; its
-registration time falls inside the production deploy run that registered it,
-and that run's commit is the one that served the turn. Both lookups are
-read-only (`aws ecs describe-task-definition`, `gh api` run listings). When
-either fails, the last production deploy before the turn is used, labelled
-"closest" with the reason.
+registration time falls inside the production deploy run that registered it
+(whatever the run's conclusion), and that run's commit is the one that served
+the turn. The lookups are read-only (`aws ecs describe-task-definition`, `gh
+api` run and release listings). When no run matches, the newest release
+deployed before the turn is used, labelled "inferred" with the reason.
 """
 import datetime
 import hashlib
@@ -36,6 +36,7 @@ CACHE = pathlib.Path.home() / ".cache" / "agent-session-view"
 EXAMPLE = HERE / "asv_reconstruct.rs"
 EXAMPLE_PATH = "crates/ai_tools/examples/asv_reconstruct.rs"
 PROD_DEPLOY = "Deploy Production Release"
+NOT_STARTED = {"queued", "pending", "waiting", "requested"}
 # `select_documentation` records its bytes before closing the block.
 SDK_CLOSE = "</macro_sdk>\n"
 NOT_REBUILT = {
@@ -90,16 +91,28 @@ def iso(timestamp):
 
 
 def production_deploys():
-    """Successful production deploy runs, newest first, or the reason there
-    are none to read."""
+    """{"runs", "releases"}: the production deploy runs and the published
+    releases, newest first, or {"unreadable": reason}. Runs of every
+    conclusion are kept: one job failing (an unrelated worker, say) marks the
+    whole run "failure" though the services deployed."""
     try:
         listing = run_json(["gh", "api", "repos/{owner}/{repo}/actions/runs?event=release&per_page=100"])
-        return [
-            run for run in listing["workflow_runs"]
-            if run["name"] == PROD_DEPLOY and run["conclusion"] == "success"
-        ], None
-    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as error:
-        return [], f"production deploy runs not readable ({type(error).__name__})"
+        runs = [run for run in listing["workflow_runs"] if run["name"] == PROD_DEPLOY]
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as error:
+        return {"unreadable": f"production deploy runs not readable ({type(error).__name__})"}
+    try:
+        releases = run_json(["gh", "api", "repos/{owner}/{repo}/releases?per_page=100"])
+        return {"runs": runs, "releases": [
+            release for release in releases
+            # A prerelease never triggers the deploy workflow.
+            if not release["draft"] and not release["prerelease"] and release["published_at"]
+        ]}
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError) as error:
+        return {"runs": runs, "releases": [], "releases_unreadable": f"releases not readable ({type(error).__name__})"}
+
+
+def outcome(run):
+    return "" if run["conclusion"] == "success" else f"; the run concluded {run['conclusion'] or run['status']}"
 
 
 def deploy_commit(task, turn_started, env, deploys):
@@ -108,9 +121,9 @@ def deploy_commit(task, turn_started, env, deploys):
     `production_deploys` returned."""
     if env == "dev":
         return closest_main(turn_started, "dev deploys every main push; the last main commit before the turn")
-    runs, unreadable = deploys
-    if unreadable:
-        return closest_main(turn_started, unreadable)
+    if "unreadable" in deploys:
+        return closest_main(turn_started, deploys["unreadable"])
+    runs = deploys["runs"]
     if task:
         try:
             registered = iso(run_json([
@@ -118,20 +131,66 @@ def deploy_commit(task, turn_started, env, deploys):
                 "--query", "taskDefinition.registeredAt", "--output", "json",
             ]))
             for run in runs:
-                if iso(run["created_at"]) <= registered <= iso(run["updated_at"]):
+                if run["status"] in NOT_STARTED:
+                    continue
+                # A run still going has no end yet.
+                ended = iso(run["updated_at"]) if run["status"] == "completed" else turn_started
+                if iso(run["created_at"]) <= registered <= ended:
                     return {"sha": run["head_sha"], "exact": True,
-                            "reason": f"{run['head_branch']}: its deploy registered task {task}"}
+                            "reason": f"{run['head_branch']}: its deploy registered task {task}{outcome(run)}"}
             reason = f"no production deploy run spans task {task}'s registration"
-        except (OSError, subprocess.CalledProcessError, ValueError) as error:
+        except (OSError, subprocess.CalledProcessError, ValueError, AttributeError, TypeError) as error:
             reason = f"task definition {task} not readable ({type(error).__name__})"
     else:
         reason = "the spans name no ECS task definition"
-    before = [run for run in runs if iso(run["updated_at"]) <= turn_started]
+    if "releases_unreadable" in deploys:
+        reason += "; " + deploys["releases_unreadable"]
+    return newest_release_before(turn_started, runs, deploys["releases"], reason)
+
+
+def first_attempt_end(run):
+    """A re-run moves the run's end; its first attempt deployed the services."""
+    attempt = run_json(["gh", "api", f"repos/{{owner}}/{{repo}}/actions/runs/{run['id']}/attempts/1"])
+    return iso(attempt["updated_at"])
+
+
+def newest_release_before(turn_started, runs, releases, reason):
+    """The newest release deployed before the turn: one whose deploy run (its
+    first attempt, when re-run) finished before it, or, for a release with no
+    run listed, one published before it. Releases are ordered by when they
+    started deploying."""
+    candidates = []
+    for run in runs:
+        rerun = run.get("run_attempt", 1) > 1
+        if not rerun and (run["status"] != "completed"
+                          or run["conclusion"] not in ("success", "failure", "cancelled", "timed_out")):
+            continue
+        try:
+            deployed = first_attempt_end(run) if rerun else iso(run["updated_at"])
+        except (OSError, subprocess.CalledProcessError, ValueError, KeyError, TypeError):
+            continue
+        attempt = " (first attempt)" if rerun else ""
+        when = f"its deploy run{attempt} finished before the turn ({deployed:%Y-%m-%d %H:%M}Z)"
+        candidates.append((iso(run["created_at"]), deployed, run["head_branch"], run, when))
+    with_runs = {run["head_branch"] for run in runs}
+    for release in releases:
+        if release["tag_name"] not in with_runs:
+            published = iso(release["published_at"])
+            candidates.append((published, published, release["tag_name"], None,
+                               f"published before the turn ({published:%Y-%m-%d %H:%M}Z; no deploy run listed)"))
+    before = [candidate for candidate in candidates if candidate[1] <= turn_started]
     if not before:
-        return closest_main(turn_started, reason + "; no production deploy before the turn listed")
-    run = max(before, key=lambda run: run["updated_at"])
-    return {"sha": run["head_sha"], "exact": False,
-            "reason": f"{reason}; the last production deploy before the turn ({run['head_branch']})"}
+        return closest_main(turn_started, reason + "; no production release before the turn listed")
+    _, _, tag, run, when = max(before, key=lambda candidate: candidate[0])
+    if run:
+        sha, why = run["head_sha"], when + outcome(run)
+    else:
+        try:
+            sha = run_json(["gh", "api", f"repos/{{owner}}/{{repo}}/commits/{tag}", "--jq", "{sha: .sha}"])["sha"]
+        except (ValueError, KeyError, TypeError) as error:
+            raise OSError(f"release {tag}'s commit not readable ({type(error).__name__})") from error
+        why = when
+    return {"sha": sha, "exact": False, "reason": f"{reason}; inferred: {tag}, the newest release {why}"}
 
 
 def closest_main(turn_started, reason):
@@ -242,39 +301,40 @@ def attach(export, contexts, turns, env):
     calls = spans.get("model_calls") or []
     if not contexts:
         return
-    deploys = production_deploys() if env != "dev" else ([], None)
+    deploys = production_deploys() if env != "dev" else {}
     commits, groups = {}, {}
     for context, turn in zip(contexts, turns):
         rows = own_calls(turn, calls) + ([context["documentation"]] if context["documentation"] else [])
         task = next((row.get("task_definition") for row in rows if row.get("task_definition")), None)
         started = datetime.datetime.fromtimestamp(turn.started, datetime.timezone.utc)
-        # Turns served by one task share its lookup; without one, each turn's
-        # own start time decides.
-        key = task or started
-        if key not in commits:
+        # Turns served by one task share an exact match; an inferred commit
+        # depends on each turn's own start time.
+        commit = commits.get(task)
+        if not commit or not commit["exact"]:
             try:
-                commits[key] = deploy_commit(task, started, env, deploys)
+                commit = deploy_commit(task, started, env, deploys)
             except (OSError, subprocess.CalledProcessError) as error:
                 context["literal"] = {"error": f"no commit to rebuild from: {error}"}
                 continue
-        commit = commits[key]
-        groups.setdefault(commit["sha"], (commit, []))[1].append((context, turn))
+            if task:
+                commits[task] = commit
+        groups.setdefault(commit["sha"], []).append((context, turn, commit))
 
     candidates = integration_candidates(spans)
-    for sha, (commit, members) in groups.items():
+    for sha, members in groups.items():
         docs = [
             {"entities": context["documentation"]["entities"], "guidance": context["documentation"]["guidance"]}
-            for context, _ in members if context["documentation"]
+            for context, _, _ in members if context["documentation"]
         ]
         request = {"docs": docs, "identities": identities(export), "integrations": candidates}
         try:
             output = render(sha, request)
         except (ReconstructionFailed, OSError, subprocess.CalledProcessError, ValueError) as error:
-            for context, _ in members:
+            for context, _, commit in members:
                 context["literal"] = {"commit": commit, "error": str(error)}
             continue
         rendered_docs = iter(output["docs"])
-        for context, turn in members:
+        for context, turn, commit in members:
             mark(context, commit, parts(context, turn, calls, output, rendered_docs))
 
 

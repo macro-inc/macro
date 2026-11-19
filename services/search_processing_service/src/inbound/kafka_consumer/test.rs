@@ -369,6 +369,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::RemoveMessage {
                     message_id: MESSAGE_ID,
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_draft_synced",
@@ -387,6 +388,30 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
                 to_emails: vec!["recipient@example.com".to_string()],
                 cc_emails: vec![],
                 origin: EmailEventOrigin::UserAction,
+                sent_at: Utc::now(),
+            }),
+            EmailEventDescription {
+                action: EmailIndexAction::UpsertSentMessage {
+                    message_id: MESSAGE_ID,
+                    owner: owner.clone(),
+                },
+                link_id: EMAIL_LINK_ID,
+                event_type: "email.message_sent",
+            },
+        ),
+        (
+            EmailTopicEvent::MessageSent(MessageSentMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                message_id: MESSAGE_ID,
+                provider_message_id: "provider-message-id".to_string(),
+                thread_id: EMAIL_THREAD_ID,
+                provider_thread_id: "provider-thread-id".to_string(),
+                subject: Some("Subject".to_string()),
+                to_emails: vec!["recipient@example.com".to_string()],
+                cc_emails: vec![],
+                origin: EmailEventOrigin::ProviderSync,
                 sent_at: Utc::now(),
             }),
             EmailEventDescription {
@@ -409,6 +434,7 @@ fn email_event_cases() -> Vec<(EmailTopicEvent, EmailEventDescription)> {
             EmailEventDescription {
                 action: EmailIndexAction::RemoveMessage {
                     message_id: MESSAGE_ID,
+                    thread_id: EMAIL_THREAD_ID,
                 },
                 link_id: EMAIL_LINK_ID,
                 event_type: "email.message_deleted",
@@ -755,6 +781,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                participant_user_ids: Vec::new(),
             }),
             ChannelEventDescription {
                 action: ChannelIndexAction::RemoveChannel {
@@ -1462,7 +1489,7 @@ fn maps_all_call_lifecycle_events_to_index_actions() {
 #[test]
 fn maps_all_email_lifecycle_events_to_index_actions() {
     let cases = email_event_cases();
-    assert_eq!(cases.len(), 18);
+    assert_eq!(cases.len(), 19);
 
     for (event, expected) in cases {
         let serialized = serde_json::to_value(&event).expect("serializable email event");
@@ -1477,6 +1504,7 @@ fn email_message_sync_actions_remove_spam_or_trash_and_upsert_other_messages() {
         describe_email_event(&received_email_event(true)).action,
         EmailIndexAction::RemoveMessage {
             message_id: MESSAGE_ID,
+            thread_id: EMAIL_THREAD_ID,
         }
     );
     assert_eq!(
@@ -1757,6 +1785,7 @@ fn channel_envelope_decodes_round_trip() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,
@@ -2172,6 +2201,7 @@ async fn unsupported_channel_schema_message_is_commit_safe() {
     let event = ChannelTopicEvent::Deleted(ChannelDeletedMetadata {
         channel_id: CHANNEL_ID,
         actor: channel_sender(),
+        participant_user_ids: Vec::new(),
     });
     let message = encoded_message(
         MacroChannelsTopic::TOPIC_STR,

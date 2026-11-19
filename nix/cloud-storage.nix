@@ -765,6 +765,61 @@
           }
         );
 
+      # The daemons baked into the Macro computer image (nix/macro-box), built
+      # like the deploy leaves: a pruned source, so only a change in their own
+      # crate closure rebuilds them, over third-party deps compiled once per
+      # Cargo.lock. A local stack with `--computers docker` builds these on
+      # every `run_local`.
+      guestBinaryDefinitions = [
+        {
+          pname = "macrod";
+          packageName = "coding_agent_worker";
+        }
+        {
+          pname = "harnessd";
+          packageName = "harnessd";
+        }
+      ];
+
+      guestCargoArtifacts = craneLib.buildDepsOnly (
+        commonArgs
+        // {
+          pname = "macro-box-guest-deps";
+          doCheck = false;
+          cargoCheckCommand = "true";
+          cargoExtraArgs =
+            "--locked "
+            + pkgs.lib.concatMapStringsSep " " (
+              def: "--package ${def.packageName} --bin ${def.pname}"
+            ) guestBinaryDefinitions;
+          CARGO_PROFILE = "release";
+        }
+      );
+
+      guestBinaryPackage =
+        { pname, packageName }:
+        craneLib.buildPackage (
+          commonArgs
+          // {
+            src = prunedDeploySrc "guest-${pname}" packageName;
+            cargoArtifacts = guestCargoArtifacts;
+            pname = "macro-box-${pname}";
+            doCheck = false;
+            cargoExtraArgs = "--locked --package ${packageName} --bin ${pname}";
+            CARGO_PROFILE = "release";
+            installPhaseCommand = ''
+              install -Dm0755 target/release/${pname} "$out/bin/${pname}"
+            '';
+          }
+        );
+
+      guestBinaryPackages = pkgs.lib.listToAttrs (
+        map (def: {
+          name = "macro-box-${def.pname}";
+          value = guestBinaryPackage def;
+        }) guestBinaryDefinitions
+      );
+
       deployServiceBinaryPackages = pkgs.lib.listToAttrs (
         map (def: {
           name = "deploy-service-binaries-${def.serviceName}";
@@ -1399,6 +1454,7 @@
       }
       // dopplerConfigBinPackages
       // deployServiceBinaryPackages
+      // guestBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
         deploy-service-binaries-email-service = emailServiceDeployBinaries;
