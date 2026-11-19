@@ -324,7 +324,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,$2,$3,false)
-            ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now()"#,
+            ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now(),is_import=false"#,
             lease.mailbox.key.link_id,lease.mailbox.key.sync_generation,message.as_str()).execute(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)
     }

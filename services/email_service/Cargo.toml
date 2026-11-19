@@ -122,6 +122,7 @@ entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
+feature_flags = { path = "../../crates/feature_flags" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../../crates/gmail_client" }

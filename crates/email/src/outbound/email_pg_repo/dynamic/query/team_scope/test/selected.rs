@@ -26,7 +26,7 @@ async fn parity(pool: &sqlx::PgPool, expected: bool) -> anyhow::Result<()> {
     params.resolved = resolve_filters(pool, &[S_LINK], Some(S_TEAM), &filter).await?;
     let read = team_read(&view, &filter, params).unwrap();
     let mut builder = QueryBuilder::new("");
-    read.push_ctes(&mut builder, Stream::Inboxes);
+    read.push_ctes(&mut builder, Stream::Inboxes)?;
     builder.push(" SELECT EXISTS (SELECT 1 FROM email_threads t WHERE t.id = ");
     builder.push_bind(S_THREAD);
     read.push_allowed(&mut builder);
@@ -46,7 +46,11 @@ async fn parity(pool: &sqlx::PgPool, expected: bool) -> anyhow::Result<()> {
     let page_read = team_read(&view, &filter, page_params).unwrap();
     let mut tx = pool.begin().await?;
     let rows = page_read
-        .fetch(&mut tx, Instant::now() + std::time::Duration::from_secs(10))
+        .fetch(
+            &mut tx,
+            Instant::now() + std::time::Duration::from_secs(10),
+            Some(&crm::outbound::email_rule_discovery::PgEmailRuleDiscovery),
+        )
         .await?;
     tx.rollback().await?;
     assert_eq!(
@@ -534,4 +538,200 @@ async fn all_to_selected_keeps_resolution_probe_and_page_in_one_snapshot(
     pool: sqlx::PgPool,
 ) -> anyhow::Result<()> {
     mode_transition_snapshot(&pool, false).await
+}
+
+#[derive(Debug, Default)]
+struct CountDiscovery(std::sync::atomic::AtomicUsize);
+#[async_trait::async_trait]
+impl crm::domain::email_rule_discovery::EmailRuleDiscoveryService<sqlx::PgConnection>
+    for CountDiscovery
+{
+    async fn discover(
+        &self,
+        connection: &mut sqlx::PgConnection,
+        request: crm::domain::email_rule_discovery::EmailRuleDiscoveryRequest,
+        deadline: Instant,
+    ) -> Result<crm::domain::email_rule_discovery::EmailRuleDiscovery, crm::domain::model::CrmError>
+    {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        crm::domain::email_rule_discovery::EmailRuleDiscoveryService::discover(
+            &crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+            connection,
+            request,
+            deadline,
+        )
+        .await
+    }
+}
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../../fixtures", scripts("email_crm_selected"))
+)]
+async fn discovery_runs_once_for_probe_and_page_and_never_for_all_mail(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) VALUES($1,$2,1,$3)",S_TEAM,S_USER,S_CONTACT).execute(&pool).await?;
+    let discovery = CountDiscovery::default();
+    for selected in [true, false] {
+        change_mode(&pool, selected).await?;
+        let view = all_mail();
+        let filter = any_direction("peer.example");
+        let mut params = super::params(SimpleSortMethod::UpdatedAt);
+        params.team_id = Some(S_TEAM);
+        params.link_ids = vec![S_LINK];
+        params.user_id = S_USER.into();
+        let mut tx = super::super::super::begin_snapshot(&pool).await?;
+        params.resolved = super::super::super::super::resolve::resolve_filters_on(
+            &mut tx,
+            &[S_LINK],
+            Some(S_TEAM),
+            &filter,
+            None,
+        )
+        .await?
+        .with_contributing_links(vec![S_LINK]);
+        let read = team_read(&view, &filter, params).unwrap();
+        let rows = read
+            .fetch(
+                &mut tx,
+                Instant::now() + Duration::from_secs(10),
+                Some(&discovery),
+            )
+            .await?;
+        assert_eq!(
+            rows.into_iter().map(|r| r.id).collect::<Vec<_>>(),
+            vec![S_THREAD]
+        );
+        tx.rollback().await?;
+        assert_eq!(discovery.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../../fixtures", scripts("email_crm_selected"))
+)]
+async fn general_owner_filter_skips_unrelated_selected_discovery(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::models::PreviewCursorQuery;
+    use crate::domain::ports::EmailRepo;
+    sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) VALUES($1,$2,1,$3)",S_TEAM,S_USER,S_CONTACT).execute(&pool).await?;
+    sqlx::query!(
+        "INSERT INTO crm_contact_emails(contact_id,email) VALUES($1,repeat('x',4097))",
+        S_CONTACT
+    )
+    .execute(&pool)
+    .await?;
+    let discovery = Arc::new(CountDiscovery::default());
+    let repo =
+        crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(discovery.clone());
+    let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(S_USER)?.into_owned();
+    for sort in [SimpleSortMethod::UpdatedAt, SimpleSortMethod::ViewedUpdated] {
+        let owner = Expr::Literal(EmailLiteral::Owner(S_COPY_LINK));
+        let filter = match sort {
+            // No address superset, and a history sort with an address filter:
+            // both must take General instead of the optimized Team reader.
+            SimpleSortMethod::UpdatedAt => owner,
+            _ => Expr::And(Box::new(owner), Box::new(any_direction("peer.example"))),
+        };
+        let rows = repo
+            .previews_for_view_cursor(
+                PreviewCursorQuery {
+                    view: all_mail(),
+                    link_ids: vec![S_LINK, S_COPY_LINK],
+                    limit: 50,
+                    query: Query::new(None, sort, Some(Arc::new(filter))),
+                    team_id: Some(S_TEAM),
+                },
+                user.clone(),
+            )
+            .await?;
+        assert_eq!(
+            rows.into_iter().map(|row| row.id).collect::<Vec<_>>(),
+            vec![S_COPY]
+        );
+    }
+    assert_eq!(discovery.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../../fixtures", scripts("email_crm_selected"))
+)]
+async fn live_growth_returns_a_typed_limit_instead_of_a_partial_email_page(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    use crate::domain::models::{EmailErr, PreviewCursorQuery};
+    use crate::domain::ports::EmailRepo;
+    sqlx::query!("INSERT INTO crm_email_rule_contacts(team_id,user_id,revision,contact_id) VALUES($1,$2,1,$3)",S_TEAM,S_USER,S_CONTACT).execute(&pool).await?;
+    let repo = crate::outbound::EmailPgRepo::new(pool.clone()).with_rule_discovery(Arc::new(
+        crm::outbound::email_rule_discovery::PgEmailRuleDiscovery,
+    ));
+    let query = || PreviewCursorQuery {
+        view: all_mail(),
+        link_ids: vec![S_LINK],
+        limit: 50,
+        query: Query::new(
+            None,
+            SimpleSortMethod::UpdatedAt,
+            Some(Arc::new(any_direction("peer.example"))),
+        ),
+        team_id: Some(S_TEAM),
+    };
+    let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str(S_USER)?.into_owned();
+    assert!(
+        !repo
+            .previews_for_view_cursor(query(), user.clone())
+            .await?
+            .is_empty()
+    );
+    sqlx::query!(
+        "INSERT INTO crm_contact_emails(contact_id,email) VALUES($1,repeat('x',4097))",
+        S_CONTACT
+    )
+    .execute(&pool)
+    .await?;
+    let error = repo
+        .previews_for_view_cursor(query(), user)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        error,
+        EmailErr::EmailRuleLimitExceeded(
+            crm::domain::email_rule_discovery::EmailRuleLimitExceeded {
+                limit: crm::domain::email_rule_discovery::EmailRuleWorkLimit::SourceValueBytes,
+                ..
+            }
+        )
+    ));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../../../fixtures", scripts("email_crm_selected"))
+)]
+async fn selected_queries_refuse_to_run_without_complete_discovery(
+    pool: sqlx::PgPool,
+) -> anyhow::Result<()> {
+    let view = all_mail();
+    let filter = any_direction("peer.example");
+    let mut params = super::params(SimpleSortMethod::UpdatedAt);
+    params.team_id = Some(S_TEAM);
+    params.link_ids = vec![S_LINK];
+    params.resolved = resolve_filters(&pool, &[S_LINK], Some(S_TEAM), &filter).await?;
+    let read = team_read(&view, &filter, params).unwrap();
+    assert!(matches!(
+        read.selection_probe(),
+        Err(crate::outbound::email_pg_repo::PreviewReadError::IncompleteRuleDiscovery)
+    ));
+    assert!(matches!(
+        read.build_page(Stream::Selection),
+        Err(crate::outbound::email_pg_repo::PreviewReadError::IncompleteRuleDiscovery)
+    ));
+    Ok(())
 }

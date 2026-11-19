@@ -1,6 +1,7 @@
 // The channel input's modules import each other; evaluating `Input` before
 // either lazy screen below is the order the app's entry gives them.
 import '@channel/Input/Input';
+import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { queryClient } from '@queries/client';
@@ -21,6 +22,10 @@ import {
   harnesses,
   settingsOpened,
 } from './stubs/fixture-state';
+
+// `?theme=dark|light` for screenshots; unset keeps the fixture's default.
+const theme = new URLSearchParams(location.search).get('theme');
+if (theme) applyTheme(theme === 'dark' ? 'Macro Dark' : 'Macro Light');
 
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
