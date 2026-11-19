@@ -1288,8 +1288,9 @@ and the delete dialog says **The N routines it created will be deleted too.**
 once it has counted them. While it counts, or if it can't, it says **At least
 N** for the ones the page already lists, or **Any routines it created will be
 deleted too.** when it lists none; it also says **At least N** when the count
-finds 200 finished ones, the most the scheduler lists. A sub-routine's delete
-dialog has no such line.
+finds 200 one-time routines with no run left (the most of those the scheduler
+lists, a run still in progress included). A sub-routine's delete dialog has no
+such line.
 In a run's details, **Created** lists the sub-routines that run created.
 
 A routine can instead define a sub-routine once, for work its runs schedule
@@ -1399,8 +1400,8 @@ on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
 toast whose **Open** opens the duplicate) and **Keep as my routine** appear under
 the eligibility rules above.
 **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
-**Share**; then **Delete**, which confirms first and says how many sub-routines
-are deleted with it. A routine someone else owns offers the open entries, **Copy
+**Share**; then **Delete**, which confirms first and warns of the sub-routines
+deleted with it, as above. A routine someone else owns offers the open entries, **Copy
 Link** and **Copy ID**. On a phone a long press opens the same actions in a
 drawer under the routine's name, without the split and tab entries, in Agents
 and in **Settings → Routines** alike. Renaming and changing the icon stay on the

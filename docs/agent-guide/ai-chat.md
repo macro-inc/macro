@@ -1064,9 +1064,8 @@ post updates come from the scheduler as code; where code can't be saved they
 start with an Ask AI step instead. When an SDK release
 breaks a routine's code and AI's update fails its checks, Macro pauses
 routines that run code in their own steps, with those of their sub-routines
-that are on and unfinished (switching the routine back on resumes those), and
-the Overview of a paused routine leads with **Paused: its code needs an
-update**. An enabled routine with code only in its sub-routine
+that are on and unfinished, and the Overview of a paused routine leads with
+**Paused: its code needs an update**. An enabled routine with code only in its sub-routine
 definitions stays enabled and shows **Its sub-routines’ code needs an
 update**; every copy of it that runs code fails until the code is updated.
 **Review the update** shows
