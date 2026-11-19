@@ -285,7 +285,10 @@ suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 Run `just imap-e2e-browser` for the desktop and phone IMAP enrollment and reply
 cases. This tier uses the authenticated local stack, a Dovecot IMAP and
 submission server, and Mailpit. The independent test client appends the inbound
-message over IMAP and reads the resulting SMTP reply through Mailpit.
+message over IMAP and reads the resulting SMTP reply through Mailpit. The
+full-stack CI job requires both layouts to save and reopen folder settings,
+reconnect the same account, and record the visible confirmations and real
+browser API requests in the coverage ledger.
 
 To inspect enrollment in local Tempo, run the same no-Doppler stack with
 `--traces lgtm` and build the full-stack web bundle with

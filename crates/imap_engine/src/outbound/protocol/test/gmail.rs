@@ -1,6 +1,7 @@
 //! A trusted-TLS transcript fixture for Google's documented X-GM extension.
 use super::*;
 use std::sync::{Arc, Mutex};
+use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject};
 #[tokio::test]
 #[ignore = "requires docker/imap-lab generated trust root"]
 async fn gmail_wire_scans_only_three_physical_folders_and_derives_native_label_feeds() {
@@ -8,12 +9,10 @@ async fn gmail_wire_scans_only_three_physical_folders_and_derives_native_label_f
         std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docker/imap-lab/generated");
     let cert = std::fs::read(generated.join("server.pem")).unwrap();
     let key = std::fs::read(generated.join("server.key")).unwrap();
-    let certificates = rustls_pemfile::certs(&mut cert.as_slice())
+    let certificates = CertificateDer::pem_slice_iter(&cert)
         .collect::<Result<Vec<_>, _>>()
         .unwrap();
-    let key = rustls_pemfile::private_key(&mut key.as_slice())
-        .unwrap()
-        .unwrap();
+    let key = PrivateKeyDer::from_pem_slice(&key).unwrap();
     let config = tokio_rustls::rustls::ServerConfig::builder_with_provider(Arc::new(
         tokio_rustls::rustls::crypto::aws_lc_rs::default_provider(),
     ))

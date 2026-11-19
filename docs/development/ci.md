@@ -35,7 +35,11 @@ has the trigger table and the other commands.
 The Rust suite includes real-server IMAP journeys. Its non-search jobs start
 `docker/imap-lab/start.sh` for Dovecot, SMTP capture and a disposable local KMS
 key; Gmail and Outlook continue to use their provider emulators. The IMAP
-browser journey uses the explicit local mail profile described in the
+browser journeys run in `email_e2e_full_stack.yml`, which prepares the lab TLS
+fixtures and starts the stack with `docker/imap-lab/browser-profile`.
+`IMAP_LAB_REQUIRED=true` makes missing desktop or phone IMAP evidence fail that
+tier's coverage check. Run that workflow on IMAP pull requests as well:
+`gh workflow run email_e2e_full_stack.yml --ref <branch>`. See the
 [lab guide](../../docker/imap-lab/README.md).
 
 Each workflow's pushes to `main` queue as the dev deploys do: one run at a

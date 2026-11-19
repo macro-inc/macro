@@ -25,6 +25,7 @@ jobs:
       SCCACHE_IDLE_TIMEOUT: '0'
       EMAIL_E2E_INSTANCE: email-e2e
       EMAIL_E2E_BROWSER_WORKERS: '4'
+      IMAP_LAB_REQUIRED: 'true'
     timeout-minutes: 45
     steps:
     - name: Checkout
@@ -166,9 +167,12 @@ jobs:
         web=$!
         trap 'kill "$web" 2>/dev/null || true; tail -n 40 "$bundle_log" || true' ERR
 
+        # Prepare verified TLS for the real IMAP/SMTP sidecars of this stack.
+        bash docker/imap-lab/prepare.sh
+
         # Builds every service, starts the stack and returns once it answers.
         started=$(date +%s)
-        just run_local --no-doppler --instance "$EMAIL_E2E_INSTANCE" --no-frontend --traces off --no-computers
+        just run_local --no-doppler --instance "$EMAIL_E2E_INSTANCE" --no-frontend --traces off --no-computers --env-file docker/imap-lab/browser-profile
         echo "Local stack up: $(( $(date +%s) - started )) s" | tee -a "$GITHUB_STEP_SUMMARY"
         trap - ERR
 

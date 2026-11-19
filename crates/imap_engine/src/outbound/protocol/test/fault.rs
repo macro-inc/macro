@@ -6,7 +6,13 @@ use std::{
         atomic::{AtomicU32, Ordering},
     },
 };
-use tokio_rustls::{TlsAcceptor, rustls::ServerConfig};
+use tokio_rustls::{
+    TlsAcceptor,
+    rustls::{
+        ServerConfig,
+        pki_types::{CertificateDer, PrivateKeyDer, pem::PemObject},
+    },
+};
 use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 #[derive(Clone, Copy)]
@@ -27,12 +33,10 @@ impl Proxy {
             .join("../../docker/imap-lab/generated");
         let certificate = std::fs::read(generated.join("server.pem")).unwrap();
         let key = std::fs::read(generated.join("server.key")).unwrap();
-        let certificates = rustls_pemfile::certs(&mut certificate.as_slice())
+        let certificates = CertificateDer::pem_slice_iter(&certificate)
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
-        let key = rustls_pemfile::private_key(&mut key.as_slice())
-            .unwrap()
-            .unwrap();
+        let key = PrivateKeyDer::from_pem_slice(&key).unwrap();
         let config = ServerConfig::builder_with_provider(Arc::new(
             tokio_rustls::rustls::crypto::aws_lc_rs::default_provider(),
         ))

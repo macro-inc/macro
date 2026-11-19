@@ -22,6 +22,23 @@ A run split over machines (`EMAIL_E2E_SHARD`, "2/3") writes
 such file in a run's directory, so the shards' `ledger-results/` laid over
 each other are one run.
 
+## IMAP and SMTP
+
+The full-stack job runs the signed-in IMAP journey in desktop and phone Chromium
+against Dovecot and a separate SMTP receiver. Each layout records the visible
+“Inbox connected” and “Inbox reconnected” confirmations and the successful email
+service requests for suggestion, discovery, enrollment, and reading and saving
+server settings. The test checks that reconnect keeps the same link. Its
+`imap-lab-observations` attachment contains only the observed labels and
+normalized operations. Browser request bodies stay out of the report.
+
+`IMAP_LAB_REQUIRED=true` makes the full-stack coverage job fail for a missing
+layout, a journey without a passing attempt, or a missing observation. The
+report reads observations only from the passing attempt of the named IMAP journey. The per-test Gmail and Outlook
+shards report their own evidence independently. Their function and state counts
+retain their existing provider scope. IMAP service operations and confirmations
+appear in the report's network inventory and dedicated IMAP results.
+
 ## Functions
 
 `functions.tsv` lists what a user does with email: draft, send, reply, mark

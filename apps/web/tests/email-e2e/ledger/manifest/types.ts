@@ -89,7 +89,7 @@ export type Operation = {
    * The providers the app makes it for; left out, both. (`providers` on a
    * row of the report is where it was seen.)
    */
-  appliesTo?: readonly Provider[];
+  appliesTo?: readonly (Provider | 'imap')[];
   needs?: string;
   note?: string;
 };

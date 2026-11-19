@@ -16,7 +16,10 @@ use tokio::{
 };
 use tokio_rustls::{
     TlsConnector,
-    rustls::{ClientConfig, RootCertStore, pki_types::ServerName},
+    rustls::{
+        ClientConfig, RootCertStore,
+        pki_types::{CertificateDer, ServerName, pem::PemObject},
+    },
 };
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -46,7 +49,7 @@ impl Connector {
         let mut roots = RootCertStore::empty();
         roots.extend(webpki_roots::TLS_SERVER_ROOTS.iter().cloned());
         if let Some(pem) = &local.trust_root_pem {
-            for cert in rustls_pemfile::certs(&mut pem.as_bytes()) {
+            for cert in CertificateDer::pem_slice_iter(pem.as_bytes()) {
                 roots
                     .add(cert.map_err(|_| Error::Invalid)?)
                     .map_err(|_| Error::Invalid)?;

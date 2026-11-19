@@ -91,6 +91,14 @@ export function MobileSettingsSheet(props: MobileSettingsSheetProps) {
       }}
       side="bottom"
       closeOnOutsidePointerStrategy="pointerdown"
+      onOutsidePointer={(event) => {
+        // Managed dialogs portal outside the settings drawer. Their controls own the tap.
+        if (
+          event.target instanceof Element &&
+          event.target.closest('[role="dialog"]')
+        )
+          event.preventDefault();
+      }}
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />

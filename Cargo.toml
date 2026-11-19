@@ -254,7 +254,6 @@ hickory-resolver = "0.26.3"
 quick-xml = "0.41"
 egress_guard = { path = "crates/egress_guard" }
 async-imap = { version = "0.12.0", default-features = false, features = ["runtime-tokio"] }
-rustls-pemfile = "2.2"
 imap_engine = { path = "crates/imap_engine" }
 imap_service_client = { path = "crates/imap_service_client" }
 computer_id = { path = "crates/computer_id" }
