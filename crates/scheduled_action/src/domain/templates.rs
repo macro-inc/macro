@@ -121,10 +121,16 @@ pub enum TemplateInputError {
     DescriptionTooLong,
     #[error("a template can have at most 100 variables")]
     TooManyVariables,
+    /// A copy's steps are its parent's, so a template of it would hold none.
+    #[error("a sub-routine's copy can't be shared; keep it as your routine first")]
+    SubRoutineCopy,
 }
 
 impl ShareRoutineTemplate {
     fn into_snapshot(self, action: &ScheduledAction, action_id: Uuid) -> Result<TemplateSnapshot> {
+        if routine_program::SubRoutineCopy::from_task(&action.task).is_some() {
+            return Err(TemplateInputError::SubRoutineCopy.into());
+        }
         if self.description.chars().count() > MAX_DESCRIPTION_CHARS {
             return Err(TemplateInputError::DescriptionTooLong.into());
         }

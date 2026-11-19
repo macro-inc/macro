@@ -280,6 +280,21 @@ async fn rejects_an_oversized_description() {
     assert!(templates.get_template(&user(), id).await.is_err());
 }
 
+#[test]
+fn a_sub_routines_copy_is_not_shared_since_its_steps_are_its_parents() {
+    let copy = crate::domain::program_runner::test::action(serde_json::json!({
+        "sub_routine": "remind", "inputs": { "taskId": "t" },
+    }));
+    let error = share_input()
+        .into_snapshot(&copy, Uuid::nil())
+        .err()
+        .unwrap();
+    assert_eq!(
+        error.downcast_ref::<TemplateInputError>(),
+        Some(&TemplateInputError::SubRoutineCopy)
+    );
+}
+
 #[tokio::test]
 async fn disabled_missing_or_failed_flags_block_templates_but_preserve_routines_and_unsharing() {
     for evaluation in [
