@@ -1,7 +1,7 @@
 import type { EntityData } from '@entity';
-import {
-  createEntityDropZone,
-  type EntityDropCoordinates,
+import type {
+  CreateEntityDropZoneOptions,
+  EntityDropCoordinates,
 } from './create-entity-drop-zone';
 
 type CreateChannelDragStateOptions = {
@@ -9,7 +9,13 @@ type CreateChannelDragStateOptions = {
 };
 
 export type ChannelDragState = {
-  entityDropZone: ReturnType<typeof createEntityDropZone>;
+  /**
+   * Options for the channel's entity drop zone. The zone itself is created by
+   * the component that renders its element (`ChannelDropZone`): solid-dnd
+   * registers a droppable when its creating owner mounts, so creating it here,
+   * before the channel's content loads, would never register it.
+   */
+  entityDrop: CreateEntityDropZoneOptions;
   attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
   setAttachFilesToChannel: (fn: (files: File[]) => Promise<void>) => void;
   setEntityMentionInputHandlers: (handlers: {
@@ -31,7 +37,7 @@ export function createChannelDragState(
     ChannelDragState['setEntityMentionInputHandlers']
   >[0] = {};
 
-  const entityDropZone = createEntityDropZone({
+  const entityDrop: CreateEntityDropZoneOptions = {
     droppableId: `channel-entity-drop-${options.channelId}`,
     onDropEntity: (entity, coordinates) =>
       entityMentionInputHandlers.insertEntityMention?.(entity, coordinates),
@@ -39,12 +45,12 @@ export function createChannelDragState(
       entityMentionInputHandlers.previewEntityMentionInsertion?.(coordinates),
     onDragEntityEnd: () =>
       entityMentionInputHandlers.clearEntityMentionInsertionPreview?.(),
-  });
+  };
 
   let attachFilesToChannel: ((files: File[]) => Promise<void>) | undefined;
 
   return {
-    entityDropZone,
+    entityDrop,
     get attachFilesToChannel() {
       return attachFilesToChannel;
     },

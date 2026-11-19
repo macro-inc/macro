@@ -1,0 +1,117 @@
+import { createPointerCollisionDetector } from '@components/app/pointer-collision';
+import { type ChannelEntity, createEntityDraggable } from '@entity';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { DragDropProvider, DragDropSensors } from '@thisbeyond/solid-dnd';
+import { createSignal, Show } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ChannelDropZone } from '../ChannelDropZone';
+import { createChannelDragState } from '../create-channel-drag-state';
+import { createEntityDropZone } from '../create-entity-drop-zone';
+
+vi.mock('@components/app/ItemDragAndDrop', () => ({
+  useOptionalDragOperation: () => ({ isAltKey: () => false }),
+}));
+
+const entity: ChannelEntity = {
+  id: 'dragged',
+  type: 'channel',
+  channelType: 'private',
+  name: 'A channel',
+  ownerId: 'owner',
+};
+
+function setup() {
+  const insertEntityMention = vi.fn();
+  const insertThreadMention = vi.fn();
+  let hovered: Element | null = null;
+  const collision = createPointerCollisionDetector(
+    () => ({ x: 0, y: 0 }),
+    () => hovered
+  );
+
+  function Row() {
+    const draggable = createEntityDraggable({ entity, splitId: 'list' });
+    return <div ref={draggable} data-testid="row" />;
+  }
+
+  function ThreadReply() {
+    const zone = createEntityDropZone({
+      droppableId: 'thread-reply-entity-drop-thread',
+      onDropEntity: insertThreadMention,
+    });
+    const droppable = zone.droppable;
+    false && droppable;
+    return (
+      <div use:droppable>
+        <span data-testid="thread-reply">reply</span>
+      </div>
+    );
+  }
+
+  // The channel creates its drag state up front and renders its content once
+  // it loads, after the channel itself has mounted.
+  const [loaded, setLoaded] = createSignal(false);
+  function Channel() {
+    const dragState = createChannelDragState({ channelId: 'channel' });
+    dragState.setEntityMentionInputHandlers({ insertEntityMention });
+    return (
+      <Show when={loaded()}>
+        <ChannelDropZone dragState={dragState}>
+          <span data-testid="message">message</span>
+          <ThreadReply />
+          <span data-testid="composer">composer</span>
+        </ChannelDropZone>
+      </Show>
+    );
+  }
+
+  const view = render(() => (
+    <DragDropProvider collisionDetector={collision}>
+      <DragDropSensors />
+      <Row />
+      <Channel />
+    </DragDropProvider>
+  ));
+  setLoaded(true);
+
+  const dragRowOnto = (testId: string) => {
+    hovered = view.getByTestId(testId);
+    fireEvent.mouseDown(view.getByTestId('row'), {
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    fireEvent.mouseMove(document, { clientX: 40, clientY: 0 });
+    fireEvent.mouseMove(document, { clientX: 50, clientY: 0 });
+    fireEvent.mouseUp(document, { button: 0 });
+  };
+
+  return { insertEntityMention, insertThreadMention, dragRowOnto };
+}
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
+
+describe('ChannelDropZone', () => {
+  it.each(['message', 'composer'])(
+    'mentions a list row dropped on the channel %s in the composer',
+    (target) => {
+      const { dragRowOnto, insertEntityMention, insertThreadMention } = setup();
+      dragRowOnto(target);
+      expect(insertEntityMention).toHaveBeenCalledOnce();
+      expect(insertEntityMention.mock.calls[0]![0]).toMatchObject({
+        id: entity.id,
+      });
+      expect(insertThreadMention).not.toHaveBeenCalled();
+    }
+  );
+
+  it('leaves a drop on a thread reply to that reply', () => {
+    const { dragRowOnto, insertEntityMention, insertThreadMention } = setup();
+    dragRowOnto('thread-reply');
+    expect(insertThreadMention).toHaveBeenCalledOnce();
+    expect(insertEntityMention).not.toHaveBeenCalled();
+  });
+});

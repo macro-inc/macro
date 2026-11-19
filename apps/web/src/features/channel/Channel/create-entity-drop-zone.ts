@@ -6,7 +6,7 @@ export type EntityDropCoordinates = {
   clientY: number;
 };
 
-type CreateEntityDropZoneOptions = {
+export type CreateEntityDropZoneOptions = {
   droppableId: string;
   /** Called when a soup entity is dropped onto this zone. */
   onDropEntity: (
