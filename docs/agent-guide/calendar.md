@@ -478,13 +478,15 @@ stays local until `Start call` creates the Quick Call, connects the creator, and
 rings selected teammates. Microphone and camera are not shared before starting.
 If invitations fail after connecting, `Retry invites` sends them again without
 creating another call. Shared-link join screens do not show the teammate picker.
-Incoming invitations appear in the incoming call banner stack at the top of the
-window (the same stack as ringing channel calls; see
+On desktop, incoming invitations appear in the incoming call stack at the top of
+the window (the same stack as ringing channel calls; see
 [Calls](calls.md#incoming-call-banners)) with the caller's profile picture and
-name, `Calling you`, and `Decline` and `Join` buttons. This stays visible across
-app pages, including call setup, hidden sidebars, narrow splits, and mobile. A
-bar along the card's top edge shows the time remaining before the 30-second
-dismissal deadline.
+name, `Calling you`, and `Decline` and `Join` buttons, and a bar along the
+card's top edge showing the time remaining before the 30-second dismissal
+deadline. On touch devices they appear in a card at the bottom left with the
+meeting name, the caller, a seconds counter and the same buttons. Both stay
+visible across app pages, including call setup, hidden sidebars and narrow
+splits.
 `Join` opens call setup; `Decline` stops ringing across the
 recipient's tabs. Unanswered invitations disappear and stop ringing after 30 seconds.
 Declining or timing out does not remove an invited live call from Channels `Live`.

@@ -292,8 +292,8 @@ use the real incoming-call signal rather than treating every active call as ring
 
 ### Incoming call banners
 
-A ringing channel or DM call also appears as a rounded card centered at the top
-of the window on every page of the app's split layout (not a meeting page, where
+On desktop, a ringing channel or DM call also appears as a rounded card centered
+at the top of the window on every page of the app's split layout (not a meeting page, where
 Join could not open the channel), so it can be answered without opening Chat. It
 shows the caller's profile picture (initials when there is none, `?` when the
 caller is unknown) and name, one line saying where they are calling
@@ -309,8 +309,10 @@ the front card's buttons usable. Clicking the stack (or the `Show all N
 incoming calls` strip under it, which is the keyboard path) fans every call out
 below with its own buttons, under an `N incoming calls` label and `Show less`;
 the stack folds back by itself once the calls it was opened with are gone.
-Cards sit below the macOS title bar and the top safe area, take no focus, and
-span the width minus 16px gutters on phones, with the buttons below the caller.
+Cards sit below the macOS title bar, take no focus, and put the buttons below
+the caller in a narrow window. Phones and tablets (touch) don't show the stack:
+they answer channel calls from Chat and the native call screens, and meeting
+invitations keep their own card at the bottom left.
 Ring one locally with `window.macroDebugIncomingCall({ channelId, createdBy })`
 in a dev build (`macroClearDebugIncomingCalls()` clears them), and a meeting
 invitation with `window.macroDebugMeetingInvitation({ createdBy })`. A new call
