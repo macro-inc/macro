@@ -279,6 +279,10 @@ impl IntoResponse for WebhookManagementError {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::NoWebhookTrigger => StatusCode::CONFLICT,
             Self::NotOwnerInPerson => StatusCode::FORBIDDEN,
+            Self::Unavailable(error) => {
+                tracing::warn!(error = ?error, "routine webhook flag unavailable");
+                return (StatusCode::SERVICE_UNAVAILABLE, "Unavailable").into_response();
+            }
             Self::Internal(error) => {
                 tracing::error!(error = ?error, "routine webhook management failed");
                 return (StatusCode::INTERNAL_SERVER_ERROR, "Internal error").into_response();
@@ -293,7 +297,7 @@ impl IntoResponse for WebhookManagementError {
     path = "/hooks/{hook_id}",
     tag = "routine webhooks",
     operation_id = "deliver_routine_webhook",
-    description = "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Send the webhook's secret as `Authorization: Bearer <secret>`. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, rotated or removed URL, or a missing or wrong secret, is 404.",
+    description = "Start a run of the routine this webhook URL belongs to, with the body (UTF-8 text, at most 64 KiB; a JSON body is checked against the trigger's payload tests) as its trigger data. Send the webhook's secret as `Authorization: Bearer <secret>`. Answers 202 at once with the run's id, or 200 without one when the body fails the payload tests. A repeated Idempotency-Key within a day answers with the first run. An unknown, rotated or removed URL, a missing or wrong secret, or a routine whose owner has webhooks off is 404.",
     params(
         ("hook_id" = String, Path, description = "The webhook's public id"),
         ("Idempotency-Key" = Option<String>, Header, description = "Up to 255 visible ASCII characters"),
@@ -389,7 +393,7 @@ impl IntoResponse for DeliveryError {
         match self {
             // Exactly what a route that does not exist answers, so a URL
             // that leads nowhere looks like no URL at all.
-            Self::NotFound => StatusCode::NOT_FOUND.into_response(),
+            Self::NotFound | Self::NotEnabled => StatusCode::NOT_FOUND.into_response(),
             Self::TooManyRequests { retry_after } | Self::Busy { retry_after } => {
                 let message = self.to_string();
                 retry(StatusCode::TOO_MANY_REQUESTS, retry_after, message)

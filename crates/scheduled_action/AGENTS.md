@@ -361,10 +361,13 @@ each run.
   /scheduled-actions/{id}/webhook`; the secret (`mrw_` + 256 random bits) is
   shown once and only its SHA-256 is kept in `scheduled_action_webhook`.
   Rotating replaces it; saving the routine without the filter, removing or
-  deleting revokes it. `POST /scheduled-action/hooks/{hook}/{secret}` (or
-  `/hooks/{hook}` with `Authorization: Bearer`) is public and outside CORS:
-  every refusal of the URL is the same 404 after the same constant-time
-  comparison; the body is UTF-8 text up to 64 KiB (413/400 otherwise);
+  deleting revokes it. `POST /scheduled-action/hooks/{hook}` with
+  `Authorization: Bearer <secret>` is public and outside CORS. The secret is
+  never part of the URL: a longer path (such as `/hooks/{hook}/{secret}`) is
+  an unknown route, matched by catch-alls so its span records the route, not
+  the path. Every refusal of the URL is the empty 404 an unknown route
+  answers, after the same constant-time comparison; the body is UTF-8 text
+  up to 64 KiB (413/400 otherwise);
   calls are counted per address (before the secret is checked) and per hook
   in Redis (`webhook_limits.rs`, 429, 503 when Redis is down); 20 waiting
   deliveries per routine at most; a repeated `Idempotency-Key` within a day
@@ -377,7 +380,13 @@ each run.
   Code reads `trigger.item.webhook.json` (or `.body` when not JSON); the run
   page keeps the body as sent; the queue row drops it when the run ends. The
   claim checks the hook again (`FOR SHARE`), so a rotation or removal that
-  returned never lets an earlier delivery start. The
+  returned never lets an earlier delivery start. Every webhook route
+  follows the owner's `enable-routine-webhooks` PostHog flag
+  (`domain/webhook_rollout.rs`, the web flag's key): off, the management
+  routes and deliveries answer 404 (a delivery reads the flag only after its
+  secret matched and its hook's limit allowed it); an unreadable flag is
+  503; without PostHog no one has it. A delivery already queued still runs
+  when the flag turns off. The
   secret is never logged or traced (`the_secret_is_never_traced`); the
   request spans record route placeholders, not paths.
 - `src/domain/event_trigger/property_selector.rs`: the `property` selector task
@@ -412,9 +421,10 @@ each run.
   (`domain/event_rollout.rs`): saving one needs it, and dispatch cancels runs
   (`NotEnabled`) for owners without it. Pausing an event routine never needs
   it. Without PostHog configured, no one has it and the host starts no event
-  intake. Webhook deliveries need no flag, at save (when the filters
-  watch nothing else) or at dispatch, so the host runs the event-run worker
-  even without intake.
+  intake or event-run worker. Webhooks follow their own flag (see
+  `src/domain/webhook.rs` above), not this one: a webhook trigger saves
+  without it when the filters watch nothing else, and its runs dispatch
+  without it.
 - Not here: the target being run (an agent turn, a routine's tool logic) →
   `crates/agent_session`, `ai_tools`; Jev condition evaluation → `crates/jev`.
 

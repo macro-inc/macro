@@ -18,6 +18,7 @@ use crate::domain::webhook::{
     Delivered, DeliveryError, DeliveryRequest, Limit, LimitScope, MAX_QUEUED, ManagingCaller,
     MintedWebhook, RoutineWebhookService, RoutineWebhooks, WebhookLimits,
 };
+use crate::domain::webhook_rollout::WebhookRollout;
 use crate::outbound::pg_event_run_repo::PgEventRunRepo;
 use crate::outbound::pg_scheduled_action_repo::PgScheduledActionRepo;
 use crate::outbound::pg_scheduled_action_repo::test::{
@@ -32,7 +33,15 @@ impl WebhookLimits for Unlimited {
     }
 }
 
-type Webhooks = RoutineWebhooks<PgScheduledActionRepo<NoBots>, PgWebhookStore, Unlimited>;
+struct On;
+
+impl WebhookRollout for On {
+    async fn enabled_for(&self, _: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        Ok(true)
+    }
+}
+
+type Webhooks = RoutineWebhooks<PgScheduledActionRepo<NoBots>, PgWebhookStore, Unlimited, On>;
 
 struct Fixture {
     pool: PgPool,
@@ -82,6 +91,7 @@ async fn fixture_with(pool: PgPool, filter: Value) -> Fixture {
         Arc::clone(&repo),
         PgWebhookStore::new(pool.clone()),
         Unlimited,
+        On,
     );
     Fixture {
         pool,

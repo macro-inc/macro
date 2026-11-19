@@ -10,6 +10,11 @@
 //! there is none, is compared in constant time. The secret is never logged,
 //! traced, stored or returned again.
 //!
+//! Webhooks follow each owner's
+//! [`ROUTINE_WEBHOOKS_FLAG`](super::webhook_rollout::ROUTINE_WEBHOOKS_FLAG):
+//! off, managing a URL answers as for an unknown routine, and a POST as for
+//! an unknown URL.
+//!
 //! An accepted delivery joins the routine's event-run queue as a `webhook`
 //! event carrying its body, text that runs read as untrusted data, once the
 //! filter's payload tests pass on it; its AI condition is answered like any
@@ -38,6 +43,7 @@ use super::event_trigger::{EventId, EventReference};
 use super::models::ActionPolicyError;
 use super::ports::ScheduledActionRepo;
 use super::service::granted_action;
+use super::webhook_rollout::WebhookRollout;
 
 #[cfg(test)]
 mod test;
@@ -302,6 +308,9 @@ pub enum WebhookManagementError {
     NoWebhookTrigger,
     #[error("only the routine's owner can manage its webhook, from their own account")]
     NotOwnerInPerson,
+    /// The webhook flag could not be read.
+    #[error("webhooks are unavailable")]
+    Unavailable(Report),
     #[error("{0}")]
     Internal(Report),
 }
@@ -341,6 +350,10 @@ pub enum DeliveryError {
     /// routine: all the same to the caller.
     #[error("not found")]
     NotFound,
+    /// Webhooks are off for the routine's owner, answered as
+    /// [`Self::NotFound`].
+    #[error("not found")]
+    NotEnabled,
     #[error("too many requests")]
     TooManyRequests { retry_after: Duration },
     #[error("the body is larger than 64 KiB")]
@@ -444,30 +457,44 @@ pub trait WebhookLimits: Send + Sync + 'static {
 }
 
 /// Managing and receiving routine webhooks.
-pub struct RoutineWebhooks<R, S, L> {
+pub struct RoutineWebhooks<R, S, L, O> {
     repo: std::sync::Arc<R>,
     store: S,
     limits: L,
+    rollout: O,
 }
 
-impl<R, S, L> RoutineWebhooks<R, S, L> {
-    pub fn new(repo: std::sync::Arc<R>, store: S, limits: L) -> Self {
+impl<R, S, L, O> RoutineWebhooks<R, S, L, O> {
+    pub fn new(repo: std::sync::Arc<R>, store: S, limits: L, rollout: O) -> Self {
         Self {
             repo,
             store,
             limits,
+            rollout,
         }
     }
 }
 
-impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<R, S, L> {
+impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits, O: WebhookRollout>
+    RoutineWebhooks<R, S, L, O>
+{
     /// The routine, when the caller is its owner in person.
     async fn owned(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         caller: ManagingCaller,
     ) -> Result<super::models::ScheduledAction, WebhookManagementError> {
-        if caller == ManagingCaller::Agent || receipt.get_authenticated_user().is_err() {
+        let user = receipt
+            .get_authenticated_user()
+            .map_err(|_| WebhookManagementError::NotOwnerInPerson)?;
+        // Off for the signed-in person, the routes answer as for a routine
+        // they can't see, whoever asks for them.
+        match self.rollout.enabled_for(user).await {
+            Ok(true) => {}
+            Ok(false) => return Err(WebhookManagementError::NotFound),
+            Err(error) => return Err(WebhookManagementError::Unavailable(error)),
+        }
+        if caller == ManagingCaller::Agent {
             return Err(WebhookManagementError::NotOwnerInPerson);
         }
         let action = granted_action(self.repo.as_ref(), receipt)
@@ -476,13 +503,28 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
                 Some(ActionPolicyError::NotFound) => WebhookManagementError::NotFound,
                 _ => WebhookManagementError::Internal(rootcause::report!("{error:#}")),
             })?;
-        let owner = receipt
-            .get_authenticated_user()
-            .map_err(|_| WebhookManagementError::NotOwnerInPerson)?;
-        if !action.owner.is_user(owner) {
+        if !action.owner.is_user(user) {
             return Err(WebhookManagementError::NotOwnerInPerson);
         }
         Ok(action)
+    }
+
+    /// Whether the routine's owner has webhooks on. A routine deleted since
+    /// its hook was found, or no person's, has none.
+    async fn enabled(&self, action_id: Uuid) -> Result<(), DeliveryError> {
+        let action = self
+            .repo
+            .get_action(&action_id)
+            .await
+            .map_err(|error| DeliveryError::Unavailable(rootcause::report!("{error:#}")))?;
+        let Some(owner) = action.as_ref().and_then(|action| action.owner.as_user()) else {
+            return Err(DeliveryError::NotFound);
+        };
+        match self.rollout.enabled_for(owner).await {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(DeliveryError::NotEnabled),
+            Err(error) => Err(DeliveryError::Unavailable(error)),
+        }
     }
 
     async fn limit(&self, scope: LimitScope, limit: Limit) -> Result<(), DeliveryError> {
@@ -526,6 +568,8 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhooks<
         span.record("hook_id", tracing::field::display(hook_id));
         span.record("action_id", tracing::field::display(stored.action_id));
         self.limit(LimitScope::Hook(hook_id), HOOK_LIMIT).await?;
+        // After the hook's limit, so a URL makes at most that many flag reads.
+        self.enabled(stored.action_id).await?;
         let event_id = EventId::try_from(generate_uuid_v7())
             .map_err(|error| DeliveryError::Unavailable(Report::new(error).into_dynamic()))?;
         let event = EventReference::webhook(
@@ -594,8 +638,8 @@ pub trait RoutineWebhookService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Delivered, DeliveryError>> + Send;
 }
 
-impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhookService
-    for RoutineWebhooks<R, S, L>
+impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits, O: WebhookRollout>
+    RoutineWebhookService for RoutineWebhooks<R, S, L, O>
 {
     #[tracing::instrument(name = "routine.webhook.status", skip_all, err)]
     async fn status(
@@ -685,6 +729,7 @@ impl<R: ScheduledActionRepo, S: WebhookStore, L: WebhookLimits> RoutineWebhookSe
             Ok(Delivered::Repeated { .. }) => "repeated",
             Ok(Delivered::Unmatched) => "unmatched",
             Err(DeliveryError::NotFound) => "not_found",
+            Err(DeliveryError::NotEnabled) => "not_enabled",
             Err(DeliveryError::TooManyRequests { .. }) => "rate_limited",
             Err(DeliveryError::TooLarge) => "too_large",
             Err(DeliveryError::NotText) => "not_text",

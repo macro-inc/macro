@@ -215,6 +215,7 @@ async fn a_bearer_post_without_a_token_is_checked_with_an_empty_secret() {
 async fn refusals_map_to_their_statuses() {
     let cases = [
         (DeliveryError::NotFound, StatusCode::NOT_FOUND, None),
+        (DeliveryError::NotEnabled, StatusCode::NOT_FOUND, None),
         (
             DeliveryError::TooManyRequests {
                 retry_after: Duration::from_secs(60),
@@ -298,7 +299,8 @@ async fn a_non_text_idempotency_key_is_refused_before_the_service() {
     assert!(fake.received().is_empty());
 }
 
-/// Not found answers, byte for byte, as a route that doesn't exist does, and so does a URL with the secret in its path,
+/// Not found and switched off answer, byte for byte, as a route that
+/// doesn't exist does, and so does a URL with the secret in its path,
 /// whatever it holds.
 #[tokio::test]
 async fn a_secret_in_the_path_is_an_unknown_url() {
@@ -319,7 +321,7 @@ async fn a_secret_in_the_path_is_an_unknown_url() {
     ] {
         assert_eq!(unknown(uri.clone()).await, no_route, "{uri}");
     }
-    for refusal in [DeliveryError::NotFound] {
+    for refusal in [DeliveryError::NotFound, DeliveryError::NotEnabled] {
         let label = format!("{refusal:?}");
         let answer = over_the_wire(
             app(Fake::answering(Err(refusal))),
@@ -432,6 +434,16 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
     };
     use crate::outbound::pg_webhook_store::PgWebhookStore;
 
+    struct On;
+    impl crate::domain::webhook_rollout::WebhookRollout for On {
+        async fn enabled_for(
+            &self,
+            _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        ) -> Result<bool, rootcause::Report> {
+            Ok(true)
+        }
+    }
+
     struct Unlimited;
     impl WebhookLimits for Unlimited {
         async fn count(
@@ -456,6 +468,7 @@ async fn the_secret_is_never_traced(pool: sqlx::PgPool) {
         Arc::clone(&repo),
         PgWebhookStore::new(pool.clone()),
         Unlimited,
+        On,
     ));
     let receipt = EntityAccessReceipt::dangerously_assert_authenticated_user(
         macro_user_id::user_id::MacroUserIdStr::parse_from_str(USER_A).unwrap(),

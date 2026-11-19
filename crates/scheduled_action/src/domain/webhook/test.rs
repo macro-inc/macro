@@ -223,10 +223,45 @@ impl WebhookLimits for Limits {
     }
 }
 
+/// On for everyone but the users switched off, or down for everyone.
+#[derive(Default)]
+struct RolloutState {
+    off: Vec<String>,
+    down: bool,
+    asked: Vec<String>,
+}
+
+#[derive(Clone, Default)]
+struct Rollout(Arc<Mutex<RolloutState>>);
+
+impl Rollout {
+    fn switch_off(&self, user: &str) {
+        self.0.lock().unwrap().off.push(user.to_owned());
+    }
+    fn go_down(&self) {
+        self.0.lock().unwrap().down = true;
+    }
+    fn asked(&self) -> Vec<String> {
+        self.0.lock().unwrap().asked.clone()
+    }
+}
+
+impl WebhookRollout for Rollout {
+    async fn enabled_for(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        let mut state = self.0.lock().unwrap();
+        state.asked.push(user.to_string());
+        if state.down {
+            return Err(rootcause::report!("posthog down"));
+        }
+        Ok(!state.off.iter().any(|off| off.as_str() == user.as_ref()))
+    }
+}
+
 struct Fixture {
-    service: RoutineWebhooks<Repo, Store, Limits>,
+    service: RoutineWebhooks<Repo, Store, Limits, Rollout>,
     store: Store,
     limits: Limits,
+    rollout: Rollout,
     action: ScheduledAction,
 }
 
@@ -234,10 +269,17 @@ fn fixture(trigger: ActionTrigger) -> Fixture {
     let action = routine(trigger);
     let store = Store::default();
     let limits = Limits::default();
+    let rollout = Rollout::default();
     Fixture {
-        service: RoutineWebhooks::new(Repo::with(&action), store.clone(), limits.clone()),
+        service: RoutineWebhooks::new(
+            Repo::with(&action),
+            store.clone(),
+            limits.clone(),
+            rollout.clone(),
+        ),
         store,
         limits,
+        rollout,
         action,
     }
 }
@@ -587,5 +629,105 @@ async fn a_minted_secret_is_256_random_bits_stored_only_as_its_hash() {
     assert_eq!(
         hash.as_bytes(),
         &<[u8; 32]>::from(Sha256::digest(second.secret.expose()))
+    );
+}
+
+/// Off for the owner, the URL they made answers as an unknown one, and the
+/// owner's routes as for a routine they can't see, even to an agent.
+#[tokio::test]
+async fn webhooks_switched_off_for_the_owner_are_not_found() {
+    let fixture = fixture(webhook_trigger());
+    let minted = fixture.mint().await;
+    let hook_id = minted.hook_id.to_string();
+    fixture.rollout.switch_off(OWNER);
+
+    let error = fixture
+        .service
+        .receive(post(&hook_id, minted.secret.expose(), b"{}"))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DeliveryError::NotEnabled), "{error:?}");
+    assert_eq!(fixture.store.admitted(), 0);
+    // Asked for the owner, and only once the secret matched.
+    assert_eq!(
+        fixture.rollout.asked().last().map(String::as_str),
+        Some(OWNER)
+    );
+    let asked = fixture.rollout.asked().len();
+    let error = fixture
+        .service
+        .receive(post(&hook_id, "wrong", b"{}"))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DeliveryError::NotFound), "{error:?}");
+    assert_eq!(fixture.rollout.asked().len(), asked);
+
+    let receipt = receipt(OWNER, &fixture.action);
+    for caller in [ManagingCaller::Person, ManagingCaller::Agent] {
+        let status = fixture.service.status(&receipt, caller).await.unwrap_err();
+        let mint = fixture.service.mint(&receipt, caller).await.unwrap_err();
+        let remove = fixture.service.remove(&receipt, caller).await.unwrap_err();
+        for error in [status, mint, remove] {
+            assert!(
+                matches!(error, WebhookManagementError::NotFound),
+                "{caller:?}: {error:?}"
+            );
+        }
+    }
+    assert_eq!(fixture.rollout.asked().len(), asked + 6);
+    // Nothing was replaced or removed: on again, the same URL works.
+    fixture.rollout.0.lock().unwrap().off.clear();
+    let delivered = fixture
+        .service
+        .receive(post(&hook_id, minted.secret.expose(), b"{}"))
+        .await
+        .unwrap();
+    assert!(matches!(delivered, Delivered::Started { .. }));
+}
+
+/// Someone else's flag doesn't open the owner's URL.
+#[tokio::test]
+async fn a_delivery_follows_the_owners_flag() {
+    let fixture = fixture(webhook_trigger());
+    let minted = fixture.mint().await;
+    fixture.rollout.switch_off(OTHER);
+    let delivered = fixture
+        .service
+        .receive(post(
+            &minted.hook_id.to_string(),
+            minted.secret.expose(),
+            b"{}",
+        ))
+        .await
+        .unwrap();
+    assert!(matches!(delivered, Delivered::Started { .. }));
+}
+
+/// An unreadable flag is not "off": the sender is told to retry, the
+/// owner that webhooks are unavailable.
+#[tokio::test]
+async fn a_flag_outage_refuses_without_saying_not_found() {
+    let fixture = fixture(webhook_trigger());
+    let minted = fixture.mint().await;
+    fixture.rollout.go_down();
+    let error = fixture
+        .service
+        .receive(post(
+            &minted.hook_id.to_string(),
+            minted.secret.expose(),
+            b"{}",
+        ))
+        .await
+        .unwrap_err();
+    assert!(matches!(error, DeliveryError::Unavailable(_)), "{error:?}");
+    assert_eq!(fixture.store.admitted(), 0);
+    let error = fixture
+        .service
+        .status(&receipt(OWNER, &fixture.action), ManagingCaller::Person)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, WebhookManagementError::Unavailable(_)),
+        "{error:?}"
     );
 }

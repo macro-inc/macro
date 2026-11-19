@@ -46,6 +46,7 @@ use scheduled_action::domain::target_runner::TargetRunner;
 use scheduled_action::domain::target_validation::TargetValidation;
 use scheduled_action::domain::templates::RoutineTemplateServiceImpl;
 use scheduled_action::domain::webhook::RoutineWebhooks;
+use scheduled_action::domain::webhook_rollout::FlaggedWebhooks;
 use scheduled_action::inbound::axum_router::{ScheduledActionRouterState, scheduled_action_router};
 use scheduled_action::inbound::draft_job_router::{
     RoutineDraftJobRouterState, routine_draft_job_router,
@@ -582,14 +583,32 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
 
     let registrar = OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(db.clone())));
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone(), registrar.clone()));
+    let routine_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+                config.environment,
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // A routine's webhook URL, checked against its stored hash and counted
-    // in Redis so every replica limits a caller together.
+    // in Redis so every replica limits a caller together. Webhooks follow
+    // each owner's PostHog flag; without PostHog no one has them.
     let webhooks = Arc::new(RoutineWebhooks::new(
         Arc::clone(&repo),
         PgWebhookStore::new(db.clone()),
         SharedWebhookLimits::new(rate_limit::RateLimitServiceImpl {
             repo: rate_limit::RedisRateLimitAdapter { redis },
         }),
+        routine_flags.clone().map(FlaggedWebhooks::new),
     ));
 
     let event_repo = Arc::new(PgEventRunRepo::new(db.clone()));
@@ -747,22 +766,6 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     drop(execution_rx);
 
     let conditions = classifier.map(|classifier| ConditionGate::new(event_content, classifier));
-    let routine_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                Duration::from_secs(3),
-                config.environment,
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     // Event routines follow each owner's PostHog flag; without PostHog no one has it.
     let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
     let event_dispatch = EventDispatchService::new(
@@ -1347,8 +1350,6 @@ fn start_event_tasks<C, F>(
     C: FnMut() -> F + Send + 'static,
     F: Future<Output = Result<(), rootcause::Report>> + Send + 'static,
 {
-    // Webhook deliveries need the worker even where event intake is off.
-    lifecycle.workers.spawn(worker);
     if !enabled {
         return;
     }
@@ -1357,6 +1358,7 @@ fn start_event_tasks<C, F>(
         lifecycle.stop_consumers.clone(),
         CONSUMER_RESTART_DELAY,
     ));
+    lifecycle.workers.spawn(worker);
 }
 
 /// Run `sweep` at once and then every `interval` on a worker of its own
