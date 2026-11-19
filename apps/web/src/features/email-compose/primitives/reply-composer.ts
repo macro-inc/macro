@@ -1198,6 +1198,8 @@ export function createReplyComposer(
       if (result === 'scheduled' && schedule.state().type === 'scheduled') {
         const scheduledDraftId = savedDraftId();
         rememberCurrentReply();
+        // The confirmed schedule already contains these edits.
+        hasLocalChanges = false;
         // The scheduled draft stays in the thread with its "Scheduled for"
         // bar, as a reload shows it; clearing it hid it until a refresh.
         void Promise.resolve(
