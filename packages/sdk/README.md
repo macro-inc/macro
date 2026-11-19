@@ -529,7 +529,9 @@ A routine with steps can define `subRoutines`: work its runs schedule once per
 item with `macro.routines.schedule(name, { trigger, inputs, key })`, each copy
 running the definition as the routine holds it when the copy runs. An update
 that omits a routine's existing `subRoutines` is refused, so pass them back
-(changed or not) with every update.
+(changed or not) with every update. The SDK can't hold a definition's apps or
+a detached copy's input values, so an update of a routine that has either is
+refused (409); change those in the editor.
 Routines run with their owner's access. For eligible routines,
 `routine.shareAsTemplate({ description, variables })` publishes a snapshot.
 Publishing rejects scheduled copies and routines with sub-routine definitions
