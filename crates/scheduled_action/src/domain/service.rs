@@ -418,7 +418,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         self.check_event_management(&input.trigger, owner_user)
             .await?;
         self.check_conditions(&input.trigger)?;
-        self.check_sub_routines(&input.task, owner_user).await?;
+        // Only scheduling links a copy to its parent, and it read the
+        // rollout before building the copy.
+        if sub_routine.is_none() || SubRoutineCopy::from_task(&input.task).is_none() {
+            self.check_sub_routines(&input.task, owner_user).await?;
+        }
         if sub_routine.is_some() && defines_sub_routines(&input.task) {
             return Err(ActionPolicyError::NestedSubRoutines.into());
         }
@@ -737,12 +741,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         }
         if !disable_only {
             // Every way a task changes needs the rollout for definitions and
-            // inputs: an edit, a run's keyed create. Making a copy that
-            // exists standalone doesn't, so switching the rollout off
-            // strands none.
-            let detaching = SubRoutineCopy::from_task(&action.task).is_some()
-                && SubRoutineCopy::from_task(&input.task).is_none();
-            if !same_task(&action.task, &input.task) && !detaching {
+            // inputs: an edit, a run's keyed create. A copy's task changes
+            // only when a run schedules it again, which read the rollout
+            // already, or when it is made standalone, which needs none, so
+            // switching the rollout off strands no copy.
+            let from_copy = SubRoutineCopy::from_task(&action.task).is_some();
+            if !same_task(&action.task, &input.task) && !from_copy {
                 self.check_sub_routines(&input.task, action.owner_user()?)
                     .await?;
             }

@@ -792,6 +792,28 @@ async fn with_the_rollout_off_runs_schedule_nothing_and_a_copy_can_still_stand_a
     );
 }
 
+/// Each read of the rollout asks the flag service over the network.
+#[tokio::test]
+async fn scheduling_reads_the_owners_rollout_once_whether_it_creates_or_moves_a_copy() {
+    use crate::domain::event_runs::test_support::SUB_ROUTINE_FLAG_READS;
+    let service = service(true);
+    let parent = reminders(&service).await;
+    start_run(&service, &parent, PARENT_RUN);
+    let reads = |request: ScheduleSubRoutine| {
+        let service = Arc::clone(&service);
+        let caller = from_code(&parent);
+        SUB_ROUTINE_FLAG_READS.scope(std::cell::Cell::new(0), async move {
+            schedule(&service, request, caller).await.unwrap();
+            SUB_ROUTINE_FLAG_READS.with(std::cell::Cell::get)
+        })
+    };
+
+    assert_eq!(reads(remind("Ship", Some("task-1"))).await, 1);
+    // Under its key with other inputs.
+    assert_eq!(reads(remind("Ship v2", Some("task-1"))).await, 1);
+    assert_eq!(stored_actions(&service).len(), 2);
+}
+
 #[tokio::test]
 async fn detaching_a_copy_keeps_the_steps_it_ran_with_its_inputs() {
     let service = service(true);

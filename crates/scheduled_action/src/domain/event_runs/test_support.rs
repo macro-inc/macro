@@ -504,6 +504,11 @@ pub struct Rollout(pub Option<bool>);
 
 pub const ROLLED_OUT: Rollout = Rollout(Some(true));
 
+tokio::task_local! {
+    /// How many times the sub-routine rollout was read inside its scope.
+    pub static SUB_ROUTINE_FLAG_READS: std::cell::Cell<usize>;
+}
+
 impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
     async fn enabled_for(&self, _user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
         self.0
@@ -511,6 +516,7 @@ impl crate::domain::event_rollout::EventRoutineRollout for Rollout {
     }
 
     async fn sub_routines_enabled_for(&self, user: &MacroUserIdStr<'_>) -> Result<bool, Report> {
+        let _ = SUB_ROUTINE_FLAG_READS.try_with(|reads| reads.set(reads.get() + 1));
         self.enabled_for(user).await
     }
 }
