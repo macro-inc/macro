@@ -12,6 +12,11 @@ const mocks = vi.hoisted(() => ({
   shown: [] as { kind: string; title: string; options: Options }[],
   dismissed: [] as number[],
   ensureComputers: vi.fn<() => Promise<Partial<ComputerStatus>[]>>(),
+  session: 1,
+}));
+
+vi.mock('@queries/auth/account-scope', () => ({
+  queryAccountSession: () => mocks.session,
 }));
 
 vi.mock('@queries/computers/computers', () => ({
@@ -34,6 +39,7 @@ vi.mock('@core/component/Toast/Toast', () => ({
 beforeEach(() => {
   mocks.ensureComputers.mockReset();
   mocks.ensureComputers.mockResolvedValue([]);
+  mocks.session = 1;
   for (const notice of mocks.shown) notice.options.onDismiss?.();
   mocks.shown = [];
   mocks.dismissed = [];
@@ -173,4 +179,21 @@ it('keeps notices away until the last of two dialogs for a computer closes', asy
   second();
   await showComputerSetupNotice(ready, vi.fn());
   expect(mocks.shown).toHaveLength(1);
+});
+
+it('shows no ready notice when another login happened while the list was read', async () => {
+  mocks.ensureComputers.mockImplementation(async () => {
+    mocks.session = 2;
+    return [];
+  });
+  await showComputerSetupNotice(
+    {
+      computerId: 'computer-1',
+      harnessId: 'harness-1',
+      computerName: "Maya's Agent Box",
+      outcome: { kind: 'ready' },
+    },
+    vi.fn()
+  );
+  expect(mocks.shown).toHaveLength(0);
 });

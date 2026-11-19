@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { queryAccountSession } from '@queries/auth/account-scope';
 import { ensureComputers } from '@queries/computers/computers';
 import type { NotifEvent } from '@service-notification/generated/schemas/notifEvent';
 import { match } from 'ts-pattern';
@@ -64,7 +65,11 @@ export async function showComputerSetupNotice(
   const key = `${notice.computerId}:${notice.outcome.kind}`;
   if (notice.outcome.kind === 'ready') {
     if (inDialog.has(notice.computerId)) return;
-    if (await setupComplete(notice.computerId)) return;
+    const session = queryAccountSession();
+    const complete = await setupComplete(notice.computerId);
+    // Another login during the read: the notice is the old account's.
+    if (queryAccountSession() !== session) return;
+    if (complete) return;
     // A dialog may have opened while the list was read.
     if (inDialog.has(notice.computerId)) return;
   }
