@@ -40,11 +40,10 @@ without widening the composer.
 
 The long-mention regression (`draft.html?collapsible`) pastes a link to a
 document with a long name, which becomes a mention filling a phone's one-line
-pill, dismisses the keyboard, and taps the mention, the text before it and the
-pill's padding: each tap opens the composer with the caret in it. Mention chips
-turn pointer events back on and stop the click, so the pill used to stay shut
-under a tap on the chip. On a tablet the full composer stays, and taps beside
-the mention focus it.
+pill, dismisses the keyboard, and taps the mention and the text before it:
+each tap opens the composer with the caret in it. Mention chips turn pointer
+events back on and stop the click, so the pill used to stay shut under a tap
+on the chip.
 
 The code-paste regression types three backticks to open a code block in the
 production composer and pastes a Macro link, then Markdown. Both land as literal

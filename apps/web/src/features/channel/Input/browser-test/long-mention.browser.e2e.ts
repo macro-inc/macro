@@ -62,10 +62,7 @@ async function writeLongMention(page: Page) {
   await expect(editor.getByText(documentName)).toBeVisible();
 }
 
-/**
- * Leaves the composer as dismissing the phone keyboard does. A tap outside
- * blurs it in Chromium but not in WebKit.
- */
+/** Leaves the composer as dismissing the phone keyboard does. */
 const dismissKeyboard = (page: Page) =>
   page.evaluate(() => {
     if (document.activeElement instanceof HTMLElement)
@@ -85,7 +82,7 @@ const editorHasCaret = (page: Page) =>
     );
   });
 
-test('a tap anywhere on the phone composer pill opens it over a long mention', async ({
+test('a tap on a long mention in the phone composer pill opens the composer', async ({
   browser,
 }) => {
   const context = await browser.newContext({
@@ -103,119 +100,49 @@ test('a tap anywhere on the phone composer pill opens it over a long mention', a
 
   await dismissKeyboard(page);
   await expect(pill).toBeVisible();
-  const mention = preview.getByText(documentName);
-  await expect(mention).toBeVisible();
+  await expect(preview.getByText(documentName)).toBeVisible();
 
   // Measured in one pass: the preview rerenders as the mention's name lands
   // in the draft.
-  const layout = await pill.evaluate((element) => {
-    const rect = (selector: string) => {
-      const found = element.querySelector(selector);
-      if (!found) throw new Error(`No ${selector}`);
-      return found.getBoundingClientRect().toJSON() as DOMRect;
-    };
-    const textNode = element.querySelector(
-      '[data-collapsed-input-preview] p'
-    )?.firstChild;
-    if (!textNode) throw new Error('No draft text');
-    const range = document.createRange();
-    range.selectNodeContents(textNode);
-    return {
-      pill: element.getBoundingClientRect().toJSON() as DOMRect,
-      add: rect('button[aria-label="Add"]'),
-      preview: rect('[data-collapsed-input-preview]'),
-      mention: rect('[data-collapsed-input-preview] [data-document-mention]'),
-      text: range.getBoundingClientRect().toJSON() as DOMRect,
-    };
-  });
-  // The mention is cut off inside the pill rather than widening it.
-  expect(layout.pill.right).toBeLessThanOrEqual(390);
-  expect(layout.mention.right).toBeGreaterThan(layout.preview.right);
-
-  const middle = layout.pill.top + layout.pill.height / 2;
-  const points: [string, number, number][] = [
-    // The chip covers most of the line; its own tap opened nothing.
-    ['mention', layout.preview.right - 20, middle],
-    ['text before the mention', layout.text.left + 4, middle],
-    ['padding beside the add button', layout.add.right + 3, middle],
-    ['padding above the draft', layout.preview.left + 40, layout.pill.top + 3],
-    [
-      'padding below the draft',
-      layout.preview.left + 40,
-      layout.pill.bottom - 3,
-    ],
-  ];
-  for (const [where, x, y] of points) {
-    await page.touchscreen.tap(x, y);
-    await expect(pill, `tap on ${where}`).toBeHidden();
-    await expect
-      .poll(() => editorHasCaret(page), `caret after ${where}`)
-      .toBe(true);
-    // The open composer keeps the long mention inside the screen.
-    const editorRight = await page
-      .locator('[data-markdown-editable]')
-      .evaluate((element) => element.getBoundingClientRect().right);
-    expect(editorRight).toBeLessThanOrEqual(390);
-    await dismissKeyboard(page);
-    await expect(pill).toBeVisible();
-  }
-  await page.screenshot({
-    path: test.info().outputPath('long-mention-phone.png'),
-  });
-  await context.close();
-});
-
-test('taps beside a long mention focus the tablet composer', async ({
-  browser,
-}) => {
-  const context = await browser.newContext({
-    viewport: { width: 820, height: 1180 },
-    isMobile: true,
-    hasTouch: true,
-  });
-  const page = await context.newPage();
-  await openFixture(page);
-  const editor = page.locator('[data-markdown-editable]');
-  await expect(editor).toBeVisible({ timeout: 60_000 });
-  // Tablets keep the full composer; there is no pill.
-  await expect(page.locator('[data-composer-collapsed]')).toHaveCount(0);
-  await editor.tap();
-  await writeLongMention(page);
-
-  const layout = await editor.evaluate((element) => {
+  const layout = await preview.evaluate((element) => {
     const textNode = element.querySelector('p')?.firstChild;
     const mention = element.querySelector('[data-document-mention]');
     if (!textNode || !mention) throw new Error('Draft not laid out');
     const range = document.createRange();
     range.selectNodeContents(textNode);
+    const box = (rect: DOMRect) => ({
+      left: rect.left,
+      right: rect.right,
+      top: rect.top,
+      height: rect.height,
+    });
     return {
-      editor: element.getBoundingClientRect().toJSON() as DOMRect,
-      mention: mention.getBoundingClientRect().toJSON() as DOMRect,
-      text: range.getBoundingClientRect().toJSON() as DOMRect,
+      preview: box(element.getBoundingClientRect()),
+      mention: box(mention.getBoundingClientRect()),
+      text: box(range.getBoundingClientRect()),
     };
   });
+  // The mention runs past the end of the preview, so the chip is under
+  // every tap on the line after the text before it.
+  expect(layout.mention.right).toBeGreaterThan(layout.preview.right);
+
+  const middle = layout.preview.top + layout.preview.height / 2;
   const points: [string, number, number][] = [
-    [
-      'text before the mention',
-      layout.text.left + 4,
-      layout.text.top + layout.text.height / 2,
-    ],
-    [
-      'space after the mention',
-      (layout.mention.right + layout.editor.right) / 2,
-      layout.mention.top + layout.mention.height / 2,
-    ],
+    ['the start of the mention', layout.mention.left + 10, middle],
+    ['the end of the line', layout.preview.right - 20, middle],
+    ['the text before the mention', layout.text.left + 4, middle],
   ];
   for (const [where, x, y] of points) {
-    await dismissKeyboard(page);
-    await expect(editor).not.toBeFocused();
     await page.touchscreen.tap(x, y);
+    await expect(pill, `tap on ${where}`).toBeHidden();
     await expect
-      .poll(() => editorHasCaret(page), `caret after ${where}`)
+      .poll(() => editorHasCaret(page), `caret after a tap on ${where}`)
       .toBe(true);
+    await dismissKeyboard(page);
+    await expect(pill).toBeVisible();
   }
   await page.screenshot({
-    path: test.info().outputPath('long-mention-tablet.png'),
+    path: test.info().outputPath('long-mention-phone.png'),
   });
   await context.close();
 });

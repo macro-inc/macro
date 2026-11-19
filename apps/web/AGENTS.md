@@ -648,7 +648,7 @@ mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
-Its long-mention case taps a phone's collapsed pill on a long document mention, beside it and on its padding; every tap must open the composer, so keep the pill's draft preview inert down to every descendant (mention chips turn pointer events back on and stop the click).
+Its long-mention case taps a long document mention in a phone's collapsed pill, which must open the composer, so keep the pill's draft preview inert down to every descendant (mention chips turn pointer events back on and stop the click).
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
