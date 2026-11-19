@@ -123,6 +123,12 @@ describe('prepareEmailBody in Node, without a DOM', () => {
         html: `<table><tr><td>Newsletter</td></tr></table>${html}`,
       }).hasTable
     ).toBe(true);
+    // Every signature counts, including one that is the table itself.
+    expect(
+      prepareEmailBody({
+        html: `${html}<table class="macro-email-signature"><tr><td>Sam</td></tr></table>`,
+      }).hasTable
+    ).toBe(false);
   });
   it('retains document styles and signatures according to explicit options', () => {
     const html =

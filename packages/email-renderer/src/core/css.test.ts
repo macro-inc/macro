@@ -3,19 +3,19 @@ import { applyColorScheme } from './css';
 
 describe('applyColorScheme', () => {
   const css =
-    '@media (prefers-color-scheme:dark){.a{color:white}}@media (prefers-color-scheme:light){.b{color:black}}.c{color:red}';
+    '@media (prefers-color-scheme:dark){.a{background-color:#111}}@media (prefers-color-scheme:light){.b{color:black}}.c{color:red}';
 
   it('applies dark rules for a dark theme and drops light ones', () => {
     expect(applyColorScheme(css, 'dark')).toEqual({
-      css: '@media all{.a{color:white}}.c{color:red}',
-      hasDarkRules: true,
+      css: '@media (min-width:0){.a{background-color:#111}}.c{color:red}',
+      darkBackground: true,
     });
   });
 
   it('applies light rules for a light theme and drops dark ones', () => {
     expect(applyColorScheme(css, 'light')).toEqual({
-      css: '@media all{.b{color:black}}.c{color:red}',
-      hasDarkRules: true,
+      css: '@media (min-width:0){.b{color:black}}.c{color:red}',
+      darkBackground: false,
     });
   });
 
@@ -25,19 +25,15 @@ describe('applyColorScheme', () => {
         '@media only screen and (max-width:600px) and (PREFERS-COLOR-SCHEME:DARK),print{.a{color:white}}',
         'dark'
       ).css
-    ).toBe('@media only screen and (max-width:600px),print{.a{color:white}}');
+    ).toBe(
+      '@media only screen and (max-width:600px) and (min-width:0),print{.a{color:white}}'
+    );
     expect(
       applyColorScheme(
-        '@media (prefers-color-scheme:dark) and (max-width:600px){.a{color:white}}',
-        'dark'
-      ).css
-    ).toBe('@media (max-width:600px){.a{color:white}}');
-    expect(
-      applyColorScheme(
-        '@media screen and (prefers-color-scheme:dark),print{.a{color:white}}',
+        '@media screen and (prefers-color-scheme:dark),not print{.a{color:white}}',
         'light'
       ).css
-    ).toBe('@media print{.a{color:white}}');
+    ).toBe('@media not print{.a{color:white}}');
   });
 
   it('resolves rules nested inside other at-rules', () => {
@@ -53,22 +49,25 @@ describe('applyColorScheme', () => {
     for (const scheme of ['light', 'dark'] as const) {
       expect(
         applyColorScheme(
-          '@media not screen and (prefers-color-scheme:dark){.a{color:white}}@media (not (prefers-color-scheme:dark)){.b{color:red}}.c{color:blue}',
+          '@media not screen and (prefers-color-scheme:dark){.a{background:#111}}@media (not (prefers-color-scheme:dark)){.b{color:red}}.c{color:blue}',
           scheme
-        ).css
-      ).toBe('.c{color:blue}');
+        )
+      ).toEqual({ css: '.c{color:blue}', darkBackground: false });
     }
   });
 
-  it('reports no dark rules for light-only or unrelated media queries', () => {
+  it('reports a dark background only for applied dark rules that paint one', () => {
     expect(
       applyColorScheme(
-        '@media (prefers-color-scheme:light){.a{color:black}}@media (max-width:600px){.b{color:red}}',
+        '@media (prefers-color-scheme:dark){a{color:#9cf}}@media (max-width:600px){.b{background:#111}}',
         'dark'
-      )
-    ).toEqual({
-      css: '@media (max-width:600px){.b{color:red}}',
-      hasDarkRules: false,
-    });
+      ).darkBackground
+    ).toBe(false);
+    expect(
+      applyColorScheme(
+        '@media screen{@media (prefers-color-scheme:dark){.a{background-image:linear-gradient(#000,#111)}}}',
+        'dark'
+      ).darkBackground
+    ).toBe(true);
   });
 });

@@ -97,7 +97,7 @@ There is no implicit fetch client or native-platform detection in this package.
   The normal browser cascade, including inherited variables, still applies.
   Reader preparation keeps the sender's `prefers-color-scheme` media rules;
   mounting evaluates them against the app theme, not the operating system
-  (`applyColorScheme`), wherever they appear. Shared sanitization used by
+  (`applySenderColorScheme`), wherever they appear. Shared sanitization used by
   replies/forwards preserves safe theme rules; display policy must not modify
   outgoing quoted HTML. Shared sanitization also
   preserves inert `data-*` metadata needed to reimport authored quotes into the
@@ -128,12 +128,15 @@ There is no implicit fetch client or native-platform detection in this package.
   not an iframe security boundary; sanitization remains essential.
 - The app decides when to adapt colors and normalize fonts. Its current policy
   adapts personal/table-less email and preserves designed newsletters on a white
-  background. `hasTable` ignores tables inside the signature. Sender
-  classification and Macro-specific rendering stay in the app.
-- In a dark theme, an email with its own dark-scheme rules is shown with them:
-  no white panel and no color adaptation, whatever `adaptColors` says. The
-  backend sanitizer drops `<meta>`, so a `color-scheme` meta tag alone is not a
-  signal; only the sender's dark rules are.
+  background. `hasTable` (and the browser's `hasLayoutTable`) ignores tables
+  inside the signature. Sender classification and Macro-specific rendering
+  stay in the app.
+- In a dark theme, an email whose dark-scheme rules paint a background is
+  shown in that dark design and adapted for contrast, never on the white
+  panel. Dark rules that paint no background (a link color, say) apply only
+  when the email is adapted; the white panel gets the sender's light rules.
+  The backend sanitizer drops `<meta>`, so a `color-scheme` meta tag alone is
+  not a signal.
 - Color adaptation removes light background colors and light gradients that sit
   on no other background, and recolors text for the theme. It keeps colored
   backgrounds and background images, and leaves text on any remaining

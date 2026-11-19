@@ -10,6 +10,7 @@ import {
   EMAIL_SERVICE_EMBEDDED_HOSTS,
   staticFileReferenceEndpoint,
 } from '@core/constant/servers';
+import { hasLayoutTable } from '@core/email';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -211,18 +212,14 @@ const $appendPreviousEmail = (
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
-    const tables = Array.from(dom.querySelectorAll('table'));
-    const hasTable = tables.length > 0;
+    const hasTable = Boolean(dom.querySelector('table'));
     if (replyType === 'forward' || hasTable) {
-      // Same branch the message view takes: personal or table-less emails
-      // get theme-adapted colors, table-layout emails get a white panel. A
-      // table inside the signature doesn't count as a table layout.
-      const hasLayoutTable = tables.some(
-        (table) => !table.closest('.gmail_signature, .macro-email-signature')
-      );
       const htmlNode = $createHtmlRenderNode({
         html: dom.documentElement.innerHTML,
-        adaptColors: Boolean(isPersonal) || !hasLayoutTable,
+        // Same branch the message view takes: personal or table-less emails
+        // get theme-adapted colors, table-layout emails get a white panel. A
+        // table inside the signature doesn't count as a table layout.
+        adaptColors: Boolean(isPersonal) || !hasLayoutTable(dom),
       });
       quoteNode.append(htmlNode);
     } else {

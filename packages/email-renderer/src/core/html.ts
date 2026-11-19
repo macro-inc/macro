@@ -8,6 +8,7 @@ import {
 } from 'parse5';
 import { prepareCss } from './css';
 import { type ImagePolicy, imageUrl, linkUrl } from './resource-policy';
+import { SIGNATURE_CLASSES } from './signature';
 
 type Node = DefaultTreeAdapterMap['node'];
 type Element = DefaultTreeAdapterMap['element'];
@@ -215,14 +216,15 @@ function parseEmailContent(
 ) {
   const { body, styles } = documentParts(html, images);
   const nodes = elements(body);
-  const signatureNode = nodes.find(
-    (node) =>
-      hasClass(node, 'gmail_signature') ||
-      hasClass(node, 'macro-email-signature')
+  const signatures = nodes.filter((node) =>
+    SIGNATURE_CLASSES.some((name) => hasClass(node, name))
   );
+  const signatureNode = signatures[0];
   // A signature laid out as a table doesn't make the message a designed
   // email, whether or not the signature is shown.
-  const signatureNodes = new Set(signatureNode ? elements(signatureNode) : []);
+  const signatureNodes = new Set(
+    signatures.flatMap((node) => [node, ...elements(node)])
+  );
   const hasTable = nodes.some(
     (node) => node.tagName === 'table' && !signatureNodes.has(node)
   );

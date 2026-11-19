@@ -121,7 +121,7 @@ test('sender color-scheme rules follow the app theme, not the OS', async ({
   page,
 }) => {
   const html =
-    '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}@media(prefers-color-scheme:light){.light{color:purple}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p><p class="light">Light</p></body>';
+    '<head><style>@media(prefers-color-scheme:dark){.wrap{background-color:#111}.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}@media(prefers-color-scheme:light){.light{color:purple}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><div class="wrap"><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p><p class="light">Light</p></div></body>';
   await page.emulateMedia({ colorScheme: 'dark' });
   const light = await mountHtml(page, 'light-app', html, { theme: 'light' });
   for (const text of ['Head', 'Nested', 'Body'])
@@ -154,7 +154,7 @@ test('sender color-scheme rules follow the app theme, not the OS', async ({
   );
 });
 
-test('an email with its own dark styles keeps them in a dark theme, unadapted and off the white panel', async ({
+test('an email with its own dark design keeps it in a dark theme, off the white panel', async ({
   page,
 }) => {
   const html =
@@ -711,4 +711,41 @@ test('background adaptation removes light gradients and leaves text on images or
   expect(styles.photoImage).toContain('url(');
   expect(styles.photoTextColor).toBe('rgb(34, 34, 34)');
   expect(styles.photoCard).toBe('rgb(255, 255, 255)');
+});
+
+test('dark-mode tweaks without a dark background leave the usual light rendering', async ({
+  page,
+}) => {
+  const html =
+    '<style>@media (prefers-color-scheme: dark){a{color:#99ccff !important}}</style><table><tr><td><p style="color:#222222">Hello <a href="https://example.com">link</a></p></td></tr></table>';
+  const results = await page.evaluate(async (html) => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const read = async (adaptColors: boolean) => {
+      const host = document.createElement('div');
+      document.body.append(host);
+      const renderer = mountEmailBody(host, prepareEmailBody({ html }), {
+        theme: themes.dark,
+        adaptColors,
+        normalizeFonts: false,
+      });
+      await new Promise(requestAnimationFrame);
+      const root = host.shadowRoot!;
+      const result = {
+        panel: (root.lastElementChild as HTMLElement).style.backgroundColor,
+        text: getComputedStyle(root.querySelector('p')!).color,
+        link: getComputedStyle(root.querySelector('a')!).color,
+      };
+      renderer.dispose();
+      host.remove();
+      return result;
+    };
+    return { panel: await read(false), adapted: await read(true) };
+  }, html);
+  // The white panel is a light canvas, so the sender's dark link color
+  // doesn't apply there.
+  expect(results.panel.panel).toBe('white');
+  expect(results.panel.link).not.toBe('rgb(153, 204, 255)');
+  // Adapted, the dark text is recolored for the dark theme as usual.
+  expect(results.adapted.panel).toBe('');
+  expect(results.adapted.text).not.toBe('rgb(34, 34, 34)');
 });

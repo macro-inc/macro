@@ -1,5 +1,5 @@
-import { applyColorScheme } from '../core/css';
 import type { PreparedEmailBody } from '../core/html';
+import { applySenderColorScheme } from './color-scheme';
 import { processEmailColors, type ThemeColorParams } from './colors';
 import { EMAIL_BODY_CONTAINMENT_CSS } from './email-body-containment-css';
 
@@ -60,18 +60,11 @@ export function mountEmailBody(
     style.textContent = `:host{display:block;contain:content}${EMAIL_BODY_CONTAINMENT_CSS}${font}`;
     const content = document.createElement('div');
     content.innerHTML = prepared.html;
-    // The sender's color-scheme rules follow the app's theme, not the OS. An
-    // email with its own dark styles is shown as designed in a dark theme:
-    // no white panel and no color adaptation.
-    const scheme =
-      settings.theme.inkL > settings.theme.panelL ? 'dark' : 'light';
-    let hasDarkRules = false;
-    for (const sheet of content.querySelectorAll('style')) {
-      const applied = applyColorScheme(sheet.textContent ?? '', scheme);
-      sheet.textContent = applied.css;
-      hasDarkRules ||= applied.hasDarkRules;
-    }
-    const senderColors = scheme === 'dark' && hasDarkRules;
+    const adaptColors = applySenderColorScheme(
+      content,
+      settings.theme,
+      settings.adaptColors
+    );
     for (const anchor of content.querySelectorAll<
       HTMLAnchorElement | HTMLAreaElement
     >('a, area')) {
@@ -96,8 +89,7 @@ export function mountEmailBody(
       // unavailable while detached; retry on attachment via ResizeObserver.
       if (abort.signal.aborted || !host.isConnected) return;
       if (!colorsPrepared) {
-        if (settings.adaptColors && !senderColors)
-          processEmailColors(shadow, settings.theme);
+        if (adaptColors) processEmailColors(shadow, settings.theme);
         colorsPrepared = true;
       }
       content.style.overflowX = '';
@@ -132,7 +124,7 @@ export function mountEmailBody(
     // Cover synchronous framework insertion without depending on a paint frame
     // (which can be suspended in a background tab or embedded browser).
     queueMicrotask(refresh);
-    if (!settings.adaptColors && !senderColors) {
+    if (!adaptColors) {
       content.style.setProperty('background-color', 'white', 'important');
       content.style.color = 'black';
     }

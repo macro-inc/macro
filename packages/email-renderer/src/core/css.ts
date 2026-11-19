@@ -2,9 +2,8 @@ import {
   type CssNode,
   generate,
   ident,
-  List,
+  type List,
   type ListItem,
-  type MediaFeature,
   type MediaQuery,
   parse,
   walk,
@@ -124,22 +123,19 @@ export function prepareCss(
 
 export type ColorScheme = 'light' | 'dark';
 
-export interface SchemeStylesheet {
-  css: string;
-  /** The sender wrote rules for a dark color scheme. */
-  hasDarkRules: boolean;
-}
-
 /**
  * Evaluate the sender's `prefers-color-scheme` media queries against the
  * app's theme instead of the operating system's. A query for the other
- * scheme drops out; a matching one keeps its remaining conditions.
+ * scheme drops out; in a matching one the scheme condition becomes always
+ * true. `darkBackground` reports whether rules written for a dark scheme now
+ * apply and paint a background: the sender designed a dark version, not
+ * just a few dark-mode tweaks.
  */
 export function applyColorScheme(
   css: string,
   scheme: ColorScheme
-): SchemeStylesheet {
-  let hasDarkRules = false;
+): { css: string; darkBackground: boolean } {
+  let darkBackground = false;
   try {
     const ast = parse(css, {
       context: 'stylesheet',
@@ -156,86 +152,70 @@ export function applyColorScheme(
           return;
         // Unparsed preludes (e.g. `(not (prefers-color-scheme: dark))`) can't
         // be evaluated, so the rule can't be applied for either scheme.
-        if (node.prelude.type !== 'AtrulePrelude') {
-          list.remove(item);
-          return walk.skip;
-        }
-        const queryList = node.prelude.children.first;
+        const queryList =
+          node.prelude.type === 'AtrulePrelude'
+            ? node.prelude.children.first
+            : null;
         if (queryList?.type !== 'MediaQueryList') {
           list.remove(item);
           return walk.skip;
         }
-        const queries: CssNode[] = [];
-        queryList.children.forEach((query) => {
-          if (query.type !== 'MediaQuery') return;
-          const evaluated = evaluateSchemeQuery(query, scheme);
-          if (evaluated.hasDarkFeature) hasDarkRules = true;
-          if (evaluated.query) queries.push(evaluated.query);
+        let appliesDark = false;
+        queryList.children.forEach((query, queryItem, queries) => {
+          const resolved =
+            query.type === 'MediaQuery'
+              ? resolveSchemeQuery(query, scheme)
+              : null;
+          if (resolved === null) queries.remove(queryItem);
+          else if (resolved && scheme === 'dark') appliesDark = true;
         });
-        if (!queries.length) {
+        if (queryList.children.isEmpty) {
           list.remove(item);
           return walk.skip;
         }
-        queryList.children = new List<CssNode>().fromArray(queries);
+        if (appliesDark && node.block)
+          walk(node.block, {
+            visit: 'Declaration',
+            enter(declaration) {
+              if (/^background(?:-color|-image)?$/i.test(declaration.property))
+                darkBackground = true;
+            },
+          });
       },
     });
-    return { css: generate(ast), hasDarkRules };
+    return { css: generate(ast), darkBackground };
   } catch {
     // The input is already sanitized; leave it as it was.
-    return { css, hasDarkRules: false };
+    return { css, darkBackground: false };
   }
 }
 
-/** One media query with its color-scheme features resolved: null when it
- *  can't match the scheme, otherwise the query without those features. */
-function evaluateSchemeQuery(
+/** Resolve one media query's color-scheme features against the scheme:
+ *  null when the query can't match, true when it matched one (now always
+ *  true), false when it has none. */
+function resolveSchemeQuery(
   query: MediaQuery,
   scheme: ColorScheme
-): { query: MediaQuery | null; hasDarkFeature: boolean } {
-  const tokens = query.children.toArray();
-  let hasDarkFeature = false;
+): boolean | null {
+  let usesScheme = false;
   let matches = true;
-  for (const token of tokens) {
-    if (!isSchemeFeature(token)) continue;
-    const value =
-      token.value?.type === 'Identifier'
-        ? token.value.name.toLowerCase()
-        : undefined;
-    if (value === 'dark') hasDarkFeature = true;
-    if (value !== undefined && value !== scheme) matches = false;
-  }
+  let negated = false;
+  query.children.forEach((token) => {
+    if (token.type === 'Identifier' && token.name.toLowerCase() === 'not')
+      negated = true;
+    if (token.type !== 'MediaFeature') return;
+    if (token.name.toLowerCase() !== 'prefers-color-scheme') return;
+    usesScheme = true;
+    if (
+      token.value?.type === 'Identifier' &&
+      token.value.name.toLowerCase() !== scheme
+    )
+      matches = false;
+    token.name = 'min-width';
+    token.value = { type: 'Number', value: '0' };
+  });
+  if (!usesScheme) return false;
   // `not` negates the whole query; resolving one feature inside it would
   // need the rest evaluated too, so the query never applies.
-  const negated = tokens.some(
-    (token) => token.type === 'Identifier' && token.name.toLowerCase() === 'not'
-  );
-  if (!matches || negated) return { query: null, hasDarkFeature };
-
-  // Drop the resolved features and the `and` that joined each one.
-  const remaining: CssNode[] = [];
-  for (const token of tokens) {
-    if (isSchemeFeature(token)) {
-      if (isAndNode(remaining.at(-1))) remaining.pop();
-      continue;
-    }
-    if (isAndNode(token) && (!remaining.length || isAndNode(remaining.at(-1))))
-      continue;
-    remaining.push(token);
-  }
-  if (!remaining.length) remaining.push({ type: 'Identifier', name: 'all' });
-  return {
-    query: { ...query, children: new List<CssNode>().fromArray(remaining) },
-    hasDarkFeature,
-  };
-}
-
-function isSchemeFeature(node: CssNode): node is MediaFeature {
-  return (
-    node.type === 'MediaFeature' &&
-    node.name.toLowerCase() === 'prefers-color-scheme'
-  );
-}
-
-function isAndNode(node: CssNode | undefined): boolean {
-  return node?.type === 'Identifier' && node.name.toLowerCase() === 'and';
+  return matches && !negated ? true : null;
 }
