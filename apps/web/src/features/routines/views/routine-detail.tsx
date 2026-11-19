@@ -25,6 +25,7 @@ import {
 import { CodeReviewNotice } from '../components/routine-code-review';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
+import { inputValueText } from '../components/routine-sub-routine-definitions';
 import {
   RoutineSubRoutines,
   type SubRoutineItem,
@@ -112,7 +113,9 @@ function copyValues(
   const definition = definitions.find((item) => item.name === copy.subRoutine);
   const values = labelledInputs(copy, definition);
   return values.length
-    ? values.map((item) => `${item.label}: ${item.value}`).join(' · ')
+    ? values
+        .map((item) => `${item.label}: ${inputValueText(item.value)}`)
+        .join(' · ')
     : undefined;
 }
 

@@ -134,13 +134,8 @@ export function withSubRoutineSteps(
   );
 }
 
-/** How a value a copy was given reads on its page and its parent's. */
-export function describeInputValue(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  if (typeof value === 'number') return String(value);
-  return JSON.stringify(value) ?? '';
-}
+/** A value a copy was given, under the label its definition declares. */
+export type LabelledInput = { label: string; value: unknown };
 
 /**
  * A copy's values, labelled as its definition declares them, in the
@@ -149,20 +144,17 @@ export function describeInputValue(value: unknown): string {
 export function labelledInputs(
   copy: SubRoutineCopyDraft,
   definition: SubRoutineDraft | undefined
-): { label: string; value: string }[] {
+): LabelledInput[] {
   const declared = definition?.inputs ?? [];
   const known = declared
     .filter((input) => input.name in copy.inputs)
     .map((input) => ({
       label: input.label,
-      value: describeInputValue(copy.inputs[input.name]),
+      value: copy.inputs[input.name],
     }));
   const names = new Set(declared.map((input) => input.name));
   const unknown = Object.entries(copy.inputs)
     .filter(([name]) => !names.has(name))
-    .map(([name, value]) => ({
-      label: name,
-      value: describeInputValue(value),
-    }));
+    .map(([name, value]) => ({ label: name, value }));
   return [...known, ...unknown];
 }

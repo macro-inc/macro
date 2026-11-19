@@ -64,6 +64,11 @@ export default {
   inputText: 'text',
   inputNumber: 'number',
   inputBoolean: 'yes or no',
+  inputYes: 'Yes',
+  inputNo: 'No',
+  appConnected: 'Connected',
+  appNotConnected: 'Not connected. Connect it before the routine runs.',
+  removeApp: 'Remove {{app}}',
   copySteps:
     'Runs “{{title}}” from {{parent}}. Each run uses the current definition.',
   copyStepsParentGone: 'Runs “{{title}}” from the routine that created it.',

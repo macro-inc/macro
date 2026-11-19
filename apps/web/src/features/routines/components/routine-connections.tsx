@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
@@ -29,10 +30,12 @@ export function ConnectionRows(props: {
               props.connected() === undefined ? undefined : props
                   .connected()
                   ?.has(app.app_slug) ? (
-                <span class="text-success">Connected</span>
+                <span class="text-success">
+                  {t('subRoutines.appConnected')}
+                </span>
               ) : (
                 <span class="text-failure">
-                  Not connected. Connect it before the routine runs.
+                  {t('subRoutines.appNotConnected')}
                 </span>
               )
             }
@@ -40,7 +43,7 @@ export function ConnectionRows(props: {
             <Button
               variant="ghost"
               size={isTouchDevice() ? 'icon-xl' : 'icon-sm'}
-              aria-label={`Remove ${app.server_name}`}
+              aria-label={t('subRoutines.removeApp', { app: app.server_name })}
               onClick={() =>
                 props.onChange(
                   props.apps.filter((other) => other.app_slug !== app.app_slug)

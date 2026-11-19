@@ -1,4 +1,4 @@
-import { t } from '@app/lib/i18n';
+import { formatLocale, t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import type { RoutineInput } from '@service-scheduled-action/generated/schemas';
@@ -8,18 +8,29 @@ import { match } from 'ts-pattern';
 import type { RoutineApp, SubRoutineDraft } from '../core/draft';
 import { firstAgent } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
-import { withSubRoutineSteps } from '../core/sub-routines';
+import { type LabelledInput, withSubRoutineSteps } from '../core/sub-routines';
 import { ConnectionRows } from './routine-connections';
 import { RoutineSurface } from './routine-editor';
 import { RoutineSteps } from './routine-step-editor';
 import type { RoutineStepSlots } from './routine-steps';
 
-function inputType(input: RoutineInput): string {
+function inputType(input: RoutineInput): string | undefined {
+  // A type a newer server adds shows no type rather than failing the page.
   return match(input.type)
     .with('text', () => t('subRoutines.inputText'))
     .with('number', () => t('subRoutines.inputNumber'))
     .with('boolean', () => t('subRoutines.inputBoolean'))
-    .exhaustive();
+    .exhaustive(() => undefined);
+}
+
+/** How a value a copy was given reads on its page and its parent's. */
+export function inputValueText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'boolean')
+    return value ? t('subRoutines.inputYes') : t('subRoutines.inputNo');
+  if (typeof value === 'number')
+    return new Intl.NumberFormat(formatLocale()).format(value);
+  return JSON.stringify(value) ?? '';
 }
 
 /** The values each copy of a definition is given, as chips. */
@@ -138,7 +149,7 @@ export function SubRoutineCopySteps(props: {
    * any more, or it holds steps this page can't show.
    */
   missing?: 'gone' | 'hidden';
-  values: { label: string; value: string }[];
+  values: LabelledInput[];
   defaultTarget: RoutineTarget;
   slots: RoutineStepSlots;
   onOpenParent?(): void;
@@ -174,7 +185,9 @@ export function SubRoutineCopySteps(props: {
                   <dt class="min-w-0 wrap-anywhere text-ink-muted">
                     {item.label}
                   </dt>
-                  <dd class="min-w-0 wrap-anywhere text-ink">{item.value}</dd>
+                  <dd class="min-w-0 wrap-anywhere text-ink">
+                    {inputValueText(item.value)}
+                  </dd>
                 </>
               )}
             </For>
