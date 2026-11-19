@@ -2583,7 +2583,7 @@ export type ScheduleSubRoutineData = {
 
 export type ScheduleSubRoutineErrors = {
     /**
-     * No sub-routine by that name, or inputs that don't fit it
+     * Malformed request or trigger, unknown sub-routine, invalid inputs, or scheduling disabled
      */
     400: string;
     401: string;
@@ -2592,9 +2592,17 @@ export type ScheduleSubRoutineErrors = {
      */
     403: string;
     /**
-     * The routine already has the most active sub-routines it can
+     * The parent routine was not found
+     */
+    404: string;
+    /**
+     * The routine reached its active sub-routine limit, the key belongs to a routine with its own steps, or the keyed copy changed or is running
      */
     409: string;
+    /**
+     * The request body exceeds the size limit
+     */
+    413: string;
     500: string;
 };
 

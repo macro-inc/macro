@@ -448,10 +448,12 @@ where
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 200, body = ScheduledActionResponse, description = "The copy its key already named, updated"),
-        (status = 400, body = String, description = "No sub-routine by that name, or inputs that don't fit it"),
+        (status = 400, body = String, description = "Malformed request or trigger, unknown sub-routine, invalid inputs, or scheduling disabled"),
         (status = 401, body = String),
         (status = 403, body = String, description = "The request doesn't come from a routine's run"),
-        (status = 409, body = String, description = "The routine already has the most active sub-routines it can"),
+        (status = 404, body = String, description = "The parent routine was not found"),
+        (status = 409, body = String, description = "The routine reached its active sub-routine limit, the key belongs to a routine with its own steps, or the keyed copy changed or is running"),
+        (status = 413, body = String, description = "The request body exceeds the size limit"),
         (status = 500, body = String),
     )
 )]

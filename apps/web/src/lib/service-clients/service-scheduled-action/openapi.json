@@ -703,7 +703,7 @@
             }
           },
           "400": {
-            "description": "No sub-routine by that name, or inputs that don't fit it",
+            "description": "Malformed request or trigger, unknown sub-routine, invalid inputs, or scheduling disabled",
             "content": {
               "text/plain": {
                 "schema": {
@@ -732,8 +732,28 @@
               }
             }
           },
+          "404": {
+            "description": "The parent routine was not found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "409": {
-            "description": "The routine already has the most active sub-routines it can",
+            "description": "The routine reached its active sub-routine limit, the key belongs to a routine with its own steps, or the keyed copy changed or is running",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "The request body exceeds the size limit",
             "content": {
               "text/plain": {
                 "schema": {

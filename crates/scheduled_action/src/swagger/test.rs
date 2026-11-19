@@ -4,6 +4,24 @@ use utoipa::OpenApi;
 use super::ApiDoc;
 
 #[test]
+fn scheduling_documents_its_responses() {
+    let spec = serde_json::to_value(ApiDoc::openapi()).unwrap();
+    let responses = spec["paths"]["/scheduled-actions/schedule"]["post"]["responses"]
+        .as_object()
+        .unwrap();
+    assert_eq!(
+        responses.keys().map(String::as_str).collect::<Vec<_>>(),
+        [
+            "200", "201", "400", "401", "403", "404", "409", "413", "500"
+        ]
+    );
+    let conflict = responses["409"]["description"].as_str().unwrap();
+    for cause in ["active sub-routine limit", "key", "changed or is running"] {
+        assert!(conflict.contains(cause), "{conflict}");
+    }
+}
+
+#[test]
 fn routine_task_schema_offers_programs_and_single_agent_tasks() {
     let spec = serde_json::to_value(ApiDoc::openapi()).unwrap();
     let schemas = &spec["components"]["schemas"];

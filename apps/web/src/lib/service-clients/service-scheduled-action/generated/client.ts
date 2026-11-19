@@ -769,9 +769,19 @@ export type scheduleSubRoutineResponse403 = {
   status: 403;
 };
 
+export type scheduleSubRoutineResponse404 = {
+  data: string;
+  status: 404;
+};
+
 export type scheduleSubRoutineResponse409 = {
   data: string;
   status: 409;
+};
+
+export type scheduleSubRoutineResponse413 = {
+  data: string;
+  status: 413;
 };
 
 export type scheduleSubRoutineResponse500 = {
@@ -789,7 +799,9 @@ export type scheduleSubRoutineResponseError = (
   | scheduleSubRoutineResponse400
   | scheduleSubRoutineResponse401
   | scheduleSubRoutineResponse403
+  | scheduleSubRoutineResponse404
   | scheduleSubRoutineResponse409
+  | scheduleSubRoutineResponse413
   | scheduleSubRoutineResponse500
 ) & {
   headers: Headers;
