@@ -207,6 +207,52 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it('keeps an empty partial channel cache loading until the first page answers', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    entityFilterMock.mockResolvedValue({
+      kind: 'live-query',
+      revision: parseCacheRevision(REVISION_0),
+      reset: true,
+      keys: [],
+      upserts: [],
+      patches: [],
+      removed: [],
+      retainedKeys: [],
+      optimistic: false,
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      liveQueries: true,
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    const ready = deferred<void>();
+    const { source, dispose } = createRoot((dispose) => {
+      const source = createSoupLiveQuery(
+        () => ({ sortMethod: 'UPDATED_AT', limit: 100 }),
+        () => ({ projection: 'channel-list' })
+      );
+      createComputed(() => {
+        if (source.cacheStatus() === 'ready') ready.resolve();
+      });
+      return { source, dispose };
+    });
+    try {
+      await ready.promise;
+      expect(source.data()).toEqual([]);
+      expect(source.isLoading()).toBe(true);
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      expect(source.isLoading()).toBe(false);
+      expect(source.data()).toEqual([]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains CRM dependency scope on opaque continuation pages', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

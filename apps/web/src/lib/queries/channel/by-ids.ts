@@ -147,7 +147,17 @@ export function useCachedChannelsByIds(
       new Set(
         source().flatMap((batch) => (batch.error() ? batch.unresolved() : []))
       ),
-    isLoading: () => source().some((batch) => batch.loading()),
+    // Successful omissions are unavailable, not placeholders for another page.
+    unavailableIds: () =>
+      new Set(
+        source().flatMap((batch) =>
+          !batch.loading() && !batch.error() ? batch.unresolved() : []
+        )
+      ),
+    isLoading: () =>
+      source().some(
+        (batch) => batch.loading() && batch.unresolved().length > 0
+      ),
     error: () =>
       source()
         .find((batch) => batch.error() && batch.unresolved().length)
