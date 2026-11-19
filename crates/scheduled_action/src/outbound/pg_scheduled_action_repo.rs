@@ -15,7 +15,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use crate::domain::appearance::AppearanceChooser;
+use crate::domain::appearance::{AppearanceChooser, AppearanceSet};
 use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
@@ -495,7 +495,7 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
     async fn set_appearance(
         &self,
         change: crate::domain::appearance::ChangeAppearance,
-    ) -> Result<Option<EntityAppearance>> {
+    ) -> Result<AppearanceSet> {
         let owners = change.chooser == AppearanceChooser::Owner;
         let mut tx = self.pool.begin().await?;
         let stored = sqlx::query!(
@@ -532,12 +532,12 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 .await?);
         // An agent's pick never replaces the owner's choice.
         if chosen_by_owner && !owners {
-            return Ok(None);
+            return Ok(AppearanceSet::Kept { current: previous });
         }
         let activity = change.activity(&previous);
         // The owner choosing the look it already has still makes it theirs.
         if activity.is_none() && (chosen_by_owner || !owners) {
-            return Ok(None);
+            return Ok(AppearanceSet::Kept { current: previous });
         }
         let appearance = serde_json::to_value(&change.appearance)?;
         let agents_change = i32::from(!owners && activity.is_some());
@@ -558,11 +558,11 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
         .await?;
         let Some(activity) = activity else {
             tx.commit().await?;
-            return Ok(None);
+            return Ok(AppearanceSet::Kept { current: previous });
         };
         activity::outbound::pg_activity_repo::insert_activities(&mut *tx, &[activity]).await?;
         tx.commit().await?;
-        Ok(Some(previous))
+        Ok(AppearanceSet::Changed { previous })
     }
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {

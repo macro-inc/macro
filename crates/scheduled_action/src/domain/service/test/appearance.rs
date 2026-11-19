@@ -245,3 +245,34 @@ async fn an_agent_picks_again_on_change_but_never_over_the_owners_choice() {
         .unwrap();
     assert_eq!(plain.appearance, chosen);
 }
+
+#[tokio::test]
+async fn a_refused_pick_answers_with_the_owners_choice_that_won_the_row() {
+    let service = service(false);
+    let names = macro_icon_names();
+    let created = service
+        .create_action(&user_principal(), picking(icon(names[0])))
+        .await
+        .unwrap();
+    let id = created.id.unwrap();
+    // The owner chooses red after the update saved its configuration, while
+    // the agent's pick waits for the routine's row.
+    let chosen = EntityAppearance {
+        icon: None,
+        color: Some(AppearanceColor::Red),
+    };
+    *service.repo.owner_choice_before_the_pick.lock().unwrap() = Some(chosen.clone());
+    let updated = service
+        .update_action(
+            edit_receipt(id),
+            update(picking(icon(names[1]))),
+            Requester::Person,
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.appearance, chosen,
+        "the look the routine has, not the one the update read"
+    );
+    assert_eq!(stored_actions(&service)[0].appearance, chosen);
+}

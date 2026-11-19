@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::appearance::{AppearanceChooser, ChangeAppearance};
+use crate::domain::appearance::{AppearanceChooser, AppearanceSet, ChangeAppearance};
 use activity::domain::ports::{ActivityReads, EntityActivityReads};
 use activity::{Action, Actor, Attribution, RecordedAction};
 use model_entity::{AppearanceColor, EntityAppearance};
@@ -30,8 +30,8 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
         event_id: macro_uuid::generate_uuid_v7(),
         occurred_at: Utc::now(),
     };
-    assert!(repo.set_appearance(change).await.unwrap().is_some());
-    assert!(
+    assert!(repo.set_appearance(change).await.unwrap().changed());
+    assert_eq!(
         repo.set_appearance(ChangeAppearance {
             id,
             appearance: appearance.clone(),
@@ -41,8 +41,10 @@ async fn appearance_and_history_commit_without_changing_scheduling(pool: PgPool)
             occurred_at: Utc::now(),
         })
         .await
-        .unwrap()
-        .is_none()
+        .unwrap(),
+        AppearanceSet::Kept {
+            current: appearance.clone()
+        }
     );
 
     let after = repo.get_action(&id).await.unwrap().unwrap();
@@ -158,14 +160,14 @@ async fn agent_picks_until_the_owner_chooses(pool: PgPool) {
         repo.set_appearance(change(id, first.clone(), AppearanceChooser::Agent))
             .await
             .unwrap()
-            .is_some()
+            .changed()
     );
     let second = colored(AppearanceColor::Green);
     assert!(
         repo.set_appearance(change(id, second.clone(), AppearanceChooser::Agent))
             .await
             .unwrap()
-            .is_some(),
+            .changed(),
         "an agent may pick again while the owner has not chosen"
     );
     assert_eq!(
@@ -178,14 +180,16 @@ async fn agent_picks_until_the_owner_chooses(pool: PgPool) {
         repo.set_appearance(change(id, chosen.clone(), AppearanceChooser::Owner))
             .await
             .unwrap()
-            .is_some()
+            .changed()
     );
-    assert!(
+    assert_eq!(
         repo.set_appearance(change(id, first, AppearanceChooser::Agent))
             .await
-            .unwrap()
-            .is_none(),
-        "an agent never replaces the owner's choice"
+            .unwrap(),
+        AppearanceSet::Kept {
+            current: chosen.clone()
+        },
+        "an agent never replaces the owner's choice, and the look it keeps is returned"
     );
     assert_eq!(
         repo.get_action(&id).await.unwrap().unwrap().appearance,
@@ -205,25 +209,29 @@ async fn choosing_the_current_look_still_keeps_it(pool: PgPool) {
 
     // The owner picks "no icon", which the routine already has: nothing to
     // record, but an agent may no longer give it one.
-    assert!(
+    assert_eq!(
         repo.set_appearance(change(
             id,
             EntityAppearance::default(),
             AppearanceChooser::Owner
         ))
         .await
-        .unwrap()
-        .is_none()
+        .unwrap(),
+        AppearanceSet::Kept {
+            current: EntityAppearance::default()
+        }
     );
-    assert!(
+    assert_eq!(
         repo.set_appearance(change(
             id,
             colored(AppearanceColor::Blue),
             AppearanceChooser::Agent
         ))
         .await
-        .unwrap()
-        .is_none()
+        .unwrap(),
+        AppearanceSet::Kept {
+            current: EntityAppearance::default()
+        }
     );
     assert_eq!(
         repo.get_action(&id).await.unwrap().unwrap().appearance,
@@ -329,11 +337,13 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
         (reset, "a look reset to none"),
     ] {
         let before = repo.get_action(&id).await.unwrap().unwrap().appearance;
-        assert!(
+        assert_eq!(
             repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
                 .await
-                .unwrap()
-                .is_none(),
+                .unwrap(),
+            AppearanceSet::Kept {
+                current: before.clone()
+            },
             "{kept}: an agent's pick is refused"
         );
         assert_eq!(
@@ -355,7 +365,7 @@ async fn a_look_the_owner_set_before_the_column_stays_theirs(pool: PgPool) {
             repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
                 .await
                 .unwrap()
-                .is_some(),
+                .changed(),
             "{open}: an agent may pick"
         );
         assert_eq!(
@@ -432,7 +442,7 @@ async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
             repo.set_appearance(change(id, blue.clone(), AppearanceChooser::Agent))
                 .await
                 .unwrap()
-                .is_some()
+                .changed()
         );
     }
     chosen_on_an_older_replica(&pool, picked, &red).await;
@@ -457,11 +467,13 @@ async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
         ),
     ] {
         let before = repo.get_action(&id).await.unwrap().unwrap().appearance;
-        assert!(
+        assert_eq!(
             repo.set_appearance(change(id, pick.clone(), AppearanceChooser::Agent))
                 .await
-                .unwrap()
-                .is_none(),
+                .unwrap(),
+            AppearanceSet::Kept {
+                current: before.clone()
+            },
             "{case}: an agent's pick is refused"
         );
         assert_eq!(
@@ -478,7 +490,7 @@ async fn an_owners_choice_on_an_older_replica_stays_theirs(pool: PgPool) {
         ))
         .await
         .unwrap()
-        .is_some(),
+        .changed(),
         "a template's look is not the owner's choice"
     );
     assert_eq!(

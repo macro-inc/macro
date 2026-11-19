@@ -35,6 +35,30 @@ pub enum AppearanceChooser {
     Agent,
 }
 
+/// What a [`ChangeAppearance`] did to the stored look.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppearanceSet {
+    /// The look changed from `previous`, and the change is in the routine's
+    /// history.
+    Changed {
+        /// The look it replaced.
+        previous: EntityAppearance,
+    },
+    /// The look stayed `current`, as read under the routine's lock: the one
+    /// it already had, or the owner's choice an agent's pick may not replace.
+    Kept {
+        /// The look the routine has.
+        current: EntityAppearance,
+    },
+}
+
+impl AppearanceSet {
+    /// Whether the stored look changed.
+    pub fn changed(&self) -> bool {
+        matches!(self, Self::Changed { .. })
+    }
+}
+
 impl ChangeAppearance {
     /// Record actual stored transitions only; repeated writes have no history.
     pub fn activity(&self, previous: &EntityAppearance) -> Option<Activity> {

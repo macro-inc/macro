@@ -18,7 +18,7 @@ use model_owner::{CreationPrincipal, Owner};
 use routine_program::{CodeIdentity, RoutineProgram};
 use tokio::sync::mpsc::Sender;
 
-use super::appearance::{AppearanceChooser, ChangeAppearance, check_pick};
+use super::appearance::{AppearanceChooser, AppearanceSet, ChangeAppearance, check_pick};
 use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
@@ -557,7 +557,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let id = action.id.ok_or(ActionPolicyError::NotFound)?;
         let span = tracing::Span::current();
         span.record("routine.id", tracing::field::display(id));
-        let changed = self
+        let set = self
             .repo
             .set_appearance(ChangeAppearance {
                 id,
@@ -568,10 +568,12 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
                 occurred_at: Utc::now(),
             })
             .await?;
-        span.record("routine.appearance.picked", changed.is_some());
-        Ok(match changed {
-            Some(_) => pick,
-            None => action.appearance.clone(),
+        span.record("routine.appearance.picked", set.changed());
+        // The look the row holds once locked, not `action`'s: an owner's
+        // choice may have committed since the configuration was saved.
+        Ok(match set {
+            AppearanceSet::Changed { .. } => pick,
+            AppearanceSet::Kept { current } => current,
         })
     }
 
