@@ -29,6 +29,7 @@ import type { BuildEntityDataArgs } from '@entity';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tooltip } from '@ui';
 import {
@@ -453,6 +454,16 @@ function SplitLabelContextMenu(props: ParentProps) {
         </Match>
         <Match when={action().muteMenu}>
           {(menu) => <NotificationMuteMenu {...menu()} />}
+        </Match>
+        <Match when={action().notificationSettingsMenu}>
+          {(menu) => (
+            <NotificationSettingsMenu
+              {...menu()}
+              onActionComplete={() => {
+                if (open()) dismissContextMenu();
+              }}
+            />
+          )}
         </Match>
         <Match when={action().copy}>
           <CopyMenuItem

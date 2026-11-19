@@ -10,6 +10,7 @@ import {
   makeCreateReminderAction,
   makeFavoriteAction,
   makeMuteAction,
+  notificationSettingsMenuFor,
 } from '@app/features/next-soup/actions';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { EntityTagSubmenu } from '@app/features/property/tags/EntityTagSubmenu';
@@ -50,6 +51,7 @@ import Rename from '@icon/system/regular/pencil-line.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
+import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 
 import type { ItemType } from '@service-storage/itemType';
 import {
@@ -160,8 +162,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
   const notificationSource = useGlobalNotificationSource();
+  const channelSettings = useChannelNotificationSettings();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
+    channelSettings,
   });
   const createReminderAction = makeCreateReminderAction({
     onEmailSaved: props.onEmailReminderSaved,
@@ -256,17 +260,30 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     };
   };
 
+  const notificationSettingsOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    const menu =
+      entity && notificationSettingsMenuFor(channelSettings, [entity]);
+    if (!menu) return undefined;
+    return {
+      id: 'notification-settings',
+      label: t('channelSections.notificationSettings'),
+      icon: BellSimple,
+      notificationSettingsMenu: menu,
+      group: 'state' as const,
+    };
+  };
+
   const muteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
     if (!entity || !muteAction.canExecute(entity)) return undefined;
     const muted = muteAction.isMuted(entity);
+    const muteMenu = muteAction.menu([entity]);
     return {
       id: 'mute',
-      label: muted
-        ? t('entityActions.unmuteNotifications')
-        : t('entityActions.muteNotifications'),
+      label: muted ? muteMenu.unmuteLabel : muteMenu.label,
       icon: muted ? BellSimple : BellSlash,
-      muteMenu: muteAction.menu([entity]),
+      muteMenu,
       action: () => {
         fireAndForget(muteAction.execute([entity]), 'entity-actions');
       },
@@ -509,6 +526,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return [
       favoriteOp(),
       muteOp(),
+      notificationSettingsOp(),
       reminderOp(),
       addTagOp(),
       ...(props.entityKind === 'task' &&

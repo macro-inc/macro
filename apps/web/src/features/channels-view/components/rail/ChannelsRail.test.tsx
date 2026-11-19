@@ -260,6 +260,12 @@ vi.mock('@queries/channel/notification-selection', () => ({
 vi.mock('@queries/channel/selection-by-id', () => ({
   fetchChannelSelectionById: mocks.fetchChannel,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({
+    createChannelNotificationSettings: () => ({ enabled: () => false }),
+  })
+);
 vi.mock('@queries/notification/unsubscribes', () => ({
   useBulkNotificationPreferencesMutation: () => ({
     mutateAsync: mocks.bulkPreferences,

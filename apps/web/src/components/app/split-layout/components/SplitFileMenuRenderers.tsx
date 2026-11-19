@@ -12,6 +12,11 @@ import {
   NotificationMuteMenu,
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
+import {
+  NotificationSettingsMenu,
+  NotificationSettingsPage,
+  NotificationSettingsSummary,
+} from '@notifications/components/NotificationSettingsMenu';
 import { Key } from '@solid-primitives/keyed';
 import { CopyButton, cn, Dropdown, Hotkey } from '@ui';
 import {
@@ -109,6 +114,14 @@ export function DesktopFileMenu(props: SplitFileMenuRenderProps) {
             />
           )}
         </Match>
+        <Match when={action().notificationSettingsMenu}>
+          {(menu) => (
+            <NotificationSettingsMenu
+              {...menu()}
+              onActionComplete={() => props.onOpenChange(false)}
+            />
+          )}
+        </Match>
         <Match when={action().copy}>
           <Dropdown.CopyItem
             icon={<Dynamic component={action().icon ?? Copy} class="size-4" />}
@@ -184,15 +197,19 @@ export function MobileFileMenu(
 ) {
   const [expandedSubmenu, setExpandedSubmenu] = createSignal<string | number>();
   const sections = () => getSplitFileMenuActionSections(props.groups);
-  const [muting, setMuting] = createSignal(false);
+  const [page, setPage] = createSignal<'mute' | 'settings'>();
+  const actions = () => sections().flatMap((section) => section.actions);
   const muteMenu = () =>
-    muting()
-      ? sections()
-          .flatMap((section) => section.actions)
-          .find((action) => action.muteMenu)?.muteMenu
+    page() === 'mute'
+      ? actions().find((action) => action.muteMenu)?.muteMenu
+      : undefined;
+  const settingsMenu = () =>
+    page() === 'settings'
+      ? actions().find((action) => action.notificationSettingsMenu)
+          ?.notificationSettingsMenu
       : undefined;
   const close = () => {
-    setMuting(false);
+    setPage(undefined);
     props.onOpenChange(false);
   };
 
@@ -209,7 +226,7 @@ export function MobileFileMenu(
             if (action().muteMenu?.muted) {
               action().muteMenu?.onMute(false);
               close();
-            } else setMuting(true);
+            } else setPage('mute');
           }}
         >
           <Dynamic
@@ -224,6 +241,21 @@ export function MobileFileMenu(
           <Show when={!action().muteMenu?.muted}>
             <CaretRight class="size-3.5" />
           </Show>
+        </MobileDrawer.Item>
+      );
+    }
+    if (action().notificationSettingsMenu) {
+      return (
+        <MobileDrawer.Item
+          disabled={action().notificationSettingsMenu?.disabled}
+          onClick={() => setPage('settings')}
+        >
+          <BellSimple class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1 truncate">{action().label}</span>
+          <Show when={action().notificationSettingsMenu}>
+            {(menu) => <NotificationSettingsSummary preset={menu().preset} />}
+          </Show>
+          <CaretRight class="size-3.5 shrink-0" />
         </MobileDrawer.Item>
       );
     }
@@ -314,7 +346,7 @@ export function MobileFileMenu(
       side="bottom"
       open={props.open}
       onOpenChange={(open) => {
-        if (!open) setMuting(false);
+        if (!open) setPage(undefined);
         props.onOpenChange(open);
       }}
       preventScroll={false}
@@ -326,7 +358,7 @@ export function MobileFileMenu(
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
             <Show
-              when={muteMenu()}
+              when={page()}
               fallback={
                 <>
                   <Show when={props.views}>
@@ -409,13 +441,28 @@ export function MobileFileMenu(
                 </>
               }
             >
-              {(menu) => (
-                <NotificationMutePage
-                  {...menu()}
-                  onBack={() => setMuting(false)}
-                  onActionComplete={close}
-                />
-              )}
+              <Show
+                when={settingsMenu()}
+                fallback={
+                  <Show when={muteMenu()}>
+                    {(menu) => (
+                      <NotificationMutePage
+                        {...menu()}
+                        onBack={() => setPage(undefined)}
+                        onActionComplete={close}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                {(menu) => (
+                  <NotificationSettingsPage
+                    {...menu()}
+                    onBack={() => setPage(undefined)}
+                    onActionComplete={close}
+                  />
+                )}
+              </Show>
             </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>

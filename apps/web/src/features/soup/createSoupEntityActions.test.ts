@@ -27,6 +27,8 @@ const mocks = vi.hoisted(() => ({
   copyLinkEnabled: false,
   favoriteEnabled: false,
   properties: [] as { id: string }[],
+  canMute: false,
+  settingsMenu: vi.fn<() => object | undefined>(() => undefined),
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -58,11 +60,21 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeMarkSenderSignalAction: mocks.action,
   makeMarkUnreadAction: mocks.action,
   makeMoveToProjectAction: mocks.action,
-  makeMuteAction: mocks.action,
+  makeMuteAction: () => ({
+    canExecute: () => mocks.canMute,
+    isMuted: () => false,
+    menu: () => ({ label: 'mute', unmuteLabel: 'unmute' }),
+    executeWithSoup: () => {},
+  }),
   makeRemoveFromProjectAction: mocks.action,
   makeRenameAction: mocks.action,
   makeShareAction: mocks.action,
+  notificationSettingsMenuFor: mocks.settingsMenu,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({ useChannelNotificationSettings: () => ({ enabled: () => false }) })
+);
 vi.mock('@app/features/projects/project-entity-actions', () => ({
   openProjectEntityAction: mocks.openProjectAction,
 }));
@@ -131,6 +143,8 @@ beforeEach(() => {
   mocks.copyLinkEnabled = false;
   mocks.favoriteEnabled = false;
   mocks.properties = [];
+  mocks.canMute = false;
+  mocks.settingsMenu.mockReset();
 });
 
 afterEach(() => disarmOpenInNewTabIntent());
@@ -346,5 +360,30 @@ describe('Project rows', () => {
 
   it('keeps project actions off a selection mixing projects with other items', () => {
     expect(menuItems([project('a', 'user'), channel])).toEqual([]);
+  });
+});
+
+describe('notification actions', () => {
+  const groupOf = (id: string) => {
+    const { buildActionGroups } = createSoupEntityActions();
+    return buildActionGroups({} as EntityActionListState, [channel], {
+      viewContext: CHANNEL_ACTION_VIEW_CONTEXT,
+    }).find((group) => group.items.some((item) => item.id === id));
+  };
+
+  it('groups Mute with Notification Settings, apart from other actions', () => {
+    mocks.canMute = true;
+    mocks.settingsMenu.mockReturnValue({});
+
+    expect(groupOf('mute')?.items.map(({ id }) => id)).toEqual([
+      'mute',
+      'notification-settings',
+    ]);
+  });
+
+  it('leaves Mute with the other actions without Notification Settings', () => {
+    mocks.canMute = true;
+
+    expect(groupOf('mute')?.id).toBe('state');
   });
 });

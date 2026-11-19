@@ -1,6 +1,7 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { MENU_GROUP_ORDER, type MenuGroup } from '@core/menu/group-menu-items';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
+import type { NotificationSettingsMenuProps } from '@notifications/components/NotificationSettingsMenu';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -40,6 +41,7 @@ export type SplitFileMenuAction = {
   copy?: boolean;
   children?: SplitFileMenuAction[];
   muteMenu?: NotificationMuteMenuProps;
+  notificationSettingsMenu?: NotificationSettingsMenuProps;
   /** Desktop-only composed item, such as an entity picker submenu. */
   menuItem?: Component<{ onActionComplete?: () => void; menu?: 'dropdown' }>;
   /** Only set when the token's shortcut is executable from the split. */

@@ -1,5 +1,6 @@
 import type { BlockTool } from '@components/app/block-tool';
 import { Permissions } from '@core/component/SharePermissions';
+import type { EntityData } from '@entity';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   setPicture: vi.fn(),
   removePicture: vi.fn(),
   unavailableAction: () => ({ canExecute: () => false, execute: () => {} }),
+  canMute: false,
+  settingsMenu: vi.fn<() => object | undefined>(() => undefined),
+  titleActions: vi.fn(),
 }));
 
 vi.mock('@app/features/next-soup/actions', () => ({
@@ -20,8 +24,18 @@ vi.mock('@app/features/next-soup/actions', () => ({
   makeCopyLinkAction: mocks.unavailableAction,
   makeCreateReminderAction: mocks.unavailableAction,
   makeFavoriteAction: mocks.unavailableAction,
-  makeMuteAction: mocks.unavailableAction,
+  makeMuteAction: () => ({
+    canExecute: () => mocks.canMute,
+    isMuted: () => false,
+    menu: () => ({ label: 'mute', unmuteLabel: 'unmute' }),
+    execute: () => {},
+  }),
+  notificationSettingsMenuFor: mocks.settingsMenu,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({ useChannelNotificationSettings: () => ({ enabled: () => false }) })
+);
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
   openBulkEditModal: vi.fn(),
 }));
@@ -93,14 +107,15 @@ const channelTools = (): BlockTool[] => [
 
 const renderMenu = (
   ops: FileOperation[] = [],
-  permissions = Permissions.OWNER
+  permissions = Permissions.OWNER,
+  entity?: EntityData
 ) => {
   let openMenu: Accessor<(() => void) | undefined> = () => undefined;
   const panel = {
     setTitleFileMenuTrigger: (value: Accessor<() => void> | undefined) => {
       openMenu = value ?? (() => undefined);
     },
-    setTitleFileMenuActions: () => {},
+    setTitleFileMenuActions: mocks.titleActions,
   } as unknown as SplitPanelContextType;
   render(() => (
     <SplitPanelContext.Provider value={panel}>
@@ -112,6 +127,7 @@ const renderMenu = (
         tools={channelTools()}
         entityKind="channel"
         permissions={permissions}
+        entity={entity}
       />
     </SplitPanelContext.Provider>
   ));
@@ -134,6 +150,8 @@ const MENU_ROWS = [
 ];
 
 beforeEach(() => {
+  mocks.canMute = false;
+  mocks.settingsMenu.mockReset();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -149,6 +167,8 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
   mocks.touch = true;
+  mocks.canMute = false;
+  mocks.settingsMenu.mockReset();
 });
 
 describe('SplitFileMenu tools', () => {
@@ -210,4 +230,54 @@ describe('SplitFileMenu tools', () => {
       expect(Boolean(deleteAction)).toBe(permissions === Permissions.OWNER);
     }
   );
+});
+
+describe('SplitFileMenu notification actions', () => {
+  const channel = {
+    type: 'channel',
+    id: 'channel',
+    name: 'General',
+  } as unknown as EntityData;
+  const sectionIds = () => {
+    const groups = mocks.titleActions.mock.lastCall?.[0] as
+      | Record<string, { id?: string }[]>
+      | undefined;
+    return groups?.state.map(({ id }) => id);
+  };
+
+  it('keeps Mute and Notification Settings together in State', () => {
+    mocks.canMute = true;
+    mocks.settingsMenu.mockReturnValue({});
+    renderMenu([], Permissions.OWNER, channel);
+
+    expect(sectionIds()).toEqual(['mute', 'notification-settings']);
+  });
+
+  it('opens notification settings in the phone drawer and applies a preset', async () => {
+    const onPreset = vi.fn();
+    mocks.settingsMenu.mockReturnValue({
+      preset: 'all',
+      enabled: new Set(),
+      targetName: 'General',
+      onPreset,
+      onSetKinds: vi.fn(),
+    });
+    const menu = renderMenu([], Permissions.OWNER, channel);
+    menu.open();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /channelSections.notificationSettings/,
+      })
+    );
+    const choices = await screen.findAllByRole('radio');
+    fireEvent.click(choices[choices.length - 1]);
+    expect(onPreset).toHaveBeenCalledExactlyOnceWith('nothing');
+  });
+
+  it('keeps Mute in State without Notification Settings', () => {
+    mocks.canMute = true;
+    renderMenu([], Permissions.OWNER, channel);
+
+    expect(sectionIds()).toEqual(['mute']);
+  });
 });

@@ -27,6 +27,7 @@ const ACTION_GROUPS: Record<string, MenuGroup> = {
   'mark-notifications-read': 'state',
   'create-reminder': 'state',
   mute: 'state',
+  'notification-settings': 'state',
   'archive-session': 'state',
   'hide-company': 'state',
   'sender-signal': 'state',

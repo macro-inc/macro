@@ -3,7 +3,6 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   ContextMenuContent,
   MENU_ITEM_CLASS,
-  MenuItem,
   MenuSeparator,
   SubTrigger,
 } from '@core/component/ContextMenu';
@@ -30,6 +29,8 @@ export type NotificationMuteMenuProps = {
    * supports it; `active` when every target already has it.
    */
   mentionsOnly?: { active: boolean; onChange: (active: boolean) => void };
+  /** Why the target is muted, beside Unmute: "Until 3:00 PM", "Muted by Work". */
+  mutedHint?: string;
   onActionComplete?: () => void;
   /** Render the trigger and submenu in a Dropdown host instead of a context menu. */
   menu?: 'dropdown';
@@ -154,31 +155,25 @@ export function NotificationMuteMenu(props: NotificationMuteMenuProps) {
     <Show
       when={!props.muted}
       fallback={
-        <Show
-          when={props.menu === 'dropdown'}
-          fallback={
-            <MenuItem
-              text={props.unmuteLabel}
-              icon={BellIcon}
-              disabled={props.disabled}
-              onClick={() => {
-                props.onMute(false);
-                props.onActionComplete?.();
-              }}
-            />
+        <Dynamic
+          component={
+            props.menu === 'dropdown' ? Dropdown.Item : ContextMenu.Item
           }
+          class={props.menu === 'dropdown' ? undefined : MENU_ITEM_CLASS}
+          disabled={props.disabled}
+          onSelect={() => {
+            props.onMute(false);
+            props.onActionComplete?.();
+          }}
         >
-          <Dropdown.Item
-            disabled={props.disabled}
-            onSelect={() => {
-              props.onMute(false);
-              props.onActionComplete?.();
-            }}
-          >
-            <BellIcon class="size-4 shrink-0" />
-            <span class="min-w-0 flex-1 truncate">{props.unmuteLabel}</span>
-          </Dropdown.Item>
-        </Show>
+          <BellIcon class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1 truncate">{props.unmuteLabel}</span>
+          <Show when={props.mutedHint}>
+            <span class="ml-auto shrink-0 text-right text-xs whitespace-nowrap text-ink-extra-muted">
+              {props.mutedHint}
+            </span>
+          </Show>
+        </Dynamic>
       }
     >
       <Dynamic
