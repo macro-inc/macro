@@ -343,7 +343,7 @@ export function createEmailPolicySettings(
     // The POST succeeded; re-read its result after retirement instead of
     // publishing old response content or replaying the command.
     if (!cacheSessionGeneration.isCurrent(generation)) {
-      await inspectPreview();
+      await parent.run(() => inspectPreview());
       return;
     }
     setState({ preview: result.value, previewDraft: draft });
