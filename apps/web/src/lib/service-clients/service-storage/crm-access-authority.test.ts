@@ -5,7 +5,13 @@ import type {
 import { StaleCacheAuthorityError } from '@graphql-cache/authority';
 import { createComputed, createRoot } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { createCrmAccessAuthority } from './crm-access-authority';
+import {
+  configureCrmAccessAuthority,
+  createCrmAccessAuthority,
+  crmAccessAllowed,
+  crmAccessAuthority,
+  crmAccessState,
+} from './crm-access-authority';
 
 const team = '00000000-0000-4000-8000-000000000001';
 afterEach(() => vi.useRealTimers());
@@ -57,6 +63,34 @@ function client(
   authority.setSession('viewer');
   return { authority, fetchProof, retire };
 }
+
+it('keeps entry points through a pending and a failed proof and closes them on a proven denial', async () => {
+  vi.useFakeTimers();
+  const fetchProof = vi.fn(async (_timeoutMs: number): Promise<string> => {
+    throw new TypeError('offline');
+  });
+  configureCrmAccessAuthority({ fetchProof, retire: async () => {} });
+  crmAccessAuthority.setHost(sharedOwner());
+  crmAccessAuthority.setSession('viewer');
+  try {
+    expect(crmAccessState()).toBe('pending');
+    expect(crmAccessAllowed()).toBe(true);
+    const failure = expect(crmAccessAuthority.refresh()).rejects.toThrow(
+      'offline'
+    );
+    await vi.advanceTimersByTimeAsync(250);
+    await failure;
+    expect(crmAccessState()).toBe('error');
+    expect(crmAccessAllowed()).toBe(true);
+    fetchProof.mockResolvedValue(`${team}:denied`);
+    await crmAccessAuthority.refresh();
+    expect(crmAccessState()).toBe('denied');
+    expect(crmAccessAllowed()).toBe(false);
+  } finally {
+    crmAccessAuthority.setSession(undefined);
+    crmAccessAuthority.setHost(undefined);
+  }
+});
 
 it('keeps team-less users admitted to the existing join-a-team workspace', async () => {
   const { authority } = client(

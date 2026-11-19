@@ -515,7 +515,8 @@ export function CrmWorkspaceView(props: {
             listsEnabled={listsEnabled()}
             listsLoading={lists.query.isLoading}
             listsError={lists.query.isError}
-            canCreateList={!!teamId()}
+            // A tool pressed before access is proven would open once it is.
+            canCreateList={canAccess() && !!teamId()}
             onNavigate={navigate}
             onCreateCompany={openCreateCompanyModal}
             onCreateContact={() => openCreateContactModal()}

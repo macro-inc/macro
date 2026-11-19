@@ -177,7 +177,9 @@ vi.mock('../components/crm-sidebar', () => ({
     onNavigate: (id: string) => void;
     onSettings: () => void;
     canAccess: boolean;
+    canCreateList: boolean;
     onNewList: () => void;
+    onImport: () => void;
   }) => (
     <nav aria-label="CRM sidebar">
       <Show when={props.canAccess}>
@@ -192,6 +194,13 @@ vi.mock('../components/crm-sidebar', () => ({
         </button>
       </Show>
       {props.pipelines}
+      <button
+        type="button"
+        disabled={!props.canCreateList}
+        onClick={props.onImport}
+      >
+        Import
+      </button>
       <button type="button" onClick={props.onSettings}>
         CRM settings
       </button>
@@ -236,7 +245,9 @@ vi.mock('./record-detail', () => ({
 }));
 vi.mock('./crm-settings', () => ({ Crm: () => <div>Stage settings</div> }));
 vi.mock('./export-companies', () => ({ CrmExport: () => null }));
-vi.mock('./import-companies', () => ({ CrmImport: () => null }));
+vi.mock('./import-companies', () => ({
+  CrmImport: () => <div>Import dialog</div>,
+}));
 vi.mock('./email-privacy', () => ({ CrmEmailOptInBanner: () => null }));
 vi.mock('./pipeline', () => ({
   PipelineView: (props: {
@@ -756,6 +767,22 @@ it.each(['pending', 'error'] as const)(
     expect(screen.queryByText("You don't have access to CRM")).toBeNull();
   }
 );
+
+it('does not open an import requested before CRM access was proven', () => {
+  const [state, setState] = createSignal<'pending' | 'allowed'>('pending');
+  fixture.accessState = state;
+  fixture.canAccess = () => state() === 'allowed';
+  fixture.touch = false;
+  setup();
+  const sidebar = within(
+    screen.getByRole('navigation', { name: 'CRM sidebar' })
+  );
+  fireEvent.click(sidebar.getByRole('button', { name: 'Import' }));
+  setState('allowed');
+  expect(screen.queryByText('Import dialog')).toBeNull();
+  fireEvent.click(sidebar.getByRole('button', { name: 'Import' }));
+  expect(screen.getByText('Import dialog')).toBeTruthy();
+});
 
 it.each([false, true])(
   'does not open a shared pipeline record after denial (touch: %s)',

@@ -603,8 +603,9 @@ External (plug icon, `g x`) appears on the rail only with the
   a new split, including when Search is already active. The command menu stays
   on ⌘K (Ctrl+K elsewhere).
 - Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Notifications follows its feature gate; Customers appears
-  only with verified CRM access, including in More, customization, and the phone dock.
+  `Agents`, `Customers`. Notifications follows its feature gate; Customers is
+  hidden only once CRM access is proven denied, including in More, customization,
+  and the phone dock, and stays while that check is pending or has failed.
   Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
