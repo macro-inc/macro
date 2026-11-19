@@ -6,8 +6,6 @@
 mod api;
 /// Durable publication of email backfill outbox rows.
 pub mod backfill_outbox;
-/// Connection-gateway refresh adapter for disconnecting an inbox's calendar.
-pub mod calendar_refresh;
 /// Google Calendar quota gate for disconnecting an inbox's calendar.
 pub mod calendar_request_gate;
 /// Access-token adapter for disconnecting an inbox's calendar.
