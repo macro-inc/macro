@@ -4,7 +4,6 @@ import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntity
 import { EntityAppearanceMenu } from '@app/features/entity-appearance/appearance-menu';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
-import { useFlowTrace } from '@app/observability/flow';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -19,9 +18,8 @@ import {
 import { useUserId } from '@core/context/user';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Telemetry } from '@macro-inc/observability';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
-import { createSignal, getOwner, onMount, Show } from 'solid-js';
+import { getOwner, onMount, Show } from 'solid-js';
 import { EntityAppearanceTrigger } from '../entity-appearance/entity-appearance';
 import { getErrorMessage } from './core/routine-draft';
 import { createRoutineConnectedApps } from './queries/connected-apps';
@@ -32,10 +30,11 @@ import {
 import { createRoutineAppTargetCheck } from './queries/routine-app-targets';
 import { createRoutineDetailSource } from './queries/routine-sources';
 import {
-  traceRoutineRequest,
+  traceRoutineInteraction,
   withRoutineQueryTrace,
 } from './queries/routine-trace';
 import {
+  readRoutineTemplateStatus,
   useRoutineTemplateQuery,
   useUnshareTemplateMutation,
 } from './queries/templates';
@@ -75,7 +74,6 @@ export function RoutineDetail(props: {
   onBack?: () => void;
   onOpen?: (id: string) => void;
 }) {
-  const flow = useFlowTrace();
   const layout = useSplitLayout();
   const panel = useSplitPanelOrThrow();
   const userId = useUserId();
@@ -172,11 +170,20 @@ export function RoutineDetail(props: {
     sharing().enabled &&
     source.routine()?.shareable === false &&
     ownedByViewer();
-  const [actionsOpen, setActionsOpen] = createSignal(false);
   const published = useRoutineTemplateQuery(
     () => props.scheduleId,
-    () => actionsOpen() && needsRevocation()
+    () => false
   );
+  const onActionsOpenChange = (open: boolean) => {
+    if (!open || !needsRevocation()) return;
+    const scheduleId = props.scheduleId;
+    fireAndForget(
+      traceRoutineInteraction('routine.template.status', scheduleId, (span) =>
+        readRoutineTemplateStatus(scheduleId, span)
+      ),
+      'routines'
+    );
+  };
   const hasPublishedSnapshot = () =>
     needsRevocation() &&
     (published.isSuccess || published.isError) &&
@@ -186,22 +193,25 @@ export function RoutineDetail(props: {
     onError: () => toast.failure(t('subRoutines.stopSharingFailed')),
   });
   const stopSharing = () => {
-    const parentSpan = flow?.run(() => Telemetry.captureContext());
-    unshare.mutate({
-      scheduleId: props.scheduleId,
-      ...(parentSpan && { parentSpan }),
-    });
-  };
-  const retrySharing = () => {
-    const span = Telemetry.span('routine.template.status.retry', {
-      attributes: { 'routine.id': props.scheduleId },
-    });
-    return traceRoutineRequest(span, () =>
-      withRoutineQueryTrace(span, (options) =>
-        published.refetch({ ...options, throwOnError: true })
-      )
+    const scheduleId = props.scheduleId;
+    fireAndForget(
+      traceRoutineInteraction(
+        'routine.stop_sharing',
+        scheduleId,
+        (parentSpan) => unshare.mutateAsync({ scheduleId, parentSpan })
+      ),
+      'routines'
     );
   };
+  const retrySharing = () =>
+    traceRoutineInteraction(
+      'routine.template.status.retry',
+      props.scheduleId,
+      (span) =>
+        withRoutineQueryTrace(span, (options) =>
+          published.refetch({ ...options, throwOnError: true })
+        )
+    );
   return (
     <Show
       when={ownedByViewer()}
@@ -212,7 +222,7 @@ export function RoutineDetail(props: {
       <RoutineDetailView
         source={source}
         userId={userId}
-        onActionsOpenChange={setActionsOpen}
+        onActionsOpenChange={onActionsOpenChange}
         identityIcon={
           <Show when={source.entity()}>
             {(entity) => (

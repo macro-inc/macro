@@ -1,5 +1,5 @@
 import { t } from '@app/lib/i18n';
-import { useFlowTrace, usePending } from '@app/observability/flow';
+import { usePending } from '@app/observability/flow';
 import { deepEqual } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
@@ -45,7 +45,11 @@ import {
   isUnchangedUpdate,
   scheduleToDuplicateBody,
 } from './routine-draft';
-import { traceRoutineRequest, withRoutineQueryTrace } from './routine-trace';
+import {
+  traceRoutineInteraction,
+  traceRoutineRequest,
+  withRoutineQueryTrace,
+} from './routine-trace';
 import { readFreshRoutine, useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
@@ -157,7 +161,6 @@ export function createRoutineDetailSource(
   callbacks: DetailCallbacks,
   subRoutineWrites: Accessor<boolean | undefined>
 ): RoutineDetailSource {
-  const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
   const detail = useRoutineQuery(id);
   const raw = createMemo(
@@ -340,7 +343,13 @@ export function createRoutineDetailSource(
     canDuplicate: () => Boolean(duplicateBody()),
     duplicate() {
       const body = duplicateBody();
-      if (body && !duplicate.isPending) duplicate.mutate({ body });
+      if (!body || duplicate.isPending) return;
+      fireAndForget(
+        traceRoutineInteraction('routine.duplicate', id(), (parentSpan) =>
+          duplicate.mutateAsync({ body, parentSpan })
+        ),
+        'routines'
+      );
     },
     duplicationPending: () => duplicate.isPending,
     history: createMemo(() =>
@@ -369,8 +378,13 @@ export function createRoutineDetailSource(
     canKeepAsOwn,
     keepAsOwn: () => {
       if (!canKeepAsOwn() || keep.isPending) return;
-      const parentSpan = flow?.run(() => Telemetry.captureContext());
-      keep.mutate({ scheduleId: id(), ...(parentSpan && { parentSpan }) });
+      const scheduleId = id();
+      fireAndForget(
+        traceRoutineInteraction('routine.keep', scheduleId, (parentSpan) =>
+          keep.mutateAsync({ scheduleId, parentSpan })
+        ),
+        'routines'
+      );
     },
     keepAsOwnPending: () => keep.isPending,
     codeReview,
@@ -393,74 +407,74 @@ export function createRoutineDetailSource(
       const subRoutines = subRoutinesFromWire(proposal.task);
       if (!steps || !subRoutines) return;
       setApproving(true);
-      const start = () =>
-        Telemetry.span('routine.code_approval', {
-          attributes: { 'routine.id': scheduleId },
-        });
-      const approval = flow ? flow.run(start) : start();
-      const failed = (title: string, error?: unknown) => {
-        approval.error(title);
-        callbacks.onError(title, error);
-      };
       try {
-        let current: ScheduledActionResponse;
-        try {
-          const phase = approval.span('routine.code_approval.check');
-          current = await traceRoutineRequest(phase, () =>
-            readFreshRoutine(scheduleId, phase)
-          );
-        } catch (error) {
-          failed(t('subRoutines.approvalCheckFailed'), error);
-          return;
-        }
-        if (id() !== scheduleId || current.owner !== userId()) return;
-        if (!deepEqual(proposal.previousTask, current.task)) {
-          failed(t('subRoutines.approvalTaskChanged'));
-          return;
-        }
-        const draft = toRoutine(current).draft;
-        if (!draft) return;
-        try {
-          await save(
-            {
-              ...withDraftSteps(draft, steps),
-              ...(subRoutines.length ? { subRoutines } : {}),
-            },
-            { approval, previous: current }
-          );
-        } catch (error) {
-          failed('Failed to update the routine’s code', error);
-          return;
-        }
-        if (!current.enabled) {
-          try {
-            const phase = approval.span('routine.code_approval.activate');
-            await traceRoutineRequest(phase, () =>
-              activate.mutateAsync({
-                scheduleId,
-                enabled: true,
-                parentSpan: phase,
-              })
-            );
-          } catch (error) {
-            failed(t('subRoutines.approvalResumeFailed'), error);
+        await traceRoutineInteraction(
+          'routine.code_approval',
+          scheduleId,
+          async (approval) => {
+            const failed = (title: string, error?: unknown) => {
+              approval.error(title);
+              callbacks.onError(title, error);
+            };
+            let current: ScheduledActionResponse;
+            try {
+              const phase = approval.span('routine.code_approval.check');
+              current = await traceRoutineRequest(phase, () =>
+                readFreshRoutine(scheduleId, phase)
+              );
+            } catch (error) {
+              failed(t('subRoutines.approvalCheckFailed'), error);
+              return;
+            }
+            if (id() !== scheduleId || current.owner !== userId()) return;
+            if (!deepEqual(proposal.previousTask, current.task)) {
+              failed(t('subRoutines.approvalTaskChanged'));
+              return;
+            }
+            const draft = toRoutine(current).draft;
+            if (!draft) return;
+            try {
+              await save(
+                {
+                  ...withDraftSteps(draft, steps),
+                  ...(subRoutines.length ? { subRoutines } : {}),
+                },
+                { approval, previous: current }
+              );
+            } catch (error) {
+              failed('Failed to update the routine’s code', error);
+              return;
+            }
+            if (!current.enabled) {
+              try {
+                const phase = approval.span('routine.code_approval.activate');
+                await traceRoutineRequest(phase, () =>
+                  activate.mutateAsync({
+                    scheduleId,
+                    enabled: true,
+                    parentSpan: phase,
+                  })
+                );
+              } catch (error) {
+                failed(t('subRoutines.approvalResumeFailed'), error);
+              }
+            }
+            if (id() === scheduleId) {
+              try {
+                const phase = approval.span('routine.code_approval.refetch');
+                await traceRoutineRequest(phase, () =>
+                  upgrades.refetch({
+                    throwOnError: true,
+                    parentSpan: phase,
+                  })
+                );
+              } catch (error) {
+                failed(t('subRoutines.approvalRefreshFailed'), error);
+              }
+            }
           }
-        }
-        if (id() === scheduleId) {
-          try {
-            const phase = approval.span('routine.code_approval.refetch');
-            await traceRoutineRequest(phase, () =>
-              upgrades.refetch({
-                throwOnError: true,
-                parentSpan: phase,
-              })
-            );
-          } catch (error) {
-            failed(t('subRoutines.approvalRefreshFailed'), error);
-          }
-        }
+        );
       } finally {
-        approval.end();
         setApproving(false);
       }
     },
@@ -573,7 +587,6 @@ export function createRoutineRowOperations(
   callbacks: RowOperationCallbacks,
   subRoutineWrites: Accessor<boolean | undefined> = () => true
 ): RoutineRowOperations {
-  const flow = useFlowTrace();
   const list = useSchedulesQuery(() => true);
   const children = useSubRoutinesQuery(() => true);
   const saved = () => (list.isSuccess || list.isError ? (list.data ?? []) : []);
@@ -632,15 +645,16 @@ export function createRoutineRowOperations(
   };
   const duplicating = createPerRoutineMutation(async (id) => {
     const body = duplicateBody(id);
-    if (body) await duplicate.mutateAsync({ body });
+    if (body)
+      await traceRoutineInteraction('routine.duplicate', id, (parentSpan) =>
+        duplicate.mutateAsync({ body, parentSpan })
+      );
   });
-  const keeping = createPerRoutineMutation((id) => {
-    const parentSpan = flow?.run(() => Telemetry.captureContext());
-    return keep.mutateAsync({
-      scheduleId: id,
-      ...(parentSpan && { parentSpan }),
-    });
-  });
+  const keeping = createPerRoutineMutation((id) =>
+    traceRoutineInteraction('routine.keep', id, (parentSpan) =>
+      keep.mutateAsync({ scheduleId: id, parentSpan })
+    )
+  );
   return {
     entity(id) {
       const schedule = find(id);

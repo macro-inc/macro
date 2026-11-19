@@ -1,3 +1,4 @@
+import { beginInteraction } from '@app/observability/flow';
 import type { Span, TraceContext } from '@macro-inc/observability';
 import type { RefetchOptions } from '@tanstack/solid-query';
 
@@ -12,6 +13,24 @@ export async function traceRoutineRequest<T>(
     throw error;
   } finally {
     span.end();
+  }
+}
+
+export function traceRoutineInteraction<T>(
+  name: string,
+  scheduleId: string,
+  request: (span: Span) => Promise<T>
+): Promise<T> {
+  const interaction = beginInteraction(`${name}.action`, {
+    attributes: { 'routine.id': scheduleId },
+  });
+  try {
+    const span = interaction.span.span(name);
+    span.setAttr('routine.id', scheduleId);
+    return traceRoutineRequest(span, () => request(span));
+  } finally {
+    // The work keeps its child span while later clicks can start their own flow.
+    interaction.end();
   }
 }
 

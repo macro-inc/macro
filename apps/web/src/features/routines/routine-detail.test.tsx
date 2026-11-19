@@ -1,9 +1,8 @@
-import { usePending } from '@app/observability/flow';
+import { beginInteraction, usePending } from '@app/observability/flow';
 import { toast } from '@core/component/Toast/Toast';
 import {
   NOOP_SPAN,
   type Span,
-  Telemetry,
   type TraceContext,
 } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
@@ -104,6 +103,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
   usePending: vi.fn(),
+  beginInteraction: vi.fn(() => ({ span: NOOP_SPAN, end: vi.fn() })),
 }));
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
@@ -156,6 +156,9 @@ vi.mock('./routine-template', () => ({
   openShareRoutineDialog: vi.fn(),
 }));
 vi.mock('./queries/templates', () => ({
+  readRoutineTemplateStatus: async (id: string, parent: TraceContext) => {
+    mocks.readSharingStatus(id, parent);
+  },
   useRoutineTemplateQuery: (
     id: Accessor<string>,
     enabled: Accessor<boolean>
@@ -177,7 +180,7 @@ vi.mock('./queries/templates', () => ({
     };
   },
   useUnshareTemplateMutation: () => ({
-    mutate: mocks.stopSharing,
+    mutateAsync: mocks.stopSharing,
     isPending: false,
   }),
 }));
@@ -434,7 +437,10 @@ vi.mock('./queries/schedules', () => ({
     refetch: mocks.refetchUpgrades,
   }),
   useChildrenQuery: () => ({ isSuccess: true, data: [] }),
-  useDetachScheduleMutation: () => ({ mutate: mocks.detach, isPending: false }),
+  useDetachScheduleMutation: () => ({
+    mutateAsync: mocks.detach,
+    isPending: false,
+  }),
   useUpdateScheduleMutation: () => ({
     mutateAsync: ({
       parentSpan,
@@ -448,7 +454,10 @@ vi.mock('./queries/schedules', () => ({
       return mocks.update(args);
     },
   }),
-  useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
+  useCreateScheduleMutation: () => ({
+    mutateAsync: mocks.create,
+    isPending: false,
+  }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
   useSetScheduleEnabledMutation: () => ({
     mutate: mocks.setEnabled,
@@ -660,6 +669,7 @@ describe('routine execution target autosave', () => {
     });
     expect(mocks.create).toHaveBeenCalledWith({
       body: expect.objectContaining({ task: saved.task }),
+      parentSpan: NOOP_SPAN,
     });
   });
 
@@ -1043,6 +1053,7 @@ describe('routine editor triggers', () => {
       key: 'Enter',
     });
     expect(mocks.create).toHaveBeenCalledExactlyOnceWith({
+      parentSpan: NOOP_SPAN,
       body: {
         name: 'Summary copy',
         kind: 'Agent',
@@ -1464,7 +1475,12 @@ describe('routine code that needs an update', () => {
       phases.set(name, phase);
       return phase;
     });
-    const start = vi.spyOn(Telemetry, 'span').mockReturnValue(root);
+    const admission = { ...root, span: NOOP_SPAN.span };
+    const start = vi.spyOn(admission, 'span').mockReturnValue(root);
+    vi.mocked(beginInteraction).mockReturnValueOnce({
+      span: admission,
+      end: vi.fn(),
+    });
     try {
       mocks.refetchUpgrades.mockImplementationOnce(async () => {
         expect(activePhase).toBe('routine.code_approval.refetch');
@@ -1475,9 +1491,13 @@ describe('routine code that needs an update', () => {
       );
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(start).toHaveBeenCalledWith('routine.code_approval', {
-        attributes: { 'routine.id': 'routine-id' },
-      });
+      expect(beginInteraction).toHaveBeenCalledWith(
+        'routine.code_approval.action',
+        {
+          attributes: { 'routine.id': 'routine-id' },
+        }
+      );
+      expect(start).toHaveBeenCalledWith('routine.code_approval');
       expect(mocks.updateTrace).toHaveBeenCalledWith(
         phases.get('routine.save')
       );
@@ -1606,14 +1626,21 @@ describe('sub-routines defined once', () => {
     sub_routine: { parent_id: 'parent-id', created_by_run_id: 'run-1' },
   };
 
-  it('reads sharing status only when the actions menu needs it', () => {
+  it('starts an interaction before reading sharing status from the menu', () => {
     setSchedules([{ ...parent, id: 'routine-id' }]);
     mocks.sharing = () => true;
     render(() => <Routine />);
     expect(mocks.readSharingStatus).not.toHaveBeenCalled();
     openActions();
+    expect(beginInteraction).toHaveBeenCalledWith(
+      'routine.template.status.action',
+      {
+        attributes: { 'routine.id': 'routine-id' },
+      }
+    );
     expect(mocks.readSharingStatus).toHaveBeenCalledExactlyOnceWith(
-      'routine-id'
+      'routine-id',
+      NOOP_SPAN
     );
   });
 
@@ -1634,7 +1661,14 @@ describe('sub-routines defined once', () => {
     });
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
+      parentSpan: NOOP_SPAN,
     });
+    expect(beginInteraction).toHaveBeenCalledWith(
+      'routine.stop_sharing.action',
+      {
+        attributes: { 'routine.id': 'routine-id' },
+      }
+    );
   });
 
   it('can revoke a cached template when its background refresh fails', () => {
@@ -1649,6 +1683,7 @@ describe('sub-routines defined once', () => {
     });
     expect(mocks.stopSharing).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
+      parentSpan: NOOP_SPAN,
     });
   });
 
@@ -2049,6 +2084,10 @@ describe('sub-routines defined once', () => {
     );
     expect(mocks.detach).toHaveBeenCalledExactlyOnceWith({
       scheduleId: 'routine-id',
+      parentSpan: NOOP_SPAN,
+    });
+    expect(beginInteraction).toHaveBeenCalledWith('routine.keep.action', {
+      attributes: { 'routine.id': 'routine-id' },
     });
   });
 

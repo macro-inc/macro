@@ -167,6 +167,40 @@ it('keeps sharing revoked when an older status response arrives after DELETE', a
   expect(queryClient.getQueryData(key)).toBeNull();
 });
 
+it('reuses fresh sharing status and traces both attempts after it expires', async () => {
+  const { readRoutineTemplateStatus } = await import('./templates');
+  queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+  const key = scheduledActionKeys.template({ scheduleId: 'routine' }).queryKey;
+  const contexts: boolean[] = [];
+  let active = false;
+  const parent = {
+    run<T>(work: () => T): T {
+      active = true;
+      try {
+        return work();
+      } finally {
+        active = false;
+      }
+    },
+  };
+  queryClient.setQueryData(key, null, { updatedAt: Date.now() - 4 * 60_000 });
+  expect(await readRoutineTemplateStatus('routine', parent)).toBeNull();
+  expect(getTemplate).not.toHaveBeenCalled();
+
+  queryClient.setQueryData(key, null, { updatedAt: Date.now() - 6 * 60_000 });
+  getTemplate
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return err([{ message: 'Try again' }]);
+    })
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return err([{ code: 'NOT_FOUND' }]);
+    });
+  expect(await readRoutineTemplateStatus('routine', parent)).toBeNull();
+  expect(contexts).toEqual([true, true]);
+});
+
 afterEach(() => {
   dispose?.();
   dispose = undefined;
@@ -216,6 +250,63 @@ it('uses the approval trace context again on an actual query retry', async () =>
   const options = { throwOnError: true, parentSpan };
   await parentSpan.run(() => query.refetch(options));
   expect(contexts).toEqual([true, true]);
+});
+
+it('carries a Duplicate admission context through create and list retries', async () => {
+  queryClient.setDefaultOptions({ queries: { retry: 1, retryDelay: 0 } });
+  const contexts: boolean[] = [];
+  let active = false;
+  const parentSpan = {
+    run<T>(work: () => T): T {
+      active = true;
+      try {
+        return work();
+      } finally {
+        active = false;
+      }
+    },
+  };
+  listSchedules.mockResolvedValueOnce(ok([routine, other]));
+  createSchedule.mockImplementation(async () => {
+    contexts.push(active);
+    return ok({ ...routine, id: 'duplicate' });
+  });
+  let mutation!: ReturnType<typeof useCreateScheduleMutation>;
+  function Probe() {
+    useSchedulesQuery(() => true);
+    mutation = useCreateScheduleMutation(undefined, 'duplicate');
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.createElement('div')
+  );
+  await vi.waitFor(() => expect(queryClient.isFetching()).toBe(0));
+  listSchedules
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return err([{ message: 'Try again' }]);
+    })
+    .mockImplementationOnce(async () => {
+      contexts.push(active);
+      return ok([routine, other]);
+    });
+  const request = {
+    body: {
+      name: routine.name,
+      kind: routine.kind,
+      trigger: routine.trigger,
+      task: routine.task,
+      enabled: true,
+    },
+    parentSpan,
+  };
+  await mutation.mutateAsync(request);
+  expect(contexts).toEqual([true, true, true]);
 });
 
 it('moves a detached copy out of both child caches when list refreshes fail', async () => {

@@ -49,16 +49,35 @@ async function fetchTemplate(
 // Cached past unmount; closes over the resolved schedule id only.
 export function routineTemplateQueryOptions(
   scheduleId: string | undefined,
-  enabled = true
+  enabled = true,
+  trace?: { parent: TraceContext | undefined }
 ) {
+  const read = () => fetchTemplate(scheduleId!);
   return queryOptions({
     queryKey: scheduledActionKeys.template({
       scheduleId: scheduleId ?? '__none__',
     }).queryKey,
     enabled: enabled && Boolean(scheduleId),
-    queryFn: () => fetchTemplate(scheduleId!),
+    queryFn: () => (trace?.parent ? trace.parent.run(read) : read()),
     behavior: routineQueryTrace,
   });
+}
+
+/** Opening the owner's menu uses the same snapshot cache as the share dialog. */
+export async function readRoutineTemplateStatus(
+  scheduleId: string,
+  parent: TraceContext
+) {
+  const trace: { parent: TraceContext | undefined } = { parent };
+  try {
+    return await queryClient.fetchQuery({
+      ...routineTemplateQueryOptions(scheduleId, true, trace),
+      staleTime: 5 * 60 * 1000,
+    });
+  } finally {
+    // Query options can outlive the interaction, even after the read fails.
+    trace.parent = undefined;
+  }
 }
 
 export function useRoutineTemplateQuery(

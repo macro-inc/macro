@@ -309,6 +309,7 @@ function _invalidateScheduleHistory(scheduleId: string) {
 export type CreateScheduleRequest = {
   body: ActionConfiguration;
   suggestionId?: string;
+  parentSpan?: TraceContext;
 };
 
 export function useCreateScheduleMutation(
@@ -317,12 +318,11 @@ export function useCreateScheduleMutation(
   source: 'new' | 'duplicate' = 'new'
 ) {
   return useMutation(() => ({
-    mutationFn: async (request: CreateScheduleRequest) =>
-      throwOnErr(
-        async () =>
-          await scheduledActionClient.createSchedule(request.body, {
-            suggestionId: request.suggestionId,
-          })
+    mutationFn: ({ body, suggestionId, parentSpan }: CreateScheduleRequest) =>
+      (parentSpan ?? Telemetry.captureContext()).run(() =>
+        throwOnErr(() =>
+          scheduledActionClient.createSchedule(body, { suggestionId })
+        )
       ),
     ...withCallbacks(
       {
@@ -338,7 +338,7 @@ export function useCreateScheduleMutation(
           upsertSchedule(schedule);
           if (request.suggestionId)
             await removeAcceptedSuggestion(request.suggestionId);
-          await invalidateSchedules();
+          await invalidateSchedules(request.parentSpan);
         },
       },
       callbacks
