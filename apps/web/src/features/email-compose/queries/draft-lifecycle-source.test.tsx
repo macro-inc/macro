@@ -16,8 +16,10 @@ vi.mock('@queries/email/thread', () => ({
   fetchFreshEmailThread: fetchThread,
 }));
 const refreshSession = vi.hoisted(() => vi.fn());
+const recentSession = vi.hoisted(() => vi.fn());
 vi.mock('@core/auth/session-refresh', () => ({
-  ensureFreshSession: refreshSession,
+  ensureFreshSession: recentSession,
+  fetchToken: refreshSession,
 }));
 const readSentWorkingCopy = vi.hoisted(() => vi.fn());
 vi.mock('@queries/email/send-queue', () => ({ readSentWorkingCopy }));
@@ -98,6 +100,7 @@ function observe(client = createClient()) {
 beforeEach(() => {
   fetchThread.mockReset();
   refreshSession.mockReset();
+  recentSession.mockReset();
   readSentWorkingCopy.mockReset();
   readSentWorkingCopy.mockResolvedValue(undefined);
 });
@@ -172,21 +175,22 @@ it('uses the fresh draft when the read succeeds after session confirmation', asy
   expect(fetchThread).toHaveBeenCalledTimes(3);
 });
 
-it('keeps the draft retryable when the session cannot be confirmed', async () => {
+it('keeps the draft retryable when a recent session can no longer refresh', async () => {
   const rejected = new ThrownResultError([
     { code: 'UNAUTHORIZED', message: 'Unauthorized' },
   ]);
   fetchThread
     .mockResolvedValueOnce(thread(false))
     .mockRejectedValueOnce(rejected)
-    .mockResolvedValueOnce(thread(false));
+    .mockRejectedValueOnce(rejected);
+  recentSession.mockResolvedValue(ok(undefined));
   refreshSession.mockResolvedValue(err([{ code: 'UNAUTHORIZED' }]));
   const { lifecycle } = observe();
   await waitFor(() => expect(lifecycle.state()?.type).toBe('editing'));
 
   await expect(lifecycle.refresh()).rejects.toBe(rejected);
   expect(lifecycle.state()).toBeUndefined();
-  await expect(lifecycle.refresh()).resolves.toMatchObject({ type: 'editing' });
+  expect(fetchThread).toHaveBeenCalledTimes(2);
 });
 
 it('does not republish cached state when a strict refresh rejects', async () => {

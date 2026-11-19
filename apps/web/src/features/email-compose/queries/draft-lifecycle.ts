@@ -1,4 +1,4 @@
-import { ensureFreshSession } from '@core/auth/session-refresh';
+import { fetchToken } from '@core/auth/session-refresh';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -107,7 +107,7 @@ async function fetchServerLifecycle(
   if (
     thread.isErr() &&
     thrownResultErrorHasCode(thread.error, 'UNAUTHORIZED') &&
-    (await ensureFreshSession()).isOk()
+    (await fetchToken()).isOk()
   ) {
     // The first refusal can predate refreshed credentials. Use the fresh
     // response before deciding that the draft itself is unavailable.
