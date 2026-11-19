@@ -1,0 +1,84 @@
+services/agent_harness_service/src/code_mode.rs
+  s_e47bee9837a594::t_16dbf760125e6c 21-23,277,281-284,294-312,325-329,331,334,336-340,342,346
+  s_f3a48b3a685142::t_78b39ed743d8fb 285-287,290-291,313-314,319,323-324,330,332-333,335
+services/agent_harness_service/src/main.rs
+  s_e47bee9837a594::t_16dbf760125e6c 681-683,706,958-960,962,995
+crates/agent_code_mode/src/domain/service.rs
+  s_e47bee9837a594::t_be3e87f5eb0ece 102,527-528,530-532
+  s_e47bee9837a594::t_96c8063b5eaae6 49,52
+crates/agent_code_mode/src/domain/ports.rs
+  s_e47bee9837a594::t_be3e87f5eb0ece 56-58
+  s_e47bee9837a594::t_7bfaf01085722e 60
+crates/agent_code_mode/src/domain/models.rs
+  s_e47bee9837a594::t_010deb4799d821 60-61,72-74,89,99
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_e47bee9837a594::t_16dbf760125e6c 10,87
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_e47bee9837a594::t_b46f5fec79e571 278,285
+  s_e47bee9837a594::t_16dbf760125e6c 401-438
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 618-826
+  s_e47bee9837a594::t_45d74b2cdd6eee 158,162-163,206,208-211,382,385
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 415,422,471,660
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_e47bee9837a594::t_16dbf760125e6c 281
+  s_e47bee9837a594::t_b46f5fec79e571 236,272,279-280,282-296,298
+  s_e47bee9837a594::t_5ce588baf31075 297,299
+crates/agent_code_mode/src/domain/service/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 694,766,768,770-775,779-784,786-787
+  s_e47bee9837a594::t_824a1d2ded9c55 788-789
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_e47bee9837a594::t_9dfb9789e3912d 395-396
+  s_e47bee9837a594::t_16dbf760125e6c 65,75,81,91-92,318-350,352-357,362,369-371,377,393
+  s_e47bee9837a594::t_4ded299a7db0c7 1-4,6-8,15,57,59-64,66-74,76-80,82-90,93-94,96-97,102-103,111-112,121-124,131-134,137,140,152-155,184,190-194,215-217,236
+  s_e47bee9837a594::t_45dd73946305b7 58
+crates/agent_code_mode/AGENTS.md
+  s_e47bee9837a594::t_16dbf760125e6c 88,99-102
+services/agent_harness_service/src/code_mode/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 914-955,958,960-961,962-971,980-981,990-996,997
+  s_e47bee9837a594::t_10f2f38b1ce6f3 845
+  s_e47bee9837a594::t_be24f56c31f735 731-732,734,742,753,758-759,956-957,959,972-979,982-989,998-1007
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_e47bee9837a594::t_630f9cf73bd747 1714-1718,1971-2018,2051,2144-2181,2196-2209,2617-2618,2620,2782,3191-3253,3603-3616,5386
+packages/sdk/specs/agent-harness.json
+  s_e47bee9837a594::t_630f9cf73bd747 3468,6808-6812,7214-7298,7345-7355,7482-7535,7550-7568,8167-8168,8356,9171-9244,9679-9694
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_e47bee9837a594::t_933b7dc815dc76 4725-4747,5099,5109,5119,5153-5340,5409-5410,5414,5422,5430,5447,5475-5476,5496,5506,5516,6057-6084,7054-7180
+  s_e47bee9837a594::t_dcc22bb4b4e3d8 7181
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_e47bee9837a594::t_933b7dc815dc76 2732-2741,2966,2992-3093,3134-3135,3139,3159,3185,3460-3473,4074-4149
+  s_e47bee9837a594::t_f28afa1c5adabc 4150
+packages/sdk-ocaml/generated/untyped.txt
+  s_e47bee9837a594::t_933b7dc815dc76 11
+packages/sdk/generated/agent-harness/index.ts
+  s_e47bee9837a594::t_630f9cf73bd747 4
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/programLanguage.ts
+  s_e47bee9837a594::t_cb113da24fe47a 10-11,20
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_e47bee9837a594::t_8028f1d29062c8 8167-8168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "4fd868a153f4fe88538051a1f14f5f3a1663f6c8",
+  "prompts": {},
+  "sessions": {
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_f3a48b3a685142": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "65b2bcf0-02e2-4f2c-88ae-8e6cea990f9a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
