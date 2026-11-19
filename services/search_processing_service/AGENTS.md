@@ -60,6 +60,13 @@ OpenSearch, and exposes backfill HTTP routes for each.
 - `changes_search_index` commits events that change nothing indexed before
   any reread claim; an event filtered later, in a worker, would hold the claim
   and absorb a later event that does change something.
+- Every outcome goes through `record_outcome`, which also feeds the freshness
+  metrics in `inbound/kafka_consumer/metrics.rs`; their names and tags are the
+  Search freshness dashboard's contract (README step 7), and their tags are
+  closed sets (never an id). `backlog.rs` samples each partition's oldest
+  pending record from the ledger and the client's cached watermarks, also while
+  the poll loop waits on a full worker channel; a new consumer loop needs its
+  own `BacklogSampler`.
 - Channel messages and agent-session prompts and replies are indexed through
   `parsers::message_text::with_pastes_as_content`: `mention_utils`'
   formatters drop `<m-paste>` (long pastes; in agent sessions also quoted
