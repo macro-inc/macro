@@ -20,8 +20,9 @@ checks.
 The notification service makes no row for activity it receives while a type
 is turned off in Settings → Notifications ("New email", say), whichever the
 flag. With unified notifications on and numbers off, rows made before stay
-unread, and keep their button lit, until read or done. Mail's number, and the
-Mail dot with unified notifications off, read the setting and go out at once.
+unread, and keep their button lit, until read or done. With numbers on, Mail's
+dot and number read the setting and go out at once, as the Mail dot does with
+unified notifications off.
 
 Unread numbers are off by default in every environment. Set
 `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a frontend build to show numbers
@@ -33,8 +34,9 @@ unread threads across every inbox, by that tab's query, and shows nothing while
 top-level message, as Chat's unread dots and section headings do (a
 conversation with only a thread mention has a mention pill but no dot, and no
 count). Mail's notification rows exist only
-for mail that raised a notification, so they are not Mail's count. Mail's and
-Channels' sources run only while numbers are on. Counts above 99 show as
+for mail that raised a notification, so they are not Mail's count. With unified
+notifications on, Mail's and Channels' sources run only while numbers are on
+(with it off, the presence dots run them, as before). Counts above 99 show as
 `99+`; Mail reads its next page each time reads leave fewer loaded than the
 label shows, and counts one more than it holds until that page arrives.
 Home keeps a dot on the desktop rail. On the mobile dock the Home bell opens
