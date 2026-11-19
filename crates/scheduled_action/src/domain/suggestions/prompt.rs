@@ -53,16 +53,16 @@ pub struct BriefData<'a> {
 
 /// How a drafted routine starts when the person may have event triggers.
 const START_ON_MAIL: &str = "start it when that kind of mail arrives \
-    (`email.message_received`, with a condition that names it) and make the user a task \
-    for what it asks of them, or run it on a schedule that gathers that week's mail of \
-    that kind into one task or document for them";
+    (`email.message_received`, with a condition that names it) and handle what each \
+    message asks of them, or run it on a schedule that gathers that week's mail of that \
+    kind into one task or document for them";
 
 /// How a drafted routine starts when they may not: a check would refuse an
 /// event trigger.
 const START_ON_SCHEDULE: &str = "this user's routines can't start when mail \
-    arrives, so run it on a schedule: each morning, to make the user a task for what each \
-    of that kind of message since the last run asks of them, or each week, to gather that \
-    week's mail of that kind into one task or document for them";
+    arrives, so run it on a schedule: each morning, to handle what each message of that \
+    kind since the last run asks of them, or each week, to gather that week's mail of \
+    that kind into one task or document for them";
 
 /// What a weekly routines session does before suggesting: review and retire.
 const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
