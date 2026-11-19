@@ -138,9 +138,11 @@ cluster's addresses; Grafana runs the host's `grafana.nix` settings and
 
 Every one runs two replicas in different zones with a PodDisruptionBudget,
 surge-first rolling updates, readiness probes and a `preStop` pause, so a
-rollout or a drained node never drops traffic. The edge's pods carry the load
-balancer controller's readiness gate: a new pod is ready only once the ALB
-sees it healthy.
+rollout or a drained node never drops traffic. From the switch on
+(`macro.edge.albReadinessGate`), the edge's pods also carry the load balancer
+controller's readiness gate: a new pod is ready only once the ALB sees it
+healthy. Before the switch no listener rule uses the edge's target groups, so
+the ALB never checks them and a gated pod would never become ready.
 
 **Notifications.** Only one Grafana may notify, and until the switch that
 is the host's. `macro.grafana.notify = false` (`env/prod.nix`) mutes every
