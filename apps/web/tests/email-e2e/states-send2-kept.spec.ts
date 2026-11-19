@@ -16,6 +16,7 @@ import {
 } from './harness/fixtures';
 import { notice, threadMessages } from './harness/send';
 import {
+  anotherDevice,
   backfilled,
   deleteElsewhere,
   failRequestsLater,
@@ -290,77 +291,94 @@ test('newer text in a reply is kept as a new draft, without its saved files, whe
     .toBeTruthy();
 });
 
-// The stale save can reach the service before the next lifecycle read. A
-// reopened reply has only the saved file reference. The original composer
-// still has its bytes and can upload them again.
+// The stale save can reach the service before the next lifecycle read. On
+// another device the reply has only the saved file reference. The original
+// composer still has its bytes and can upload them again.
 for (const scenario of [
   {
     title:
       'newer text in a reply waiting to be saved is kept as a new draft, without its saved files, when its draft is deleted elsewhere',
-    reopen: true,
+    remoteOnly: true,
     files: 0,
   },
   {
     title: 'a replacement reply uploads the file it still has on this device',
-    reopen: false,
+    remoteOnly: false,
     files: 1,
   },
 ]) {
-  test(scenario.title, async ({ page, mailbox }) => {
-    const { thread, draftId, file } = await replyWithFile(
-      page,
-      mailbox,
-      'Spare pages',
-      scenario.reopen
-    );
-    const saving = await holdOperation(page, 'SaveEmailDraft');
-    await page.keyboard.type(` ${NEWER}`);
-    await saving.arrived;
-    const reading = await holdRequests(page, DRAFT_READ);
+  test(scenario.title, async ({ page: original, mailbox, browser }) => {
+    const {
+      thread,
+      draftId,
+      file: originalFile,
+    } = await replyWithFile(original, mailbox, 'Spare pages', false);
+    const other = scenario.remoteOnly
+      ? await anotherDevice(browser, mailbox)
+      : undefined;
+    const page = other?.page ?? original;
+    const threadUrl = `${mailbox.front.origin}/app/mail/${thread.id}`;
+    const file = other
+      ? page.getByRole('button', { name: 'Remove notes.txt' })
+      : originalFile;
     try {
-      await deleteElsewhere(mailbox, draftId);
-      await returnToTab(page);
-      await saving.release();
-      await expect(
-        notice(
-          page,
-          'The draft changed elsewhere. Your newer text was kept as a new draft.'
-        )
-      ).toBeVisible();
-      saw('STC-409');
-      if (scenario.reopen) {
+      if (other) {
+        await page.goto(threadUrl);
+        await expect(file).toBeVisible();
+        await replyBody(page).click();
+      }
+
+      const saving = await holdOperation(page, 'SaveEmailDraft');
+      await page.keyboard.type(` ${NEWER}`);
+      await saving.arrived;
+      const reading = await holdRequests(page, DRAFT_READ);
+      try {
+        await deleteElsewhere(mailbox, draftId);
+        await returnToTab(page);
+        await saving.release();
         await expect(
           notice(
             page,
-            'Previously saved attachments could not be copied to the new draft. Please attach those files again.'
+            'The draft changed elsewhere. Your newer text was kept as a new draft.'
           )
         ).toBeVisible();
-        saw('STC-080');
+        saw('STC-409');
+        if (scenario.remoteOnly) {
+          await expect(
+            notice(
+              page,
+              'Previously saved attachments could not be copied to the new draft. Please attach those files again.'
+            )
+          ).toBeVisible();
+          saw('STC-080');
+        }
+        await expect(file).toHaveCount(scenario.files);
+        await expect
+          .poll(async () => {
+            const replacement = await savedDraft(
+              mailbox,
+              { threadId: thread.id },
+              NEWER
+            );
+            const drafts = (await threadMessages(mailbox, thread.id)).filter(
+              (message) => message.is_draft
+            );
+            return drafts.map((message) => ({
+              replacement:
+                message.db_id === replacement && message.db_id !== draftId,
+              files: message.attachments_draft?.length ?? 0,
+            }));
+          })
+          .toEqual([{ replacement: true, files: scenario.files }]);
+      } finally {
+        await reading.release();
       }
-      await expect(file).toHaveCount(scenario.files);
-      await expect
-        .poll(async () => {
-          const replacement = await savedDraft(
-            mailbox,
-            { threadId: thread.id },
-            NEWER
-          );
-          const drafts = (await threadMessages(mailbox, thread.id)).filter(
-            (message) => message.is_draft
-          );
-          return drafts.map((message) => ({
-            replacement:
-              message.db_id === replacement && message.db_id !== draftId,
-            files: message.attachments_draft?.length ?? 0,
-          }));
-        })
-        .toEqual([{ replacement: true, files: scenario.files }]);
-    } finally {
-      await reading.release();
-    }
 
-    await mailbox.open(`/app/mail/${thread.id}`);
-    await expect(replyBody(page)).toContainText(NEWER);
-    await expect(file).toHaveCount(scenario.files);
+      await page.goto(threadUrl);
+      await expect(replyBody(page)).toContainText(NEWER);
+      await expect(file).toHaveCount(scenario.files);
+    } finally {
+      await other?.close();
+    }
   });
 }
