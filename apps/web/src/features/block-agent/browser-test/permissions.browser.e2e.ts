@@ -40,7 +40,7 @@ async function shot(
 }
 
 // The same cards for programs in either checked language; a JS tools
-// program's state comes from its saved record as well as its receipt.
+// program also has a saved record, which the cards load.
 const LANGUAGES = [
   { language: 'ocaml', program: 'Email.send_message' },
   { language: 'js_tools', program: 'tools.email.send_message' },

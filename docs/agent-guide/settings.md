@@ -1149,10 +1149,11 @@ Computer Claude sign-ins**.
 ### Agent permissions
 
 Behind `enable-agent-permissions` and either `enable-ocaml-code-mode` or
-`enable-js-tools-code-mode` (all on in dev), an agent's edit form has a **Permissions** section between `Who can use
-it` and `Advanced`: `All allowed` or `<n> restrictions` with the first two
-(`Asks before sending · Email`) and `Manage`, which opens the **Permissions**
-page in place; Back returns to the form with its unsaved edits. The Macro row
+`enable-js-tools-code-mode` (all on in dev), an agent's edit form has a
+**Permissions** section between `Who can use it` and `Advanced`: `All allowed`
+or `<n> restrictions` with the first two (`Asks before sending · Email`) and
+`Manage`, which opens the **Permissions** page in place; Back returns to the
+form with its unsaved edits. The Macro row
 in the agent list has a shield button (`Macro's permissions`) that opens the
 same page for the Macro persona (the new Macro bot id), and
 `requestAgentPermissions(agentId, focus?)` opens it from elsewhere, scrolled

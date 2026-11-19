@@ -1655,7 +1655,7 @@ describe('code execution results', () => {
     origin: 'group_action',
   } as const;
 
-  it('shows a JS tools program its permissions refused from its record', () => {
+  it('shows the blocked card for a refused JS tools record', () => {
     codeQuery.record = {
       executionId,
       source: jsToolsSource,
