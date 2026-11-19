@@ -1,57 +1,65 @@
 //! `.github/attestable-checks.json`: the `PR CI` jobs that can be attested,
-//! written by `cargo x workflows` (`xtask_workflows`' `attestation` module).
+//! with the scripts a runner runs for each. Written by `cargo x workflows`
+//! (`xtask_workflows`' `attestation` module).
 
-use std::path::Path;
+use std::collections::BTreeMap;
 
 use rootcause::prelude::*;
 use serde::Deserialize;
 
-const PATH: &str = ".github/attestable-checks.json";
+pub const PATH: &str = ".github/attestable-checks.json";
 
 #[derive(Deserialize)]
 pub struct Manifest {
     /// A check's commit status is this plus its id.
     pub status_prefix: String,
-    /// The workflow that calls the checks' workflows, and its job whose path
-    /// filters decide which calls run.
-    pub caller: String,
-    pub caller_start_job: String,
-    /// The job whose outputs select what a called workflow's jobs run on.
-    pub selector_job: String,
-    /// The action that turns changed paths into outputs; emulated here.
-    pub filter_action: String,
-    /// `run` steps and actions that only keep a runner going; skipped here.
-    pub runner_steps: Vec<String>,
-    pub runner_actions: Vec<String>,
     pub checks: Vec<Check>,
+    /// The jobs `PR CI` runs that can't be attested.
+    pub not_attestable: Vec<NotAttestable>,
 }
 
-#[derive(Clone, Deserialize)]
+#[derive(Deserialize)]
 pub struct Check {
     /// `<call>/<job>`.
     pub id: String,
-    /// The caller's job that calls the workflow.
-    pub call: String,
-    pub workflow: String,
-    pub job: String,
-    /// The job's own condition.
-    #[serde(rename = "if")]
-    pub condition: Option<String>,
-    /// The selector outputs the job reads, sorted.
-    pub inputs: Vec<String>,
-    /// Whether the job waits for the selector job.
-    pub selected: bool,
-    /// The `run` steps that are the check.
-    pub steps: Vec<String>,
+    /// The job's name in a `PR CI` run.
+    pub name: String,
+    /// What a pass was for; a status for another fingerprint is not accepted.
     pub fingerprint: String,
+    /// The paths the check reads; `.` is the whole tree.
+    pub inputs: Vec<String>,
+    /// The Nix dev shell its steps run in.
+    pub dev_shell: String,
+    pub env: BTreeMap<String, String>,
+    pub steps: Vec<Step>,
+}
+
+/// One script of a check, as the workflow holds it.
+#[derive(Deserialize)]
+pub struct Step {
+    pub name: String,
+    pub run: String,
+    /// Relative to the repository's root.
+    pub working_directory: Option<String>,
+    /// Whether a runner runs it with `-o pipefail`.
+    pub pipefail: bool,
+    pub env: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize)]
+pub struct NotAttestable {
+    pub id: String,
+    pub why: String,
 }
 
 impl Manifest {
-    /// The manifest of the tree checked out at `root`.
-    pub fn read(root: &Path) -> Result<Self, Report> {
-        let path = root.join(PATH);
-        let text =
-            std::fs::read_to_string(&path).context(format!("could not read {}", path.display()))?;
-        Ok(serde_json::from_str(&text).context(format!("{PATH} is not a check manifest"))?)
+    pub fn parse(text: &str) -> Result<Self, Report> {
+        Ok(serde_json::from_str(text).context(format!(
+            "{PATH} is not what this cargo x attest reads; run `cargo x workflows`"
+        ))?)
+    }
+
+    pub fn check(&self, id: &str) -> Option<&Check> {
+        self.checks.iter().find(|check| check.id == id)
     }
 }

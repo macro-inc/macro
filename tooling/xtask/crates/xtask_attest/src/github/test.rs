@@ -22,15 +22,20 @@ fn pull(state: &str, head: &str, base_branch: &str) -> Pull {
 
 fn commit(parents: &[&str]) -> GitCommit {
     GitCommit {
-        tree: Object {
-            sha: "3333".to_owned(),
-        },
         parents: parents
             .iter()
             .map(|sha| Object {
                 sha: (*sha).to_owned(),
             })
             .collect(),
+    }
+}
+
+fn status(description: Option<&str>) -> Status {
+    Status {
+        context: "attested/web-app/cycles".to_owned(),
+        state: "success".to_owned(),
+        description: description.map(str::to_owned),
     }
 }
 
@@ -56,20 +61,61 @@ fn finds_no_pull_request_for_a_head_that_has_none() {
 }
 
 #[test]
-fn reads_the_base_and_tree_of_a_merge_of_the_head() {
+fn takes_only_a_merge_commit_built_for_this_head() {
+    let older = "4444444444444444444444444444444444444444";
+
+    assert!(merges(&commit(&[BASE, HEAD]), HEAD));
+    assert!(!merges(&commit(&[BASE, older]), HEAD));
+    assert!(!merges(&commit(&[HEAD, BASE]), HEAD));
+    assert!(!merges(&commit(&[HEAD]), HEAD));
+}
+
+#[test]
+fn reads_what_a_status_vouches_for() {
+    let stated = status(Some("fp=0123456789abcdef src=fedcba9876543210"));
+    let with_note = status(Some(
+        "fp=0123456789abcdef src=fedcba9876543210 failed on a runner",
+    ));
+    let expected = Claim {
+        fingerprint: "0123456789abcdef".to_owned(),
+        source: "fedcba9876543210".to_owned(),
+    };
+
+    assert_eq!(stated.claim(), Some(expected));
     assert_eq!(
-        merge_of(&commit(&[BASE, HEAD]), HEAD),
-        Some((BASE.to_owned(), "3333".to_owned()))
+        with_note.claim().map(|claim| claim.source),
+        Some("fedcba9876543210".to_owned())
     );
 }
 
 #[test]
-fn refuses_a_merge_commit_built_for_an_older_head() {
-    let older = "4444444444444444444444444444444444444444";
+fn a_status_someone_wrote_by_hand_vouches_for_nothing() {
+    for description in [
+        None,
+        Some("looks good to me"),
+        Some("fp=0123456789abcdef"),
+        Some("fp=0123456789abcdef src=fedcba98"),
+        Some("fp=0123456789ABCDEF src=fedcba9876543210"),
+        Some("fp=0123456789abcdef src=fedcba9876543210x"),
+        Some("fp=0123456789abcdef  src=fedcba9876543210"),
+    ] {
+        assert_eq!(status(description).claim(), None, "{description:?}");
+    }
+}
 
-    assert_eq!(merge_of(&commit(&[BASE, older]), HEAD), None);
-    assert_eq!(merge_of(&commit(&[HEAD, BASE]), HEAD), None);
-    assert_eq!(merge_of(&commit(&[HEAD]), HEAD), None);
+#[test]
+fn writes_a_description_it_can_read_back() {
+    let plain = description("0123456789abcdef", "fedcba9876543210", None);
+    let noted = description(
+        "0123456789abcdef",
+        "fedcba9876543210",
+        Some(&"long ".repeat(60)),
+    );
+
+    assert_eq!(plain, "fp=0123456789abcdef src=fedcba9876543210");
+    assert_eq!(noted.chars().count(), DESCRIPTION_LIMIT);
+    assert!(status(Some(&plain)).claim().is_some());
+    assert!(status(Some(&noted)).claim().is_some());
 }
 
 #[test]
@@ -89,11 +135,9 @@ fn reads_what_github_answers() {
     assert_eq!(pull.mergeable, Some(true));
     assert_eq!(pull.merge_commit_sha.as_deref(), Some("c"));
 
-    let commit: GitCommit =
-        serde_json::from_str(r#"{"tree": {"sha": "t"}, "parents": [{"sha": "b"}, {"sha": "a"}]}"#)
-            .expect("a git commit");
-    assert_eq!(
-        merge_of(&commit, "a"),
-        Some(("b".to_owned(), "t".to_owned()))
-    );
+    let statuses: Vec<Status> = serde_json::from_str(
+        r#"[{"context": "CI gate", "state": "pending", "description": null, "id": 1}]"#,
+    )
+    .expect("statuses");
+    assert_eq!(statuses[0].description, None);
 }

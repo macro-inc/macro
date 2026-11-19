@@ -1,44 +1,50 @@
-//! `cargo x attest`: run `PR CI` jobs on this machine and attest the result.
+//! `cargo x attest`: run `PR CI` checks on this machine, and let the passes
+//! count.
 //!
-//! `cargo x attest run <check>...` builds the merge of `HEAD` with `main`,
-//! runs each check's job there as a runner would ([`runner`]), and with
-//! `--post` records every pass as a commit status on `HEAD`. A requested
-//! `PR CI` run then skips those jobs (`xtask_workflows`' `attestation`
-//! module has the rules). Without `--post` nothing leaves the machine.
+//! `run` executes a check's scripts in the working tree and records what
+//! happened, keyed by the check's definition and a hash of the files it read
+//! ([`inputs`]). It posts nothing: running a check while working is what makes
+//! the record. `post` then finds the recorded passes that apply to the commit
+//! `PR CI` will test, the merge of the pushed head with its base branch, and
+//! posts each as a commit status. `PR CI` skips a job whose status names the
+//! files it is about to test (`xtask_workflows`' `attestation` module has the
+//! rules).
 //!
-//! With `--post` the merge is the one GitHub built for the pull request, and
-//! the status names its base commit: `PR CI` accepts it for that merge only.
-//!
-//! A check that fails here posts no pass, so its job runs in `PR CI`; a pass
-//! posted for the same commit earlier is withdrawn.
+//! A pass is for the bytes it ran on. A commit that leaves a check's inputs
+//! alone keeps its pass; a commit, or a move of the base branch, that changes
+//! one of them does not, and `post` says which input changed.
 
-mod checkout;
-mod expression;
 mod file_commands;
+mod git;
 mod github;
+mod inputs;
 mod manifest;
-mod paths_filter;
+mod receipts;
 mod runner;
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    process::ExitCode,
-};
+use std::{path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use rootcause::prelude::*;
+use sha2::{Digest, Sha256};
 
 use crate::{
-    checkout::{Base, Checkout},
+    git::git,
     manifest::{Check, Manifest},
-    runner::{JobResult, Machine, Outputs, Plan},
+    receipts::Receipts,
+    runner::{Machine, Outcome},
 };
+
+#[cfg(test)]
+mod test;
+
+/// How many paths a message names before it counts the rest.
+const PATHS_SHOWN: usize = 3;
 
 #[derive(Parser)]
 #[command(
     name = "cargo x attest",
-    about = "Run PR CI jobs on this machine and attest their result"
+    about = "Run PR CI checks on this machine and let the passes count"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -48,312 +54,220 @@ struct Cli {
 #[derive(Subcommand)]
 enum Action {
     /// List the checks that can be attested.
-    List,
-    /// Run checks on the merge of HEAD with the base branch.
+    List {
+        /// Also list the jobs that can't be, and why.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Run checks on the commit in this working tree and record the results.
     Run {
-        /// Check ids from `list`, or `all` for every check PR CI would run.
+        /// Check ids from `list`, or `all` for every check whose inputs this
+        /// branch changes.
         #[arg(required = true)]
         checks: Vec<String>,
-        /// Post a commit status on HEAD for each check that passes.
-        #[arg(long)]
-        post: bool,
+        /// The branch the pull request merges into.
+        #[arg(long, default_value = "main")]
+        base: String,
+    },
+    /// Post the recorded passes that apply to what PR CI will test.
+    Post {
         /// The branch the pull request merges into.
         #[arg(long, default_value = "main")]
         base: String,
     },
 }
 
-/// What happened to one requested check.
-enum Verdict {
-    /// `PR CI` would not run it for this change, so there is nothing to attest.
-    NotNeeded,
-    Passed {
-        description: String,
-    },
-    Failed {
-        step: String,
-    },
-    /// This machine can't run it as a runner would; why.
-    Unavailable(String),
+/// What `post` does about one check.
+#[derive(Debug, PartialEq)]
+enum Posting {
+    /// A pass on these files is recorded here and not yet on the commit.
+    Pass,
+    /// The check failed here on files the commit says it passed on.
+    Withdraw,
+    /// The commit already carries the pass.
+    Standing,
+    /// Something failed it on these files: a runner's audit, or a later run.
+    Contradicted,
+    /// This machine has no pass for these files.
+    Nothing,
 }
 
-fn load(root: &Path, workflow: &str) -> Result<serde_yaml::Value, Report> {
-    let path = root.join(".github/workflows").join(workflow);
-    let text =
-        std::fs::read_to_string(&path).context(format!("could not read {}", path.display()))?;
-    Ok(serde_yaml::from_str(&text).context(format!("{workflow} is not YAML"))?)
+/// `recorded` is what this machine saw on exactly these files; the flags are
+/// what the commit's statuses say about them.
+fn posting(recorded: Option<bool>, says_passed: bool, says_failed: bool) -> Posting {
+    match recorded {
+        Some(true) if says_failed => Posting::Contradicted,
+        Some(true) if says_passed => Posting::Standing,
+        Some(true) => Posting::Pass,
+        Some(false) if says_passed && !says_failed => Posting::Withdraw,
+        Some(false) | None => Posting::Nothing,
+    }
 }
 
-fn source_root() -> Result<PathBuf, Report> {
-    let here = std::env::current_dir().context("no current directory")?;
-    Ok(PathBuf::from(checkout::git(
-        &here,
-        &["rev-parse", "--show-toplevel"],
-    )?))
+/// The first few of a list of paths, and how many more there are.
+fn some_of(paths: &[String]) -> String {
+    let shown = paths
+        .iter()
+        .take(PATHS_SHOWN)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join(", ");
+    match paths.len().saturating_sub(PATHS_SHOWN) {
+        0 => shown,
+        more => format!("{shown} and {more} more"),
+    }
 }
 
-fn list() -> Result<(), Report> {
-    let manifest = Manifest::read(&source_root()?)?;
+/// The repository this was run in, and where its receipts are kept.
+struct Repository {
+    root: PathBuf,
+    cache: PathBuf,
+}
+
+impl Repository {
+    fn here() -> Result<Self, Report> {
+        let here = std::env::current_dir().context("no current directory")?;
+        let root = PathBuf::from(git(&here, &["rev-parse", "--show-toplevel"])?);
+        let common_dir = PathBuf::from(git(
+            &root,
+            &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        )?);
+        Ok(Self {
+            cache: receipts::cache_dir(&common_dir)?,
+            root,
+        })
+    }
+
+    fn receipts(&self) -> Result<Receipts, Report> {
+        Receipts::open(self.cache.join("receipts"))
+    }
+
+    /// One scratch directory per working tree, so two can run at once.
+    fn scratch(&self) -> PathBuf {
+        let key = hex::encode(&Sha256::digest(self.root.to_string_lossy().as_bytes())[..6]);
+        self.cache.join(format!("scratch-{key}"))
+    }
+
+    /// The checks as a commit defines them.
+    fn manifest_at(&self, commit: &str) -> Result<Manifest, Report> {
+        let text = git(
+            &self.root,
+            &["show", &format!("{commit}:{}", manifest::PATH)],
+        )
+        .context(format!("{commit} has no {}", manifest::PATH))?;
+        Manifest::parse(&text)
+    }
+
+    /// The hash of a check's inputs in a commit.
+    fn source(&self, commit: &str, check: &Check) -> Result<String, Report> {
+        let objects = inputs::objects_at(&self.root, commit, &check.inputs)?;
+        Ok(inputs::inputs_hash(&check.inputs, &objects))
+    }
+}
+
+fn list(all: bool) -> Result<(), Report> {
+    let manifest = Repository::here()?.manifest_at("HEAD")?;
     for check in &manifest.checks {
-        println!("{:<48} {}", check.id, check.steps.join(", "));
+        let steps: Vec<&str> = check.steps.iter().map(|step| step.name.as_str()).collect();
+        println!("{:<48} {}: {}", check.id, check.name, steps.join(", "));
+    }
+    if all {
+        println!();
+        for job in &manifest.not_attestable {
+            println!("{:<48} not attestable: {}", job.id, job.why);
+        }
     }
     Ok(())
 }
 
-/// The checks asked for, in manifest order.
-fn requested<'a>(manifest: &'a Manifest, asked: &[String]) -> Result<Vec<&'a Check>, Report> {
-    if asked.iter().any(|id| id == "all") {
+/// The checks asked for, in manifest order. `all` is every check whose inputs
+/// differ from where the branch left `base`: `PR CI` runs no others.
+fn requested<'a>(
+    repository: &Repository,
+    manifest: &'a Manifest,
+    asked: &[String],
+    base: &str,
+) -> Result<Vec<&'a Check>, Report> {
+    if !asked.iter().any(|id| id == "all") {
+        for id in asked {
+            if manifest.check(id).is_none() {
+                bail!("`{id}` is not a check; `cargo x attest list` shows them");
+            }
+        }
+        return Ok(manifest
+            .checks
+            .iter()
+            .filter(|check| asked.contains(&check.id))
+            .collect());
+    }
+
+    let Ok(fork) = git(
+        &repository.root,
+        &["merge-base", "HEAD", &format!("origin/{base}")],
+    ) else {
+        eprintln!("note: origin/{base} is not known here, so every check runs");
         return Ok(manifest.checks.iter().collect());
-    }
-    for id in asked {
-        if !manifest.checks.iter().any(|check| &check.id == id) {
-            bail!("`{id}` is not a check; `cargo x attest list` shows them");
-        }
-    }
-    Ok(manifest
-        .checks
-        .iter()
-        .filter(|check| asked.contains(&check.id))
-        .collect())
-}
-
-/// Runs the checks of one checkout, remembering what `PR CI` decides once
-/// per run: which calls its path filters start, and each workflow's selection.
-struct Session<'a> {
-    machine: Machine<'a>,
-    caller: serde_yaml::Value,
-    /// `needs` as the caller's call jobs see it: the start job's outputs.
-    caller_needs: BTreeMap<String, Outputs>,
-    /// The selector job's outputs, per workflow file; `None` when it failed.
-    selections: BTreeMap<String, Option<Outputs>>,
-    base: String,
-}
-
-impl Session<'_> {
-    fn condition(
-        &self,
-        condition: Option<&str>,
-        needs: &BTreeMap<String, Outputs>,
-    ) -> Result<bool, Report> {
-        struct Needs<'a>(&'a BTreeMap<String, Outputs>);
-        impl expression::Contexts for Needs<'_> {
-            fn lookup(&self, path: &[String]) -> Result<expression::Value, Report> {
-                match path {
-                    [needs, job, outputs, name] if needs == "needs" && outputs == "outputs" => {
-                        Ok(self
-                            .0
-                            .get(job)
-                            .and_then(|outputs| outputs.get(name))
-                            .map_or(expression::Value::Null, |value| {
-                                expression::Value::String(value.clone())
-                            }))
-                    }
-                    _ => bail!("a job condition reads `{}`", path.join(".")),
-                }
-            }
-        }
-
-        match condition {
-            Some(condition) => Ok(expression::evaluate(condition, &Needs(needs))?.truthy()),
-            None => Ok(true),
-        }
-    }
-
-    fn run(&mut self, check: &Check) -> Result<Verdict, Report> {
-        // The caller's path filter comes first: a call that does not start
-        // runs none of its jobs.
-        let call_condition = runner::scalar(&self.caller["jobs"][check.call.as_str()]["if"]);
-        if !self.condition(call_condition.as_deref(), &self.caller_needs)? {
-            return Ok(Verdict::NotNeeded);
-        }
-
-        let workflow = load(&self.machine.workspace, &check.workflow)?;
-        let selector = self.machine.manifest.selector_job.clone();
-
-        let mut needs = BTreeMap::new();
-        if check.selected {
-            if !self.selections.contains_key(&check.workflow) {
-                eprintln!("── {} / {selector}", check.workflow);
-                let selection = match self.machine.run_job(
-                    &workflow,
-                    &selector,
-                    &Plan::EveryStep,
-                    &BTreeMap::new(),
-                )? {
-                    JobResult::Passed(outputs) => Some(outputs),
-                    JobResult::Failed { .. } | JobResult::Unavailable(_) => None,
-                };
-                self.selections.insert(check.workflow.clone(), selection);
-            }
-            let Some(selection) = self.selections[&check.workflow].clone() else {
-                return Ok(Verdict::Failed {
-                    step: format!("{selector} (the job that selects what runs)"),
-                });
-            };
-            needs.insert(selector, selection);
-        }
-
-        if !self.condition(check.condition.as_deref(), &needs)? {
-            return Ok(Verdict::NotNeeded);
-        }
-
-        eprintln!("── {}", check.id);
-        match self
-            .machine
-            .run_job(&workflow, &check.job, &Plan::Steps(&check.steps), &needs)?
-        {
-            JobResult::Failed { step } => Ok(Verdict::Failed { step }),
-            JobResult::Unavailable(why) => Ok(Verdict::Unavailable(why)),
-            JobResult::Passed(_) => {
-                let digest = match needs.values().next() {
-                    Some(selection) => runner::inputs_digest(&check.inputs, selection),
-                    None => "-".to_owned(),
-                };
-                Ok(Verdict::Passed {
-                    description: format!("fp={} in={digest} base={}", check.fingerprint, self.base),
-                })
-            }
-        }
-    }
-}
-
-/// Do what one verdict calls for on the commit, and say it in a line.
-/// A pass posted for the commit earlier, from this clone or another, no
-/// longer holds for a check that fails now: the statuses are read then.
-fn settle(
-    checkout: &Checkout,
-    manifest: &Manifest,
-    posting: bool,
-    check: &Check,
-    verdict: &Verdict,
-) -> Result<String, Report> {
-    let context = format!("{}{}", manifest.status_prefix, check.id);
-    let post = |state: &str, description: &str| {
-        github::post_status(
-            &checkout.repository,
-            &checkout.head,
-            state,
-            &context,
-            description,
-        )
     };
-
-    Ok(match verdict {
-        Verdict::NotNeeded => format!("-     {}: PR CI does not run it for this change", check.id),
-        Verdict::Unavailable(why) => {
-            format!("skip  {}: {why}; its job will run in PR CI", check.id)
+    let mut changed = Vec::new();
+    for check in &manifest.checks {
+        if repository.source(&fork, check)? == repository.source("HEAD", check)? {
+            println!("-     {}: this branch does not change its inputs", check.id);
+        } else {
+            changed.push(check);
         }
-        Verdict::Failed { step } => {
-            let attested = posting
-                && github::newest_statuses(&checkout.repository, &checkout.head)?
-                    .get(&context.to_lowercase())
-                    .is_some_and(|state| state == "success");
-            if attested {
-                post(
-                    "failure",
-                    &format!("`{step}` failed on the attesting machine"),
-                )?;
-            }
-            format!(
-                "FAIL  {}: `{step}` failed; its job will run in PR CI{}",
-                check.id,
-                if attested {
-                    " (withdrew the earlier attestation)"
-                } else {
-                    ""
-                }
-            )
-        }
-        Verdict::Passed { description } if posting => {
-            post("success", description)?;
-            format!(
-                "pass  {}: posted {context} on {}",
-                check.id,
-                &checkout.head[..10]
-            )
-        }
-        Verdict::Passed { description } => format!(
-            "pass  {}: would post {context} \"{description}\" (--post)",
-            check.id
-        ),
-    })
+    }
+    Ok(changed)
 }
 
-fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool, Report> {
-    let base = if post_statuses {
-        Base::PullRequest
-    } else {
-        Base::Tip
-    };
-    let checkout = checkout::prepare(&source_root()?, base_branch, base)?;
-    eprintln!(
-        "attesting {} merged with origin/{base_branch} at {} in {}",
-        &checkout.head[..10],
-        &checkout.base[..10],
-        checkout.dir.display()
-    );
-
-    // The checks are the merged tree's: a job that changed on the base branch
-    // is run, and fingerprinted, as PR CI will run it.
-    let manifest = Manifest::read(&checkout.dir)?;
-    let checks = requested(&manifest, asked)?;
-
-    let scratch = checkout.cache.join("scratch");
-    if scratch.exists() {
-        std::fs::remove_dir_all(&scratch)
-            .context("could not clear the last run's scratch files")?;
-    }
-    let runner_home = checkout.cache.join("runner-home");
-    for directory in [&scratch, &runner_home] {
-        std::fs::create_dir_all(directory)
-            .context(format!("could not create {}", directory.display()))?;
-    }
-
-    let fresh_checkout = || checkout.restore();
+fn run(asked: &[String], base: &str) -> Result<bool, Report> {
+    let repository = Repository::here()?;
+    let head = git(&repository.root, &["rev-parse", "HEAD"])?;
+    let manifest = repository.manifest_at("HEAD")?;
+    let checks = requested(&repository, &manifest, asked, base)?;
+    let receipts = repository.receipts()?;
     let machine = Machine {
-        manifest: &manifest,
-        workspace: checkout.dir.clone(),
-        scratch,
-        runner_home,
-        github: BTreeMap::from([
-            ("workspace", checkout.dir.display().to_string()),
-            ("sha", checkout.merge.clone()),
-            ("event_name", "pull_request".to_owned()),
-            ("base_ref", checkout.base_branch.clone()),
-            ("repository", checkout.repository.clone()),
-        ]),
-        changed_files: checkout.changed_files.clone(),
-        shallow: checkout.shallow,
-        fresh_checkout: &fresh_checkout,
+        workspace: repository.root.clone(),
+        scratch: repository.scratch(),
     };
 
-    let caller = load(&checkout.dir, &manifest.caller)?;
-    let start = match machine.run_job(
-        &caller,
-        &manifest.caller_start_job,
-        &Plan::FiltersOnly,
-        &BTreeMap::new(),
-    )? {
-        JobResult::Passed(outputs) => outputs,
-        JobResult::Failed { step } => bail!("deciding the caller's path filters ran `{step}`"),
-        JobResult::Unavailable(why) => bail!("the caller's path filters can't be decided: {why}"),
-    };
-    let mut session = Session {
-        machine,
-        caller,
-        caller_needs: BTreeMap::from([(manifest.caller_start_job.clone(), start)]),
-        selections: BTreeMap::new(),
-        base: checkout.base.clone(),
-    };
-
-    // Each check is settled as it ends: a later check that stops the run must
-    // not leave a failed check's earlier pass in force.
+    // A result is recorded for a commit's files. With uncommitted changes
+    // under its inputs a check still runs, and nothing is recorded.
     let mut all_passed = true;
     let mut summary = Vec::new();
     for check in checks {
-        let verdict = session.run(check)?;
-        all_passed &= !matches!(verdict, Verdict::Failed { .. });
-        let line = settle(&checkout, &manifest, post_statuses, check, &verdict)?;
+        let before = inputs::uncommitted(&repository.root, &check.inputs)?;
+        let source = repository.source(&head, check)?;
+
+        eprintln!("── {}", check.id);
+        let line = match machine.run(check)? {
+            Outcome::Failed { step } => {
+                all_passed = false;
+                if before.is_empty() {
+                    receipts.record(&check.id, &check.fingerprint, &source, false, &head)?;
+                }
+                format!("FAIL  {}: `{step}` failed", check.id)
+            }
+            Outcome::Passed if !before.is_empty() => format!(
+                "pass  {}: not recorded, uncommitted: {}",
+                check.id,
+                some_of(&before)
+            ),
+            Outcome::Passed => {
+                let after = inputs::uncommitted(&repository.root, &check.inputs)?;
+                if !after.is_empty() {
+                    format!(
+                        "pass  {}: not recorded, the check changed: {}",
+                        check.id,
+                        some_of(&after)
+                    )
+                } else if git(&repository.root, &["rev-parse", "HEAD"])? != head {
+                    format!("pass  {}: not recorded, HEAD moved while it ran", check.id)
+                } else {
+                    receipts.record(&check.id, &check.fingerprint, &source, true, &head)?;
+                    format!("pass  {}: recorded for {source}", check.id)
+                }
+            }
+        };
         eprintln!("{line}");
         summary.push(line);
     }
@@ -365,10 +279,130 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
     Ok(all_passed)
 }
 
+/// Why this machine has no pass for the files `PR CI` will test.
+fn unrecorded(repository: &Repository, receipts: &Receipts, check: &Check, merge: &str) -> String {
+    let Some(latest) = receipts.of(&check.id).into_iter().next() else {
+        return "not run on this machine".to_owned();
+    };
+    if latest.fingerprint != check.fingerprint {
+        return "the job is defined differently in what PR CI tests".to_owned();
+    }
+
+    let changed = inputs::objects_at(&repository.root, &latest.commit, &check.inputs)
+        .and_then(|ran| {
+            let tested = inputs::objects_at(&repository.root, merge, &check.inputs)?;
+            Ok(inputs::differing(&check.inputs, &ran, &tested))
+        })
+        .unwrap_or_default();
+    if changed.is_empty() {
+        return "it ran here on other files than PR CI tests".to_owned();
+    }
+    format!(
+        "{} differ between {} and what PR CI tests; bring the branch up to date and run it again",
+        some_of(&changed),
+        latest.commit.get(..10).unwrap_or(&latest.commit)
+    )
+}
+
+fn post(base: &str) -> Result<(), Report> {
+    let repository = Repository::here()?;
+    let head = git(&repository.root, &["rev-parse", "HEAD"])?;
+    let github_repository =
+        git::repository_of(&git(&repository.root, &["remote", "get-url", "origin"])?)?;
+    let receipts = repository.receipts()?;
+
+    // What PR CI tests: GitHub's merge of the pushed head into its base. The
+    // checks and their inputs are read from there, not from this tree.
+    let merge = github::pull_request_merge(&github_repository, &head, base)?;
+    git(
+        &repository.root,
+        &["fetch", "--quiet", "origin", &merge.sha],
+    )?;
+    let manifest = repository.manifest_at(&merge.sha)?;
+    let statuses = github::statuses(&github_repository, &head)?;
+    eprintln!(
+        "#{}: PR CI tests {}, the merge of {} into {base}",
+        merge.number,
+        &merge.sha[..10],
+        &head[..10]
+    );
+
+    for check in &manifest.checks {
+        let context = format!("{}{}", manifest.status_prefix, check.id);
+        let source = repository.source(&merge.sha, check)?;
+        let about_these_files: Vec<&github::Status> = statuses
+            .iter()
+            .filter(|status| status.context.eq_ignore_ascii_case(&context))
+            .filter(|status| {
+                status.claim().is_some_and(|claim| {
+                    claim.fingerprint == check.fingerprint && claim.source == source
+                })
+            })
+            .collect();
+        let says_passed = about_these_files
+            .iter()
+            .any(|status| status.state == "success");
+        let says_failed = about_these_files
+            .iter()
+            .any(|status| status.state != "success");
+        let recorded = receipts
+            .find(&check.id, &check.fingerprint, &source)
+            .map(|receipt| receipt.passed);
+
+        let line = match posting(recorded, says_passed, says_failed) {
+            Posting::Pass => {
+                github::post_status(
+                    &github_repository,
+                    &head,
+                    "success",
+                    &context,
+                    &github::description(&check.fingerprint, &source, None),
+                )?;
+                format!("post  {}: attested on {}", check.id, &head[..10])
+            }
+            Posting::Withdraw => {
+                github::post_status(
+                    &github_repository,
+                    &head,
+                    "failure",
+                    &context,
+                    &github::description(
+                        &check.fingerprint,
+                        &source,
+                        Some("failed on the machine that attested it"),
+                    ),
+                )?;
+                format!(
+                    "FAIL  {}: failed here since; its attestation is withdrawn",
+                    check.id
+                )
+            }
+            Posting::Standing => {
+                format!("kept  {}: already attested on {}", check.id, &head[..10])
+            }
+            Posting::Contradicted => format!(
+                "-     {}: something failed it on these files, so it runs in PR CI",
+                check.id
+            ),
+            Posting::Nothing if recorded == Some(false) => {
+                format!("-     {}: failed here; it runs in PR CI", check.id)
+            }
+            Posting::Nothing => format!(
+                "-     {}: {}",
+                check.id,
+                unrecorded(&repository, &receipts, check, &merge.sha)
+            ),
+        };
+        println!("{line}");
+    }
+    Ok(())
+}
+
 fn main() -> ExitCode {
     let outcome = match Cli::parse().command {
-        Action::List => list().map(|()| true),
-        Action::Run { checks, post, base } => run(&checks, post, &base),
+        Action::List { all } => list(all).map(|()| true),
+        Action::Run { checks, base } => run(&checks, &base),
+        Action::Post { base } => post(&base).map(|()| true),
     };
 
     match outcome {

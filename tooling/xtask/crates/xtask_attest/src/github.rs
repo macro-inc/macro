@@ -1,8 +1,15 @@
 //! What the tool asks GitHub, through the `gh` CLI and the developer's own
 //! login: the merge commit `PR CI` will test, and the statuses on a commit.
 
-use std::{collections::BTreeMap, process::Command, time::Duration};
+use std::{process::Command, time::Duration};
 
+use nom::{
+    IResult, Parser,
+    bytes::complete::{tag, take_while_m_n},
+    character::complete::char,
+    combinator::{all_consuming, opt, rest},
+    sequence::preceded,
+};
 use rootcause::{option_ext::OptionExt, prelude::*};
 use serde::Deserialize;
 
@@ -15,15 +22,15 @@ const DESCRIPTION_LIMIT: usize = 140;
 /// push; how often to ask for it, and how long to wait in between.
 const MERGE_ATTEMPTS: u8 = 8;
 const MERGE_WAIT: Duration = Duration::from_secs(5);
-/// How many contexts GitHub lists per page of a commit's combined status.
+/// How many statuses GitHub lists per page.
 const STATUS_PAGE: usize = 100;
+/// The length of a fingerprint and of an inputs hash, in hex digits.
+const HASH_DIGITS: usize = 16;
 
 /// The merge commit GitHub built for a pull request.
 pub struct PullMerge {
     pub number: u64,
-    /// The commit of the base branch the head was merged into.
-    pub base: String,
-    pub tree: String,
+    pub sha: String,
 }
 
 #[derive(Deserialize)]
@@ -47,7 +54,6 @@ struct Ref {
 
 #[derive(Deserialize)]
 struct GitCommit {
-    tree: Object,
     parents: Vec<Object>,
 }
 
@@ -56,15 +62,61 @@ struct Object {
     sha: String,
 }
 
-#[derive(Deserialize)]
-struct CombinedStatus {
-    statuses: Vec<Status>,
+/// One commit status. GitHub lists a commit's statuses newest first, and
+/// keeps every one that was ever posted.
+#[derive(Clone, Debug, Deserialize)]
+pub struct Status {
+    pub context: String,
+    pub state: String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
-#[derive(Deserialize)]
-struct Status {
-    context: String,
-    state: String,
+/// What a status vouches for: the check as it was defined, and the hash of
+/// the inputs it ran on.
+#[derive(Debug, PartialEq)]
+pub struct Claim {
+    pub fingerprint: String,
+    pub source: String,
+}
+
+fn hash(input: &str) -> IResult<&str, &str> {
+    take_while_m_n(HASH_DIGITS, HASH_DIGITS, |c: char| {
+        c.is_ascii_hexdigit() && !c.is_ascii_uppercase()
+    })
+    .parse(input)
+}
+
+/// `fp=<hash> src=<hash>`, then nothing or a space and free text.
+fn claim(input: &str) -> IResult<&str, Claim> {
+    let (input, (fingerprint, source)) =
+        (preceded(tag("fp="), hash), preceded(tag(" src="), hash)).parse(input)?;
+    let (input, _) = all_consuming(opt(preceded(char(' '), rest))).parse(input)?;
+    Ok((
+        input,
+        Claim {
+            fingerprint: fingerprint.to_owned(),
+            source: source.to_owned(),
+        },
+    ))
+}
+
+impl Status {
+    /// What the status vouches for, when `cargo x attest` or `PR CI` wrote it.
+    pub fn claim(&self) -> Option<Claim> {
+        claim(self.description.as_deref()?)
+            .ok()
+            .map(|(_, claim)| claim)
+    }
+}
+
+/// The description of a status for a check and the inputs it ran on.
+pub fn description(fingerprint: &str, source: &str, note: Option<&str>) -> String {
+    let description = match note {
+        Some(note) => format!("fp={fingerprint} src={source} {note}"),
+        None => format!("fp={fingerprint} src={source}"),
+    };
+    description.chars().take(DESCRIPTION_LIMIT).collect()
 }
 
 fn api<T: serde::de::DeserializeOwned>(arguments: &[&str]) -> Result<T, Report> {
@@ -93,14 +145,11 @@ fn open_pull(pulls: Vec<Pull>, head: &str, base_branch: &str) -> Option<Pull> {
         .find(|pull| pull.state == "open" && pull.head.sha == head && pull.base.name == base_branch)
 }
 
-/// The base and tree of a merge commit, when it is the merge of `head` into
-/// one commit of the base branch. A pull request's merge commit holds an older
-/// head until GitHub rebuilds it.
-fn merge_of(commit: &GitCommit, head: &str) -> Option<(String, String)> {
-    match commit.parents.as_slice() {
-        [base, merged] if merged.sha == head => Some((base.sha.clone(), commit.tree.sha.clone())),
-        _ => None,
-    }
+/// Whether a merge commit is the merge of `head` into one commit of the base
+/// branch. A pull request's merge commit holds an older head until GitHub
+/// rebuilds it.
+fn merges(commit: &GitCommit, head: &str) -> bool {
+    matches!(commit.parents.as_slice(), [_, merged] if merged.sha == head)
 }
 
 /// The merge commit `PR CI` will test for `head`: GitHub's merge of it into
@@ -114,7 +163,7 @@ pub fn pull_request_merge(
         .context(format!("is {} pushed?", &head[..10]))?;
     let number = open_pull(pulls, head, base_branch)
         .context(format!(
-            "no open pull request into {base_branch} has {} as its head; push it and open one before --post",
+            "no open pull request into {base_branch} has {} as its head; push it and open one first",
             &head[..10]
         ))?
         .number;
@@ -124,13 +173,13 @@ pub fn pull_request_merge(
         if pull.mergeable == Some(false) {
             bail!("#{number} conflicts with {base_branch}; PR CI can't run on it either");
         }
-        if let Some(merge) = pull
+        if let Some(sha) = pull
             .merge_commit_sha
             .filter(|_| pull.mergeable == Some(true))
         {
-            let commit: GitCommit = api(&[&format!("repos/{repository}/git/commits/{merge}")])?;
-            if let Some((base, tree)) = merge_of(&commit, head) {
-                return Ok(PullMerge { number, base, tree });
+            let commit: GitCommit = api(&[&format!("repos/{repository}/git/commits/{sha}")])?;
+            if merges(&commit, head) {
+                return Ok(PullMerge { number, sha });
             }
         }
         if attempt < MERGE_ATTEMPTS {
@@ -144,26 +193,20 @@ pub fn pull_request_merge(
     )
 }
 
-/// The state of the newest status of each context on a commit. Contexts are
-/// in lower case: GitHub treats two that differ only in case as one.
-pub fn newest_statuses(repository: &str, head: &str) -> Result<BTreeMap<String, String>, Report> {
-    let mut newest = BTreeMap::new();
+/// Every status on a commit, newest first.
+pub fn statuses(repository: &str, head: &str) -> Result<Vec<Status>, Report> {
+    let mut all = Vec::new();
     for page in 1.. {
-        let combined: CombinedStatus = api(&[&format!(
-            "repos/{repository}/commits/{head}/status?per_page={STATUS_PAGE}&page={page}"
+        let batch: Vec<Status> = api(&[&format!(
+            "repos/{repository}/commits/{head}/statuses?per_page={STATUS_PAGE}&page={page}"
         )])?;
-        let last = combined.statuses.len() < STATUS_PAGE;
-        newest.extend(
-            combined
-                .statuses
-                .into_iter()
-                .map(|status| (status.context.to_lowercase(), status.state)),
-        );
+        let last = batch.len() < STATUS_PAGE;
+        all.extend(batch);
         if last {
             break;
         }
     }
-    Ok(newest)
+    Ok(all)
 }
 
 /// Post a commit status on `head`.
@@ -174,7 +217,6 @@ pub fn post_status(
     context: &str,
     description: &str,
 ) -> Result<(), Report> {
-    let description: String = description.chars().take(DESCRIPTION_LIMIT).collect();
     let output = Command::new("gh")
         .args(["api", "--method", "POST"])
         .arg(format!("repos/{repository}/statuses/{head}"))
