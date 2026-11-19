@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::{PgConnection, PgPool};
 
-use crate::domain::model::{Change, PermissionError, PolicyOwner, Rule, Target, TargetKind};
+use crate::domain::model::{Change, PermissionError, PolicyOwner, Rule, SetBy, Target, TargetKind};
 use crate::domain::ports::{PermissionStore, Write, WriteTo};
 
 /// Why the store failed.
@@ -45,7 +45,7 @@ fn rule(
     kind: &str,
     target: &str,
     state: &str,
-    via_agent: bool,
+    (via_agent, restriction_only): (bool, bool),
     updated_at: DateTime<Utc>,
 ) -> Result<Rule, PgPermissionStoreError> {
     let corrupt = || PgPermissionStoreError::Corrupt(format!("{kind} {target} {state}"));
@@ -54,6 +54,7 @@ fn rule(
         target: Target::from_stored(kind, target).ok_or_else(corrupt)?,
         state: state.parse().map_err(|_| corrupt())?,
         via_agent,
+        restriction_only,
         updated_at,
     })
 }
@@ -119,7 +120,7 @@ async fn policy_rules(
     match owner {
         PolicyOwner::Agent(agent) => sqlx::query!(
             r#"
-            SELECT kind, target, state, via_agent, updated_at
+            SELECT kind, target, state, via_agent, restriction_only, updated_at
             FROM agent_tool_permission
             WHERE bot_id = $1
             "#,
@@ -133,14 +134,14 @@ async fn policy_rules(
                 &row.kind,
                 &row.target,
                 &row.state,
-                row.via_agent,
+                (row.via_agent, row.restriction_only),
                 row.updated_at,
             )
         })
         .collect(),
         PolicyOwner::Persona { persona, user } => sqlx::query!(
             r#"
-            SELECT kind, target, state, via_agent, updated_at
+            SELECT kind, target, state, via_agent, restriction_only, updated_at
             FROM persona_tool_permission
             WHERE user_id = $1 AND persona_id = $2
             "#,
@@ -155,7 +156,7 @@ async fn policy_rules(
                 &row.kind,
                 &row.target,
                 &row.state,
-                row.via_agent,
+                (row.via_agent, row.restriction_only),
                 row.updated_at,
             )
         })
@@ -179,7 +180,15 @@ async fn overlay_rules(
     .fetch_all(connection)
     .await?
     .into_iter()
-    .map(|row| rule(&row.kind, &row.target, &row.state, true, row.created_at))
+    .map(|row| {
+        rule(
+            &row.kind,
+            &row.target,
+            &row.state,
+            (true, true),
+            row.created_at,
+        )
+    })
     .collect()
 }
 
@@ -188,7 +197,7 @@ async fn save_policy(
     owner: &PolicyOwner,
     batch: &Batch,
     by: &MacroUserIdStr<'static>,
-    via_agent: bool,
+    set_by: SetBy,
 ) -> Result<(), sqlx::Error> {
     match owner {
         PolicyOwner::Agent(agent) => {
@@ -207,13 +216,14 @@ async fn save_policy(
             sqlx::query!(
                 r#"
                 INSERT INTO agent_tool_permission
-                    (bot_id, kind, target, state, updated_by, via_agent)
-                SELECT $1, kind, target, state, $5, $6
+                    (bot_id, kind, target, state, updated_by, via_agent, restriction_only)
+                SELECT $1, kind, target, state, $5, $6, $7
                 FROM UNNEST($2::text[], $3::text[], $4::text[]) AS change (kind, target, state)
                 ON CONFLICT (bot_id, kind, target) DO UPDATE
                 SET state = EXCLUDED.state,
                     updated_by = EXCLUDED.updated_by,
                     via_agent = EXCLUDED.via_agent,
+                    restriction_only = EXCLUDED.restriction_only,
                     updated_at = now()
                 "#,
                 agent.as_uuid(),
@@ -221,7 +231,8 @@ async fn save_policy(
                 &batch.upsert_targets,
                 &batch.upsert_states,
                 by.as_ref(),
-                via_agent,
+                set_by.via_agent(),
+                set_by.restriction_only(),
             )
             .execute(&mut *connection)
             .await?;
@@ -243,12 +254,13 @@ async fn save_policy(
             sqlx::query!(
                 r#"
                 INSERT INTO persona_tool_permission
-                    (user_id, persona_id, kind, target, state, via_agent)
-                SELECT $1, $2, kind, target, state, $6
+                    (user_id, persona_id, kind, target, state, via_agent, restriction_only)
+                SELECT $1, $2, kind, target, state, $6, $7
                 FROM UNNEST($3::text[], $4::text[], $5::text[]) AS change (kind, target, state)
                 ON CONFLICT (user_id, persona_id, kind, target) DO UPDATE
                 SET state = EXCLUDED.state,
                     via_agent = EXCLUDED.via_agent,
+                    restriction_only = EXCLUDED.restriction_only,
                     updated_at = now()
                 "#,
                 user.as_ref(),
@@ -256,7 +268,8 @@ async fn save_policy(
                 &batch.upsert_kinds,
                 &batch.upsert_targets,
                 &batch.upsert_states,
-                via_agent,
+                set_by.via_agent(),
+                set_by.restriction_only(),
             )
             .execute(&mut *connection)
             .await?;
@@ -355,7 +368,7 @@ impl PermissionStore for PgPermissionStore {
                     write.owner,
                     &batch,
                     write.by,
-                    write.via_agent,
+                    write.set_by,
                 )
                 .await?;
             }
