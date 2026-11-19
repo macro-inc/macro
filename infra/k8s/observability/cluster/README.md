@@ -409,8 +409,11 @@ release() {
    except its last 12 hours, which Mimir reads from blocks only once they are
    12 hours old (`query_store_after`). Then set `mimirBackfill.enable = false`
    in `../aws/` and apply.
-8. **Merge *Host, GoAlert only***, run Deploy Observability as a dry run,
-   then for real. It replaces the host, which also drops every `hold`.
+8. **Merge *Host, GoAlert only***, then follow "The GoAlert-only rollout" in
+   `infra/stacks/observability/README.md`: its checks, a dry run of Deploy
+   Observability, a targeted `pulumi up` of the narrowed host role (the deploy
+   workflow refuses role changes), then the real run. It replaces the host,
+   which also drops every `hold`.
 9. **Afterwards**: remove the localhost redirect URI from the Google OAuth
    client, and set `macro.cluster.autoSync = true`.
 
@@ -441,9 +444,10 @@ again, every time:
    revision is left, not even terminating: `kubectl --context observability
    -n observability get pods -l 'app.kubernetes.io/name in (loki,tempo)'`
    shows only pods younger than the sync.
-2. **If step 8 ran**, revert *Host, GoAlert only* on main and deploy it with
-   Deploy Observability (dry run, then for real). The new host starts all its
-   services.
+2. **If step 8 ran**, revert *Host, GoAlert only* on main and deploy it as
+   "Going back to the full host" in `infra/stacks/observability/README.md`
+   says: widen the role with the targeted `pulumi up`, then Deploy
+   Observability, dry run first. The new host starts all its services.
    **Otherwise**, on the host: `release loki tempo grafana prometheus` (the
    ones held so far).
 3. **If step 5 ran**, revert *Pulumi, listener rule* on main, then `pulumi
