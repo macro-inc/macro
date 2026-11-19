@@ -237,6 +237,29 @@ async fn main() -> anyhow::Result<()> {
 
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
+/// The analyzer the permission gate lists a JS tools program's operations
+/// with, or `None` when it can't start. That is logged, not fatal: without
+/// it JS tools programs are never offered, and everything else still boots.
+async fn js_tools_analyzer(
+    binary: std::path::PathBuf,
+    scratch: std::path::PathBuf,
+) -> Option<Arc<dyn code_execution::domain::ProgramAnalyzer>> {
+    match code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
+        binary,
+        scratch,
+        8,
+        code_execution::domain::Limits::default().max_source_bytes,
+    )
+    .await
+    {
+        Ok(analyzer) => Some(Arc::new(analyzer)),
+        Err(error) => {
+            tracing::error!(%error, "JS tools analyzer failed to start; JS tools programs are off");
+            None
+        }
+    }
+}
+
 fn macro_mcp_endpoint(base_url: &McpServiceUrl) -> Result<url::Url, url::ParseError> {
     // Append rather than Url::join("/mcp"), which would discard the gateway prefix.
     url::Url::parse(&format!("{}/mcp", base_url.trim_end_matches('/')))
@@ -730,15 +753,8 @@ async fn run() -> anyhow::Result<()> {
                 },
             )?;
             // JS tools programs need only Deno: the bundle is embedded.
-            let analyzer = code_execution::outbound::deno::analyze::JsToolsAnalyzer::new(
-                binary.into(),
-                code_scratch.path().join("analyses-js"),
-                8,
-                code_execution::domain::Limits::default().max_source_bytes,
-            )
-            .await
-            .map_err(|error| anyhow::anyhow!("invalid JS tools analyzer: {error}"))?;
-            program_analyzers.js_tools = Some(Arc::new(analyzer));
+            program_analyzers.js_tools =
+                js_tools_analyzer(binary.into(), code_scratch.path().join("analyses-js")).await;
             let checker = code_execution::outbound::deno::check::DenoChecker::new(
                 binary.into(),
                 code_scratch.path().join("checks"),
