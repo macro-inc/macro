@@ -231,9 +231,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `routine_run_finished` analytics and, for every run, an inbox-only
   `routine_run_finished` notification to the owner
   (`src/scheduling/routine_run_notifications.rs`), which names a
-  sub-routine's run "<name> · from <parent>". `with_run_sessions` hands the
-  scheduler the code-mode invocation lookup so a routine an Ask AI step's
-  session creates becomes its run's sub-routine. AI drafts routines
+  sub-routine's run "<name> · from <parent>". The scheduler's create and
+  schedule handlers read the validated `current_session()` to link actions
+  from an Ask AI step's session to its routine run. AI drafts routines
   (`POST /scheduled-actions/drafts`) in a hidden session of the in-process
   agent, which runs a background session given instructions at low effort
   and delivers its replies unseen (`containers.rs`, `reply_delivery`).

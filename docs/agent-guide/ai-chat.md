@@ -1048,11 +1048,14 @@ and a line says which and why, with **Ask AI each run instead** / **Write it onc
 and **Undo**. A closed step's line reads its sentence with the values
 filled in. The starters that sort email, set task priorities and
 post updates come from the scheduler as code; where code can't be saved they
-start with an Ask AI step instead. When an SDK release
-breaks a routine's code and AI's update fails its checks, the routine pauses
-and its Overview leads with **Paused: its code needs an update**: the reason,
-**Review the update** (each changed step before and after) and **Approve and
-resume**, which saves the update, checks it again and turns the routine on.
+start with an Ask AI step instead. When an SDK release breaks a routine's
+code and AI's update fails its checks, Macro pauses routines that run code
+in their own steps. An Ask AI parent with code only in its sub-routine
+definitions stays enabled. Copies that need the broken code fail until it
+is updated. A paused routine's Overview leads with **Paused: its code needs
+an update** and shows the reason. For a proposal that changes its own code steps,
+**Review the update** shows the changed steps and **Approve and resume**
+saves the update, checks it again and turns the routine on.
 
 ## Routine run notifications and failures
 
@@ -2618,6 +2621,10 @@ and never messages the routine's owner: an Ask AI step tells them, as in the
 routine drafter. Hosts without code get the skill in the form they can follow:
 each kind's lookup tool (`NameSearch`, `ListLabels`, `ListTeamMembers` and the
 like), then `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`.
+For a scheduled copy or a program with sub-routine definitions or saved
+input values, `ReadRoutine` returns the routine's summary and explains why
+it cannot supply editable settings. `UpdateRoutine` refuses those
+routines. A copy's steps are edited in its parent's definition.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's
 title) opens a

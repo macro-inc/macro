@@ -1330,14 +1330,16 @@ now** (disabled while it runs or a run is starting; a toast says **Run
 started**) and **Turn off** / **Turn on** (the switch's rules); **Duplicate**
 (the routine page's copy: same steps, triggers, description, run visibility and
 on/off state, named "<name> copy"; it stays in the list with a **Duplicated**
-toast whose **Open** opens the copy) and, on a sub-routine, **Keep as my
+toast whose **Open** opens the duplicate) and, on a sub-routine, **Keep as my
 routine**; **Copy Link**, **Copy ID** and, with `enable-routine-sharing`,
-**Share**; then **Delete**, which confirms first and names the sub-routines
-deleted with it. A routine someone else owns offers the open entries, **Copy
-Link** and **Copy ID**. On a phone a long press opens the same actions in a
-drawer under the routine's name, without the split and tab entries, in Agents
-and in **Settings → Routines** alike. Renaming and changing the icon stay on the
-routine's page.
+**Share** for publishing eligible templates; then **Delete**, which confirms
+first and names the sub-routines deleted with it. A routine someone else owns
+offers the open entries, **Copy Link** and **Copy ID**. A scheduled copy that
+reads its parent's definition has **Duplicate** disabled on its page, and
+duplicating it from the list is refused. On a phone a long press opens the
+same actions in a drawer under the routine's name, without the split and tab
+entries, in Agents and in **Settings → Routines** alike. Renaming and changing
+the icon stay on the routine's page.
 
 Open the routine and use its **Runs** tab to see past runs. **Show runs in
 Home and Agents** (a switch under **Runs & notifications** on the routine's
@@ -1592,7 +1594,9 @@ Owners can still stop sharing through the API; their existing routines and
 already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
 only the web gate; exercising templates needs the backend flag enabled too.
 
-A routine runs as its owner, so it is shared as a template, never directly.
+A routine runs with its owner's access. Sharing publishes a template. Publishing
+rejects scheduled copies and routines with sub-routine definitions or saved input
+values, even if **Share** appears in the menu.
 The three-dot menu's **Share** opens the standard Share dialog, **Share:
 name**: a channel-or-people picker, an optional message, and **Share**, which
 posts the routine mention; below it, **Anyone with the link** shows **Just me**
@@ -1646,8 +1650,10 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 `condition`), `steps`, a JSON array encoded as a string, and `requiredApps`.
 Step types are `code` (TypeScript against Macro's SDK, type-checked when saved,
 run with the owner's access) and `agent` (`model`, or `agent.bot_id`
-from **ListAgents**, plus `instructions`). Routine ownership comes from the authenticated caller, never a
-model-supplied user ID.
+from **ListAgents**, plus `instructions`). The authenticated caller supplies
+routine ownership. **ReadRoutine** reports when it cannot provide editable
+settings for a scheduled copy or a routine with definitions or saved inputs.
+**UpdateRoutine** refuses those routines.
 
 ## Command menu (Ctrl+K)
 

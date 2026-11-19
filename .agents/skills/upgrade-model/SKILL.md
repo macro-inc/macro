@@ -40,9 +40,13 @@ component contains it. Keep the frontend catalog aligned with the backend.
 Check the pricing setup under `crates/ai_billing` and MacroDB pricing migrations;
 a new provider ID needs the corresponding pricing configuration.
 
-When retiring a model, migrate saved selections as well. Routines
-(`scheduled_action.task->>'model'`) and in-memory agents
-(`agent_configs.default_model`) persist their model. Follow
+When retiring a model, migrate saved selections as well. Routines store model
+selections in `scheduled_action.task`: `$.model` for a single agent,
+`$.steps[*].model` for program agent steps and
+`$.sub_routines[*].steps[*].model` for definition agent steps. Apply the
+runtime check to each step's own agent selection. Scheduled copies read those
+selections from their parent. In-memory agents store theirs in
+`agent_configs.default_model`. Follow
 `crates/macro_db_client/migrations/20261019221542_upgrade_retired_claude_models.sql`,
 keep the Macro-runtime scope, and bump the routine's `configuration_revision`.
 Create migrations through the `sqlx-migration` skill.

@@ -11,7 +11,8 @@ each run.
 
 - `src/lib.rs`: module map — `domain`, `inbound`, `outbound`, `swagger`.
 - `src/domain/service.rs` + `src/domain/ports.rs`: the orchestration service
-  and the ports its adapters implement.
+  and the ports its adapters implement. `src/domain/service/configuration.rs`
+  applies configuration replacements and checks inherited rewrites.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
 - `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`)
@@ -302,15 +303,16 @@ each run.
   whose definition is gone or whose inputs no longer fit fails its run. A
   copy's task can't change by update (`CopyTaskFixed`, 409) and no other
   route creates one (`CopyOutsideRun`); detaching a copy first writes the
-  steps it ran, with its input values, into it. Copies of an owner-identity
-  parent stay off when a program switches the parent on (`follow_parent`).
+  steps it ran, with its input values, into it. When a program resumes a
+  parent it is allowed to enable, `follow_parent` keeps any sub-routines
+  whose own task writes as the owner off.
   Defining sub-routines or inputs waits for the owner's
   `enable-sub-routines` flag (`EventRoutineRollout::sub_routines_enabled_for`,
   `SubRoutinesDisabled`), and an update that omits a non-empty
   `sub_routines` or `inputs` is refused (`ExplicitSubRoutinesRequired`,
-  409), so a client that predates them can't drop them; so is one that
-  sends back a definition with apps without its `mcp_servers`
-  (`ExplicitAppsRequired`), which the SDK can't hold. A single agent
+  409). A client that sends back a definition with apps must restate its
+  `mcp_servers` (`ExplicitAppsRequired`). The SDK's `RoutineOptions` cannot
+  express the definition or the saved inputs. A single agent
   task's `sub_routines`, `inputs` or `sub_routine`, which its parser skips
   and main kept, are dropped from a new or changed task
   (`without_fields_beside_agent`); one stored with them still runs, and is
@@ -322,9 +324,12 @@ each run.
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,
   `scheduled_action_code_upgrade`); a
-  failed rewrite pauses the routine. A routine whose code writes as its
-  owner (`dangerously_operate_as_user`) is never rewritten: it is paused for
-  the owner with its code as it was. Nor can a model's rewrite, saved
+  failed rewrite pauses a routine that runs code in its own steps. A parent
+  with code only in its definitions stays enabled, and copies that need the
+  broken code fail until it is updated. When owner-identity code
+  (`dangerously_operate_as_user`) fails its checks, Macro keeps the original
+  source for the owner's review and applies the same pause rule. Nor can a
+  model's rewrite, saved
   unreviewed while the routine wrote as Macro, start writing as the owner:
   switching it on is refused (`UnreviewedRewrite`, 409) while any of its
   code steps still holds code a rewrite wrote, on every save. Only a person
