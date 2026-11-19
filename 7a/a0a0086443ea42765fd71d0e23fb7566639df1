@@ -1,0 +1,128 @@
+apps/web/src/features/block-agent/state/permission-approval.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-164
+apps/web/src/features/block-agent/views/CodeExecutionPart.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-7,14-16,67-83,103-152
+apps/web/src/features/agent-permissions/tests/gated-fixtures.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-41
+apps/web/src/features/agent-permissions/queries/permissions.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 57-72,88-100,106-111
+apps/web/src/features/block-agent/component/ToolApprovalRequest.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 3,6,13,17-27,38,61
+apps/web/src/lib/i18n/locales/en/agent-permissions-chat.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-81
+apps/web/src/features/block-agent/component/parts/ToolApprovalPart.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 6-7,12-15,48-85,100-117
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-150
+apps/web/src/features/block-agent/views/ShowPermissionsPart.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-56
+apps/web/src/features/block-agent/component/parts/ToolCallPart.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 15,24,79-84
+  s_d68827eef00d3d::t_70c49c68710780 85
+apps/web/src/features/agent-permissions/core/selection.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-69
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 40-44,72-75,84-89
+apps/web/src/features/block-agent/browser-test/permissions.playwright.config.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-18
+apps/web/src/features/agent-permissions/views/blocked-permissions-notice.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-40
+apps/web/src/features/agent-permissions/AGENTS.md
+  s_d68827eef00d3d::t_1c81acb83368ff 17-24,28-29,49,53-55
+apps/web/src/features/block-agent/state/permission-approval.test.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-169
+apps/web/src/features/block-agent/ui/ToolApprovalCard.tsx
+  s_d68827eef00d3d::t_c9e03fc052c4f1 62,72-75,78-81,83-95,136,146
+  s_d68827eef00d3d::t_1c81acb83368ff 3,29-48,113,125
+apps/web/src/features/agent-permissions/components/blocked-by-permissions-card.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-69
+apps/web/src/features/agent-permissions/index.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-8,14-16
+apps/web/src/features/block-agent/browser-test/permissions.html
+  s_d68827eef00d3d::t_1c81acb83368ff 1-2
+apps/web/src/features/agent-permissions/queries/keys.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 8
+apps/web/src/features/block-agent/component/PermissionApprovalRequest.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-170
+apps/web/src/features/agent-permissions/core/selection.test.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-51
+apps/web/src/features/agent-permissions/components/gated-operation-list.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-102
+apps/web/src/features/block-agent/browser-test/permissions-settings.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-8
+apps/web/src/features/block-agent/primitives/create-tool-approval-controller.test.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 121-157
+apps/web/src/features/agent-permissions/components/blocked-by-permissions-card.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-82
+apps/web/src/features/block-agent/browser-test/permissions-session.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-89
+apps/web/src/features/agent-permissions/components/gated-phrases.test.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-64
+apps/web/src/lib/i18n/locales/en.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 6,60
+crates/agent_permissions/src/domain/service/test.rs
+  s_d68827eef00d3d::t_1c81acb83368ff 427-465
+  s_d68827eef00d3d::t_70d98351cfeb83 426
+apps/web/src/features/block-agent/browser-test/permissions.browser.e2e.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-125
+crates/agent_permissions/AGENTS.md
+  s_d68827eef00d3d::t_1c81acb83368ff 20-23
+apps/web/src/features/agent-permissions/core/gated-operations.test.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-74
+apps/web/src/features/agent-permissions/use-agent-permissions-available.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-71
+apps/web/src/features/block-agent/state/tool-groups.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 10-12,29-33,89-91,158-167
+  s_d68827eef00d3d::t_1f5858b946d1d1 168-169
+apps/web/src/features/agent-permissions/views/show-permissions-card.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-402
+apps/web/src/features/block-agent/browser-test/permissions.vite.config.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-42
+apps/web/src/features/agent-permissions/core/gated-operations.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-105
+apps/web/src/features/agent-permissions/use-agent-permissions-available.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-17
+apps/web/src/features/block-agent/browser-test/permissions.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-409
+apps/web/src/features/settings/Agents.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 81,84-85,361,1092-1098
+  s_d68827eef00d3d::t_47e6e9d3d93470 1099-1100
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 128-161
+apps/web/src/features/block-agent/views/code-execution-record.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 11,64-69
+apps/web/src/features/settings/Agents.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 6,209-210,519
+apps/web/src/lib/service-clients/service-agent-harness/tool-permissions.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 66-79
+apps/web/src/features/agent-permissions/views/show-permissions-card.test.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1-163
+apps/web/src/features/block-agent/browser-test/playwright.config.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 10
+apps/web/src/features/block-agent/component/parts/CodeExecutionToolCall.tsx
+  s_d68827eef00d3d::t_1c81acb83368ff 1,104-109,114-115
+crates/agent_permissions/src/domain/service.rs
+  s_d68827eef00d3d::t_1c81acb83368ff 511-514,517,529,533,537,540-543
+docs/agent-guide/ai-chat.md
+  s_d68827eef00d3d::t_1c81acb83368ff 1792-1830
+apps/web/src/features/agent-permissions/views/open-agent-permissions.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-16
+apps/web/src/features/agent-permissions/components/gated-phrases.ts
+  s_d68827eef00d3d::t_1c81acb83368ff 1-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "7aa0a0086443ea42765fd71d0e23fb7566639df1",
+  "prompts": {},
+  "sessions": {
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
