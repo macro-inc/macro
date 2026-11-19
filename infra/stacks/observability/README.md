@@ -830,9 +830,11 @@ server; see [MCP servers](../../../docs/development/mcp-servers.md#goalert).
   and `Acknowledge · Graph · Runbook` links. Status changes are one line.
   `goalert/test_macro_alerts_relay.py` pins the format.
 - nginx serves `oncall.macro-internal.com` from a runtime server block. Only
-  `/health`, `/api/v2/generic/incoming` and `/api/v2/heartbeat/` are reachable
-  without a session (GoAlert checks the integration key); other inbound
-  integrations return 404. The rest is GoAlert's UI behind its login.
+  `/health`, `/api/v2/generic/incoming`, `/api/v2/heartbeat/` and
+  `/api/v2/grafana/incoming` are reachable without a session (GoAlert checks
+  the integration key); the last is for the observability cluster's Grafana
+  (`infra/k8s/observability/cluster`), since this host's pages over loopback.
+  Other inbound integrations return 404. The rest is GoAlert's UI behind its login.
 - Login is Google OIDC with Grafana's OAuth client, whose redirect URIs include
   `https://oncall.macro-internal.com/api/v2/identity/providers/oidc/callback`.
   GoAlert cannot restrict OIDC to a domain, so that client must keep the
