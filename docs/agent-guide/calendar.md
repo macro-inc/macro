@@ -223,8 +223,9 @@ scopes, which the server turns off and clears hourly) shows **Calendar for
 <address> stopped syncing** with **Reconnect** even while another inbox works;
 Reconnect asks for calendar access alone, and the re-grant re-imports its events.
 For the same inbox the app-wide toast reads **Calendar stopped syncing** with
-**Reconnect** (shown again even if an earlier Enable calendar was dismissed), and
-the sidebar's Connect more calendars card and the calendar settings menu say
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), the
+sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
+past an earlier dismissal of the card), and the calendar settings menu says
 **Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
 access and Turn on calendar. The signal is the inbox's calendar data
 (`has_calendar_data`) beside missing calendar permission: Macro creates the

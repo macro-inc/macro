@@ -8,9 +8,11 @@ const host = vi.hoisted(() => ({
         linkId: string;
         emailAddress: string;
         action: 'enable' | 'reconnect' | 'turnOff';
+        stoppedSyncing: boolean;
         consentScopes: string;
       }[]
     | undefined,
+  dismissed: [] as string[],
   startAddInbox: vi.fn(),
   outlookOffered: false,
 }));
@@ -22,7 +24,7 @@ vi.mock('@queries/prompt-dismissals', () => ({
   usePromptDismissalsQuery: () => ({
     isSuccess: true,
     isError: false,
-    data: { dismissed: [] },
+    data: { dismissed: host.dismissed },
   }),
   dismissPromptEverywhere: vi.fn(),
 }));
@@ -39,17 +41,20 @@ vi.mock('@queries/auth/outlook-link', () => ({
 
 const account = (
   emailAddress: string,
-  action: 'enable' | 'reconnect' | 'turnOff'
+  action: 'enable' | 'reconnect' | 'turnOff',
+  stoppedSyncing = false
 ) => ({
   linkId: emailAddress,
   emailAddress,
   action,
+  stoppedSyncing,
   consentScopes: 'calendar',
 });
 
 afterEach(() => {
   cleanup();
   host.accounts = [];
+  host.dismissed = [];
   host.startAddInbox.mockReset();
   host.outlookOffered = false;
   localStorage.clear();
@@ -98,6 +103,20 @@ describe('ConnectCalendarsPromotion', () => {
     });
   });
 
+  it('says which account to turn calendar on for', () => {
+    host.accounts = [account('me@example.com', 'enable')];
+    render(() => <ConnectCalendarsPromotion />);
+    expect(
+      screen.getByRole('heading', { name: 'Enable calendar' })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Grant calendar access for me@example.com to turn it on.'
+      )
+    ).toBeTruthy();
+    expect(screen.queryByText('Connect more calendars')).toBeNull();
+  });
+
   it('offers to reconnect an expired calendar grant', () => {
     host.accounts = [
       account('me@example.com', 'turnOff'),
@@ -105,8 +124,46 @@ describe('ConnectCalendarsPromotion', () => {
     ];
     render(() => <ConnectCalendarsPromotion />);
     expect(
+      screen.getByRole('heading', { name: 'Reconnect calendar' })
+    ).toBeTruthy();
+    expect(
+      screen.getByText('Reconnect work@example.com to resume calendar sync.')
+    ).toBeTruthy();
+    expect(
       screen.getByRole('button', { name: 'Reconnect calendar' })
     ).toBeTruthy();
+  });
+
+  it('says a calendar stopped syncing, past an older dismissal of the card', () => {
+    host.dismissed = ['calendar-accounts'];
+    host.accounts = [
+      account('me@example.com', 'turnOff'),
+      account('work@example.com', 'reconnect', true),
+    ];
+    render(() => <ConnectCalendarsPromotion />);
+    expect(
+      screen.getByRole('heading', { name: 'Calendar stopped syncing' })
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        'Reconnect work@example.com to show its events in Macro again.'
+      )
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Reconnect calendar' }));
+    expect(host.startAddInbox).toHaveBeenCalledWith({
+      scopes: 'calendar',
+      emailAddress: 'work@example.com',
+    });
+    expect(
+      screen.getByRole('button', { name: 'Dismiss calendar stopped syncing' })
+    ).toBeTruthy();
+  });
+
+  it('keeps an older dismissal for the other cases', () => {
+    host.dismissed = ['calendar-accounts'];
+    host.accounts = [account('me@example.com', 'enable')];
+    render(() => <ConnectCalendarsPromotion />);
+    expect(screen.queryByText('Enable calendar')).toBeNull();
   });
 
   it('hides once two accounts have calendar access', () => {

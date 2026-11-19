@@ -10,7 +10,6 @@ import { useAddInboxFlow } from '@core/email-link';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { untrack } from 'solid-js';
-import { match } from 'ts-pattern';
 import { z } from 'zod';
 
 /** Accounts with calendar access at which the prompt has done its job. */
@@ -24,7 +23,7 @@ const cardStateSchema = z.object({
   /** An account already connected without (working) calendar access. */
   fix: z
     .object({
-      kind: z.enum(['enable', 'reconnect']),
+      kind: z.enum(['enable', 'stopped', 'reconnect']),
       emailAddress: z.string(),
       scopes: scopesSchema,
     })
@@ -37,6 +36,10 @@ type CardState = z.infer<typeof cardStateSchema>;
  * accounts follows the multi-inbox flag, like "Connect another account" in
  * the calendar settings menu. Its logos are the providers the button's
  * chooser offers: Outlook only while the server offers it to this user.
+ *
+ * While an account it can fix needs attention, the card names that account
+ * and says what happened, as the calendar view's prompt and the app-wide toast
+ * do, instead of inviting another account.
  */
 export function ConnectCalendarsPromotion(props: { class?: string }) {
   const accounts = useLoadedCalendarAccounts();
@@ -59,7 +62,7 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
         fix:
           attention && attention.action !== 'turnOff'
             ? {
-                kind: attention.action,
+                kind: attention.stoppedSyncing ? 'stopped' : attention.action,
                 emailAddress: attention.emailAddress,
                 scopes: attention.consentScopes,
               }
@@ -72,9 +75,21 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
   const outlookOffered = useOutlookAvailable(applies);
   const logos = () =>
     outlookOffered() ? [...COPY.logos, COPY.outlookLogo] : COPY.logos;
-  const action = () => {
+  /** The account needing attention and its words, if there is one. */
+  const accountCase = () => {
     const fix = state()?.fix;
-    if (!fix)
+    return fix && { fix, copy: COPY.accountCases[fix.kind] };
+  };
+  const headline = () => accountCase()?.copy.headline ?? COPY.headline;
+  const pitch = () => {
+    const attention = accountCase();
+    return attention
+      ? attention.copy.pitch(attention.fix.emailAddress)
+      : COPY.pitch;
+  };
+  const action = () => {
+    const attention = accountCase();
+    if (!attention)
       return {
         label: COPY.action,
         // A brand-new account needs the mailbox scopes alongside calendar.
@@ -84,11 +99,9 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
             'sidebar-promotion.calendar'
           ),
       };
+    const { fix, copy } = attention;
     return {
-      label: match(fix.kind)
-        .with('reconnect', () => COPY.reconnectAction)
-        .with('enable', () => COPY.enableAction)
-        .exhaustive(),
+      label: copy.action,
       onClick: () =>
         fireAndForget(
           startAddInbox({
@@ -101,13 +114,13 @@ export function ConnectCalendarsPromotion(props: { class?: string }) {
   };
   return (
     <SidebarPromotion
-      id={COPY.id}
+      id={accountCase()?.copy.id ?? COPY.id}
       applies={allOf(state() === undefined ? undefined : !state()?.satisfied)}
       logos={logos()}
-      headline={COPY.headline}
-      pitch={COPY.pitch}
+      headline={headline()}
+      pitch={pitch()}
       class={props.class}
-      dismissLabel="Dismiss connect more calendars"
+      dismissLabel={`Dismiss ${headline().toLowerCase()}`}
       action={action()}
     />
   );
