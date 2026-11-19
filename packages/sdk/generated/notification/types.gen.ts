@@ -601,6 +601,12 @@ export type ComputerSetupOutcome = {
      */
     failureReason: string;
     kind: 'failed';
+    /**
+     * Setup gave up a second time, so the computer was released and its
+     * purchase refunded (and an agent teammate taken back): there is
+     * nothing to retry.
+     */
+    released?: boolean;
 };
 
 /**

@@ -169,7 +169,7 @@ const context: EmailComposeContext = {
     feedback: {
       success: () => undefined,
       failure: () => undefined,
-      alert: () => {},
+      alert: () => undefined,
       dismiss: () => {},
     },
     blockingNotice: async () => {},

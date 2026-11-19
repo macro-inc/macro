@@ -117,8 +117,9 @@ impl Config {
 pub struct OutlookLoops {
     /// Discovery and delta sync against Microsoft Graph.
     pub sync: bool,
-    /// The projection relay, the only refresh an Outlook event's viewers get
-    /// for its changes, whether a sync or a Macro write made them.
+    /// The projection relay, the only path an Outlook event's changes take to
+    /// the calendar topic and to its viewers, whether a sync or a Macro write
+    /// made them.
     pub relay: bool,
 }
 

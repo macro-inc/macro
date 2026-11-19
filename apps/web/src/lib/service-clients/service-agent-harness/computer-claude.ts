@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { type ErrorResponseHandler, statusError } from '@core/util/safeFetch';
+import { match } from 'ts-pattern';
 import {
   getClaudeSignOutUrl,
   getCompleteClaudeSignInUrl,
@@ -14,36 +15,68 @@ import type {
   ClaudeSignInStarted,
 } from './generated/schemas';
 
-type ClaudeSignInErrorCode = 'CLAUDE_INVALID_CODE' | 'CLAUDE_SIGN_IN_EXPIRED';
+type ClaudeSignInErrorCode =
+  | 'CLAUDE_INVALID_CODE'
+  | 'CLAUDE_MALFORMED_CODE'
+  | 'CLAUDE_SIGN_IN_EXPIRED'
+  | 'CLAUDE_COMPUTER_UNREACHABLE'
+  | 'CLAUDE_COMPUTER_BUSY'
+  | 'CLAUDE_TIMEOUT';
 
 const harnessUrl = (path: (harnessId: string) => string, harnessId: string) =>
   `${SERVER_HOSTS['agent-harness']}${path(encodeURIComponent(harnessId))}`;
+
+/** The `code` the harness service puts on a sign-in failure, if any. */
+async function bodyCode(response: Response): Promise<string | undefined> {
+  try {
+    const body: unknown = await response.json();
+    if (typeof body === 'object' && body !== null && 'code' in body)
+      return typeof body.code === 'string' ? body.code : undefined;
+  } catch {
+    // Not JSON: a proxy's error page. The status decides.
+  }
+  return undefined;
+}
 
 const claudeSignInError: ErrorResponseHandler<ClaudeSignInErrorCode> = async (
   response
 ) => {
   // The pending sign-in is gone: it timed out, or another tab replaced it.
-  if (response.status === 404 || response.status === 410) {
+  // A 404 is a missing computer, which no new link fixes.
+  if (response.status === 410) {
     return {
       code: 'CLAUDE_SIGN_IN_EXPIRED',
       message: 'The Claude sign-in expired',
     };
   }
-  if (response.status === 422) {
-    const body: unknown = await response.json();
-    if (
-      typeof body === 'object' &&
-      body !== null &&
-      'code' in body &&
-      body.code === 'invalid_code'
-    ) {
-      return {
-        code: 'CLAUDE_INVALID_CODE',
-        message: 'Claude rejected the sign-in code',
-      };
-    }
+  if (response.status === 504) {
+    return { code: 'CLAUDE_TIMEOUT', message: 'The computer took too long' };
   }
-  return statusError(response.status);
+  const code = await bodyCode(response);
+  const known = match(code)
+    .returnType<{ code: ClaudeSignInErrorCode; message: string } | undefined>()
+    .with('invalid_code', () => ({
+      code: 'CLAUDE_INVALID_CODE',
+      message: 'Claude rejected the sign-in code',
+    }))
+    .with('malformed_code', () => ({
+      code: 'CLAUDE_MALFORMED_CODE',
+      message: 'The pasted code is not one Claude shows',
+    }))
+    .with('sign_in_expired', () => ({
+      code: 'CLAUDE_SIGN_IN_EXPIRED',
+      message: 'The Claude sign-in expired',
+    }))
+    .with('computer_unreachable', () => ({
+      code: 'CLAUDE_COMPUTER_UNREACHABLE',
+      message: 'The computer is not reachable',
+    }))
+    .with('computer_busy', () => ({
+      code: 'CLAUDE_COMPUTER_BUSY',
+      message: 'The computer is busy',
+    }))
+    .otherwise(() => undefined);
+  return known ?? statusError(response.status);
 };
 
 /** Claude Code sign-in on a Macro computer's runtime. Changes need manage rights. */
@@ -53,9 +86,9 @@ export const computerClaudeClient = {
       harnessUrl(getGetClaudeModeUrl, harnessId)
     ),
   startSignIn: (harnessId: string, signal: AbortSignal) =>
-    fetchWithToken<ClaudeSignInStarted>(
+    fetchWithToken<ClaudeSignInStarted, ClaudeSignInErrorCode>(
       harnessUrl(getStartClaudeSignInUrl, harnessId),
-      { method: 'POST', signal }
+      { method: 'POST', signal, errorResponseHandler: claudeSignInError }
     ),
   completeSignIn: (harnessId: string, code: string, signal: AbortSignal) =>
     fetchWithToken<ClaudeSignedIn, ClaudeSignInErrorCode>(

@@ -2,6 +2,7 @@
 
 use agent_fold::domain::model::Author;
 use agent_session::domain::{model::AgentSessionId, search::indexing::SearchSnapshot};
+use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use opensearch_client::{
     OpensearchClient,
     agent_session::{
@@ -11,8 +12,9 @@ use opensearch_client::{
 use rootcause::Report;
 use std::sync::Arc;
 
-use crate::domain::agent_session_index::{
-    AgentSessionSearchIndex, ProjectionVersion, ProjectionWrites,
+use crate::{
+    domain::agent_session_index::{AgentSessionSearchIndex, ProjectionVersion, ProjectionWrites},
+    parsers::message_text::with_pastes_as_content,
 };
 
 pub struct OpenSearchAgentSessionIndex(pub Arc<OpensearchClient>);
@@ -52,7 +54,7 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
                         Author::User { user_id } => user_id.as_ref().map(ToString::to_string),
                         Author::Agent => None,
                     },
-                    content: message.searchable_text(),
+                    content: shown_text(&message.searchable_text()),
                 })
                 .collect(),
         };
@@ -80,3 +82,18 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
             .await?)
     }
 }
+
+/// A message's text with its `<m-*>` chips written as text. Links and
+/// mentions read as `PlainTextFormatter` writes them, as in agent
+/// notifications; prompts and replies are prose, not valid markup
+/// (`Vec<String>`, `a < b`), so they parse leniently, and from a tag that does
+/// not parse the text up to the next paste stays as written. A paste reads as
+/// its content.
+fn shown_text(text: &str) -> String {
+    with_pastes_as_content(text, |markup| {
+        PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(markup)).0
+    })
+}
+
+#[cfg(test)]
+mod test;

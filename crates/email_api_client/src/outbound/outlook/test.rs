@@ -42,7 +42,12 @@ async fn delta_preserves_removals_as_stream_events_and_keeps_opaque_continuation
         .mount(&server)
         .await;
     let page = api
-        .folder_changes(&token, &ProviderId::new("folder").unwrap(), None)
+        .folder_changes(
+            &token,
+            &ProviderId::new("folder").unwrap(),
+            None,
+            RoundStart::Unordered,
+        )
         .await
         .unwrap();
     assert_eq!(page.changed, vec![ProviderId::new("m1").unwrap()]);
@@ -67,6 +72,7 @@ async fn unsafe_cursors_are_rejected_before_sending_credentials() {
                 &token,
                 &ProviderId::new("inbox").unwrap(),
                 Some(&StreamToken::new(unsafe_url)),
+                RoundStart::Unordered,
             )
             .await;
         assert!(matches!(result, Err(EmailApiError::Permanent { .. })));
@@ -181,9 +187,14 @@ async fn expired_cursor_is_recoverable_without_deleting_existing_mail() {
         .mount(&server)
         .await;
     assert_eq!(
-        api.folder_changes(&token, &ProviderId::new("inbox").unwrap(), None)
-            .await
-            .unwrap_err(),
+        api.folder_changes(
+            &token,
+            &ProviderId::new("inbox").unwrap(),
+            None,
+            RoundStart::Unordered
+        )
+        .await
+        .unwrap_err(),
         EmailApiError::OutdatedCursor
     );
 }
@@ -372,6 +383,7 @@ async fn read_authentication_retry_keeps_the_same_mailbox_generation() {
             },
             &ProviderId::new("folder").unwrap(),
             None,
+            RoundStart::Unordered,
         )
         .await
         .unwrap();

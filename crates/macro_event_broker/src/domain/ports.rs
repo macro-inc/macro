@@ -27,9 +27,11 @@ pub trait MacroEventBroker: Send + Sync + 'static {
 /// port is trivial to mock or stub in tests.
 pub trait EventPublisher: Send + Sync + 'static {
     /// Publishes a raw `payload` to [`T::TOPIC_STR`](Topic::TOPIC_STR), keyed by `key`.
+    /// `event_type` is the payload's wire event type, for the publish's telemetry.
     fn publish<T: Topic>(
         &self,
         key: &str,
+        event_type: Option<&str>,
         payload: &[u8],
     ) -> impl Future<Output = Result<(), EventBrokerError>> + Send;
 }

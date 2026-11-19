@@ -135,19 +135,15 @@ test.describe('the header of a thread open on a desktop', () => {
   });
 
   // When this fails, the envelope of the reading pane's thread does not
-  // offer Mark as read once the thread is unread. Today the unread's own
-  // write clears the toggle, which goes back to Mark as unread while the
-  // mailbox holds the thread unread (handoff
-  // thread-unread-toggle-resets-on-own-write). A thread open in the list's
-  // place goes back to the list when marked unread, so only the reading
-  // pane can show this label.
-  test('known bug: thread-unread-toggle-resets-on-own-write: the envelope offers Mark as read once the thread is unread @known-bug', {
-    tag: '@known-bug',
-  }, async ({ page, mailbox }) => {
+  // offer Mark as read once the thread is unread. Use u because clicking
+  // the envelope to mark it unread closes the thread.
+  test('the envelope offers Mark as read once the thread is unread', async ({
+    page,
+    mailbox,
+  }) => {
     const ids = await deliverAll(mailbox, ['Minutes', 'Budget']);
-    const header = page
-      .getByRole('region', { name: 'Reading pane' })
-      .getByRole('group', { name: 'Email actions' });
+    const pane = page.getByRole('region', { name: 'Reading pane' });
+    const header = pane.getByRole('group', { name: 'Email actions' });
     const toggle = header.getByRole('button', { name: /^Mark as (un)?read$/ });
     const seenInFlight = seenRequestsInFlight(page);
 
@@ -157,13 +153,18 @@ test.describe('the header of a thread open on a desktop', () => {
       .poll(() => rowIds(page))
       .toEqual(expect.arrayContaining(Object.values(ids)));
     await page.getByRole('button', { name: 'Show reading pane' }).click();
-    await openFromList(page, ids.Minutes, 'About Minutes.');
+    await openFromList(page, ids.Minutes, 'About Minutes.', pane);
     await expect.poll(readAt(mailbox, 'Minutes')).toBe(true);
     await expect.poll(seenInFlight).toBe(0);
     await expect(toggle).toHaveAccessibleName('Mark as unread');
-    await toggle.click();
+    await page.getByRole('heading', { name: 'Minutes', level: 1 }).click();
+    await page.keyboard.press('u');
     await expect.poll(readAt(mailbox, 'Minutes')).toBe(false);
     await expect(toggle).toHaveAccessibleName('Mark as read');
     saw('STL-072', 'F-068');
+
+    await openFromList(page, ids.Budget, 'About Budget.', pane);
+    await expect.poll(readAt(mailbox, 'Budget')).toBe(true);
+    await expect(toggle).toHaveAccessibleName('Mark as unread');
   });
 });

@@ -1,4 +1,6 @@
 use super::*;
+use rdkafka::mocking::MockCluster;
+use rdkafka::producer::FutureRecord;
 
 struct TestConsumerGroup;
 
@@ -59,4 +61,150 @@ fn ungrouped_config_uses_unique_internal_groups_without_offset_storage() {
     assert_eq!(first.get("enable.auto.commit"), Some("false"));
     assert_eq!(first.get("enable.auto.offset.store"), Some("false"));
     assert_eq!(first.get("auto.offset.reset"), None);
+}
+
+struct BoundedPrefetchGroup;
+
+impl GroupName for BoundedPrefetchGroup {
+    const GROUP_NAME: &'static str = "bounded-prefetch-group";
+    const PREFETCH: Prefetch = Prefetch::Bounded {
+        records: 10,
+        partition_bytes: 8 * 1024,
+    };
+}
+
+#[tokio::test]
+async fn bounded_prefetch_keeps_a_quiet_partition_close_behind_a_backlog() {
+    let cluster = MockCluster::new(1).expect("mock cluster");
+    cluster
+        .create_topic("backlog", 1, 1)
+        .expect("backlog topic");
+    cluster.create_topic("quiet", 1, 1).expect("quiet topic");
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", cluster.bootstrap_servers())
+        .set("batch.num.messages", "10")
+        .create()
+        .expect("producer");
+    let deliveries: Vec<_> = (0..2_000)
+        .map(|_| {
+            producer
+                .send_result(FutureRecord::<(), _>::to("backlog").payload("backlog"))
+                .expect("enqueue backlog record")
+        })
+        .collect();
+    for delivery in deliveries {
+        delivery
+            .await
+            .expect("delivery report")
+            .expect("publish backlog record");
+    }
+
+    let consumer: StreamConsumer =
+        grouped_config::<BoundedPrefetchGroup>(&cluster.bootstrap_servers())
+            .create()
+            .expect("consumer");
+    let mut assignment = TopicPartitionList::new();
+    assignment
+        .add_partition_offset("backlog", 0, Offset::Beginning)
+        .expect("backlog assignment");
+    assignment
+        .add_partition_offset("quiet", 0, Offset::Beginning)
+        .expect("quiet assignment");
+    consumer.assign(&assignment).expect("assign");
+
+    // The quiet record is published once 50 backlog records have arrived. By
+    // then librdkafka's defaults have fetched most of the backlog ahead of it,
+    // so it arrives soon after only if the consumer stopped fetching early.
+    let mut backlog_received = 0;
+    loop {
+        let message = tokio::time::timeout(Duration::from_secs(10), consumer.recv())
+            .await
+            .expect("receive deadline")
+            .expect("message");
+        if message.topic() == "quiet" {
+            break;
+        }
+        backlog_received += 1;
+        if backlog_received == 50 {
+            producer
+                .send(
+                    FutureRecord::<(), _>::to("quiet").payload("quiet"),
+                    SEND_TIMEOUT,
+                )
+                .await
+                .expect("publish quiet record");
+        }
+    }
+
+    assert!(
+        backlog_received < 500,
+        "{backlog_received} backlog records arrived before the quiet record"
+    );
+}
+
+#[tokio::test]
+async fn position_and_cached_watermarks_show_records_not_yet_received() {
+    use rdkafka::mocking::MockCluster;
+    use rdkafka::producer::{FutureProducer, FutureRecord};
+
+    let cluster = MockCluster::new(1).expect("mock broker");
+    cluster.create_topic("position-test", 1, 1).expect("topic");
+    let producer: FutureProducer = ClientConfig::new()
+        .set("bootstrap.servers", cluster.bootstrap_servers())
+        .create()
+        .expect("producer");
+    for _ in 0..3 {
+        producer
+            .send(
+                FutureRecord::to("position-test")
+                    .key("key")
+                    .payload("payload"),
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("publish");
+    }
+    let consumer: StreamConsumer<_> =
+        grouped_config::<TestConsumerGroup>(&cluster.bootstrap_servers())
+            .create_with_context(StatisticsContext {
+                inner: DefaultConsumerContext,
+                observer: None,
+            })
+            .expect("consumer");
+    let mut assignment = TopicPartitionList::new();
+    assignment
+        .add_partition_offset("position-test", 0, Offset::Beginning)
+        .expect("assignment");
+    consumer.assign(&assignment).expect("manual assignment");
+    let consumer = KafkaEventConsumer::<TestConsumerGroup> {
+        consumer: ConsumerTransport(Either::Left(consumer)),
+        marker: PhantomData,
+    };
+
+    let before = consumer.position().expect("position");
+    assert_eq!(
+        before
+            .find_partition("position-test", 0)
+            .map(|partition| partition.offset()),
+        Some(Offset::Invalid),
+        "nothing received yet"
+    );
+    drop(
+        tokio::time::timeout(Duration::from_secs(5), consumer.recv())
+            .await
+            .expect("receive deadline")
+            .expect("message"),
+    );
+
+    let after = consumer.position().expect("position");
+    assert_eq!(
+        after
+            .find_partition("position-test", 0)
+            .map(|partition| partition.offset()),
+        Some(Offset::Offset(1))
+    );
+    let (_, high) = consumer
+        .cached_watermarks("position-test", 0)
+        .expect("watermarks");
+    assert_eq!(high, 3, "two fetched records are still unreceived");
 }

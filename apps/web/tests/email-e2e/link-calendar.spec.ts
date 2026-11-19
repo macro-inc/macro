@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import type { Mailbox } from './harness/fixtures';
 import { expect, test } from './harness/linking';
+import { lapseGrant } from './harness/ways-elsewhere';
 import { did } from './ledger/record';
 
 const MAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.modify';
@@ -22,13 +23,6 @@ async function holdCalendarData(mailbox: Mailbox) {
     `INSERT INTO calendar_accounts (id, owner_id, email_link_id, provider, provider_account_id)
      VALUES (gen_random_uuid(), '${mailbox.user.macroUserId}', '${mailbox.inbox.linkId}', 'google', '${mailbox.inbox.email}')
      RETURNING id`
-  );
-}
-
-/** Marks the inbox as needing its provider grant renewed. */
-async function lapseGrant(mailbox: Mailbox) {
-  await mailbox.stack.sql(
-    `UPDATE email_links SET needs_reauth = true WHERE id = '${mailbox.inbox.linkId}' RETURNING id`
   );
 }
 

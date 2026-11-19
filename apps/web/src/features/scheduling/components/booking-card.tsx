@@ -195,16 +195,18 @@ export function BookingCard(props: {
                   <Check class="size-4" /> Confirm
                 </Item>
               </Show>
-              <Item
-                class={menu.context ? MENU_ITEM_CLASS : undefined}
-                disabled={!!props.busyId}
-                onSelect={() => {
-                  if (!props.busyId && manageable())
-                    props.onManage(props.booking.id);
-                }}
-              >
-                <Calendar class="size-4" /> Reschedule
-              </Item>
+              <Show when={props.booking.status !== 'failed'}>
+                <Item
+                  class={menu.context ? MENU_ITEM_CLASS : undefined}
+                  disabled={!!props.busyId}
+                  onSelect={() => {
+                    if (!props.busyId && manageable())
+                      props.onManage(props.booking.id);
+                  }}
+                >
+                  <Calendar class="size-4" /> Reschedule
+                </Item>
+              </Show>
             </Show>
             <Item
               class={cn(menu.context && MENU_ITEM_CLASS, 'text-failure')}

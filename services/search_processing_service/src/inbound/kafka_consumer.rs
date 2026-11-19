@@ -10,7 +10,12 @@
 //! channel and stall every topic. Malformed records are committed without a
 //! handoff so they cannot wedge a partition.
 //! Processing is retried in-process; exhausted events are logged and dropped
-//! because their offsets are already committed.
+//! because their offsets are already committed. A graceful stop gives the
+//! workers a few seconds, then commits each partition it still owns back to its
+//! first record no worker started ([`offsets`]), so a scale-in or deploy
+//! redelivers the events still queued instead of losing them. Events a worker
+//! had started are not redelivered, so one that hangs or kills its worker is
+//! not retried on every stop.
 //!
 //! Per-entity event mapping and processing live in the [`calendar_event`],
 //! [`call`], [`channel`], [`chat`], [`document`], [`email`], [`project`], and
@@ -20,6 +25,7 @@
 #![allow(clippy::enum_variant_names)]
 
 mod agent_session;
+mod backlog;
 mod calendar_event;
 mod call;
 mod channel;
@@ -27,7 +33,10 @@ mod chat;
 mod context;
 mod document;
 mod email;
+mod entity_type;
 mod message;
+mod metrics;
+mod offsets;
 mod project;
 mod property;
 #[cfg(test)]
@@ -49,7 +58,9 @@ use ::email::domain::events::EmailMacroEvent;
 use calendar_events::domain::events::CalendarMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
-use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
+use kafka_util::{
+    GroupName, InitialOffset, KafkaEventConsumer, Prefetch, consumer_span, record_span_error,
+};
 use macro_event_broker::{
     KafkaConsumerAdapter, MacroEvent as _, MacroEventCollection, MacroEventConsumerService,
 };
@@ -57,16 +68,18 @@ use messages::outbound::broker::MessageMacroEvent;
 use projects::domain::events::ProjectMacroEvent;
 use properties::domain::events::PropertyMacroEvent;
 use rdkafka::{
+    Offset, TopicPartitionList,
     consumer::CommitMode,
     message::{BorrowedMessage, Message as _},
 };
 use rootcause::prelude::{Report, ResultExt as _};
-use tokio::{sync::mpsc, task::JoinHandle};
+use tokio::{sync::mpsc, task::JoinHandle, time::MissedTickBehavior};
 use tokio_retry::{Retry, strategy::ExponentialBackoff};
 use tracing::{Instrument as _, field};
 use uuid::Uuid;
 
 use self::{
+    backlog::{BacklogSampler, SAMPLE_INTERVAL},
     calendar_event::process_calendar_event,
     call::{describe_call_event, process_call_event},
     channel::{describe_channel_event, process_channel_event},
@@ -74,11 +87,13 @@ use self::{
     document::{describe_document_event, process_document_event},
     email::{describe_email_event, email_ordering_key, process_email_event},
     message::{describe_message_event, process_message_event},
+    offsets::{OffsetLedger, RecordPosition, WorkerReport},
     project::{describe_project_event, process_project_event},
     property::{describe_property_event, process_property_event},
 };
 
-pub(crate) use self::context::KafkaProcessingContext;
+use self::metrics::Loss;
+pub(crate) use self::{context::KafkaProcessingContext, metrics::IndexMetrics};
 
 /// Consumer group used for live search-index event offsets.
 pub(crate) struct SearchProcessingConsumerGroup;
@@ -88,6 +103,13 @@ impl GroupName for SearchProcessingConsumerGroup {
     // `macro.messages` joined this group's subscription with no committed
     // offset; starting at its head avoids replaying the topic's retention.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
+    // Every topic reaches the poll loop through one queue, so with librdkafka's
+    // defaults a document or message waited behind up to 100,000 prefetched
+    // email records, about an hour of an email backlog at production's pace.
+    const PREFETCH: Prefetch = Prefetch::Bounded {
+        records: 10,
+        partition_bytes: 8 * 1024,
+    };
 }
 
 type SearchProcessingKafkaAdapter =
@@ -118,8 +140,17 @@ const WORKER_COUNT: usize = 10;
 ///
 /// Offsets are committed at handoff, so a crash can drop up to
 /// `WORKER_COUNT * WORKER_CHANNEL_CAPACITY` queued events, plus the
-/// agent-session events each queued reread absorbed.
+/// agent-session events each queued reread absorbed. A graceful stop
+/// redelivers the queued ones: see [`SHUTDOWN_DRAIN_DEADLINE`].
 const WORKER_CHANNEL_CAPACITY: usize = 16;
+/// How long a gracefully stopping consumer lets the workers finish the events
+/// they hold, half of the 10 s ECS gives a task after its stop signal. Then it
+/// commits each partition it still owns back to its first record no worker
+/// started, which its next owner redelivers.
+const SHUTDOWN_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
+/// How long aborted workers get to stop, so their last start and finish
+/// reports reach the ledger before it decides what to rewind.
+const ABORT_GRACE: Duration = Duration::from_millis(500);
 /// Delay before polling Kafka again after a receive error.
 const RECEIVE_ERROR_RETRY_DELAY: Duration = Duration::from_secs(1);
 /// Total processing attempts before an event is dropped.
@@ -130,6 +161,7 @@ const PROCESSING_RETRY_BASE_DELAY: Duration = Duration::from_secs(1);
 /// A decoded search-processing event and its Kafka coordinates.
 struct ReceivedEvent {
     event: DeclaredMacroEvent,
+    topic: &'static str,
     partition: i32,
     offset: i64,
     /// Wire type of `event`, e.g. `email.thread_backfilled`.
@@ -139,6 +171,16 @@ struct ReceivedEvent {
     /// The record's `kafka.process` span, from receipt until processing ends,
     /// so its duration includes the wait in the worker channel.
     span: tracing::Span,
+}
+
+impl ReceivedEvent {
+    fn position(&self) -> RecordPosition {
+        RecordPosition {
+            topic: self.topic,
+            partition: self.partition,
+            offset: self.offset,
+        }
+    }
 }
 
 /// Outcome of one decoded broker event, recorded as the `outcome` field of
@@ -301,6 +343,7 @@ impl PendingRereads {
 struct WorkerPool {
     senders: Vec<mpsc::Sender<ReceivedEvent>>,
     pending_rereads: Arc<PendingRereads>,
+    metrics: IndexMetrics,
 }
 
 impl WorkerPool {
@@ -308,6 +351,7 @@ impl WorkerPool {
     fn new(
         senders: Vec<mpsc::Sender<ReceivedEvent>>,
         pending_rereads: Arc<PendingRereads>,
+        metrics: IndexMetrics,
     ) -> Self {
         assert!(
             !senders.is_empty(),
@@ -316,13 +360,18 @@ impl WorkerPool {
         Self {
             senders,
             pending_rereads,
+            metrics,
         }
     }
 
     /// Spawns [`WORKER_COUNT`] workers sharing `context` and returns their
-    /// join handles alongside the pool. Dropping the pool closes every worker
+    /// join handles alongside the pool. Each worker reports to `reports` when
+    /// it starts and finishes a record. Dropping the pool closes every worker
     /// channel, letting the workers drain and exit.
-    fn spawn(context: &KafkaProcessingContext) -> (Self, Vec<JoinHandle<()>>) {
+    fn spawn(
+        context: &KafkaProcessingContext,
+        reports: &mpsc::UnboundedSender<WorkerReport>,
+    ) -> (Self, Vec<JoinHandle<()>>) {
         let pending_rereads = Arc::new(PendingRereads::default());
         let (senders, workers) = (0..WORKER_COUNT)
             .map(|_| {
@@ -333,11 +382,15 @@ impl WorkerPool {
                         context.clone(),
                         receiver,
                         Arc::clone(&pending_rereads),
+                        reports.clone(),
                     )),
                 )
             })
             .unzip();
-        (Self::new(senders, pending_rereads), workers)
+        (
+            Self::new(senders, pending_rereads, context.metrics.clone()),
+            workers,
+        )
     }
 
     fn shard_index(&self, key: &str) -> usize {
@@ -354,7 +407,12 @@ impl WorkerPool {
         // Before any reread claim: an event that changes nothing must not hold
         // one and absorb a later event that does.
         if !changes_search_index(&event.event) {
-            record_outcome(&processing_span(&event), EventOutcome::NoIndexChange);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                EventOutcome::NoIndexChange,
+            );
             return HandoffOutcome::NoIndexChange;
         }
 
@@ -369,7 +427,12 @@ impl WorkerPool {
         if let Some(key) = &reread_key
             && !self.pending_rereads.claim(key.clone())
         {
-            record_outcome(&processing_span(&event), EventOutcome::Coalesced);
+            record_outcome(
+                &self.metrics,
+                &processing_span(&event),
+                &event,
+                EventOutcome::Coalesced,
+            );
             return HandoffOutcome::Coalesced;
         }
 
@@ -393,6 +456,7 @@ fn attach_event_coordinates<E>(
 ) -> Result<ReceivedEvent, E> {
     decoded.map(|event| ReceivedEvent {
         event_type: event_type(&event),
+        topic: event_topic(&event),
         event,
         partition,
         offset,
@@ -415,6 +479,9 @@ fn receive_record<M: rdkafka::Message, E>(
         attach_event_coordinates(decoded, message.partition(), message.offset(), span.clone()).map(
             |received| ReceivedEvent {
                 produced_at_ms: message.timestamp().to_millis(),
+                // The offset ledger keys the record by the topic it arrived
+                // on, so its start and finish reports match its receipt.
+                topic: subscribed_topic(message.topic()).unwrap_or(received.topic),
                 ..received
             },
         );
@@ -467,6 +534,30 @@ fn event_type(event: &DeclaredMacroEvent) -> &'static str {
     }
 }
 
+/// The topic the event arrives on.
+fn event_topic(event: &DeclaredMacroEvent) -> &'static str {
+    match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::CalendarMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::CallMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::ChannelMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::ChatMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::DocumentMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::EmailMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::MessageMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::ProjectMacroEvent(event) => event.topic(),
+        DeclaredMacroEvent::PropertyMacroEvent(event) => event.topic(),
+    }
+}
+
+/// The subscribed topic named `topic`, as the static name the offset ledger keys on.
+fn subscribed_topic(topic: &str) -> Option<&'static str> {
+    DeclaredMacroEvent::topics()
+        .iter()
+        .copied()
+        .find(|subscribed| *subscribed == topic)
+}
+
 fn event_id(event: &DeclaredMacroEvent) -> Uuid {
     match event {
         DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => event.event().event_id,
@@ -514,18 +605,28 @@ fn processing_span(received: &ReceivedEvent) -> tracing::Span {
     )
 }
 
-fn record_outcome(span: &tracing::Span, outcome: EventOutcome) {
+/// Records how `received` ended on its `process_event` span and in `metrics`.
+fn record_outcome(
+    metrics: &IndexMetrics,
+    span: &tracing::Span,
+    received: &ReceivedEvent,
+    outcome: EventOutcome,
+) {
     span.record("outcome", <&'static str>::from(outcome));
     if outcome == EventOutcome::Dropped {
         span.record("otel.status_code", "ERROR");
     }
+    metrics.record_processed(received, outcome);
 }
 
 /// Runs one record's processing inside its spans and records the outcome. A
 /// dropped event also fails the record's span, the consumer's top-level span,
 /// so drops count in the service's error rate.
-async fn process_received<'a, F, Fut>(received: &'a ReceivedEvent, process: F)
-where
+async fn process_received<'a, F, Fut>(
+    metrics: &IndexMetrics,
+    received: &'a ReceivedEvent,
+    process: F,
+) where
     F: FnOnce(&'a ReceivedEvent) -> Fut,
     Fut: Future<Output = EventOutcome>,
 {
@@ -536,7 +637,7 @@ where
         .instrument(span.clone())
         .instrument(received.span.clone())
         .await;
-    record_outcome(&span, outcome);
+    record_outcome(metrics, &span, received, outcome);
     if outcome == EventOutcome::Dropped {
         record_span_error(&received.span, "event dropped after its processing retries");
     }
@@ -585,7 +686,15 @@ async fn process_event(
             process_message_event(db, opensearch_client, event, partition, offset).await
         }
         DeclaredMacroEvent::EmailMacroEvent(event) => {
-            process_email_event(db, opensearch_client, event, partition, offset).await
+            process_email_event(
+                db,
+                opensearch_client,
+                &context.mailbox_deletes,
+                event,
+                partition,
+                offset,
+            )
+            .await
         }
         DeclaredMacroEvent::ProjectMacroEvent(event) => {
             process_project_event(db, opensearch_client, event, partition, offset).await
@@ -600,10 +709,11 @@ async fn run_event_worker(
     context: KafkaProcessingContext,
     events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
+    reports: mpsc::UnboundedSender<WorkerReport>,
 ) {
     let context = &context;
-    drain_worker_events(events, pending_rereads, |received| async move {
-        process_received(&received, |received| {
+    drain_worker_events(events, pending_rereads, reports, |received| async move {
+        process_received(&context.metrics, &received, |received| {
             process_event(
                 context,
                 &received.event,
@@ -617,13 +727,15 @@ async fn run_event_worker(
     tracing::trace!("search processing event worker drained");
 }
 
-/// Processes one worker's events in order until its channel closes.
+/// Processes one worker's events in order until its channel closes, reporting
+/// each record to `reports` as it starts and once it is processed.
 ///
 /// A reread's claim is released as it is dequeued, before `process` reads
 /// anything, so an event that arrives mid-reread queues the next one.
 async fn drain_worker_events<F, Fut>(
     mut events: mpsc::Receiver<ReceivedEvent>,
     pending_rereads: Arc<PendingRereads>,
+    reports: mpsc::UnboundedSender<WorkerReport>,
     mut process: F,
 ) where
     F: FnMut(ReceivedEvent) -> Fut,
@@ -633,7 +745,12 @@ async fn drain_worker_events<F, Fut>(
         if let Some(key) = coalescible_reread_key(&received.event) {
             pending_rereads.release(&key);
         }
+        let position = received.position();
+        // The consumer stops listening only after giving up on the workers,
+        // so a closed channel needs no handling here.
+        let _ = reports.send(WorkerReport::Started(position));
         process(received).await;
+        let _ = reports.send(WorkerReport::Done(position));
     }
 }
 
@@ -655,35 +772,133 @@ fn commit_logged(consumer: &SearchProcessingKafkaConsumer, message: &BorrowedMes
     }
 }
 
+/// Updates `ledger` for a record whose handoff ended in `outcome`. A handed-off
+/// record stays open until its worker reports it; a coalesced, malformed or
+/// index-irrelevant one is finished now; a record the closed worker never took
+/// stays open.
+fn track_handoff<E>(
+    ledger: &mut OffsetLedger,
+    position: RecordPosition,
+    outcome: &HandoffOutcome<E>,
+) {
+    match outcome {
+        HandoffOutcome::HandedOff | HandoffOutcome::WorkerClosed => {}
+        HandoffOutcome::Coalesced
+        | HandoffOutcome::NoIndexChange
+        | HandoffOutcome::MalformedRecord(_) => ledger.skipped(position),
+    }
+}
+
+/// Waits for a record's `handoff`, which a full worker channel holds. The wait
+/// is a stall, so worker reports still reach `ledger` and pending ages are
+/// still sampled meanwhile. Returns `None` if `shutdown` resolves first,
+/// without waiting: the record was never committed and stays open.
+async fn await_handoff<T>(
+    handoff: impl Future<Output = T>,
+    shutdown: &mut (impl Future<Output = ()> + Unpin),
+    sample_tick: &mut tokio::time::Interval,
+    reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
+    ledger: &mut OffsetLedger,
+    mut sample: impl FnMut(&OffsetLedger),
+) -> Option<T> {
+    let mut handoff = std::pin::pin!(handoff);
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut *shutdown => return None,
+            outcome = &mut handoff => return Some(outcome),
+            _ = sample_tick.tick() => sample(ledger),
+            Some(report) = reports.recv() => ledger.report(report),
+        }
+    }
+}
+
+/// How polling ended.
+struct PollEnd {
+    result: Result<(), Report>,
+    /// The record polling took and left uncommitted, which the group
+    /// redelivers whatever the stop does with its partition.
+    uncommitted: Option<RecordPosition>,
+}
+
 async fn poll_events(
     consumer: &SearchProcessingKafkaConsumer,
     workers: WorkerPool,
+    ledger: &mut OffsetLedger,
+    reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
     shutdown: impl Future<Output = ()> + Send,
-) -> Result<(), Report> {
+) -> PollEnd {
     let mut shutdown = std::pin::pin!(shutdown);
+    let mut uncommitted = None;
+    let mut sampler = BacklogSampler::new(workers.metrics.pending_ages().clone());
+    let mut sample_tick = tokio::time::interval(SAMPLE_INTERVAL);
+    sample_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
     loop {
         tokio::select! {
+            biased;
             _ = &mut shutdown => {
                 tracing::info!("search processing event consumer shutting down");
                 break;
+            }
+            _ = sample_tick.tick() => sampler.sample_consumer(consumer, ledger),
+            Some(report) = reports.recv() => {
+                ledger.report(report);
+                while let Ok(report) = reports.try_recv() {
+                    ledger.report(report);
+                }
             }
             result = consumer.recv() => {
                 let message = match result {
                     Ok(message) => message,
                     Err(_) => { // error is logged in tracing automatically
-                        tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY).await;
-                        continue;
+                        tokio::select! {
+                            biased;
+                            _ = &mut shutdown => {
+                                tracing::info!("search processing event consumer shutting down");
+                                break;
+                            }
+                            () = tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY) => continue,
+                        }
                     }
                 };
                 let kafka_message = message.inner();
                 let (span, decoded) = receive_record(kafka_message, || message.decode_payload());
+                let position = subscribed_topic(rdkafka::Message::topic(kafka_message)).map(|topic| {
+                    RecordPosition {
+                        topic,
+                        partition: kafka_message.partition(),
+                        offset: kafka_message.offset(),
+                    }
+                });
+                if let Some(position) = position {
+                    ledger.received(position, kafka_message.timestamp().to_millis());
+                }
 
-                match workers.handoff(decoded).instrument(span.clone()).await {
+                let Some(outcome) = await_handoff(
+                    workers.handoff(decoded).instrument(span.clone()),
+                    &mut shutdown,
+                    &mut sample_tick,
+                    reports,
+                    ledger,
+                    |ledger| sampler.sample_consumer(consumer, ledger),
+                )
+                .await else {
+                    tracing::info!("search processing event consumer shutting down");
+                    uncommitted = position;
+                    break;
+                };
+                if let Some(position) = position {
+                    track_handoff(ledger, position, &outcome);
+                }
+                match outcome {
                     HandoffOutcome::HandedOff
                     | HandoffOutcome::Coalesced
                     | HandoffOutcome::NoIndexChange => {}
                     HandoffOutcome::MalformedRecord(error) => {
                         record_span_error(&span, &error);
+                        workers
+                            .metrics
+                            .record_loss(rdkafka::Message::topic(kafka_message), Loss::Undecodable);
                         tracing::error!(
                             parent: &span,
                             error = %error,
@@ -702,12 +917,15 @@ async fn poll_events(
                             offset = kafka_message.offset(),
                             "search processing event worker channel closed; leaving offset uncommitted"
                         );
-                        return Err(rootcause::report!(
-                            "search processing event worker channel closed for topic {} at partition {} offset {}",
-                            rdkafka::Message::topic(kafka_message),
-                            kafka_message.partition(),
-                            kafka_message.offset(),
-                        ));
+                        return PollEnd {
+                            result: Err(rootcause::report!(
+                                "search processing event worker channel closed for topic {} at partition {} offset {}",
+                                rdkafka::Message::topic(kafka_message),
+                                kafka_message.partition(),
+                                kafka_message.offset(),
+                            )),
+                            uncommitted: position,
+                        };
                     }
                 }
 
@@ -718,16 +936,164 @@ async fn poll_events(
         }
     }
 
-    Ok(())
+    PollEnd {
+        result: Ok(()),
+        uncommitted,
+    }
+}
+
+/// What committing back at a stop achieved.
+#[derive(Debug, Default)]
+struct Rewind {
+    /// Partitions committed back to these records, which are redelivered.
+    rewound: Vec<RecordPosition>,
+    /// Queued records on partitions this consumer no longer owns.
+    not_rewound: Vec<RecordPosition>,
+    /// Queued records whose rewind failed, because the assignment or the
+    /// commit did; whether the next owner reads them depends on the offset
+    /// committed last.
+    unconfirmed: Vec<RecordPosition>,
+}
+
+/// Commits each partition this consumer still owns back to its first record
+/// no worker started, so its next owner redelivers it and what followed it.
+/// Partitions it no longer owns are left to their owner.
+fn rewind_queued(consumer: &SearchProcessingKafkaConsumer, ledger: &OffsetLedger) -> Rewind {
+    let queued = ledger.queued();
+    if queued.is_empty() {
+        return Rewind::default();
+    }
+    let assigned = match consumer.inner().assignment() {
+        Ok(assigned) => assigned,
+        Err(error) => {
+            tracing::error!(error = ?error, "could not read the consumer's assignment");
+            return Rewind {
+                unconfirmed: queued,
+                ..Rewind::default()
+            };
+        }
+    };
+    let points = ledger
+        .rewind_points(|topic, partition| assigned.find_partition(topic, partition).is_some());
+    let mut offsets = TopicPartitionList::with_capacity(points.len());
+    let mut rewound = Vec::with_capacity(points.len());
+    for point in points {
+        match offsets.add_partition_offset(
+            point.topic,
+            point.partition,
+            Offset::Offset(point.offset),
+        ) {
+            Ok(()) => rewound.push(point),
+            Err(error) => {
+                tracing::error!(error = ?error, position = %point, "invalid search processing rewind offset")
+            }
+        }
+    }
+    let mut unconfirmed = Vec::new();
+    if !rewound.is_empty()
+        && let Err(error) = consumer.inner().commit_offsets(&offsets, CommitMode::Sync)
+    {
+        tracing::error!(error = ?error, "could not commit search processing partitions back to their queued events");
+        unconfirmed = std::mem::take(&mut rewound);
+    }
+    let covered = |position: &RecordPosition, points: &[RecordPosition]| {
+        points
+            .iter()
+            .any(|point| point.topic == position.topic && point.partition == position.partition)
+    };
+    let (unconfirmed, not_rewound) = queued
+        .into_iter()
+        .filter(|position| !covered(position, &rewound))
+        .partition(|position| covered(position, &unconfirmed));
+    Rewind {
+        rewound,
+        not_rewound,
+        unconfirmed,
+    }
+}
+
+/// How the workers ended.
+struct Drained {
+    /// The first worker panic, even one that happened long before the stop.
+    panic: Option<tokio::task::JoinError>,
+    /// Workers still running at the deadline, and aborted.
+    aborted: usize,
+}
+
+/// Waits for the workers to finish the events they hold, applying each
+/// report to `ledger`. With a `deadline`, workers still running when it passes
+/// are aborted; their records stay open.
+async fn drain_workers(
+    workers: Vec<JoinHandle<()>>,
+    reports: &mut mpsc::UnboundedReceiver<WorkerReport>,
+    ledger: &mut OffsetLedger,
+    deadline: Option<Duration>,
+) -> Drained {
+    use futures::StreamExt as _;
+
+    let aborts: Vec<_> = workers.iter().map(JoinHandle::abort_handle).collect();
+    let mut running: futures::stream::FuturesUnordered<_> = workers.into_iter().collect();
+    let mut timeout = std::pin::pin!(async {
+        match deadline {
+            Some(deadline) => tokio::time::sleep(deadline).await,
+            None => std::future::pending().await,
+        }
+    });
+    let mut panic = None;
+    let mut timed_out = false;
+    loop {
+        tokio::select! {
+            Some(report) = reports.recv() => ledger.report(report),
+            finished = running.next() => match finished {
+                Some(Err(error)) if error.is_panic() => {
+                    panic.get_or_insert(error);
+                }
+                Some(_) => {}
+                None => break,
+            },
+            () = &mut timeout => {
+                timed_out = true;
+                break;
+            }
+        }
+    }
+    let aborted = if timed_out { running.len() } else { 0 };
+    if timed_out {
+        for abort in aborts {
+            abort.abort();
+        }
+        // An aborted worker stops at its next await; until then it can still
+        // report, so wait briefly before the ledger is read.
+        let _ = tokio::time::timeout(ABORT_GRACE, async {
+            while let Some(finished) = running.next().await {
+                if let Err(error) = finished
+                    && error.is_panic()
+                {
+                    panic.get_or_insert(error);
+                }
+            }
+        })
+        .await;
+    }
+    while let Ok(report) = reports.try_recv() {
+        ledger.report(report);
+    }
+    Drained { panic, aborted }
 }
 
 /// Runs the bounded broker event poll loop and worker pool until `shutdown`
 /// resolves.
 ///
 /// The caller is responsible for supervising this function. A closed worker
-/// channel returns an error without committing the current Kafka message. On
-/// normal shutdown the senders are dropped and all buffered events are
-/// processed before this function returns.
+/// channel returns an error without committing the current Kafka message.
+///
+/// After a graceful stop the workers get [`SHUTDOWN_DRAIN_DEADLINE`] to finish
+/// what they hold; any still running are aborted. Unless a worker panicked
+/// during the run, each partition still assigned is then committed back to its
+/// first record no worker started, so its next owner redelivers it. Records a
+/// worker had started and did not finish are logged as lost, never rewound to.
+/// After an error exit the workers drain fully, as before, and nothing is
+/// rewound.
 #[tracing::instrument(skip(context, shutdown), fields(brokers), err)]
 pub(crate) async fn run_event_consumer(
     brokers: &str,
@@ -745,21 +1111,159 @@ pub(crate) async fn run_event_consumer(
         "search processing event consumer listening"
     );
 
-    let (pool, workers) = WorkerPool::spawn(&context);
+    let (report_sender, mut reports) = mpsc::unbounded_channel();
+    let (pool, workers) = WorkerPool::spawn(&context, &report_sender);
+    // Only the workers hold senders now, so `reports` closes once they all exit.
+    drop(report_sender);
+    let mut ledger = OffsetLedger::default();
     // Passing the pool by value drops every sender when polling stops, which
     // closes the worker channels so the workers drain and exit.
-    let poll_result = poll_events(&consumer, pool, shutdown).await;
+    let PollEnd {
+        result: poll_result,
+        uncommitted,
+    } = poll_events(&consumer, pool, &mut ledger, &mut reports, shutdown).await;
 
-    let mut worker_failure = None;
-    for worker in workers {
-        if let Err(error) = worker.await {
-            worker_failure = Some(error);
+    let graceful = poll_result.is_ok();
+    let span = tracing::info_span!(
+        "kafka.consumer_stop",
+        graceful,
+        drain_ms = field::Empty,
+        aborted_workers = field::Empty,
+        worker_panicked = field::Empty,
+        lost = field::Empty,
+        rewound_partitions = field::Empty,
+        not_rewound = field::Empty,
+        unconfirmed = field::Empty,
+    );
+    let drained = async {
+        let drain_started = std::time::Instant::now();
+        let drained = drain_workers(
+            workers,
+            &mut reports,
+            &mut ledger,
+            graceful.then_some(SHUTDOWN_DRAIN_DEADLINE),
+        )
+        .await;
+        let span = tracing::Span::current();
+        span.record("drain_ms", u64::try_from(drain_started.elapsed().as_millis()).unwrap_or(u64::MAX));
+        span.record("aborted_workers", drained.aborted);
+        span.record("worker_panicked", drained.panic.is_some());
+
+        let lost = ledger.started_unfinished();
+        span.record("lost", lost.len());
+        if !lost.is_empty() {
+            tracing::warn!(
+                events = %display_positions(&lost),
+                "search processing events a worker had started were cut off by the stop; they are replayed only when a queued event before them on their partition is"
+            );
         }
+        if graceful && drained.panic.is_none() {
+            let rewind = rewind_queued(&consumer, &ledger);
+            for (record, loss) in losses_at_stop(&lost, Some(&rewind), &[], uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
+            span.record("rewound_partitions", rewind.rewound.len());
+            span.record("not_rewound", rewind.not_rewound.len());
+            span.record("unconfirmed", rewind.unconfirmed.len());
+            if !rewind.rewound.is_empty() {
+                tracing::info!(
+                    partitions = %display_positions(&rewind.rewound),
+                    "search processing partitions committed back to their first queued event; it and what follows are redelivered"
+                );
+            }
+            if !rewind.not_rewound.is_empty() {
+                tracing::warn!(
+                    events = %display_positions(&rewind.not_rewound),
+                    "queued search processing events on partitions this consumer no longer owns were not committed back"
+                );
+            }
+            if !rewind.unconfirmed.is_empty() {
+                tracing::warn!(
+                    events = %display_positions(&rewind.unconfirmed),
+                    "queued search processing events could not be committed back; check the group's committed offsets before a backfill"
+                );
+            }
+        } else {
+            let queued = ledger.queued();
+            for (record, loss) in losses_at_stop(&lost, None, &queued, uncommitted) {
+                context.metrics.record_loss(record.topic, loss);
+            }
+            span.record("not_rewound", queued.len());
+            if !queued.is_empty() {
+                tracing::warn!(
+                    events = %display_positions(&queued),
+                    "the consumer stopped after an error with queued events; those committed at handoff are not redelivered"
+                );
+            }
+        }
+        drained
     }
+    .instrument(span)
+    .await;
 
     poll_result?;
-    if let Some(error) = worker_failure {
+    if let Some(error) = drained.panic {
         Err(rootcause::report!(error))?;
     }
     Ok(())
+}
+
+/// The records a stop loses, which the group will not redeliver, with why.
+///
+/// `lost` were started and cut off; a partition committed back to an offset
+/// at or before one replays it. After a `rewind`, the queued records it could
+/// not commit back are lost; without one, every `queued` record is, since it
+/// was committed at handoff. The `uncommitted` record never was, so it is
+/// redelivered either way.
+fn losses_at_stop(
+    lost: &[RecordPosition],
+    rewind: Option<&Rewind>,
+    queued: &[RecordPosition],
+    uncommitted: Option<RecordPosition>,
+) -> Vec<(RecordPosition, Loss)> {
+    let replayed = |record: &RecordPosition| {
+        rewind.is_some_and(|rewind| {
+            rewind.rewound.iter().any(|point| {
+                point.topic == record.topic
+                    && point.partition == record.partition
+                    && point.offset <= record.offset
+            })
+        })
+    };
+    let cut_off = lost
+        .iter()
+        .filter(|record| !replayed(record))
+        .map(|record| (*record, Loss::CutOffAtStop));
+    let queued_losses: Vec<_> = match rewind {
+        Some(rewind) => rewind
+            .not_rewound
+            .iter()
+            .map(|record| (*record, Loss::NotRewound))
+            .chain(
+                rewind
+                    .unconfirmed
+                    .iter()
+                    .map(|record| (*record, Loss::RewindUnconfirmed)),
+            )
+            .collect(),
+        None => queued
+            .iter()
+            .map(|record| (*record, Loss::QueuedWithoutRewind))
+            .collect(),
+    };
+    cut_off
+        .chain(
+            queued_losses
+                .into_iter()
+                .filter(|(record, _)| Some(*record) != uncommitted),
+        )
+        .collect()
+}
+
+fn display_positions(positions: &[RecordPosition]) -> String {
+    positions
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ")
 }

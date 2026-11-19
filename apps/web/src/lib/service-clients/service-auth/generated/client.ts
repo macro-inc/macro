@@ -18,6 +18,7 @@ import type {
   CodexEnvironment,
   CodexLoginPoll,
   CodexLoginStart,
+  ComputerRollout,
   ComputerStatus,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
@@ -117,6 +118,7 @@ import type {
   SystemStatusHistory,
   Team,
   TeamAgent,
+  TeamAgentErrorBody,
   TeamAgents,
   TeamInviteLinkResponse,
   TeamInviteLinkTeam,
@@ -4993,6 +4995,47 @@ export const listTeamComputerOffers = async (
 };
 
 /**
+ * @summary Whether the caller sees computers: the same rollout check purchases and
+offers make, so the web never shows computers the backend would refuse.
+ */
+export type getTeamComputerRolloutResponse200 = {
+  data: ComputerRollout;
+  status: 200;
+};
+
+export type getTeamComputerRolloutResponseSuccess =
+  getTeamComputerRolloutResponse200 & {
+    headers: Headers;
+  };
+
+export type getTeamComputerRolloutResponse =
+  getTeamComputerRolloutResponseSuccess;
+
+export const getGetTeamComputerRolloutUrl = () => {
+  return `/team/computers/rollout`;
+};
+
+export const getTeamComputerRollout = async (
+  options?: RequestInit
+): Promise<getTeamComputerRolloutResponse> => {
+  const res = await fetch(getGetTeamComputerRolloutUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamComputerRolloutResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamComputerRolloutResponse;
+};
+
+/**
  * @summary Stop billing at the end of the current period.
  */
 export type cancelTeamComputerResponse200 = {
@@ -6578,13 +6621,18 @@ export type createTeamAgentResponse401 = {
   status: 401;
 };
 
+export type createTeamAgentResponse402 = {
+  data: TeamAgentErrorBody;
+  status: 402;
+};
+
 export type createTeamAgentResponse403 = {
   data: ErrorResponse;
   status: 403;
 };
 
 export type createTeamAgentResponse409 = {
-  data: ErrorResponse;
+  data: TeamAgentErrorBody;
   status: 409;
 };
 
@@ -6604,6 +6652,7 @@ export type createTeamAgentResponseSuccess = createTeamAgentResponse201 & {
 export type createTeamAgentResponseError = (
   | createTeamAgentResponse400
   | createTeamAgentResponse401
+  | createTeamAgentResponse402
   | createTeamAgentResponse403
   | createTeamAgentResponse409
   | createTeamAgentResponse500
@@ -6639,6 +6688,78 @@ export const createTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as createTeamAgentResponse;
+};
+
+/**
+ * @summary The calling agent reports that it is online, with its own credential.
+The first report makes it `running` and tells its inviter it is ready;
+later ones change nothing. 404 for an account that isn't an agent of its
+team.
+ */
+export type reportTeamAgentOnlineResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type reportTeamAgentOnlineResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type reportTeamAgentOnlineResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type reportTeamAgentOnlineResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type reportTeamAgentOnlineResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type reportTeamAgentOnlineResponseSuccess =
+  reportTeamAgentOnlineResponse204 & {
+    headers: Headers;
+  };
+export type reportTeamAgentOnlineResponseError = (
+  | reportTeamAgentOnlineResponse401
+  | reportTeamAgentOnlineResponse403
+  | reportTeamAgentOnlineResponse404
+  | reportTeamAgentOnlineResponse500
+) & {
+  headers: Headers;
+};
+
+export type reportTeamAgentOnlineResponse =
+  | reportTeamAgentOnlineResponseSuccess
+  | reportTeamAgentOnlineResponseError;
+
+export const getReportTeamAgentOnlineUrl = () => {
+  return `/team_agents/me/online`;
+};
+
+export const reportTeamAgentOnline = async (
+  options?: RequestInit
+): Promise<reportTeamAgentOnlineResponse> => {
+  const res = await fetch(getReportTeamAgentOnlineUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: reportTeamAgentOnlineResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as reportTeamAgentOnlineResponse;
 };
 
 /**

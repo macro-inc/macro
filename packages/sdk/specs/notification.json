@@ -2286,6 +2286,10 @@
               "kind": {
                 "type": "string",
                 "enum": ["failed"]
+              },
+              "released": {
+                "type": "boolean",
+                "description": "Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry."
               }
             }
           }

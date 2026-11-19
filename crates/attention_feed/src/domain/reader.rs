@@ -175,6 +175,24 @@ where
         })
     }
 
+    /// The keys that may hold something unread for the viewer; see
+    /// [`CandidateSource::unread_keys`]. Read them with [`Self::current`]
+    /// before trusting one.
+    pub async fn unread_keys(
+        &self,
+        viewer: &FeedViewer,
+        types: Vec<EntityType>,
+        limit: u16,
+    ) -> Result<Vec<FeedKey>, Report> {
+        Ok(self
+            .source
+            .unread_keys(viewer, types, limit)
+            .await?
+            .into_iter()
+            .map(FeedKey::new)
+            .collect())
+    }
+
     /// The current candidates for `keys` in `request`'s feed, loaded, keyed
     /// by key. Keys the feed no longer admits are absent.
     #[tracing::instrument(
