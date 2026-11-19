@@ -172,6 +172,13 @@ async function attempt(
     const made = await channelsMade(db, new Date(result.startedAtMs));
     const context: Context = { ids, now: new Date(result.startedAtMs), timezone: TIMEZONE, made };
     const quality = checks(item, arm, result, context);
+    // Keep the whole chat when DRAFTS_LOG_DIR is set, before the session goes.
+    const logDir = process.env.DRAFTS_LOG_DIR;
+    if (logDir && result.sessionId) {
+      const log = await call(`${at.harness}/agent-sessions/${result.sessionId}/log`, { token: owner }).catch((error) => ({ error: String(error) }));
+      mkdirSync(logDir, { recursive: true });
+      writeFileSync(join(logDir, `${options.label}.${arm}.${item.id}.${options.round}.json`), JSON.stringify({ case: item.id, text: item.text, result, log }, null, 1));
+    }
     // Before the run check, so a session still running can't act during it.
     if (result.sessionId) await deleteSession(at, owner, result.sessionId);
     let run: Attempt['run'];
