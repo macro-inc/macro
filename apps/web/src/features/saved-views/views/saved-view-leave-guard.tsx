@@ -2,9 +2,9 @@ import { t } from '@app/lib/i18n';
 import { useBeforeLeave } from '@app/lib/split-router';
 import { createDraftLeave } from '@core/util/create-draft-leave';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { UnsavedChangesDialog } from '@ui';
+import { type ManagedDialogProps, openDialog, UnsavedChangesDialog } from '@ui';
 import deepEqual from 'fast-deep-equal';
-import { onCleanup } from 'solid-js';
+import { createEffect, getOwner, on, onCleanup } from 'solid-js';
 import type { SavedViewLeaveSource } from '../context/saved-view-leave-source';
 
 /** Reuses the app's leave dialog for route, sidebar, pane, and window exits. */
@@ -13,6 +13,7 @@ export function SavedViewLeaveGuard(props: {
   /** Selection fields, not filter/layout fields, in each watched namespace. */
   selection: Readonly<Record<string, readonly string[]>>;
 }) {
+  const owner = getOwner();
   const leave = createDraftLeave({
     identity: props.source.identity,
     scope: props.source.viewerId,
@@ -40,9 +41,9 @@ export function SavedViewLeaveGuard(props: {
     search: Object.keys(props.selection),
     descendants: true,
   });
-  return (
+  const LeaveDialog = (dialog: ManagedDialogProps) => (
     <UnsavedChangesDialog
-      open={leave.open()}
+      open={dialog.open}
       pending={leave.busy()}
       canSave={Boolean(props.source.identity())}
       error={leave.error()}
@@ -54,4 +55,23 @@ export function SavedViewLeaveGuard(props: {
       onSave={() => fireAndForget(leave.save(), 'saved-view-leave')}
     />
   );
+  createEffect(
+    on(leave.open, (open) => {
+      if (!open) return;
+      const handle = openDialog(LeaveDialog, {}, { owner });
+      let active = true;
+      onCleanup(() => {
+        active = false;
+        handle.close();
+      });
+      // Host dismissal must settle the pending navigation, but an older
+      // dialog must never cancel a newer leave request.
+      const finish = async () => {
+        await handle.closed;
+        if (active) leave.keepEditing();
+      };
+      fireAndForget(finish(), 'saved-view-leave');
+    })
+  );
+  return null;
 }

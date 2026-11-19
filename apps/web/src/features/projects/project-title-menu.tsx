@@ -14,7 +14,8 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { formatOptionValue } from '@property/utils/formatting';
-import { createSignal, Show } from 'solid-js';
+import { type ManagedDialogProps, openDialog } from '@ui';
+import { createSignal, getOwner, Show } from 'solid-js';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { RenameProjectDialog } from './components/rename-project-dialog';
 import {
@@ -54,9 +55,7 @@ export type ProjectTitleMenuViewProps = {
 export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
   const definitions = useProjectsContext().createPropertyDefinitionsSource();
   const layout = useSplitLayout();
-  const [renaming, setRenaming] = createSignal(false);
-  const [deleting, setDeleting] = createSignal(false);
-  const [error, setError] = createSignal<string>();
+  const owner = getOwner();
   const definition = (id: string) =>
     definitions
       .properties()
@@ -85,22 +84,42 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
       throw new Error('Project is read-only.');
     await props.commands.rename(props.project.id, name);
   };
-  const deleteProject = async () => {
-    if (!canDeleteProject(props.project)) {
-      setError('Only the project owner can delete it.');
-      return;
-    }
-    const projectId = props.project.id;
-    setError(undefined);
-    try {
-      await props.commands.delete(projectId);
-      if (props.project.id === projectId) props.onDelete();
-    } catch (error) {
-      if (props.project.id !== projectId) return;
-      setError(
-        error instanceof Error ? error.message : 'Could not delete project.'
-      );
-    }
+  const RenameDialog = (dialog: ManagedDialogProps) => (
+    <RenameProjectDialog
+      name={props.project.name}
+      onOpenChange={dialog.onOpenChange}
+      onRename={renameProject}
+    />
+  );
+  const DeleteDialog = (dialog: ManagedDialogProps) => {
+    const [error, setError] = createSignal<string>();
+    const deleteProject = async () => {
+      if (!canDeleteProject(props.project)) {
+        setError('Only the project owner can delete it.');
+        return;
+      }
+      const projectId = props.project.id;
+      setError(undefined);
+      try {
+        await props.commands.delete(projectId);
+        if (props.project.id === projectId) props.onDelete();
+        dialog.onOpenChange(false);
+      } catch (error) {
+        if (props.project.id !== projectId) return;
+        setError(
+          error instanceof Error ? error.message : 'Could not delete project.'
+        );
+      }
+    };
+    return (
+      <DeleteProjectsDialog
+        count={1}
+        pending={props.commands.pending()}
+        error={error()}
+        onOpenChange={dialog.onOpenChange}
+        onDelete={() => fireAndForget(deleteProject(), 'projects')}
+      />
+    );
   };
   const optionTool = (propertyId: string, label: string): BlockTool => ({
     label,
@@ -135,7 +154,16 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
       label: () => t('entityActions.rename'),
       icon: RenameIcon,
       group: 'file',
-      action: () => setRenaming(true),
+      action: () => {
+        openDialog(
+          RenameDialog,
+          {},
+          {
+            owner,
+            key: `project-title:rename:${props.project.id}`,
+          }
+        );
+      },
       condition: () => canEditProject(props.project),
     },
     status: optionTool(
@@ -157,38 +185,26 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
       icon: TrashIcon,
       group: 'delete',
       action: () => {
-        setError(undefined);
-        setDeleting(true);
+        openDialog(
+          DeleteDialog,
+          {},
+          {
+            owner,
+            key: `project-title:delete:${props.project.id}`,
+          }
+        );
       },
       condition: () => canDeleteProject(props.project),
     },
   };
   return (
-    <>
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <ProjectTitleMenuView project={props.project} actions={actions} />
-        }
-      >
-        <MobileProjectTitleMenu project={props.project} actions={actions} />
-      </Show>
-      <Show when={renaming()}>
-        <RenameProjectDialog
-          name={props.project.name}
-          onOpenChange={setRenaming}
-          onRename={renameProject}
-        />
-      </Show>
-      <Show when={deleting()}>
-        <DeleteProjectsDialog
-          count={1}
-          pending={props.commands.pending()}
-          error={error()}
-          onOpenChange={setDeleting}
-          onDelete={() => fireAndForget(deleteProject(), 'projects')}
-        />
-      </Show>
-    </>
+    <Show
+      when={isTouchDevice()}
+      fallback={
+        <ProjectTitleMenuView project={props.project} actions={actions} />
+      }
+    >
+      <MobileProjectTitleMenu project={props.project} actions={actions} />
+    </Show>
   );
 }

@@ -20,3 +20,21 @@ for the user. No further browser automation will run for this change.
 
 The isolated `project-updates-r5` verification stack was stopped. The hosted-dev
 preview remains available at the existing preview address.
+
+## Main merge and cleanup
+
+- Merged `origin/main` at `7546d65576`. Resolved `MobileDrawer.tsx` by combining
+  navigation-driven dismissal with controlled snap points, rejected-dismissal
+  restoration, and the keyboard-stable Discussion sheet.
+- Removed 49 branch-only test and browser-fixture files; retained all files
+  already present on main and removed obsolete suite commands.
+- Open project-title rename/delete and saved-view leave confirmation through
+  the imperative dialog host with owner-bound cleanup and permission checks.
+- Use `Show` for conditional JSX and resolve repeated JSX children once; retain
+  Discussion's render callback without evaluating it outside its provider.
+- Separate project-route decoding from Back history behavior; retain nested
+  task returns, direct-link fallbacks, list state, and phone/tablet behavior.
+- Local validation: 307 test files and 2,427 tests passed, together with web
+  checks and `just check`. Browser/device checks remain assigned to the user.
+- Request and review CI after pushing; completion requires a passing gate on
+  the latest commit.
