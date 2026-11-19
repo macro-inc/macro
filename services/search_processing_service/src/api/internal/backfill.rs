@@ -26,13 +26,16 @@ use serde::Serialize;
 
 use crate::BackfillServiceImpl;
 use crate::api::context::{ApiContext, AuthorizationService};
+use crate::domain::backfill_gate::BackfillGate;
 use crate::domain::jobs::{BackfillJobs, JobId};
 use crate::domain::models::{
     CalendarEventBackfillRequest, CallBackfillRequest, ChannelBackfillRequest, ChatBackfillRequest,
     DocumentBackfillRequest, EmailBackfillRequest, ProjectBackfillRequest,
     PropertiesBackfillRequest,
 };
+use crate::domain::ports::BackfillControl as _;
 use crate::domain::service::BackfillService;
+use crate::outbound::backfill_control::DynamoBackfillControl;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
@@ -46,6 +49,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/properties", post(properties))
         .route("/projects", post(projects))
         .route("/calendar-events", post(calendar_events))
+        .route("/pause", get(pause_state).put(set_pause))
         .route("/{job_id}", get(status))
 }
 
@@ -54,10 +58,11 @@ struct AcceptedReceipt {
     job_id: JobId,
 }
 
-#[tracing::instrument(skip(service, jobs, _internal_authorization, req))]
+#[tracing::instrument(skip(service, jobs, gate, _internal_authorization, req))]
 async fn agent_sessions(
     State(service): State<Arc<crate::AgentSessionIndexer>>,
     State(jobs): State<BackfillJobs>,
+    State(gate): State<BackfillGate>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     extract::Json(req): extract::Json<
         crate::domain::agent_session_index::AgentSessionBackfillRequest,
@@ -67,7 +72,7 @@ async fn agent_sessions(
         service,
         jobs,
         "agent-sessions",
-        move |svc, progress, cancel| async move { svc.backfill(req, progress, cancel).await },
+        move |svc, progress, cancel| async move { svc.backfill(req, &gate, progress, cancel).await },
     )
     .await
 }
@@ -230,12 +235,68 @@ async fn calendar_events(
     .await
 }
 
+#[derive(Debug, serde::Deserialize, Serialize)]
+struct PauseState {
+    paused: bool,
+}
+
+/// Whether backfills are paused. Every task rereads the switch every
+/// [`crate::domain::backfill_gate::PAUSE_POLL_INTERVAL`], so a change takes up to that long to stop or
+/// start them.
+#[tracing::instrument(skip(control, _internal_authorization))]
+async fn pause_state(
+    State(control): State<DynamoBackfillControl>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+) -> Response {
+    match control.paused().await {
+        Ok(paused) => axum::Json(PauseState { paused }).into_response(),
+        Err(error) => {
+            tracing::error!(error = ?error, "failed to read the backfill pause switch");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "pause switch unavailable",
+            )
+                .into_response()
+        }
+    }
+}
+
+/// Pause or resume every backfill in every task: SQS backfill workers stop
+/// taking messages, which wait on the queue, and direct backfills wait before
+/// their next write. Work already admitted finishes.
+#[tracing::instrument(skip(control, _internal_authorization))]
+async fn set_pause(
+    State(control): State<DynamoBackfillControl>,
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    extract::Json(req): extract::Json<PauseState>,
+) -> Response {
+    match control.set_paused(req.paused).await {
+        Ok(()) => {
+            tracing::info!(paused = req.paused, "backfill pause switch set");
+            axum::Json(req).into_response()
+        }
+        Err(error) => {
+            tracing::error!(error = ?error, "failed to set the backfill pause switch");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "pause switch unavailable",
+            )
+                .into_response()
+        }
+    }
+}
+
 #[tracing::instrument(skip(jobs, _internal_authorization))]
 async fn status(
     State(jobs): State<BackfillJobs>,
     _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
     Path(job_id): Path<String>,
 ) -> Response {
+    // Job ids are UUIDs; the table's other items, such as the pause switch,
+    // are not jobs.
+    if uuid::Uuid::parse_str(&job_id).is_err() {
+        return (StatusCode::NOT_FOUND, "unknown job id").into_response();
+    }
     match jobs.snapshot(&JobId::from(job_id)).await {
         Ok(Some(snap)) => axum::Json(snap).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "unknown job id").into_response(),

@@ -7,6 +7,7 @@
 //! loops live here so they can be tested with in-memory fakes while adapters
 //! stay single-concern.
 
+use super::backfill_gate::BackfillGate;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -29,6 +30,7 @@ use super::ports::{BackfillSource, PropertyBackfillIndexer, SearchEventPublisher
 /// paginate by sort-key.
 async fn drain_source_with_cursor<C, Fut, P>(
     publisher: &P,
+    gate: &BackfillGate,
     progress: &JobProgress,
     cancel: &CancellationToken,
     fetch: impl Fn(Option<C>) -> Fut,
@@ -42,7 +44,9 @@ where
     let mut not_queued = 0usize;
 
     loop {
-        if cancel.is_cancelled() {
+        // A paused backfill enqueues nothing either: the queue's workers
+        // would only hold the messages back.
+        if !wait_unpaused_or_cancel(gate, cancel).await {
             tracing::info!(enqueued, "backfill cancelled between pages");
             break;
         }
@@ -131,6 +135,7 @@ pub struct BackfillOrchestrator<S, P, I> {
     source: S,
     publisher: P,
     property_indexer: I,
+    gate: BackfillGate,
 }
 
 impl<S, P, I> BackfillOrchestrator<S, P, I>
@@ -139,11 +144,12 @@ where
     P: SearchEventPublisher,
     I: PropertyBackfillIndexer,
 {
-    pub fn new(source: S, publisher: P, property_indexer: I) -> Self {
+    pub fn new(source: S, publisher: P, property_indexer: I, gate: BackfillGate) -> Self {
         Self {
             source,
             publisher,
             property_indexer,
+            gate,
         }
     }
 }
@@ -159,6 +165,7 @@ where
 /// back reflects the rows actually enqueued before cancellation.
 async fn drain_source<Fut, P>(
     publisher: &P,
+    gate: &BackfillGate,
     progress: &JobProgress,
     cancel: &CancellationToken,
     fetch: impl Fn(usize) -> Fut,
@@ -172,7 +179,9 @@ where
     let mut not_queued = 0usize;
 
     loop {
-        if cancel.is_cancelled() {
+        // A paused backfill enqueues nothing either: the queue's workers
+        // would only hold the messages back.
+        if !wait_unpaused_or_cancel(gate, cancel).await {
             tracing::info!(enqueued, "backfill cancelled between pages");
             break;
         }
@@ -196,11 +205,23 @@ where
     })
 }
 
+/// Wait while backfills are paused; `false` once `cancel` fires instead.
+async fn wait_unpaused_or_cancel(gate: &BackfillGate, cancel: &CancellationToken) -> bool {
+    if cancel.is_cancelled() {
+        return false;
+    }
+    tokio::select! {
+        () = gate.wait_unpaused() => !cancel.is_cancelled(),
+        () = cancel.cancelled() => false,
+    }
+}
+
 /// Drain typed property pages with a bounded number of direct reindexes.
 /// Cancellation is observed only at page boundaries so each started page is
 /// either completed and counted or fails without updating progress.
 async fn drain_property_source<Fut, I>(
     indexer: &I,
+    gate: &BackfillGate,
     progress: &JobProgress,
     cancel: &CancellationToken,
     fetch: impl Fn(usize) -> Fut,
@@ -213,7 +234,7 @@ where
     let mut enqueued = 0usize;
 
     loop {
-        if cancel.is_cancelled() {
+        if !wait_unpaused_or_cancel(gate, cancel).await {
             tracing::info!(enqueued, "property backfill cancelled between pages");
             break;
         }
@@ -229,11 +250,28 @@ where
             rows_consumed,
         } = page;
 
-        stream::iter(entity_ids)
-            .map(|entity_id| async move { indexer.reindex(&entity_id, entity_type).await })
+        if stream::iter(entity_ids)
+            .map(|entity_id| async move {
+                // A write cancelled while it waits for the gate is skipped,
+                // and its page is not counted.
+                let _permit = tokio::select! {
+                    biased;
+                    permit = gate.admit() => permit,
+                    () = cancel.cancelled() => return Ok(false),
+                };
+                indexer
+                    .reindex(&entity_id, entity_type)
+                    .await
+                    .map(|()| true)
+            })
             .buffer_unordered(20)
-            .try_collect::<Vec<()>>()
-            .await?;
+            .try_collect::<Vec<bool>>()
+            .await?
+            .contains(&false)
+        {
+            tracing::info!(enqueued, "property backfill cancelled during a page");
+            break;
+        }
 
         enqueued += rows_consumed;
         offset += rows_consumed;
@@ -258,7 +296,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_calls(&req, cursor)
         })
         .await
@@ -270,7 +308,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_chats(&req, cursor)
         })
         .await
@@ -285,7 +323,7 @@ where
         if req.channel_ids.as_ref().is_some_and(Vec::is_empty) {
             return Ok(BackfillReceipt::default());
         }
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_channels(&req, cursor)
         })
         .await
@@ -297,7 +335,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_documents(&req, cursor)
         })
         .await
@@ -309,7 +347,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source(&self.publisher, &progress, &cancel, |offset| {
+        drain_source(&self.publisher, &self.gate, &progress, &cancel, |offset| {
             self.source.fetch_emails(&req, offset)
         })
         .await
@@ -321,9 +359,13 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_property_source(&self.property_indexer, &progress, &cancel, |offset| {
-            self.source.fetch_entity_properties(&req, offset)
-        })
+        drain_property_source(
+            &self.property_indexer,
+            &self.gate,
+            &progress,
+            &cancel,
+            |offset| self.source.fetch_entity_properties(&req, offset),
+        )
         .await
     }
 
@@ -333,7 +375,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_projects(&req, cursor)
         })
         .await
@@ -345,7 +387,7 @@ where
         progress: Arc<JobProgress>,
         cancel: CancellationToken,
     ) -> Result<BackfillReceipt, BackfillError> {
-        drain_source_with_cursor(&self.publisher, &progress, &cancel, |cursor| {
+        drain_source_with_cursor(&self.publisher, &self.gate, &progress, &cancel, |cursor| {
             self.source.fetch_calendar_events(&req, cursor)
         })
         .await

@@ -75,6 +75,8 @@ pub enum BackfillError {
     Reindex(#[source] anyhow::Error),
     #[error("failed updating the search index")]
     Index(#[source] anyhow::Error),
+    #[error("failed reading or writing the backfill pause switch")]
+    Control(#[source] anyhow::Error),
     /// The search index refused writes, so the job stopped instead of
     /// retrying. `cursor` is the last key it finished, to resume after.
     #[error("stopped because the search index refused writes: {reason}")]
