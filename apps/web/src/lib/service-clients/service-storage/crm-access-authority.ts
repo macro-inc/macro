@@ -98,16 +98,23 @@ export function createCrmAccessAuthority(options: Options) {
   let observationVersion = 0;
   let earlyProofStarted = false;
   let earlyAccess: 'allowed' | 'denied' | undefined;
-  // A server denial remains authoritative if writing its durable marker fails.
-  // It holds for the owner generation it was proven against: another read of
-  // that baseline cannot reopen CRM, and only a committed grant or a newer
-  // owner generation supersedes it.
-  let deniedProof: string | undefined;
+  // A server denial remains authoritative if writing its durable marker fails,
+  // or if the owner that recorded it is replaced by one that has not. It is
+  // bound to that owner and generation: another read of the same baseline
+  // cannot reopen CRM, and only a committed grant, a newer generation of the
+  // same owner or a new login supersedes it.
+  let deniedProof:
+    | { owner: CacheAuthorityHost; generation: string }
+    | undefined;
 
   function observe(next: CacheAuthority, retryRetirement = false) {
     const previous = observed;
     observationVersion += 1;
-    if (deniedProof !== next.generation) deniedProof = undefined;
+    if (
+      deniedProof?.owner === owner &&
+      deniedProof.generation !== next.generation
+    )
+      deniedProof = undefined;
     if (
       (next.account !== null && next.account !== account) ||
       (previous && previous.generation !== next.generation) ||
@@ -252,9 +259,14 @@ export function createCrmAccessAuthority(options: Options) {
           earlyAccess = undefined;
           // A proven denial hides entry points even if local disk cleanup fails.
           const denied = policy.endsWith(':denied');
-          const newlyDenied = denied && deniedProof !== before.generation;
+          const newlyDenied =
+            denied &&
+            !(
+              deniedProof?.owner === target &&
+              deniedProof.generation === before.generation
+            );
           if (denied) {
-            deniedProof = before.generation;
+            deniedProof = { owner: target, generation: before.generation };
             setState('denied');
           }
           const result = await span.span('crm.access.transition', async () => {
@@ -267,6 +279,7 @@ export function createCrmAccessAuthority(options: Options) {
               if (
                 newlyDenied &&
                 current() &&
+                observed?.generation === before.generation &&
                 !(error instanceof StaleCacheAuthorityError)
               )
                 retire('permission', before.generation);
@@ -274,7 +287,9 @@ export function createCrmAccessAuthority(options: Options) {
             }
           });
           if (!current()) return;
-          deniedProof = undefined;
+          deniedProof = denied
+            ? { owner: target, generation: result.authority.generation }
+            : undefined;
           span.run(() => observe(result.authority));
           await retiring;
           return;

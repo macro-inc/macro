@@ -139,6 +139,26 @@ it('retires its own copies once when a proven denial cannot be committed', async
   expect(authority.state()).toBe('denied');
 });
 
+it('keeps a proven denial when its owner is replaced by one that still records access', async () => {
+  const { authority, fetchProof } = client(sharedOwner(`${team}:allowed`));
+  await authority.refresh();
+  fetchProof.mockResolvedValue(`${team}:denied`);
+  await authority.refresh();
+  expect(authority.state()).toBe('denied');
+  const requested = Promise.withResolvers<void>();
+  const proof = Promise.withResolvers<string>();
+  fetchProof.mockImplementation(async () => {
+    requested.resolve();
+    return proof.promise;
+  });
+  authority.setHost(sharedOwner(`${team}:allowed`));
+  await requested.promise;
+  expect(authority.state()).toBe('denied');
+  proof.resolve(`${team}:allowed`);
+  await authority.refresh();
+  expect(authority.state()).toBe('allowed');
+});
+
 it('follows a regrant committed by another window after proving the denial itself', async () => {
   const owner = sharedOwner(`${team}:allowed`);
   const first = client(owner);
