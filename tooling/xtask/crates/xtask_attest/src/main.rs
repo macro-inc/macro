@@ -113,6 +113,7 @@ fn requested<'a>(manifest: &'a Manifest, asked: &[String]) -> Result<Vec<&'a Che
 /// Runs the checks of one checkout, remembering what `PR CI` decides once
 /// per run: which calls its path filters start, and each workflow's selection.
 struct Session<'a> {
+    checkout: &'a Checkout,
     machine: Machine<'a>,
     caller: serde_yaml::Value,
     /// `needs` as the caller's call jobs see it: the start job's outputs.
@@ -167,6 +168,7 @@ impl Session<'_> {
         if check.selected {
             if !self.selections.contains_key(&check.workflow) {
                 eprintln!("── {} / {selector}", check.workflow);
+                self.checkout.restore()?;
                 let selection = match self.machine.run_job(
                     &workflow,
                     &selector,
@@ -191,6 +193,7 @@ impl Session<'_> {
         }
 
         eprintln!("── {}", check.id);
+        self.checkout.restore()?;
         match self
             .machine
             .run_job(&workflow, &check.job, &Plan::Steps(&check.steps), &needs)?
@@ -286,6 +289,7 @@ fn run(asked: &[String], post_statuses: bool, base_branch: &str) -> Result<bool,
         JobResult::Failed { step } => bail!("deciding the caller's path filters ran `{step}`"),
     };
     let mut session = Session {
+        checkout: &checkout,
         machine,
         caller,
         caller_needs: BTreeMap::from([(manifest.caller_start_job.clone(), start)]),

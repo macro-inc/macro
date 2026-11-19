@@ -13,7 +13,6 @@
 //! attestation run at a time, whichever worktree starts it.
 
 use std::{
-    collections::BTreeSet,
     fs::File,
     path::{Path, PathBuf},
     process::Command,
@@ -25,6 +24,8 @@ use sha2::{Digest, Sha256};
 /// The merge of a commit with its base, ready to run checks on.
 pub struct Checkout {
     pub dir: PathBuf,
+    /// The source repository's git directory, whose objects the checkout reads.
+    common_dir: PathBuf,
     /// Holds what outlives one run: the checkout, the runner's home.
     pub cache: PathBuf,
     pub head: String,
@@ -98,29 +99,41 @@ fn initialize(dir: &Path, common_dir: &Path, remote_url: &str) -> Result<(), Rep
     Ok(())
 }
 
-/// A shallow source knows where its history stops; the checkout must too, on
-/// top of the boundaries its own fetches set.
-fn share_shallow_boundary(dir: &Path, common_dir: &Path) -> Result<(), Report> {
-    let read = |path: PathBuf| -> BTreeSet<String> {
-        std::fs::read_to_string(path)
-            .unwrap_or_default()
-            .lines()
-            .map(str::to_owned)
-            .collect()
-    };
-
+/// A shallow source knows where its history stops, and the checkout reads
+/// history through the source's objects, so it takes the source's boundary
+/// as it is. A step's own `git fetch --depth` would otherwise leave a
+/// boundary at a commit whose parents are all there, and hide them from the
+/// next merge.
+fn take_shallow_boundary(dir: &Path, common_dir: &Path) -> Result<(), Report> {
     let own = dir.join(".git/shallow");
-    let mut boundary = read(common_dir.join("shallow"));
-    boundary.extend(read(own.clone()));
-    if boundary.is_empty() {
-        return Ok(());
+    match std::fs::read(common_dir.join("shallow")) {
+        Ok(boundary) => {
+            std::fs::write(&own, boundary)
+                .context("could not write the checkout's shallow boundary")?;
+        }
+        Err(_) if own.exists() => {
+            std::fs::remove_file(&own)
+                .context("could not clear the checkout's shallow boundary")?;
+        }
+        Err(_) => {}
     }
+    Ok(())
+}
 
-    let text: String = boundary
-        .iter()
-        .map(|commit| format!("{commit}\n"))
-        .collect();
-    Ok(std::fs::write(&own, text).context("could not write the checkout's shallow boundary")?)
+impl Checkout {
+    /// Put the checkout back to the merge commit, as a runner's fresh
+    /// checkout is for every job: tracked files restored, untracked files
+    /// removed, history as the source has it. Ignored files (build output,
+    /// installed packages) stay, as they do on a runner's cache volume.
+    pub fn restore(&self) -> Result<(), Report> {
+        take_shallow_boundary(&self.dir, &self.common_dir)?;
+        git(
+            &self.dir,
+            &["checkout", "--quiet", "--force", "--detach", &self.merge],
+        )?;
+        git(&self.dir, &["clean", "--quiet", "-fd"])?;
+        Ok(())
+    }
 }
 
 /// Build the merge of `HEAD` with the remote's `base_branch` and check it out.
@@ -153,7 +166,7 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
 
     let dir = cache.join("checkout");
     initialize(&dir, &common_dir, &remote_url)?;
-    share_shallow_boundary(&dir, &common_dir)?;
+    take_shallow_boundary(&dir, &common_dir)?;
 
     // The merge GitHub would build: base first, head second.
     let tree = git(&dir, &["merge-tree", "--write-tree", &base, &head]).context(format!(
@@ -188,14 +201,6 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
             &base,
         ],
     )?;
-    git(
-        &dir,
-        &["checkout", "--quiet", "--force", "--detach", &merge],
-    )?;
-    // Untracked files a previous run left; ignored ones (build output,
-    // installed packages) stay, as they do on a runner's cache volume.
-    git(&dir, &["clean", "--quiet", "-fd"])?;
-
     let merge_base = git(&dir, &["merge-base", &base, &head])?;
     let changed_files = git(
         &dir,
@@ -205,8 +210,9 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
     .map(str::to_owned)
     .collect();
 
-    Ok(Checkout {
+    let checkout = Checkout {
         dir,
+        common_dir,
         cache,
         head,
         base,
@@ -215,5 +221,7 @@ pub fn prepare(source: &Path, base_branch: &str) -> Result<Checkout, Report> {
         repository: repository_of(&remote_url)?,
         changed_files,
         _lock: lock,
-    })
+    };
+    checkout.restore()?;
+    Ok(checkout)
 }
