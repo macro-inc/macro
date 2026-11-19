@@ -8,6 +8,11 @@ tools — hexagonal, heavily feature-gated.
 
 ## Start here
 
+- `domain/mailbox/imap_connection.rs`: verified-address IMAP connection policy,
+  durable promotion recovery and enrollment; its ports keep credentials and SQL
+  outside the email domain. `domain/mailbox/runtime.rs` separates sync and
+  write admission per provider.
+
 - `src/domain/service.rs` + `src/domain/ports.rs`: the domain service and the
   traits its adapters implement.
 - `src/domain/message_reads.rs` (feature `mailbox`): synced message/thread
@@ -90,7 +95,8 @@ tools — hexagonal, heavily feature-gated.
   (`domain/event_forward.rs`): that same file, or, for an organizer outside
   Google, a real invitation (`METHOD:REQUEST`) sent as the message's calendar
   body to the recipients and the organizer, whichever the calendar decides.
-- Provider protocol implementations live in `email_api_client`; HTTP/queue
+- Gmail/Graph API adapters live in `email_api_client`; IMAP/SMTP protocol
+  implementations live in `imap_engine`, behind `imap_service`. HTTP/queue
   hosting lives in `services/email_service`; HTML parsing/sanitization lives in
   `email_utils`. PostgreSQL adapters in this crate and `email_db_client` perform
   database I/O; domain modules call their ports.
@@ -334,6 +340,11 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Draft claims inspect one indexed eligible head per provider mailbox, then lock only
+  the winner with every eligibility fence repeated; retry a locked head’s successor,
+  yielding without a claim after 32 contended candidates until the next worker round.
+  Keep separate normal/recovery index predicates and correlated command-lease probes
+  so paused writes and mixed-provider backlogs do not scan unrelated drafts.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
@@ -603,3 +614,7 @@ tools — hexagonal, heavily feature-gated.
 - Rules: `.agents/rules/rust/architecture.md`
 
 - Persist agent correlation with scheduled delivery and organization projection payloads, then restore it when publishing delayed activity.
+
+Keep paused folders in the complete role catalog with `sync_enabled = false`.
+Pause or remove only their folder streams: treating an exclusion as deletion
+reclassifies retained Trash descendants and schedules unwanted body downloads.

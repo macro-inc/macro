@@ -84,9 +84,25 @@ starts it and brings up the native controls. When it ends, the last frame dims u
 focus) hides it on that device for good (`localStorage`
 `email-tutorial-row-dismissed`). It is outside the virtualized rows, so list
 keyboard focus skips it.
-Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
-shows `Connect your email`; Gmail/Google Workspace and enabled Outlook connections
-use provider consent. Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
+Compose via the `Email` button (or `Create` → `Email E`). A fresh account
+shows **Connect your email** or offers the verified sign-in address. Gmail,
+Google Workspace and enabled Outlook connections offer provider consent.
+When IMAP is available, open the incoming/outgoing server form, confirm both
+servers, enter the password or app password, then choose **Connect inbox**.
+Phones show the same fields full-screen.
+
+Open **Settings → Email** to check import progress, reconnect or disconnect.
+On an owned IMAP inbox, **Server settings** shows the hosts, ports, encryption
+and usernames for both servers. Recent verifications also show the negotiated
+features, the verification time and any outgoing size limit the server supplied.
+**Change login details** verifies replacement credentials for the same inbox.
+
+Under **Folders**, choose a role, include or exclude a folder, or watch one
+additional folder for new mail. Inbox is always included. **Outside the latest
+sync** identifies an included folder absent from the most recent pass. Choose
+**Save settings** to apply changes.
+
+Most functionality needs a connected account. Search is `Ctrl+F` within the surface: it focuses the list header's search field, and when a thread or a new email has replaced the list it is left to the browser's find. Outside a text field, `/` opens the app's Search view from Email in every state, as in every other view. The Email sidebar has no search field.
 
 ### Wide search (flagged)
 

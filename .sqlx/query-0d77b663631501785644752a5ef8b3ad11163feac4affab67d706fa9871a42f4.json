@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id,user_id,credential_owner,email,link_id,verification_id,sync_generation,grant_generation,expected_generation,completed FROM email_imap_connection_attempts WHERE id=$1 AND user_id=$2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "credential_owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "verification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "expected_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 9,
+        "name": "completed",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "0d77b663631501785644752a5ef8b3ad11163feac4affab67d706fa9871a42f4"
+}

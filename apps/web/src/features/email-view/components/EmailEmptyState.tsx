@@ -6,6 +6,8 @@ import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import EmptyStateNoFilterMatchGraphic from '@design/empty-state-no-filter-match.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { FOCUS_WINDOW_DAYS } from '@queries/email/focus';
+import { useInboxSuggestion } from '@queries/email/link';
+import { queryReadyGate } from '@queries/gate';
 import { EmptyStatePanel, FilteredHiddenBanner } from '@ui';
 import { Match, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -85,6 +87,34 @@ export function EmailEmptyState() {
     useEmailView();
   const emailActive = useEmailLinksStatus();
   const startAddInbox = useAddInboxFlow();
+  const suggestion = useInboxSuggestion(() => !emailActive());
+  const offer = () => {
+    if (!queryReadyGate(suggestion) || suggestion.data.offer === 'none') return;
+    return suggestion.data;
+  };
+  const connectSuggested = () => {
+    const suggested = offer();
+    if (!suggested) return startAddInbox();
+    switch (suggested.offer) {
+      case 'gmail':
+        return startAddInbox({
+          provider: 'GMAIL',
+          emailAddress: suggested.email,
+        });
+      case 'outlook':
+        return startAddInbox({
+          provider: 'OUTLOOK',
+          emailAddress: suggested.email,
+        });
+      case 'imap':
+        return startAddInbox({
+          provider: 'IMAP',
+          emailAddress: suggested.email,
+        });
+      default:
+        return startAddInbox();
+    }
+  };
   // Scheduled has no search or filters; text typed on another tab stays behind.
   const searchText = () =>
     canSearchEmailTab(state.tab) ? state.search.trim() : '';
@@ -98,12 +128,24 @@ export function EmailEmptyState() {
         <EmptyStatePanel
           centered
           graphic={EmptyStateEmailGraphic}
-          title="Connect your email"
-          description="Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail."
+          title={offer() ? `Connect ${offer()?.email}` : 'Connect your email'}
+          description={
+            offer()
+              ? 'Read and reply to messages from this inbox in Macro.'
+              : 'Bring your inbox into Macro to triage signal from noise, reply faster, and let agents work alongside your mail.'
+          }
           primaryAction={{
             label: 'Connect email',
-            onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+            onClick: () => fireAndForget(connectSuggested(), 'add-inbox'),
           }}
+          secondaryAction={
+            offer()
+              ? {
+                  label: 'Use a different account',
+                  onClick: () => fireAndForget(startAddInbox(), 'add-inbox'),
+                }
+              : undefined
+          }
           documentationUrl={EMAIL_DOCS_URL}
         />
       </Match>

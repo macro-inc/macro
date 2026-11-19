@@ -18,6 +18,7 @@ pub mod events;
 mod evidence;
 mod focus;
 mod host;
+mod imap;
 mod inbox;
 mod infra;
 mod lambda;
@@ -41,6 +42,7 @@ pub use focus::FocusClassifier;
 /// The Gmail emulator's own API, for what the inbox methods do not cover.
 pub use gmail_emulator;
 pub use host::raise_open_file_limit;
+pub use imap::ImapLab;
 pub use inbox::{Inbox, Mail, MailAttachment, Provider, ProviderMessage};
 pub use macro_services::{GatewayMessage, HeldRequest, ServiceRequest};
 /// The Outlook emulator's own API, for what the inbox methods do not cover.

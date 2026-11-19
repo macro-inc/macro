@@ -308,6 +308,13 @@ emulator, not by a model provider. Image generation does not go through it.
 
 With a real Gemini key in the environment the emulator does not start.
 
+### IMAP and SMTP mailboxes
+
+To connect a real IMAP mailbox and send through authenticated local SMTP,
+start a named local instance with the IMAP lab env file. Its Dovecot, rollout
+flags and Mailpit belong only to that instance. See the
+[mail lab instructions](../../docker/imap-lab/README.md).
+
 ### Recover an existing instance without resetting data
 
 `just run_local --detach --instance <name>` brings an existing instance back up over
@@ -871,6 +878,11 @@ just stack update --services contacts_service  # rebuild and reload only these; 
 just stack update --binaries-dir <dir>  # remount a prebuilt set; volumes stay
 just stack down               # remove containers, volumes, and state
 ```
+
+Native Rust service containers use the Nix store library directories from the
+shell that builds or starts the stack. This lets binaries linked against shared
+libraries such as OpenSSL use the same libraries through the read-only store
+mount. A prebuilt Nix bundle uses its own recorded closure.
 
 The `run_local` start flags also apply to `stack up`. This includes `--instance`, `--no-doppler`, `--no-build`, and `--binaries-dir`. Every flow records the same state, so `stack update` works on a `run_local` instance. With no recorded stack it bootstraps through `stack up` only if the instance has no volumes; otherwise it refuses, unless you pass `--wipe-if-unrecorded`.
 

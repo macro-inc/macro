@@ -5,7 +5,13 @@ import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { queryReadyGate } from '../gate';
+import {
+  assertQueryAccount,
+  currentQueryAccount,
+  type QueryAccount,
+} from './account-scope';
 import { authKeys } from './keys';
+import { useQueryAccount } from './use-query-account';
 
 /** OAuth transport stays in the auth client, shared query orchestration here. */
 export function useInitOutlookLink() {
@@ -26,19 +32,28 @@ export function useInitOutlookLink() {
 const adminConsentReturnUrl = () => `${getWebOrigin()}/app/inbox-link-callback`;
 
 /** Per user: Outlook follows the server's `enable-outlook` flag. */
-const emailConnectionProvidersQuery = () =>
+const emailConnectionProvidersQuery = (account: QueryAccount | undefined) =>
   queryOptions({
-    queryKey: authKeys.emailConnectionProviders.queryKey,
-    queryFn: () =>
-      throwOnErr(() =>
+    queryKey: authKeys.emailConnectionProviders(
+      account?.userId,
+      account?.session
+    ).queryKey,
+    queryFn: async () => {
+      assertQueryAccount(account);
+      const result = await throwOnErr(() =>
         authServiceClient.emailConnectionProviders(adminConsentReturnUrl())
-      ),
+      );
+      assertQueryAccount(account);
+      return result;
+    },
     staleTime: 0,
   });
 
 /** Fetch on opening the chooser, without suspending unrelated application UI. */
 export function fetchEmailConnectionProviders() {
-  return queryClient.fetchQuery(emailConnectionProvidersQuery());
+  return queryClient.fetchQuery(
+    emailConnectionProvidersQuery(currentQueryAccount())
+  );
 }
 
 /**
@@ -49,10 +64,24 @@ export function fetchEmailConnectionProviders() {
 export function useOutlookAvailable(
   enabled: Accessor<boolean> = () => true
 ): Accessor<boolean> {
+  return useMailProviderAvailable('outlook', enabled);
+}
+
+export function useImapAvailable(
+  enabled: Accessor<boolean> = () => true
+): Accessor<boolean> {
+  return useMailProviderAvailable('imap', enabled);
+}
+
+function useMailProviderAvailable(
+  provider: 'outlook' | 'imap',
+  enabled: Accessor<boolean>
+): Accessor<boolean> {
+  const account = useQueryAccount();
   const query = useQuery(() => ({
-    ...emailConnectionProvidersQuery(),
-    enabled: enabled(),
+    ...emailConnectionProvidersQuery(account()),
+    enabled: !!account() && enabled(),
   }));
   // Gate the read: a pending query's data suspends the caller's boundary.
-  return () => queryReadyGate(query) && query.data.outlook;
+  return () => queryReadyGate(query) && !!query.data[provider];
 }

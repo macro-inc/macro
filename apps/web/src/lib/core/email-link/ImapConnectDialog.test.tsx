@@ -1,0 +1,176 @@
+/** @vitest-environment jsdom */
+
+import type { Discovery } from '@service-email/generated/schemas';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
+import { err, ok, type Result } from 'neverthrow';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { ImapConnectDialog } from './ImapConnectDialog';
+
+const mail = vi.hoisted(() => ({
+  discover: vi.fn(),
+  connect: vi.fn(),
+  accountCurrent: vi.fn(),
+}));
+vi.mock('@core/context/user', () => ({
+  useEmail: () => () => 'owner@example.com',
+}));
+vi.mock('@queries/auth/account-scope', () => ({
+  currentQueryAccount: () => ({ userId: 'owner', session: 1 }),
+  isCurrentQueryAccount: mail.accountCurrent,
+  queryAccountSession: () => 1,
+}));
+vi.mock('@service-email/client', () => ({
+  emailClient: { imapDiscover: mail.discover, imapConnect: mail.connect },
+}));
+
+beforeEach(() => {
+  vi.stubGlobal('scrollTo', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  mail.accountCurrent.mockReturnValue(true);
+  mail.discover.mockResolvedValue(
+    ok({
+      imap: {
+        host: 'in.example.com',
+        username: 'in-user',
+        port: 993,
+        tls: 'implicit',
+      },
+      smtp: {
+        host: 'out.example.com',
+        username: 'out-user',
+        port: 587,
+        tls: 'start_tls',
+      },
+      hostConfirmationRequired: true,
+    })
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.resetAllMocks();
+  vi.unstubAllGlobals();
+});
+
+it('binds reconnect to its inbox, requires confirmation again when a destination changes, and erases refused credentials', async () => {
+  const result = vi.fn();
+  mail.connect.mockResolvedValue(
+    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' }])
+  );
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={result}
+      emailAddress="owner@example.com"
+      linkId="existing-inbox"
+    />
+  ));
+  const incomingPassword = await screen.findByLabelText(
+    'Password or app password'
+  );
+  const confirm = screen.getByRole('checkbox', { name: /I trust/ });
+  expect(incomingPassword).toHaveProperty('disabled', true);
+  fireEvent.click(confirm);
+  fireEvent.input(incomingPassword, {
+    target: { value: 'first-app-password' },
+  });
+  const smtp = screen.getByRole('group', {
+    name: 'Outgoing mail (SMTP)',
+    hidden: true,
+  });
+  fireEvent.input(within(smtp).getByLabelText('Server name'), {
+    target: { value: 'smtp.example.com' },
+  });
+  expect(confirm).toHaveProperty('checked', false);
+  expect(incomingPassword).toHaveProperty('value', '');
+  fireEvent.click(confirm);
+  fireEvent.input(incomingPassword, {
+    target: { value: 'incoming-app-password' },
+  });
+  fireEvent.click(screen.getByLabelText('Use a separate outgoing password'));
+  const outgoingPassword = screen.getByLabelText('Outgoing password');
+  fireEvent.input(outgoingPassword, {
+    target: { value: 'outgoing-app-password' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Connect inbox' }));
+  await screen.findByRole('alert');
+  expect(mail.connect).toHaveBeenCalledTimes(1);
+  expect(mail.connect.mock.calls[0][0]).toEqual({
+    requestId: expect.any(String),
+    linkId: 'existing-inbox',
+    email: 'owner@example.com',
+    imap: {
+      endpoint: {
+        host: 'in.example.com',
+        username: 'in-user',
+        port: 993,
+        tls: 'implicit',
+      },
+      password: 'incoming-app-password',
+    },
+    smtp: {
+      endpoint: {
+        host: 'smtp.example.com',
+        username: 'out-user',
+        port: 587,
+        tls: 'start_tls',
+      },
+      password: 'outgoing-app-password',
+    },
+    confirmedHosts: ['in.example.com', 'smtp.example.com'],
+  });
+  expect(incomingPassword).toHaveProperty('value', '');
+  expect(outgoingPassword).toHaveProperty('value', '');
+  expect(result).not.toHaveBeenCalled();
+});
+
+it('discards discovery when the signed-in account changes', async () => {
+  const outcome = Promise.withResolvers<Result<Discovery, never>>();
+  mail.discover.mockReturnValue(outcome.promise);
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={() => {}}
+      emailAddress="owner@example.com"
+    />
+  ));
+  await vi.waitFor(() => expect(mail.discover).toHaveBeenCalledTimes(1));
+  mail.accountCurrent.mockReturnValue(false);
+  outcome.resolve(ok({ hostConfirmationRequired: true }));
+  await outcome.promise;
+  expect(screen.queryByLabelText('Password or app password')).toBeNull();
+  expect(mail.connect).not.toHaveBeenCalled();
+});
+
+it('keeps password entry closed when the server refuses discovery for an unverified address', async () => {
+  mail.discover.mockResolvedValue(
+    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'address_unverified' }])
+  );
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={() => {}}
+      emailAddress="unverified@example.com"
+    />
+  ));
+  expect(await screen.findByRole('alert')).toHaveProperty(
+    'textContent',
+    'Connect a verified address associated with your Macro account.'
+  );
+  expect(screen.queryByLabelText('Password or app password')).toBeNull();
+});

@@ -56,6 +56,7 @@ where
             provider: match link.provider {
                 service::link::UserProvider::Gmail => UserProvider::Gmail,
                 service::link::UserProvider::Outlook => UserProvider::Outlook,
+                service::link::UserProvider::Imap => UserProvider::Imap,
             },
         }))
     }

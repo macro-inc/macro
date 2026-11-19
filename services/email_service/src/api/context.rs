@@ -50,6 +50,12 @@ pub(crate) type MailboxInitializer =
         PgMailboxInitialization,
         MicrosoftGrantSource,
     >;
+pub(crate) type ImapConnectionSvc = email::domain::mailbox::imap_connection::ImapConnectionService<
+    crate::outbound::imap_connection::PgImapConnections,
+    crate::outbound::imap_connection::ImapConnectionClient,
+    crate::outbound::imap_connection::ImapEnrollment,
+>;
+
 pub(crate) type EmailSvc = EmailServiceImpl<
     EmailPgRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -180,6 +186,12 @@ pub(crate) type InvitationSvc = email::domain::invitations::InvitationService<
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub imap_notifications: Arc<
+        email::domain::mailbox::imap_notifications::ImapNotificationService<
+            email::outbound::mailbox_pg::PgMailboxSync,
+        >,
+    >,
+    pub imap_connections: Arc<ImapConnectionSvc>,
     pub gmail_push: Arc<GmailPushSvc>,
     pub user_inbox_deletion: Arc<UserInboxDeletionSvc>,
     pub inbox_connection: Arc<InboxConnectionSvc>,

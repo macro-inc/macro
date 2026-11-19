@@ -6,14 +6,40 @@ from email.message import EmailMessage
 import imaplib
 import json
 import os
+import re
 from pathlib import Path
 import ssl
+import subprocess
+import tempfile
 import sys
 import uuid
 
 
+def submission_mime(subject):
+    """Read Dovecot's native relay output before Mailpit synthesizes Bcc headers."""
+    container = "macro-imap-lab-dovecot-1"
+    with tempfile.TemporaryDirectory(prefix="imap-relay-oracle-") as directory:
+        subprocess.run(["docker", "cp", f"{container}:/tmp/macro-relay-rawlog/.", directory], check=True, capture_output=True, timeout=10)
+        for filename in reversed(sorted(Path(directory).glob("*.out"))):
+            # Native rawlog prepends a timestamp to each line; remove only
+            # that logging prefix, preserving the SMTP bytes after it.
+            raw = re.sub(rb"(?m)^[0-9]+\.[0-9]{6} ", b"", filename.read_bytes())
+            for chunk in raw.split(b"\r\nDATA\r\n")[1:]:
+                if b"\r\n.\r\n" not in chunk:
+                    continue
+                body = chunk.split(b"\r\n.\r\n", 1)[0] + b"\r\n"
+                body = b"\r\n".join(line[1:] if line.startswith(b"..") else line for line in body.split(b"\r\n"))
+                mail = message_from_bytes(body, policy=policy.default)
+                if str(mail.get("Subject", "")) == subject:
+                    return {"mimeBase64": base64.b64encode(body).decode(), "headerNames": list(mail.keys())}
+    return None
+
+
 def main():
     request = json.load(sys.stdin)
+    if request["operation"] == "submissionMime":
+        print(json.dumps(submission_mime(request["subject"])))
+        return
     context = ssl.create_default_context(cafile=Path(__file__).parent / "generated/ca.pem")
     port = int(os.environ.get("IMAP_LAB_IMAPS_PORT", "35993"))
     with imaplib.IMAP4_SSL("localhost", port, ssl_context=context, timeout=10) as server:

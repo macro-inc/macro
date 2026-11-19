@@ -66,12 +66,12 @@ impl Output {
             .count()
     }
 
-    pub(in crate::domain::mailbox::link_manager) fn subscriber(
-        &self,
-    ) -> impl tracing::Subscriber + Send + Sync + 'static {
-        tracing_subscriber::registry()
-            .with(tracing_subscriber::filter::LevelFilter::TRACE)
-            .with(Capture(self.clone()))
+    pub(in crate::domain::mailbox::link_manager) fn subscriber(&self) -> tracing::Dispatch {
+        crate::telemetry_capture::capture_dispatch(
+            tracing_subscriber::registry()
+                .with(tracing_subscriber::filter::LevelFilter::TRACE)
+                .with(Capture(self.clone())),
+        )
     }
 }
 

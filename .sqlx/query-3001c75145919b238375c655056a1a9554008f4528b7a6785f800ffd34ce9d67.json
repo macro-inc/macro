@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_links l WHERE l.id=$1 AND NOT l.is_sync_active\n            AND l.disconnect_requested_at IS NOT NULL AND NOT EXISTS(SELECT 1 FROM email_mailbox_lifecycle_outbox o\n                WHERE o.link_id=l.id AND o.payload->>'kind' IN ('cleanup_microsoft_watches','revoke_microsoft_grant','disconnect_imap'))) AS \"ready!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ready!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3001c75145919b238375c655056a1a9554008f4528b7a6785f800ffd34ce9d67"
+}

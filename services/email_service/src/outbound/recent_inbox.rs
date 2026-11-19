@@ -53,6 +53,7 @@ impl RecentInboxMailboxes for PgRecentInboxes {
 #[derive(Clone)]
 pub struct ProviderRecentInbox<R, T, L> {
     pub gmail: GmailApi,
+    pub imap: super::email_api::imap::ImapMailboxGateway,
     pub outlook: MailboxApiService<R, T, L>,
 }
 
@@ -69,6 +70,7 @@ where
     ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
         let messages = match mailbox.provider {
             UserProvider::Gmail => self.gmail_inbox(mailbox.key.link_id, limit).await?,
+            UserProvider::Imap => self.imap.recent(mailbox.key, limit).await?,
             UserProvider::Outlook => self
                 .outlook
                 .recent_inbox_messages(

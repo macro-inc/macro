@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_links WHERE lower(email_address)=lower($1) AND provider<>'GMAIL') AS \"conflict!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conflict!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "f98283557106cadb4a66c03070b1c9aecb243a1437975703f3b96aab83602473"
+}

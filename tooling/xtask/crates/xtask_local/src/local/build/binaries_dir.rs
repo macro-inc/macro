@@ -64,6 +64,21 @@ impl BinariesDir {
         ]
     }
 
+    /// Native cargo output may depend on shared libraries supplied by the developer's Nix shell.
+    /// Retain only canonical paths visible through the read-only store mount. Nix-built
+    /// binary bundles already carry their own closure and must keep their recorded paths.
+    pub fn runtime_library_path(&self) -> Option<String> {
+        if !matches!(self, Self::TargetDir(_)) {
+            return None;
+        }
+        let value = std::env::var_os("LD_LIBRARY_PATH")?;
+        let directories = std::env::split_paths(&value)
+            .filter_map(|path| path.canonicalize().ok())
+            .filter(|path| path.starts_with("/nix/store") && path.is_dir());
+        let value = std::env::join_paths(directories).ok()?.into_string().ok()?;
+        (!value.is_empty()).then_some(value)
+    }
+
     /// Assert every expected binary exists in the directory.
     pub fn validate(&self, binaries: &[&str]) -> Result<()> {
         let missing: Vec<&str> = binaries

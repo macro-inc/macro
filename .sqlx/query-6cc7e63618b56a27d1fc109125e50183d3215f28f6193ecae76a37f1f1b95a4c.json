@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO imap_account_owners(link_id,owner_id,sync_generation,grant_generation,lease_until) SELECT a.link_id,$4,a.sync_generation,a.grant_generation,now()+interval '360 seconds' FROM imap_accounts a JOIN email_links l ON l.id=a.link_id WHERE a.link_id=$1 AND a.sync_generation=$2 AND a.grant_generation=$3 AND l.provider='IMAP' AND l.is_sync_active AND NOT l.needs_reauth AND l.sync_generation=a.sync_generation AND l.grant_generation=a.grant_generation ON CONFLICT(link_id) DO UPDATE SET owner_id=EXCLUDED.owner_id,sync_generation=EXCLUDED.sync_generation,grant_generation=EXCLUDED.grant_generation,lease_until=EXCLUDED.lease_until WHERE imap_account_owners.owner_id=$4 OR imap_account_owners.lease_until<now() RETURNING link_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6cc7e63618b56a27d1fc109125e50183d3215f28f6193ecae76a37f1f1b95a4c"
+}

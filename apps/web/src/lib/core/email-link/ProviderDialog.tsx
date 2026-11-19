@@ -9,7 +9,7 @@ import {
 import { type Owner, onCleanup, runWithOwner, Show } from 'solid-js';
 import { OutlookBetaBadge } from './OutlookBetaBadge';
 
-export type EmailProvider = 'GMAIL' | 'OUTLOOK';
+export type EmailProvider = 'GMAIL' | 'OUTLOOK' | 'IMAP';
 
 /**
  * Shared provider choice for onboarding, empty states and additional inboxes.
@@ -20,6 +20,7 @@ export function EmailProviderDialog(
     onSelect: (provider: EmailProvider) => void;
     disabled?: boolean;
     outlookAvailable: boolean;
+    imapAvailable?: boolean;
   }
 ) {
   return (
@@ -38,15 +39,18 @@ export function EmailProviderDialog(
         <Panel.Body class="p-6 font-sans flex flex-col gap-3">
           <Dialog.Description class="text-ink-muted text-sm/tight">
             <Show
-              when={props.outlookAvailable}
-              fallback="Connect a Gmail or Google Workspace account."
+              when={props.imapAvailable}
+              fallback={
+                props.outlookAvailable
+                  ? 'Connect Gmail, Outlook.com, or an individual Microsoft 365 account.'
+                  : 'Connect a Gmail or Google Workspace account.'
+              }
             >
-              Connect Gmail, Outlook.com, or an individual Microsoft 365
-              account.
+              Choose the provider for the inbox you want to connect.
             </Show>
           </Dialog.Description>
           <p class="text-ink-muted text-sm/tight">
-            Macro connects an account's email and calendar together, so keep the
+            Gmail and Outlook connect email and calendar together. Keep the
             email permissions checked on the provider's screen.
           </p>
           <Button
@@ -64,6 +68,15 @@ export function EmailProviderDialog(
             >
               Outlook / Microsoft 365
               <OutlookBetaBadge />
+            </Button>
+          </Show>
+          <Show when={props.imapAvailable}>
+            <Button
+              variant="secondary"
+              disabled={props.disabled}
+              onClick={() => props.onSelect('IMAP')}
+            >
+              Other email (IMAP / SMTP)
             </Button>
           </Show>
           <Button
@@ -84,7 +97,8 @@ export function EmailProviderDialog(
  * With Gmail the only provider on offer, there is nothing to choose.
  */
 export async function selectEmailProvider(
-  owner: Owner | null
+  owner: Owner | null,
+  mailOnly = true
 ): Promise<EmailProvider | undefined> {
   // Registered before the read: a caller gone by the time it answers must not
   // be sent to a consent screen.
@@ -96,18 +110,22 @@ export async function selectEmailProvider(
       })
     );
   let outlookAvailable = false;
+  let imapAvailable = false;
   try {
-    outlookAvailable = (await fetchEmailConnectionProviders()).outlook;
+    const availability = await fetchEmailConnectionProviders();
+    outlookAvailable = availability.outlook;
+    imapAvailable = mailOnly && availability.imap;
   } catch {
     /* Gmail remains available when the availability read fails. */
   }
   if (disposed) return undefined;
-  if (!outlookAvailable) return 'GMAIL';
+  if (!outlookAvailable && !imapAvailable) return 'GMAIL';
   let selected: EmailProvider | undefined;
   const handle = openDialog(
     EmailProviderDialog,
     {
-      outlookAvailable: true,
+      outlookAvailable,
+      imapAvailable,
       onSelect: (provider) => {
         selected = provider;
         handle.close();

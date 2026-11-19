@@ -154,6 +154,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
                             }
                         });
                     result.push(MailFolder {
+                        sync_enabled: true,
                         id: ProviderId::new(folder.id)?,
                         parent_id: folder.parent_folder_id.map(ProviderId::new).transpose()?,
                         name: folder.display_name,

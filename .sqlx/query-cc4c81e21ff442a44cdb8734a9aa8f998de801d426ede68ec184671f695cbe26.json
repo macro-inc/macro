@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE imap_accounts a SET lease_id=$4,lease_until=now()+interval '5 minutes' FROM email_links l WHERE a.link_id=$1 AND a.sync_generation=$2 AND a.grant_generation=$3 AND (a.lease_until IS NULL OR a.lease_until<now()) AND l.id=a.link_id AND l.macro_id=a.user_id AND l.provider='IMAP' AND l.is_sync_active AND NOT l.needs_reauth AND l.sync_generation=a.sync_generation AND l.grant_generation=a.grant_generation RETURNING a.user_id,a.credential_ciphertext,a.state,a.revision",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "credential_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "cc4c81e21ff442a44cdb8734a9aa8f998de801d426ede68ec184671f695cbe26"
+}

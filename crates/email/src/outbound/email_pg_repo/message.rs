@@ -414,7 +414,7 @@ pub(crate) async fn delete_draft_message(
 
     let outlook = sqlx::query!(r#"
         SELECT l.id,l.sync_generation FROM email_links l JOIN email_messages m ON m.link_id = l.id
-        WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider = 'OUTLOOK'
+        WHERE m.id = $1 AND m.thread_id = $2 AND l.id = ANY($3) AND l.provider IN ('OUTLOOK','IMAP')
             AND ($4::text = l.macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $4))
         FOR UPDATE OF l
     "#,message_id,thread_db_id,link_ids,actor).fetch_optional(&mut *tx).await?;

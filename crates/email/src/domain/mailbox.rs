@@ -26,6 +26,9 @@ pub mod drafts;
 pub mod gmail_history;
 pub mod gmail_push;
 pub mod health;
+pub mod imap_connection;
+pub mod imap_notifications;
+pub mod imap_settings;
 /// Per-delivery Gmail inbox admission and reconciliation.
 pub mod inbox_sync;
 pub mod initialization;
@@ -36,6 +39,7 @@ pub mod live_pass;
 pub mod progress;
 pub mod projection;
 pub mod reimport;
+pub mod runtime;
 pub mod settings;
 pub mod telemetry;
 #[cfg(test)]
@@ -354,7 +358,27 @@ pub trait MailboxGateway: Send + Sync + 'static {
 
 /// The shared ingestion path writes content, normalized state and a projection
 /// outbox atomically. Import work must not generate incoming-mail notifications.
+/// Recoverable destination for a sender Macro blocks on protocols without rules.
+#[derive(Clone, Copy)]
+pub enum BlockedSenderDestination {
+    Junk,
+    Trash,
+}
+
 pub trait MailboxIngest: Send + Sync + 'static {
+    /// Persisted user intent, scoped to this exact mailbox binding.
+    fn sender_blocked(
+        &self,
+        mailbox: MailboxKey,
+        sender: &str,
+    ) -> impl Future<Output = Result<bool, MailboxError>> + Send;
+    /// Ingest plus a durable organization command commit together.
+    fn ingest_blocked(
+        &self,
+        lease: &MessageLease,
+        snapshot: MailboxMessage,
+        destination: BlockedSenderDestination,
+    ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn ingest(
         &self,
         lease: &MessageLease,
@@ -710,7 +734,41 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                             "outlook invitation imported without calendar parts"
                         );
                     }
-                    self.ingest.ingest(lease, snapshot).await?;
+                    let block_destination = if snapshot.state.in_inbox
+                        && !snapshot.state.is_draft
+                        && !snapshot.content.message.is_sent
+                    {
+                        if let Some(sender) = snapshot.content.message.from.as_ref()
+                            && self
+                                .ingest
+                                .sender_blocked(lease.mailbox, &sender.email)
+                                .await?
+                        {
+                            if folders.iter().any(|folder| {
+                                folder.role == email_api_client::domain::models::FolderRole::Junk
+                            }) {
+                                Some(BlockedSenderDestination::Junk)
+                            } else if folders.iter().any(|folder| {
+                                folder.role == email_api_client::domain::models::FolderRole::Trash
+                            }) {
+                                Some(BlockedSenderDestination::Trash)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+                    match block_destination {
+                        Some(destination) => {
+                            self.ingest
+                                .ingest_blocked(lease, snapshot, destination)
+                                .await?
+                        }
+                        None => self.ingest.ingest(lease, snapshot).await?,
+                    }
                     "imported"
                 }
                 // Live work follows a change Graph or Macro just made, which

@@ -223,6 +223,7 @@ async fn inline_attachments_are_loaded_even_when_has_attachments_is_false() {
         .mount(&server)
         .await;
     let folder = MailFolder {
+        sync_enabled: true,
         id: ProviderId::new("folder").unwrap(),
         parent_id: None,
         name: "Boîte de réception".into(),
@@ -597,6 +598,7 @@ async fn organization_patch_returns_the_exact_conditional_response_version() {
 fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
     let folders = vec![
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("trash").unwrap(),
             parent_id: None,
             name: "Trash".into(),
@@ -605,6 +607,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             total_items: None,
         },
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("parent").unwrap(),
             parent_id: Some(ProviderId::new("trash").unwrap()),
             name: "Deleted project".into(),
@@ -613,6 +616,7 @@ fn folder_subtrees_inherit_trash_without_becoming_move_destinations() {
             total_items: None,
         },
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("child").unwrap(),
             parent_id: Some(ProviderId::new("parent").unwrap()),
             name: "Invoices".into(),
@@ -764,6 +768,7 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
         .mount(&server)
         .await;
     let inbox = MailFolder {
+        sync_enabled: true,
         id: ProviderId::new("inbox").unwrap(),
         parent_id: None,
         name: "Inbox".into(),

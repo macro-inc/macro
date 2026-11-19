@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_settings(link_id) VALUES($1) ON CONFLICT(link_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86fb35197e5106a0f1e9333a2c46b080cad1b1cc542ccfcdc94c31864307c80c"
+}

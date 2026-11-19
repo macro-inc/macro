@@ -111,14 +111,47 @@ async fn providers_offer_outlook_only_when_the_switch_and_the_users_flag_allow()
         )
         .with_connections_enabled(switch)
         .with_feature_flags(configured.then_some(flags));
-        let providers = connection_providers(Some(&service), &user, None, false).await;
+        let providers = connection_providers(
+            Some(&service),
+            &user,
+            None,
+            false,
+            None::<&FakeFeatureFlags>,
+        )
+        .await;
         assert!(providers.gmail);
         assert_eq!(
             providers.outlook, offered,
             "switch {switch}, configured {configured}, load {load:?}"
         );
     }
-    assert!(!connection_providers(None, &user, None, false).await.outlook);
+    assert!(
+        !connection_providers(None, &user, None, false, None::<&FakeFeatureFlags>)
+            .await
+            .outlook
+    );
+}
+
+#[tokio::test]
+async fn an_imap_offer_is_independent_of_microsoft_consent() {
+    let user = MacroUserIdStr::try_from("macro|person@example.com".to_string()).unwrap();
+    let mut flags = FakeFeatureFlags::default();
+    flags.set(
+        user.clone(),
+        Ok(FlagSnapshot::new([(
+            models_email::service::link::IMAP_CONNECTIONS_FLAG.into(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    let offered = connection_providers(None, &user, None, false, Some(&flags)).await;
+    assert!(offered.imap);
+    assert!(!offered.outlook);
+    flags.set(user.clone(), Err("offline".into()));
+    assert!(
+        !connection_providers(None, &user, None, false, Some(&flags))
+            .await
+            .imap
+    );
 }
 
 #[tokio::test]

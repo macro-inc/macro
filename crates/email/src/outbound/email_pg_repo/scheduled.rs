@@ -43,7 +43,7 @@ async fn change_schedule(
     let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
     let outlook = sqlx::query!(r#"
         SELECT (macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS "authorized!"
-        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE
+        FROM email_links WHERE id = $1 AND provider IN ('OUTLOOK','IMAP') FOR UPDATE
     "#,link_id,actor.as_ref()).fetch_optional(&mut *tx).await.map_err(anyhow::Error::from)?;
     if outlook.as_ref().is_some_and(|link| !link.authorized) {
         return Err(EmailErr::Unauthorized);

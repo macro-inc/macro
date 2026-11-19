@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT link_id FROM imap_accounts WHERE link_id=$1 AND user_id=$2 AND sync_generation=$3 AND grant_generation=$4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "767d4305d6022c439473f6259a43c13912bbc7fa394330dad0173e0cccb71da3"
+}

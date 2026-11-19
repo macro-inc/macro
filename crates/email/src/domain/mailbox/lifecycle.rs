@@ -105,6 +105,11 @@ pub enum InboxLifecycleEffect {
         generation: i64,
         owner: String,
     },
+    /// Close sockets and erase encrypted IMAP credentials before local purge.
+    DisconnectImap {
+        sync_generation: i64,
+        grant_generation: i64,
+    },
     DeleteMailbox {
         reason: DeletionReason,
     },

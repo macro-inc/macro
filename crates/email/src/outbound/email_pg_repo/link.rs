@@ -19,6 +19,7 @@ pub(super) async fn link_by_fusionauth_and_macro_id(
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
         UserProvider::Outlook => DbUserProvider::Outlook,
+        UserProvider::Imap => DbUserProvider::Imap,
     };
 
     let db_link = sqlx::query_as!(
@@ -53,6 +54,7 @@ pub(super) async fn link_by_fusionauth_email_provider(
     let provider: DbUserProvider = match provider {
         UserProvider::Gmail => DbUserProvider::Gmail,
         UserProvider::Outlook => DbUserProvider::Outlook,
+        UserProvider::Imap => DbUserProvider::Imap,
     };
 
     let db_link = sqlx::query_as!(
@@ -218,6 +220,7 @@ impl DbInboxDetailsRow {
             provider: match self.provider {
                 DbUserProvider::Gmail => UserProvider::Gmail,
                 DbUserProvider::Outlook => UserProvider::Outlook,
+                DbUserProvider::Imap => UserProvider::Imap,
             },
             is_sync_active: self.is_sync_active,
             needs_reauth: self.needs_reauth,
@@ -233,8 +236,9 @@ impl DbInboxDetailsRow {
                 DbEmailBackfillStatus::Cancelled => EmailBackfillStatus::Cancelled,
                 DbEmailBackfillStatus::Failed => EmailBackfillStatus::Failed,
             }),
-            needs_calendar_permission: !GoogleScopeSet::from_scopes(self.google_granted_scopes)
-                .has_calendar_capability(),
+            needs_calendar_permission: matches!(self.provider, DbUserProvider::Gmail)
+                && !GoogleScopeSet::from_scopes(self.google_granted_scopes)
+                    .has_calendar_capability(),
             calendar_disabled: self.calendar_disabled,
             has_calendar_data: self.has_calendar_data,
             created_at: self.created_at,
@@ -263,7 +267,7 @@ pub(super) async fn inbox_details_for_macro_id(
                l.updated_at as "updated_at!",
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
-               CASE WHEN l.provider = 'OUTLOOK' THEN
+               CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)

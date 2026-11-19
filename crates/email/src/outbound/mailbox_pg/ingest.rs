@@ -2,11 +2,12 @@ use super::*;
 use crate::domain::mailbox::drafts::models::DraftCheckpoint;
 use email_api_client::domain::models::MailboxMessage;
 
-impl MailboxIngest for PgMailboxSync {
-    async fn ingest(
+impl PgMailboxSync {
+    async fn ingest_snapshot(
         &self,
         lease: &MessageLease,
         snapshot: MailboxMessage,
+        blocked: Option<BlockedSenderDestination>,
     ) -> Result<(), MailboxError> {
         let MailboxMessage {
             draft_correlation,
@@ -292,9 +293,75 @@ impl MailboxIngest for PgMailboxSync {
             ON CONFLICT (dedupe_key) DO NOTHING
         "#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,payload,dedupe)
             .execute(&mut *tx).await.map_err(db_error)?;
+        if let Some(destination) = blocked {
+            use crate::domain::models::mailbox_action::{MailboxAction, PendingMailboxState};
+            let (action, pending) = match destination {
+                BlockedSenderDestination::Junk => (
+                    MailboxAction::Junk(true),
+                    PendingMailboxState {
+                        in_inbox: Some(false),
+                        in_junk: Some(true),
+                        in_trash: Some(false),
+                        ..Default::default()
+                    },
+                ),
+                BlockedSenderDestination::Trash => (
+                    MailboxAction::Trashed(true),
+                    PendingMailboxState {
+                        in_inbox: Some(false),
+                        in_junk: Some(false),
+                        in_trash: Some(true),
+                        ..Default::default()
+                    },
+                ),
+            };
+            let action = serde_json::to_value(action).map_err(|_| MailboxError::Persistence)?;
+            let pending = serde_json::to_value(pending).map_err(|_| MailboxError::Persistence)?;
+            let command=sqlx::query_scalar!(r#"INSERT INTO email_mailbox_commands(id,link_id,generation,actor_id,intent,status)
+                SELECT $1,l.id,l.sync_generation,l.macro_id,$4,'pending' FROM email_links l WHERE l.id=$2 AND l.sync_generation=$3
+                AND NOT EXISTS(SELECT 1 FROM email_mailbox_commands c JOIN email_mailbox_command_targets t ON t.command_id=c.id
+                    WHERE c.link_id=l.id AND c.generation=l.sync_generation AND t.message_id=$5 AND c.intent=$4 AND c.status IN ('pending','running','confirming')) RETURNING id"#,macro_uuid::generate_uuid_v7(),lease.mailbox.link_id,lease.mailbox.sync_generation,action,message_id).fetch_optional(&mut *tx).await.map_err(db_error)?;
+            if let Some(command) = command {
+                sqlx::query!("INSERT INTO email_mailbox_command_targets(command_id,message_id,provider_id,pending) VALUES($1,$2,$3,$4)",command,message_id,lease.provider_id.as_str(),pending).execute(&mut *tx).await.map_err(db_error)?;
+                sqlx::query!(r#"INSERT INTO email_pending_mailbox_state(message_id,attribute,command_id,desired) SELECT $1,key,$2,value FROM jsonb_each($3)
+                    ON CONFLICT(message_id,attribute) DO UPDATE SET command_id=EXCLUDED.command_id,desired=EXCLUDED.desired"#,message_id,command,pending).execute(&mut *tx).await.map_err(db_error)?;
+                email_db_client::threads::update::recompute_thread_metadata(
+                    &mut tx,
+                    thread_id,
+                    lease.mailbox.link_id,
+                )
+                .await
+                .map_err(db_error)?;
+            }
+        }
         tx.commit().await.map_err(db_error)
     }
+}
 
+impl MailboxIngest for PgMailboxSync {
+    async fn sender_blocked(
+        &self,
+        mailbox: MailboxKey,
+        sender: &str,
+    ) -> Result<bool, MailboxError> {
+        sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links l JOIN email_mailbox_settings_work w ON w.link_id=l.id WHERE l.id=$1 AND l.provider='IMAP' AND l.is_sync_active AND l.sync_generation=$2 AND l.grant_generation=$3 AND w.kind='sender_block' AND lower(w.resource_key)=lower($4) AND w.desired) AS "blocked!""#,mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation,sender).fetch_one(&self.db).await.map_err(db_error)
+    }
+    async fn ingest(
+        &self,
+        lease: &MessageLease,
+        snapshot: MailboxMessage,
+    ) -> Result<(), MailboxError> {
+        self.ingest_snapshot(lease, snapshot, None).await
+    }
+    async fn ingest_blocked(
+        &self,
+        lease: &MessageLease,
+        snapshot: MailboxMessage,
+        destination: BlockedSenderDestination,
+    ) -> Result<(), MailboxError> {
+        self.ingest_snapshot(lease, snapshot, Some(destination))
+            .await
+    }
     async fn absent(&self, lease: &MessageLease) -> Result<(), MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
         let Some(mailbox_address) = sqlx::query_scalar!("SELECT email_address FROM email_links WHERE id = $1 AND sync_generation = $2 AND grant_generation = $3 AND is_sync_active FOR UPDATE",lease.mailbox.link_id,lease.mailbox.sync_generation,lease.mailbox.grant_generation)

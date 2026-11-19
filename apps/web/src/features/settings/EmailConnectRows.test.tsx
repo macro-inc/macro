@@ -23,6 +23,7 @@ vi.mock('@core/email-link', () => ({
 vi.mock('@queries/auth/outlook-link', () => ({
   fetchEmailConnectionProviders: mocks.providers,
   useOutlookAvailable: () => outlookOffered,
+  useImapAvailable: () => () => false,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_INBOX_RESYNC: false,
@@ -41,6 +42,7 @@ vi.mock('@queries/email/link', () => ({
 vi.mock('@app/features/calendar/components/TurnOffCalendarDialog', () => ({
   TurnOffCalendarDialog: () => null,
 }));
+vi.mock('./ImapMailboxSettings', () => ({ ImapMailboxSettings: () => null }));
 vi.mock('./InboxSettingsOperations', () => ({
   InboxSettingsOperations: () => null,
 }));

@@ -190,6 +190,7 @@ where
         let maximum = match plan.destination_provider {
             UserProvider::Gmail => 18_000_000,
             UserProvider::Outlook => 150_000_000,
+            UserProvider::Imap => 25_000_000,
         };
         let mut total = plan
             .uploads

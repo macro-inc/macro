@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SET statement_timeout = '30s'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "ecfb047d10971015a0db359b403fe5f57ca44365152152d6464d73a0fd18afd9"
+}

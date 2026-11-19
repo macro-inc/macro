@@ -29,3 +29,6 @@ mod utils;
 /// The service's OpenAPI document, rendered by the `*_openapi` binary.
 pub use api::swagger::ApiDoc;
 pub use server::run;
+
+/// Provider-specific IMAP rollout scheduling.
+pub mod imap_runtime;

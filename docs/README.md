@@ -18,7 +18,8 @@ provider ([linked devices](architecture/whatsapp-linked-devices.md)) and the
 Document sync: [DSS sync router](architecture/sync-router.md).
 
 Email: [frontend architecture](architecture/email.md) and
-[backend composition and boundaries](architecture/email-backend.md).
+[backend composition and boundaries](architecture/email-backend.md), including
+the [private IMAP/SMTP engine](architecture/imap-engine.md) and its [port coverage](design/imap-smtp-port-ledger.md).
 
 Billing: the [Stripe event inbox](architecture/stripe-event-inbox.md).
 

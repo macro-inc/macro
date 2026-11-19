@@ -960,6 +960,7 @@ async fn run_server() -> anyhow::Result<()> {
             signup_policy,
             rate_limit_service: rate_limit,
             event_broker: macro_event_broker.clone(),
+            email_connection_flags: feature_flags,
             calendar_scope_enabled: config.calendar_scope_enabled,
             google_authorization_url,
             account_link_state_key,

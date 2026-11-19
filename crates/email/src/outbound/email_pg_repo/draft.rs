@@ -99,7 +99,7 @@ pub(super) async fn insert_message_in_transaction(
     let mailbox = sqlx::query!(r#"
         SELECT macro_id,
             ($2::text = macro_id OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = email_links.id AND u.primary_macro_id = $2)) AS authorized
-        FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE
+        FROM email_links WHERE id = $1 AND provider IN ('OUTLOOK','IMAP') FOR UPDATE
     "#,link_id,input.actor_id).fetch_optional(&mut **tx).await.map_err(anyhow::Error::from)?;
     if mailbox
         .as_ref()
@@ -401,7 +401,7 @@ pub(super) async fn snapshot_outlook_draft(
                 jsonb_agg(jsonb_build_object('email',c.email_address,'name',COALESCE(r.name,c.name))) FILTER (WHERE r.recipient_type = 'BCC') AS bcc_addresses
             FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id WHERE r.message_id = m.id
         ) recipients
-        WHERE m.id = $1 AND m.link_id = $2 AND l.provider = 'OUTLOOK'
+        WHERE m.id = $1 AND m.link_id = $2 AND l.provider IN ('OUTLOOK','IMAP')
         ON CONFLICT (message_id) DO UPDATE SET
             revision = email_mailbox_drafts.revision + 1,desired_content = EXCLUDED.desired_content,actor_id = EXCLUDED.actor_id,
             checkpoint = CASE WHEN email_mailbox_drafts.state = 'synced' OR (email_mailbox_drafts.state='failed' AND email_mailbox_drafts.error_code='invalid_content') THEN NULL ELSE email_mailbox_drafts.checkpoint END,

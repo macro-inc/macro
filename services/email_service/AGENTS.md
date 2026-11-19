@@ -8,6 +8,13 @@ the gateway `/email` prefix.
 
 ## Start here
 
+- `api/imap.rs` exposes connection suggestion, discovery and IMAP linking under
+  `/email/links`; `outbound/imap_connection.rs` stores retry-safe promotion
+  attempts. `outbound/email_api/imap.rs` implements the existing mailbox,
+  command, attachment and draft ports through the internal engine client.
+  `imap_runtime.rs` refreshes independent IMAP sync/write flags and resumes
+  interrupted promotions.
+
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/composition/api.rs`: production API dependencies and service wiring.

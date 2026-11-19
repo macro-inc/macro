@@ -1,0 +1,23 @@
+# imap_service_client
+
+## What it is
+
+Authenticated internal client for imap_service. Shared DTOs are defined by
+imap_engine; the wrapper adds a service-specific key, both mailbox generations,
+and trace propagation on every call.
+
+## Checks
+
+- `cargo test -p imap_service_client`.
+- Run `bash crates/imap_service_client/regen.sh` after an internal API change;
+  `bash crates/imap_service_client/regen.sh --check` verifies the checked-in contract.
+- Run `python3 -m unittest discover -s crates/imap_service_client -p test_normalize_openapi.py`
+  for strict OpenAPI conversion checks.
+
+## Gotchas
+
+Never edit `src/generated.rs` by hand. The pinned Progenitor generator reuses
+source DTOs and injects tracing through its pre-hook.
+
+Never accept arbitrary upload URLs. Upload identifiers are scoped by the link,
+and the service validates the credential binding before reading any bytes.

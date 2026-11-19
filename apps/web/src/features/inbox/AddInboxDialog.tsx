@@ -1,5 +1,9 @@
 import { useAddInboxFlow } from '@core/email-link';
-import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
+import {
+  type EmailProvider,
+  EmailProviderDialog,
+} from '@core/email-link/ProviderDialog';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import type { ConsentScopes } from '@service-auth/client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
@@ -35,18 +39,24 @@ export function AddInboxDialog() {
   const [pending, setPending] = createSignal(false);
   // Undefined until the providers read settles. The dialog waits for it, so
   // Outlook never flashes in for a user it isn't offered to, or pops in late.
-  const [outlookAvailable, setOutlookAvailable] = createSignal<boolean>();
+  const [availability, setAvailability] = createSignal<{
+    outlook: boolean;
+    imap: boolean;
+  }>();
   createEffect(() => {
     if (!isAddInboxDialogOpen()) return;
     let current = true;
-    setOutlookAvailable(undefined);
-    void fetchEmailConnectionProviders()
-      .then((providers) => {
-        if (current) setOutlookAvailable(providers.outlook);
-      })
-      .catch(() => {
-        if (current) setOutlookAvailable(false);
-      });
+    setAvailability(undefined);
+    fireAndForget(
+      fetchEmailConnectionProviders()
+        .then((providers) => {
+          if (current) setAvailability(providers);
+        })
+        .catch(() => {
+          if (current) setAvailability({ outlook: false, imap: false });
+        }),
+      'email-providers'
+    );
     onCleanup(() => {
       current = false;
     });
@@ -54,7 +64,7 @@ export function AddInboxDialog() {
 
   onCleanup(() => setRequest(null));
 
-  const handleConfirm = async (provider: 'GMAIL' | 'OUTLOOK') => {
+  const handleConfirm = async (provider: EmailProvider) => {
     if (pending()) return;
     setPending(true);
     // On web this navigates away; on native iOS the OAuth completes in place
@@ -69,13 +79,17 @@ export function AddInboxDialog() {
 
   return (
     <EmailProviderDialog
-      open={isAddInboxDialogOpen() && outlookAvailable() !== undefined}
+      open={isAddInboxDialogOpen() && availability() !== undefined}
       onOpenChange={(open) => {
         if (!open) setRequest(null);
       }}
       onSelect={handleConfirm}
       disabled={pending()}
-      outlookAvailable={outlookAvailable() === true}
+      outlookAvailable={availability()?.outlook === true}
+      imapAvailable={
+        availability()?.imap === true &&
+        (!request()?.scopes || request()?.scopes === 'gmail')
+      }
     />
   );
 }

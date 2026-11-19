@@ -81,12 +81,12 @@ impl InboxHealthGateway for Fake {
         &self,
         _binding: &InboxHealthBinding,
         _freshness: TokenFreshness,
-    ) -> Result<AccessToken, EmailApiError> {
+    ) -> Result<(), EmailApiError> {
         let mut mailbox = self.0.lock().unwrap();
         if mailbox.acquire == Err(EmailApiError::AuthRequired) && mailbox.persists_reauth {
             mailbox.needs_reauth = true;
         }
-        mailbox.acquire.clone().map(|()| AccessToken::new("token"))
+        mailbox.acquire.clone()
     }
     async fn renew_gmail_watch(
         &self,

@@ -41,7 +41,7 @@ export type OnboardingRecord = {
   suggestedTeamDomain: string | undefined;
 };
 
-export type InboxProvider = 'google' | 'microsoft';
+export type InboxProvider = 'google' | 'microsoft' | 'imap';
 
 export type EmailAccountsSource = {
   accounts: Accessor<Loadable<readonly EmailAccount[]>>;
@@ -122,6 +122,8 @@ export type OnboardingContext = {
    * user may connect an Outlook inbox. False until both are known.
    */
   createOutlookAvailability(): Accessor<boolean>;
+  /** Verified sign-in address offered for IMAP enrollment. */
+  createImapSuggestion(): Accessor<string | undefined>;
   createToolCatalog(): ToolCatalogSource;
   /**
    * Independent provider states. `poll` re-checks while connections change.

@@ -22,6 +22,7 @@ fn provider(value: &str) -> Result<UserProvider, EmailErr> {
     match value {
         "GMAIL" => Ok(UserProvider::Gmail),
         "OUTLOOK" => Ok(UserProvider::Outlook),
+        "IMAP" => Ok(UserProvider::Imap),
         _ => Err(invalid()),
     }
 }
@@ -81,7 +82,7 @@ async fn source_facts(
     EmailErr,
 > {
     let row=sqlx::query!(r#"SELECT m.updated_at,m.provider_id,m.thread_id,
-        CASE WHEN l.provider='OUTLOOK' THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
+        CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN COALESCE(d.checkpoint->'draft'->>'version',m.provider_version,d.base_version) ELSE m.provider_history_id END AS version,
         m.is_draft,m.is_sent,
         (COALESCE(d.delete_requested,false) OR EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')) AS "retired!",
         (m.draft_generation <> $3 OR EXISTS(SELECT 1 FROM email_send_attempts a WHERE a.message_id=m.id AND NOT a.cancelled AND NOT a.sent)

@@ -80,7 +80,9 @@
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
         path: _type:
-        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null;
+        builtins.match ".*\\.(md|html|txt|json|jsonl|canvas|sql|sh|ttf|xml|graphql|mjs|proto)$" path != null
+        # The engine embeds its verified mail-provider catalog.
+        || pkgs.lib.hasSuffix "/crates/imap_engine/catalog/providers.toml" (toString path);
       # `crates/routine_program` embeds its catalog programs with `include_str!`.
       # Only these `.ts` files: matching every `.ts` would pull the web app into
       # the Rust source hash.
@@ -478,6 +480,11 @@
 
       deployServiceBinaryDefinitions = [
         {
+          serviceName = "imap-service";
+          packageName = "imap_service";
+          binaries = [ "imap_service" ];
+        }
+        {
           serviceName = "agent-harness-service";
           packageName = "agent_harness_service";
           binaries = [ "agent_harness_service" ];
@@ -758,6 +765,7 @@
       );
 
       localStackDeployServiceNames = [
+        "imap-service"
         "agent-harness-service"
         "calendar-service"
         "connection-gateway"

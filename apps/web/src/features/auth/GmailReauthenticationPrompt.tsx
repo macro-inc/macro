@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { useKeyedPersistentToasts } from '@core/component/Toast/useKeyedPersistentToasts';
+import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { reconnectScopes } from '@core/email-link/consent';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -21,6 +22,7 @@ import {
 export function GmailReauthenticationPrompt() {
   const linksQuery = useEmailLinksQuery();
   const startAddInbox = useAddInboxFlow();
+  const userId = useUserId();
 
   // Probe inbox grants on mount and on window focus so a grant that died while the
   // user was away surfaces here instead of only after the daily refresh.
@@ -29,7 +31,9 @@ export function GmailReauthenticationPrompt() {
   useKeyedPersistentToasts({
     items: () =>
       (linksQuery.isSuccess ? linksQuery.data.links : []).filter(
-        (link) => link.needs_reauth
+        (link) =>
+          link.needs_reauth &&
+          (link.provider !== 'IMAP' || link.macro_id === userId())
       ),
     key: (link) => link.id,
     toast: (link, dismiss) => ({

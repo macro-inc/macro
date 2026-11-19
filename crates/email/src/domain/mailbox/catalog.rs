@@ -71,6 +71,7 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
                         )
                         .has_calendar_capability()
                     }
+                    UserProvider::Imap => false,
                     UserProvider::Outlook => facts.granted_scopes.iter().any(|scope| {
                         scope
                             .rsplit('/')
@@ -79,7 +80,8 @@ impl<R: InboxCatalogRepository> InboxCatalogService<R> {
                     }),
                 };
                 InboxCatalogEntry {
-                    needs_calendar_permission: facts.calendar_disabled || !has_calendar,
+                    needs_calendar_permission: facts.link.provider != UserProvider::Imap
+                        && (facts.calendar_disabled || !has_calendar),
                     sync_status,
                     facts,
                 }

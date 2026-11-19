@@ -56,6 +56,7 @@ pub async fn run_worker(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
+    imap_gateway: crate::outbound::email_api::imap::ImapMailboxGateway,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
@@ -69,6 +70,7 @@ pub async fn run_worker(
         worker,
         db,
         email_api,
+        imap_gateway,
         auth_service_client,
         redis_client,
         sqs_client,
@@ -91,6 +93,7 @@ pub(crate) async fn context(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
+    imap_gateway: crate::outbound::email_api::imap::ImapMailboxGateway,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
@@ -137,6 +140,7 @@ pub(crate) async fn context(
         }
     };
     let inbox_lifecycle = Arc::new(crate::composition::inbox_lifecycle(
+        imap_gateway.client.clone(),
         outlook,
         db.clone(),
         auth_service_client.clone(),
@@ -144,6 +148,7 @@ pub(crate) async fn context(
         connection_gateway_client.clone(),
     ));
     let inbox_health = Arc::new(crate::composition::inbox_health(
+        imap_gateway.clone(),
         db.clone(),
         email_api.clone(),
         auth_service_client.clone(),
@@ -192,6 +197,7 @@ pub async fn run_worker_with_cancellation(
     worker: sqs_worker::SQSWorker,
     db: PgPool,
     email_api: GmailApi,
+    imap_gateway: crate::outbound::email_api::imap::ImapMailboxGateway,
     auth_service_client: AuthServiceClient,
     redis_client: RedisClient,
     sqs_client: SQS,
@@ -206,6 +212,7 @@ pub async fn run_worker_with_cancellation(
         worker.clone(),
         db,
         email_api,
+        imap_gateway,
         auth_service_client,
         redis_client,
         sqs_client,

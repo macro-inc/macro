@@ -1,0 +1,64 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind='folder' ORDER BY key LIMIT 2000",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "bf38cda0d8f9d7b58f7ca2f3be5ebb5228778f0673d53d95610e50c7c14adebf"
+}

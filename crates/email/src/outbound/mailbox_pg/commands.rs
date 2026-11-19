@@ -62,11 +62,18 @@ impl PgMailboxSync {
 
 impl MailboxCommandRepository for PgMailboxSync {
     async fn claim_command(&self, lease_id: Uuid) -> Result<Option<CommandLease>, MailboxError> {
+        if self
+            .runtime
+            .as_ref()
+            .is_some_and(|runtime| !runtime.writes_enabled())
+        {
+            return Ok(None);
+        }
         let mut tx = self.mutation_claim_transaction().await?;
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT c.id FROM email_mailbox_commands c JOIN email_links l ON l.id = c.link_id
-                WHERE l.is_sync_active AND l.provider = 'OUTLOOK' AND c.generation = l.sync_generation
+                WHERE l.is_sync_active AND l.provider = $2::text::email_user_provider_enum AND c.generation = l.sync_generation
                     AND c.status IN ('pending','running') AND c.available_at <= now()
                     AND (c.lease_until IS NULL OR c.lease_until < now())
                     AND c.intent->>'kind' IN ('read','flagged','archived','trashed','junk','category')
@@ -74,7 +81,7 @@ impl MailboxCommandRepository for PgMailboxSync {
                         WHERE s.link_id=c.link_id AND s.kind='create_label' AND s.resource_key=c.intent->'value'->>'name'
                         AND s.completed_revision<s.revision))
                     AND NOT EXISTS (SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_drafts draft ON draft.message_id=target.message_id
-                        WHERE target.command_id=c.id AND draft.lease_until>now() AND draft.lease_id IS NOT NULL)
+                        WHERE target.command_id=c.id AND draft.lease_until>now() AND draft.lease_id IS NOT NULL OFFSET 0)
                     AND NOT EXISTS (SELECT 1 FROM email_mailbox_commands prior
                         WHERE prior.link_id = c.link_id AND prior.generation = c.generation
                             AND prior.status IN ('pending','running','confirming')
@@ -87,7 +94,7 @@ impl MailboxCommandRepository for PgMailboxSync {
                 status = 'running',attempts = attempts + 1,updated_at = now()
             FROM candidate q,email_links l WHERE c.id = q.id AND l.id = c.link_id
             RETURNING c.id,c.link_id,c.generation,l.grant_generation,c.intent,c.attempts
-        "#,lease_id).fetch_optional(&mut *tx).await.map_err(db_error)?;
+        "#,lease_id, self.provider.as_str()).fetch_optional(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)?;
         row.map(|row| {
             Ok(CommandLease {

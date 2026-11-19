@@ -107,6 +107,8 @@ const SERVING_MARKER: &str = "is up and running";
 /// How a stack differs from the default one.
 #[derive(Clone, Debug, Default)]
 pub struct StackOptions {
+    /// Start the real IMAP engine against the isolated Dovecot/Mailpit lab.
+    pub imap: bool,
     /// Environment variables for every service the stack starts, set after the stack's own,
     /// so they can replace them.
     pub env: Vec<(String, String)>,
@@ -181,6 +183,7 @@ pub struct Stack {
     opensearch_url: Option<String>,
     graphql_url: Option<String>,
     calendar: Option<CalendarPart>,
+    imap: Option<crate::imap::ImapPart>,
     worker_env: BTreeMap<String, String>,
     api_url: String,
     internal_api_key: String,
@@ -203,7 +206,16 @@ impl Stack {
             .map_err(|report| report.attach(crate::host::resources()))
     }
 
-    async fn start_parts(options: StackOptions) -> Result<Self, Report> {
+    async fn start_parts(mut options: StackOptions) -> Result<Self, Report> {
+        let imap_launch = if options.imap {
+            let launch = crate::imap::ImapLaunch::prepare().await?;
+            options
+                .env
+                .push(("OVERRIDE_IMAP_SERVICE_URL".into(), launch.url()));
+            Some(launch)
+        } else {
+            None
+        };
         let servers = environment::Servers::from_env()?;
         let id = Uuid::now_v7().simple().to_string();
         let log_dir = log_dir(&id)?;
@@ -324,6 +336,7 @@ impl Stack {
             opensearch_url: None,
             graphql_url: None,
             calendar: None,
+            imap: None,
             worker_env: env,
             api_url,
             internal_api_key,
@@ -333,6 +346,13 @@ impl Stack {
         };
         // The stack exists now, so a failure from here on is cleaned up by
         // its drop.
+        if let Some(launch) = imap_launch {
+            stack.imap = Some(
+                launch
+                    .start(&stack.worker_env, &stack.api_url, &stack.log_dir)
+                    .await?,
+            );
+        }
         if options.search {
             stack.opensearch_url = Some(environment::opensearch_url()?);
         }
@@ -594,6 +614,7 @@ impl Stack {
             &gmail.base_url(),
             &outlook.base_url(),
             &format!("{}/{}", aws.url(), environment::UPLOADS_BUCKET),
+            options.imap,
         )
         .await?;
 
@@ -625,7 +646,7 @@ impl Stack {
                 macro_services: &macro_services,
                 queues,
             });
-            if options.outlook_import_live_pass {
+            if options.outlook_import_live_pass || options.imap {
                 env.insert("POSTHOG_HOST".to_owned(), macro_services.posthog_url());
                 env.insert(
                     "POSTHOG_API_KEY".to_owned(),
@@ -1296,12 +1317,23 @@ impl Stack {
         &self.internal_api_key
     }
 
+    /// The independently controlled real mail-server fixture for this stack.
+    pub fn imap_lab(&self) -> Result<crate::imap::ImapLab, Report> {
+        self.imap
+            .as_ref()
+            .map(|part| part.lab.clone())
+            .ok_or_else(|| report!("this scenario needs StackOptions.imap"))
+    }
+
     /// Fails when a service is no longer running, with the end of its log.
     pub(crate) fn ensure_running(&mut self) -> Result<(), Report> {
         if let Some(redis) = &self.redis {
             redis.ensure_held()?;
         }
         self.api.ensure_running()?;
+        if let Some(imap) = &mut self.imap {
+            imap.service.ensure_running()?;
+        }
         if let Some(workers) = &mut self.workers {
             workers.ensure_running()?;
         }
@@ -1332,7 +1364,13 @@ impl Stack {
             .as_ref()
             .map(ServiceProcess::log)
             .unwrap_or_default();
+        let imap = self
+            .imap
+            .as_ref()
+            .map(|part| part.service.log())
+            .unwrap_or_default();
         for (name, log) in [
+            ("imap_service", imap),
             (API, self.api_log()),
             (WORKERS, self.workers_log()),
             (DOCUMENT_STORAGE, document_storage),
@@ -1388,6 +1426,9 @@ impl Stack {
         if let Some(mut workers) = self.workers.take() {
             workers.stop().await;
         }
+        if let Some(mut imap) = self.imap.take() {
+            imap.service.stop_gracefully().await;
+        }
         if let Some(mut calendar) = self.calendar.take() {
             calendar.service.stop().await;
             calendar.reads.stop().await;
@@ -1432,6 +1473,7 @@ impl Stack {
             .chain(&self.document_storage)
             .chain(&self.search_indexer)
             .chain(&self.focus_worker)
+            .chain(self.imap.as_ref().map(|part| &part.service))
             .chain(self.calendar.as_ref().map(|calendar| &calendar.service));
         for process in std::iter::once(&self.api).chain(others) {
             report.push_str(&format!(
@@ -1590,7 +1632,7 @@ fn provider_call(
 /// process exits. Another scenario's listener can take the port between its
 /// choice and the API binding it, and would answer the request, so the API
 /// must also have logged that it is serving.
-async fn wait_for_health(
+pub(crate) async fn wait_for_health(
     http: &reqwest::Client,
     api_url: &str,
     api: &mut ServiceProcess,

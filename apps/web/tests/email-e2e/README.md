@@ -273,3 +273,20 @@ apps/web/test-email-fixtures-browser` runs the ones that cover an email or
 calendar bug class; the recipe lists them. The CI job runs it beside this
 suite. `src/features/calendar/browser-test` mounts the calendar over scripted
 `/calendar` routes until `calendar_service` is part of the stack.
+
+### IMAP and SMTP
+
+Run `just imap-e2e-browser` for the desktop and phone IMAP enrollment and reply
+cases. This tier uses the authenticated local stack, a Dovecot IMAP and
+submission server, and Mailpit. The independent test client appends the inbound
+message over IMAP and reads the resulting SMTP reply through Mailpit.
+
+To inspect enrollment in local Tempo, run the same no-Doppler stack with
+`--traces lgtm` and build the full-stack web bundle with
+`VITE_ENABLE_BROWSER_OTEL=true`, `VITE_OTEL_ENV=local` and
+`VITE_OTEL_EXPORTER_URL=/i/otlp/v1/traces`. Run
+`just apps/web/test-email-e2e-full-stack imap-mail full-stack-imap`.
+Each case records its enrollment trace ID in the Playwright JSON report's
+`imap-enrollment-trace` attachment. Look up that ID in local Tempo to follow
+the browser request through the email and IMAP services. Playwright's network
+trace stays off because the enrollment request contains the lab password.

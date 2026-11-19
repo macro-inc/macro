@@ -1,6 +1,7 @@
 //! Email API infrastructure adapters.
 
 mod gmail_gate;
+pub mod imap;
 mod microsoft;
 mod token_source;
 

@@ -344,3 +344,12 @@ the existing gateway prefixes.
   or their runtime types from `src/macro.ts`.
 
 - `Team.members()` includes effective `crmAccess`; `Team.setMemberCrmAccess(user, enabled)` changes it through the existing team API. `crm.access()` reads current viewer authority even when denied. Backend permission checks apply equally to SDK and generated MCP operations.
+
+The email SDK coverage excludes `imapConnect`, `imapDiscover`, and `imapSuggestion`.
+These routes belong to the signed-in account enrollment flow, whose password entry and
+server confirmation run in the web application. The generated email client retains
+the complete wire types.
+The owner-only account configuration routes `getImapMailboxSettings` and
+`updateImapMailboxSettings` share the existing settings exclusion. The generated
+client includes these operations, which read server usernames or change folder routing.
+The internal IMAP service callback `imapNotification` is also excluded.

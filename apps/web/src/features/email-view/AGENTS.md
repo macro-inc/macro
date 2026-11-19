@@ -49,6 +49,10 @@ the Soup-backed thread list, and saved email views.
   the shell's sidebar layout to choose drag or, in the navigation sheet,
   Move up and Move down.
 
+The first-visit panel in `components/EmailEmptyState.tsx` uses the authenticated
+inbox suggestion and the shared picker in `@core/email-link`. IMAP opens the
+credential form directly; desktop and phone use the same field validation.
+
 ## Gotchas
 
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the

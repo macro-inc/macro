@@ -10,10 +10,12 @@ mod get_messages_by_thread_id;
 mod get_thread_histories;
 mod get_thread_owner;
 mod gmail;
+pub(crate) mod imap;
 mod recent_messages;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
+        .route("/imap/notifications", post(imap::handler))
         .route("/messages/{id}", get(get_message_by_id::handler))
         .route(
             "/messages/batch",

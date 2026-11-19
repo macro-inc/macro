@@ -24,6 +24,7 @@ async fn authorized(
         },
         provider: match row.provider.as_str() {
             "OUTLOOK" => UserProvider::Outlook,
+            "IMAP" => UserProvider::Imap,
             "GMAIL" => UserProvider::Gmail,
             _ => return Err(MailboxError::Persistence),
         },
@@ -247,9 +248,14 @@ impl MailboxSettingsRepository for PgMailboxSync {
         outlook_sync: bool,
         outlook_writes: bool,
     ) -> Result<Option<SettingsLease>, MailboxError> {
+        let (outlook_sync, outlook_writes) = match &self.runtime {
+            Some(runtime) => (runtime.sync_enabled(), runtime.writes_enabled()),
+            None => (outlook_sync, outlook_writes),
+        };
         let row=sqlx::query!(r#"WITH candidate AS (
             SELECT s.id FROM email_links l JOIN email_mailbox_settings_work s ON s.link_id=l.id
-            WHERE (l.provider<>'OUTLOOK' OR (s.kind='catalog' AND $2) OR (s.kind<>'catalog' AND $3))
+            WHERE (l.provider='GMAIL' OR (s.kind='catalog' AND $2) OR (s.kind<>'catalog' AND $3))
+            AND (l.provider = $4::text::email_user_provider_enum OR (l.provider='GMAIL' AND $4='OUTLOOK'))
             AND l.is_sync_active AND l.disconnect_requested_at IS NULL AND s.next_run_at<=now() AND (s.kind='catalog' OR s.revision>s.completed_revision)
             AND (s.lease_until IS NULL OR s.lease_until<now())
             AND (s.kind<>'delete_label' OR NOT EXISTS(SELECT 1 FROM email_mailbox_commands c
@@ -259,7 +265,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
             ORDER BY s.next_run_at,s.id LIMIT 1 FOR UPDATE OF l,s SKIP LOCKED
         ) UPDATE email_mailbox_settings_work s SET lease_id=$1,lease_until=now()+interval '3 minutes',attempts=attempts+1
         FROM candidate c,email_links l WHERE s.id=c.id AND l.id=s.link_id
-        RETURNING s.id,s.link_id,s.revision,s.kind,s.resource_key,s.desired,l.sync_generation,l.grant_generation,l.provider::text AS "provider!""#,lease_id,outlook_sync,outlook_writes)
+        RETURNING s.id,s.link_id,s.revision,s.kind,s.resource_key,s.desired,l.sync_generation,l.grant_generation,l.provider::text AS "provider!""#,lease_id,outlook_sync,outlook_writes,self.provider.as_str())
             .fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|r| {
             Ok(SettingsLease {
@@ -278,6 +284,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
                     provider: match r.provider.as_str() {
                         "GMAIL" => UserProvider::Gmail,
                         "OUTLOOK" => UserProvider::Outlook,
+                        "IMAP" => UserProvider::Imap,
                         _ => return Err(MailboxError::Persistence),
                     },
                 },

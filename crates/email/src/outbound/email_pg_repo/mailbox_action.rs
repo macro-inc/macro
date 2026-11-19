@@ -35,7 +35,7 @@ pub(super) async fn enqueue(
     // Serialize acceptance per mailbox and recheck the scoped delegation edge at
     // commit, so an access revocation cannot create new pending work.
     let binding = sqlx::query!(r#"
-        SELECT l.sync_generation FROM email_links l WHERE l.id = $1 AND l.provider = 'OUTLOOK' AND l.is_sync_active
+        SELECT l.sync_generation FROM email_links l WHERE l.id = $1 AND l.provider IN ('OUTLOOK','IMAP') AND l.is_sync_active
             AND (l.macro_id = $2 OR EXISTS (SELECT 1 FROM macro_user_links u WHERE u.link_id = l.id AND u.primary_macro_id = $2))
         FOR UPDATE
     "#,link_id,actor.as_ref()).fetch_one(&mut *tx).await?;

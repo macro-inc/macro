@@ -15,6 +15,7 @@ mod contacts;
 mod credentials;
 mod drafts;
 mod gmail_history;
+mod imap_notifications;
 mod ingest;
 mod lifecycle;
 mod progress;
@@ -30,6 +31,8 @@ mod watches;
 pub struct PgMailboxSync {
     pub(super) db: PgPool,
     imports_paused: bool,
+    provider: crate::domain::models::UserProvider,
+    runtime: Option<runtime::MailboxRuntime>,
 }
 
 impl PgMailboxSync {
@@ -37,7 +40,21 @@ impl PgMailboxSync {
         Self {
             db,
             imports_paused: false,
+            provider: crate::domain::models::UserProvider::Outlook,
+            runtime: None,
         }
+    }
+
+    /// Bind every claim to one provider so workers never send another provider's work to this gateway.
+    pub fn with_provider(mut self, provider: crate::domain::models::UserProvider) -> Self {
+        self.provider = provider;
+        self
+    }
+
+    /// Bind runtime admission to the provider-specific feature flag snapshot.
+    pub fn with_runtime(mut self, runtime: runtime::MailboxRuntime) -> Self {
+        self.runtime = Some(runtime);
+        self
     }
 
     /// While paused, message claims take only live work: import rows wait,
@@ -54,6 +71,10 @@ impl PgMailboxSync {
         &self,
     ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
         let mut tx = self.db.begin().await.map_err(db_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
             .fetch_one(&mut *tx).await.map_err(db_error)?;
         Ok(tx)
@@ -117,6 +138,13 @@ impl MailboxSyncRepository for PgMailboxSync {
         Ok(())
     }
     async fn claim_catalog(&self, lease_id: Uuid) -> Result<Option<CatalogLease>, MailboxError> {
+        if self
+            .runtime
+            .as_ref()
+            .is_some_and(|runtime| !runtime.sync_enabled())
+        {
+            return Ok(None);
+        }
         self.claim_catalog_lease(lease_id).await
     }
     async fn commit_catalog(
@@ -136,10 +164,17 @@ impl MailboxSyncRepository for PgMailboxSync {
         lease_id: Uuid,
         kind: StreamKind,
     ) -> Result<Option<StreamLease>, MailboxError> {
+        if self
+            .runtime
+            .as_ref()
+            .is_some_and(|runtime| !runtime.sync_enabled())
+        {
+            return Ok(None);
+        }
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id, s.notified_traceparent FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = $3::text::email_user_provider_enum AND s.generation = l.sync_generation
                     AND s.kind = $2 AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -152,7 +187,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             RETURNING s.id, s.link_id, s.generation, l.grant_generation, s.scope_id,
                 s.position, s.initial_complete, s.fence, s.notified_at, c.notified_traceparent,
                 s.import_started_at
-        "#, lease_id, kind.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#, lease_id, kind.as_str(), self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             let pass = match kind {
                 StreamKind::MailFolder => FolderPass::Folder,
@@ -373,6 +408,13 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn claim_message(&self, lease_id: Uuid) -> Result<Option<MessageLease>, MailboxError> {
+        if self
+            .runtime
+            .as_ref()
+            .is_some_and(|runtime| !runtime.sync_enabled())
+        {
+            return Ok(None);
+        }
         // Naming both `is_import` values lets `available_at <= now()` end the claim index scan.
         // Without it, Postgres before 18 reads every backed-off row on each poll.
         // Paused imports name `false` twice, so only live rows are claimed.
@@ -380,7 +422,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             WITH candidate AS (
                 SELECT q.link_id,q.generation,q.provider_id,q.notified_traceparent FROM email_message_reconciliation q
                 JOIN email_links l ON l.id = q.link_id
-                WHERE q.generation = l.sync_generation AND l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK'
+                WHERE q.generation = l.sync_generation AND l.is_sync_active AND NOT l.needs_reauth AND l.provider = $3::text::email_user_provider_enum
                     AND q.is_import IN (false,$2)
                     AND q.available_at <= now() AND (q.lease_until IS NULL OR q.lease_until < now())
                 ORDER BY q.is_import,q.available_at,q.link_id,q.provider_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED
@@ -391,7 +433,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             FROM candidate c,email_links l
             WHERE q.link_id = c.link_id AND q.generation = c.generation AND q.provider_id = c.provider_id AND l.id = q.link_id
             RETURNING q.link_id,q.generation,l.grant_generation,q.provider_id,q.revision,q.is_import,q.attempts,q.notified_at,c.notified_traceparent
-        "#,lease_id,!self.imports_paused).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#,lease_id,!self.imports_paused, self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
         row.map(|row| {
             Ok(MessageLease {
                 mailbox: MailboxKey {
@@ -412,13 +454,14 @@ impl MailboxSyncRepository for PgMailboxSync {
 
     async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, MailboxError> {
         let rows = sqlx::query!(r#"
-            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count FROM email_mailbox_folders f
+            SELECT f.provider_id,f.parent_id,f.display_name,f.role,f.total_item_count,f.sync_enabled FROM email_mailbox_folders f
             JOIN email_links l ON l.id = f.link_id
             WHERE f.link_id = $1 AND l.sync_generation = $2 AND l.is_sync_active AND f.deleted_at IS NULL
         "#,mailbox.link_id,mailbox.sync_generation).fetch_all(&self.db).await.map_err(db_error)?;
         rows.into_iter()
             .map(|row| {
                 Ok(MailFolder {
+                    sync_enabled: row.sync_enabled,
                     id: ProviderId::new(row.provider_id)?,
                     parent_id: row.parent_id.map(ProviderId::new).transpose()?,
                     name: row.display_name,

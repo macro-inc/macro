@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT head.message_id AS \"message_id!\" FROM email_links l\n                CROSS JOIN LATERAL (\n                    SELECT scoped.message_id,scoped.available_at FROM (\n                        (SELECT d.message_id,d.available_at FROM email_mailbox_drafts d\n                        WHERE $1 AND d.link_id=l.id AND d.generation=l.sync_generation\n                            AND d.state IN ('pending','running','synced')\n                            AND NOT(d.message_id=ANY($3))\n                            AND (d.state IN ('pending','running') OR (d.state='synced' AND EXISTS(\n                                SELECT 1 FROM email_scheduled_messages schedule WHERE schedule.message_id=d.message_id\n                                    AND schedule.link_id=d.link_id AND NOT schedule.sent AND NOT schedule.processing AND schedule.send_time<=now())))\n                            AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id\n                                WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now() OFFSET 0)\n                            AND d.available_at<=now() AND (d.lease_until IS NULL OR d.lease_until<now())\n                        ORDER BY d.available_at,d.message_id LIMIT 1)\n                        UNION ALL\n                        (SELECT d.message_id,d.available_at FROM email_mailbox_drafts d\n                        WHERE NOT $1 AND d.checkpoint->>'stage' IN ('creating','submitting','confirming') AND d.link_id=l.id AND d.generation=l.sync_generation\n                            AND d.state IN ('pending','running','synced')\n                            AND NOT(d.message_id=ANY($3))\n                            AND (d.state IN ('pending','running') OR (d.state='synced' AND EXISTS(\n                                SELECT 1 FROM email_scheduled_messages schedule WHERE schedule.message_id=d.message_id\n                                    AND schedule.link_id=d.link_id AND NOT schedule.sent AND NOT schedule.processing AND schedule.send_time<=now())))\n                            AND NOT EXISTS(SELECT 1 FROM email_mailbox_command_targets target JOIN email_mailbox_commands command ON command.id=target.command_id\n                                WHERE target.message_id=d.message_id AND command.lease_id IS NOT NULL AND command.lease_until>now() OFFSET 0)\n                            AND d.available_at<=now() AND (d.lease_until IS NULL OR d.lease_until<now())\n                        ORDER BY d.available_at,d.message_id LIMIT 1)\n                    ) scoped ORDER BY scoped.available_at,scoped.message_id LIMIT 1\n                ) head\n                WHERE l.is_sync_active AND l.provider=$2::text::email_user_provider_enum\n                ORDER BY head.available_at,head.message_id LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2577575e91717b3dada610c4f859660b408fc06aefaf1c785ebeb9fe57f6e16e"
+}

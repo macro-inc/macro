@@ -85,6 +85,7 @@ pub fn validate_attachment_edit(
     let maximum = match facts.provider {
         UserProvider::Gmail => 18_000_000,
         UserProvider::Outlook => 150_000_000,
+        UserProvider::Imap => 25_000_000,
     };
     if added_bytes > 0 && facts.total_bytes.saturating_add(added_bytes) > maximum {
         return Err(AttachmentError::Invalid(
@@ -207,7 +208,7 @@ impl<R: DraftAttachmentRepository, S: DraftAttachmentStorage, A: EntityAccessSer
         let provider = self.inbox(actor, link).await?;
         // Existing Gmail clients predate upload completion. Outlook and every
         // client supplying an idempotency key use the verified upload protocol.
-        let upload_pending = upload_id.is_some() || provider == UserProvider::Outlook;
+        let upload_pending = upload_id.is_some() || provider.uses_mailbox_framework();
         let id = upload_id.unwrap_or_else(macro_uuid::generate_uuid_v7);
         let attachment = AttachmentDraft {
             id,

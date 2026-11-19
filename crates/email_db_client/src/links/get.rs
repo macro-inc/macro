@@ -277,7 +277,7 @@ pub async fn fetch_inbox_details_for_macro_id(
                s.signature_on_replies_forwards as "signature_on_replies_forwards?",
                s.signature,
                s.read_receipts_enabled as "read_receipts_enabled?",
-               CASE WHEN l.provider = 'OUTLOOK' THEN
+               CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN
                    CASE WHEN NOT EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder'))
                        THEN 'Init'::email_backfill_job_status
                    WHEN EXISTS (SELECT 1 FROM email_sync_streams ss WHERE ss.link_id = l.id AND ss.generation = l.sync_generation AND ss.kind IN ('folder_catalog','mail_folder') AND NOT ss.initial_complete)
@@ -286,8 +286,8 @@ pub async fn fetch_inbox_details_for_macro_id(
                    ELSE 'Complete'::email_backfill_job_status END
                ELSE bj.status END as "latest_backfill_status?: _",
                c.sfs_photo_url as "photo_url?",
-               CASE WHEN l.provider = 'OUTLOOK' THEN COALESCE(ms.granted_scopes, '{}') ELSE COALESCE(g.granted_scopes, '{}') END AS "provider_granted_scopes!",
-               (CASE WHEN l.provider = 'OUTLOOK' THEN ms.calendar_disabled_at ELSE g.calendar_disabled_at END IS NOT NULL) AS "calendar_disabled!",
+               CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN COALESCE(ms.granted_scopes, '{}') ELSE COALESCE(g.granted_scopes, '{}') END AS "provider_granted_scopes!",
+               (CASE WHEN l.provider IN ('OUTLOOK','IMAP') THEN ms.calendar_disabled_at ELSE g.calendar_disabled_at END IS NOT NULL) AS "calendar_disabled!",
                EXISTS (
                    SELECT 1 FROM calendar_accounts ca WHERE ca.email_link_id = l.id
                ) AS "has_calendar_data!"
@@ -529,6 +529,7 @@ pub async fn fetch_readable_owned_inboxes(
             provider: match row.provider {
                 DbUserProvider::Gmail => service::link::UserProvider::Gmail,
                 DbUserProvider::Outlook => service::link::UserProvider::Outlook,
+                DbUserProvider::Imap => service::link::UserProvider::Imap,
             },
             sync_generation: row.sync_generation,
             grant_generation: row.grant_generation,

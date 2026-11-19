@@ -81,6 +81,31 @@ export function useEmailLinksQuery(enabled: Accessor<boolean> = queryEnabled) {
   return useQuery(() => emailLinksQueryOptions(account(), enabled()));
 }
 
+function inboxSuggestionQueryOptions(
+  viewer: QueryAccount | undefined,
+  enabled: boolean
+) {
+  return {
+    queryKey: emailKeys.inboxSuggestion(viewer?.userId).queryKey,
+    queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      assertQueryAccount(viewer);
+      const suggestion = await throwOnErr(() =>
+        emailClient.imapSuggestion(signal)
+      );
+      assertQueryAccount(viewer);
+      return suggestion;
+    },
+    enabled: !!viewer && enabled,
+    staleTime: LINK_STALE_TIME,
+  };
+}
+
+/** Offer the signed-in address only after the caller has established that it needs an inbox. */
+export function useInboxSuggestion(enabled: Accessor<boolean>) {
+  const account = useQueryAccount();
+  return useQuery(() => inboxSuggestionQueryOptions(account(), enabled()));
+}
+
 /**
  * The link id of the user's primary inbox — their own `is_primary` link.
  * Delegated inboxes are primary for their own account, hence the macro_id

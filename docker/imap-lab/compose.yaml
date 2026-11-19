@@ -1,4 +1,40 @@
 services:
+  sqs:
+    image: softwaremill/elasticmq-native:1.7.1
+    profiles: ["e2e"]
+    ports: ["127.0.0.1:37924:9324"]
+  kafka:
+    image: apache/kafka:3.9.1
+    profiles: ["e2e"]
+    environment:
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@localhost:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://127.0.0.1:37992
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports: ["127.0.0.1:37992:9092"]
+  stalwart:
+    image: stalwartlabs/stalwart:v1.1.1
+    profiles: ["stalwart"]
+    init: true
+    environment:
+      STALWART_RECOVERY_ADMIN: lab-admin:pass
+    volumes:
+      - stalwart-config:/etc/stalwart
+      - stalwart-data:/var/lib/stalwart
+    ports:
+      - "127.0.0.1:36993:993"
+      - "127.0.0.1:36465:465"
+      - "127.0.0.1:36880:8080"
+      - "127.0.0.1:36443:443"
   localstack:
     image: localstack/localstack:4
     environment:
@@ -13,6 +49,7 @@ services:
     volumes:
       - ./dovecot.conf:/etc/dovecot/conf.d/zz-macro-lab.conf:ro
       - ./generated:/etc/dovecot/lab-tls:ro
+      - ./generated/relay-rawlog:/tmp/macro-relay-rawlog
     ports:
       - "127.0.0.1:${IMAP_LAB_IMAPS_PORT:-35993}:31993"
       - "127.0.0.1:${IMAP_LAB_STARTTLS_PORT:-35143}:31143"
@@ -24,3 +61,7 @@ services:
     image: axllent/mailpit:v1.20
     ports:
       - "127.0.0.1:${IMAP_LAB_MAILPIT_PORT:-35825}:8025"
+
+volumes:
+  stalwart-config:
+  stalwart-data:

@@ -9,7 +9,7 @@ impl PgMailboxSync {
         let row = sqlx::query!(r#"
             WITH candidate AS (
                 SELECT s.id FROM email_sync_streams s JOIN email_links l ON l.id = s.link_id
-                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = 'OUTLOOK' AND s.generation = l.sync_generation
+                WHERE l.is_sync_active AND NOT l.needs_reauth AND l.provider = $2::text::email_user_provider_enum AND s.generation = l.sync_generation
                     AND s.kind = 'folder_catalog' AND s.next_run_at <= now()
                     AND (s.lease_until IS NULL OR s.lease_until < now())
                 ORDER BY s.next_run_at, s.id LIMIT 1 FOR UPDATE OF s SKIP LOCKED
@@ -17,7 +17,7 @@ impl PgMailboxSync {
             UPDATE email_sync_streams s SET lease_id = $1, lease_until = now() + interval '3 minutes', lease_started_at = clock_timestamp(), fence = fence + 1
             FROM candidate c, email_links l WHERE s.id = c.id AND l.id = s.link_id
             RETURNING s.id,s.link_id,s.generation,l.grant_generation,s.fence
-        "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#,lease_id, self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)?;
         Ok(row.map(|row| CatalogLease {
             id: row.id,
             mailbox: MailboxKey {
@@ -102,27 +102,29 @@ impl PgMailboxSync {
         .map_err(db_error)?;
         for folder in folders {
             sqlx::query!(r#"
-                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation,total_item_count)
-                VALUES ($1,$2,$3,$4,$5,$6,$7)
+                INSERT INTO email_mailbox_folders (link_id,provider_id,parent_id,display_name,role,catalog_generation,total_item_count,sync_enabled)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
                 ON CONFLICT (link_id,provider_id) DO UPDATE SET parent_id = EXCLUDED.parent_id,
                     display_name = EXCLUDED.display_name,role = EXCLUDED.role,catalog_generation = EXCLUDED.catalog_generation,deleted_at = NULL,
-                    total_item_count = EXCLUDED.total_item_count
-            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence,folder.total_items.map(i64::from))
+                    total_item_count = EXCLUDED.total_item_count,sync_enabled = EXCLUDED.sync_enabled
+            "#,lease.mailbox.link_id,folder.id.as_str(),folder.parent_id.as_ref().map(ProviderId::as_str),folder.name,role_name(folder.role),lease.fence,folder.total_items.map(i64::from),folder.sync_enabled)
                 .execute(&mut *tx).await.map_err(db_error)?;
-            sqlx::query!(
-                r#"
+            if folder.sync_enabled {
+                sqlx::query!(
+                    r#"
                 INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id)
                 VALUES ($1,$2,$3,'mail_folder',$4)
                 ON CONFLICT (link_id,generation,kind,scope_id) DO NOTHING
             "#,
-                macro_uuid::generate_uuid_v7(),
-                lease.mailbox.link_id,
-                lease.mailbox.sync_generation,
-                folder.id.as_str()
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(db_error)?;
+                    macro_uuid::generate_uuid_v7(),
+                    lease.mailbox.link_id,
+                    lease.mailbox.sync_generation,
+                    folder.id.as_str()
+                )
+                .execute(&mut *tx)
+                .await
+                .map_err(db_error)?;
+            }
         }
         sqlx::query!(
             r#"
@@ -142,13 +144,13 @@ impl PgMailboxSync {
             WHERE m.link_id = $1 AND (f.deleted_at IS NOT NULL OR f.provider_id=ANY($3)) AND m.provider_id IS NOT NULL
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&trash_changes).execute(&mut *tx).await.map_err(db_error)?;
-        // Stop polling folders that no longer exist, and their live passes;
+        // Stop polling missing or explicitly paused folders, and their live passes;
         // retained messages are handled by mailbox-wide reconciliation above,
         // not cascaded from folder deletion.
         sqlx::query!(r#"
             DELETE FROM email_sync_streams s USING email_mailbox_folders f
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind IN ('mail_folder','mail_folder_live')
-                AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
+                AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND (f.deleted_at IS NOT NULL OR NOT f.sync_enabled)
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
         tx.commit().await.map_err(db_error)?;

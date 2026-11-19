@@ -63,6 +63,7 @@ const MAIN_PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("flake.lock"),
     xtask_paths::repo_glob!(".config/nextest.toml"),
     xtask_paths::repo_glob!(".github/workflows/email_e2e.yml"),
+    xtask_paths::repo_glob!("docker/imap-lab/**"),
 ];
 
 /// How many jobs the scenarios without search are divided over.
@@ -259,6 +260,7 @@ fn scenarios() -> Job {
         format!("slice:${{{{ matrix.partition }}}}/{PARTITIONS}"),
     ))
     .map(prepare)
+    .add_step(Step::new("start the real IMAP and SMTP lab").run("bash docker/imap-lab/start.sh"))
     .add_step(run_scenarios())
     .map(|job| keep_results(job, "email-e2e-results-${{ matrix.partition }}"))
     .map(|job| finish(job, "email-e2e-logs-${{ matrix.partition }}"))

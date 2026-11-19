@@ -1213,6 +1213,22 @@ describe('after a Microsoft sign-up', () => {
     expect(screen.queryByText('Continuing with Microsoft')).toBeNull();
   });
 
+  it('opens IMAP enrollment from the suggested sign-in address without claiming calendar access', async () => {
+    const { fake } = setup({
+      resume: 'work',
+      world: { imapSuggestion: 'ada@example.com' },
+    });
+    await heading('Connect your work email.');
+    expect(screen.queryByText(/Your password stays with Google/)).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Use a different account' })
+    ).toBeTruthy();
+    click('Connect ada@example.com');
+    await waitFor(() =>
+      expect(connects(fake.calls())).toEqual(['connectInbox:imap'])
+    );
+  });
+
   it('leaves a Google sign-up to choose, with both providers offered', async () => {
     saveSignupDraft({ step: 'work', authenticating: true, provider: 'google' });
     const { fake } = setup({ world: { outlookAvailable: true } });

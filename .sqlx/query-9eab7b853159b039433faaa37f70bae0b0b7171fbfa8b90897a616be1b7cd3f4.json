@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_links l WHERE lower(email_address)=lower($2) AND (l.macro_id=$1 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$1))) AS \"connected!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9eab7b853159b039433faaa37f70bae0b0b7171fbfa8b90897a616be1b7cd3f4"
+}

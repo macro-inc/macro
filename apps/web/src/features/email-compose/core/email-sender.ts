@@ -1,3 +1,4 @@
+import type { UserProvider } from '@service-email/generated/schemas';
 import type { EmailMessage } from '../../email-message/core/email-message';
 
 export type EmailSenderAddress = {
@@ -10,7 +11,7 @@ export type SenderInbox = {
   email_address: string;
   displayName?: string;
   photo_url?: string | null;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: UserProvider;
   /** null means this inbox's provider lookup failed; undefined is not loaded. */
   sendAs?: readonly EmailSenderAddress[] | null;
 };
@@ -19,7 +20,7 @@ export type FromInboxOption = EmailSenderAddress & {
   id: string;
   inboxId: string;
   photo_url?: string | null;
-  provider?: 'GMAIL' | 'OUTLOOK';
+  provider?: UserProvider;
   isAlias: boolean;
 };
 

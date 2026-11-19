@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT kind,key,folder_id,message_id,sequence,received_at,document,body FROM imap_state_entries WHERE link_id=$1 AND kind=ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "folder_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "received_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "document",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 7,
+        "name": "body",
+        "type_info": "Bytea"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "ca691cec68aaffd5bd1649033f7457f912615a68fb152a3c48d2e6a27c6250b3"
+}

@@ -15,7 +15,7 @@ use std::ops::Range;
 use uuid::Uuid;
 
 use super::EmailServiceImpl;
-use crate::domain::models::{UserProvider, mailbox_action::MailboxAction};
+use crate::domain::models::mailbox_action::MailboxAction;
 
 /// One thread's label change, committed to the DB but not yet sent to Gmail.
 struct StagedThreadLabels {
@@ -138,7 +138,7 @@ where
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .ok_or(EmailErr::ThreadNotFound)?;
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             return Ok(self
                 .queue_outlook_action(&link, thread_id, actor, action)
                 .await?
@@ -275,7 +275,7 @@ where
             .await
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
 
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             return Ok(self
                 .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(true))
                 .await?
@@ -327,7 +327,7 @@ where
 
         // Resolve from the authorized thread's inbox, never the caller's primary
         // inbox: multi-inbox users have a distinct UNREAD label for each link.
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             return Ok(self
                 .queue_outlook_action(&link, thread_id, macro_id, MailboxAction::Read(false))
                 .await?
@@ -376,7 +376,7 @@ where
         actor: macro_user_id::user_id::MacroUserIdStr<'static>,
         in_inbox: bool,
     ) -> Result<usize, EmailErr> {
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             return Ok(self
                 .queue_outlook_action(link, thread_id, actor, MailboxAction::Archived(!in_inbox))
                 .await?
@@ -511,7 +511,7 @@ where
             .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
             .ok_or(EmailErr::LabelNotFound)?;
 
-        if link.provider == UserProvider::Outlook {
+        if link.provider.uses_mailbox_framework() {
             return self
                 .queue_outlook_action(
                     link,
@@ -588,7 +588,7 @@ where
                     self.ensure_thread_has_received_messages(thread_id, link.id)
                         .await?;
                 }
-                if link.provider == UserProvider::Outlook {
+                if link.provider.uses_mailbox_framework() {
                     self.queue_outlook_action(
                         &link,
                         thread_id,

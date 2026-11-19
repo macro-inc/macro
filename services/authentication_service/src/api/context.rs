@@ -331,6 +331,8 @@ pub(crate) struct ApiContext {
     /// AI allowances, credits, and overage
     pub ai_billing_service: Arc<AiBillingServiceType>,
     pub ai_payment_gateway: Arc<ai_billing::outbound::StripePaymentGateway>,
+    /// User-specific availability for the IMAP provider in the inbox chooser.
+    pub email_connection_flags: Option<feature_flags::outbound::posthog::PostHogFeatureFlags>,
     /// Whether Gmail link consent requests the Google Calendar scope.
     pub calendar_scope_enabled: bool,
     /// Google's OAuth authorization endpoint, where a Gmail link sends the browser.

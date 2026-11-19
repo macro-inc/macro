@@ -9,7 +9,7 @@ use syn::visit::Visit;
 
 use super::junit::{self, Outcome};
 use super::ledger::{self, Ledger};
-use super::{GMAIL, JUNIT_NAME, KNOWN_BUG, Model, OUTLOOK, Status, evidence};
+use super::{GMAIL, IMAP, JUNIT_NAME, KNOWN_BUG, Model, OUTLOOK, Status, evidence};
 
 /// Where the scenarios are.
 const SCENARIOS_DIR: &str = "crates/email_e2e/tests";
@@ -35,7 +35,11 @@ impl Model {
         // cannot pass, so the entry points only they reach cannot be reached.
         let mut held_open: BTreeSet<(&str, &str)> = BTreeSet::new();
         for row in &self.functions {
-            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
+            for (provider, cell) in [
+                (GMAIL, &row.gmail),
+                (OUTLOOK, &row.outlook),
+                (IMAP, &row.imap),
+            ] {
                 let Some(cell) = cell else { continue };
                 let known_bug = cell
                     .reason
@@ -58,7 +62,11 @@ impl Model {
             }
         }
         for row in &self.entry_rows {
-            for (provider, cell) in [(GMAIL, &row.gmail), (OUTLOOK, &row.outlook)] {
+            for (provider, cell) in [
+                (GMAIL, &row.gmail),
+                (OUTLOOK, &row.outlook),
+                (IMAP, &row.imap),
+            ] {
                 let open = cell
                     .as_ref()
                     .is_some_and(|cell| cell.status == Status::Open);

@@ -20,16 +20,28 @@ impl MailboxProjectionRepository for PgMailboxSync {
         &self,
         lease_id: Uuid,
     ) -> Result<Option<ProjectionLease>, MailboxError> {
+        let mut tx = self.db.begin().await.map_err(db_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         let row = sqlx::query!(r#"
             WITH candidate AS (
-                SELECT o.id FROM email_projection_outbox o JOIN email_links l ON l.id = o.link_id
-                WHERE l.is_sync_active AND o.available_at <= now() AND (o.lease_until IS NULL OR o.lease_until < now())
-                ORDER BY o.available_at,o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED
+                SELECT due.id FROM email_links l
+                CROSS JOIN LATERAL (
+                    SELECT o.id,o.available_at FROM email_projection_outbox o
+                    WHERE o.link_id=l.id AND o.available_at<=now()
+                        AND (o.lease_until IS NULL OR o.lease_until<now())
+                    ORDER BY o.available_at,o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED
+                ) due
+                WHERE l.is_sync_active AND l.provider=$2::text::email_user_provider_enum
+                ORDER BY due.available_at,due.id LIMIT 1
             )
             UPDATE email_projection_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1
             FROM candidate c,email_links l WHERE o.id = c.id AND l.id = o.link_id
             RETURNING o.id,o.link_id,o.generation,o.payload,o.attempts,l.sync_generation,l.grant_generation
-        "#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
+        "#,lease_id,self.provider.as_str()).fetch_optional(&mut *tx).await.map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         row.map(|row| {
             Ok(ProjectionLease {
                 id: row.id,

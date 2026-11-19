@@ -59,6 +59,17 @@ pub async fn lock_gmail_connection(
     .fetch_one(&mut *conn)
     .await
     .map_err(unavailable)?;
+    sqlx::query!(
+        "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
+        address.to_ascii_lowercase()
+    )
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(unavailable)?;
+    let conflicting = sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links WHERE lower(email_address)=lower($1) AND provider<>'GMAIL') AS "conflict!""#,address).fetch_one(&mut *conn).await.map_err(unavailable)?;
+    if conflicting {
+        return Err(InitializationError::IdentityConflict);
+    }
     let facts=sqlx::query!(r#"SELECT
         EXISTS(SELECT 1 FROM "RolesOnUsers" ru JOIN "RolesOnPermissions" rp ON rp."roleId"=ru."roleId"
             WHERE ru."userId"=$1 AND rp."permissionId"='read:professional_features') AS "professional!",
@@ -88,6 +99,10 @@ async fn snapshot(
     request: &InitializeMailbox,
     grant: &VerifiedMailboxGrant,
 ) -> Result<InitializationSnapshot, InitializationError> {
+    let conflicting=sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_links WHERE lower(email_address)=lower($1) AND provider<>'OUTLOOK') AS "conflict!""#,grant.email).fetch_one(&mut *conn).await.map_err(unavailable)?;
+    if conflicting {
+        return Err(InitializationError::IdentityConflict);
+    }
     let row = sqlx::query!(r#"
         SELECT l.id,l.macro_id,l.grant_id,l.grant_generation,l.sync_generation,
             l.provider_tenant_id,l.provider_mailbox_id,
@@ -217,7 +232,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         .map_err(unavailable)?;
         sqlx::query!(
             "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
-            grant.email
+            grant.email.to_ascii_lowercase()
         )
         .fetch_one(&mut *tx)
         .await
@@ -237,7 +252,7 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         "#,
             request.attempt,
             request.actor_fusion_id,
-            grant.email
+            grant.email.to_ascii_lowercase()
         )
         .execute(&mut *tx)
         .await

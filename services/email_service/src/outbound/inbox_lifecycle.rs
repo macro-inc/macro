@@ -14,6 +14,7 @@ use email_api_client::domain::models::{AccessToken, EmailApiError, MailboxAccess
 use email_api_client::domain::ports::{MailboxWatchClient, ScopedMailboxRepository};
 
 pub struct InboxLifecycleClients {
+    pub imap: imap_service_client::ImapServiceClient,
     pub outlook: email_api_client::OutlookApiClientRepository,
     pub auth: authentication_service_client::AuthServiceClient,
     pub queue: sqs_client::SQS,
@@ -22,6 +23,23 @@ pub struct InboxLifecycleClients {
 impl InboxLifecycleEffects for InboxLifecycleClients {
     async fn apply(&self, link: Uuid, effect: &InboxLifecycleEffect) -> Result<(), MailboxError> {
         match effect {
+            InboxLifecycleEffect::DisconnectImap {
+                sync_generation,
+                grant_generation,
+            } => {
+                match self
+                    .imap
+                    .delete(imap_service_client::Binding {
+                        link_id: link,
+                        sync_generation: *sync_generation,
+                        grant_generation: *grant_generation,
+                    })
+                    .await
+                {
+                    Ok(()) | Err(imap_service_client::Error::NotFound) => Ok(()),
+                    Err(error) => Err(super::email_api::imap::error(error).into()),
+                }
+            }
             InboxLifecycleEffect::GmailHistory { work } => {
                 use email::domain::mailbox::gmail_history::HistoryWork;
                 use models_email::gmail::inbox_sync::{

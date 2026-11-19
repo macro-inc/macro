@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM email_links l JOIN email_imap_connection_attempts a ON a.link_id=l.id WHERE a.id=$1 AND l.macro_id=$2 AND l.is_sync_active AND l.sync_generation=a.sync_generation AND l.grant_generation=a.grant_generation) AS \"current!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "0e6aaccd47e7ac57cba8dfbd7c2fa6003e020b1f4bbbbad08b693277f7a0e804"
+}

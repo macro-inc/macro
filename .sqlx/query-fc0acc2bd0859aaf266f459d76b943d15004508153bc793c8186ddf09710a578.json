@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM imap_idle_hosts WHERE host_hash IN(SELECT host_hash FROM imap_idle_hosts WHERE updated_at<now()-interval '30 days' ORDER BY updated_at LIMIT 100)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "fc0acc2bd0859aaf266f459d76b943d15004508153bc793c8186ddf09710a578"
+}

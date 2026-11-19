@@ -52,18 +52,32 @@ impl Link {
     }
 }
 
+/// User rollout shared by the chooser and IMAP account enrollment.
+pub const IMAP_CONNECTIONS_FLAG: &str = "enable-imap-connections";
+
 #[derive(Debug, Clone, Copy, ToSchema, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UserProvider {
     Gmail,
     /// Microsoft Outlook and Microsoft 365.
     Outlook,
+    /// An inbox connected through IMAP and SMTP.
+    Imap,
 }
 
 impl UserProvider {
+    /// Whether this provider uses durable folder streams, drafts and commands.
+    pub fn uses_mailbox_framework(self) -> bool {
+        match self {
+            Self::Gmail => false,
+            Self::Outlook | Self::Imap => true,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             UserProvider::Gmail => "GMAIL",
             UserProvider::Outlook => "OUTLOOK",
+            UserProvider::Imap => "IMAP",
         }
     }
 }

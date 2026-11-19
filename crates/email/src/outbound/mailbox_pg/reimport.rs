@@ -9,7 +9,8 @@ mod test;
 impl FolderReimportRepository for PgMailboxSync {
     async fn outlook_links(&self) -> Result<Vec<Uuid>, MailboxError> {
         sqlx::query_scalar!(
-            "SELECT id FROM email_links WHERE provider = 'OUTLOOK' ORDER BY created_at, id"
+            "SELECT id FROM email_links WHERE provider = $1::text::email_user_provider_enum ORDER BY created_at, id",
+            self.provider.as_str()
         )
         .fetch_all(&self.db)
         .await
@@ -24,7 +25,7 @@ impl FolderReimportRepository for PgMailboxSync {
         // A stream is due when its round started before `revision`; rounds
         // started before revisions were recorded have none.
         let Some(row) = sqlx::query!(r#"
-            SELECT l.provider = 'OUTLOOK' AS "outlook!", l.is_sync_active AND NOT l.needs_reauth AS "active!",
+            SELECT l.provider = $3::text::email_user_provider_enum AS "outlook!", l.is_sync_active AND NOT l.needs_reauth AS "active!",
                 l.sync_generation, l.grant_generation,
                 EXISTS(SELECT 1 FROM email_sync_streams s WHERE s.link_id = l.id AND s.generation = l.sync_generation
                         AND s.kind IN ('folder_catalog','mail_folder') AND NOT s.initial_complete)
@@ -41,7 +42,7 @@ impl FolderReimportRepository for PgMailboxSync {
                     AND (s.reader_revision IS NULL OR s.reader_revision < $2)
             ) due
             WHERE l.id = $1
-        "#,link_id,revision).fetch_optional(&self.db).await.map_err(db_error)? else {
+        "#,link_id,revision, self.provider.as_str()).fetch_optional(&self.db).await.map_err(db_error)? else {
             return Ok(LinkReimport::NotOutlook);
         };
         Ok(if !row.outlook {
@@ -77,9 +78,9 @@ impl FolderReimportRepository for PgMailboxSync {
         // The link lock orders this after catalog commits and page commits, as
         // resync is.
         let current = sqlx::query_scalar!(r#"
-            SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' AND sync_generation = $2
+            SELECT id FROM email_links WHERE id = $1 AND provider = $4::text::email_user_provider_enum AND sync_generation = $2
                 AND grant_generation = $3 AND is_sync_active AND NOT needs_reauth FOR UPDATE
-        "#,mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation).fetch_optional(&mut *tx).await.map_err(db_error)?;
+        "#,mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation, self.provider.as_str()).fetch_optional(&mut *tx).await.map_err(db_error)?;
         if current.is_none() {
             return Ok(None);
         }

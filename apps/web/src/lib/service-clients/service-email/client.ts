@@ -26,16 +26,21 @@ import { CalendarMutationErrorCode } from '@service-calendar/generated/schemas/c
 import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import type { Result } from 'neverthrow';
 import type {
+  AccountMailSettings,
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
   ApiMessageOperation,
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
+  Discovery,
   GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  ImapConnectRequest,
+  ImapConnectResponse,
+  ImapSuggestion,
   InitResponse,
   ListBackfillJobsResponse,
   ListContactsResponse,
@@ -55,6 +60,7 @@ import type {
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
+  UpdateFolderSettings,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -132,6 +138,36 @@ async function forwardCalendarEventErrorHandler(response: Response) {
   return {
     code: 'HTTP_ERROR' as const,
     message: `HTTP error! status: ${response.status}`,
+  };
+}
+
+async function imapConnectionError(response: Response) {
+  const body: unknown = await response.json().catch(() => null);
+  const code =
+    typeof body === 'object' && body !== null && 'code' in body
+      ? body.code
+      : undefined;
+  // Only closed, non-personal codes may reach telemetry or the UI.
+  const known = [
+    'payment_required',
+    'address_unverified',
+    'provider_conflict',
+    'connection_changed',
+    'disabled',
+    'credentials_rejected',
+    'credentials_unavailable',
+    'forbidden',
+    'invalid',
+    'throttled',
+    'connection_unavailable',
+    'conflict',
+  ];
+  return {
+    code: 'IMAP_CONNECTION_REFUSED' as const,
+    message:
+      typeof code === 'string' && known.includes(code)
+        ? code
+        : 'connection_unavailable',
   };
 }
 
@@ -474,6 +510,69 @@ export const emailClient = {
       {
         method: 'GET',
         headers: emailLinkHeaders(linkId),
+      }
+    );
+  },
+
+  imapSuggestion(signal: AbortSignal) {
+    return emailFetch<ImapSuggestion>('/email/links/suggestion', { signal });
+  },
+
+  imapDiscover(email: string, signal: AbortSignal, parentSpan?: Span) {
+    return fetchWithToken<Discovery, 'IMAP_CONNECTION_REFUSED'>(
+      `${emailHost}/email/links/imap/discover`,
+      {
+        errorResponseHandler: imapConnectionError,
+        method: 'POST',
+        body: JSON.stringify({ email }),
+        signal,
+        trace: { parentSpan },
+      }
+    );
+  },
+
+  getImapMailboxSettings(
+    linkId: string,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return emailFetch<AccountMailSettings>(
+      `/email/links/${encodeURIComponent(linkId)}/imap/settings`,
+      { signal, trace: { parentSpan } }
+    );
+  },
+
+  updateImapMailboxSettings(
+    linkId: string,
+    change: UpdateFolderSettings,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return fetchWithToken<AccountMailSettings, 'IMAP_CONNECTION_REFUSED'>(
+      `${emailHost}/email/links/${encodeURIComponent(linkId)}/imap/settings`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify(change),
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
+      }
+    );
+  },
+
+  imapConnect(
+    request: ImapConnectRequest,
+    signal: AbortSignal,
+    parentSpan?: Span
+  ) {
+    return fetchWithToken<ImapConnectResponse, 'IMAP_CONNECTION_REFUSED'>(
+      `${emailHost}/email/links/imap`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+        signal,
+        trace: { parentSpan },
+        errorResponseHandler: imapConnectionError,
       }
     );
   },

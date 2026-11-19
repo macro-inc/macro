@@ -254,6 +254,29 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # imap_service: internal mail engine, reached through email_service.
+  # ============================================================================
+  imap_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/imap_service"]
+    ports:
+      - "127.0.0.1:8113:8080"
+    depends_on:
+      - postgres
+      - localstack
+    networks:
+      databases:
+      services:
+        aliases:
+          - imap-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # notification_service (Port 8089)
   # User notifications - NotificationDB
   # ============================================================================

@@ -14,6 +14,7 @@ export enum ServiceUrl {
   PREVIEW_GATEWAY_URL = 'PREVIEW_GATEWAY_URL',
   SYNC_SERVICE_URL = 'SYNC_SERVICE_URL',
   EMAIL_SERVICE_URL = 'EMAIL_SERVICE_URL',
+  IMAP_SERVICE_URL = 'IMAP_SERVICE_URL',
   STATIC_FILE_SERVICE_URL = 'STATIC_FILE_SERVICE_URL',
   NOTIFICATION_SERVICE_URL = 'NOTIFICATION_SERVICE_URL',
   AUTHENTICATION_SERVICE_URL = 'AUTHENTICATION_SERVICE_URL',
@@ -45,6 +46,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-dev3.macroverse.workers.dev',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://dev-gateway.macro.com/email',
+  [ServiceUrl.IMAP_SERVICE_URL]: 'http://engine.imap-dev.macro.internal:8080',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]:
     'https://static-file-service-dev.macro.com',
   [ServiceUrl.NOTIFICATION_SERVICE_URL]:
@@ -77,6 +79,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.SYNC_SERVICE_URL]:
     'https://sync-service-prod2.macroverse.workers.dev',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://gateway.macro.com/email',
+  [ServiceUrl.IMAP_SERVICE_URL]: 'http://engine.imap-prod.macro.internal:8080',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]: 'https://static-file-service.macro.com',
   [ServiceUrl.NOTIFICATION_SERVICE_URL]:
     'https://gateway.macro.com/notification',

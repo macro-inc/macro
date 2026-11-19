@@ -7,6 +7,19 @@ use tracing::span::{Attributes, Id, Record};
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 
+/// Register a capture independently of the thread that first visits each callsite.
+pub(crate) fn capture_dispatch(
+    subscriber: impl tracing::Subscriber + Send + Sync + 'static,
+) -> tracing::Dispatch {
+    // With a single registered dispatcher, tracing-core asks the registering
+    // thread's default about new callsites. Parallel tests without a subscriber
+    // can then cache "never" for another test's events. Keep a second dispatcher
+    // registered for the test process without installing it as anyone's default.
+    static NOOP: std::sync::OnceLock<tracing::Dispatch> = std::sync::OnceLock::new();
+    NOOP.get_or_init(|| tracing::Dispatch::new(tracing::subscriber::NoSubscriber::new()));
+    tracing::Dispatch::new(subscriber)
+}
+
 pub(crate) type Fields = HashMap<&'static str, String>;
 
 #[derive(Default)]
@@ -33,12 +46,8 @@ pub(crate) struct Telemetry(Arc<Mutex<Captured>>);
 
 impl Telemetry {
     pub(crate) fn install(&self) -> tracing::subscriber::DefaultGuard {
-        let guard =
-            tracing::subscriber::set_default(tracing_subscriber::registry().with(self.clone()));
-        // A callsite another test thread registered while this subscriber was
-        // being installed can keep a cached "never" interest; recompute it.
-        tracing::callsite::rebuild_interest_cache();
-        guard
+        let dispatch = capture_dispatch(tracing_subscriber::registry().with(self.clone()));
+        tracing::dispatcher::set_default(&dispatch)
     }
 
     /// Closed spans with this name, oldest first.
@@ -99,4 +108,17 @@ impl<S: tracing::Subscriber + for<'a> LookupSpan<'a>> tracing_subscriber::Layer<
             self.0.lock().unwrap().spans.push((span.name(), values.0));
         }
     }
+}
+
+#[test]
+fn captures_a_callsite_first_used_on_a_thread_without_a_subscriber() {
+    fn visit_callsite() {
+        tracing::debug!("cross-thread capture fixture");
+    }
+
+    let capture = Telemetry::default();
+    let _guard = capture.install();
+    std::thread::spawn(visit_callsite).join().unwrap();
+    visit_callsite();
+    assert_eq!(capture.events("cross-thread capture fixture").len(), 1);
 }

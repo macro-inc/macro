@@ -15,9 +15,13 @@ thread/message API types, DB row types, and Gmail API response shapes.
 
 ## Scope
 
+- `UserProvider` includes Gmail, Outlook and IMAP. API spelling is uppercase;
+  service variants are explicit. Use `uses_mailbox_framework` to distinguish
+  durable organization/draft work from Gmail's queue operations.
+
 - Owns: email/Gmail wire and DB-row models shared across email services.
 - Not here: calendar sync (moved out, see `#6826`) → `calendar_events`;
-  actual IMAP/SMTP or Gmail API calls → `email_service`, `gmail_client`.
+  actual IMAP/SMTP calls → `imap_engine`; Gmail API calls → `gmail_client`.
 
 ## Boundaries
 

@@ -43,6 +43,7 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@core/util/platform', () => ({
   isPlatform: () => mocks.desktop,
+  isTauri: () => mocks.mobile || mocks.desktop,
 }));
 vi.mock('@queries/auth', () => ({
   useInitGmailLink: () => ({ mutateAsync: mocks.start }),

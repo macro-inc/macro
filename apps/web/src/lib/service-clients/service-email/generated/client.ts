@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AccountMailSettings,
   AddDraftAttachmentParams,
   AddDraftAttachmentRequest,
   AddDraftAttachmentResponse,
@@ -27,6 +28,7 @@ import type {
   CreateLabelResponse,
   DeleteDraftParams,
   DeleteScheduledDraftParams,
+  Discovery,
   EmlFile,
   EmptyResponse,
   ErrorResponse,
@@ -43,6 +45,11 @@ import type {
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
+  ImapConnectionErrorResponse,
+  ImapConnectRequest,
+  ImapConnectResponse,
+  ImapDiscoverRequest,
+  ImapSuggestion,
   InitErrorCodeResponse,
   InitResponse,
   InitUserParams,
@@ -55,6 +62,7 @@ import type {
   MailboxOperation,
   MailboxSettingsOperation,
   MessageOperationResponse,
+  Notification,
   ParsedMessage,
   PatchSettingsRequest,
   PatchSettingsResponse,
@@ -72,6 +80,7 @@ import type {
   TransferRecoveryResponse,
   UnblockSenderRequest,
   UnresolvedSignatureImagesError,
+  UpdateFolderSettings,
   UpdateLabelBatchRequest,
   UpdateLabelBatchResponse,
   UpdateThreadLabelRequest,
@@ -2519,6 +2528,167 @@ export const healthCheckLinks = async (
   } as healthCheckLinksResponse;
 };
 
+export type imapConnectResponse200 = {
+  data: ImapConnectResponse;
+  status: 200;
+};
+
+export type imapConnectResponse400 = {
+  data: ImapConnectionErrorResponse;
+  status: 400;
+};
+
+export type imapConnectResponse403 = {
+  data: ImapConnectionErrorResponse;
+  status: 403;
+};
+
+export type imapConnectResponse409 = {
+  data: ImapConnectionErrorResponse;
+  status: 409;
+};
+
+export type imapConnectResponse422 = {
+  data: ImapConnectionErrorResponse;
+  status: 422;
+};
+
+export type imapConnectResponse429 = {
+  data: ImapConnectionErrorResponse;
+  status: 429;
+};
+
+export type imapConnectResponseSuccess = imapConnectResponse200 & {
+  headers: Headers;
+};
+export type imapConnectResponseError = (
+  | imapConnectResponse400
+  | imapConnectResponse403
+  | imapConnectResponse409
+  | imapConnectResponse422
+  | imapConnectResponse429
+) & {
+  headers: Headers;
+};
+
+export type imapConnectResponse =
+  | imapConnectResponseSuccess
+  | imapConnectResponseError;
+
+export const getImapConnectUrl = () => {
+  return `/email/links/imap`;
+};
+
+export const imapConnect = async (
+  imapConnectRequest: ImapConnectRequest,
+  options?: RequestInit
+): Promise<imapConnectResponse> => {
+  const res = await fetch(getImapConnectUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(imapConnectRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: imapConnectResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as imapConnectResponse;
+};
+
+export type imapDiscoverResponse200 = {
+  data: Discovery;
+  status: 200;
+};
+
+export type imapDiscoverResponse403 = {
+  data: ImapConnectionErrorResponse;
+  status: 403;
+};
+
+export type imapDiscoverResponseSuccess = imapDiscoverResponse200 & {
+  headers: Headers;
+};
+export type imapDiscoverResponseError = imapDiscoverResponse403 & {
+  headers: Headers;
+};
+
+export type imapDiscoverResponse =
+  | imapDiscoverResponseSuccess
+  | imapDiscoverResponseError;
+
+export const getImapDiscoverUrl = () => {
+  return `/email/links/imap/discover`;
+};
+
+export const imapDiscover = async (
+  imapDiscoverRequest: ImapDiscoverRequest,
+  options?: RequestInit
+): Promise<imapDiscoverResponse> => {
+  const res = await fetch(getImapDiscoverUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(imapDiscoverRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: imapDiscoverResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as imapDiscoverResponse;
+};
+
+export type imapSuggestionResponse200 = {
+  data: ImapSuggestion;
+  status: 200;
+};
+
+export type imapSuggestionResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type imapSuggestionResponseSuccess = imapSuggestionResponse200 & {
+  headers: Headers;
+};
+export type imapSuggestionResponseError = imapSuggestionResponse401 & {
+  headers: Headers;
+};
+
+export type imapSuggestionResponse =
+  | imapSuggestionResponseSuccess
+  | imapSuggestionResponseError;
+
+export const getImapSuggestionUrl = () => {
+  return `/email/links/suggestion`;
+};
+
+export const imapSuggestion = async (
+  options?: RequestInit
+): Promise<imapSuggestionResponse> => {
+  const res = await fetch(getImapSuggestionUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: imapSuggestionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as imapSuggestionResponse;
+};
+
 /**
  * For an inbox the caller owns this enqueues a full cascade teardown
 (`LinkManagerMessage::DeleteLink`). For an inbox reached via delegation it
@@ -2664,6 +2834,118 @@ export const disableLinkCalendar = async (
     status: res.status,
     headers: res.headers,
   } as disableLinkCalendarResponse;
+};
+
+export type getImapMailboxSettingsResponse200 = {
+  data: AccountMailSettings;
+  status: 200;
+};
+
+export type getImapMailboxSettingsResponse404 = {
+  data: ImapConnectionErrorResponse;
+  status: 404;
+};
+
+export type getImapMailboxSettingsResponseSuccess =
+  getImapMailboxSettingsResponse200 & {
+    headers: Headers;
+  };
+export type getImapMailboxSettingsResponseError =
+  getImapMailboxSettingsResponse404 & {
+    headers: Headers;
+  };
+
+export type getImapMailboxSettingsResponse =
+  | getImapMailboxSettingsResponseSuccess
+  | getImapMailboxSettingsResponseError;
+
+export const getGetImapMailboxSettingsUrl = (linkId: string) => {
+  return `/email/links/${linkId}/imap/settings`;
+};
+
+export const getImapMailboxSettings = async (
+  linkId: string,
+  options?: RequestInit
+): Promise<getImapMailboxSettingsResponse> => {
+  const res = await fetch(getGetImapMailboxSettingsUrl(linkId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getImapMailboxSettingsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getImapMailboxSettingsResponse;
+};
+
+export type updateImapMailboxSettingsResponse200 = {
+  data: AccountMailSettings;
+  status: 200;
+};
+
+export type updateImapMailboxSettingsResponse400 = {
+  data: ImapConnectionErrorResponse;
+  status: 400;
+};
+
+export type updateImapMailboxSettingsResponse404 = {
+  data: ImapConnectionErrorResponse;
+  status: 404;
+};
+
+export type updateImapMailboxSettingsResponse409 = {
+  data: ImapConnectionErrorResponse;
+  status: 409;
+};
+
+export type updateImapMailboxSettingsResponseSuccess =
+  updateImapMailboxSettingsResponse200 & {
+    headers: Headers;
+  };
+export type updateImapMailboxSettingsResponseError = (
+  | updateImapMailboxSettingsResponse400
+  | updateImapMailboxSettingsResponse404
+  | updateImapMailboxSettingsResponse409
+) & {
+  headers: Headers;
+};
+
+export type updateImapMailboxSettingsResponse =
+  | updateImapMailboxSettingsResponseSuccess
+  | updateImapMailboxSettingsResponseError;
+
+export const getUpdateImapMailboxSettingsUrl = (linkId: string) => {
+  return `/email/links/${linkId}/imap/settings`;
+};
+
+export const updateImapMailboxSettings = async (
+  linkId: string,
+  updateFolderSettings: UpdateFolderSettings,
+  options?: RequestInit
+): Promise<updateImapMailboxSettingsResponse> => {
+  const res = await fetch(getUpdateImapMailboxSettingsUrl(linkId), {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateFolderSettings),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateImapMailboxSettingsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateImapMailboxSettingsResponse;
 };
 
 /**
@@ -4206,6 +4488,60 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+export type imapNotificationResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type imapNotificationResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type imapNotificationResponse503 = {
+  data: void;
+  status: 503;
+};
+
+export type imapNotificationResponseSuccess = imapNotificationResponse204 & {
+  headers: Headers;
+};
+export type imapNotificationResponseError = (
+  | imapNotificationResponse401
+  | imapNotificationResponse503
+) & {
+  headers: Headers;
+};
+
+export type imapNotificationResponse =
+  | imapNotificationResponseSuccess
+  | imapNotificationResponseError;
+
+export const getImapNotificationUrl = () => {
+  return `/internal/imap/notifications`;
+};
+
+export const imapNotification = async (
+  notification: Notification,
+  options?: RequestInit
+): Promise<imapNotificationResponse> => {
+  const res = await fetch(getImapNotificationUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(notification),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: imapNotificationResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as imapNotificationResponse;
 };
 
 /**

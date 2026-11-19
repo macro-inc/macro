@@ -4,6 +4,8 @@ use models_email::service::{label::Label, link::UserProvider};
 use uuid::Uuid;
 
 pub struct ProviderMailboxSettings<R, T, L> {
+    pub db: sqlx::PgPool,
+    pub imap: super::email_api::imap::ImapMailboxGateway,
     pub gmail: super::email_api::GmailApi,
     pub outlook: MailboxApiService<R, T, L>,
 }
@@ -24,6 +26,13 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.list_labels(mailbox.key.link_id).await,
             UserProvider::Outlook => self.outlook.labels(access(mailbox)).await,
+            UserProvider::Imap => {
+                email_db_client::labels::get::fetch_labels_by_link_id(&self.db, mailbox.key.link_id)
+                    .await
+                    .map_err(|_| EmailApiError::Transient {
+                        message: "IMAP keyword catalog unavailable".into(),
+                    })
+            }
         }
     }
     async fn create_label(
@@ -34,6 +43,18 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.create_label(mailbox.key.link_id, name).await,
             UserProvider::Outlook => self.outlook.create_label(access(mailbox), name).await,
+            // IMAP keywords have no standalone server catalog; creating one records
+            // its name locally until it is first assigned with UID STORE.
+            UserProvider::Imap => Ok(Label {
+                id: None,
+                link_id: mailbox.key.link_id,
+                provider_label_id: name.into(),
+                name: Some(name.into()),
+                created_at: chrono::Utc::now(),
+                message_list_visibility: None,
+                label_list_visibility: None,
+                type_: Some(models_email::service::label::LabelType::User),
+            }),
         }
     }
     async fn delete_label(
@@ -44,6 +65,7 @@ where
         match mailbox.provider {
             UserProvider::Gmail => self.gmail.delete_label(mailbox.key.link_id, name).await,
             UserProvider::Outlook => self.outlook.delete_label(access(mailbox), name).await,
+            UserProvider::Imap => Ok(()),
         }
     }
     async fn category_messages(
@@ -51,6 +73,44 @@ where
         mailbox: SettingsMailbox,
         name: &str,
     ) -> Result<Vec<CategoryMessage>, EmailApiError> {
+        if mailbox.provider == UserProvider::Imap {
+            use email::domain::mailbox::MailboxGateway;
+            let folders = self.imap.folders(mailbox.key).await?;
+            let mut result = Vec::new();
+            for folder in &folders {
+                let mut position = None;
+                loop {
+                    let page = self
+                        .imap
+                        .changes(
+                            mailbox.key,
+                            &folder.id,
+                            position.as_ref(),
+                            RoundStart::Unordered,
+                        )
+                        .await?;
+                    for id in page.changed {
+                        if let Some(message) = self.imap.message(mailbox.key, &id, &folders).await?
+                            && message.tags.iter().any(|tag| tag == name)
+                        {
+                            result.push(CategoryMessage {
+                                id,
+                                categories: message.tags,
+                                version: message.version,
+                            });
+                            if result.len() >= 100 {
+                                return Ok(result);
+                            }
+                        }
+                    }
+                    match page.position {
+                        StreamPosition::Continue(next) => position = Some(next),
+                        StreamPosition::Checkpoint(_) => break,
+                    }
+                }
+            }
+            return Ok(result);
+        }
         self.outlook.category_messages(access(mailbox), name).await
     }
     async fn remove_category(
@@ -59,6 +119,19 @@ where
         message: &CategoryMessage,
         remaining: Vec<String>,
     ) -> Result<(), EmailApiError> {
+        if mailbox.provider == UserProvider::Imap {
+            use email::domain::mailbox::commands::MailboxCommandGateway;
+            return self
+                .imap
+                .apply(
+                    mailbox.key,
+                    &message.id,
+                    &MessageAction::SetTags(remaining),
+                    message.version.as_deref(),
+                )
+                .await
+                .map(|_| ());
+        }
         self.outlook
             .apply(
                 access(mailbox),
@@ -73,6 +146,9 @@ where
         &self,
         mailbox: SettingsMailbox,
     ) -> Result<Vec<OwnedSenderRule>, EmailApiError> {
+        if mailbox.provider == UserProvider::Imap {
+            return Ok(Vec::new());
+        }
         self.outlook.sender_rules(access(mailbox)).await
     }
     async fn create_sender_rule(

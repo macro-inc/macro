@@ -38,10 +38,15 @@ impl MailboxProgressRepository for PgMailboxSync {
     }
 
     async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
+        let mut tx = self.db.begin().await.map_err(db_error)?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
         sqlx::query!(
             "DELETE FROM email_mailbox_import_minutes WHERE minute < now() - interval '1 day'"
         )
-        .execute(&self.db)
+        .execute(&mut *tx)
         .await
         .map_err(db_error)?;
         // One aggregate per Outlook link, each read through the
@@ -97,12 +102,12 @@ impl MailboxProgressRepository for PgMailboxSync {
                     WHERE link_id = l.id ORDER BY minute DESC LIMIT 2
                 ) newest
             ) latest
-            WHERE l.provider = 'OUTLOOK' AND (l.is_sync_active OR q.queued > 0 OR q.abandoned > 0)
-        "#
-        )
-        .fetch_all(&self.db)
+            WHERE l.provider = $1::text::email_user_provider_enum AND (l.is_sync_active OR q.queued > 0 OR q.abandoned > 0)
+        "#, self.provider.as_str())
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_error)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(rows
             .into_iter()
             .map(|row| MailboxBacklog {

@@ -4,6 +4,7 @@ use email_api_client::domain::models::FolderRole;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod crm_cleanup;
+mod imap;
 mod import_pacing;
 mod import_reads;
 mod live_pass;
@@ -262,6 +263,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
     repo.commit_catalog(
         &lease,
         &[MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("inbox-id").unwrap(),
             parent_id: None,
             name: "Boîte de réception".into(),
@@ -293,6 +295,7 @@ async fn complete_catalog_resolves_roles_and_creates_folder_streams(db: PgPool) 
     repo.commit_catalog(
         &rediscovery,
         &[MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("inbox-id").unwrap(),
             parent_id: None,
             name: "Boîte de réception".into(),
@@ -639,6 +642,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'folder_catalog','mail')",Uuid::new_v4(),link).execute(&db).await.unwrap();
     let mut folders = vec![
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("trash").unwrap(),
             parent_id: None,
             name: "Trash".into(),
@@ -647,6 +651,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             total_items: None,
         },
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("parent").unwrap(),
             parent_id: None,
             name: "Projects".into(),
@@ -655,6 +660,7 @@ async fn folder_delete_and_restore_reprojects_unchanged_message_etags(db: PgPool
             total_items: None,
         },
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("folder").unwrap(),
             parent_id: Some(ProviderId::new("parent").unwrap()),
             name: "Invoices".into(),
@@ -713,6 +719,7 @@ async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'folder_catalog','mail')",Uuid::new_v4(),link).execute(&db).await.unwrap();
     let mut folders = vec![
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("trash").unwrap(),
             parent_id: None,
             name: "Trash".into(),
@@ -721,6 +728,7 @@ async fn a_folder_moved_to_trash_turns_a_queued_import_recheck_into_live_work(db
             total_items: None,
         },
         MailFolder {
+            sync_enabled: true,
             id: ProviderId::new("folder").unwrap(),
             parent_id: None,
             name: "Invoices".into(),

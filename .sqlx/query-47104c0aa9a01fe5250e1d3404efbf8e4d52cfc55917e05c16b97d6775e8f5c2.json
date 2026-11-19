@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO imap_state_entries(link_id,kind,key,folder_id,message_id,sequence,received_at,document,body) SELECT $1,d.kind,d.key,d.folder_id,d.message_id,d.sequence,d.received_at,d.document,decode(d.body,'base64') FROM jsonb_to_recordset($2::jsonb) AS d(kind text,key text,folder_id text,message_id text,sequence bigint,received_at timestamptz,document jsonb,body text) ON CONFLICT(link_id,kind,key) DO UPDATE SET folder_id=EXCLUDED.folder_id,message_id=EXCLUDED.message_id,sequence=EXCLUDED.sequence,received_at=EXCLUDED.received_at,document=EXCLUDED.document,body=EXCLUDED.body",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "47104c0aa9a01fe5250e1d3404efbf8e4d52cfc55917e05c16b97d6775e8f5c2"
+}
