@@ -1,0 +1,626 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 162 tests using 4 workers
+
+2026/11/16 22:34:54 socat[1632556] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:34:54 socat[1631535] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:34:54 socat[1632574] E write(6, 0x646e09259000, 24): Broken pipe
+  ✓    2 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.6s)
+2026/11/16 22:34:54 socat[1632566] E write(6, 0x646e09259000, 24): Broken pipe
+  ✓    1 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.7s)
+2026/11/16 22:34:59 socat[1634128] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:34:59 socat[1634133] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1643054] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1632979] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1643074] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1640948] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1640972] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:00 socat[1633908] E write(6, 0x646e09259000, 24): Broken pipe
+  ✓    5 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (6.4s)
+  ✓    4 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (8.1s)
+2026/11/16 22:35:01 socat[1632568] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:01 socat[1634146] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:01 socat[1632580] E write(6, 0x646e09259000, 24): Broken pipe
+  ✓    3 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (8.3s)
+2026/11/16 22:35:01 socat[1632645] E write(6, 0x646e09259000, 24): Broken pipe
+2026/11/16 22:35:01 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:01 socat[1634012] E write(6, 0x646e09259000, 24): Broken pipe
+  ✓    6 tests/channels-e2e/access.spec.ts:168:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (7.3s)
+  ✓    9 tests/channels-e2e/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.3s)
+2026/11/16 22:35:02 socat[1645027] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓    7 tests/channels-e2e/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (1.6s)
+2026/11/16 22:35:03 socat[1645029] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:03 socat[1645055] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓    8 tests/channels-e2e/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (2.9s)
+2026/11/16 22:35:05 socat[1645521] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:05 socat[1645773] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:06 socat[1652647] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:06 socat[1652656] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1645881] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1646935] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1654404] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1644831] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:08 socat[1654413] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   10 tests/channels-e2e/channels.spec.ts:30:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.3s)
+2026/11/16 22:35:08 socat[1652545] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1646579] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:08 socat[1648547] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   12 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (5.8s)
+2026/11/16 22:35:10 socat[1658936] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:10 socat[1658956] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:10 socat[1657484] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:10 socat[1658193] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:11 socat[1652652] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:11 socat[1652662] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   11 tests/channels-e2e/channels.spec.ts:60:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (8.5s)
+2026/11/16 22:35:12 socat[1665314] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:12 socat[1658950] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:12 socat[1658972] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   15 tests/channels-e2e/channels.spec.ts:223:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.4s)
+2026/11/16 22:35:12 socat[1665017] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:14 socat[1656078] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:14 socat[1668308] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   14 tests/channels-e2e/channels.spec.ts:193:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.3s)
+2026/11/16 22:35:15 socat[1669118] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:17 socat[1671041] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:17 socat[1671304] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   18 tests/channels-e2e/channels.spec.ts:320:1 › CHN-09 a member who does not own the channel is not offered Delete (2.8s)
+2026/11/16 22:35:18 socat[1665884] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:18 socat[1665952] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:19 socat[1679258] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:19 socat[1678521] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:19 socat[1679271] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   19 tests/channels-e2e/channels.spec.ts:338:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.1s)
+2026/11/16 22:35:21 socat[1677621] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:21 socat[1677775] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:21 socat[1680693] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   16 tests/channels-e2e/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.3s)
+2026/11/16 22:35:21 socat[1680714] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:21 socat[1681537] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:21 socat[1681542] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   20 tests/channels-e2e/channels.spec.ts:361:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.1s)
+2026/11/16 22:35:23 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:23 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:23 socat[1652436] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:23 socat[1654162] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:23 socat[1654172] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   13 tests/channels-e2e/channels.spec.ts:160:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.6s)
+2026/11/16 22:35:24 socat[1681810] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:24 socat[1683515] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   21 tests/channels-e2e/channels.spec.ts:383:1 › CHN-12 going to another tab and back keeps the message list where it was (2.9s)
+2026/11/16 22:35:24 socat[1688809] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   22 tests/channels-e2e/channels.spec.ts:411:1 › CHN-13 a channel’s history starts with “Channel <name> created” (2.9s)
+2026/11/16 22:35:30 socat[1668737] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:30 socat[1669107] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   17 tests/channels-e2e/channels.spec.ts:290:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (18.1s)
+2026/11/16 22:35:33 socat[1705191] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   26 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (2.5s)
+2026/11/16 22:35:33 socat[1705395] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:35 socat[1708261] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:35 socat[1708290] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:37 socat[1706782] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   27 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.5s)
+2026/11/16 22:35:37 socat[1714390] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:40 socat[1690407] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:40 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:40 socat[1690418] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   23 tests/channels-e2e/channels.spec.ts:431:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.8s)
+2026/11/16 22:35:41 socat[1719004] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:41 socat[1690618] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   24 tests/channels-e2e/channels.spec.ts:450:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.8s)
+2026/11/16 22:35:42 socat[1690799] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   25 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (17.5s)
+2026/11/16 22:35:42 socat[1715530] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:42 socat[1715637] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:42 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:42 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:42 socat[1725850] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   28 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (5.8s)
+2026/11/16 22:35:43 socat[1720498] E read(6, 0x646e0925a000, 8192): Connection reset by peer
+2026/11/16 22:35:43 socat[1720499] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 22:35:43 socat[1726448] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   30 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.5s)
+2026/11/16 22:35:44 socat[1727560] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:44 socat[1727788] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:46 socat[1722750] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:46 socat[1725115] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:46 socat[1725912] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:46 socat[1729957] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   29 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.7s)
+2026/11/16 22:35:47 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:47 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:35:47 socat[1727811] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:47 socat[1729225] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   31 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.0s)
+2026/11/16 22:35:47 socat[1727346] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:47 socat[1728266] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:47 socat[1728325] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:48 socat[1728455] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   32 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (5.2s)
+2026/11/16 22:35:48 socat[1730153] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:48 socat[1728543] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:48 socat[1728972] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:48 socat[1732280] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   33 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (5.1s)
+2026/11/16 22:35:50 socat[1739207] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:50 socat[1739487] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   36 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (2.1s)
+2026/11/16 22:35:51 socat[1732963] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:51 socat[1739483] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   34 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.1s)
+2026/11/16 22:35:51 socat[1740644] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:51 socat[1739068] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:51 socat[1740770] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   35 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (4.5s)
+2026/11/16 22:35:51 socat[1738564] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:52 socat[1739950] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:52 socat[1740497] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:52 socat[1741752] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:52 socat[1741850] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   37 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (4.2s)
+2026/11/16 22:35:54 socat[1741167] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:54 socat[1741271] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:35:54 socat[1743481] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   38 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (4.4s)
+2026/11/16 22:35:57 socat[1743335] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   39 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (6.5s)
+  -   43 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection
+2026/11/16 22:35:59 socat[1750529] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:01 socat[1743464] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:01 socat[1743490] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   40 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (10.3s)
+2026/11/16 22:36:01 socat[1754008] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:01 socat[1754037] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:02 socat[1760305] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:02 socat[1760321] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   42 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (7.7s)
+2026/11/16 22:36:03 socat[1749380] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:03 socat[1749398] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   41 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (10.8s)
+2026/11/16 22:36:04 socat[1761892] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:04 socat[1762131] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:05 socat[1761772] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   46 tests/channels-e2e/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (4.3s)
+2026/11/16 22:36:06 socat[1763763] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:07 socat[1768754] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   45 tests/channels-e2e/current.spec.ts:272:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (5.8s)
+2026/11/16 22:36:07 socat[1769137] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:12 socat[1773097] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:12 socat[1773108] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:13 socat[1763740] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:13 socat[1774065] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:13 socat[1774376] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:14 socat[1770727] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:14 socat[1782255] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:14 socat[1771045] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:14 socat[1782518] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   48 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (7.9s)
+2026/11/16 22:36:15 socat[1771419] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:15 socat[1771752] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:15 socat[1772632] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:15 socat[1783583] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   49 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.0s)
+2026/11/16 22:36:20 socat[1782829] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:20 socat[1782850] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:20 socat[1787912] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:20 socat[1787991] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:22 socat[1796063] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   47 tests/channels-e2e/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (18.6s)
+2026/11/16 22:36:23 socat[1784803] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1787263] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1787393] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1789366] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1789375] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1795080] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:23 socat[1795341] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   51 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (7.8s)
+2026/11/16 22:36:23 socat[1796079] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   50 tests/channels-e2e/direct-messages.spec.ts:122:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (9.2s)
+2026/11/16 22:36:24 socat[1798121] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   52 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.7s)
+2026/11/16 22:36:26 socat[1798828] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:26 socat[1798848] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   54 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (2.9s)
+2026/11/16 22:36:26 socat[1798897] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:26 socat[1799352] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   55 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (2.6s)
+2026/11/16 22:36:28 socat[1806409] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:28 socat[1805372] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:28 socat[1806656] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   56 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.3s)
+2026/11/16 22:36:29 socat[1806583] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:29 socat[1806667] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   57 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.4s)
+2026/11/16 22:36:36 socat[1809378] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:36 socat[1809486] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   58 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (7.4s)
+2026/11/16 22:36:38 socat[1821258] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:38 socat[1820677] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   60 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (2.6s)
+2026/11/16 22:36:38 socat[1821266] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:40 socat[1798654] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:40 socat[1798658] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   53 tests/channels-e2e/direct-messages.spec.ts:270:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.4s)
+2026/11/16 22:36:41 socat[1828475] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:41 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:36:41 socat[1830315] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   61 tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.3s)
+2026/11/16 22:36:43 socat[1832627] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   62 tests/channels-e2e/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.3s)
+2026/11/16 22:36:43 socat[1832658] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:43 socat[1832757] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:44 socat[1832768] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   63 tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message (2.7s)
+2026/11/16 22:36:44 socat[1832926] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   44 tests/channels-e2e/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (46.3s)
+2026/11/16 22:36:45 socat[1834341] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:45 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:36:45 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   64 tests/channels-e2e/find-and-keys.spec.ts:344:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.5s)
+2026/11/16 22:36:45 socat[1839417] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:46 socat[1834757] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:46 socat[1840643] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   65 tests/channels-e2e/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (2.1s)
+2026/11/16 22:36:46 socat[1809531] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:46 socat[1809575] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   59 tests/channels-e2e/find-and-keys.spec.ts:209:1 › KEY-06 Enter on a selected message opens a reply to that message (17.2s)
+2026/11/16 22:36:46 socat[1834765] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:46 socat[1840651] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   66 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (2.6s)
+2026/11/16 22:36:48 socat[1842895] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:48 socat[1843018] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   67 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (2.3s)
+2026/11/16 22:36:48 socat[1841282] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   68 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.8s)
+2026/11/16 22:36:48 socat[1843839] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:49 socat[1844131] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   69 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (3.3s)
+  ✓   71 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (2.9s)
+2026/11/16 22:36:50 socat[1845978] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:51 socat[1846637] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:52 socat[1852930] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   72 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (4.7s)
+2026/11/16 22:36:53 socat[1853185] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:55 socat[1854636] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:55 socat[1854685] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:55 socat[1852961] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:55 socat[1852966] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   74 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.3s)
+2026/11/16 22:36:55 socat[1844238] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:55 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:36:55 socat[1844276] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   70 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (8.7s)
+2026/11/16 22:36:56 socat[1852971] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:56 socat[1853122] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:56 socat[1855212] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:56 socat[1855248] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:56 socat[1851773] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   73 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.3s)
+2026/11/16 22:36:59 socat[1863902] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1861863] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1864069] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   78 tests/channels-e2e/members.spec.ts:215:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (2.1s)
+  ✓   77 tests/channels-e2e/members.spec.ts:179:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (3.9s)
+2026/11/16 22:36:59 socat[1855844] E read(6, 0x646e0925a000, 8192): Connection reset by peer
+2026/11/16 22:36:59 socat[1856160] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1855845] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1856466] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1855974] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:36:59 socat[1855978] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:00 socat[1866330] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:00 socat[1866435] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:00 socat[1863473] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   76 tests/channels-e2e/members.spec.ts:140:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (5.5s)
+2026/11/16 22:37:01 socat[1866859] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:01 socat[1865183] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:01 socat[1866915] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   80 tests/channels-e2e/members.spec.ts:270:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (1.9s)
+2026/11/16 22:37:01 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:01 socat[1866340] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:01 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:01 socat[1866571] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   79 tests/channels-e2e/members.spec.ts:240:1 › MEM-07 a member who does not own the channel cannot remove its owner (2.9s)
+2026/11/16 22:37:04 socat[1868508] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:04 socat[1868564] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:04 socat[1868506] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:04 socat[1868523] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:04 socat[1868722] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:04 socat[1868737] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:05 socat[1868719] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:05 socat[1868734] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:05 socat[1867108] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:05 socat[1875756] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1875729] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1867107] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1875758] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   81 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (5.3s)
+2026/11/16 22:37:06 socat[1867392] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1876537] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1876553] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1876148] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:06 socat[1876275] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   82 tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (5.6s)
+2026/11/16 22:37:09 socat[1878131] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1878152] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1869726] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1873034] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1869691] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1871389] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:09 socat[1878154] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:10 socat[1855395] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:10 socat[1855418] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘   75 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (16.9s)
+2026/11/16 22:37:10 socat[1878508] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:10 socat[1878489] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:10 socat[1878498] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1868553] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1886503] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1886520] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1868555] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1886582] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   83 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (9.1s)
+2026/11/16 22:37:11 socat[1886563] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:11 socat[1886580] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1886516] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:11 socat[1886548] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   84 tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (5.1s)
+2026/11/16 22:37:12 socat[1877757] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:12 socat[1887422] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:12 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:12 socat[1887208] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   85 tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (6.0s)
+2026/11/16 22:37:13 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:14 socat[1888488] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1888544] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1888538] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1888762] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:14 socat[1889080] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1888839] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:14 socat[1889066] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   88 tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (3.5s)
+2026/11/16 22:37:14 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:15 socat[1888420] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:15 socat[1888443] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:15 socat[1888441] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   86 tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (5.2s)
+2026/11/16 22:37:16 socat[1887004] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:16 socat[1892615] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:16 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:16 socat[1891838] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   87 tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (5.4s)
+2026/11/16 22:37:17 socat[1891117] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:18 socat[1900071] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:18 socat[1899259] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:18 socat[1900094] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:19 socat[1902054] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   92 tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (2.6s)
+2026/11/16 22:37:19 socat[1902082] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:19 socat[1891125] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:19 socat[1903290] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:19 socat[1903314] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   89 tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (6.6s)
+2026/11/16 22:37:20 socat[1904310] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1891532] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1904403] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1891533] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   90 tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (5.4s)
+2026/11/16 22:37:20 socat[1904312] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1901944] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1901992] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:20 socat[1902000] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:22 socat[1905669] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:22 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:22 socat[1905694] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:22 socat[1905696] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   91 tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (6.8s)
+2026/11/16 22:37:22 socat[1905284] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:22 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   95 tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (2.6s)
+2026/11/16 22:37:23 socat[1905271] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:23 socat[1905291] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:23 socat[1905292] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:24 socat[1905402] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:24 socat[1905390] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:24 socat[1905431] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:25 socat[1913884] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:25 socat[1913898] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:25 socat[1912777] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:25 socat[1913921] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   97 tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (2.6s)
+2026/11/16 22:37:25 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   96 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (3.0s)
+  -   99 tests/channels-e2e/offline.spec.ts:57:1 › OFF-01 a channel the person has read opens whole with no connection
+2026/11/16 22:37:25 socat[1913841] E write(6, 0x646e0925a000, 24): Broken pipe
+  -  100 tests/channels-e2e/offline.spec.ts:76:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back
+  -  101 tests/channels-e2e/offline.spec.ts:103:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives
+  -  102 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection
+  -  103 tests/channels-e2e/offline.spec.ts:154:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen
+  -  104 tests/channels-e2e/offline.spec.ts:187:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included
+  -  105 tests/channels-e2e/offline.spec.ts:218:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more
+  -  106 tests/channels-e2e/offline.spec.ts:257:1 › OFF-08 a team owner opening a held channel with no connection sees the channel
+  -  107 tests/channels-e2e/offline.spec.ts:275:1 › OFF-09 a channel left as soon as its messages showed opens with no connection
+  -  108 tests/channels-e2e/offline.spec.ts:297:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection
+  -  109 tests/channels-e2e/offline.spec.ts:316:1 › OFF-11 opening a held channel with no connection does not say that a new version is out
+  -  110 tests/channels-e2e/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection
+2026/11/16 22:37:25 socat[1913887] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:26 socat[1915322] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:26 socat[1904647] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:26 socat[1915410] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:26 socat[1904648] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:26 socat[1915409] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   94 tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (6.7s)
+2026/11/16 22:37:27 socat[1916259] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:27 socat[1916400] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:27 socat[1915858] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   93 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (8.2s)
+  -  113 tests/channels-e2e/prewarm.spec.ts:24:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone
+  -  114 tests/channels-e2e/prewarm.spec.ts:88:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first
+  -  115 tests/channels-e2e/prewarm.spec.ts:114:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first
+  -  116 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back
+  -  117 tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is
+  ✓  111 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.8s)2026/11/16 22:37:28 socat[1917630] E write(6, 0x646e0925a000, 24): Broken pipe
+
+  ✓  112 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (3.0s)
+2026/11/16 22:37:29 socat[1917992] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:29 socat[1918569] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  118 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.6s)
+2026/11/16 22:37:31 socat[1926325] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:31 socat[1927151] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:31 socat[1927182] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  120 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.7s)
+2026/11/16 22:37:33 socat[1929878] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:33 socat[1926495] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:33 socat[1926530] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  119 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (5.1s)
+2026/11/16 22:37:38 socat[1939935] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  123 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (5.0s)
+2026/11/16 22:37:42 socat[1944704] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  124 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (4.2s)
+2026/11/16 22:37:42 socat[1945307] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:45 socat[1916677] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:45 socat[1916663] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:45 socat[1931386] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  122 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (13.3s)
+2026/11/16 22:37:45 socat[1931399] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:46 socat[1956306] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:46 socat[1915516] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:46 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:46 socat[1956369] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:46 socat[1915517] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:46 socat[1956323] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓   98 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (21.5s)
+2026/11/16 22:37:47 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:48 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:48 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:48 socat[1957480] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:49 socat[1957478] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:50 socat[1957486] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:50 socat[1957672] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  125 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (7.9s)
+2026/11/16 22:37:50 socat[1966938] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:50 socat[1966839] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  126 tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (5.5s)
+2026/11/16 22:37:50 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:52 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:52 socat[1963944] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:52 socat[1964063] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:52 socat[1964048] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:54 socat[1967852] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:54 socat[1967959] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:54 socat[1967973] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  128 tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (4.0s)
+2026/11/16 22:37:54 socat[1967835] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:54 socat[1967856] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:54 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:54 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:55 socat[1968817] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:55 socat[1968872] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:55 socat[1968815] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:55 socat[1968837] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  127 tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (8.6s)
+2026/11/16 22:37:55 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:37:56 socat[1976060] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:56 socat[1976081] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:56 socat[1976022] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  129 tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (5.7s)
+2026/11/16 22:37:56 socat[1928751] E write(6, 0x646e0925a000, 28): Broken pipe
+2026/11/16 22:37:56 socat[1928717] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:56 socat[1928752] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  121 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (26.9s)
+2026/11/16 22:37:57 socat[1976348] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:57 socat[1976558] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:57 socat[1976582] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1976748] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1976805] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1976803] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1977913] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1978252] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  132 tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (3.2s)
+2026/11/16 22:37:59 socat[1979433] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1978747] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1975152] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:37:59 socat[1979395] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  130 tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (5.2s)
+2026/11/16 22:38:00 socat[1978341] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  133 tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (3.5s)
+2026/11/16 22:38:00 socat[1978357] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:01 socat[1980951] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:01 socat[1980973] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:01 socat[1981175] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  131 tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (5.9s)
+2026/11/16 22:38:04 socat[1986920] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:04 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:04 socat[1987201] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:04 socat[1988728] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  136 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (4.1s)
+2026/11/16 22:38:05 socat[1986532] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:05 socat[1986566] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:05 socat[1986534] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:05 socat[1986564] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  134 tests/channels-e2e/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (5.4s)
+2026/11/16 22:38:05 socat[1990236] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:05 socat[1988058] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:05 socat[1990247] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  137 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (4.6s)
+2026/11/16 22:38:07 socat[1990844] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:08 socat[1995456] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  139 tests/channels-e2e/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.0s)
+2026/11/16 22:38:08 socat[1996527] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:08 socat[1996576] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  140 tests/channels-e2e/unread.spec.ts:127:1 › UNR-03 my own messages never mark a channel unread for me (2.8s)
+2026/11/16 22:38:08 socat[1997503] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:08 socat[1998009] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  138 tests/channels-e2e/unread.spec.ts:43:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (4.4s)
+2026/11/16 22:38:12 socat[2001813] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:12 socat[2002144] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  141 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.3s)
+2026/11/16 22:38:13 socat[2008903] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:13 socat[2009204] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  143 tests/channels-e2e/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (5.1s)
+2026/11/16 22:38:14 socat[2004275] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:14 socat[2010556] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  144 tests/channels-e2e/unread.spec.ts:281:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.5s)
+2026/11/16 22:38:17 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:17 socat[1986506] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘  135 tests/channels-e2e/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.3s)
+2026/11/16 22:38:17 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:17 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:17 socat[2012250] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  145 tests/channels-e2e/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.6s)
+  -  148 tests/channels-e2e/writes.spec.ts:47:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back
+  -  149 tests/channels-e2e/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services
+  -  150 tests/channels-e2e/writes.spec.ts:102:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written
+  -  151 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached
+  -  152 tests/channels-e2e/writes.spec.ts:154:1 › WRT-05 a message the services took but whose answer never came back is in the channel once
+  -  153 tests/channels-e2e/writes.spec.ts:180:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left
+  -  154 tests/channels-e2e/writes.spec.ts:206:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back
+  -  155 tests/channels-e2e/writes.spec.ts:233:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services
+  -  156 tests/channels-e2e/writes.spec.ts:255:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed
+  -  157 tests/channels-e2e/writes.spec.ts:280:1 › WRT-10 a message still waiting to be sent says that it is not sent yet
+  -  158 tests/channels-e2e/writes.spec.ts:302:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet
+  -  159 tests/channels-e2e/writes.spec.ts:323:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both
+  -  160 tests/channels-e2e/writes.spec.ts:358:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold
+  -  161 tests/channels-e2e/writes.spec.ts:410:1 › WRT-14 a message written offline in one window shows in the other window of the same device
+  -  162 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later
+2026/11/16 22:38:19 socat[2003255] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:19 socat[2001534] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:19 socat[2001784] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘  142 tests/channels-e2e/unread.spec.ts:196:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (10.6s)
+2026/11/16 22:38:19 socat[2015126] E write(6, 0x646e0925a000, 24): Broken pipe
+2026/11/16 22:38:19 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:19 socat[2016084] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✓  147 tests/channels-e2e/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (2.5s)
+2026/11/16 22:38:22 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:22 socat[2013298] E write(6, 0x646e0925a000, 24): Broken pipe
+  ✘  146 tests/channels-e2e/unread.spec.ts:357:1 › UNR-09 the first message in a new channel marks it unread for the other member (7.6s)
+2026/11/16 22:38:22 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:22 socat[1596157] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+
+  33 skipped
+  129 passed (3.7m)
+2026/11/16 22:38:22 socat[1597463] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 22:38:22 socat[1597463] W exiting on signal 15
+2026/11/16 22:38:22 socat[1596157] W exiting on signal 15

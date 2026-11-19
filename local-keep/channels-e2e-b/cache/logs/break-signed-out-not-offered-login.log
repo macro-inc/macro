@@ -1,0 +1,48 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+  ✘  1 tests/channels-e2e/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (16.3s)
+
+
+  1) tests/channels-e2e/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Login' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('button', { name: 'Login' })
+
+
+      280 |     await visitor.goto(`/app/channel/${channel.id}`);
+      281 |
+    > 282 |     await expect(visitor.getByRole('button', { name: 'Login' })).toBeVisible();
+          |                                                                  ^
+      283 |     await expect(visitor.getByText('members only')).toHaveCount(0);
+      284 |     await expect(visitor.getByText(channel.name)).toHaveCount(0);
+      285 |     await expect(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:282:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-signed-out-not-offered-login/test-results/access-ACC-09-a-signed-out-8964d-g-in-and-sees-nothing-of-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-signed-out-not-offered-login/test-results/access-ACC-09-a-signed-out-8964d-g-in-and-sees-nothing-of-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-signed-out-not-offered-login/test-results/access-ACC-09-a-signed-out-8964d-g-in-and-sees-nothing-of-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-signed-out-not-offered-login/test-results/access-ACC-09-a-signed-out-8964d-g-in-and-sees-nothing-of-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/access.spec.ts:264:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it 
+2026/11/16 08:44:31 socat[3525289] W exiting on signal 15
+2026/11/16 08:44:31 socat[3524542] W exiting on signal 15

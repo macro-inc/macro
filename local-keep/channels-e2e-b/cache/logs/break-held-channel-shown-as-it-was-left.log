@@ -1,0 +1,262 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 3 workers
+
+2026/11/16 07:02:29 socat[2324364] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:02:29 socat[2324398] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:02:30 socat[2324402] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:02:30 socat[2324400] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:01 socat[2331548] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:01 socat[2331564] E write(6, 0x6444a0e8c000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (36.3s)
+2026/11/16 07:03:04 socat[2333540] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:04 socat[2333791] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:04 socat[2333822] E write(6, 0x6444a0e8c000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (39.5s)
+2026/11/16 07:03:11 socat[2384214] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:11 socat[2384223] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:33 socat[2381069] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:33 socat[2381071] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:33 socat[2381075] E write(6, 0x6444a0e8c000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (1.1m)
+2026/11/16 07:03:51 socat[2401072] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:51 socat[2401112] E write(6, 0x6444a0e8c000, 24): Broken pipe
+2026/11/16 07:03:51 socat[2401149] E write(6, 0x6444a0e8c000, 24): Broken pipe
+  ✘  4 tests/channels-e2e/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (48.7s)
+
+
+  1) tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 10
+    + Received  +  7
+
+      Array [
+    -   "one, edited",
+    -   "This message was deleted.",
+    -   "  > first reply, edited",
+    -   "  > third reply",
+    -   "four, edited",
+    -   "five [❤️]",
+    -   "six [👍 2]",
+    -   "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+    +   "one",
+    +   "two",
+    +   "  > first reply",
+    +   "three",
+    +   "four",
+    +   "five",
+    +   "six",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:196:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-04-a-channel-c-17b23-hen-the-app-is-opened-again/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-04-a-channel-c-17b23-hen-the-app-is-opened-again/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-04-a-channel-c-17b23-hen-the-app-is-opened-again/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-04-a-channel-c-17b23-hen-the-app-is-opened-again/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 4
+
+      Array [
+    -   "one, edited",
+    +   "one",
+        "two",
+        "  > first reply",
+    +   "three",
+        "four",
+    -   "five [❤️]",
+    -   "six [🎉]",
+    -   "seven",
+    +   "five",
+    +   "six",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:266:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-06-a-channel-m-05478-ght-when-it-is-opened-again/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-06-a-channel-m-05478-ght-when-it-is-opened-again/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-06-a-channel-m-05478-ght-when-it-is-opened-again/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-06-a-channel-m-05478-ght-when-it-is-opened-again/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 10
+    + Received  +  7
+
+      Array [
+    -   "one, edited",
+    -   "This message was deleted.",
+    -   "  > first reply, edited",
+    -   "  > third reply",
+    -   "four, edited",
+    -   "five [❤️]",
+    -   "six [👍 2]",
+    -   "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+    +   "one",
+    +   "two",
+    +   "  > first reply",
+    +   "three",
+    +   "four",
+    +   "five",
+    +   "six",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:311:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-09-changes-mad-a129d-ll-there-when-it-has-loaded/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-09-changes-mad-a129d-ll-there-when-it-has-loaded/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-09-changes-mad-a129d-ll-there-when-it-has-loaded/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-09-changes-mad-a129d-ll-there-when-it-has-loaded/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 3
+
+      Array [
+    -   "one, edited twice",
+    +   "one",
+        "two",
+        "  > first reply",
+    -   "  > second reply",
+        "three",
+    +   "four",
+        "five",
+    -   "six [👍]",
+    -   "eight",
+    +   "six",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:376:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-10-a-channel-s-b3f4e-he-connection-and-reloading/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-10-a-channel-s-b3f4e-he-connection-and-reloading/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-10-a-channel-s-b3f4e-he-connection-and-reloading/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-held-channel-shown-as-it-was-left/test-results/current-SYN-10-a-channel-s-b3f4e-he-connection-and-reloading/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again 
+    tests/channels-e2e/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again 
+    tests/channels-e2e/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded 
+    tests/channels-e2e/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading 
+2026/11/16 07:03:52 socat[2321433] W exiting on signal 15
+2026/11/16 07:03:52 socat[2315420] W exiting on signal 15

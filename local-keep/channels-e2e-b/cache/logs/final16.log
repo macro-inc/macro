@@ -1,0 +1,15 @@
+head 6c0266e155 20:10:28 load 77.02 65.31 58.52
+engine built 20:11:41 load 83.85 68.66 60.15
+on bundle built 20:12:19 load 61.19 64.93 59.27
+off bundle built 20:12:53 load 48.24 61.36 58.25
+f16-on-1 start 20:12:53 load 45.65 60.60 58.03
+f16-on-1 end 20:24:36 load 40.80 39.14 46.89
+f16-off-1 start 20:24:40 load 38.57 38.70 46.70
+f16-off-1 end 20:31:34 load 68.42 63.50 55.28
+ALLDONE16
+reseeded; runs again
+f16b-on-1 start 20:34:07 load 66.67 65.15 57.14
+f16b-on-1 end 20:43:53 load 31.72 54.58 58.14
+f16b-off-1 start 20:43:57 load 31.72 54.58 58.14
+f16b-off-1 end 20:47:56 load 53.36 55.91 58.07
+ALLDONE16B

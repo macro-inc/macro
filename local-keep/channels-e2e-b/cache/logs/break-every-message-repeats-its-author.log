@@ -1,0 +1,63 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:07:50 socat[45332] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:07:50 socat[43986] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:08:07 socat[67684] E write(6, 0x638611efa000, 24): Broken pipe
+2026/11/16 08:08:07 socat[67687] E write(6, 0x638611efa000, 24): Broken pipe
+2026/11/16 08:08:08 socat[67675] E write(6, 0x638611efa000, 24): Broken pipe
+2026/11/16 08:08:08 socat[67682] E write(6, 0x638611efa000, 24): Broken pipe
+2026/11/16 08:08:08 socat[67686] E write(6, 0x638611efa000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (18.4s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').getByText('Ada Owner', { exact: true })
+    Expected: 2
+    Received: 3
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ada Owner', { exact: true })
+        33 × locator resolved to 3 elements
+           - unexpected value "3"
+
+
+      225 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(seeded);
+      226 |   // A person's name stands once above their run of messages.
+    > 227 |   await expect(mine.list.getByText('Ada Owner', { exact: true })).toHaveCount(
+          |                                                                   ^
+      228 |     2
+      229 |   );
+      230 |   await expect(mine.list.getByText('Ben Member', { exact: true })).toHaveCount(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:227:67
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-every-message-repeats-its-author/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-every-message-repeats-its-author/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-every-message-repeats-its-author/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-every-message-repeats-its-author/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-every-message-repeats-its-author/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+2026/11/16 08:08:09 socat[43986] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:08:09 socat[45332] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:08:09 socat[45332] W exiting on signal 15
+2026/11/16 08:08:09 socat[43986] W exiting on signal 15

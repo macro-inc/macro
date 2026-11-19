@@ -1,0 +1,59 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:42:22 socat[3343191] E write(6, 0x64a79a662000, 24): Broken pipe
+2026/11/16 08:42:22 socat[3343463] E write(6, 0x64a79a662000, 24): Broken pipe
+2026/11/16 08:42:22 socat[3343473] E write(6, 0x64a79a662000, 24): Broken pipe
+2026/11/16 08:42:22 socat[3343465] E write(6, 0x64a79a662000, 24): Broken pipe
+2026/11/16 08:42:22 socat[3343490] E write(6, 0x64a79a662000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (18.0s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "Ben Member: earlier from ben",
+    -   "Ada Owner: sent with the button",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      56 |     'Ada Owner: sent with the button',
+      57 |   ];
+    > 58 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      59 |   await expect(mine.message('sent with the button')).toBeInViewport();
+      60 |   await expect(mine.composerText).toHaveText('');
+      61 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:58:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-does-nothing/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-does-nothing/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-send-button-does-nothing/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-does-nothing/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-send-button-does-nothing/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+2026/11/16 08:42:23 socat[3323765] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:42:23 socat[3323765] W exiting on signal 15
+2026/11/16 08:42:23 socat[3323524] W exiting on signal 15

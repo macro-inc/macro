@@ -1,0 +1,2 @@
+[["        if (announced) announceWaitingWrite(write.channelId);\n        throw error;", "        if (announced) announceWaitingWrite(write.channelId);\n        if (write.predicted) return mapChannelMessage(write.predicted);\n        throw error;"],
+ ["    if (result.error) throw refusalOf(result.error);\n    if (!result.data)", "    if (result.error && write.predicted) {\n      return mapChannelMessage(write.predicted);\n    }\n    if (result.error) throw refusalOf(result.error);\n    if (!result.data)"]]

@@ -1,0 +1,46 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:58:20 socat[3372133] E write(6, 0x60cd5e0aa000, 24): Broken pipe
+2026/11/16 07:58:20 socat[3372442] E write(6, 0x60cd5e0aa000, 24): Broken pipe
+2026/11/16 07:58:20 socat[3372447] E write(6, 0x60cd5e0aa000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (3.4s)
+
+
+  1) tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+
+    Error: expect(received).toContain(expected) // indexOf
+
+    Expected substring: "01a1e35d-24b0-7053-81f6-76a6130c564a"
+    Received string:    "https://localhost:23309/app/channel/01a1e35d-0435-72ee-87d0-0d70cc278e6e?channel_message_id="
+
+      146 |   await expect(page.getByText('Link copied to clipboard')).toBeVisible();
+      147 |   const link = await page.evaluate(() => navigator.clipboard.readText());
+    > 148 |   expect(link).toContain(target.id);
+          |                ^
+      149 |
+      150 |   // The link is opened from elsewhere in the app, as a pasted link is.
+      151 |   await page.goto('/app/channels');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:148:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-copied-link-loses-its-message/test-results/location-NAV-07-“Copy-link-35c8d-hat-opens-the-channel-on-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it 
+2026/11/16 07:58:21 socat[3345462] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:58:21 socat[3345462] W exiting on signal 15
+2026/11/16 07:58:21 socat[3345462] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:58:21 socat[3344618] W exiting on signal 15

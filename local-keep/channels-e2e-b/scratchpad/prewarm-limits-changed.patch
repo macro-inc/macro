@@ -1,0 +1,25 @@
+--- a/apps/web/src/lib/queries/messages/local/prewarm-list.ts
++++ b/apps/web/src/lib/queries/messages/local/prewarm-list.ts
+@@ -9,9 +9,9 @@
+ import type { SoupAstItemsQueryArgs } from '../../soup/items';
+ 
+ /** Unread channels kept ready on the device, most recently active first. */
+-export const PREWARM_UNREAD_CHANNELS = 40;
++export const PREWARM_UNREAD_CHANNELS = 41;
+ /** Recently used channels kept ready on the device, besides unread ones. */
+-export const PREWARM_RECENT_CHANNELS = 20;
++export const PREWARM_RECENT_CHANNELS = 21;
+ 
+ const joined = { channelIsParticipant: [true] };
+ 
+--- a/apps/web/src/lib/queries/messages/local/prewarm.ts
++++ b/apps/web/src/lib/queries/messages/local/prewarm.ts
+@@ -6,7 +6,7 @@
+ import { type FetchChannelServerPage, loadChannelPage } from './pages';
+ 
+ /** The page a channel opens with. */
+-export const PREWARM_PAGE_SIZE = 50;
++export const PREWARM_PAGE_SIZE = 20;
+ const CHANNEL_DELAY_MS = 500;
+ /** Channels not opened for this long leave the device. */
+ export const CHANNEL_EVICTION_AGE_MS = 30 * 86_400_000;

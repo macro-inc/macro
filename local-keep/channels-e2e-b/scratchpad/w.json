@@ -1,0 +1,1 @@
+[["  stopWatching ??= waitingWrites.subscribe((message) => {\n    if (message.windowId !== WINDOW_ID)", "  stopWatching ??= waitingWrites.subscribe((message) => {\n    if (message) return;\n    if (message.windowId !== WINDOW_ID)"]]

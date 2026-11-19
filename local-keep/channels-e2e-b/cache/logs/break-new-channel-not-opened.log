@@ -1,0 +1,106 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:28:46 socat[2014597] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:46 socat[2014606] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:46 socat[2014885] E write(6, 0x59743d310000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:29:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (18.0s)
+2026/11/16 08:28:50 socat[2014615] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:50 socat[2014191] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:50 socat[2014924] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:50 socat[2014949] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:51 socat[2016131] E write(6, 0x59743d310000, 24): Broken pipe
+2026/11/16 08:28:51 socat[2016224] E write(6, 0x59743d310000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/channels.spec.ts:59:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (22.1s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:29:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:23309/app/channels"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        30 × locator resolved to <html lang="en" data-platform="web" data-modality="mouse" data-theme-light="true" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:23309/app/channels"
+
+
+       at harness/management.ts:180
+
+      178 |   await invite.getByRole('button', { name: 'Skip for now' }).click();
+      179 |   await expect(invite).toBeHidden();
+    > 180 |   await expect(page).toHaveURL(/\/channels?\/[0-9a-f-]{36}/);
+          |                      ^
+      181 |   return openChannelId(page);
+      182 | }
+      183 |
+        at createChannelInApp (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:180:22)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:34:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:59:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:23309/app/channels"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        33 × locator resolved to <html lang="en" data-platform="web" data-modality="mouse" data-theme-light="true" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:23309/app/channels"
+
+
+       at harness/management.ts:180
+
+      178 |   await invite.getByRole('button', { name: 'Skip for now' }).click();
+      179 |   await expect(invite).toBeHidden();
+    > 180 |   await expect(page).toHaveURL(/\/channels?\/[0-9a-f-]{36}/);
+          |                      ^
+      181 |   return openChannelId(page);
+      182 | }
+      183 |
+        at createChannelInApp (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:180:22)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:76:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-new-channel-not-opened/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/channels.spec.ts:29:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message 
+    tests/channels-e2e/channels.spec.ts:59:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+2026/11/16 08:28:52 socat[1995384] W exiting on signal 15
+2026/11/16 08:28:52 socat[1988721] W exiting on signal 15

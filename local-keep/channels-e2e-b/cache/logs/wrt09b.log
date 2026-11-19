@@ -1,0 +1,17 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/15 15:59:42 socat[2257225] E write(6, 0x57c8840ed000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (2.9s)
+2026/11/15 15:59:42 socat[2257254] E write(6, 0x57c8840ed000, 24): Broken pipe
+2026/11/15 15:59:42 socat[2256643] E write(6, 0x57c8840ed000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (3.0s)
+2026/11/15 15:59:44 socat[2264380] E write(6, 0x57c8840ed000, 24): Broken pipe
+2026/11/15 15:59:44 socat[2263978] E write(6, 0x57c8840ed000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.6s)
+
+  3 passed (17.6s)
+2026/11/15 15:59:44 socat[2230397] W exiting on signal 15
+2026/11/15 15:59:44 socat[2227654] W exiting on signal 15

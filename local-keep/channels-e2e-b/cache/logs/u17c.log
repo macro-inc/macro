@@ -1,0 +1,358 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 60 tests using 4 workers
+
+2026/11/17 22:00:32 socat[3587999] E read(6, 0x5943495ae000, 8192): Connection reset by peer
+2026/11/17 22:00:32 socat[3588000] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 22:00:32 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:32 socat[3588118] E write(6, 0x5943495ae000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (10.5s)
+2026/11/17 22:00:32 socat[3588332] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:34 socat[3611198] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:34 socat[3611310] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:34 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:34 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:34 socat[3611449] E write(6, 0x5943495ae000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (12.6s)
+2026/11/17 22:00:35 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:35 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:35 socat[3611150] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:35 socat[3611200] E write(6, 0x5943495ae000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.2s)
+2026/11/17 22:00:38 socat[3616248] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:38 socat[3616681] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:38 socat[3619244] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:38 socat[3616575] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.1s)
+2026/11/17 22:00:38 socat[3619383] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:38 socat[3619595] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3588343] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:39 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:39 socat[3588255] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3588356] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3586521] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3588398] E write(6, 0x5943495ae000, 24): Broken pipe
+2026/11/17 22:00:39 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:39 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   2 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (18.0s)
+2026/11/17 22:00:40 socat[3613356] E read(6, 0x5943495af000, 8192): Connection reset by peer
+2026/11/17 22:00:40 socat[3613357] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 22:00:40 socat[3625279] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:40 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:40 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:40 socat[3625642] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.3s)
+  ✘   3 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (18.2s)
+2026/11/17 22:00:42 socat[3627408] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:42 socat[3627707] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:42 socat[3627542] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.4s)
+2026/11/17 22:00:42 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:42 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:43 socat[3626980] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:43 socat[3629185] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:43 socat[3629372] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.2s)
+2026/11/17 22:00:43 socat[3628367] E read(6, 0x5943495af000, 8192): Connection reset by peer
+2026/11/17 22:00:43 socat[3628368] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 22:00:43 socat[3630385] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:43 socat[3630520] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.1s)
+2026/11/17 22:00:44 socat[3631094] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3634759] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3635190] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3635432] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.5s)
+2026/11/17 22:00:46 socat[3640051] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3628902] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3640374] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:46 socat[3640408] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.7s)
+2026/11/17 22:00:47 socat[3639180] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:47 socat[3639286] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:47 socat[3639425] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.0s)
+2026/11/17 22:00:47 socat[3634073] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:47 socat[3638028] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:47 socat[3638149] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:47 socat[3638373] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.7s)
+2026/11/17 22:00:49 socat[3640932] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:49 socat[3643033] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:49 socat[3643108] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.1s)
+2026/11/17 22:00:50 socat[3646070] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:50 socat[3643685] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:50 socat[3646204] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:50 socat[3646258] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.2s)
+2026/11/17 22:00:50 socat[3645353] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:51 socat[3646978] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:51 socat[3647046] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.2s)
+2026/11/17 22:00:52 socat[3642475] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:52 socat[3655736] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:52 socat[3655811] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.4s)
+2026/11/17 22:00:52 socat[3654170] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:52 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:00:52 socat[3654718] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.0s)
+2026/11/17 22:00:52 socat[3654491] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:53 socat[3656144] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:53 socat[3650683] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:53 socat[3656231] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:53 socat[3656403] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.1s)
+2026/11/17 22:00:55 socat[3657954] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3657973] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3659687] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3659943] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.1s)
+2026/11/17 22:00:56 socat[3662463] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3663033] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3663175] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.1s)
+2026/11/17 22:00:56 socat[3660400] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3660451] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:56 socat[3660588] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.5s)
+2026/11/17 22:00:57 socat[3661621] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:57 socat[3659693] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:57 socat[3661896] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:57 socat[3661977] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.9s)
+2026/11/17 22:00:59 socat[3665635] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:00:59 socat[3665980] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.1s)
+2026/11/17 22:01:00 socat[3670967] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:00 socat[3671110] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.4s)
+2026/11/17 22:01:01 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:01:01 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:01:01 socat[3671073] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:01 socat[3671230] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.4s)
+2026/11/17 22:01:01 socat[3670546] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:02 socat[3675321] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:02 socat[3675372] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.2s)
+2026/11/17 22:01:03 socat[3678066] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:03 socat[3677997] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.9s)
+2026/11/17 22:01:04 socat[3676798] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:04 socat[3676988] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:04 socat[3677324] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  30 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.4s)
+2026/11/17 22:01:05 socat[3679530] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:05 socat[3679614] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:06 socat[3680844] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:06 socat[3686477] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:06 socat[3686509] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.5s)
+2026/11/17 22:01:07 socat[3689755] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3675853] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3689898] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3690050] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.9s)
+2026/11/17 22:01:07 socat[3686362] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3686501] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.9s)
+2026/11/17 22:01:07 socat[3688752] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3689052] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:07 socat[3689231] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.0s)
+2026/11/17 22:01:10 socat[3692914] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:10 socat[3693239] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:10 socat[3693394] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.2s)
+2026/11/17 22:01:11 socat[3693525] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:11 socat[3696524] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:11 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:01:11 socat[3696580] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.4s)
+2026/11/17 22:01:11 socat[3696299] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:11 socat[3696468] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:11 socat[3696584] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:11 socat[3696605] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.7s)
+2026/11/17 22:01:13 socat[3704513] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3692918] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3704683] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3704566] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.5s)
+2026/11/17 22:01:13 socat[3704151] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3701300] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3704171] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:13 socat[3704215] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  39 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.1s)
+2026/11/17 22:01:14 socat[3704321] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:14 socat[3704516] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:14 socat[3704546] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.4s)
+2026/11/17 22:01:16 socat[3706264] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:17 socat[3710662] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:17 socat[3706733] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:17 socat[3710622] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  42 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.3s)
+2026/11/17 22:01:18 socat[3716606] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:18 socat[3716872] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.6s)
+2026/11/17 22:01:18 socat[3707189] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:18 socat[3711318] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:18 socat[3711391] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.9s)
+2026/11/17 22:01:18 socat[3712645] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:18 socat[3712788] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:18 socat[3712944] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.1s)
+2026/11/17 22:01:20 socat[3716441] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:20 socat[3720115] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:20 socat[3720164] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  45 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.1s)
+2026/11/17 22:01:21 socat[3722494] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:21 socat[3722504] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  47 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.1s)
+2026/11/17 22:01:21 socat[3721421] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:21 socat[3721709] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:22 socat[3721867] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:22 socat[3720803] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:22 socat[3722396] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:22 socat[3722487] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  48 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.4s)
+2026/11/17 22:01:23 socat[3541755] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:01:23 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 22:01:23 socat[3727811] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:23 socat[3727854] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  46 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (4.9s)
+2026/11/17 22:01:23 socat[3726721] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:23 socat[3726846] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:23 socat[3726851] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  49 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.7s)
+2026/11/17 22:01:24 socat[3728075] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:24 socat[3728312] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:24 socat[3728565] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  50 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.2s)
+2026/11/17 22:01:26 socat[3732972] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:26 socat[3734379] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:26 socat[3734431] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:26 socat[3734447] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  52 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (2.9s)
+2026/11/17 22:01:27 socat[3734444] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:27 socat[3543477] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  53 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.1s)
+2026/11/17 22:01:27 socat[3736937] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:27 socat[3736958] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  51 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.1s)
+2026/11/17 22:01:28 socat[3736786] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:28 socat[3736620] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  54 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.9s)
+2026/11/17 22:01:29 socat[3740271] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:29 socat[3740327] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  55 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (3.1s)
+2026/11/17 22:01:31 socat[3741437] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:31 socat[3741776] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:31 socat[3740610] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:31 socat[3745004] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:31 socat[3745077] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  57 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (3.5s)
+2026/11/17 22:01:32 socat[3746003] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:32 socat[3746320] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:32 socat[3746556] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  58 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (3.4s)
+2026/11/17 22:01:33 socat[3739119] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:33 socat[3750841] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  56 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (5.7s)
+2026/11/17 22:01:33 socat[3750706] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:33 socat[3749977] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:33 socat[3750078] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:33 socat[3750326] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  59 tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (3.3s)
+2026/11/17 22:01:34 socat[3749442] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:34 socat[3751371] E write(6, 0x5943495af000, 24): Broken pipe
+2026/11/17 22:01:34 socat[3751382] E write(6, 0x5943495af000, 24): Broken pipe
+  ✓  60 tests/channels-e2e/unread.spec.ts:321:1 › UNR-08 a channel I am added to appears in my list at once, and opens (2.9s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwl8kd8z5ix8-channel' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwl8kd8z5ix8-channel' }).getByLabel('Unread', { exact: true })
+
+
+       99 |   await findConversations(page, made.tag);
+      100 |   const row = conversationRow(page, `${made.tag}-channel`);
+    > 101 |   await expect(unreadDot(row)).toBeVisible();
+          |                                ^
+      102 |
+      103 |   await row.click();
+      104 |   const view = new ChannelView(page, made.channel);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/unread.spec.ts:101:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwl8kd7l0o2c-channel' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwl8kd7l0o2c-channel' }).getByLabel('Unread', { exact: true })
+
+
+      300 |   await findConversations(cyPage, made.tag);
+      301 |   const row = conversationRow(cyPage, `${made.tag}-channel`);
+    > 302 |   await expect(unreadDot(row)).toBeVisible();
+          |                                ^
+      303 |
+      304 |   await row.click();
+      305 |   const view = new ChannelView(cyPage, made.channel);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/unread.spec.ts:302:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/u17c/test-results/unread-UNR-07-a-member-who-10306-message-and-clears-the-mark/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+    tests/channels-e2e/unread.spec.ts:282:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark 
+  58 passed (1.5m)
+2026/11/17 22:01:34 socat[3543477] W exiting on signal 15
+2026/11/17 22:01:34 socat[3541755] W exiting on signal 15

@@ -1,0 +1,10 @@
+head 20786d1750 03:40:36 load 140.36 1245.28 1038.79
+services updated 03:47:42 load 46.22 340.17 677.26
+engine built 03:48:19 load 57.24 306.01 651.54
+on bundle built 03:48:53 load 44.95 279.31 631.67
+off bundle built 03:49:27 load 47.44 253.78 610.08
+f20-on-1 start 03:49:32 load 50.61 251.01 607.27
+f20-on-1 end 03:59:16 load 29.80 73.00 346.19
+f20-off-1 start 03:59:19 load 29.09 72.14 344.45
+f20-off-1 end 04:03:10 load 50.48 62.44 280.70
+ALLDONE20

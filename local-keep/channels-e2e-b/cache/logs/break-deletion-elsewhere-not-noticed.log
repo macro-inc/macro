@@ -1,0 +1,25 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/17 05:01:17 socat[2807174] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:17 socat[2807551] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:17 socat[2807622] E write(6, 0x6225dd0b2000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+2026/11/17 05:01:17 socat[2803389] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:17 socat[2807565] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:17 socat[2807626] E write(6, 0x6225dd0b2000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (3.2s)
+2026/11/17 05:01:20 socat[2812962] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:23 socat[2807665] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:25 socat[2819738] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:25 socat[2819712] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:25 socat[2824452] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:25 socat[2825286] E write(6, 0x6225dd0b2000, 24): Broken pipe
+2026/11/17 05:01:25 socat[2825554] E write(6, 0x6225dd0b2000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.9s)
+
+  3 passed (25.3s)
+2026/11/17 05:01:25 socat[2771557] W exiting on signal 15
+2026/11/17 05:01:25 socat[2769008] W exiting on signal 15

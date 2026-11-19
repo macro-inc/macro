@@ -1,0 +1,51 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:05:47 socat[2603084] E write(6, 0x6018f176c000, 24): Broken pipe
+2026/11/16 07:05:47 socat[2603089] E write(6, 0x6018f176c000, 28): Broken pipe
+2026/11/16 07:05:47 socat[2603090] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/offline.spec.ts:74:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (24.0s)
+
+
+  1) tests/channels-e2e/offline.spec.ts:74:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      89 |   await goOfflineAtOnce(page.context());
+      90 |   await page.getByText(late.name).first().click();
+    > 91 |   await expect(couldNotLoad(page)).toBeVisible();
+         |                                    ^
+      92 |   await expect(page.getByText('made just now')).toHaveCount(0);
+      93 |
+      94 |   await goOnline(page.context());
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:91:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-load-error-not-shown/test-results/offline-OFF-02-a-channel-t-529bd-when-the-connection-is-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-load-error-not-shown/test-results/offline-OFF-02-a-channel-t-529bd-when-the-connection-is-back/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-load-error-not-shown/test-results/offline-OFF-02-a-channel-t-529bd-when-the-connection-is-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-load-error-not-shown/test-results/offline-OFF-02-a-channel-t-529bd-when-the-connection-is-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/offline.spec.ts:74:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back 
+2026/11/16 07:05:47 socat[2594395] W exiting on signal 15
+2026/11/16 07:05:47 socat[2593848] W exiting on signal 15

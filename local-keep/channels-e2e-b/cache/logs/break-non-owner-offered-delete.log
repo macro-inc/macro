@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:31:04 socat[2230625] E write(6, 0x5f382eb11000, 24): Broken pipe
+2026/11/16 08:31:04 socat[2230688] E write(6, 0x5f382eb11000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:316:1 › CHN-09 a member who does not own the channel is not offered Delete (18.2s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:316:1 › CHN-09 a member who does not own the channel is not offered Delete 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByRole('menu', { name: 'Channel actions' }).getByRole('menuitem', { name: 'Delete' })
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByRole('menu', { name: 'Channel actions' }).getByRole('menuitem', { name: 'Delete' })
+        30 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      328 |   await expect(channelAction(benPage, 'Copy Link')).toBeVisible();
+      329 |   await expect(channelAction(benPage, 'Rename')).toBeVisible();
+    > 330 |   await expect(channelAction(benPage, 'Delete')).toHaveCount(0);
+          |                                                  ^
+      331 | });
+      332 |
+      333 | // If this fails, a person cannot see who is in a channel.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:330:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-non-owner-offered-delete/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-non-owner-offered-delete/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-non-owner-offered-delete/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-non-owner-offered-delete/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/channels.spec.ts:316:1 › CHN-09 a member who does not own the channel is not offered Delete 
+2026/11/16 08:31:05 socat[2208691] W exiting on signal 15
+2026/11/16 08:31:05 socat[2207943] W exiting on signal 15

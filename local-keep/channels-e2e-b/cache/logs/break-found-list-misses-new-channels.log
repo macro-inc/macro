@@ -1,0 +1,13 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 09:34:37 socat[4066915] E write(6, 0x64e8f03aa000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/unread.spec.ts:320:1 › UNR-08 a channel I am added to appears in my list at once, and opens (5.6s)
+
+  1 passed (6.9s)
+2026/11/16 09:34:37 socat[4058370] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:34:37 socat[4064547] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:34:37 socat[4064547] W exiting on signal 15
+2026/11/16 09:34:37 socat[4058370] W exiting on signal 15

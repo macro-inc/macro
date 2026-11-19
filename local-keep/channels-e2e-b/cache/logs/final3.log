@@ -1,0 +1,17 @@
+probe3 start 23:28:59 load 15.11 17.71 23.51
+probe3 end 23:40:08 load 31.13 26.09 25.62
+probe3b start 23:50:10 load 10.66 15.83 20.78
+probe3b end 00:02:41 load 40.76 34.78 28.55
+f3-on-1 start 00:30:10 load 16.67 20.52 23.21
+f3-on-1 end 00:36:10 load 33.67 30.51 26.92 exit 0
+f3-on-2 start 00:36:10 load 33.67 30.51 26.92
+f3-on-2 end 00:41:43 load 43.15 37.78 31.07 exit 0
+f3-on-3 start 00:41:43 load 43.15 37.78 31.07
+f3-on-3 end 00:47:42 load 25.38 33.76 31.62 exit 0
+f3-on-4 start 00:47:42 load 25.38 33.76 31.62
+f3-on-4 end 00:53:29 load 47.24 40.50 35.13 exit 0
+f3-on-5 start 00:53:29 load 47.24 40.50 35.13
+f3-on-5 end 00:59:06 load 40.61 40.72 36.94 exit 0
+f3-off-1 start 00:59:08 load 38.00 40.18 36.78
+f3-off-1 end 01:03:04 load 25.15 32.73 34.52
+ALLDONE3

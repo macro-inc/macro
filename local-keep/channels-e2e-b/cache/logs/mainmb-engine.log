@@ -1,0 +1,271 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web" does not contain a 'flake.nix', searching up
+scripts/cached-wasm-build.sh cache-wasm /home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web/../../target/cache-wasm" wasm-pack build /home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web/../../crates/client/cache-wasm --target web --release --out-dir /home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web/src/lib/graphql-cache/wasm
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling rustversion v1.0.22
+   Compiling wasm-bindgen-shared v0.2.126
+   Compiling once_cell v1.21.4
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.0
+   Compiling bumpalo v3.20.2
+   Compiling pin-project-lite v0.2.17
+   Compiling serde_core v1.0.228
+   Compiling futures-core v0.3.32
+   Compiling version_check v0.9.5
+   Compiling futures-sink v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-io v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling serde v1.0.228
+   Compiling stable_deref_trait v1.2.1
+   Compiling autocfg v1.5.0
+   Compiling thiserror v2.0.18
+   Compiling semver v1.0.28
+   Compiling typenum v1.20.0
+   Compiling zmij v1.0.23
+   Compiling equivalent v1.0.2
+   Compiling heck v0.5.0
+   Compiling serde_json v1.0.150
+   Compiling regex-syntax v0.8.11
+   Compiling itoa v1.0.18
+   Compiling sha1_smol v1.0.1
+   Compiling hashbrown v0.17.1
+   Compiling getrandom v0.3.4
+   Compiling mutants v0.0.3
+   Compiling either v1.16.0
+   Compiling rustc-hash v2.1.2
+   Compiling zerocopy v0.8.48
+   Compiling anyhow v1.0.103
+   Compiling doppleganger-core v0.5.0
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling writeable v0.6.3
+   Compiling byteorder v1.5.0
+   Compiling ucd-trie v0.1.7
+   Compiling recursion v0.5.4
+   Compiling litemap v0.8.2
+   Compiling thiserror v1.0.69
+   Compiling smallvec v1.15.1
+   Compiling utf8_iter v1.0.4
+   Compiling subtle v2.6.1
+   Compiling icu_normalizer_data v2.2.0
+   Compiling fnv v1.0.7
+   Compiling libm v0.2.16
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v1.3.0
+   Compiling Inflector v0.11.4
+   Compiling icu_locale_data v2.2.0
+   Compiling countme v3.0.1
+   Compiling opaque-debug v0.3.1
+   Compiling hashbrown v0.14.5
+   Compiling getrandom v0.4.2
+   Compiling is-terminal v0.4.17
+   Compiling cpufeatures v0.2.17
+   Compiling parking_lot_core v0.9.12
+   Compiling icu_collator_data v2.2.0
+   Compiling text-size v1.1.1
+   Compiling concolor-query v0.3.3
+   Compiling rustc-hash v1.1.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling bitflags v1.3.2
+   Compiling unicode-width v0.2.0
+   Compiling yansi v1.0.1
+   Compiling unicode-width v0.1.14
+   Compiling turso_ext v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+   Compiling fractional_index v2.0.2
+   Compiling log v0.4.29
+   Compiling utf16_iter v1.0.5
+   Compiling scopeguard v1.2.0
+   Compiling lazy_static v1.5.0
+   Compiling bytes v1.11.1
+   Compiling write16 v1.0.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling cfg_aliases v0.2.1
+   Compiling bitflags v2.11.1
+   Compiling siphasher v1.0.3
+   Compiling nu-ansi-term v0.50.3
+   Compiling typed-arena v2.0.2
+   Compiling maybe_send v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/maybe_send)
+   Compiling softaes v0.1.5
+   Compiling tracing-core v0.1.36
+   Compiling nom v8.0.0
+   Compiling aho-corasick v1.1.4
+   Compiling thread_local v1.1.9
+   Compiling fastrand v2.4.1
+   Compiling adler2 v2.0.1
+   Compiling hex v0.4.3
+   Compiling subsequence_match v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/subsequence_match)
+   Compiling fallible-iterator v0.3.0
+   Compiling cfg_block v0.1.1
+   Compiling pastey v0.2.3
+   Compiling simdutf8 v0.1.5
+   Compiling ryu v1.0.23
+   Compiling allocator-api2 v0.4.0
+   Compiling futures-channel v0.3.32
+   Compiling generic-array v0.14.9
+   Compiling rustc_version v0.4.1
+   Compiling num-traits v0.2.19
+   Compiling cowlike v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/cowlike)
+   Compiling pest v2.8.6
+   Compiling ahash v0.8.12
+   Compiling hash32 v0.2.1
+   Compiling memoffset v0.9.1
+   Compiling bigdecimal v0.4.10
+   Compiling rowan v0.16.1
+   Compiling cc v1.2.62
+   Compiling concolor v0.1.1
+   Compiling uncased v0.9.10
+   Compiling lock_api v0.4.14
+   Compiling sharded-slab v0.1.7
+   Compiling tempfile v3.27.0
+   Compiling miniz_oxide v0.8.9
+   Compiling event-listener v5.4.2
+   Compiling base64 v0.22.1
+   Compiling tracing-log v0.2.0
+   Compiling wasm-bindgen v0.2.126
+   Compiling rapidhash v4.5.1
+   Compiling arc-swap v1.9.2
+   Compiling ariadne v0.6.0
+   Compiling heapless v0.7.17
+   Compiling specta v2.0.0-rc.25
+   Compiling branches v0.4.5
+   Compiling crc32c v0.6.8
+   Compiling event-listener-strategy v0.5.4
+   Compiling tracing-subscriber v0.3.23
+   Compiling aegis v0.9.8
+   Compiling unsynn v0.3.0
+   Compiling turso_core v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+   Compiling hashbrown v0.16.1
+   Compiling async-lock v3.4.2
+   Compiling parking_lot v0.12.5
+   Compiling intrusive-collections v0.9.7
+   Compiling syn v2.0.117
+   Compiling syn v3.0.3
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
+   Compiling inout v0.1.4
+   Compiling digest v0.10.7
+   Compiling pest_meta v2.8.6
+   Compiling doppleganger-macros-parse v0.5.0
+   Compiling indexmap v2.14.0
+   Compiling sha2 v0.10.9
+   Compiling lru v0.16.4
+   Compiling num-integer v0.1.46
+   Compiling uuid v1.23.1
+   Compiling regex-automata v0.4.18
+   Compiling num-bigint v0.4.8
+   Compiling cache-core v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/client/cache-core)
+   Compiling doppleganger-macros v0.5.0
+   Compiling doppleganger v0.5.0
+   Compiling displaydoc v0.2.7
+   Compiling bytemuck_derive v1.12.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling bytemuck v1.25.0
+   Compiling roaring v0.11.4
+   Compiling pack1 v1.1.0
+   Compiling wasm-bindgen-macro-support v0.2.126
+   Compiling synstructure v0.13.2
+   Compiling pest_generator v2.8.6
+   Compiling regex v1.13.1
+   Compiling logos-codegen v0.16.1
+   Compiling futures-macro v0.3.32
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling tracing-attributes v0.1.31
+   Compiling zerovec-derive v0.11.3
+   Compiling strum_macros v0.27.2
+   Compiling thiserror-impl v1.0.69
+   Compiling specta-macros v2.0.0-rc.25
+   Compiling turso_macros v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+   Compiling miette-derive v7.6.0
+   Compiling strum_macros v0.26.4
+   Compiling aristo-macros v0.4.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling pest_derive v2.8.6
+   Compiling aristo v0.4.1
+   Compiling utoipa-gen v5.5.0
+   Compiling futures-util v0.3.32
+   Compiling zerofrom v0.1.8
+   Compiling tracing v0.1.44
+   Compiling miette v7.6.0
+   Compiling yoke v0.8.2
+   Compiling cobs v0.3.0
+   Compiling apollo-parser v0.8.6
+   Compiling jsonpath-rust v0.3.5
+   Compiling logos-derive v0.16.1
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling logos v0.16.1
+   Compiling strum v0.26.3
+   Compiling strum v0.27.2
+   Compiling turso_parser v0.8.0-pre.3 (https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249)
+   Compiling wasm-bindgen-macro v0.2.126
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling triomphe v0.1.15
+   Compiling non_empty v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/non_empty)
+   Compiling notification_state v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/notification_state)
+   Compiling model_file_type v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/model_file_type)
+   Compiling document_sub_type v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/document_sub_type)
+   Compiling filter_ast v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/filter_ast)
+   Compiling rootcause-internals v0.12.1
+   Compiling rootcause v0.12.1
+   Compiling futures-executor v0.3.32
+   Compiling postcard v1.1.3
+   Compiling futures v0.3.32
+   Compiling icu_provider v2.2.0
+   Compiling icu_locale v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling js-sys v0.3.103
+   Compiling utoipa v5.5.0
+   Compiling rand_core v0.9.5
+   Compiling fastbloom v0.14.1
+   Compiling rand_chacha v0.9.0
+   Compiling bot_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/bot_id)
+   Compiling macro_uuid v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/macro_uuid)
+   Compiling serde_json_bytes v0.2.5
+   Compiling rand v0.9.4
+   Compiling icu_collator v2.2.1
+   Compiling apollo-compiler v1.32.0
+   Compiling twox-hash v2.1.2
+   Compiling macro_user_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/macro_user_id)
+   Compiling model_owner v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/model_owner)
+   Compiling getrandom v0.2.17
+   Compiling chrono v0.4.45
+   Compiling serde-wasm-bindgen v0.6.5
+   Compiling web-sys v0.3.103
+   Compiling wasm-bindgen-futures v0.4.76
+   Compiling rand_core v0.6.4
+   Compiling cipher v0.4.4
+   Compiling universal-hash v0.5.1
+   Compiling aead v0.5.2
+   Compiling polyval v0.6.2
+   Compiling aes v0.8.4
+   Compiling ctr v0.9.2
+   Compiling ghash v0.5.1
+   Compiling item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/item_filters)
+   Compiling predicate-index v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/predicate_index)
+   Compiling aes-gcm v0.10.3
+   Compiling models_databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/models_databases)
+   Compiling item-filter-index v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/item_filter_index)
+   Compiling graphql_soup_filter_input v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/graphql_soup_filter_input)
+   Compiling soup-filter-projection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/soup_filter_projection)
+   Compiling database_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/database_sql)
+   Compiling soup-filter-cache-adapter v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/soup_filter_cache_adapter)
+   Compiling turso-opfs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/client/turso-opfs)
+   Compiling cache-turso v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/client/cache-turso)
+   Compiling cache-wasm v0.6.54 (/home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/crates/client/cache-wasm)
+    Finished `release` profile [optimized] target(s) in 1m 00s
+[INFO]: found wasm-opt at "/nix/store/p7j7pwaj6izvwkzqahz3l85lfm19ls95-binaryen-129/bin/wasm-opt"
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+[INFO]: ✨   Done in 1m 10s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/teo/.herdr/worktrees/macro/synoet-che2e-mainmb/apps/web/src/lib/graphql-cache/wasm.
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.1, you are using: 0.15.0. To update, navigate to: https://wasm-bindgen.github.io/wasm-pack/installer/

@@ -1,0 +1,112 @@
+## Why
+
+Channels kept on the device (opened from the device, kept current by sequence, writes queued there) had no end-to-end proof. This adds tests of that behaviour to the channels end-to-end suite and records what they found on this branch's base.
+
+## What
+
+- Carries the channels end-to-end suite onto this stack: its commits are cherry-picked, not merged, because a merge conflicted in generated SDK code, a calendar service file and the GraphQL schema. The base branch is merged in at `b7023c79d8`, and main after it.
+- Adds 45 tests: OFF-14 in `offline.spec.ts` (a thread read on a page that was left before the device kept it), OFF-13 (a held channel offline once 120 others are newer), CHN-16 in `channels.spec.ts` (a rename saved while the list of channels is still being read), and 42 more: `current.spec.ts` (SYN, a device catches up on what changed while away), `offline.spec.ts` (OFF, what shows with no connection), `writes.spec.ts` (WRT, writes made offline or blocked), `prewarm.spec.ts` (PRE, what a device fetches and drops by itself), and REC-04 in `reconnect.spec.ts` (the connection lost just after the app opened).
+- The six newest: OFF-12 (going back to a link to an old message offline), PRE-02 and PRE-03 (the fortieth unread and twentieth recent channel are held, the next is not), PRE-04 (fifty messages of a fetched channel are held), PRE-05 (a channel not opened for thirty days is dropped, with the device's clock moved), WRT-15 (a waiting message after the device's kept data is lost).
+- Adds harness steps for connection states (`harness/network.ts`), a device that holds channels (`harness/device.ts`) and the channel as the services hold it (`harness/server.ts`).
+- Each new test has a row in the inventory. Each was watched failing under a deliberate break of the product; those breaks are no longer in the pull request (see below).
+- Eleven older tests of opening, order, links and live events were also watched failing on a build with the flag: their old breaks change code that build does not run.
+- The base removed the GraphQL sources flag and keeps channels on the device only with `VITE_ENABLE_CHANNEL_LOCAL_SYNC`, which has no default. The suite and its two CI jobs now tell their builds apart by that flag alone: "with the flag" means channel local sync on, and "without" is what ships until the rollout flag is turned on, with channel messages over REST.
+- Marks written for builds without the GraphQL sources named builds that no longer exist. Defects of those sources are now marked for both builds: UNR-10 as known; CHN-08, CHN-15, MEM-03, ACC-06, UNR-04, UNR-08 and DM-02 as failing in some runs. DM-06 is no longer a defect. All four now have break proofs (see the newest round).
+- Copying a link or a message's text no longer raises a toast on main, so CHN-06, NAV-07 and MSG-17 wait for the clipboard instead.
+- The suite's AGENTS.md says to rebuild the cache engine before building a bundle to test, and why.
+
+## UNR-06's cause, and the runs on the merged head
+
+The base branch and main are merged in twice more as they moved (no conflicts); the head was then `f5e3a35c63`. A third merge, with one conflict in the list of workflow modules that CI names (both sides kept, generated workflows unchanged), gave `283a6a569f`, and a fourth, with no conflicts, gave `20786d1750`, and a fifth, also with no conflicts, gives the head `85a6768461`.
+
+- Cause of UNR-06: the Mute notifications submenu builds its entries from the menu's properties, and since the "Only @mentions" entry it reads one of them while building, so the whole list is built again whenever those properties are recomputed. Every entry is then a new element; the one holding the keyboard is removed, focus falls to the page, and Enter chooses nothing. A probe that logged focus, keys and element removal saw exactly this in every failure (7 of 250 with local sync on, 2 of 150 off): entries removed and added between the focus and the key, and the key delivered to the page body. The entries were remade while the submenu was open in about one run in nine on both builds; it fails only when that falls between focus and key.
+- It is not the new entry taking focus, and not the menu's key handling. It shows without local sync too, so it does not tell the two builds apart. What recomputes the properties at that moment was not traced.
+- UNR-06 now notes the first attempt with `failsSometimes`, chooses again while the submenu is still open, and asserts the bell either way; the defect is in `intermittent-defects.tsv` with its frequency. Afterwards UNR-06 held 120 of 120 with local sync off and failed 4 of 120 with it on, for a different reason (next point).
+- One whole run on each build at `596c31be38` (the merged head; the push adds one line to UNR-06), services updated in place: local sync on 164 passed; off 129 passed, 35 skipped. Nothing unexpected in either. Marked defects that showed: ACC-06, CHN-08 and UNR-04 on; ACC-06, CHN-02, MEM-03 and MSG-18 off.
+- Open observation, not marked: in repeats on the four casts that have run hundreds of tests today, a channel with a new message sometimes got no unread dot in the sidebar within 15 seconds (UNR-06 4 of 120, UNR-02 2 of 37, UNR-07 1 of 37 with local sync on; UNR-02 1 of 25 with it off). On the two casts that have run little, the same tests held 120 of 120 with local sync on. That points at the worn casts (hundreds of channels left unread), but the little-used run also had half the workers, so it is not settled.
+- One more whole run on each build at `f5e3a35c63`, after the base moved again: local sync on 164 passed; off 129 passed, 35 skipped. Nothing unexpected. Marked defects that showed: ACC-06, CHN-02, CHN-08 and MEM-03 on; ACC-06, CHN-02, MSG-18 and UNR-08 off.
+- One whole run on each build at `283a6a569f`, after that third merge and a service update: local sync on 164 passed; off 129 passed, 35 skipped. Nothing unexpected. Marked defects that showed: ACC-06 and KEY-05 on; ACC-06, CHN-02, MSG-18 and THR-02 off.
+- One whole run on each build at `20786d1750`, after the fourth merge and a service update: local sync on 164 passed; off 129 passed, 35 skipped. Nothing unexpected. Marked defects that showed: ACC-06 and CHN-02 on; ACC-06, CHN-02 and MSG-18 off.
+- One whole run on each build at `85a6768461`, after the fifth merge and a service update: local sync on 164 passed; off 129 passed, 35 skipped. Nothing unexpected. Marked defects that showed: ACC-06, MEM-03 and THR-02 on; ACC-06, CHN-02, DM-01 and MSG-18 off.
+- `ledger/check.ts`: 164 tests, 67 of 84 listed behaviours covered, 10 known defects, 17 intermittent. `just check` passes.
+
+## After the deliberate breaks left the suite
+
+The base branch at `b7023c79d8` and main are merged in, and the base suite's later commits are carried over.
+
+- Removed from the pull request: `ledger/breaks/` (74 patches), `ledger/proofs.tsv`, and the checker's requirement that every test names a break. The patches and what each run did under them are kept with the run evidence, outside the repository.
+- Kept: `ledger/inventory.tsv`, `ledger/known-defects.tsv`, `ledger/intermittent-defects.tsv`, and the checker holding the tests and a run against them. Known defects still name the builds they show on, because this suite runs on two: with and without `VITE_ENABLE_CHANNEL_LOCAL_SYNC`.
+- Taken from the base suite: a video of every person's page when a run records video, a bounded click in UNR-04, and DM-01, DM-02, DM-03 and MEM-03 going on after a reload when their recorded defect shows.
+- One whole run on each build at `6c0266e155`, on a stack rebuilt and seeded anew; main is merged once more after it, with the generated storage SDK regenerated from the merged specs. Local sync off: 129 passed, 35 skipped, nothing unexpected. Local sync on: 163 passed, 1 failed.
+- The failure, on: UNR-06, once. "Until I turn it off" in the Mute notifications submenu took Enter and the menu stayed open, so the channel was never muted. Repeated afterwards: 1 of 50 with local sync on, 0 of 30 with it off. Main added an entry to that submenu since the last round; the cause is in the section above.
+- Marked defects that showed: ACC-06 and CHN-02 on both builds, MEM-03 on, DM-01, DM-03 and MSG-18 off.
+- `ledger/check.ts`: 164 tests, 67 of 84 listed behaviours covered, 10 known defects, 16 intermittent. `just check` passes.
+
+## On the base with the fixes for OFF-06, OFF-09 and OFF-13
+
+At `ce183ced7f` (web code only changed; the cache engine passes the stale-engine check), both bundles rebuilt, same stack.
+
+- Local sync on, five whole runs of 164 tests: all five with nothing unexpected. Off, three whole runs: two with nothing unexpected (129 passed, 35 skipped), one with one failure.
+- The one failure, off: MSG-18, once. One person's own four messages, sent one after another while another person sent four, showed on a page as 1, 3, 2, 4. Not seen before; in thirty repeats on each build afterwards it did not show again. No cause found.
+- OFF-06, OFF-09 and OFF-13, thirty times each with local sync on: 90 of 90. OFF-13 is no longer a known defect and OFF-06 no longer marked as failing sometimes.
+- OFF-14 is new and forces the cut-off: the device's engine is held back, so the page reads a thread from the services and cannot keep it; the app is then loaded again on another channel, the engine let through, and the thread opened with no connection. 30 of 30. Under a break that makes the next page ignore what an earlier page left noted it fails, while OFF-06 and OFF-09 pass, so it is that path it exercises. Nothing on screen says when the next page has kept the thread; the test relies on the pause before the connection is lost.
+- Break proofs added: CHN-08 (its break stops the test at the Favorites step, before the deletion), DM-06 (a name typed offers nobody), CHN-15 and MEM-03 (a channel the services say is gone stays open: the marked check failed 14 of 14 and 4 of 4 under the break, against 7 of 13 and 0 of 3 without), OFF-13 and OFF-14.
+- Four break patches no longer applied to this base (`device-not-used`, `copy-text-copies-nothing`, `prewarm-limits-changed`, `waiting-write-not-shown-in-other-window`). They are rewritten and their 22 tests fail under them again. The other breaks apply but were not rebuilt on this head.
+- With local sync off the base now opens a channel the cache knows with no connection, showing the channel with failing message reads. No test covers that: the offline tests are skipped on that build.
+- Marked defects that showed in these eight runs: ACC-06 in all eight, CHN-02 in five, CHN-15 in three, MSG-18 and THR-02 in two each, MEM-03, CHN-08, KEY-05 and UNR-04 in one each.
+- Machine load during the runs: one-minute average 21 to 60. Seven bundle builds ran during the first whole run.
+
+## On the base before, one flag
+
+At `9d6f721ec2`, engine rebuilt, on the same stack with its services rebuilt from this head. One whole run on each build after the marks were moved:
+
+- With channel local sync: 162 of 163 passed. Without (messages over REST, the first browser run of that path): 128 passed, 34 skipped, 1 failed.
+- The one failure, on both builds, was CHN-08, and it was the test: its step for the channel menu clicked the menu's button while the menu was still open from the choice before, which closed it. With the step fixed, every CHN test four times on each build: 64 of 64 both times. No whole run was made after that fix, nor after main's last three commits were merged.
+- In the run before the marks were moved, with channel local sync: OFF-09 failed once (a channel left as soon as its messages showed was empty with no connection). It held in the next run and in every run of the final round.
+- Without the flag nothing failed that is not also seen with it: ACC-06, CHN-02, CHN-15 and MSG-18 showed their marked defects.
+- A run made on the base before this one (`8e1a07f44b`) is void: the stack's services failed to rebuild, so a new web app ran against old services.
+
+## Final round, on a new stack
+
+At `da4308dd82`, cache engine rebuilt, on a stack started empty and seeded for this round. Ten whole-suite runs with the flag (162 tests) and three without. An eleventh flag-on run is void: pages crashed in twelve tests while another job took the machine's load to 143.
+
+- Flag off: 129 passed, 33 skipped, three times.
+- Flag on: two runs with nothing unexpected, eight with one to three failures, all of three tests:
+  - MEM-03, five runs: a person removed from a channel kept it open with its composer. This is the defect the suite already knows without the flag, where it shows in every run. With the flag it shows in some: 1 of 30 repeats here, and 2 of 30 on a bundle of main at the merge-base built with the flag, so it is not from this branch. Now marked as failing in some runs with the flag.
+  - DM-02, four runs: the first conversation two people ever have, started from "New direct message", did not reach the other person's open list. It failed once for each of the four casts, on its first run, and never again: the conversation then exists for the life of the stack, which is why no earlier round saw it. main's bundle with the flag failed the same way on a cast that had never run it; a build without the flag showed the row at once. Marked as failing in some runs with the flag; only the row is excused.
+  - OFF-06, four runs (and once more in a later run): a long thread read while connected showed only its first three replies with no connection. It held in all twenty runs at `94876dc650`. Not traced further; marked as failing in some runs.
+- Repeats of OFF-04, OFF-12, CHN-07 and MEM-03, thirty each among every CHN and MEM test, traces kept: CHN-07 held 30 of 30 here and on main's bundle. OFF-12 held its first 17 repeats and failed 12 of the last 13 with "Conversation unavailable"; OFF-04's marked check showed 8 times, from the same minute on.
+- The cause is a limit, shown by OFF-13: with no connection after a reload, a channel the device holds says "Conversation unavailable" once about a hundred of the person's other channels are newer (it opened with 95 newer and not with 120; leaving the device alone for 30 s first changed nothing). Thirty repeats make more than a hundred channels for each person, which pushes the run's long channel past the limit. OFF-12 held in all eleven whole runs. main's bundle with the flag opens no channel offline at all (OFF-12 0 of 30), so this is a limit of the new behaviour, not a regression from main. OFF-13 is marked a known defect with the flag.
+- OFF-04's earlier failures in repeat mixes fit the same limit; its one failure in a whole run (the earlier stack) does not, and stays unexplained.
+- After the marks, one whole run on each build: 163 passed with the flag; 129 passed, 34 skipped without.
+- Machine load during the round: one-minute average 19 to 41 for the valid runs, 54 to 86 for the last three.
+
+## Earlier rounds, with the flag on
+
+All at `94876dc650`, cache engine rebuilt from its sources, on a local stack that was never emptied.
+
+- Twenty whole-suite runs with the flag on (five of 155 tests, fifteen of 161): eleven with no unexpected failure, nine with one each.
+  - OFF-04, once: a long channel read back to its start while connected could not be loaded offline after a reload. Recorded as an intermittent defect.
+  - MEM-01, three times: a fault of the test, fixed here. The Invite dialog's one row reads "Invite <address>" until the device's own list of people answers, then becomes that person's row; the test looked for the row by its first name and lost it. The dialog stays open and either row invites the person. It happens on main with the flag on too (6 of 20) as on this build (9 of 20), both on people who had run little. With the row found by the address: 20 of 20 on those people, then 30 of 30 and 12 of 12 among other tests.
+  - PRE-05, three times, and WRT-05, twice: faults of the tests, fixed here (the old channel was among the twenty a device fetches again; the network step dropped a request that was already gone).
+- Five whole-suite runs with the flag off: none failed.
+- Eight more whole-suite runs after those fixes (seven on, one off): PRE-05 failed once more before its last fix and not in the six runs after it. MEM-01 failed once more (the same test fault). MEM-03, a known defect without the flag (a removed person's page keeps the channel), showed once with the flag. CHN-03 (a renamed channel's header) failed in four of the last five runs on both builds, having held in every run before. Cause: a defect on both builds that the stack's own growth exposed. A page reads its whole list of channels, a hundred to a request, after every load; a rename saved while that read is under way never reaches the header, because a page of the list answered before the rename puts the old name back and the list is not read again until a reload. The people of this stack had over 4,000 channels each by then (43 requests, three to six seconds), so the test's rename always fell inside the read. On people with a handful of channels the unchanged test held 6 of 6 on the same build. CHN-16 reproduces it on such people by holding the list's answer back (flag on, flag off, and main with the flag on) and is marked a known defect on both builds. CHN-03 now waits for the list first: 30 of 30 and 12 of 12 flag on, 10 of 10 flag off.
+- WRT-15 asserts what the inventory states: a message waiting to be sent when the device's kept data is lost is not shown again and is never sent. Nothing on screen tells the person.
+- Offline at the top of the fifty messages a fetched channel holds, nothing says older ones exist.
+- After these fixes: one whole run on each build with nothing unexpected (162 passed flag on; 129 passed, 33 skipped flag off), and every CHN and MEM test thirty times with the flag on and ten with it off. Unexpected in those: CHN-07 once in 30 (a channel its owner deleted kept its composer) and MEM-03 once in 30 (a removed person kept the channel), flag on only; neither was traced to a cause. OFF-04 showed 4 times in 30 in that mix and not in 36 further repeats with traces kept, so there is still only the one trace of it.
+- REC-04 still fails on both builds: a page cut off just after it opened says a new version is available.
+
+## Break proofs (run before the breaks left the pull request)
+
+All 55 older breaks were rebuilt on this head with the current engine and their tests run against them with the flag on.
+
+- Eleven tests passed under four breaks of the message path a build with the flag does not use (`link-target-ignored`, `live-events-ignored`, `new-message-goes-above-the-last`, `page-loses-a-message`). Built with the flag off, all eleven fail. Three new breaks of the path the flag uses, and one existing one, make them fail with the flag on.
+- KEY-07's recorded break no longer made it fail on either build: the test now reaches the list another way. Its proof is replaced by `e-key-does-not-edit`, under which it fails.
+- UNR-08 does not fail under its recorded break on either build, nor under a corrected one. It has no working proof; its row says so.
+- Every other test failed under its break. The six new tests each fail under theirs.
+
+## Checks run locally
+
+CI does not run on a stacked pull request. Everything above ran on a local stack with no other suite on it, on a machine other sessions were using: one-minute load average 10 to 36 across the runs. The earlier rounds' stack was never emptied between runs, so its people accumulated channels; the final round ran on a new one. `ledger/check.ts`, Biome and `just check` pass. The test files are outside the web app's TypeScript project and are not type-checked.
+
+Not covered end to end: document discussions, how long the first send after opening takes, phones and the desktop app, prewarm fetching one channel at a time.

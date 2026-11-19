@@ -1,0 +1,1 @@
+no-access-shown-as-unavailable	SYN-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 

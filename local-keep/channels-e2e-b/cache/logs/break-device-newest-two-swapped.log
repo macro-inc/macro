@@ -1,0 +1,163 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/16 09:24:02 socat[3071910] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:02 socat[3071901] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:18 socat[3071848] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:18 socat[3071885] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:18 socat[3071902] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (18.5s)
+2026/11/16 09:24:19 socat[3078880] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:19 socat[3078900] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:19 socat[3078912] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:19 socat[3049862] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:24:19 socat[3078883] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:19 socat[3078903] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (20.2s)
+2026/11/16 09:24:21 socat[3071870] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:21 socat[3071889] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:21 socat[3071907] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:21 socat[3071887] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+2026/11/16 09:24:21 socat[3071905] E write(6, 0x5cf33a0c8000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (22.4s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "Ben Member: earlier from ben",
+        "Ada Owner: sent with enter",
+    +   "Ben Member: earlier from ben",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      30 |
+      31 |   await Promise.all([mine.reload(), bens.reload()]);
+    > 32 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      33 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+      34 | });
+      35 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:32:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+    @@ -2,9 +2,9 @@
+        "Ada Owner: ada 1",
+        "Ben Member: ben 1",
+        "Ada Owner: ada 2",
+        "Ada Owner: ada 3",
+        "Ben Member: ben 2",
+    -   "Ben Member: ben 3",
+        "Ada Owner: ada 4",
+    +   "Ben Member: ben 3",
+        "Ben Member: ben 4",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      105 |     'Ben Member: ben 4',
+      106 |   ];
+    > 107 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(exchange);
+          |                                                    ^
+      108 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(exchange);
+      109 |
+      110 |   await Promise.all([mine.reload(), bens.reload()]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:107:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "other channel start",
+        "meant for the other channel",
+    +   "other channel start",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      648 |   await expect
+      649 |     .poll(() => otherView.topLevel())
+    > 650 |     .toEqual(['other channel start', 'meant for the other channel']);
+          |      ^
+      651 | });
+      652 |
+      653 | // If this fails, “Copy Text” puts nothing, or something else, on the
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:650:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-newest-two-swapped/test-results/messages-MSG-16-a-message--c8cb2--not-appear-in-the-open-one/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+    tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+    tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one 
+2026/11/16 09:24:23 socat[3049862] W exiting on signal 15
+2026/11/16 09:24:23 socat[3049090] W exiting on signal 15

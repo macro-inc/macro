@@ -1,0 +1,1182 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { HoverCard } from '@core/component/HoverCard';
+import { toast } from '@core/component/Toast/Toast';
+import { UserIcon } from '@core/component/UserIcon';
+import { UserTooltip } from '@core/component/UserTooltip';
+import { useEmail, useUserId } from '@core/context/user';
+import { isMobile } from '@core/mobile/isMobile';
+import {
+  type CombinedRecipientItem,
+  type CombinedRecipientKind,
+  type CustomUserInput,
+  emailToId,
+  recipientEntityMapper,
+  type WithCustomUserInput,
+} from '@core/user';
+import { isAutomatedAddress } from '@core/user/automated-address';
+import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
+import type { RecipientSourceFactory } from '@core/user/recipient-source';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
+import { isEditableInput } from '@core/util/isEditableInput';
+import { matches } from '@core/util/match';
+import { preserveOrderedWindow } from '@core/util/ordered-window';
+import { truncateString } from '@core/util/string';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import XIcon from '@icon/system/regular/x.svg';
+import type { CollectionNode } from '@kobalte/core';
+import {
+  Combobox,
+  type ComboboxTriggerMode,
+  useComboboxContext,
+} from '@kobalte/core/combobox';
+import { Avatar, cn, Layer } from '@ui';
+import * as EmailValidator from 'email-validator';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  on,
+  onMount,
+  Show,
+  Switch,
+  untrack,
+} from 'solid-js';
+import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { RecipientMenuContent } from './RecipientMenuContent';
+import { RecipientSourceControls } from './RecipientSourceControls';
+import {
+  getRecipientOptionEmail,
+  getRecipientOptionLabel,
+  getRecipientOptionName,
+  getRecipientOptionTextValue,
+  getRecipientOptionValue,
+  rankRecipientMatches,
+  uniqueRecipientMatches,
+} from './recipient-options';
+
+function ChipWithUserTooltip(props: {
+  chip: JSX.Element;
+  renderTooltip: (close: () => void) => JSX.Element;
+}) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <HoverCard
+      placement="bottom"
+      open={open()}
+      onOpenChange={setOpen}
+      triggerAs="div"
+      triggerClass="max-w-full"
+      trigger={props.chip}
+      content={props.renderTooltip(() => setOpen(false))}
+      // Chips mount under the cursor when a recipient is picked via keyboard;
+      // don't treat that as a hover.
+      requirePointerMovement
+    />
+  );
+}
+
+function RecipientChip(props: {
+  icon?: JSX.Element;
+  label: string;
+  address?: string;
+  showAddress?: boolean;
+  onRemove: () => void;
+  draggable?: boolean;
+  onDragStart?: (e: DragEvent) => void;
+  onDragEnd?: (e: DragEvent) => void;
+}) {
+  return (
+    <div
+      class="flex flex-row shrink-0 max-w-full py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
+      draggable={props.draggable}
+      onDragStart={props.onDragStart}
+      onDragEnd={props.onDragEnd}
+    >
+      <Show when={props.icon}>{props.icon}</Show>
+      <p class="min-w-0 truncate text-sm">{truncateString(props.label, 20)}</p>
+      <Show when={props.address}>
+        {(address) => (
+          <span
+            class={
+              props.showAddress
+                ? 'min-w-0 truncate text-sm text-ink-muted'
+                : 'sr-only'
+            }
+          >
+            {address()}
+          </span>
+        )}
+      </Show>
+      <XIcon
+        class="size-5 shrink-0 hover:bg-hover hover:text-failure p-1 rounded-full"
+        onClick={props.onRemove}
+      />
+    </div>
+  );
+}
+
+function AgentAvatar(props: { agent: CombinedRecipientItem<'agent'>['data'] }) {
+  return (
+    <Avatar size="sm">
+      <Show
+        when={props.agent.avatar_url}
+        fallback={
+          <Avatar.Fallback>
+            <RobotIcon aria-hidden="true" class="size-3.5" />
+          </Avatar.Fallback>
+        }
+      >
+        {(avatarUrl) => (
+          <Avatar.Image src={avatarUrl()} alt={props.agent.name} />
+        )}
+      </Show>
+    </Avatar>
+  );
+}
+
+type RecipientComboboxItemProps = CollectionNode<CombinedRecipientItem> & {
+  inviteExternalEmails?: boolean;
+};
+
+const RECIPIENT_OPTION_HEIGHT_PX = 36;
+const RECIPIENT_OPTION_MAX_VISIBLE_COUNT = 6;
+
+function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
+  const handleMouseEnter = () => {
+    const items = document.querySelectorAll('[data-highlighted]');
+    items.forEach((item) => {
+      item.removeAttribute('data-highlighted');
+      item.setAttribute('data-highlighted-temp', '');
+    });
+  };
+
+  const handleMouseLeave = () => {
+    const items = document.querySelectorAll('[data-highlighted-temp]');
+    items.forEach((item) => {
+      item.removeAttribute('data-highlighted-temp');
+      item.setAttribute('data-highlighted', '');
+    });
+  };
+
+  return (
+    <Combobox.Item
+      item={props}
+      class={cn(
+        'flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
+        props.disabled && 'hover:bg-ink/5'
+      )}
+      onMouseEnter={props.disabled ? handleMouseEnter : undefined}
+      onMouseLeave={props.disabled ? handleMouseLeave : undefined}
+      // Kobalte still selects on pointerup, but synchronously detaches this
+      // popup. Cancel outside-dismiss handling of that same event in a drawer.
+      onPointerUp={(event) => event.preventDefault()}
+    >
+      <Switch>
+        <Match
+          when={matches(
+            props.rawValue,
+            (i) =>
+              i.kind === 'user' || i.kind === 'contact' || i.kind === 'custom'
+          )}
+        >
+          {(item) => {
+            const option = item();
+            const name = getRecipientOptionName(option);
+            const email = getRecipientOptionEmail(option);
+
+            // Render the email at reduced opacity (no pipe separator) when a
+            // display name is present; otherwise show the email on its own.
+            const showEmail = Boolean(name) && name !== email && Boolean(email);
+
+            // Use appropriate id for UserIcon based on type
+            const iconId = props.disabled ? '?' : option.id;
+
+            return (
+              <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink select-none text-sm">
+                <Show
+                  when={props.inviteExternalEmails && option.kind === 'custom'}
+                  fallback={
+                    <UserIcon
+                      id={iconId ?? ''}
+                      name={name ?? email ?? ''}
+                      size="sm"
+                      isDeleted={false}
+                    />
+                  }
+                >
+                  <PaperPlaneTiltIcon
+                    aria-hidden="true"
+                    class="size-4 shrink-0"
+                  />
+                </Show>
+                <p
+                  class={cn(
+                    'ph-no-capture truncate my-auto',
+                    props.disabled && 'italic'
+                  )}
+                >
+                  <Show
+                    when={
+                      props.inviteExternalEmails && option.kind === 'custom'
+                    }
+                    fallback={
+                      <Show when={showEmail} fallback={name || email}>
+                        {name}
+                        {/* An en space is the 0.5em gap; unlike a margin, Safari's truncated-text tooltip keeps it. */}
+                        {' '}
+                        <span class="opacity-50">{email}</span>
+                      </Show>
+                    }
+                  >
+                    <strong class="font-semibold">Invite</strong> {email}
+                  </Show>
+                </p>
+              </Combobox.ItemLabel>
+            );
+          }}
+        </Match>
+        <Match when={matches(props.rawValue, (i) => i.kind === 'channel')}>
+          {(item) => {
+            return (
+              <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink select-none text-sm">
+                <div class="flex flex-col items-center justify-center p-1">
+                  <EntityIcon
+                    targetType={item().data.channel_type || 'channel'}
+                  />
+                </div>
+                <p class={'ph-no-capture truncate my-auto'}>
+                  {item().data.name}
+                </p>
+              </Combobox.ItemLabel>
+            );
+          }}
+        </Match>
+        <Match when={matches(props.rawValue, (i) => i.kind === 'agent')}>
+          {(item) => (
+            <Combobox.ItemLabel class="flex min-w-0 w-full items-center gap-2 text-sm text-ink select-none">
+              <AgentAvatar agent={item().data} />
+              <span class="min-w-0 truncate font-medium">
+                {item().data.name}
+              </span>
+              <span class="min-w-0 truncate text-xs text-ink-muted">
+                @{item().data.handle}
+              </span>
+            </Combobox.ItemLabel>
+          )}
+        </Match>
+      </Switch>
+
+      <Combobox.ItemIndicator>
+        <CheckIcon class="size-4" />
+      </Combobox.ItemIndicator>
+    </Combobox.Item>
+  );
+}
+
+export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
+  selectedOptions: WithCustomUserInput<K>[];
+  setSelectedOptions: (next: WithCustomUserInput<K>[]) => void;
+  /** Notify the owner while a recipient query is being entered, before selection. */
+  onInputChange?: (value: string) => void;
+  // If you provide triedToSubmit, the component will show an error message if no options are selected and triedToSubmit is true
+  triedToSubmit?: Accessor<boolean>;
+  placeholder?: string | JSX.Element;
+  inputRef?: (ref: HTMLInputElement) => void;
+  inputId?: string;
+  focusOnMount?: boolean;
+  /** Open the suggestions dropdown when the input gains focus (default true) */
+  openOnFocus?: boolean;
+  triggerMode?: ComboboxTriggerMode;
+  /** Retain a typed query when focus moves to an action beside the picker. */
+  noResetInputOnBlur?: boolean;
+  hideBorder?: boolean;
+  noPadding?: boolean;
+  includeSelf?: boolean;
+  /** Existing participants excluded by the personal suggestion source. */
+  excludedIds?: Accessor<ReadonlySet<string>>;
+  selfEmail?: string;
+  disabled?: boolean;
+  onChipDragStart?: (option: WithCustomUserInput<K>, e: DragEvent) => void;
+  onChipDragEnd?: (e: DragEvent) => void;
+  hideMenuOnEscape?: boolean;
+  horizontalScroll?: boolean;
+  class?: string;
+  depth?: 0 | 1 | 2 | 3 | 4;
+  portalScope?: 'local';
+  /** Show an invite action for a complete email outside the known recipients. */
+  inviteExternalEmails?: boolean;
+  /** Messages can target only existing users or channels. Defaults to true. */
+  allowCustomRecipients?: boolean;
+  /** Show each person's address beside their name on chips, as email does. */
+  showChipAddresses?: boolean;
+} & (
+  | {
+      /** Explicit scoped options, such as team participants or agents. */
+      options: Accessor<CombinedRecipientItem<K>[]>;
+      createSource?: RecipientSourceFactory<K>;
+    }
+  | {
+      options?: Accessor<CombinedRecipientItem<K>[]>;
+      /** Personal suggestions are owned by the open picker, never a catalog. */
+      createSource: RecipientSourceFactory<K>;
+    }
+);
+
+export function RecipientSelector<K extends CombinedRecipientKind>(
+  props: RecipientSelectorProps<K>
+): JSX.Element {
+  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
+  const [inputValue, setInputValue] = createSignal('');
+  const [disabled, setDisabled] = createSignal(false);
+
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+  const [portalSearchRef, setPortalSearchRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  const portalMount = () => {
+    if (props.portalScope !== 'local') return undefined;
+    return (
+      portalSearchRef()?.closest<HTMLElement>('.portal-scope') ?? undefined
+    );
+  };
+
+  // The chips container caps its height and scrolls; keep the input's line
+  // visible as chips push it down. The memo fires only when the count
+  // changes: an owner that rebuilds the same selection must not scroll its
+  // surroundings back to this input.
+  const selectedCount = createMemo(() => props.selectedOptions.length);
+  createEffect(
+    on(
+      selectedCount,
+      () => {
+        requestAnimationFrame(() => {
+          inputRef()?.scrollIntoView({ block: 'nearest' });
+        });
+      },
+      { defer: true }
+    )
+  );
+
+  const [isOpen, setIsOpen] = createSignal(false);
+  const [suppressOpenUntilInputChange, setSuppressOpenUntilInputChange] =
+    createSignal(Boolean(props.focusOnMount));
+
+  const setComboboxOpen = (next: boolean) => {
+    if (next && suppressOpenUntilInputChange()) return;
+    setIsOpen(next);
+  };
+
+  const hasValidCustomEmail = () => {
+    const input = inputValue();
+    if (!input || !EmailValidator.validate(input)) return false;
+    return true;
+  };
+
+  createEffect(() => {
+    if (hasValidCustomEmail()) {
+      setComboboxOpen(true);
+    }
+  });
+
+  if (props.focusOnMount) {
+    onMount(() => {
+      const focusedAtMount = document.activeElement;
+      setTimeout(() => {
+        // A busy page can run this after the user has moved on to another
+        // field; their typing stays there.
+        const focused = document.activeElement;
+        if (focused !== focusedAtMount && isEditableInput(focused)) return;
+        inputRef()?.focus();
+      }, 0);
+    });
+  }
+
+  function getOptionDisabled(option: CombinedRecipientItem): boolean {
+    if (option.kind === 'custom') {
+      return option.data.invalid;
+    }
+    return false;
+  }
+
+  const placeholderText = () => {
+    return props.selectedOptions.length === 0 ? 'Select recipients' : undefined;
+  };
+
+  const userId = useUserId();
+  const userEmail = useEmail();
+  const selfEmail = () => (props.selfEmail ?? userEmail())?.toLowerCase();
+  const selfId = () =>
+    props.selfEmail ? emailToId(props.selfEmail) : userId();
+
+  function handleChange(value: CombinedRecipientItem[]) {
+    let newestSelection = value.at(-1);
+    if (!newestSelection) {
+      props.setSelectedOptions([]);
+      return;
+    }
+
+    if (
+      !props.includeSelf &&
+      newestSelection.kind === 'user' &&
+      newestSelection.id === selfId()
+    ) {
+      const inputEl = inputRef();
+      if (inputEl) inputEl.value = '';
+
+      setIsOpen(false);
+      return toast.failure('You cannot add yourself');
+    }
+
+    // We can only select one channel at a time
+    if (newestSelection.kind === 'channel') {
+      props.setSelectedOptions(value as CombinedRecipientItem<K>[]);
+      setIsOpen(false);
+      return;
+    }
+
+    if (
+      newestSelection.kind === 'user' ||
+      newestSelection.kind === 'contact' ||
+      newestSelection.kind === 'custom' ||
+      newestSelection.kind === 'agent'
+    ) {
+      props.setSelectedOptions(value as CombinedRecipientItem<K>[]);
+      setIsOpen(false);
+      return;
+    }
+  }
+
+  const invalid = createMemo(
+    () =>
+      (props.triedToSubmit?.() ?? false) && props.selectedOptions.length === 0
+  );
+
+  const selfDomain = createMemo(() => selfEmail()?.split('@')[1]);
+  const source = props.createSource?.({
+    search: inputValue,
+    enabled: () => isOpen() && !props.disabled,
+    selfId,
+    senderDomain: selfDomain,
+    includeSelf: () => props.includeSelf ?? false,
+    excludedIds: props.excludedIds,
+  });
+
+  const baseRecipientSearchConfig =
+    FreshSearchPresets.baseUserSearch<CombinedRecipientItem>(
+      selfDomain,
+      getRecipientOptionEmail
+    );
+
+  // Create search function for recipients - only used for initial sorting with no query
+  const recipientSearch = createFreshSearch<CombinedRecipientItem>({
+    config: {
+      ...baseRecipientSearchConfig,
+      brevityWeight: 1,
+      timeWeight: 1.5,
+      boostFn: (item) => {
+        const sameDomainBoost = baseRecipientSearchConfig.boostFn?.(item) ?? 0;
+        const isSearching = untrack(() => inputValue().trim().length > 0);
+        if (!isSearching) return sameDomainBoost;
+
+        const personBoost =
+          item.kind === 'user' || item.kind === 'contact' ? 0.25 : 0;
+        return sameDomainBoost * 0.125 + personBoost;
+      },
+      useViewedAt: true,
+    },
+    getName: getRecipientOptionTextValue,
+    isChannelItem: (item) => item.kind === 'channel',
+    getTimestamp: (item) => {
+      if (item.kind === 'user') {
+        return { lastInteraction: item.data.lastInteraction };
+      }
+      if (item.kind === 'channel') {
+        const channel = item.data as typeof item.data & {
+          interacted_at?: string | null;
+          viewed_at?: string | null;
+        };
+        return {
+          viewedAt: channel.viewed_at,
+          updatedAt: channel.interacted_at ?? channel.updated_at,
+        };
+      }
+      return {};
+    },
+  });
+
+  const selectedEmails = createMemo(() => {
+    const set = new Set<string>();
+    for (const option of props.selectedOptions) {
+      const email = getRecipientOptionEmail(option as CombinedRecipientItem);
+      if (email) set.add(email.toLowerCase());
+    }
+    return set;
+  });
+
+  const augmentUserWithDmActivity = useAugmentUserWithDmActivity();
+  const recipients = createMemo(() => {
+    const options: CombinedRecipientItem[] = [];
+    const emails = new Set<string>();
+
+    const personal: CombinedRecipientItem[] = [];
+    const personalIds = new Set(
+      (source?.items() ?? [])
+        .filter((item) => item.kind === 'user')
+        .map((item) => item.id)
+    );
+    for (const option of uniqueRecipientMatches([
+      ...(source?.items() ?? []),
+      ...(props.options?.() ?? []),
+    ])) {
+      const item = option as CombinedRecipientItem;
+      const email = getRecipientOptionEmail(item);
+
+      if (
+        !(item.kind === 'user' && personalIds.has(item.id)) &&
+        (item.kind === 'contact' || item.kind === 'user') &&
+        email &&
+        isAutomatedAddress(email) &&
+        inputValue().trim().toLowerCase() !== email.toLowerCase() &&
+        !selectedEmails().has(email.toLowerCase())
+      ) {
+        continue;
+      }
+
+      if (!props.includeSelf) {
+        const emailLower = email?.toLowerCase();
+        const matchesSelf =
+          (item.kind === 'user' && item.id === selfId()) ||
+          (item.kind === 'contact' &&
+            !!emailLower &&
+            emailLower === selfEmail());
+        const isSelected = !!emailLower && selectedEmails().has(emailLower);
+        if (matchesSelf && !isSelected) {
+          continue;
+        }
+      }
+
+      if (email) {
+        emails.add(email.toLowerCase());
+      }
+
+      if (item.kind === 'user' && personalIds.has(item.id)) personal.push(item);
+      if (item.kind === 'user' && !personalIds.has(item.id)) {
+        options.push({ ...item, data: augmentUserWithDmActivity(item.data) });
+        continue;
+      }
+
+      options.push(item);
+    }
+
+    const sorted = recipientSearch(options, '').map((item) => {
+      return item.item;
+    });
+
+    return {
+      raw: options,
+      emails,
+      sorted,
+      personal,
+    };
+  });
+
+  const options = createMemo(() => {
+    const { raw, emails, sorted, personal } = recipients();
+    const currentUserInput = inputValue();
+
+    // Check if currentUserInput matches any existing email
+    const hasExactEmailMatch =
+      currentUserInput && emails.has(currentUserInput.toLowerCase());
+
+    const searchTerm = currentUserInput.trim();
+    if (searchTerm && !searchTerm.includes('@')) return [];
+    const searched = searchTerm
+      ? recipientSearch(raw, searchTerm).map((item) => item.item)
+      : sorted;
+    const typed: CombinedRecipientItem[] = [];
+
+    // Only add custom input if it doesn't match an existing email
+    if (
+      props.allowCustomRecipients !== false &&
+      currentUserInput &&
+      !hasExactEmailMatch &&
+      EmailValidator.validate(currentUserInput)
+    ) {
+      const customUserInput: CustomUserInput = {
+        id: emailToId(currentUserInput),
+        email: currentUserInput,
+        invalid: !EmailValidator.validate(currentUserInput),
+      };
+
+      typed.push(recipientEntityMapper('custom')(customUserInput));
+    }
+
+    // Selected custom chips stay hidden; an async result must not toggle one.
+    return uniqueRecipientMatches<
+      CombinedRecipientItem | WithCustomUserInput<K>
+    >(
+      preserveOrderedWindow(
+        rankRecipientMatches([...searched, ...typed], searchTerm),
+        personal,
+        getRecipientOptionValue
+      ),
+      props.selectedOptions
+    ) as CombinedRecipientItem<K>[];
+  });
+
+  const visibleOptionKeys = createMemo(
+    () =>
+      new Set(
+        (options() as CombinedRecipientItem[]).map(getRecipientOptionValue)
+      )
+  );
+
+  // Kobalte resolves selected values against the `options` prop
+  // (getOptionsFromValues) and silently drops any selection it can't find
+  // there, so selected options that the search filtered out must stay in the
+  // collection. `defaultFilter` keeps them hidden from the dropdown.
+  const optionsWithSelected = createMemo(() => {
+    const visible = options() as CombinedRecipientItem[];
+    const keys = visibleOptionKeys();
+    const hiddenSelected = (
+      props.selectedOptions as CombinedRecipientItem[]
+    ).filter((option) => !keys.has(getRecipientOptionValue(option)));
+    return [...visible, ...hiddenSelected];
+  });
+
+  const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
+    () => {}
+  );
+
+  const selectedLen = () => props.selectedOptions.length;
+
+  let contentEl: HTMLElement | undefined;
+
+  // Adds each typed address as the known recipient with that address, or as a
+  // typed one. Committing changes the selection, and Kobalte clears the input
+  // when it does.
+  const commitEmails = (parts: string[]) => {
+    const emails = parts
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .filter(
+        (email, index, all) =>
+          all.findIndex(
+            (other) => other.toLowerCase() === email.toLowerCase()
+          ) === index
+      );
+    if (emails.length === 0 || !emails.every((e) => EmailValidator.validate(e)))
+      return false;
+    const known = recipients().raw;
+    const findKnown = (email: string) =>
+      known.find(
+        (option) =>
+          getRecipientOptionEmail(option)?.toLowerCase() === email.toLowerCase()
+      );
+    const pending = emails.filter(
+      (email) => !selectedEmails().has(email.toLowerCase())
+    );
+    // Every address is already a recipient: setting the same selection again
+    // still makes Kobalte clear the text instead of leaving it in the field.
+    if (pending.length === 0) {
+      handleChange([...(props.selectedOptions as CombinedRecipientItem[])]);
+      return true;
+    }
+    if (props.allowCustomRecipients === false && !pending.every(findKnown))
+      return false;
+    const added = pending.map(
+      (email) =>
+        findKnown(email) ??
+        recipientEntityMapper('custom')({
+          id: emailToId(email),
+          email,
+          invalid: false,
+        })
+    );
+    handleChange([
+      ...(props.selectedOptions as CombinedRecipientItem[]),
+      ...added,
+    ]);
+    return true;
+  };
+
+  const commitSeparatedEmails = (input: string) =>
+    /[,;]\s*$/.test(input) && commitEmails(input.split(/[,;]/));
+
+  // Contacts and names load after the field opens and reorder the rows, so a
+  // row the pointer rests on can change under it. Enter on a complete address
+  // adds that address unless an arrow key picked another row since the edit.
+  let rowPickedByKey = false;
+  const commitTypedAddressOnEnter = (e: KeyboardEvent) => {
+    if (rowPickedByKey || e.isComposing) return false;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+    return commitEmails([inputValue()]);
+  };
+
+  const onInputChange = (next: string) => {
+    rowPickedByKey = false;
+    props.onInputChange?.(next);
+    if (commitSeparatedEmails(next)) {
+      setInputValue('');
+      return;
+    }
+    const previous = inputValue();
+    setInputValue(next);
+    if (next !== previous) {
+      setSuppressOpenUntilInputChange(false);
+    }
+    if (next.length === 0) return;
+
+    setIsOpen(true);
+
+    // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
+    // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
+    queueMicrotask(() => {
+      listboxRef()?.dispatchEvent(
+        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+        new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
+      );
+    });
+  };
+
+  return (
+    <Layer depth={props.depth ?? 2}>
+      <Combobox<CombinedRecipientItem>
+        multiple
+        virtualized
+        allowsEmptyCollection={!!source}
+        triggerMode={props.triggerMode ?? 'input'}
+        // Kobalte's deferred second close can cancel a newly typed query.
+        // handleChange closes synchronously after updating selected values.
+        closeOnSelection={false}
+        open={isOpen()}
+        onOpenChange={setComboboxOpen}
+        disabled={props.disabled}
+        validationState={invalid() ? 'invalid' : 'valid'}
+        options={optionsWithSelected()}
+        optionLabel={getRecipientOptionLabel}
+        optionValue={getRecipientOptionValue}
+        optionTextValue={getRecipientOptionTextValue}
+        optionDisabled={getOptionDisabled}
+        defaultFilter={(option) =>
+          visibleOptionKeys().has(getRecipientOptionValue(option))
+        }
+        value={props.selectedOptions as CombinedRecipientItem[]}
+        onChange={handleChange}
+        onInputChange={onInputChange}
+        noResetInputOnBlur={props.noResetInputOnBlur}
+        shouldFocusWrap
+        placeholder={
+          props.selectedOptions?.length === 0 || isMobile()
+            ? (props.placeholder ?? placeholderText())
+            : undefined
+        }
+        class={cn(
+          'ph-no-capture w-full text-base offset-2 bg-surface rounded-2xl',
+          !props.hideBorder && 'border border-edge',
+          !props.noPadding && 'p-2',
+          props.class
+        )}
+      >
+        <Combobox.Control<CombinedRecipientItem>>
+          {(state) => {
+            const context = useComboboxContext();
+            const [chipsScrollRef, setChipsScrollRef] =
+              createSignal<HTMLElement>();
+            return (
+              <div class="relative">
+                <div
+                  ref={props.horizontalScroll ? setChipsScrollRef : undefined}
+                  class={cn(
+                    'flex items-center gap-1.5 text-ink scrollbar-hidden',
+                    props.horizontalScroll
+                      ? 'flex-nowrap overflow-x-auto sm:flex-wrap sm:overflow-x-hidden sm:max-h-37.5 sm:overflow-y-auto pb-0.5 sm:pb-0'
+                      : 'flex-wrap max-h-37.5 overflow-y-auto'
+                  )}
+                >
+                  <For each={state.selectedOptions()}>
+                    {(option) => {
+                      return (
+                        <Switch>
+                          <Match
+                            when={matches(
+                              option,
+                              (o) => o.kind === 'user' || o.kind === 'contact'
+                            )}
+                          >
+                            {(userOrContactOption) => {
+                              const opt = userOrContactOption();
+                              const name = getRecipientOptionName(opt);
+                              const email = getRecipientOptionEmail(opt);
+
+                              const displayText = () => name || email;
+
+                              return (
+                                <ChipWithUserTooltip
+                                  chip={
+                                    <RecipientChip
+                                      icon={
+                                        <UserIcon
+                                          id={opt.id}
+                                          name={displayText() ?? ''}
+                                          size="sm"
+                                          isDeleted={false}
+                                          showTooltip={false}
+                                        />
+                                      }
+                                      label={displayText() ?? ''}
+                                      address={
+                                        displayText() === email
+                                          ? undefined
+                                          : email
+                                      }
+                                      showAddress={props.showChipAddresses}
+                                      onRemove={() => state.remove(option)}
+                                      draggable={!!props.onChipDragStart}
+                                      onDragStart={(e) =>
+                                        props.onChipDragStart?.(
+                                          option as WithCustomUserInput<K>,
+                                          e
+                                        )
+                                      }
+                                      onDragEnd={props.onChipDragEnd}
+                                    />
+                                  }
+                                  renderTooltip={(close) => (
+                                    <UserTooltip
+                                      displayName={name || ''}
+                                      email={email}
+                                      id={opt.id}
+                                      isDeleted={false}
+                                      onClose={close}
+                                    />
+                                  )}
+                                />
+                              );
+                            }}
+                          </Match>
+                          <Match
+                            when={matches(option, (o) => o.kind === 'channel')}
+                          >
+                            {(channelOption) => {
+                              return (
+                                <RecipientChip
+                                  icon={<HashIcon class="size-4" />}
+                                  label={
+                                    channelOption().data.name ??
+                                    channelOption().id
+                                  }
+                                  onRemove={() => state.remove(option)}
+                                />
+                              );
+                            }}
+                          </Match>
+                          <Match
+                            when={matches(option, (o) => o.kind === 'agent')}
+                          >
+                            {(agentOption) => (
+                              <RecipientChip
+                                icon={
+                                  <AgentAvatar agent={agentOption().data} />
+                                }
+                                label={agentOption().data.name}
+                                onRemove={() => state.remove(option)}
+                              />
+                            )}
+                          </Match>
+                          <Match
+                            when={matches(option, (o) => o.kind === 'custom')}
+                          >
+                            {(customOption) => {
+                              const email = customOption().data.email;
+
+                              return (
+                                <ChipWithUserTooltip
+                                  chip={
+                                    <RecipientChip
+                                      icon={
+                                        props.inviteExternalEmails ? (
+                                          <PaperPlaneTiltIcon
+                                            aria-hidden="true"
+                                            class="size-4"
+                                          />
+                                        ) : (
+                                          <UserIcon
+                                            id={email}
+                                            name={email}
+                                            size="sm"
+                                            isDeleted={false}
+                                            showTooltip={false}
+                                          />
+                                        )
+                                      }
+                                      label={email}
+                                      onRemove={() => state.remove(option)}
+                                      draggable={!!props.onChipDragStart}
+                                      onDragStart={(e) =>
+                                        props.onChipDragStart?.(
+                                          option as WithCustomUserInput<K>,
+                                          e
+                                        )
+                                      }
+                                      onDragEnd={props.onChipDragEnd}
+                                    />
+                                  }
+                                  renderTooltip={(close) => (
+                                    <UserTooltip
+                                      displayName={email}
+                                      email={email}
+                                      isDeleted={false}
+                                      onClose={close}
+                                    />
+                                  )}
+                                />
+                              );
+                            }}
+                          </Match>
+                        </Switch>
+                      );
+                    }}
+                  </For>
+                  <Combobox.Input
+                    id={props.inputId}
+                    disabled={disabled()}
+                    ref={(el) => {
+                      setInputRef(el);
+                      props.inputRef?.(el);
+                    }}
+                    class="flex-1 min-h-7 p-1 min-w-50 outline-none placeholder:text-ink-placeholder"
+                    classList={{ 'ml-1': selectedLen() === 0 }}
+                    onFocus={() => {
+                      if (props.openOnFocus ?? true) setComboboxOpen(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (
+                        (e.key === 'a' && e.ctrlKey) ||
+                        (e.key === 'a' && e.metaKey)
+                      ) {
+                        setDisabled(true);
+                        queueMicrotask(() => setDisabled(false));
+                      }
+                    }}
+                    // use a non-delegated event here so that we can process it before Kobalte
+                    on:keydown={(e: KeyboardEvent) => {
+                      const list = context.listState();
+                      const last = list.collection().getLastKey();
+                      if (
+                        source &&
+                        (source.hasNext() || source.error()) &&
+                        isOpen() &&
+                        (e.key === 'PageDown' ||
+                          (e.key === 'ArrowDown' &&
+                            last !== undefined &&
+                            list.selectionManager().focusedKey() === last))
+                      ) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!source.loading())
+                          fireAndForget(
+                            source.error() ? source.retry() : source.next(),
+                            'recipient-directory'
+                          );
+                        return;
+                      }
+                      if (e.key === 'Escape' && isOpen()) {
+                        e.preventDefault();
+                        if (props.hideMenuOnEscape) {
+                          e.stopPropagation();
+                        }
+                        setSuppressOpenUntilInputChange(true);
+                        setIsOpen(false);
+                        return;
+                      }
+
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        const inputEl = inputRef();
+                        const currentSearch = inputValue().trim();
+                        if (currentSearch.length > 0) {
+                          setInputValue('');
+                          if (inputEl) inputEl.value = '';
+                          return;
+                        }
+
+                        inputEl?.blur();
+                        return;
+                      }
+
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        rowPickedByKey = true;
+                      }
+
+                      if (
+                        e.key === 'Enter' &&
+                        context.isOpen() &&
+                        commitTypedAddressOnEnter(e)
+                      ) {
+                        e.preventDefault();
+                        context.close();
+                        return;
+                      }
+
+                      if (e.key === 'Tab' && context.isOpen()) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        inputRef()?.dispatchEvent(
+                          // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+                          new KeyboardEvent('keydown', {
+                            bubbles: true,
+                            key: 'Enter',
+                          })
+                        );
+                      }
+                    }}
+                  />
+                </div>
+                <Show when={props.horizontalScroll}>
+                  <CustomScrollbar
+                    scrollContainer={chipsScrollRef}
+                    horizontal
+                    class="sm:hidden"
+                  />
+                </Show>
+              </div>
+            );
+          }}
+        </Combobox.Control>
+
+        <div class="hidden" ref={setPortalSearchRef} />
+        <Combobox.Portal mount={portalMount()}>
+          <Layer depth={2}>
+            <RecipientMenuContent
+              ref={(el: HTMLElement) => {
+                contentEl = el;
+              }}
+              // WebKit's tap handling moves focus to the tapped element's
+              // nearest focusable ancestor and does not treat that as a
+              // cancelable pointerdown default. With tabIndex={-1} the
+              // dropdown itself is that ancestor, so the focus event stays
+              // inside the dismissable layer instead of landing on e.g. a
+              // mobile drawer's tabindex="-1" content; the focusin handler
+              // below then hands focus straight back to the input so the
+              // virtual keyboard stays open.
+              tabIndex={-1}
+              on:focusin={(e: FocusEvent) => {
+                if (e.target === e.currentTarget) {
+                  inputRef()?.focus({ preventScroll: true });
+                }
+              }}
+              // Keep focus on the combobox input while pressing options: the
+              // browser's pointerdown default moves focus to the tapped
+              // element's nearest focusable ancestor — inside a mobile drawer
+              // that's corvu's tabindex="-1" content, which Kobalte's
+              // dismissable layer treats as focus-outside and closes the
+              // dropdown before a touch tap's `click` (where touch selection
+              // happens) can fire. `click` is not a compatibility mouse event,
+              // so it still fires with pointerdown's default canceled.
+              // (Chromium honors this; WebKit needs the tabIndex above.)
+              onPointerDown={(e: PointerEvent) => e.preventDefault()}
+              // Never let a press inside the dropdown start a corvu drawer
+              // drag (no-op outside drawers).
+              data-corvu-no-drag=""
+              onFocusOutside={(e) => {
+                // Focus landing on an ANCESTOR of the dropdown (a container
+                // like the mobile drawer's tabindex="-1" content receiving
+                // tap-focus) is fallout from pressing an option, not the user
+                // moving to another control — veto the dismissal and put
+                // focus back on the input.
+                const focused = e.detail.originalEvent.target;
+                if (
+                  contentEl &&
+                  focused instanceof Node &&
+                  focused.contains(contentEl)
+                ) {
+                  e.preventDefault();
+                  inputRef()?.focus({ preventScroll: true });
+                }
+              }}
+              class="menu-surface z-modal-content translate-y-1 p-1.5 menu-open-animation text-sm"
+            >
+              <Combobox.Listbox
+                ref={setListboxRef}
+                class="flex flex-col gap-1"
+                scrollToItem={scrollToItem()}
+                autoFocus="first"
+              >
+                {(items) => {
+                  const arr = Array.from(items());
+                  const count = arr.length;
+                  const visibleCount = Math.min(
+                    count,
+                    RECIPIENT_OPTION_MAX_VISIBLE_COUNT
+                  );
+                  const height = visibleCount * RECIPIENT_OPTION_HEIGHT_PX;
+
+                  const [handle, setHandle] =
+                    createSignal<VirtualizerHandle | null>(null);
+
+                  setScrollToItem(() => (key: string) => {
+                    const virtualizerHandle = handle();
+                    if (virtualizerHandle) {
+                      const ndx = arr.findIndex((item) => item.key === key);
+                      if (ndx > -1) {
+                        virtualizerHandle.scrollToIndex(ndx, {
+                          align: 'nearest',
+                        });
+                      }
+                    }
+                  });
+
+                  return (
+                    <VList
+                      data={arr}
+                      itemSize={RECIPIENT_OPTION_HEIGHT_PX}
+                      style={{
+                        height: `${height}px`,
+                      }}
+                      ref={setHandle}
+                    >
+                      {(item) => {
+                        return (
+                          <RecipientComboboxItem
+                            {...item}
+                            inviteExternalEmails={props.inviteExternalEmails}
+                          />
+                        );
+                      }}
+                    </VList>
+                  );
+                }}
+              </Combobox.Listbox>
+              <Show when={source}>
+                {(value) => (
+                  <RecipientSourceControls
+                    source={value()}
+                    empty={visibleOptionKeys().size === 0}
+                    resetScroll={() => {
+                      const first = visibleOptionKeys().values().next().value;
+                      if (first !== undefined) scrollToItem()(first);
+                    }}
+                  />
+                )}
+              </Show>
+            </RecipientMenuContent>
+          </Layer>
+        </Combobox.Portal>
+        <Combobox.ErrorMessage class="text-xs text-failure mt-1">
+          *At least one participant is required
+        </Combobox.ErrorMessage>
+      </Combobox>
+    </Layer>
+  );
+}

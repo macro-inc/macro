@@ -1,0 +1,21 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 1 worker
+
+PRE lists 43 idle ms 27331
+RENAME shown after ms 3504 list pages after save 43 last page at ms 3275
+2026/11/16 15:50:24 socat[3048308] E write(6, 0x61419123f000, 24): Broken pipe
+2026/11/16 15:50:24 socat[3048327] E write(6, 0x61419123f000, 24): Broken pipe
+2026/11/16 15:50:24 socat[3048348] E write(6, 0x61419123f000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-RENAME how long the header takes (35.6s)
+PRE lists 43 idle ms 27414
+RENAME shown after ms 3476 list pages after save 43 last page at ms 3169
+2026/11/16 15:51:00 socat[3109208] E write(6, 0x61419123f000, 24): Broken pipe
+2026/11/16 15:51:00 socat[3109229] E write(6, 0x61419123f000, 24): Broken pipe
+2026/11/16 15:51:00 socat[3109232] E write(6, 0x61419123f000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-RENAME how long the header takes (35.5s)
+
+  2 passed (1.2m)
+2026/11/16 15:51:00 socat[3045542] W exiting on signal 15
+2026/11/16 15:51:00 socat[3039059] W exiting on signal 15

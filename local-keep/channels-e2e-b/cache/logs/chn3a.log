@@ -1,0 +1,321 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 2 workers
+
+2026/11/16 15:11:46 socat[3083867] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3084650] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3084656] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3084648] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3084654] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3083099] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3083597] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:46 socat[3083608] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:47 socat[3083346] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:11:47 socat[3083600] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.4s)
+  ✘  2 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.5s)
+2026/11/16 15:12:08 socat[3155656] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3155658] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3154381] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3155613] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3155651] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3154033] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3061046] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:12:08 socat[3154053] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3154178] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3154043] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:08 socat[3154055] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.3s)
+  ✘  4 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.3s)
+2026/11/16 15:12:29 socat[3199151] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:29 socat[3199173] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3199185] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3199202] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3199213] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3196839] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3196845] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3196861] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3196868] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3196898] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+2026/11/16 15:12:30 socat[3197348] E write(6, 0x5eb4bc01b000, 24): Broken pipe
+  ✘  5 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.3s)
+  ✘  6 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.5s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjein6honr7"
+    Received string:    "e2e-mwjein4lhmtaMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        - locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+        - unexpected value "e2e-mwjein4lhmtaMessagesAttachmentsCallsParticipantsBMCall"
+        27 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjein4lhmtaMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjein6gerch"
+    Received string:    "e2e-mwjein4nwb1nMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        - locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+        - unexpected value "e2e-mwjein4nwb1nMessagesAttachmentsCallsParticipantsBMCall"
+        28 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjein4nwb1nMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjej42vn4lu"
+    Received string:    "e2e-mwjej3zrpvuiMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        - locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+        - unexpected value "e2e-mwjej3zrpvuiMessagesAttachmentsCallsParticipantsBMCall"
+        29 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjej3zrpvuiMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjej41kfvul"
+    Received string:    "e2e-mwjej3zq89qsMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        2 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjej3zq89qsMessagesAttachmentsCallsParticipantsBMCall"
+        28 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjej3zq89qsMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjejkte5wbz"
+    Received string:    "e2e-mwjejkqidn6hMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        28 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjejkqidn6hMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjejky94fm0"
+    Received string:    "e2e-mwjejku41sjuMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        2 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjejku41sjuMessagesAttachmentsCallsParticipantsBMCall"
+        28 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjejku41sjuMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3a/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+2026/11/16 15:12:31 socat[3061518] W exiting on signal 15
+2026/11/16 15:12:31 socat[3061046] W exiting on signal 15

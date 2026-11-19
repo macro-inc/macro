@@ -1,0 +1,57 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:01:20 socat[3652141] E write(6, 0x600b9b0d8000, 24): Broken pipe
+2026/11/16 08:01:20 socat[3652150] E write(6, 0x600b9b0d8000, 24): Broken pipe
+2026/11/16 08:01:37 socat[3654174] E write(6, 0x600b9b0d8000, 24): Broken pipe
+2026/11/16 08:01:37 socat[3654199] E write(6, 0x600b9b0d8000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (18.6s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e35f-f443-7aae-8a56-471650845ed2"]').locator('[contenteditable="true"]').first()
+    Expected: "kept over a reload"
+    Received: ""
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e35f-f443-7aae-8a56-471650845ed2"]').locator('[contenteditable="true"]').first()
+        6 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" aria-label="Type @ to share" data-hotkey-scope="channel-input-intercept_7">…</div>
+          - unexpected value ""
+        26 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" data-hotkey-scope="channel-input-intercept_7" aria-label="Type @ to share with #e2e-mwiz5hrkjriq">…</div>
+           - unexpected value ""
+
+
+      60 |   await view.shown();
+      61 |
+    > 62 |   await expect(view.composerText).toHaveText('kept over a reload');
+         |                                   ^
+      63 | });
+      64 |
+      65 | // If this fails, a message a person already sent comes back into the
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:62:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-draft-lost-on-reload/test-results/composer-CMP-02-a-draft-is-a6bf5-the-composer-after-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-draft-lost-on-reload/test-results/composer-CMP-02-a-draft-is-a6bf5-the-composer-after-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-draft-lost-on-reload/test-results/composer-CMP-02-a-draft-is-a6bf5-the-composer-after-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-draft-lost-on-reload/test-results/composer-CMP-02-a-draft-is-a6bf5-the-composer-after-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload 
+2026/11/16 08:01:38 socat[3623945] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:01:38 socat[3630422] W exiting on signal 15
+2026/11/16 08:01:38 socat[3623945] W exiting on signal 15

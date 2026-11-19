@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 09:35:01 socat[4085269] E write(6, 0x5b1e73691000, 24): Broken pipe
+2026/11/16 09:35:01 socat[4085272] E write(6, 0x5b1e73691000, 24): Broken pipe
+2026/11/16 09:35:01 socat[4085295] E write(6, 0x5b1e73691000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (17.3s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: locator('[data-input-id="edit-message-input-01a1e3b5-7b8e-70fb-9978-22abf5bfb029"] [contenteditable]')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for locator('[data-input-id="edit-message-input-01a1e3b5-7b8e-70fb-9978-22abf5bfb029"] [contenteditable]')
+
+
+      261 |     `[data-input-id="edit-message-input-${mine.id}"] [contenteditable]`
+      262 |   );
+    > 263 |   await expect(editor).toBeFocused();
+          |                        ^
+      264 |   await expect(editor).toHaveText('to be edited');
+      265 |   await page.keyboard.press('ControlOrMeta+a');
+      266 |   await page.keyboard.type('edited by keyboard');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:263:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-e-key-does-not-edit/test-results/find-and-keys-KEY-07-“e”-o-f54f1-n-selected-message-edits-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it 
+2026/11/16 09:35:01 socat[4082728] W exiting on signal 15
+2026/11/16 09:35:01 socat[4076720] W exiting on signal 15

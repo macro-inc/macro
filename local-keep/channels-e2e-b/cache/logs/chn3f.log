@@ -1,0 +1,26 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 1 worker
+
+HELD list asked 1 held 1 server name "n/a"
+HELD shown after ms -1 list asked in all 1 header e2e-mwjgckugzobd Messages Attachments Ca
+2026/11/16 16:03:48 socat[178690] E write(6, 0x633fee8b1000, 24): Broken pipe
+2026/11/16 16:03:48 socat[178752] E write(6, 0x633fee8b1000, 24): Broken pipe
+HELD after reload ok
+2026/11/16 16:03:49 socat[315686] E write(6, 0x633fee8b1000, 24): Broken pipe
+2026/11/16 16:03:49 socat[315714] E write(6, 0x633fee8b1000, 24): Broken pipe
+2026/11/16 16:03:49 socat[315718] E write(6, 0x633fee8b1000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-HELD a rename saved while the channel list is still loading (1.1m)
+HELD list asked 1 held 1 server name "n/a"
+HELD shown after ms -1 list asked in all 1 header e2e-mwjge0ulptsg Messages Attachments Ca
+2026/11/16 16:04:56 socat[317255] E write(6, 0x633fee8b1000, 24): Broken pipe
+2026/11/16 16:04:56 socat[317274] E write(6, 0x633fee8b1000, 24): Broken pipe
+HELD after reload ok
+2026/11/16 16:04:57 socat[426180] E write(6, 0x633fee8b1000, 24): Broken pipe
+2026/11/16 16:04:57 socat[426365] E write(6, 0x633fee8b1000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-HELD a rename saved while the channel list is still loading (1.1m)
+
+  2 passed (2.3m)
+2026/11/16 16:04:57 socat[171190] W exiting on signal 15
+2026/11/16 16:04:57 socat[169646] W exiting on signal 15

@@ -1,0 +1,2394 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 164 tests using 4 workers
+
+2026/11/17 20:13:17 socat[2010797] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:17 socat[2010898] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:17 socat[2011013] E write(6, 0x5df7c0206000, 24): Broken pipe
+  ✓    4 tests/channels-e2e/access.spec.ts:19:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (1.9s)
+2026/11/17 20:13:17 socat[2011034] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:17 socat[2011078] E write(6, 0x5df7c0206000, 24): Broken pipe
+  ✓    2 tests/channels-e2e/access.spec.ts:45:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (1.9s)
+  ✘    6 tests/channels-e2e/access.spec.ts:174:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it (27ms)
+  ✘    7 tests/channels-e2e/access.spec.ts:218:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (89ms)
+2026/11/17 20:13:20 socat[2014202] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:20 socat[2014225] E write(6, 0x5df7c0206000, 24): Broken pipe
+  ✓    8 tests/channels-e2e/access.spec.ts:254:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (2.8s)
+2026/11/17 20:13:21 socat[2015909] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:21 socat[2016598] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:21 socat[2016896] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:21 socat[2012913] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:21 socat[2013039] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:21 socat[2013072] E write(6, 0x5df7c0206000, 24): Broken pipe
+  ✓    5 tests/channels-e2e/access.spec.ts:145:1 › ACC-05 a withdrawn request can no longer be approved (4.0s)
+  ✓    9 tests/channels-e2e/access.spec.ts:270:1 › ACC-09 a signed-out person who opens a channel’s address is asked to log in and sees nothing of it (1.3s)
+2026/11/17 20:13:24 socat[2021589] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:24 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:24 socat[2022248] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:25 socat[2025282] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:25 socat[2025603] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:26 socat[2026454] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:26 socat[2018109] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:26 socat[2026757] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   10 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (5.4s)
+2026/11/17 20:13:26 socat[2027109] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2012926] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2013045] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2012923] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2013067] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:34 socat[2013080] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:34 socat[2010894] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2011011] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2010947] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:13:34 socat[2011041] E write(6, 0x5df7c0206000, 24): Broken pipe
+  ✘    1 tests/channels-e2e/access.spec.ts:110:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (19.2s)
+  ✘    3 tests/channels-e2e/access.spec.ts:67:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (19.4s)
+2026/11/17 20:13:37 socat[2053308] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:39 socat[2056496] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:39 socat[2056769] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:41 socat[2058881] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:41 socat[2059049] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:41 socat[2059172] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   14 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (5.5s)
+2026/11/17 20:13:44 socat[2066487] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:44 socat[2066512] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:44 socat[2066628] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:44 socat[2064718] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:44 socat[2064736] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:44 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:44 socat[2064740] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   15 tests/channels-e2e/channels.spec.ts:217:1 › CHN-06 Copy Link gives an address that opens the channel for another member (3.9s)
+2026/11/17 20:13:45 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:45 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:45 socat[2038282] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:45 socat[2038470] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:45 socat[2031519] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:45 socat[2031615] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:45 socat[2031633] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   12 tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (18.9s)
+2026/11/17 20:13:49 socat[2076474] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:49 socat[2076576] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:49 socat[2076187] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:49 socat[2071080] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:49 socat[2076419] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:49 socat[2076433] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   17 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.1s)
+2026/11/17 20:13:51 socat[2070704] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:51 socat[2078856] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:51 socat[2080013] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:51 socat[2080160] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   18 tests/channels-e2e/channels.spec.ts:313:1 › CHN-09 a member who does not own the channel is not offered Delete (2.1s)
+2026/11/17 20:13:53 socat[2079314] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:53 socat[2079330] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:53 socat[2079333] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:53 socat[2083336] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:53 socat[2083352] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   16 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (9.0s)
+2026/11/17 20:13:54 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:13:54 socat[2053066] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:54 socat[2053069] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:54 socat[2054253] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:54 socat[2054262] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:54 socat[2054270] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   13 tests/channels-e2e/channels.spec.ts:154:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.2s)
+2026/11/17 20:13:55 socat[2090713] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:55 socat[2090728] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:55 socat[2090873] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   20 tests/channels-e2e/channels.spec.ts:354:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.0s)
+2026/11/17 20:13:57 socat[2091144] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:57 socat[2092964] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:13:57 socat[2093395] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   22 tests/channels-e2e/channels.spec.ts:404:1 › CHN-13 a channel’s history starts with “Channel <name> created” (1.9s)
+2026/11/17 20:14:08 socat[2083609] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:08 socat[2083726] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   19 tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (17.3s)
+2026/11/17 20:14:12 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:14:12 socat[2091012] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:12 socat[2091019] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:12 socat[2121631] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:12 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:14:12 socat[2121651] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   24 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (2.6s)
+  ✘   21 tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was (17.6s)
+2026/11/17 20:14:14 socat[2096316] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:14 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:14:14 socat[2096987] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:14 socat[2097195] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   23 tests/channels-e2e/channels.spec.ts:424:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.7s)
+2026/11/17 20:14:15 socat[2129634] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:15 socat[2129686] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   26 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (2.7s)
+2026/11/17 20:14:15 socat[2129681] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:16 socat[2132825] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:17 socat[2130055] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:17 socat[2134880] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   27 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (3.3s)
+2026/11/17 20:14:17 socat[2135068] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:19 socat[2139174] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:19 socat[2140080] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:20 socat[2131328] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:14:20 socat[2134195] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:20 socat[2131329] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:14:20 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:14:20 socat[2134228] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:20 socat[2134331] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:20 socat[2141736] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   28 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (5.2s)
+2026/11/17 20:14:20 socat[2141698] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:21 socat[2142111] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:22 socat[2143285] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:22 socat[2142181] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2143646] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2144398] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   30 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.1s)
+2026/11/17 20:14:23 socat[2140542] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2140668] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2140604] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2141059] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2145045] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:23 socat[2145062] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   29 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (5.3s)
+2026/11/17 20:14:27 socat[2147276] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:27 socat[2148016] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:27 socat[2148940] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:27 socat[2153310] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:27 socat[2153408] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:27 socat[2153427] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   32 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (3.9s)
+2026/11/17 20:14:30 socat[2128849] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:30 socat[2129022] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:30 socat[2129156] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   25 tests/channels-e2e/channels.spec.ts:465:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (17.9s)
+2026/11/17 20:14:31 socat[2156464] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:31 socat[2157062] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:31 socat[2160223] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:31 socat[2160432] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:31 socat[2160612] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   33 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (4.9s)
+2026/11/17 20:14:34 socat[2166449] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:35 socat[2166485] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:35 socat[2167952] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   34 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (4.8s)
+2026/11/17 20:14:35 socat[2167989] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:42 socat[2147061] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:42 socat[2147196] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:42 socat[2152848] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:42 socat[2152932] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:42 socat[2153177] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   31 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (19.4s)
+2026/11/17 20:14:47 socat[2191148] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:47 socat[2191160] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:47 socat[2192155] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:47 socat[2191331] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:47 socat[2192175] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:47 socat[2192189] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   37 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (4.3s)
+2026/11/17 20:14:50 socat[2171367] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:50 socat[2171395] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2167905] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2167979] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2167993] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2197727] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2197978] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2198003] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2203399] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2203429] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:51 socat[2203433] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   38 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (4.2s)
+  ✘   35 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (19.3s)
+2026/11/17 20:14:52 socat[2172323] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2172350] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2172354] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   36 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (17.1s)
+2026/11/17 20:14:52 socat[2024168] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2024199] E write(6, 0x5df7c0206000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2025666] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2025681] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:52 socat[2025759] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   11 tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (1.5m)
+  ✓   39 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (3.7s)
+2026/11/17 20:14:55 socat[2204871] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:14:55 socat[2204872] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:14:55 socat[2207745] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:55 socat[2207196] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:56 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:14:56 socat[2210302] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:59 socat[2216688] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:59 socat[2217959] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:59 socat[2218114] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:14:59 socat[2218120] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   42 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (5.5s)
+2026/11/17 20:15:00 socat[2208763] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:00 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   40 tests/channels-e2e/current.spec.ts:132:1 › SYN-02 an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload (8.6s)
+2026/11/17 20:15:00 socat[2208783] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:01 socat[2209039] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:01 socat[2209284] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:01 socat[2209298] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   41 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (8.9s)
+2026/11/17 20:15:02 socat[2222907] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:03 socat[2229265] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:04 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:15:04 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:15:04 socat[2230641] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2231970] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2232009] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2232157] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   45 tests/channels-e2e/current.spec.ts:272:1 › SYN-08 a person removed from a channel while away is not shown the messages their device kept (4.6s)
+2026/11/17 20:15:05 socat[2228516] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2231980] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:15:05 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:15:05 socat[2232167] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   46 tests/channels-e2e/current.spec.ts:295:1 › SYN-09 changes made while the page is reloading are all there when it has loaded (3.8s)
+2026/11/17 20:15:05 socat[2232144] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2221672] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:05 socat[2221696] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   43 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (10.3s)
+2026/11/17 20:15:05 socat[2221728] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:13 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:15:13 socat[2235872] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:21 socat[2250351] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:23 socat[2269249] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:23 socat[2234906] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:23 socat[2269343] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:23 socat[2269310] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   47 tests/channels-e2e/current.spec.ts:317:1 › SYN-10 a channel stays right through rounds of leaving it, losing the connection and reloading (17.8s)
+2026/11/17 20:15:25 socat[2235654] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:25 socat[2235603] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:25 socat[2239445] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:25 socat[2240118] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   48 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (19.8s)
+2026/11/17 20:15:26 socat[2235648] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:26 socat[2235703] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:42 socat[2284154] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:42 socat[2284423] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:43 socat[2240318] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:43 socat[2240677] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:43 socat[2313164] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:43 socat[2313218] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   44 tests/channels-e2e/current.spec.ts:228:1 › SYN-06 a channel more than a thousand changes behind is right when it is opened again (43.9s)
+  ✘   49 tests/channels-e2e/direct-messages.spec.ts:72:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (37.5s)
+2026/11/17 20:15:50 socat[2284846] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2285037] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2285061] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2286613] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2286854] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2287049] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2291607] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:50 socat[2291755] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   51 tests/channels-e2e/direct-messages.spec.ts:193:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (24.5s)
+2026/11/17 20:15:55 socat[2335169] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:55 socat[2335313] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   54 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (3.5s)
+2026/11/17 20:15:55 socat[2335288] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:57 socat[2340103] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:57 socat[2340262] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:15:57 socat[2340606] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   55 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (2.5s)
+2026/11/17 20:16:00 socat[2347036] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:00 socat[2347080] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:00 socat[2347191] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   56 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (2.3s)
+2026/11/17 20:16:01 socat[2317378] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:01 socat[2317439] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:01 socat[2317456] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   53 tests/channels-e2e/direct-messages.spec.ts:290:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.8s)
+2026/11/17 20:16:02 socat[2349800] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:02 socat[2350717] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:02 socat[2351245] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   57 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (2.5s)
+2026/11/17 20:16:05 socat[2354986] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:16:05 socat[2354987] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:16:05 socat[2355213] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   58 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (2.5s)
+2026/11/17 20:16:07 socat[2361803] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:07 socat[2361841] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   60 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (2.2s)
+2026/11/17 20:16:09 socat[2365823] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:09 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:16:09 socat[2365874] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   61 tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (2.1s)
+2026/11/17 20:16:11 socat[2367257] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:11 socat[2366384] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:11 socat[2367304] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:11 socat[2367420] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   62 tests/channels-e2e/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (2.3s)
+2026/11/17 20:16:14 socat[2373347] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:14 socat[2374590] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:14 socat[2374667] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   63 tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message (2.4s)
+2026/11/17 20:16:16 socat[2379235] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:16 socat[2379286] E write(6, 0x5df7c0207000, 26): Broken pipe
+2026/11/17 20:16:16 socat[2378357] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:16 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:16:16 socat[2379287] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:16:16 socat[2379417] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   64 tests/channels-e2e/find-and-keys.spec.ts:344:1 › KEY-10 choosing a channel in the list puts the cursor in its composer (2.3s)
+2026/11/17 20:16:18 socat[2385460] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:18 socat[2385517] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:18 socat[2385616] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   65 tests/channels-e2e/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (1.9s)
+2026/11/17 20:16:19 socat[2354813] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:19 socat[2355216] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:19 socat[2355022] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   59 tests/channels-e2e/find-and-keys.spec.ts:209:1 › KEY-06 Enter on a selected message opens a reply to that message (17.2s)
+2026/11/17 20:16:20 socat[2387364] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:20 socat[2387380] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:20 socat[2387476] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   66 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (2.1s)
+2026/11/17 20:16:22 socat[2391269] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:22 socat[2388271] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:22 socat[2391304] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:22 socat[2391348] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   67 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (2.3s)
+2026/11/17 20:16:22 socat[2392297] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:22 socat[2392539] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:22 socat[2392617] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   68 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (2.3s)
+2026/11/17 20:16:25 socat[2396084] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   69 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (3.4s)
+2026/11/17 20:16:25 socat[2396795] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:28 socat[2403691] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:28 socat[2403658] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   71 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (3.2s)
+2026/11/17 20:16:30 socat[2410355] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:30 socat[2412039] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:31 socat[2414512] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:31 socat[2399290] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:31 socat[2399444] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:31 socat[2399549] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   70 tests/channels-e2e/location.spec.ts:97:1 › NAV-05 reading forward from an old message reaches the latest with nothing missing or repeated (9.0s)
+2026/11/17 20:16:33 socat[2417019] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:33 socat[2417267] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:33 socat[2417332] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   72 tests/channels-e2e/location.spec.ts:137:1 › NAV-07 “Copy link” on a message gives a link that opens the channel on it (4.7s)
+2026/11/17 20:16:51 socat[2420386] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:51 socat[2420394] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:51 socat[2420449] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:51 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:16:51 socat[2425561] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:51 socat[2425603] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:51 socat[2425635] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[2417820] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[2417931] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[2418117] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:16:52 socat[2425495] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[2425524] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   73 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (20.3s)
+2026/11/17 20:16:52 socat[2420347] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:52 socat[2420362] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   74 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (19.5s)
+2026/11/17 20:16:53 socat[2272772] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:53 socat[2273090] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:54 socat[2278147] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:54 socat[2278243] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:54 socat[2278302] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:16:54 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:16:54 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   50 tests/channels-e2e/direct-messages.spec.ts:136:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time (1.5m)
+2026/11/17 20:17:10 socat[2457862] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:10 socat[2458053] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:11 socat[2491687] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:11 socat[2456001] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:11 socat[2491738] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:11 socat[2491755] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   75 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.9s)
+2026/11/17 20:17:12 socat[2463954] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2464114] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2464151] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   77 tests/channels-e2e/members.spec.ts:183:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages (17.3s)
+2026/11/17 20:17:12 socat[2458623] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2458651] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2464754] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2464792] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:12 socat[2464818] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   76 tests/channels-e2e/members.spec.ts:144:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (19.2s)
+2026/11/17 20:17:13 socat[2316966] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:13 socat[2316971] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   52 tests/channels-e2e/direct-messages.spec.ts:248:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (1.5m)
+2026/11/17 20:17:27 socat[2493241] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:27 socat[2493500] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:27 socat[2493568] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   78 tests/channels-e2e/members.spec.ts:219:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages (16.2s)
+2026/11/17 20:17:28 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:28 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:31 socat[2496745] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:31 socat[2497465] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:31 socat[2502586] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:31 socat[2502831] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:31 socat[2503337] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   79 tests/channels-e2e/members.spec.ts:244:1 › MEM-07 a member who does not own the channel cannot remove its owner (18.5s)
+  ✘   80 tests/channels-e2e/members.spec.ts:274:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it (17.8s)
+2026/11/17 20:17:32 socat[2501680] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:17:32 socat[2501681] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:17:32 socat[2505903] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:32 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:32 socat[2505923] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:32 socat[2505973] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   81 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (18.2s)
+2026/11/17 20:17:36 socat[2540966] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:36 socat[2540954] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2544028] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2543836] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2544025] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2545026] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2545057] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2545059] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:37 socat[2545028] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   84 tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (5.3s)
+2026/11/17 20:17:38 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:38 socat[2545973] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:38 socat[2545978] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:38 socat[2546117] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:38 socat[2545977] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:38 socat[2546121] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   85 tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (5.1s)
+2026/11/17 20:17:41 socat[2550076] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:41 socat[2551958] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:41 socat[2551837] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:42 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:43 socat[2557069] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:43 socat[2557017] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:43 socat[2557018] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:43 socat[2557070] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   87 tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (4.6s)
+2026/11/17 20:17:45 socat[2526213] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:17:45 socat[2526215] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:17:45 socat[2530199] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:45 socat[2530234] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:45 socat[2530153] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:45 socat[2530197] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   82 tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload (17.5s)
+2026/11/17 20:17:46 socat[2559881] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2559929] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2559940] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2559877] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2557589] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2559915] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:46 socat[2559938] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   88 tests/channels-e2e/messages.spec.ts:298:1 › MSG-08 pressing E on my selected message edits it, and the other person sees the edit (2.8s)
+2026/11/17 20:17:46 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:46 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:49 socat[2567624] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:49 socat[2567864] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:49 socat[2567958] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:50 socat[2568220] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2570509] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2560912] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2570569] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2570622] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2570582] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:51 socat[2570627] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   89 tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (5.1s)
+2026/11/17 20:17:52 socat[2568201] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:52 socat[2568230] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:52 socat[2571428] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:52 socat[2571444] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:52 socat[2571447] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   90 tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (5.6s)
+2026/11/17 20:17:52 socat[2538315] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:52 socat[2539098] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:53 socat[2537680] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:53 socat[2538775] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   83 tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once (20.9s)
+2026/11/17 20:17:54 socat[2547384] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:54 socat[2547400] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:54 socat[2547404] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:54 socat[2572424] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:54 socat[2578367] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:54 socat[2578374] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   92 tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (2.8s)
+2026/11/17 20:17:55 socat[2547402] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:55 socat[2547397] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   86 tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author (17.3s)
+2026/11/17 20:17:57 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:57 socat[2583985] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:57 socat[2583924] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:57 socat[2584115] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[2584329] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[2584429] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[2584441] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[2585985] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[2585991] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:58 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   95 tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (2.9s)
+2026/11/17 20:17:59 socat[2582601] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2587165] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2587131] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2587099] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2582598] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2587167] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   94 tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (4.8s)
+2026/11/17 20:17:59 socat[2587134] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:59 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:17:59 socat[2586526] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:17:59 socat[2586516] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:01 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:01 socat[2595838] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:01 socat[2595992] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:01 socat[2595839] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:01 socat[2595991] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   93 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (6.8s)
+2026/11/17 20:18:01 socat[2595600] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:01 socat[2595644] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   96 tests/channels-e2e/messages.spec.ts:623:1 › MSG-16 a message sent to another channel does not appear in the open one (2.9s)
+2026/11/17 20:18:02 socat[2596598] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:02 socat[2593285] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:02 socat[2596675] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:02 socat[2596732] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   97 tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (2.4s)
+2026/11/17 20:18:02 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:02 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:04 socat[2597942] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:04 socat[2598085] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:04 socat[2598086] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:05 socat[2599164] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:06 socat[2604934] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:06 socat[2605301] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:06 socat[2604250] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:06 socat[2605157] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   98 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (5.2s)
+2026/11/17 20:18:08 socat[2574205] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:08 socat[2575350] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:08 socat[2576633] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:08 socat[2575406] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:08 socat[2576636] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘   91 tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (17.4s)
+2026/11/17 20:18:09 socat[2609382] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:09 socat[2609591] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:11 socat[2599173] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:11 socat[2599212] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  100 tests/channels-e2e/offline.spec.ts:85:1 › OFF-02 a channel the device has never held says it cannot load offline, and loads when the connection is back (9.3s)
+2026/11/17 20:18:11 socat[2599253] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:11 socat[2608350] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:11 socat[2611688] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:11 socat[2611760] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  101 tests/channels-e2e/offline.spec.ts:112:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (5.3s)
+2026/11/17 20:18:12 socat[2606158] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:12 socat[2606356] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓   99 tests/channels-e2e/offline.spec.ts:66:1 › OFF-01 a channel the person has read opens whole with no connection (10.3s)
+2026/11/17 20:18:12 socat[2606561] E write(6, 0x5df7c0207000, 68): Broken pipe
+2026/11/17 20:18:12 socat[2606568] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:18:16 socat[2621136] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:16 socat[2621463] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:20 socat[2629387] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:20 socat[2630732] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:22 socat[2623558] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  105 tests/channels-e2e/offline.spec.ts:227:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (10.8s)
+2026/11/17 20:18:22 socat[2623603] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:24 socat[2623510] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  104 tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.4s)
+2026/11/17 20:18:24 socat[2623545] E write(6, 0x5df7c0207000, 856): Broken pipe
+2026/11/17 20:18:24 socat[2623546] E write(6, 0x555555624000, 68): Broken pipe
+2026/11/17 20:18:24 socat[2612902] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:26 socat[2637000] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:26 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:26 socat[2638325] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:27 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:27 socat[2644887] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:28 socat[2634069] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  103 tests/channels-e2e/offline.spec.ts:163:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (16.6s)
+2026/11/17 20:18:28 socat[2634232] E write(6, 0x5df7c0207000, 856): Broken pipe
+2026/11/17 20:18:28 socat[2634233] E write(6, 0x555555624000, 737): Broken pipe
+2026/11/17 20:18:31 socat[2648738] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:33 socat[2645789] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:33 socat[2646016] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  106 tests/channels-e2e/offline.spec.ts:266:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (10.2s)
+2026/11/17 20:18:33 socat[2646102] E write(6, 0x5df7c0207000, 852): Broken pipe
+2026/11/17 20:18:33 socat[2646103] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:18:33 socat[2646630] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  107 tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (9.5s)
+2026/11/17 20:18:33 socat[2646632] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:33 socat[2646649] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:36 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:36 socat[2661092] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:38 socat[2657873] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  108 tests/channels-e2e/offline.spec.ts:306:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (10.1s)
+2026/11/17 20:18:38 socat[2657993] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:38 socat[2658016] E write(6, 0x5df7c0207000, 856): Broken pipe
+2026/11/17 20:18:38 socat[2658017] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:18:39 socat[2661535] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:39 socat[2661726] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:40 socat[2671906] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:43 socat[2644231] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:43 socat[2644294] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  102 tests/channels-e2e/offline.spec.ts:137:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.7s)
+2026/11/17 20:18:43 socat[2644304] E write(6, 0x5df7c0207000, 56): Broken pipe
+2026/11/17 20:18:43 socat[2644305] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/17 20:18:43 socat[2666465] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  109 tests/channels-e2e/offline.spec.ts:325:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (10.4s)
+2026/11/17 20:18:43 socat[2667468] E write(6, 0x5df7c0207000, 26): Broken pipe
+2026/11/17 20:18:43 socat[2667474] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:18:45 socat[2672281] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  110 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (12.0s)
+2026/11/17 20:18:45 socat[2672443] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:46 socat[2683163] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:46 socat[2683174] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  113 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (2.7s)
+2026/11/17 20:18:46 socat[2682342] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:48 socat[2673373] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:48 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:18:48 socat[2673383] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  111 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page that was left before the device kept it shows its replies with no connection (10.4s)
+2026/11/17 20:18:48 socat[2685137] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:48 socat[2685185] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  114 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (2.8s)
+2026/11/17 20:18:48 socat[2685147] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:48 socat[2673393] E write(6, 0x5df7c0207000, 26): Broken pipe
+2026/11/17 20:18:48 socat[2673394] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:18:54 socat[2685108] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:18:54 socat[2685134] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  112 tests/channels-e2e/offline.spec.ts:413:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.8s)
+2026/11/17 20:18:54 socat[2685140] E write(6, 0x5df7c0207000, 856): Broken pipe
+2026/11/17 20:18:54 socat[2685141] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:19:17 socat[2685175] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:19:17 socat[2685198] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  115 tests/channels-e2e/prewarm.spec.ts:27:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (31.4s)
+2026/11/17 20:19:17 socat[2685202] E write(6, 0x5df7c0207000, 68): Broken pipe
+2026/11/17 20:19:17 socat[2685203] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/17 20:19:21 socat[2745063] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:19:22 socat[2754477] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:19:22 socat[2754501] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:19:25 socat[2754928] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:04 socat[2706183] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:04 socat[2706189] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  118 tests/channels-e2e/prewarm.spec.ts:140:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/17 20:20:06 socat[2833389] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:06 socat[2840905] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  120 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.2s)
+2026/11/17 20:20:06 socat[2841079] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2844301] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2843496] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2844333] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2844328] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2842939] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2841928] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2842982] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:10 socat[2842998] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  121 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (3.9s)
+2026/11/17 20:20:12 socat[2846724] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:12 socat[2847079] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:12 socat[2847835] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  122 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.0s)
+2026/11/17 20:20:38 socat[2854505] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:20:38 socat[2854327] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:38 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:20:38 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:20:38 socat[2854456] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  123 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (26.7s)
+2026/11/17 20:20:51 socat[2906043] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:51 socat[2906267] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:51 socat[2906277] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  124 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (12.9s)
+2026/11/17 20:20:57 socat[2938309] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:57 socat[2931322] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:57 socat[2938443] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:57 socat[2938475] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  125 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (5.5s)
+2026/11/17 20:20:57 socat[2693978] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:20:57 socat[2693988] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  117 tests/channels-e2e/prewarm.spec.ts:117:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first (2.2m)
+2026/11/17 20:20:58 socat[2694003] E write(6, 0x5df7c0207000, 855): Broken pipe
+2026/11/17 20:20:58 socat[2694004] E write(6, 0x555555624000, 212): Broken pipe
+2026/11/17 20:20:59 socat[2695143] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  116 tests/channels-e2e/prewarm.spec.ts:91:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first (2.2m)
+2026/11/17 20:21:00 socat[2695157] E write(6, 0x5df7c0207000, 68): Broken pipe
+2026/11/17 20:21:00 socat[2695158] E write(6, 0x555555624000, 212): Broken pipe
+2026/11/17 20:21:00 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:02 socat[2945695] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:02 socat[2945845] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  126 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (5.3s)
+2026/11/17 20:21:08 socat[2954672] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:08 socat[2954682] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  127 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (10.5s)
+2026/11/17 20:21:12 socat[2967353] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:12 socat[2967550] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  130 tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (3.9s)
+2026/11/17 20:21:12 socat[2967575] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2949628] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2951195] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2951990] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2948510] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2950689] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:18 socat[2951750] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  128 tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (19.0s)
+2026/11/17 20:21:22 socat[2955344] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:22 socat[2955269] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:22 socat[2955394] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:22 socat[2990176] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:22 socat[2989739] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:23 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:23 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:23 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:24 socat[2996953] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:24 socat[2996995] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:24 socat[2996954] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:24 socat[2996996] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  132 tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (4.4s)
+2026/11/17 20:21:24 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:27 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:27 socat[2999238] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:27 socat[2999017] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:27 socat[2999090] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:28 socat[3006995] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:28 socat[3007001] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[3006984] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[3007029] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[3006998] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  133 tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (4.7s)
+2026/11/17 20:21:29 socat[2971550] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:29 socat[2971557] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[2971561] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[2971549] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[2971555] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:29 socat[2971559] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  131 tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (17.3s)
+2026/11/17 20:21:38 socat[2996496] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:38 socat[2996651] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:38 socat[2996332] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:38 socat[2996485] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:38 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:38 socat[2996648] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  129 tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (36.3s)
+2026/11/17 20:21:43 socat[3036061] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:43 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:43 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:43 socat[3036180] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:43 socat[3036244] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:43 socat[3036209] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:43 socat[3036246] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  136 tests/channels-e2e/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (3.6s)
+2026/11/17 20:21:46 socat[3009075] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:46 socat[3009137] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  134 tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (17.7s)
+2026/11/17 20:21:47 socat[3011087] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:47 socat[3011145] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:47 socat[3011196] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  135 tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (16.8s)
+2026/11/17 20:21:51 socat[3053005] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:51 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:51 socat[3050058] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:51 socat[3053021] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:51 socat[3050149] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  138 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (4.0s)
+2026/11/17 20:21:52 socat[3051063] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:52 socat[3051271] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:52 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:21:52 socat[3053231] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:52 socat[3051342] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:52 socat[3053281] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  139 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (4.8s)
+2026/11/17 20:21:54 socat[3055383] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:54 socat[3058949] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:55 socat[3063577] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:55 socat[3063598] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  141 tests/channels-e2e/unread.spec.ts:87:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (2.7s)
+2026/11/17 20:21:56 socat[3053833] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:56 socat[3065824] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:56 socat[3065836] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  140 tests/channels-e2e/unread.spec.ts:38:1 › UNR-01 a message in a channel I do not have open marks its row unread at once; opening it clears the mark, also after reload (4.6s)
+2026/11/17 20:21:58 socat[3066930] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:58 socat[3066988] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:21:58 socat[3066991] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  142 tests/channels-e2e/unread.spec.ts:122:1 › UNR-03 my own messages never mark a channel unread for me (2.6s)
+2026/11/17 20:22:00 socat[3039400] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:00 socat[3039430] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:00 socat[3039442] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  137 tests/channels-e2e/threads.spec.ts:440:1 › THR-10 “Reply” on a message puts the keyboard in the reply box, so typing goes there (17.2s)
+2026/11/17 20:22:00 socat[3068376] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:00 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:22:00 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:22:00 socat[3069210] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:00 socat[3069384] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  143 tests/channels-e2e/unread.spec.ts:155:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (4.4s)
+2026/11/17 20:22:02 socat[3079372] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:02 socat[3079702] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:02 socat[3075015] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:02 socat[3075067] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  144 tests/channels-e2e/unread.spec.ts:192:1 › UNR-05 a mention of me in a channel I do not have open shows a count of mentions on its row (4.7s)
+2026/11/17 20:22:03 socat[3078728] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:03 socat[3080826] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:03 socat[3080960] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  146 tests/channels-e2e/unread.spec.ts:277:1 › UNR-07 a member who never opened a channel sees it unread, and opening it shows every message and clears the mark (2.6s)
+2026/11/17 20:22:04 socat[3080542] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:04 socat[3080906] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:05 socat[3083327] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:05 socat[3083388] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:05 socat[3083391] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  145 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (5.0s)
+2026/11/17 20:22:05 socat[3082486] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:05 socat[3082519] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:05 socat[3082523] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  147 tests/channels-e2e/unread.spec.ts:316:1 › UNR-08 a channel I am added to appears in my list at once, and opens (2.9s)
+2026/11/17 20:22:17 socat[3094294] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:17 socat[3094361] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:17 socat[3094472] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:17 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:22:17 socat[3092107] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:17 socat[3092237] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:17 socat[3092251] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  150 tests/channels-e2e/writes.spec.ts:47:1 › WRT-01 a message sent with no connection shows at once and reaches the other person once when the connection is back (11.3s)
+2026/11/17 20:22:20 socat[3082718] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:20 socat[3082840] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:20 socat[3082974] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  148 tests/channels-e2e/unread.spec.ts:353:1 › UNR-09 the first message in a new channel marks it unread for the other member (17.2s)
+2026/11/17 20:22:22 socat[3091910] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:22 socat[3092027] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✘  149 tests/channels-e2e/unread.spec.ts:381:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.2s)
+2026/11/17 20:22:25 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:22:25 socat[3119181] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:26 socat[3112210] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:26 socat[3113539] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:26 socat[3113663] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  151 tests/channels-e2e/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (9.1s)
+2026/11/17 20:22:29 socat[3126422] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:29 socat[3126614] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:29 socat[3126809] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  153 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (6.8s)
+2026/11/17 20:22:30 socat[3128259] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:30 socat[3128447] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:31 socat[3137247] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:31 socat[3137954] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  154 tests/channels-e2e/writes.spec.ts:154:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (5.6s)
+2026/11/17 20:22:32 socat[3138912] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:32 socat[3138929] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:32 socat[3138982] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  152 tests/channels-e2e/writes.spec.ts:102:1 › WRT-03 several messages sent with no connection arrive once each, in the order they were written (12.0s)
+2026/11/17 20:22:38 socat[3135551] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:38 socat[3137668] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:38 socat[3138003] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  155 tests/channels-e2e/writes.spec.ts:180:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (9.1s)
+2026/11/17 20:22:42 socat[3141881] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3142074] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3142078] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3140297] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3140596] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  156 tests/channels-e2e/writes.spec.ts:206:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (10.8s)
+2026/11/17 20:22:42 socat[3140487] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3141274] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3141388] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:42 socat[3141430] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  157 tests/channels-e2e/writes.spec.ts:233:1 › WRT-08 a reply written with no connection shows in its thread at once and reaches the services (10.3s)
+2026/11/17 20:22:47 socat[3153498] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:47 socat[3153487] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  158 tests/channels-e2e/writes.spec.ts:255:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (8.1s)
+2026/11/17 20:22:54 socat[1962451] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:22:54 socat[3163361] E write(6, 0x5df7c0207000, 47): Broken pipe
+2026/11/17 20:22:54 socat[3163362] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:22:54 socat[1965318] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  159 tests/channels-e2e/writes.spec.ts:280:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (12.2s)
+2026/11/17 20:22:56 socat[3163587] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:22:56 socat[3163588] E write(6, 0x555555624000, 59): Broken pipe
+2026/11/17 20:22:56 socat[3163580] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  160 tests/channels-e2e/writes.spec.ts:302:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (13.6s)
+2026/11/17 20:22:57 socat[3169377] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:57 socat[3169998] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:57 socat[3172598] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:57 socat[3170678] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:22:57 socat[3174194] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  161 tests/channels-e2e/writes.spec.ts:323:1 › WRT-12 a message written offline with the channel open in two windows is sent once and shows in both (10.4s)
+2026/11/17 20:23:04 socat[3195640] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:04 socat[3195658] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:06 socat[3211791] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:06 socat[3211846] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3194635] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3195732] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3195749] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3194798] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3195758] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3194823] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  163 tests/channels-e2e/writes.spec.ts:410:1 › WRT-14 a message written offline in one window shows in the other window of the same device (11.0s)
+2026/11/17 20:23:07 socat[3194487] E read(6, 0x5df7c0207000, 8192): Connection reset by peer
+2026/11/17 20:23:07 socat[3194488] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3213890] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:07 socat[3213931] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  164 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (10.4s)
+2026/11/17 20:23:08 socat[3185709] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:08 socat[3187523] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:08 socat[3194864] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:08 socat[3194885] E write(6, 0x5df7c0207000, 24): Broken pipe
+2026/11/17 20:23:08 socat[3194887] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  162 tests/channels-e2e/writes.spec.ts:358:1 › WRT-13 two devices of one person, one of them offline, end up showing the same channel as the services hold (13.4s)
+2026/11/17 20:24:36 socat[2757959] E write(6, 0x5df7c0207000, 24): Broken pipe
+  ✓  119 tests/channels-e2e/prewarm.spec.ts:174:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is (5.3m)
+2026/11/17 20:24:36 socat[2758016] E write(6, 0x5df7c0207000, 28): Broken pipe
+2026/11/17 20:24:36 socat[2758017] E write(6, 0x555555624000, 26): Broken pipe
+
+
+  1) tests/channels-e2e/access.spec.ts:67:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Cy Teammate (cy.2[at]channels-e2e.seed.macro.local) asked to join the channel')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Cy Teammate (cy.2[at]channels-e2e.seed.macro.local) asked to join the channel')
+
+
+      88 |     `Cy Teammate (${people.cy.email}) asked to join the channel`
+      89 |   );
+    > 90 |   await expect(request).toBeVisible();
+         |                         ^
+      91 |   await page.getByRole('button', { name: 'Approve' }).click();
+      92 |   await expect(view.list.getByText('Approved by Ada Owner')).toBeVisible();
+      93 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:90:25
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:110:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Cy Teammate (cy.3[at]channels-e2e.seed.macro.local) asked to join the channel')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Cy Teammate (cy.3[at]channels-e2e.seed.macro.local) asked to join the channel')
+
+
+      126 |       `Cy Teammate (${people.cy.email}) asked to join the channel`
+      127 |     )
+    > 128 |   ).toBeVisible();
+          |     ^
+      129 |
+      130 |   await page.getByRole('button', { name: 'Deny' }).click();
+      131 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:128:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/access.spec.ts:174:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it 
+
+    Error: create channel failed (400): {"message":"team id missing for team channel type"}
+
+       at harness/api.ts:25
+
+      23 | async function answered<T>(response: APIResponse, what: string): Promise<T> {
+      24 |   if (!response.ok()) {
+    > 25 |     throw new Error(
+         |           ^
+      26 |       `${what} failed (${response.status()}): ${await response.text()}`
+      27 |     );
+      28 |   }
+        at answered (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/api.ts:25:11)
+        at Api.createChannel (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/api.ts:55:18)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:179:19
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-06-a-teammate-f-01e5f-in-by-its-name-and-joins-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/access.spec.ts:218:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+
+    Error: create channel failed (400): {"message":"team id missing for team channel type"}
+
+       at harness/api.ts:25
+
+      23 | async function answered<T>(response: APIResponse, what: string): Promise<T> {
+      24 |   if (!response.ok()) {
+    > 25 |     throw new Error(
+         |           ^
+      26 |       `${what} failed (${response.status()}): ${await response.text()}`
+      27 |     );
+      28 |   }
+        at answered (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/api.ts:25:11)
+        at Api.createChannel (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/api.ts:55:18)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:223:19
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('dialog', { name: 'Create a channel' }).getByRole('button', { name: 'Create', exact: true })
+        - locator resolved to <button disabled type="submit" tabindex="-1" data-button="" data-size="md" data-disabled="" data-slot="button" data-variant="primary" data-appearance="default" class="relative inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full border font-medium select-none transition-colors duration-150 disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed data-disabled:opacity-45 focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:t…>Create</button>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+        - waiting 20ms
+        2 × waiting for element to be visible, enabled and stable
+          - element is not enabled
+        - retrying click action
+          - waiting 100ms
+        168 × waiting for element to be visible, enabled and stable
+            - element is not enabled
+          - retrying click action
+            - waiting 500ms
+
+
+       at harness/management.ts:181
+
+      179 |     dialog.getByRole('radio', { name: new RegExp(`^${visibility}\\b`) })
+      180 |   ).toBeChecked();
+    > 181 |   await dialog.getByRole('button', { name: 'Create', exact: true }).click();
+          |                                                                     ^
+      182 |
+      183 |   const invite = page.getByRole('dialog', {
+      184 |     name: `Add people or agents to ${name}`,
+        at createChannelInApp (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:181:69)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:71:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before the rename",
+    -   "Ada Owner renamed the channel to renamed-mwl4qve5fieg",
+    +   "ada[at]channels-e2e.seed.macro.local renamed the channel to renamed-mwl4qve5fieg",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:87
+
+      85 |       message: 'the last messages and system lines in the list',
+      86 |     })
+    > 87 |     .toEqual(expected);
+         |      ^
+      88 | }
+      89 |
+      90 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:87:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:138:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+    Expected substring: "Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+
+
+      342 |   await showTab(page, 'Participants');
+      343 |
+    > 344 |   await expect(participant(page, 'Ada Owner')).toContainText('Owner');
+          |                                                ^
+      345 |   await expect(participant(page, 'Ben Member')).toContainText('Member');
+      346 |   await expect(participant(page, 'Cy Teammate')).toContainText('Member');
+      347 |   await expect(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:344:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ben Member' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ben Member' })
+
+
+      390 |
+      391 |   await showTab(page, 'Participants');
+    > 392 |   await expect(participant(page, 'Ben Member')).toBeVisible();
+          |                                                 ^
+      393 |   await showTab(page, 'Messages');
+      394 |
+      395 |   await expect(view.messageById(reading.id)).toBeInViewport();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:392:49
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+
+
+      165 |   for (const each of [view, benView]) {
+      166 |     const message = each.message('@Ben can you look?');
+    > 167 |     await expect(message).toBeVisible();
+          |                           ^
+      168 |     await expect(personMentions(message)).toHaveText(['@Ben']);
+      169 |     await expect(personMentions(message)).toHaveAttribute(
+      170 |       'data-user-id',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:167:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      318 |   await benView.composerText.click();
+      319 |   await benPage.keyboard.type('yes, writing');
+    > 320 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      321 |
+      322 |   await benPage.keyboard.press('Enter');
+      323 |   await expect(view.message('yes, writing')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:320:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      339 |
+      340 |   await ben.typing(channel.id);
+    > 341 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      342 |
+      343 |   await ben.typing(channel.id, false);
+      344 |   await expect(typingLine(page, 'Ben Member')).toBeHidden({ timeout: 5_000 });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:341:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('DM with Ben Member')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('DM with Ben Member')
+
+
+      35 |   await startDirectMessage(page);
+      36 |   await addRecipient(page, people.ben.email);
+    > 37 |   await expect(page.getByText('DM with Ben Member')).toBeVisible();
+         |                                                      ^
+      38 |   await firstMessageBox(page).click();
+      39 |   await page.keyboard.type(hello);
+      40 |   await page.keyboard.press('Enter');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:37:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e/direct-messages.spec.ts:72:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1eb26-2c90-7b10-8c54-46540c617834"]')
+    Expected substring: "Ada Owner"
+    Received string:    "Aada.38:15 PM8:15 PM"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1eb26-2c90-7b10-8c54-46540c617834"]')
+        31 × locator resolved to <div data-index="0" class="absolute left-0 w-full" data-key="channel:01a1eb26-2c90-7b10-8c54-46540c617834">…</div>
+           - unexpected value "Aada.38:15 PM8:15 PM"
+
+
+      115 |   });
+      116 |   if (!(await cyRow.isVisible())) await cyPage.reload();
+    > 117 |   await expect(cyRow).toContainText('Ada Owner');
+          |                       ^
+      118 |   await cyRow.getByRole('treeitem').click();
+      119 |   const cyView = new ChannelView(cyPage, id);
+      120 |   await cyView.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:117:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) tests/channels-e2e/direct-messages.spec.ts:136:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+
+
+      156 |       .getByRole('main')
+      157 |       .getByRole('link', { name: 'Message Cy Teammate' })
+    > 158 |       .click();
+          |        ^
+      159 |   };
+      160 |
+      161 |   await messageCy();
+        at messageCy (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:158:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:161:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-03-“Mes-59677-hem-the-same-one-every-time/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-03-“Mes-59677-hem-the-same-one-every-time/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-03-“Mes-59677-hem-the-same-one-every-time/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-03-“Mes-59677-hem-the-same-one-every-time/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-03-“Mes-59677-hem-the-same-one-every-time/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) tests/channels-e2e/direct-messages.spec.ts:193:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+
+
+      240 |     await expect(
+      241 |       main.getByRole('link', { name: `Message ${name}` })
+    > 242 |     ).toBeVisible();
+          |       ^
+      243 |   }
+      244 | });
+      245 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:242:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  16) tests/channels-e2e/direct-messages.spec.ts:248:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Target page, context or browser has been closed
+    Call log:
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+
+
+      264 |     .getByRole('main')
+      265 |     .getByRole('link', { name: 'Message Cy Teammate' })
+    > 266 |     .click();
+          |      ^
+      267 |
+      268 |   const main = deePage.getByRole('main');
+      269 |   await expect(main.getByRole('heading', { name: 'Say hello' })).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:266:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  17) tests/channels-e2e/direct-messages.spec.ts:290:1 › DM-06 typing a teammate’s name in “New direct message” offers that person 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('option', { name: /Ben Member/ })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('option', { name: /Ben Member/ })
+
+
+      300 |   await page.keyboard.type('Ben');
+      301 |
+    > 302 |   await expect(page.getByRole('option', { name: /Ben Member/ })).toBeVisible();
+          |                                                                  ^
+      303 | });
+      304 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:302:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  18) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "said before one",
+        "said before two",
+    -   "Ada Owner added Cy Teammate",
+    +   "ada.3[at]channels-e2e.seed.macro.local added cy.3[at]channels-e2e.seed.macro.local",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:87
+
+      85 |       message: 'the last messages and system lines in the list',
+      86 |     })
+    > 87 |     .toEqual(expected);
+         |      ^
+      88 | }
+      89 |
+      90 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:87:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:38:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  19) tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+
+
+      87 |
+      88 |   await showTab(page, 'Participants');
+    > 89 |   await expect(participant(page, 'Cy Teammate')).toBeVisible();
+         |                                                  ^
+      90 |   await removeParticipantInApp(page, 'Cy Teammate');
+      91 |
+      92 |   await expect(participant(page, 'Ada Owner')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:89:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  20) tests/channels-e2e/members.spec.ts:144:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner removed Cy Teammate' })
+
+
+      162 |   await expect(
+      163 |     systemLine(benPage, 'Ada Owner removed Cy Teammate')
+    > 164 |   ).toBeVisible();
+          |     ^
+      165 |   await ada.post(channel.id, 'not for cy');
+      166 |
+      167 |   // Ben, who stayed, has it; Cy's page, open all along, does not.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:164:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  21) tests/channels-e2e/members.spec.ts:183:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' })
+
+
+      197 |   await expect(
+      198 |     systemLine(benPage, 'Ada Owner added Cy Teammate')
+    > 199 |   ).toBeVisible();
+          |     ^
+      200 |   await ada.post(channel.id, 'with cy');
+      201 |   await benView.expectEndsWith(['before cy', 'with cy']);
+      202 |   await ada.removeParticipants(channel.id, [people.cy]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:199:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  22) tests/channels-e2e/members.spec.ts:219:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Array [
+        "before cy",
+    -   "Ada Owner added Cy Teammate",
+    +   "ada.3[at]channels-e2e.seed.macro.local added cy.3[at]channels-e2e.seed.macro.local",
+        "with cy",
+    -   "Ada Owner removed Cy Teammate",
+    +   "ada.3[at]channels-e2e.seed.macro.local removed cy.3[at]channels-e2e.seed.macro.local",
+        "after cy",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:87
+
+      85 |       message: 'the last messages and system lines in the list',
+      86 |     })
+    > 87 |     .toEqual(expected);
+         |      ^
+      88 | }
+      89 |
+      90 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:87:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:234:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  23) tests/channels-e2e/members.spec.ts:244:1 › MEM-07 a member who does not own the channel cannot remove its owner 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+    Expected substring: "Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+
+
+      256 |   await showTab(benPage, 'Participants');
+      257 |
+    > 258 |   await expect(participant(benPage, 'Ada Owner')).toContainText('Owner');
+          |                                                   ^
+      259 |   await expect(
+      260 |     participantRow(benPage, 'Ada Owner').getByRole('button', {
+      261 |       name: 'Cannot remove participant',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:258:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  24) tests/channels-e2e/members.spec.ts:274:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it 
+
+    Error: the last messages and system lines in the list
+
+    the last messages and system lines in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "waiting for cy",
+    -   "Ada Owner added Cy Teammate",
+    +   "ada[at]channels-e2e.seed.macro.local added cy[at]channels-e2e.seed.macro.local",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/management.ts:87
+
+      85 |       message: 'the last messages and system lines in the list',
+      86 |     })
+    > 87 |     .toEqual(expected);
+         |      ^
+      88 | }
+      89 |
+      90 | /** A channel's row in the list of conversations, outside Favorites. */
+        at expectTimelineEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:87:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:289:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  25) tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Array [
+    -   "Ben Member: earlier from ben",
+    -   "Ada Owner: sent with enter",
+    +   "ben.1[at]channels-e2e.seed.macro.local: earlier from ben",
+    +   "ada.1[at]channels-e2e.seed.macro.local: sent with enter",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      23 |
+      24 |   const shown = ['Ben Member: earlier from ben', 'Ada Owner: sent with enter'];
+    > 25 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      26 |   await expect(mine.message('sent with enter')).toBeInViewport();
+      27 |   await expect(mine.composerText).toHaveText('');
+      28 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:25:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-01-a-message--efd5f-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  26) tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Array [
+    -   "Ben Member: earlier from ben",
+    -   "Ada Owner: sent with the button",
+    +   "ben.3[at]channels-e2e.seed.macro.local: earlier from ben",
+    +   "ada.3[at]channels-e2e.seed.macro.local: sent with the button",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      56 |     'Ada Owner: sent with the button',
+      57 |   ];
+    > 58 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(shown);
+         |                                                    ^
+      59 |   await expect(mine.message('sent with the button')).toBeInViewport();
+      60 |   await expect(mine.composerText).toHaveText('');
+      61 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(shown);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:58:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-02-a-message--c4fab-ople-and-stays-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  27) tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 8
+    + Received  + 8
+
+      Array [
+    -   "Ada Owner: ada 1",
+    -   "Ben Member: ben 1",
+    -   "Ada Owner: ada 2",
+    -   "Ada Owner: ada 3",
+    -   "Ben Member: ben 2",
+    -   "Ben Member: ben 3",
+    -   "Ada Owner: ada 4",
+    -   "Ben Member: ben 4",
+    +   "ada.2[at]channels-e2e.seed.macro.local: ada 1",
+    +   "ben.2[at]channels-e2e.seed.macro.local: ben 1",
+    +   "ada.2[at]channels-e2e.seed.macro.local: ada 2",
+    +   "ada.2[at]channels-e2e.seed.macro.local: ada 3",
+    +   "ben.2[at]channels-e2e.seed.macro.local: ben 2",
+    +   "ben.2[at]channels-e2e.seed.macro.local: ben 3",
+    +   "ada.2[at]channels-e2e.seed.macro.local: ada 4",
+    +   "ben.2[at]channels-e2e.seed.macro.local: ben 4",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      105 |     'Ben Member: ben 4',
+      106 |   ];
+    > 107 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(exchange);
+          |                                                    ^
+      108 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(exchange);
+      109 |
+      110 |   await Promise.all([mine.reload(), bens.reload()]);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:107:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-03-a-quick-ba-59a4e--for-both-each-message-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  28) tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 6
+    + Received  + 6
+
+      Array [
+    -   "Ada Owner: ada opens",
+    -   "Ada Owner: ada goes on",
+    -   "Ben Member: ben answers",
+    -   "Ada Owner: ada again",
+    -   "Ben Member: ben once",
+    -   "Ben Member: ben twice",
+    +   "ada[at]channels-e2e.seed.macro.local: ada opens",
+    +   "ada[at]channels-e2e.seed.macro.local: ada goes on",
+    +   "ben[at]channels-e2e.seed.macro.local: ben answers",
+    +   "ada[at]channels-e2e.seed.macro.local: ada again",
+    +   "ben[at]channels-e2e.seed.macro.local: ben once",
+    +   "ben[at]channels-e2e.seed.macro.local: ben twice",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      222 |     'Ben Member: ben twice',
+      223 |   ];
+    > 224 |   await expect.poll(() => mine.topLevelByAuthor()).toEqual(seeded);
+          |                                                    ^
+      225 |   await expect.poll(() => bens.topLevelByAuthor()).toEqual(seeded);
+      226 |   // A person's name stands once above their run of messages.
+      227 |   await expect(mine.list.getByText('Ada Owner', { exact: true })).toHaveCount(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:224:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-06-messages-i-a2d0d-ach-show-under-their-author/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  29) tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Array [
+    -   "Ben Member: ben replied",
+    -   "Ada Owner: ada replied",
+    +   "ben.1[at]channels-e2e.seed.macro.local: ben replied",
+    +   "ada.1[at]channels-e2e.seed.macro.local: ada replied",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      440 |   for (const view of [mine, bens]) {
+      441 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+    > 442 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+          |                                                            ^
+      443 |     await expect(view.list.getByText('regretted')).toHaveCount(0);
+      444 |   }
+      445 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:442:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  30) tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "Ada Owner: an answer",
+    +   "ada.3[at]channels-e2e.seed.macro.local: an answer",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      27 |     await expect
+      28 |       .poll(() => view.repliesByAuthor(root.id))
+    > 29 |       .toEqual(['Ada Owner: an answer']);
+         |        ^
+      30 |     await expect
+      31 |       .poll(() => view.topLevel())
+      32 |       .toEqual(['a question', 'something later']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:29:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  31) tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 4
+
+      Array [
+    -   "Ada Owner: ada replies first",
+    -   "Ben Member: ben replies second",
+    -   "Ada Owner: ada replies third",
+    -   "Ben Member: ben replies fourth",
+    +   "ada.1[at]channels-e2e.seed.macro.local: ada replies first",
+    +   "ben.1[at]channels-e2e.seed.macro.local: ben replies second",
+    +   "ada.1[at]channels-e2e.seed.macro.local: ada replies third",
+    +   "ben.1[at]channels-e2e.seed.macro.local: ben replies fourth",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       99 |     await expect(view.hiddenReplies(root.id)).toContainText('1 more reply');
+      100 |     await view.hiddenReplies(root.id).click();
+    > 101 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+          |                                                            ^
+      102 |     await expect.poll(() => view.topLevel()).toEqual(channelMessages);
+      103 |   }
+      104 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:101:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  32) tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 2
+
+      Array [
+    -   "Ben Member: ben replies",
+    -   "Ada Owner: ada replies well",
+    +   "ben.2[at]channels-e2e.seed.macro.local: ben replies",
+    +   "ada.2[at]channels-e2e.seed.macro.local: ada replies well",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      195 |   const replies = ['Ben Member: ben replies', 'Ada Owner: ada replies well'];
+      196 |   for (const view of [mine, bens]) {
+    > 197 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+          |                                                            ^
+      198 |     await expect(
+      199 |       view.messageById(reply.id).getByText('(edited)')
+      200 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:197:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  33) tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 6
+    + Received  + 6
+
+      Array [
+    -   "Ben Member: one",
+    -   "Ben Member: two",
+    -   "Ben Member: three",
+    -   "Ben Member: four",
+    -   "Ben Member: five",
+    -   "Ben Member: six, live",
+    +   "ben.3[at]channels-e2e.seed.macro.local: one",
+    +   "ben.3[at]channels-e2e.seed.macro.local: two",
+    +   "ben.3[at]channels-e2e.seed.macro.local: three",
+    +   "ben.3[at]channels-e2e.seed.macro.local: four",
+    +   "ben.3[at]channels-e2e.seed.macro.local: five",
+    +   "ben.3[at]channels-e2e.seed.macro.local: six, live",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      323 |   await expect
+      324 |     .poll(() => view.repliesByAuthor(root.id))
+    > 325 |     .toEqual([
+          |      ^
+      326 |       'Ben Member: one',
+      327 |       'Ben Member: two',
+      328 |       'Ben Member: three',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:325:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  34) tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    -   "Ben Member: a first reply, live",
+    +   "ben.2[at]channels-e2e.seed.macro.local: a first reply, live",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      370 |   await expect
+      371 |     .poll(() => view.repliesByAuthor(quiet.id))
+    > 372 |     .toEqual(['Ben Member: a first reply, live']);
+          |      ^
+      373 |   await expect
+      374 |     .poll(() => view.topLevel())
+      375 |     .toEqual(['thread start', 'a message without replies']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:372:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/f16-on-1/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  34 failed
+    tests/channels-e2e/access.spec.ts:67:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+    tests/channels-e2e/access.spec.ts:110:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+    tests/channels-e2e/access.spec.ts:174:1 › ACC-06 a teammate finds a team channel they are not in by its name and joins it 
+    tests/channels-e2e/access.spec.ts:218:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+    tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read 
+    tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+    tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked 
+    tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was 
+    tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+    tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+    tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+    tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+    tests/channels-e2e/direct-messages.spec.ts:72:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+    tests/channels-e2e/direct-messages.spec.ts:136:1 › DM-03 “Message …” on a channel’s participant opens my conversation with them, the same one every time 
+    tests/channels-e2e/direct-messages.spec.ts:193:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+    tests/channels-e2e/direct-messages.spec.ts:248:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type 
+    tests/channels-e2e/direct-messages.spec.ts:290:1 › DM-06 typing a teammate’s name in “New direct message” offers that person 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+    tests/channels-e2e/members.spec.ts:144:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+    tests/channels-e2e/members.spec.ts:183:1 › MEM-05 people added and removed while the channel is open show as lines between the right messages 
+    tests/channels-e2e/members.spec.ts:219:1 › MEM-06 a channel opened afresh shows who was added and removed between the right messages 
+    tests/channels-e2e/members.spec.ts:244:1 › MEM-07 a member who does not own the channel cannot remove its owner 
+    tests/channels-e2e/members.spec.ts:274:1 › MEM-08 a person added while their app was closed finds the channel in the list when they open it 
+    tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload 
+    tests/channels-e2e/messages.spec.ts:37:1 › MSG-02 a message sent with the send button shows once at the end for both people, and stays after reload 
+    tests/channels-e2e/messages.spec.ts:71:1 › MSG-03 a quick back-and-forth between two people reads in the same order for both, each message once 
+    tests/channels-e2e/messages.spec.ts:198:1 › MSG-06 messages in a row from one person and from alternating people each show under their author 
+    tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+    tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+    tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+    tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+    tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+    tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+  130 passed (11.7m)
+2026/11/17 20:24:36 socat[1965318] W exiting on signal 15
+2026/11/17 20:24:36 socat[1962451] W exiting on signal 15

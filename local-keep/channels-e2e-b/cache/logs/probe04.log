@@ -1,0 +1,36 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 4 tests using 4 workers
+
+2026/11/15 23:44:45 socat[2400557] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:45 socat[2400588] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:46 socat[2400524] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:46 socat[2400581] E write(6, 0x57898702b000, 24): Broken pipe
+PROBE reload=false blocked for 2340 ms
+PROBE reload=false blocked for 1815 ms
+PROBE reload=true blocked for 6446 ms
+PROBE reload=false arrived 5231 ms after unblock
+2026/11/15 23:44:51 socat[2400572] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:51 socat[2400583] E write(6, 0x57898702b000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/zz-probe.spec.ts:8:3 › PROBE-04 how late blocked sends arrive (reload false) (10.2s)
+PROBE reload=false arrived 6230 ms after unblock
+2026/11/15 23:44:52 socat[2400574] E write(6, 0x57898702b000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe.spec.ts:8:3 › PROBE-04 how late blocked sends arrive (reload false) (11.1s)
+PROBE reload=true blocked for 9271 ms
+PROBE reload=true arrived 5141 ms after unblock
+2026/11/15 23:44:55 socat[2403462] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:55 socat[2394329] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:55 socat[2403673] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:44:55 socat[2403682] E write(6, 0x57898702b000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/zz-probe.spec.ts:8:3 › PROBE-04 how late blocked sends arrive (reload true) (13.9s)
+PROBE reload=true arrived 301478 ms after unblock
+2026/11/15 23:49:54 socat[2403813] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:49:54 socat[2403908] E write(6, 0x57898702b000, 24): Broken pipe
+2026/11/15 23:49:54 socat[2403935] E write(6, 0x57898702b000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/zz-probe.spec.ts:8:3 › PROBE-04 how late blocked sends arrive (reload true) (5.2m)
+
+  4 passed (5.5m)
+2026/11/15 23:49:54 socat[2372275] W exiting on signal 15
+2026/11/15 23:49:54 socat[2371565] W exiting on signal 15
+PROBE04DONE

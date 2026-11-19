@@ -1,0 +1,148 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/17 04:57:55 socat[2106191] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:57:55 socat[2064841] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:57:55 socat[2106302] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:57:55 socat[2106782] E write(6, 0x56da0b7ac000, 212): Broken pipe
+2026/11/17 04:57:55 socat[2106784] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  2 tests/channels-e2e/prewarm.spec.ts:117:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first (2.5m)
+2026/11/17 04:57:58 socat[2110191] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:57:58 socat[2110256] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:57:58 socat[2110317] E write(6, 0x56da0b7ac000, 210): Broken pipe
+2026/11/17 04:57:58 socat[2110318] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  3 tests/channels-e2e/prewarm.spec.ts:91:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first (2.5m)
+2026/11/17 04:59:06 socat[2108689] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:59:06 socat[2108728] E write(6, 0x56da0b7ac000, 24): Broken pipe
+2026/11/17 04:59:06 socat[2108749] E write(6, 0x56da0b7ac000, 28): Broken pipe
+2026/11/17 04:59:06 socat[2108750] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/prewarm.spec.ts:140:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (3.7m)
+
+
+  1) tests/channels-e2e/prewarm.spec.ts:91:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      84 |   await expectShown(inside, [texts[1]]);
+      85 |   await conversationRow(page, channels[0].name).click();
+    > 86 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+         |                                    ^
+      87 | }
+      88 |
+      89 | // If this fails, a device fetches more unread channels than the forty it
+        at expectOnlySecondHeld (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:86:36)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:112:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-02-a-device-le-96e16-ast-and-not-the-forty-first/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-02-a-device-le-96e16-ast-and-not-the-forty-first/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-02-a-device-le-96e16-ast-and-not-the-forty-first/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-02-a-device-le-96e16-ast-and-not-the-forty-first/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/prewarm.spec.ts:117:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      84 |   await expectShown(inside, [texts[1]]);
+      85 |   await conversationRow(page, channels[0].name).click();
+    > 86 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+         |                                    ^
+      87 | }
+      88 |
+      89 | // If this fails, a device fetches more unread channels than the forty it
+        at expectOnlySecondHeld (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:86:36)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:135:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-03-a-device-le-88694-st-and-not-the-twenty-first/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-03-a-device-le-88694-st-and-not-the-twenty-first/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-03-a-device-le-88694-st-and-not-the-twenty-first/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-03-a-device-le-88694-st-and-not-the-twenty-first/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/prewarm.spec.ts:140:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('long 06', { exact: true }) })
+    Expected: visible
+    Timeout: 300ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 300ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('long 06', { exact: true }) })
+
+
+    Call Log:
+    - Timeout 150000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:269
+
+      267 |       if (lost) return;
+      268 |       await expect(last).toBeVisible({ timeout: 300 });
+    > 269 |     }).toPass({ timeout: 150_000, intervals: [50] });
+          |        ^
+      270 |     if (lost) throw lost;
+      271 |     await record();
+      272 |     return seen;
+        at Conversation.readTo (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:269:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:163:10
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-prewarm-limits-changed/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/prewarm.spec.ts:91:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first 
+    tests/channels-e2e/prewarm.spec.ts:117:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first 
+    tests/channels-e2e/prewarm.spec.ts:140:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back 
+2026/11/17 04:59:07 socat[2064841] W exiting on signal 15
+2026/11/17 04:59:07 socat[2061742] W exiting on signal 15

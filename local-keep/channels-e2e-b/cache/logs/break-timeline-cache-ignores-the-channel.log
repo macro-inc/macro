@@ -1,0 +1,359 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 7 tests using 3 workers
+
+2026/11/16 08:47:12 socat[3796112] E read(6, 0x5de7b6787000, 8192): Connection reset by peer
+2026/11/16 08:47:12 socat[3796093] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796113] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796104] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796110] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796129] E write(6, 0x5de7b6787000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (17.7s)
+  ✘  3 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (17.8s)
+2026/11/16 08:47:12 socat[3796423] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796435] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:12 socat[3796438] E write(6, 0x5de7b6787000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages (18.5s)
+2026/11/16 08:47:29 socat[3823529] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:29 socat[3823845] E write(6, 0x5de7b6787000, 24): Broken pipe
+  ✘  4 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (16.7s)
+2026/11/16 08:47:32 socat[3825029] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3825099] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3824682] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3823821] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3824691] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3829782] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3824686] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3827796] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:32 socat[3773077] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:47:32 socat[3774037] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  5 tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view (18.9s)
+  ✘  6 tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window (18.6s)
+2026/11/16 08:47:53 socat[3773077] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:47:53 socat[3852062] E write(6, 0x5de7b6788000, 24): Broken pipe
+2026/11/16 08:47:53 socat[3851235] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:53 socat[3851238] E write(6, 0x5de7b6787000, 24): Broken pipe
+2026/11/16 08:47:53 socat[3852068] E write(6, 0x5de7b6788000, 24): Broken pipe
+  ✘  7 tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other (22.6s)
+
+
+  1) tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 7
+    + Received  + 5
+
+      Array [
+    -   "second 001",
+    -   "second 002",
+    -   "second 003",
+    -   "second 004",
+    -   "second 005",
+    -   "second 006",
+    -   "second 007",
+    +   "first 001",
+    +   "first 002",
+    +   "first 003",
+    +   "first 004",
+    +   "first 005",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/open.spec.ts:54:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/open-OPEN-02-switching-bet-95a01-each-channel’s-own-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('while away three', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('while away three', { exact: true }) })
+
+
+      24 |   await context.setOffline(false);
+      25 |
+    > 26 |   await expect(view.message('while away three')).toBeVisible();
+         |                                                  ^
+      27 |   expect(await view.drawnTexts()).toEqual([
+      28 |     'before one',
+      29 |     'before two',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:26:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-01-after-the-ccf04-r-in-order-without-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('written offline')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('written offline')
+
+
+      54 |   // in the composer and say sending failed, or hold the message to send
+      55 |   // later. Either way the text must still be on the screen.
+    > 56 |   await expect(page.getByText('written offline')).toBeVisible();
+         |                                                   ^
+      57 |   await context.setOffline(false);
+      58 |   await ada.post(channel.id, 'after');
+      59 |   await expect(view.message('after')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:56:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-02-a-message-57eaf-neither-lost-nor-sent-twice/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "before",
+    -   "while hidden one",
+    -   "while hidden two",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:103:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/reconnect-REC-03-a-message-7264e--when-the-person-comes-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('arrives at the end', { exact: true }) })
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('arrives at the end', { exact: true }) })
+
+
+      70 |   await ben.post(channel.id, 'arrives at the end');
+      71 |
+    > 72 |   await expect(view.message('arrives at the end')).toBeInViewport();
+         |                                                    ^
+      73 |   await view.expectAtBottom();
+      74 | });
+      75 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/scroll.spec.ts:72:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/scroll-SCROLL-03-at-the-en-aa667-omeone-else-arrives-in-view/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "before",
+    -   "from the first window",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/two-tabs.spec.ts:23:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-01-a-message--a022c--same-person’s-other-window/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1e38a-3f86-7dab-817b-87b0cb6ab531"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e38a-3f86-7dab-817b-87b0cb6ab531"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      62 |     .click();
+      63 |
+    > 64 |   await expect(second.messageById(removed.id)).toHaveCount(0);
+         |                                                ^
+      65 |   await expect(second.messageById(edited.id)).toContainText('now edited');
+      66 |   await expect(
+      67 |     second
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/two-tabs.spec.ts:64:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-timeline-cache-ignores-the-channel/test-results/two-tabs-TAB-02-an-edit-a--cd4de-ne-window-show-in-the-other/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7 failed
+    tests/channels-e2e/open.spec.ts:35:1 › OPEN-02 switching between channels in the list shows each channel’s own messages 
+    tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload 
+    tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice 
+    tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back 
+    tests/channels-e2e/scroll.spec.ts:55:1 › SCROLL-03 at the end of the channel, a message from someone else arrives in view 
+    tests/channels-e2e/two-tabs.spec.ts:6:1 › TAB-01 a message sent in one window shows once in the same person’s other window 
+    tests/channels-e2e/two-tabs.spec.ts:29:1 › TAB-02 an edit, a reaction and a deletion made in one window show in the other 
+2026/11/16 08:47:53 socat[3773077] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:47:53 socat[3774037] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:47:53 socat[3774037] W exiting on signal 15
+2026/11/16 08:47:53 socat[3773077] W exiting on signal 15

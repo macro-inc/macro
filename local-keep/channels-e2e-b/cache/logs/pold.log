@@ -1,0 +1,113 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 4 workers
+
+2026/11/16 23:36:33 socat[440798] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:36:37 socat[440679] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:36:37 socat[440769] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:36:38 socat[440666] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:36:38 socat[440755] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:36:38 socat[440795] E write(6, 0x64a7704cf000, 24): Broken pipe
+POLD none newer: unavailable=false 0
+POLD 95 newer: unavailable=false 0
+POLD 120 newer: unavailable=true 0
+  ✓  1 tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD none newer (18.9s)
+2026/11/16 23:36:47 socat[460068] E write(6, 0x64a7704cf000, 28): Broken pipe
+2026/11/16 23:36:47 socat[460070] E write(6, 0x555555624000, 26): Broken pipe
+  ✓  4 tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 95 newer (20.7s)
+2026/11/16 23:37:02 socat[460744] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:37:02 socat[460875] E write(6, 0x64a7704cf000, 28): Broken pipe
+2026/11/16 23:37:02 socat[460878] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  3 tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer (35.5s)
+POLD 120 newer, left alone 30 s: unavailable=true 0
+2026/11/16 23:37:30 socat[460760] E write(6, 0x64a7704cf000, 24): Broken pipe
+2026/11/16 23:37:30 socat[460894] E write(6, 0x64a7704cf000, 28): Broken pipe
+2026/11/16 23:37:30 socat[460895] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  2 tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer, left alone 30 s (1.1m)
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer ────────────────────────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('Conversation unavailable')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('Conversation unavailable')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      45 |     });
+      46 |     console.log(`POLD ${label}: unavailable=${await unavailable.isVisible()} ${lists.length}`);
+    > 47 |     await expect(unavailable).toHaveCount(0);
+         |                               ^
+      48 |   });
+      49 | }
+      50 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:47:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer, left alone 30 s ───────────────────
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('Conversation unavailable')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('Conversation unavailable')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      45 |     });
+      46 |     console.log(`POLD ${label}: unavailable=${await unavailable.isVisible()} ${lists.length}`);
+    > 47 |     await expect(unavailable).toHaveCount(0);
+         |                               ^
+      48 |   });
+      49 | }
+      50 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:47:31
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer-left-alone-30-s/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer-left-alone-30-s/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer-left-alone-30-s/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pold/test-results/zz-probe-P-OLD-120-newer-left-alone-30-s/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer ─────────────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:20:3 › P-OLD 120 newer, left alone 30 s ────────────────────
+  2 passed (1.4m)
+2026/11/16 23:37:32 socat[399889] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:37:32 socat[401040] W exiting on signal 15
+2026/11/16 23:37:32 socat[399889] W exiting on signal 15

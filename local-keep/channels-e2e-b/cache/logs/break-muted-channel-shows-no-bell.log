@@ -1,0 +1,54 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:27:42 socat[1914147] E write(6, 0x57f11c937000, 24): Broken pipe
+2026/11/16 08:27:42 socat[1908082] E write(6, 0x57f11c937000, 24): Broken pipe
+2026/11/16 08:27:42 socat[1914183] E write(6, 0x57f11c937000, 24): Broken pipe
+2026/11/16 08:27:42 socat[1914199] E write(6, 0x57f11c937000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (18.4s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj031mh0atp-muted' }).getByLabel('Notifications muted', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj031mh0atp-muted' }).getByLabel('Notifications muted', { exact: true })
+
+
+      245 |     'Until I turn it off'
+      246 |   );
+    > 247 |   await expect(mutedBell(row)).toBeVisible();
+          |                                ^
+      248 |
+      249 |   await ben.post(made.muted, 'while muted');
+      250 |   await ben.post(made.loud, 'after the muted one');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/unread.spec.ts:247:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-muted-channel-shows-no-bell/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-muted-channel-shows-no-bell/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-muted-channel-shows-no-bell/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-muted-channel-shows-no-bell/test-results/unread-UNR-06-a-muted-chan-7a658-essages-unmuted-it-is-again/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/unread.spec.ts:227:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again 
+2026/11/16 08:27:43 socat[1885885] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:27:43 socat[1886586] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:27:43 socat[1886586] W exiting on signal 15
+2026/11/16 08:27:43 socat[1885885] W exiting on signal 15

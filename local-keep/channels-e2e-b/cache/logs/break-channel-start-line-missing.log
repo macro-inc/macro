@@ -1,0 +1,50 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:56:27 socat[3160917] E write(6, 0x5da3f5bdf000, 24): Broken pipe
+2026/11/16 07:56:27 socat[3160930] E write(6, 0x5da3f5bdf000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:407:1 › CHN-13 a channel’s history starts with “Channel <name> created” (17.6s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:407:1 › CHN-13 a channel’s history starts with “Channel <name> created” 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Channel e2e-mwiyyvai6pqq created')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Channel e2e-mwiyyvai6pqq created')
+
+
+      417 |
+      418 |   const start = view.list.getByText(`Channel ${channel.name} created`);
+    > 419 |   await expect(start).toBeVisible();
+          |                       ^
+      420 |   const startBox = await start.boundingBox();
+      421 |   const firstBox = await view.message('the first').boundingBox();
+      422 |   expect(startBox?.y).toBeLessThan(firstBox?.y ?? 0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:419:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-start-line-missing/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/channels.spec.ts:407:1 › CHN-13 a channel’s history starts with “Channel <name> created” 
+2026/11/16 07:56:28 socat[3137572] W exiting on signal 15
+2026/11/16 07:56:28 socat[3137473] W exiting on signal 15

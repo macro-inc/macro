@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:04:55 socat[3960397] E write(6, 0x585598954000, 24): Broken pipe
+2026/11/16 08:04:55 socat[3960406] E write(6, 0x585598954000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does (18.6s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1e362-f9fb-7aa9-9f06-28a77ab32e83"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'Edit' })
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e362-f9fb-7aa9-9f06-28a77ab32e83"]').locator('[data-message-hover-actions]').getByRole('button', { name: 'Edit' })
+        32 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      473 |   await expect(onBens.getByRole('button', { name: 'Reply' })).toBeVisible();
+      474 |   await expect(onBens.getByRole('button', { name: 'Copy Text' })).toBeVisible();
+    > 475 |   await expect(onBens.getByRole('button', { name: 'Edit' })).toHaveCount(0);
+          |                                                              ^
+      476 |   await expect(onBens.getByRole('button', { name: 'Delete' })).toHaveCount(0);
+      477 |
+      478 |   // The keys that edit and delete a selected message of one's own.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:475:62
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-offered-on-others-messages/test-results/messages-MSG-12-someone-el-2e340-or-Delete-while-my-own-does/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-edit-offered-on-others-messages/test-results/messages-MSG-12-someone-el-2e340-or-Delete-while-my-own-does/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-offered-on-others-messages/test-results/messages-MSG-12-someone-el-2e340-or-Delete-while-my-own-does/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-edit-offered-on-others-messages/test-results/messages-MSG-12-someone-el-2e340-or-Delete-while-my-own-does/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:455:1 › MSG-12 someone else’s message offers no Edit or Delete, while my own does 
+2026/11/16 08:04:56 socat[3941236] W exiting on signal 15
+2026/11/16 08:04:56 socat[3938171] W exiting on signal 15

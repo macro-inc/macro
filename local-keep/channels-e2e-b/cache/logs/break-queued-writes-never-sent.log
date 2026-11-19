@@ -1,0 +1,63 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 07:10:05 socat[3042423] E write(6, 0x6440a36e7000, 24): Broken pipe
+2026/11/16 07:10:49 socat[3044712] E write(6, 0x6440a36e7000, 24): Broken pipe
+2026/11/16 07:10:49 socat[3045035] E write(6, 0x6440a36e7000, 24): Broken pipe
+2026/11/16 07:10:49 socat[3045926] E write(6, 0x6440a36e7000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (46.4s)
+
+
+  1) tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached 
+
+    Error: the channel as the services hold it
+
+    the channel as the services hold it
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "one",
+        "two",
+        "three",
+    -   "kept one",
+    -   "kept two",
+      ]
+
+    Call Log:
+    - Timeout 40000ms exceeded while waiting on the predicate
+
+      40 |       timeout,
+      41 |     })
+    > 42 |     .toEqual(lines);
+         |      ^
+      43 | }
+      44 |
+      45 | // If this fails, a message written offline does not show until it is sent,
+        at expectServer (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:42:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:148:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-queued-writes-never-sent/test-results/writes-WRT-04-messages-tha-f6412-the-services-can-be-reached/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-queued-writes-never-sent/test-results/writes-WRT-04-messages-tha-f6412-the-services-can-be-reached/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-queued-writes-never-sent/test-results/writes-WRT-04-messages-tha-f6412-the-services-can-be-reached/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-queued-writes-never-sent/test-results/writes-WRT-04-messages-tha-f6412-the-services-can-be-reached/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/writes.spec.ts:127:1 › WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached 
+2026/11/16 07:10:50 socat[3032585] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:10:50 socat[3032940] W exiting on signal 15
+2026/11/16 07:10:50 socat[3032585] W exiting on signal 15

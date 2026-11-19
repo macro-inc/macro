@@ -1,0 +1,105 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 07:49:08 socat[2470395] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:08 socat[2470399] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:08 socat[2471091] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:08 socat[2471095] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2470383] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2469858] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2470397] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2470401] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2471085] E write(6, 0x62df8e5d6000, 24): Broken pipe
+2026/11/16 07:49:09 socat[2471093] E write(6, 0x62df8e5d6000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (20.6s)
+  ✘  1 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (21.7s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('two files', { exact: true }) }).locator('[data-message-attachments]').getByRole('link', { name: 'notes.txt' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('two files', { exact: true }) }).locator('[data-message-attachments]').getByRole('link', { name: 'notes.txt' })
+
+
+      242 |   for (const each of [view, benView]) {
+      243 |     const files = attachmentsOf(each.message('two files'));
+    > 244 |     await expect(files.getByRole('link', { name: 'notes.txt' })).toBeVisible();
+          |                                                                  ^
+      245 |     await expect(
+      246 |       files.getByRole('button', { name: 'Open image viewer' })
+      247 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:244:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-07-a-text-fil-f431f-eople-and-under-Attachments/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+
+
+      291 |     await expect(
+      292 |       each.list.getByRole('link', { name: 'alone.txt' })
+    > 293 |     ).toBeVisible();
+          |       ^
+      294 |     await expect(each.list.locator('[data-message-attachments]')).toHaveCount(
+      295 |       1
+      296 |     );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:293:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-attachment-not-sent/test-results/composer-CMP-08-a-file-can-be-sent-on-its-own-with-no-text/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments 
+    tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text ─
+2026/11/16 07:49:11 socat[2449182] W exiting on signal 15
+2026/11/16 07:49:11 socat[2447351] W exiting on signal 15

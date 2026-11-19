@@ -1,0 +1,171 @@
+diff --git a/apps/web/tests/channels-e2e/composer.spec.ts b/apps/web/tests/channels-e2e/composer.spec.ts
+index 69019c6cc8..64c02ed18c 100644
+--- a/apps/web/tests/channels-e2e/composer.spec.ts
++++ b/apps/web/tests/channels-e2e/composer.spec.ts
+@@ -13,7 +13,7 @@ import {
+   waitingFiles,
+   writePng,
+ } from './harness/composer';
+-import { expect, failsSometimes, test } from './harness/fixtures';
++import { COPIES, expect, failsSometimes, test, timed } from './harness/fixtures';
+ import { findConversations } from './harness/sidebar';
+ 
+ // If this fails, a person who starts writing, looks at another channel and
+@@ -90,12 +90,13 @@ test('CMP-03 sending a message clears its draft, and a reload does not bring it
+ 
+ // If this fails, a message the app showed as sent was never sent: a person
+ // who closes or reloads the page right after sending loses it.
+-test('CMP-13 a message shown as sent is still sent when the page is reloaded at once', async ({
++for (const copy of COPIES) test(`CMP-13 a message shown as sent is still sent when the page is reloaded at once (copy ${copy})`, async ({
+   page,
+   ada,
+   people,
+   pageFor,
+ }) => {
++  test.setTimeout(480_000);
+   const channel = await ada.createChannel({ members: [people.ben] });
+   const bens = new ChannelView(await pageFor('ben'), channel.id);
+   await bens.open();
+@@ -107,8 +108,10 @@ test('CMP-13 a message shown as sent is still sent when the page is reloaded at
+   await page.reload();
+   await view.shown();
+ 
+-  await view.expectEndsWith(['sent just before a reload']);
+-  await bens.expectEndsWith(['sent just before a reload']);
++  const ends = (who: ChannelView) => (timeout: number) =>
++    expect.poll(async () => (await who.texts()).slice(-1), { timeout }).toEqual(['sent just before a reload']);
++  await timed('on own page after the reload', ends(view));
++  await timed('on the other page', ends(bens));
+   // Known defect on main, about one run in eight: the sent message is also
+   // back in the composer as a draft.
+   await failsSometimes(async () => {
+diff --git a/apps/web/tests/channels-e2e/harness/fixtures.ts b/apps/web/tests/channels-e2e/harness/fixtures.ts
+index fea526133c..9ba731159a 100644
+--- a/apps/web/tests/channels-e2e/harness/fixtures.ts
++++ b/apps/web/tests/channels-e2e/harness/fixtures.ts
+@@ -49,7 +49,44 @@ type WorkerFixtures = {
+   history: History;
+ };
+ 
++import { appendFileSync } from 'node:fs';
++import { join as joinPath } from 'node:path';
++import { runDirectory as probeRunDirectory } from './stack';
++function listen(context: import('@playwright/test').BrowserContext, who: string): void {
++  const title = base.info().title;
++  context.on('console', (message) => {
++    if (!/mutation_queue|graphql-cache/.test(message.text())) return;
++    void Promise.all(message.args().map((arg) => arg.jsonValue().catch(() => '?'))).then((args) =>
++      appendFileSync(
++        joinPath(probeRunDirectory(), 'console.log'),
++        `${title}\t${who}\t${new Date().toISOString()}\t${JSON.stringify(args)}\n`
++      )
++    );
++  });
++}
++export const COPIES = Array.from({ length: Number(process.env.CHANNELS_E2E_COPIES ?? 1) }, (_, n) => n + 1);
++/** Probe: runs a check with the usual wait; if it fails, times how long the thing takes, up to 330 s, then fails as before. */
++export async function timed(label: string, run: (timeout: number) => Promise<void>, usual = 15_000): Promise<void> {
++  const from = Date.now();
++  try {
++    await run(usual);
++  } catch (error) {
++    let note = `${label}: not within 330 s`;
++    try {
++      await run(330_000);
++      note = `${label}: after ${Math.round((Date.now() - from) / 1000)} s`;
++    } catch {}
++    base.info().annotations.push({ type: 'late', description: note });
++    appendFileSync(joinPath(probeRunDirectory(), 'late.log'), `${base.info().title}\t${note}\n`);
++    throw error;
++  }
++}
++
+ export const test = base.extend<Fixtures, WorkerFixtures>({
++  page: async ({ page }, use) => {
++    listen(page.context(), 'ada');
++    await use(page);
++  },
+   history: [
+     // biome-ignore lint/correctness/noEmptyPattern: Playwright reads what a fixture needs from this pattern and accepts nothing else here.
+     async ({}, use) => {
+@@ -76,6 +113,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
+         storageState: session(key),
+       });
+       opened.push(context);
++      listen(context, key);
+       return context.newPage();
+     });
+     for (const context of opened) {
+diff --git a/apps/web/tests/channels-e2e/messages.spec.ts b/apps/web/tests/channels-e2e/messages.spec.ts
+index bddd0382ca..abf5d051cc 100644
+--- a/apps/web/tests/channels-e2e/messages.spec.ts
++++ b/apps/web/tests/channels-e2e/messages.spec.ts
+@@ -1,5 +1,5 @@
+ import { conversationRow } from './harness/channel';
+-import { expect, failsSometimes, test } from './harness/fixtures';
++import { COPIES, expect, failsSometimes, test, timed } from './harness/fixtures';
+ import { Conversation } from './harness/messages';
+ 
+ // If this fails, a message sent with Enter is lost, doubled or misplaced for
+@@ -488,13 +488,14 @@ test('MSG-12 someone else’s message offers no Edit or Delete, while my own doe
+ 
+ // If this fails, a reaction does not reach the other person, counts wrong
+ // when two people agree, or does not go away when taken back.
+-test('MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed', async ({
++for (const copy of COPIES) test(`MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (copy ${copy})`, async ({
+   page,
+   ada,
+   ben,
+   people,
+   pageFor,
+ }) => {
++  test.setTimeout(480_000);
+   const channel = await ada.createChannel({ members: [people.ben] });
+   const liked = await ben.post(channel.id, 'who is in?');
+   const mine = new Conversation(page, channel.id);
+@@ -529,8 +530,8 @@ test('MSG-13 a quick reaction shows for both people, counts 2 when the other add
+   );
+ 
+   await bens.reaction(bensMessage, '👍').click();
+-  await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍']);
+-  await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍']);
++  await timed('removal on own page', (timeout) => expect.poll(() => bens.reactions(bensMessage), { timeout }).toEqual(['👍']));
++  await timed('removal on the other page', (timeout) => expect.poll(() => mine.reactions(myMessage), { timeout }).toEqual(['👍']));
+ 
+   await mine.reaction(myMessage, '👍').click();
+   await expect.poll(() => mine.reactions(myMessage)).toEqual([]);
+diff --git a/apps/web/tests/channels-e2e/writes.spec.ts b/apps/web/tests/channels-e2e/writes.spec.ts
+index 40251c6eaa..87c60dd42f 100644
+--- a/apps/web/tests/channels-e2e/writes.spec.ts
++++ b/apps/web/tests/channels-e2e/writes.spec.ts
+@@ -1,6 +1,6 @@
+ import type { Api, SentMessage } from './harness/api';
+ import { expectShown, type Named } from './harness/device';
+-import { expect, failsSometimes, SOUP_BUILD, test } from './harness/fixtures';
++import { COPIES, expect, failsSometimes, SOUP_BUILD, test, timed } from './harness/fixtures';
+ import { Conversation } from './harness/messages';
+ import {
+   blockWrites,
+@@ -124,11 +124,12 @@ test('WRT-03 several messages sent with no connection arrive once each, in the o
+ 
+ // If this fails, what a person wrote while the services could not be
+ // reached is gone when they load the page again, or is sent twice.
+-test('WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached', async ({
++for (const copy of COPIES) test(`WRT-04 messages that could not be sent are still there after a reload and are sent once when the services can be reached (copy ${copy})`, async ({
+   pageFor,
+   ada,
+   ben,
+ }) => {
++  test.setTimeout(480_000);
+   const { channel } = await scene(ada, ben);
+   const bens = new Conversation(await pageFor('ben'), channel.id);
+   await bens.open();
+@@ -147,7 +148,7 @@ test('WRT-04 messages that could not be sent are still there after a reload and
+     await expectShown(bens, after);
+     await expectServer(channel, ['one', 'two', 'three']);
+     await unblock();
+-    await expectServer(channel, after, 40_000);
++    await timed('kept messages at the services', (timeout) => expectServer(channel, after, timeout), 40_000);
+     await expectShown(bens, after);
+   });
+ });

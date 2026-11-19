@@ -1,0 +1,72 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 12 tests using 3 workers
+
+2026/11/15 16:00:16 socat[2318639] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:16 socat[2313265] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:16 socat[2313412] E write(6, 0x60cb6758f000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (4.8s)
+2026/11/15 16:00:16 socat[2319336] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:16 socat[2319425] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2319334] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2319345] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2313277] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2313631] E write(6, 0x60cb6758f000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (5.9s)
+2026/11/15 16:00:17 socat[2320104] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2320110] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:17 socat[2313268] E write(6, 0x60cb6758f000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (6.1s)
+2026/11/15 16:00:21 socat[2285036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:21 socat[2286397] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:21 socat[2320164] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:21 socat[2324499] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:21 socat[2324637] E write(6, 0x60cb6758f000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (5.1s)
+2026/11/15 16:00:21 socat[2327859] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:21 socat[2328068] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:22 socat[2327751] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:22 socat[2324370] E write(6, 0x60cb6758f000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (4.6s)
+2026/11/15 16:00:22 socat[2329927] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:22 socat[2329971] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:22 socat[2324628] E write(6, 0x60cb6758f000, 24): Broken pipe
+2026/11/15 16:00:22 socat[2285036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:22 socat[2286397] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   6 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (4.9s)
+2026/11/15 16:00:25 socat[2331651] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:25 socat[2331823] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:25 socat[2329546] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:25 socat[2330147] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (3.7s)
+2026/11/15 16:00:27 socat[2330815] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:27 socat[2331033] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:27 socat[2335258] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:27 socat[2335875] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (5.1s)
+2026/11/15 16:00:27 socat[2285036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:27 socat[2286397] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:28 socat[2338276] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:28 socat[2331655] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:28 socat[2331900] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (5.0s)
+2026/11/15 16:00:29 socat[2344233] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:31 socat[2346111] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:31 socat[2346115] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:31 socat[2341028] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (5.1s)
+2026/11/15 16:00:32 socat[2346530] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:32 socat[2346865] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:32 socat[2286397] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:32 socat[2344456] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (4.1s)
+2026/11/15 16:00:33 socat[2344742] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:33 socat[2345001] E write(6, 0x60cb67590000, 24): Broken pipe
+2026/11/15 16:00:33 socat[2349241] E write(6, 0x60cb67590000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (5.0s)
+
+  12 passed (34.6s)
+2026/11/15 16:00:33 socat[2286397] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 16:00:33 socat[2286397] W exiting on signal 15
+2026/11/15 16:00:33 socat[2285036] W exiting on signal 15
+ALLDONE

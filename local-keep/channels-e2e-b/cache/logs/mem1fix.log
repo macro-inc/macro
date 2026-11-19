@@ -1,0 +1,323 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 40 tests using 2 workers
+
+2026/11/16 15:39:20 socat[1968301] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:20 socat[1968312] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:20 socat[1967072] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:20 socat[1965672] E read(6, 0x57e4e1f1a000, 8192): Connection reset by peer
+2026/11/16 15:39:20 socat[1965673] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 15:39:20 socat[1967176] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:20 socat[1967185] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (3.8s)
+2026/11/16 15:39:22 socat[1968310] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1968325] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1946717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:39:22 socat[1969923] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1970131] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1967169] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1967183] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:22 socat[1967187] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:39:26 socat[1978237] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:26 socat[1978399] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:26 socat[1979373] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:26 socat[1979423] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:26 socat[1946717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:39:26 socat[1946717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:39:26 socat[1976749] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1976751] E write(6, 0x57e4e1f1a000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:39:27 socat[1979704] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1979823] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1979825] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1978789] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1978793] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:27 socat[1978807] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.0s)
+2026/11/16 15:39:31 socat[1990379] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:31 socat[1990456] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:31 socat[1988268] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (3.9s)
+2026/11/16 15:39:31 socat[1988241] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1990208] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1990213] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1992059] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1990868] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1992214] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1992572] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1988180] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:33 socat[1988183] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.5s)
+2026/11/16 15:39:38 socat[2002468] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2002479] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001076] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001094] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001104] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.0s)
+2026/11/16 15:39:38 socat[2000975] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001027] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001034] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001949] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2001978] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[2002002] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[1994101] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[1994145] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:38 socat[1994151] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.8s)
+2026/11/16 15:39:43 socat[2011246] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:43 socat[2011342] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:43 socat[2010202] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:43 socat[2010210] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.1s)
+2026/11/16 15:39:45 socat[2011014] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2011021] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2011044] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2012315] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2012556] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2012584] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2008985] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:45 socat[2009696] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.5s)
+2026/11/16 15:39:49 socat[2022336] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:49 socat[2022355] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:49 socat[2022359] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:49 socat[2020097] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:49 socat[2020108] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:49 socat[2020128] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.0s)
+2026/11/16 15:39:50 socat[2020059] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2020078] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2020093] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2020834] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2022102] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2022137] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2022331] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2013489] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[1946359] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:39:50 socat[2013494] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:50 socat[2013497] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.7s)
+2026/11/16 15:39:54 socat[2032489] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:54 socat[2032492] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:55 socat[2024421] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:55 socat[2024451] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.1s)
+2026/11/16 15:39:55 socat[2024446] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2031377] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2031383] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2032810] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2032838] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2032905] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2024202] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2024210] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:39:56 socat[2024213] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:40:00 socat[2042692] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:00 socat[2042716] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:00 socat[2035664] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:00 socat[2035666] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.0s)
+2026/11/16 15:40:02 socat[2035674] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2035680] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2035718] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2042764] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2042016] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2043221] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2043249] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2034290] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2034320] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:02 socat[2034362] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.7s)
+2026/11/16 15:40:06 socat[2054063] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:06 socat[2054108] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:06 socat[2054225] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:06 socat[2047586] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:06 socat[2047599] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:06 socat[2047601] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.3s)
+2026/11/16 15:40:07 socat[2047664] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2047667] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2054409] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2047845] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2054451] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2054457] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2046120] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:07 socat[2046166] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:40:12 socat[2057320] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2056642] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2057404] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2057434] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2056556] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2056599] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:12 socat[2056602] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.3s)
+2026/11/16 15:40:13 socat[2056966] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2057028] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2057031] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2063931] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2063995] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2064171] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2055889] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:13 socat[2055908] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:40:17 socat[2067095] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:17 socat[2067102] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:17 socat[2067159] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:17 socat[2066398] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:17 socat[2066527] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (3.9s)
+2026/11/16 15:40:18 socat[2066545] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2066552] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2066554] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2067186] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2066886] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2067213] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2067368] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2065667] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2065684] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:18 socat[2065878] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.4s)
+2026/11/16 15:40:23 socat[2078857] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:23 socat[2078860] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:23 socat[2078882] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:23 socat[2076986] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:23 socat[2077052] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:23 socat[2077159] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.2s)
+2026/11/16 15:40:24 socat[2078395] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2078446] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2079289] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2078619] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2079311] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2079338] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2076619] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2076643] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:24 socat[2076648] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.6s)
+2026/11/16 15:40:29 socat[2088780] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:29 socat[2089777] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:29 socat[2089780] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:29 socat[2088657] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:29 socat[2088670] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:29 socat[2088679] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.1s)
+2026/11/16 15:40:30 socat[2088782] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2088789] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2089681] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[1946359] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:40:30 socat[2090647] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2090695] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2087675] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2087954] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:30 socat[2088005] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.0s)
+2026/11/16 15:40:35 socat[2103779] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:35 socat[2103807] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:35 socat[2102084] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:35 socat[2102095] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.0s)
+2026/11/16 15:40:36 socat[2102099] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:36 socat[2102111] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:36 socat[2103834] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:36 socat[2103894] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:36 socat[2099632] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:36 socat[2100010] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.6s)
+2026/11/16 15:40:40 socat[2113463] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:40 socat[2113471] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:40 socat[2112024] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:40 socat[2112030] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:40 socat[2112032] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  30 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.2s)
+2026/11/16 15:40:42 socat[2112608] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2112745] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2114007] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2114014] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2111524] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2111590] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:42 socat[2111642] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.6s)
+2026/11/16 15:40:46 socat[2123646] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:46 socat[2123675] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:46 socat[2123679] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:46 socat[2122534] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:46 socat[2122557] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.1s)
+2026/11/16 15:40:47 socat[2123113] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2121764] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2123144] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2123216] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2124079] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2124094] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2124128] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2115491] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2116116] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:47 socat[2117527] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.5s)
+2026/11/16 15:40:52 socat[2134361] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:52 socat[2134363] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:52 socat[2132874] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:52 socat[2132907] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:52 socat[2132919] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.3s)
+2026/11/16 15:40:53 socat[2132985] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2132988] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2133011] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2134459] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2134512] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2125709] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:53 socat[2125723] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.4s)
+2026/11/16 15:40:58 socat[2144186] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:58 socat[2144852] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:58 socat[2144856] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:58 socat[2138996] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:58 socat[2139348] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.3s)
+2026/11/16 15:40:59 socat[2144300] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2144438] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2144445] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2145873] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2145883] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2136988] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2137152] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:40:59 socat[2137173] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.7s)
+2026/11/16 15:41:04 socat[2158063] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:04 socat[2158331] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:04 socat[2158186] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:04 socat[2149083] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:04 socat[2149598] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.2s)
+2026/11/16 15:41:04 socat[2149464] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2149615] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2149706] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2149985] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[1946717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:41:05 socat[2158347] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2158426] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2158500] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2147536] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2147543] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:05 socat[2147545] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.6s)
+2026/11/16 15:41:09 socat[2167472] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:09 socat[2167493] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:09 socat[2161128] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:09 socat[2161130] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (4.1s)
+2026/11/16 15:41:11 socat[2161272] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2161371] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2161438] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2168523] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2168721] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2160555] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+2026/11/16 15:41:11 socat[2160570] E write(6, 0x57e4e1f1b000, 24): Broken pipe
+  ✓  39 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.7s)
+
+  40 passed (2.1m)
+2026/11/16 15:41:11 socat[1946717] W exiting on signal 15
+2026/11/16 15:41:11 socat[1946359] W exiting on signal 15

@@ -1,0 +1,51 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:26:38 socat[1810313] E write(6, 0x55b9174e7000, 24): Broken pipe
+2026/11/16 08:26:38 socat[1810315] E write(6, 0x55b9174e7000, 24): Broken pipe
+2026/11/16 08:26:38 socat[1810319] E write(6, 0x55b9174e7000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages (16.7s)
+
+
+  1) tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Message no longer available')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('Message no longer available')
+
+
+      87 |   });
+      88 |
+    > 89 |   await expect(page.getByText('Message no longer available')).toBeVisible();
+         |                                                               ^
+      90 |   await view.shown();
+      91 |   await view.expectEndsWith(['kept one', 'kept two']);
+      92 |   await expect(view.messageById(last.id)).toBeInViewport();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:89:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-message-not-recognised/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-missing-message-not-recognised/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-message-not-recognised/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-missing-message-not-recognised/test-results/location-NAV-04-a-link-to--52799-d-shows-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/location.spec.ts:75:1 › NAV-04 a link to a message that does not exist says so and shows the latest messages 
+2026/11/16 08:26:38 socat[1789558] W exiting on signal 15
+2026/11/16 08:26:38 socat[1788543] W exiting on signal 15

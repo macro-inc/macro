@@ -1,0 +1,101 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:25:17 socat[1705806] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:17 socat[1706027] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:27 socat[1703533] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:27 socat[1703787] E write(6, 0x61d8be651000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable (16.5s)
+2026/11/16 08:25:33 socat[1713633] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:33 socat[1713990] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:33 socat[1713998] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:34 socat[1703821] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:34 socat[1704135] E write(6, 0x61d8be651000, 24): Broken pipe
+2026/11/16 08:25:34 socat[1704154] E write(6, 0x61d8be651000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (23.5s)
+
+
+  1) tests/channels-e2e/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Conversation unavailable' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('heading', { name: 'Conversation unavailable' })
+
+
+      253 |   await expect(
+      254 |     page.getByRole('heading', { name: 'Conversation unavailable' })
+    > 255 |   ).toBeVisible();
+          |     ^
+      256 |   await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
+      257 |   await expect(page.locator('[data-input-id^="channel-input-"]')).toHaveCount(
+      258 |     0
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:255:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/access-ACC-08-the-address--c79bb-conversation-is-unavailable/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/access-ACC-08-the-address--c79bb-conversation-is-unavailable/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/access-ACC-08-the-address--c79bb-conversation-is-unavailable/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/access-ACC-08-the-address--c79bb-conversation-is-unavailable/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Conversation unavailable' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('heading', { name: 'Conversation unavailable' })
+
+
+      273 |   await expect(
+      274 |     benPage.getByRole('heading', { name: 'Conversation unavailable' })
+    > 275 |   ).toBeVisible();
+          |     ^
+      276 |   await expect(benPage.getByText('soon gone two')).toHaveCount(0);
+      277 |   await expect(sidebarRow(benPage, channel.id)).toHaveCount(0);
+      278 |   await page.reload();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:275:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-missing-channel-shown-as-no-access/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/access.spec.ts:248:1 › ACC-08 the address of a channel that does not exist says the conversation is unavailable 
+    tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone 
+2026/11/16 08:25:35 socat[1682097] W exiting on signal 15
+2026/11/16 08:25:35 socat[1680799] W exiting on signal 15

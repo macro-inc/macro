@@ -1,0 +1,32 @@
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-03	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-

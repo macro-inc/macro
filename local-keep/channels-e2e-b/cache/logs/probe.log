@@ -1,0 +1,61 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/15 14:02:52 socat[1399564] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:02:52 socat[1399556] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:02:52 socat[1399553] E write(6, 0x5d9f512ce000, 24): Broken pipe
+[7.0] 2 after reload [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[7.2] 3 after reload [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[7.2] 1 after reload [ 'one' ] composer: "kept one"
+[17.1] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[17.3] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[17.3] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[27.1] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[27.4] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[27.4] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[37.2] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[37.4] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[37.4] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[47.2] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[47.5] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[47.5] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[57.2] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[57.5] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[57.5] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[67.3] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[67.6] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[67.6] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[77.3] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[77.6] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[77.6] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[87.4] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[87.6] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[87.6] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[97.4] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[97.7] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[97.7] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[107.4] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[107.7] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[107.7] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[117.5] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[117.8] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[117.8] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+[127.5] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+2026/11/15 14:04:57 socat[1400793] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1400925] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1400952] E write(6, 0x5d9f512ce000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe.spec.ts:11:3 › P4 blocked sends then reload at once 2 (2.1m)
+[127.8] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[127.8] 3 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "kept two"
+2026/11/15 14:04:57 socat[1400959] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1400964] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1401042] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1401020] E write(6, 0x5d9f512ce000, 24): Broken pipe
+2026/11/15 14:04:57 socat[1401072] E write(6, 0x5d9f512ce000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/zz-probe.spec.ts:11:3 › P4 blocked sends then reload at once 3 (2.1m)
+  ✓  1 tests/channels-e2e/zz-probe.spec.ts:11:3 › P4 blocked sends then reload at once 1 (2.1m)
+
+  3 passed (2.2m)
+2026/11/15 14:04:57 socat[1390592] W exiting on signal 15
+2026/11/15 14:04:57 socat[1389034] W exiting on signal 15

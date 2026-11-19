@@ -1,0 +1,36 @@
+queued-writes-never-sent	WRT-01	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+queued-writes-never-sent	WRT-03	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+queued-writes-never-sent	WRT-04	DEFECT-CHECK-FAILED	Error: the channel as the services hold it
+queued-writes-never-sent	WRT-08	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+queued-writes-never-sent	WRT-12	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+queued-writes-never-sent	WRT-13	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+device-not-used	OFF-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b2-1027-7188-97b4-fd551ed2b57a"]')
+device-not-used	OFF-04	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	OFF-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b2-11dc-7d44-b76c-dac1bb63a33f"]')
+device-not-used	OFF-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b3-3675-7537-a92d-4744ebe4f3c3"]')
+device-not-used	OFF-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b3-4c49-7af9-a11a-d7396f9adacd"]')
+device-not-used	OFF-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b3-5b6d-79b8-95af-60b0e8f3e778"]')
+device-not-used	OFF-09	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	OFF-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b4-6b9a-78c2-8693-40ac1bcfbd16"]')
+device-not-used	OFF-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b4-731c-7f5e-8133-3b9c35af6ca4"]')
+device-not-used	PRE-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b4-f805-7cf2-b484-f914e07092d2"]')
+device-not-used	WRT-02	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-05	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+device-not-used	WRT-06	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	WRT-07	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	WRT-14	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+channel-changes-not-applied	SYN-01	PASSED	
+channel-changes-not-applied	SYN-03	PASSED	
+channel-changes-not-applied	SYN-05	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+channel-changes-not-applied	OFF-03	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+changes-reach-neither-screen-nor-device	SYN-02	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+held-channel-shown-as-it-was-left	SYN-04	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+held-channel-shown-as-it-was-left	SYN-06	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+held-channel-shown-as-it-was-left	SYN-09	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+held-channel-shown-as-it-was-left	SYN-10	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+no-access-shown-as-unavailable	SYN-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+channel-load-error-not-shown	OFF-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+refused-write-kept	WRT-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Failed to send message')
+waiting-message-not-marked	WRT-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Not sent yet')
+waiting-message-not-marked	WRT-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Not sent yet')
+BREAKSDONE

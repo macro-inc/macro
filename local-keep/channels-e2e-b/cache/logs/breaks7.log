@@ -1,0 +1,39 @@
+start 09:10:43 load 20.34 17.47 16.98
+prewarm-limits-changed	PRE-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+prewarm-limits-changed	PRE-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+prewarm-limits-changed	PRE-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+idle-channels-never-evicted	PRE-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Unable to load this channel')
+stored-send-never-forgotten	WRT-15	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+start 09:20:44 load 18.72 16.84 16.64
+device-link-target-ignored	NAV-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e3a9-3ecb-7a29-8ac7-ae6eeb35ffab"]')
+device-link-target-ignored	NAV-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e3a9-6083-7881-85f6-f5da6a2a14a7"]')
+device-link-target-ignored	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e3a9-3f17-70c4-981f-31e98635e705"]')
+device-link-target-ignored	OFF-12	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e3a9-3f3e-7d75-b927-da4401a14e28"]')
+device-page-loses-a-message	OPEN-01	FAILED	Error: the last messages in the list | the last messages in the list
+device-page-loses-a-message	SCROLL-01	FAILED	Error: the last messages in the list | the last messages in the list
+device-newest-two-swapped	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+device-newest-two-swapped	MSG-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+device-newest-two-swapped	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+device-not-used	OFF-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e1b1-e521-728b-b953-d652ebd1d000"]')
+changes-reach-neither-screen-nor-device	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+changes-reach-neither-screen-nor-device	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+changes-reach-neither-screen-nor-device	MSG-18	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 4
+composer-not-focused-on-arrival	KEY-07	PASSED	
+found-list-misses-new-channels	UNR-08	PASSED	
+unread-mark-never-shows	UNR-10	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj26yvha9t0-fo
+composer-not-focused-on-arrival	KEY-07	PASSED	
+found-list-misses-new-channels	UNR-08	PASSED	
+link-target-ignored	NAV-02	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d83f-7eb0-8a24-d0e497a11c71"]')
+link-target-ignored	NAV-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-fb0a-708d-bd69-3250362afa6b"]')
+link-target-ignored	NAV-06	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d7e6-7e8a-b2b5-dc43968992bf"]')
+live-events-ignored	CMP-03	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	CMP-13	FAILED	Error: the last messages in the list | the last messages in the list
+live-events-ignored	MSG-18	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 4
+new-message-goes-above-the-last	MSG-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+new-message-goes-above-the-last	MSG-16	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+page-loses-a-message	OPEN-01	FAILED	Error: the last messages in the list | the last messages in the list
+page-loses-a-message	SCROLL-01	FAILED	Error: the last messages in the list | the last messages in the list
+unread-mark-never-shows	UNR-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj2ev9kyyb7-fo
+end 09:32:53 load 26.29 19.84 17.74
+BREAKS7DONE

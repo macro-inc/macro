@@ -1,0 +1,25 @@
+</tbody></table></div>
+<p class="mut">WRT-11 and WRT-14 fail on the unbroken build, which is their proof. One written test (an edit made while away, reached through a link to an older message) was dropped because no break of the device copy made it fail.</p>
+
+<h2>Run counts</h2>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Build</th><th>Result</th></tr></thead><tbody>
+<tr><td>New tests ×10 (360 runs)</td><td>flag on</td><td>318 passed, 42 failed, before the intermittent checks were marked</td></tr>
+<tr><td>Existing suite once (119)</td><td>flag on</td><td>115 passed; CMP-13, DM-02, MEM-03, UNR-04 failed</td></tr>
+<tr><td>Whole suite, run 1 (154)</td><td>flag on</td><td>148 passed; CMP-13, MSG-18, WRT-03, WRT-04, WRT-06, WRT-12 unexpected</td></tr>
+<tr><td>Whole suite, run 2</td><td>flag on</td><td>149 passed; CMP-13, DM-02, MSG-13, OFF-08, WRT-12 unexpected</td></tr>
+<tr><td>Whole suite, run 3</td><td>flag on</td><td>145 passed; CMP-13, MEM-03, MSG-13, UNR-06, OFF-08, WRT-12, ACC-03/04/05 unexpected</td></tr>
+<tr><td>Whole suite once</td><td>flag off</td><td>123 passed, 27 skipped (flag-only tests); ACC-03/04/05 and CMP-07 failed, then passed 3 of 3 each when rerun</td></tr>
+<tr><td>Break builds</td><td>8 breaks</td><td>every new test failed under one</td></tr>
+</tbody></table></div>
+<p>CI does not run on a pull request stacked on another branch, so none of this ran in CI.</p>
+
+<h2>What is not proven</h2>
+<ul>
+<li><b>No channel regressions: not shown.</b> CMP-13 is a regression with the flag on. DM-02 (2 of 4), MEM-03 (2 of 4), MSG-13 (2 of 3), UNR-06 (1), ACC-03/04/05 (1 run each build) and OFF-08 failed in whole-suite runs on a machine at load 50 and are not classified: they may be B, the load, or the tests. The flag-off suite ran once.</li>
+<li><b>Rates are from one loaded machine.</b> The final marked suite has not had a clean whole run; WRT-03, WRT-04 and WRT-12 were re-marked after run 1 and WRT-09 corrected after run 3 (an earlier "refused message stays on screen" finding was the test's mistake and is withdrawn).</li>
+<li><b>Weak spots a reviewer found in the tests.</b> A marked check also covers the steps that take the device offline, so a failure of those steps is recorded as the defect. SYN-06 and SYN-08 open the channel only once before leaving, so the device may not have held it. For WRT-01, 03, 04, 08 and 12 the break proof fails at "shows at once offline", not at "arrives once, in order". OFF-07 accepts "there are more" without a count. OFF-08 and OFF-11 check for a notice only at one moment.</li>
+<li><b>Not tested end to end:</b> jumping to an older held message offline, a sequence that goes down, the prewarm limits (40 unread, 20 recent), thirty-day eviction, a storage reset with queued writes, document discussions, phones and the desktop app. B's unit tests cover some of these; they were not rerun here.</li>
+<li>B's own result page (claude.ai/artifact/5KkQXx1sXboyuynkj1jRmy) could not be read from this session, so nothing here is checked against it.</li>
+</ul>
+<p class="mut">Evidence files are under <code>~/.cache/channels-e2e-b/</code> on the machine that ran this: <code>evidence/</code>, <code>runs/&lt;name&gt;/playwright-report.json</code>, <code>breaks/results.tsv</code>.</p>
+</main>

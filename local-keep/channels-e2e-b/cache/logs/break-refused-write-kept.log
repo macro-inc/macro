@@ -1,0 +1,53 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:07:01 socat[2695069] E write(6, 0x609ab032f000, 24): Broken pipe
+2026/11/16 07:07:01 socat[2697273] E write(6, 0x609ab032f000, 24): Broken pipe
+2026/11/16 07:07:01 socat[2697417] E write(6, 0x609ab032f000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/writes.spec.ts:258:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (39.0s)
+
+
+  1) tests/channels-e2e/writes.spec.ts:258:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Failed to send message')
+    Expected: visible
+    Timeout: 30000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 30000ms
+      - waiting for getByText('Failed to send message')
+
+
+      272 |   await goOnline(bens.page.context());
+      273 |
+    > 274 |   await expect(bens.page.getByText('Failed to send message')).toBeVisible({
+          |                                                               ^
+      275 |     timeout: 30_000,
+      276 |   });
+      277 |   await expect(bens.message('too late')).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:274:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-refused-write-kept/test-results/writes-WRT-09-a-message-th-b41da-he-person-is-told-it-failed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-refused-write-kept/test-results/writes-WRT-09-a-message-th-b41da-he-person-is-told-it-failed/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-refused-write-kept/test-results/writes-WRT-09-a-message-th-b41da-he-person-is-told-it-failed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-refused-write-kept/test-results/writes-WRT-09-a-message-th-b41da-he-person-is-told-it-failed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/writes.spec.ts:258:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed 
+2026/11/16 07:07:02 socat[2688643] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:07:02 socat[2689353] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:07:02 socat[2689353] W exiting on signal 15
+2026/11/16 07:07:02 socat[2688643] W exiting on signal 15

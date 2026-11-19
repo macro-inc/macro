@@ -1,0 +1,64 @@
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-

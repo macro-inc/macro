@@ -1,0 +1,198 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 30 tests using 4 workers
+
+2026/11/17 04:42:10 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:10 socat[421396] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:10 socat[421380] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:10 socat[421442] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:10 socat[421385] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:17 socat[426244] E write(6, 0x5ac702e4f000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.9s)
+2026/11/17 04:42:17 socat[426355] E write(6, 0x5ac702e4f000, 26): Broken pipe
+2026/11/17 04:42:17 socat[426356] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:18 socat[425294] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:18 socat[426070] E write(6, 0x5ac702e4f000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.9s)
+2026/11/17 04:42:18 socat[426339] E write(6, 0x5ac702e4f000, 26): Broken pipe
+2026/11/17 04:42:18 socat[426340] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:18 socat[425962] E write(6, 0x5ac702e4f000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.3s)
+2026/11/17 04:42:18 socat[426319] E write(6, 0x5ac702e4f000, 26): Broken pipe
+2026/11/17 04:42:18 socat[426320] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:18 socat[426025] E write(6, 0x5ac702e4f000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.4s)
+2026/11/17 04:42:18 socat[426185] E write(6, 0x5ac702e4f000, 26): Broken pipe
+2026/11/17 04:42:18 socat[426188] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:21 socat[444463] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:21 socat[444338] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:21 socat[444629] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:21 socat[445328] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:21 socat[385058] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:21 socat[445827] E write(6, 0x5ac702e4f000, 24): Broken pipe
+2026/11/17 04:42:28 socat[450665] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:28 socat[385058] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:28 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:28 socat[450895] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.3s)
+2026/11/17 04:42:28 socat[450920] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:28 socat[450921] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:28 socat[450904] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.4s)
+2026/11/17 04:42:28 socat[451036] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:28 socat[451037] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:29 socat[451752] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.5s)
+2026/11/17 04:42:29 socat[451237] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:29 socat[451507] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:29 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   7 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.7s)
+2026/11/17 04:42:29 socat[451784] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:29 socat[451785] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:29 socat[451551] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:29 socat[451552] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:32 socat[466530] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:32 socat[466630] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:32 socat[466613] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:32 socat[466768] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:32 socat[467493] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:32 socat[467500] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.7s)
+2026/11/17 04:42:39 socat[470015] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:39 socat[470156] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:39 socat[470157] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:40 socat[470497] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.8s)
+2026/11/17 04:42:40 socat[470604] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:40 socat[473500] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:40 socat[473548] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.9s)
+2026/11/17 04:42:40 socat[473596] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:40 socat[473598] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:40 socat[473556] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:40 socat[473649] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.9s)
+2026/11/17 04:42:40 socat[473715] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:40 socat[473718] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:43 socat[489100] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:43 socat[489470] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:44 socat[490850] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:44 socat[490868] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:50 socat[491615] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.2s)
+2026/11/17 04:42:50 socat[491995] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:50 socat[492000] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:51 socat[493159] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:51 socat[493531] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.6s)
+2026/11/17 04:42:51 socat[493695] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:51 socat[493696] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:51 socat[494931] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:51 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:51 socat[495215] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.6s)
+2026/11/17 04:42:51 socat[495329] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:51 socat[495330] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:52 socat[494897] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:52 socat[385058] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:42:52 socat[495201] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.9s)
+2026/11/17 04:42:52 socat[495319] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:42:52 socat[495320] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:42:54 socat[512918] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:54 socat[514815] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:54 socat[515198] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:55 socat[515881] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:55 socat[516118] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:42:55 socat[516139] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:01 socat[516283] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.7s)
+2026/11/17 04:43:01 socat[516377] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:01 socat[516393] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:02 socat[518601] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:02 socat[518619] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.4s)
+2026/11/17 04:43:02 socat[518656] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:02 socat[518657] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:02 socat[518969] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.2s)
+2026/11/17 04:43:02 socat[518993] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:02 socat[518994] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:04 socat[519669] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.4s)
+2026/11/17 04:43:04 socat[519685] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:04 socat[519686] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:04 socat[531315] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:04 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:04 socat[531628] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:05 socat[532281] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:05 socat[532320] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:05 socat[532646] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:05 socat[532953] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:07 socat[539417] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:12 socat[537658] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.6s)
+2026/11/17 04:43:12 socat[537956] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:12 socat[537958] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:12 socat[539093] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:12 socat[539150] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.2s)
+2026/11/17 04:43:12 socat[539227] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:12 socat[539228] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:13 socat[539428] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:13 socat[539439] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:13 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  23 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.3s)
+2026/11/17 04:43:13 socat[539455] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:13 socat[539456] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:15 socat[555796] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:16 socat[541240] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.5s)
+2026/11/17 04:43:16 socat[541263] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:16 socat[541273] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:16 socat[541275] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:16 socat[555921] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:16 socat[555977] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:16 socat[556474] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:19 socat[565668] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:19 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:19 socat[385058] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:19 socat[565968] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:23 socat[560080] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:23 socat[560178] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.4s)
+2026/11/17 04:43:23 socat[560240] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:23 socat[560243] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:23 socat[559827] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:23 socat[559862] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.8s)
+2026/11/17 04:43:23 socat[559889] E write(6, 0x5ac702e50000, 50): Broken pipe
+2026/11/17 04:43:24 socat[560852] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.3s)
+2026/11/17 04:43:24 socat[560935] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:24 socat[560936] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:26 socat[571187] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:26 socat[571290] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.1s)
+2026/11/17 04:43:26 socat[571337] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:26 socat[571338] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:26 socat[580151] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:26 socat[580438] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:27 socat[580388] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:27 socat[385058] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:27 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:27 socat[580462] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:34 socat[583190] E write(6, 0x5ac702e50000, 24): Broken pipe
+2026/11/17 04:43:34 socat[583268] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.2s)
+2026/11/17 04:43:34 socat[583458] E write(6, 0x5ac702e50000, 26): Broken pipe
+2026/11/17 04:43:34 socat[583459] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:43:34 socat[583697] E write(6, 0x5ac702e50000, 24): Broken pipe
+  ✓  30 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (10.4s)
+2026/11/17 04:43:34 socat[583721] E write(6, 0x5ac702e50000, 50): Broken pipe
+
+  30 passed (1.7m)
+2026/11/17 04:43:34 socat[385058] W exiting on signal 15
+2026/11/17 04:43:34 socat[382130] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:43:34 socat[382130] W exiting on signal 15

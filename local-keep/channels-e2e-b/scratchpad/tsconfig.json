@@ -1,0 +1,3 @@
+{"extends":"/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tsconfig.json",
+"include":["/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/**/*","/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/src/vite-env.d.ts"],
+"exclude":[],"compilerOptions":{"noEmit":true,"skipLibCheck":true,"types":["node","vite/client","vite-plugin-solid-svg/types","vite-plugin-solid-svg/types-component-solid","wicg-file-system-access","@types/gtag.js","@types/facebook-pixel"]}}

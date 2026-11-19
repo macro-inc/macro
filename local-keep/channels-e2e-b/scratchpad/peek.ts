@@ -1,0 +1,10 @@
+import { request } from '@playwright/test';
+const run = process.env.RUN!;
+const http = await request.newContext({ baseURL: 'https://localhost:23309', ignoreHTTPSErrors: true, storageState: `${run}/ben-0.session.json` });
+const sel = encodeURIComponent(JSON.stringify({ limit: 100, direction: 'older' }));
+const id = process.argv[2];
+const page = await (await http.get(`/dss/messages/channel/${id}/timeline?selection=${sel}`)).json();
+console.log(JSON.stringify(page, null, 1).slice(0, 2500));
+const root = page.entries.find((e: any) => e.message?.thread && JSON.stringify(e).includes('reply'));
+const withThread = page.entries.map((e: any) => [e.message?.content, JSON.stringify(e.thread ?? e.message?.thread)?.slice(0, 200)]);
+console.log(withThread);

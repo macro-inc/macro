@@ -1,0 +1,129 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 4 workers
+
+2026/11/16 09:05:30 socat[1341032] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:05:42 socat[1343090] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:05:42 socat[1343117] E write(6, 0x597830092000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (14.8s)
+2026/11/16 09:05:42 socat[1343124] E write(6, 0x597830092000, 26): Broken pipe
+2026/11/16 09:05:42 socat[1343125] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:05:45 socat[1362121] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:05:49 socat[1313297] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:05:49 socat[1370321] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:06:39 socat[1343122] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:06:39 socat[1343155] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:06:39 socat[1343169] E write(6, 0x597830092000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/16 09:06:48 socat[1448737] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:06:48 socat[1449161] E write(6, 0x597830092000, 24): Broken pipe
+  ✘  6 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (8.2s)
+2026/11/16 09:07:37 socat[1313297] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:07:37 socat[1342971] E write(6, 0x597830092000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/prewarm.spec.ts:114:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first (2.2m)
+2026/11/16 09:07:37 socat[1342973] E write(6, 0x597830092000, 212): Broken pipe
+2026/11/16 09:07:37 socat[1342974] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 09:07:38 socat[1343520] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:07:38 socat[1343541] E write(6, 0x597830092000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/prewarm.spec.ts:88:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first (2.2m)
+2026/11/16 09:07:39 socat[1343550] E write(6, 0x597830092000, 212): Broken pipe
+2026/11/16 09:07:39 socat[1343551] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 09:08:00 socat[1373662] E write(6, 0x597830092000, 24): Broken pipe
+2026/11/16 09:08:00 socat[1373664] E write(6, 0x597830092000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/prewarm.spec.ts:168:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened a day later still is (2.3m)
+2026/11/16 09:08:00 socat[1373668] E write(6, 0x597830092000, 28): Broken pipe
+2026/11/16 09:08:00 socat[1373669] E write(6, 0x555555624000, 24): Broken pipe
+
+
+  1) tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 16
+    + Received  +  0
+
+    @@ -36,22 +36,6 @@
+        "long 35",
+        "long 36",
+        "long 37",
+        "long 38",
+        "long 39",
+    -   "long 40",
+    -   "long 41",
+    -   "long 42",
+    -   "long 43",
+    -   "long 44",
+    -   "long 45",
+    -   "long 46",
+    -   "long 47",
+    -   "long 48",
+    -   "long 49",
+    -   "long 50",
+    -   "long 51",
+    -   "long 52",
+    -   "long 53",
+    -   "long 54",
+    -   "long 55",
+      ]
+
+      161 |   await expect(view.message('long 05')).toHaveCount(0);
+      162 |   await goOnline(page.context());
+    > 163 |   expect(await view.readTo('long 01', 'back')).toEqual(texts);
+          |                                                ^
+      164 | });
+      165 |
+      166 | // If this fails, channels a person stopped opening stay on the device for
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:163:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/prewarm-PRE-04-a-fetched-c-1ffe6-when-the-connection-is-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later 
+
+    Error: page.evaluate: NoModificationAllowedError: Failed to execute 'removeEntry' on 'FileSystemDirectoryHandle': An attempt was made to modify an object where modifications are not allowed.
+
+       at harness/device.ts:162
+
+      160 |   );
+      161 |   await page.goto('/kept-data-lost');
+    > 162 |   await page.evaluate(async () => {
+          |              ^
+      163 |     const root = await navigator.storage.getDirectory();
+      164 |     const names: string[] = [];
+      165 |     for await (const name of root.keys()) names.push(name);
+        at loseKeptData (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:162:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:448:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/new6/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back 
+    tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later 
+  4 passed (2.8m)
+2026/11/16 09:08:00 socat[1313297] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:08:00 socat[1313699] W exiting on signal 15
+2026/11/16 09:08:00 socat[1313297] W exiting on signal 15

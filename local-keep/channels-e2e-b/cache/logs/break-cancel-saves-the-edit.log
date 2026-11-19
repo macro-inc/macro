@@ -1,0 +1,61 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:53:12 socat[2854675] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:53:12 socat[2855847] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:53:31 socat[2883133] E write(6, 0x645c8ae83000, 24): Broken pipe
+2026/11/16 07:53:31 socat[2883241] E write(6, 0x645c8ae83000, 24): Broken pipe
+2026/11/16 07:53:31 socat[2883266] E write(6, 0x645c8ae83000, 24): Broken pipe
+2026/11/16 07:53:31 socat[2883254] E write(6, 0x645c8ae83000, 24): Broken pipe
+2026/11/16 07:53:31 socat[2883339] E write(6, 0x645c8ae83000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was (19.4s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "leave me alone",
+    +   "changed, then escaped",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      350 |   await expect
+      351 |     .poll(() => mine.topLevel())
+    > 352 |     .toEqual(['before', 'leave me alone']);
+          |      ^
+      353 |
+      354 |   await mine.action(mine.messageById(original.id), 'edit');
+      355 |   await expect(mine.editor(original.id)).toBeFocused();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:352:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-cancel-saves-the-edit/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-cancel-saves-the-edit/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-cancel-saves-the-edit/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-cancel-saves-the-edit/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-cancel-saves-the-edit/test-results/messages-MSG-09-cancelling-79579-eaves-the-message-as-it-was/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:331:1 › MSG-09 cancelling an edit, with Escape or “Discard Edit”, leaves the message as it was 
+2026/11/16 07:53:32 socat[2855847] W exiting on signal 15
+2026/11/16 07:53:32 socat[2854675] W exiting on signal 15

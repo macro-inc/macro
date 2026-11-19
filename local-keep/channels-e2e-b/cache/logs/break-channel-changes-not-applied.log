@@ -1,0 +1,184 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 3 workers
+
+2026/11/16 06:59:52 socat[2082819] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 06:59:52 socat[2082835] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 06:59:56 socat[2081973] E read(6, 0x5c9f4e072000, 8192): Connection reset by peer
+2026/11/16 06:59:56 socat[2081975] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 06:59:56 socat[2082827] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 06:59:56 socat[2082833] E write(6, 0x5c9f4e072000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/current.spec.ts:153:1 › SYN-03 a channel changed while the person was offline and in another channel is right when they come back to it (9.4s)
+2026/11/16 07:00:00 socat[2094057] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 07:00:00 socat[2094084] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 07:00:22 socat[2082825] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 07:00:22 socat[2082831] E write(6, 0x5c9f4e072000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back (34.6s)
+2026/11/16 07:00:30 socat[2085032] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 07:00:30 socat[2085062] E write(6, 0x5c9f4e072000, 28): Broken pipe
+2026/11/16 07:00:30 socat[2085066] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  2 tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection (43.0s)
+2026/11/16 07:00:32 socat[2075379] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:00:32 socat[2103462] E write(6, 0x5c9f4e072000, 24): Broken pipe
+2026/11/16 07:00:32 socat[2103465] E write(6, 0x5c9f4e072000, 24): Broken pipe
+  ✘  4 tests/channels-e2e/offline.spec.ts:101:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives (35.7s)
+
+
+  1) tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 0
+
+    @@ -4,9 +4,6 @@
+        "  > first reply, edited",
+        "  > third reply",
+        "four, edited",
+        "five [❤️]",
+        "six [👍 2]",
+    -   "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:126:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-01-a-channel-l-e15ca--when-the-person-comes-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-01-a-channel-l-e15ca--when-the-person-comes-back/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-01-a-channel-l-e15ca--when-the-person-comes-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-01-a-channel-l-e15ca--when-the-person-comes-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 0
+
+    @@ -4,9 +4,6 @@
+        "  > first reply, edited",
+        "  > third reply",
+        "four, edited",
+        "five [❤️]",
+        "six [👍 2]",
+    -   "seven",
+    -   "eight, edited",
+    -   "  > reply to eight",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/current.spec.ts:223:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/current-SYN-05-what-a-devi-02ea9--channel-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/offline.spec.ts:101:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -2,7 +2,6 @@
+        "one, edited",
+        "This message was deleted.",
+        "  > a reply",
+        "three [👍]",
+        "four",
+    -   "five",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:121:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/offline-OFF-03-on-a-very-s-2fcc6-ows-when-the-answer-arrives/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/offline-OFF-03-on-a-very-s-2fcc6-ows-when-the-answer-arrives/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/offline-OFF-03-on-a-very-s-2fcc6-ows-when-the-answer-arrives/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-changes-not-applied/test-results/offline-OFF-03-on-a-very-s-2fcc6-ows-when-the-answer-arrives/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/current.spec.ts:109:1 › SYN-01 a channel left for another one shows everything that changed meanwhile when the person comes back 
+    tests/channels-e2e/current.spec.ts:202:1 › SYN-05 what a device caught up on is what it shows the next time it opens the channel with no connection 
+    tests/channels-e2e/offline.spec.ts:101:1 › OFF-03 on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives 
+  1 passed (47.5s)
+2026/11/16 07:00:33 socat[2075379] W exiting on signal 15
+2026/11/16 07:00:33 socat[2074534] W exiting on signal 15

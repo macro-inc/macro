@@ -1,0 +1,97 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:41:16 socat[3242483] E write(6, 0x62761a942000, 24): Broken pipe
+2026/11/16 08:41:16 socat[3242496] E write(6, 0x62761a942000, 24): Broken pipe
+2026/11/16 08:41:16 socat[3242507] E write(6, 0x62761a942000, 24): Broken pipe
+2026/11/16 08:41:17 socat[3242489] E write(6, 0x62761a942000, 24): Broken pipe
+2026/11/16 08:41:17 socat[3242498] E write(6, 0x62761a942000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type (17.6s)
+  ✘  1 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (17.4s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing 
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e384-47bb-7bb4-b629-1d149eef1252"]').getByRole('button', { name: 'Send message' })
+    Expected: disabled
+    Received: enabled
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeDisabled" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e384-47bb-7bb4-b629-1d149eef1252"]').getByRole('button', { name: 'Send message' })
+        31 × locator resolved to <button type="button" data-closed="" data-button="" draggable="false" data-slot="button" data-size="icon-md" data-variant="primary" data-input-action="send" aria-label="Send message" data-appearance="default" class="relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium select-none disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-c…>…</button>
+           - unexpected value "enabled"
+
+
+      127 |   const view = new ChannelView(page, channel.id);
+      128 |   await view.open();
+    > 129 |   await expect(sendButton(view)).toBeDisabled();
+          |                                  ^
+      130 |
+      131 |   await view.composerText.click();
+      132 |   await page.keyboard.type('one');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:129:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/composer-CMP-04-the-send-b-ae676--sending-I-can-go-on-typing/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/composer-CMP-04-the-send-b-ae676--sending-I-can-go-on-typing/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/composer-CMP-04-the-send-b-ae676--sending-I-can-go-on-typing/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/composer-CMP-04-the-send-b-ae676--sending-I-can-go-on-typing/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type 
+
+    Error: expect(locator).toBeDisabled() failed
+
+    Locator:  getByRole('main').getByRole('button', { name: 'Send message' })
+    Expected: disabled
+    Received: enabled
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeDisabled" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('button', { name: 'Send message' })
+        34 × locator resolved to <button type="button" data-closed="" data-button="" draggable="false" data-slot="button" data-size="icon-md" data-variant="primary" data-input-action="send" aria-label="Send message" data-appearance="default" class="relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium select-none disabled:cursor-not-allowed disabled:opacity-45 data-disabled:cursor-not-allowed focus-visible:outline-hidden focus-visible:-outline-offset-2 motion-reduce:transition-none forced-c…>…</button>
+           - unexpected value "enabled"
+
+
+      258 |   await expect(
+      259 |     main.getByRole('button', { name: 'Send message' })
+    > 260 |   ).toBeDisabled();
+          |     ^
+      261 |   await expect(
+      262 |     section(deePage, 'direct_messages').getByRole('treeitem', {
+      263 |       name: 'Cy Teammate',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:260:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-send-button-always-on/test-results/direct-messages-DM-05-a-co-80e2c-ng-can-be-sent-until-I-type/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing 
+    tests/channels-e2e/direct-messages.spec.ts:228:1 › DM-05 a conversation with someone I never wrote to opens empty, saying “Say hello”, and nothing can be sent until I type 
+2026/11/16 08:41:17 socat[3223842] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:41:17 socat[3223842] W exiting on signal 15
+2026/11/16 08:41:17 socat[3217479] W exiting on signal 15

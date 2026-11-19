@@ -1,0 +1,780 @@
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone/trace.zip
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat1/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat1/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat1/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat1/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat1/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat1/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat1/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat1/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat1/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat1/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat1/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat1/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat1/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat1/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat1/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat2/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat2/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat2/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat2/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat2/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat2/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat2/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat2/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat2/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat2/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat2/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat2/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat2/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat2/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat2/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat2/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat3/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat3/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat3/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat3/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat3/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat3/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat3/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat3/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat3/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat3/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat3/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat3/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat3/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat3/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat3/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat3/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat4/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat4/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat4/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat4/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat4/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat4/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat4/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat4/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat4/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat4/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat4/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat4/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat4/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat4/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat4/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat4/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat5/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat5/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat5/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat5/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat5/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat5/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat5/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat5/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat5/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat5/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat5/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat5/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat5/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat5/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat5/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat5/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat6/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat6/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat6/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat6/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat6/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat6/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat6/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat6/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat6/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat6/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat6/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat6/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat6/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat6/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat6/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat6/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat7/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat7/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat7/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat7/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat7/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat7/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat7/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat7/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat7/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat7/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat7/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat7/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat7/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat7/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat7/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat7/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat8/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat8/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat8/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat8/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat8/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat8/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat8/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat8/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat8/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat8/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat8/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat8/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat8/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat8/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat8/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat8/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat9/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat9/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat9/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat9/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat9/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat9/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat9/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat9/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat9/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat9/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat9/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat9/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat9/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat9/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat9/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat9/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat10/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat10/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat10/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat10/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat10/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat10/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat10/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat10/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat10/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat10/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat10/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat10/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat10/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat10/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat10/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat10/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat11/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat11/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat11/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat11/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat11/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat11/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat11/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat11/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat11/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat11/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat11/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat11/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat11/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat11/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat11/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat11/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat12/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat12/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat12/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat12/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat12/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat12/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat12/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat12/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat12/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat12/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat12/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat12/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat12/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat12/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat12/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat12/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat13/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat13/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat13/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat13/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat13/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat13/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat13/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat13/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat13/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat13/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat13/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat13/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat13/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat13/trace.zip
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat13/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat13/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat14/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat14/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat14/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat14/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat14/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat14/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat14/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat14/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat14/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat14/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat14/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat14/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat14/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat14/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat14/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat14/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat15/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat15/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat15/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat15/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat15/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat15/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat15/trace.zip
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat15/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat15/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat15/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat15/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat15/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat15/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat15/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat15/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat15/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat16/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat16/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat16/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat16/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat16/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat16/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat16/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat16/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat16/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat16/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat16/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat16/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat16/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat16/trace.zip
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat16/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat16/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat17/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat17/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat17/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat17/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat17/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat17/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat17/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat17/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat17/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat17/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat17/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat17/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat17/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat17/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat17/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat17/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat18/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat18/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat18/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat18/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat18/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat18/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat18/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat18/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat18/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat18/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat18/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat18/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat18/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat18/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat18/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat18/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat19/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat19/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat19/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat19/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat19/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat19/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat19/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat19/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat19/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat19/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat19/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat19/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat19/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat19/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat19/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat19/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat20/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat20/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat20/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat20/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat20/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat20/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat20/trace.zip
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat20/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat20/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat20/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat20/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat20/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat20/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat20/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat20/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat20/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat21/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat21/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat21/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat21/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat21/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat21/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat21/trace.zip
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat21/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat21/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat21/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat21/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat21/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat21/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat21/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat21/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat21/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat22/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat22/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat22/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat22/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat22/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat22/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat22/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat22/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat22/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat22/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat22/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat22/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat22/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat22/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat22/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat22/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat23/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat23/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat23/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat23/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat23/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat23/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat23/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat23/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat23/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat23/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat23/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat23/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat23/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat23/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat23/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat23/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat24/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat24/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat24/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat24/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat24/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat24/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat24/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat24/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat24/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat24/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat24/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat24/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat24/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat24/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat24/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat24/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat25/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat25/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat25/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat25/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat25/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat25/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat25/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat25/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat25/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat25/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat25/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat25/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat25/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat25/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat25/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat25/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat26/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat26/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat26/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat26/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat26/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat26/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat26/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat26/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat26/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat26/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat26/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat26/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat26/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat26/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat26/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat26/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat27/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat27/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat27/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat27/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat27/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat27/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat27/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat27/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat27/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat27/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat27/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat27/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat27/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat27/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat27/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat27/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat28/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat28/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat28/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat28/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat28/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat28/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat28/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat28/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat28/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat28/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat28/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat28/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat28/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat28/trace.zip
+CHN-15	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat28/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat28/trace.zip
+CHN-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-01-a-private--30462-and-takes-its-first-message-repeat29/trace.zip
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-02-a-team-cha-0f444-’s-channels-and-can-be-read-repeat29/trace.zip
+CHN-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat29/trace.zip
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-04-a-rename-s-1ff02-er-who-has-the-channel-open-repeat29/trace.zip
+CHN-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload-repeat29/trace.zip
+CHN-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member-repeat29/trace.zip
+CHN-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat29/trace.zip
+CHN-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too-repeat29/trace.zip
+CHN-09	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-09-a-member-w-2d5de-annel-is-not-offered-Delete-repeat29/trace.zip
+CHN-10	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked-repeat29/trace.zip
+CHN-11	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none-repeat29/trace.zip
+CHN-12	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was-repeat29/trace.zip
+CHN-13	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-13-a-channel’-5f737-with-“Channel-name-created”-repeat29/trace.zip
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-14-a-brand-ne-a6330-“Channel-name-created”-line-repeat29/trace.zip
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-15-a-channel--06db8-es-on-its-owner’s-open-page-repeat29/trace.zip
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/channels-CHN-16-a-rename-s-5be29-ng-read-shows-in-the-header-repeat29/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat1/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat1/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat1/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat1/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat1/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat1/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat1/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat2/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat2/trace.zip
+MEM-03	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat2/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat2/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat2/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat2/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat2/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat2/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat3/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat3/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat3/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat3/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat3/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat3/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat3/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat4/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat4/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat4/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat4/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat4/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat4/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat4/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat5/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat5/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat5/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat5/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat5/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat5/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat5/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat5/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat6/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat6/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat6/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat6/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat6/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat6/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat6/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat7/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat7/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat7/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat7/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat7/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat7/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat7/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat7/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat8/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat8/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat8/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat8/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat8/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat8/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat8/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat9/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat9/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat9/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat9/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat9/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat9/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat9/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat9/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat10/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat10/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat10/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat10/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat10/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat10/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat10/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat11/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat11/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat11/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat11/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat11/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat11/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat11/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat11/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat12/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat12/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat12/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat12/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat12/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat12/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat12/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat13/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat13/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat13/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat13/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat13/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat13/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat13/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat14/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat14/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat14/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat14/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat14/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat14/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat14/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat15/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat15/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat15/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat15/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat15/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat15/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat15/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat15/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat16/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat16/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat16/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat16/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat16/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat16/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat16/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat16/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat17/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat17/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat17/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat17/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat17/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat17/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat17/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat17/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat18/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat18/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat18/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat18/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat18/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat18/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat18/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat18/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat19/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat19/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat19/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat19/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat19/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat19/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat19/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat19/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat20/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat20/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat20/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat20/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat20/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat20/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat20/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat20/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat21/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat21/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat21/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat21/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat21/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat21/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat21/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat21/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat22/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat22/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat22/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat22/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat22/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat22/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat22/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat22/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat23/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat23/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat23/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat23/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat23/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat23/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat23/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat23/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat24/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat24/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat24/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat24/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat24/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat24/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat24/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat24/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat25/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat25/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat25/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat25/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat25/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat25/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat25/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat25/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat26/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat26/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat26/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat26/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat26/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat26/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat26/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat26/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat27/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat27/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat27/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat27/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat27/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat27/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat27/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat27/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat28/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat28/trace.zip
+MEM-03	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat28/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat28/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat28/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat28/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat28/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat28/trace.zip
+MEM-01	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat29/trace.zip
+MEM-02	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told-repeat29/trace.zip
+MEM-03	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat29/trace.zip
+MEM-04	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel-repeat29/trace.zip
+MEM-05	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-05-people-adde-c583e--between-the-right-messages-repeat29/trace.zip
+MEM-06	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-06-a-channel-o-fd759--between-the-right-messages-repeat29/trace.zip
+MEM-07	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner-repeat29/trace.zip
+MEM-08	passed	-	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/members-MEM-08-a-person-ad-905b9--the-list-when-they-open-it-repeat29/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat1/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat2/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat2/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat3/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat3/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat4/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat4/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat5/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat5/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat6/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat6/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat7/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat7/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat8/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat8/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat9/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat9/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat10/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat10/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat11/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat11/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat12/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat12/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat13/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat13/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat14/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat14/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat15/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat15/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat16/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat16/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat17/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat17/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat18/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat18/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat19/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat19/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat20/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat20/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat21/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat21/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat22/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat22/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat23/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat23/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat24/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat24/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat25/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat25/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat26/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat26/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat27/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat27/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat28/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat28/trace.zip
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-04-messages-re-3412b-gh-again-with-no-connection-repeat29/trace.zip
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/r11-main/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat29/trace.zip

@@ -1,0 +1,23 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 1 worker
+
+HELD list asked 1 held 1 server name "n/a"
+HELD shown after ms -1 list asked in all 1 header e2e-mwjgj687qugu Messages Attachments Ca
+2026/11/16 16:08:55 socat[721252] E write(6, 0x594082dd3000, 24): Broken pipe
+2026/11/16 16:08:55 socat[721270] E write(6, 0x594082dd3000, 24): Broken pipe
+HELD after reload ok
+2026/11/16 16:08:57 socat[824669] E write(6, 0x594082dd3000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-HELD a rename saved while the channel list is still loading (1.1m)
+HELD list asked 1 held 1 server name "n/a"
+HELD shown after ms -1 list asked in all 1 header e2e-mwjgkluyuibc Messages Attachments Ca
+2026/11/16 16:10:02 socat[826431] E write(6, 0x594082dd3000, 24): Broken pipe
+HELD after reload ok
+2026/11/16 16:10:03 socat[937791] E write(6, 0x594082dd3000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe2.spec.ts:6:1 › P-HELD a rename saved while the channel list is still loading (1.1m)
+
+  2 passed (2.4m)
+2026/11/16 16:10:03 socat[702723] W exiting on signal 15
+2026/11/16 16:10:03 socat[701649] W exiting on signal 15

@@ -1,0 +1,14 @@
+  const log = await page.evaluate(
+    () => (window as unknown as { __log: string[] }).__log
+  );
+  const mark = log.lastIndexOf('--- press Enter');
+  const enter = log.findIndex((l, i) => i > mark && l.includes('keydown Enter'));
+  const remade = log.findIndex(
+    (l, i) => i > mark && l.includes('added DIV[menuitem|mute')
+  );
+  const target = enter < 0 ? 'none' : log[enter].includes('target=BODY') ? 'body' : 'item';
+  console.log(
+    `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+  );
+  expect(held).toBe(true);
+});

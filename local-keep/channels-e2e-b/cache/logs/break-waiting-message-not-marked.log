@@ -1,0 +1,98 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 07:07:38 socat[2803379] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:07:38 socat[2804791] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:08:06 socat[2814816] E read(6, 0x6362c33a2000, 8192): Connection reset by peer
+2026/11/16 07:08:06 socat[2814774] E write(6, 0x6362c33a1000, 24): Broken pipe
+2026/11/16 07:08:06 socat[2814818] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 07:08:06 socat[2814804] E write(6, 0x6362c33a2000, 24): Broken pipe
+2026/11/16 07:08:06 socat[2814817] E read(6, 0x6362c33a2000, 8192): Connection reset by peer
+2026/11/16 07:08:06 socat[2814819] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 07:08:06 socat[2814803] E write(6, 0x6362c33a2000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/writes.spec.ts:305:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet (28.8s)
+  ✘  2 tests/channels-e2e/writes.spec.ts:283:1 › WRT-10 a message still waiting to be sent says that it is not sent yet (28.9s)
+
+
+  1) tests/channels-e2e/writes.spec.ts:283:1 › WRT-10 a message still waiting to be sent says that it is not sent yet 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Not sent yet')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Not sent yet')
+
+
+      296 |   await expect(bens.message('waiting')).toBeVisible();
+      297 |
+    > 298 |   await expect(bens.list.getByText('Not sent yet')).toBeVisible({
+          |                                                     ^
+      299 |     timeout: 20_000,
+      300 |   });
+      301 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:298:53
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-10-a-message-st-17087-ays-that-it-is-not-sent-yet/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-10-a-message-st-17087-ays-that-it-is-not-sent-yet/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-10-a-message-st-17087-ays-that-it-is-not-sent-yet/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-10-a-message-st-17087-ays-that-it-is-not-sent-yet/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/writes.spec.ts:305:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Not sent yet')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Not sent yet')
+
+
+      317 |   await expect(bens.message('waiting')).toBeVisible();
+      318 |
+    > 319 |   await expect(bens.list.getByText('Not sent yet')).toBeVisible({
+          |                                                     ^
+      320 |     timeout: 20_000,
+      321 |   });
+      322 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:319:53
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-waiting-message-not-marked/test-results/writes-WRT-11-a-waiting-me-e69ca-ays-that-it-is-not-sent-yet/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/writes.spec.ts:283:1 › WRT-10 a message still waiting to be sent says that it is not sent yet 
+    tests/channels-e2e/writes.spec.ts:305:1 › WRT-11 a waiting message written right after another of the same person says that it is not sent yet 
+2026/11/16 07:08:06 socat[2803379] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:08:06 socat[2804791] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:08:06 socat[2804791] W exiting on signal 15
+2026/11/16 07:08:06 socat[2803379] W exiting on signal 15

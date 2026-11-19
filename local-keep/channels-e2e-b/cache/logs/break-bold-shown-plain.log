@@ -1,0 +1,64 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:52:04 socat[2750461] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:04 socat[2750270] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:06 socat[2750270] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:06 socat[2750461] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:06 socat[2750270] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:24 socat[2776763] E write(6, 0x61a973c59000, 24): Broken pipe
+2026/11/16 07:52:24 socat[2776782] E write(6, 0x61a973c59000, 24): Broken pipe
+2026/11/16 07:52:25 socat[2776743] E write(6, 0x61a973c59000, 24): Broken pipe
+2026/11/16 07:52:25 socat[2750461] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:25 socat[2776762] E write(6, 0x61a973c59000, 24): Broken pipe
+2026/11/16 07:52:25 socat[2776781] E write(6, 0x61a973c59000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload (20.3s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload 
+
+    Error: expect(locator).toHaveCSS(expected) failed
+
+    Locator: locator('[data-channel-scroll]').getByText('bold', { exact: true })
+    Expected: "700"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveCSS" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('bold', { exact: true })
+
+
+      175 |       view.list.getByRole('link', { name: 'https://example.com/path?q=1' })
+      176 |     ).toHaveAttribute('href', 'https://example.com/path?q=1');
+    > 177 |     await expect(view.list.getByText('bold', { exact: true })).toHaveCSS(
+          |                                                                ^
+      178 |       'font-weight',
+      179 |       '700'
+      180 |     );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:177:64
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-bold-shown-plain/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-bold-shown-plain/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-bold-shown-plain/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-bold-shown-plain/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-bold-shown-plain/test-results/messages-MSG-05-formatting-8e8a1-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:152:1 › MSG-05 formatting, a link, emoji and other scripts read the same for both people and after reload 
+2026/11/16 07:52:26 socat[2750270] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:52:26 socat[2750461] W exiting on signal 15
+2026/11/16 07:52:26 socat[2750270] W exiting on signal 15

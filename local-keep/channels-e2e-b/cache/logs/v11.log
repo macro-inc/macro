@@ -1,0 +1,118 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 10 tests using 4 workers
+
+2026/11/16 23:41:19 socat[1047301] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:41:22 socat[1092900] E read(6, 0x5a2a6c6b0000, 8192): Connection reset by peer
+2026/11/16 23:41:22 socat[1092780] E write(6, 0x5a2a6c6af000, 24): Broken pipe
+2026/11/16 23:41:22 socat[1092901] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 23:41:22 socat[1092906] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/members.spec.ts:116:1 › MEM-03 a person removed while the channel is open loses it at once (4.6s)
+2026/11/16 23:41:22 socat[1091379] E read(6, 0x5a2a6c6af000, 8192): Connection reset by peer
+2026/11/16 23:41:22 socat[1091380] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 23:41:27 socat[1095451] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:27 socat[1095905] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:29 socat[1092735] E write(6, 0x5a2a6c6af000, 24): Broken pipe
+2026/11/16 23:41:29 socat[1092902] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:30 socat[1105179] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:30 socat[1105840] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:34 socat[1098281] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:34 socat[1098463] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:36 socat[1111950] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/offline.spec.ts:193:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (18.7s)
+2026/11/16 23:41:36 socat[1111986] E write(6, 0x5a2a6c6b0000, 28): Broken pipe
+2026/11/16 23:41:36 socat[1111987] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/16 23:41:36 socat[1092765] E write(6, 0x5a2a6c6af000, 24): Broken pipe
+2026/11/16 23:41:36 socat[1092895] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:36 socat[1092904] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:36 socat[1126717] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/direct-messages.spec.ts:71:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (19.2s)
+2026/11/16 23:41:39 socat[1121186] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:39 socat[1121088] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/offline.spec.ts:382:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (16.8s)
+2026/11/16 23:41:39 socat[1121346] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:41 socat[1136439] E read(6, 0x5a2a6c6b0000, 8192): Connection reset by peer
+2026/11/16 23:41:41 socat[1136440] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 23:41:41 socat[1136368] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:41 socat[1136454] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/members.spec.ts:116:1 › MEM-03 a person removed while the channel is open loses it at once (4.0s)
+2026/11/16 23:41:47 socat[1141482] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:47 socat[1141511] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:48 socat[1139514] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:50 socat[1144890] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:50 socat[1047301] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:41:50 socat[1136346] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:51 socat[1136683] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/direct-messages.spec.ts:71:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (14.0s)
+2026/11/16 23:41:51 socat[1156638] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:51 socat[1156589] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:41:55 socat[1168024] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:42:09 socat[1153227] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:42:09 socat[1153371] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/offline.spec.ts:193:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (29.4s)
+2026/11/16 23:42:09 socat[1153469] E write(6, 0x5a2a6c6b0000, 28): Broken pipe
+2026/11/16 23:42:09 socat[1153471] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 23:42:36 socat[1119353] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✘   4 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.3m)
+2026/11/16 23:42:37 socat[1119589] E write(6, 0x5a2a6c6b0000, 28): Broken pipe
+2026/11/16 23:42:37 socat[1119590] E write(6, 0x555555624000, 56): Broken pipe
+2026/11/16 23:42:57 socat[1164978] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:42:57 socat[1165150] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+  ✘   9 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.3m)
+2026/11/16 23:42:57 socat[1165199] E write(6, 0x5a2a6c6b0000, 28): Broken pipe
+2026/11/16 23:42:57 socat[1165200] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 23:43:03 socat[1175423] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:43:03 socat[1175592] E write(6, 0x5a2a6c6b0000, 24): Broken pipe
+2026/11/16 23:43:03 socat[1175611] E write(6, 0x5a2a6c6b0000, 28): Broken pipe
+2026/11/16 23:43:03 socat[1175612] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  10 tests/channels-e2e/offline.spec.ts:382:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (1.2m)
+
+
+  1) tests/channels-e2e/offline.spec.ts:382:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e6bc-4911-7dcf-95b6-d19cf53363de"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e6bc-4911-7dcf-95b6-d19cf53363de"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at ChannelView.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:407:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/v11/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/v11/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/v11/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/v11/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/offline.spec.ts:382:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection 
+  9 passed (2.1m)
+2026/11/16 23:43:04 socat[1047301] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:43:04 socat[1047301] W exiting on signal 15
+2026/11/16 23:43:04 socat[1046102] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:43:04 socat[1046102] W exiting on signal 15

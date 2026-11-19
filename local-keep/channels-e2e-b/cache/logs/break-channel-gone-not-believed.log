@@ -1,0 +1,23 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/17 05:03:05 socat[3041957] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:07 socat[3049313] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:08 socat[3054029] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:08 socat[3054033] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:08 socat[3054060] E write(6, 0x5d41317b8000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (7.1s)
+2026/11/17 05:03:18 socat[3041939] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:18 socat[3041963] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:18 socat[3042104] E write(6, 0x5d41317b8000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.1s)
+2026/11/17 05:03:18 socat[3041958] E write(6, 0x5d41317b8000, 24): Broken pipe
+2026/11/17 05:03:18 socat[3042074] E write(6, 0x5d41317b8000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.1s)
+
+  3 passed (31.5s)
+2026/11/17 05:03:19 socat[3005068] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:03:19 socat[3005068] W exiting on signal 15
+2026/11/17 05:03:19 socat[3002873] W exiting on signal 15

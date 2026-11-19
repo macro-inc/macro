@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:20:07 socat[1202335] E write(6, 0x57dbaf146000, 24): Broken pipe
+2026/11/16 08:20:07 socat[1202350] E write(6, 0x57dbaf146000, 24): Broken pipe
+2026/11/16 08:20:07 socat[1202354] E write(6, 0x57dbaf146000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it (17.9s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwiztax17t9z-channel' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwiztax17t9z-channel' }).getByLabel('Unread', { exact: true })
+
+
+      104 |   await findConversations(page, made.tag);
+      105 |   const row = conversationRow(page, `${made.tag}-channel`);
+    > 106 |   await expect(unreadDot(row)).toBeVisible();
+          |                                ^
+      107 |
+      108 |   await row.click();
+      109 |   const view = new ChannelView(page, made.channel);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/unread.spec.ts:106:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mark-as-read-does-nothing/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-mark-as-read-does-nothing/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mark-as-read-does-nothing/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-mark-as-read-does-nothing/test-results/unread-UNR-02-a-channel-wi-214ac-d-“Mark-as-read”-removes-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/unread.spec.ts:92:1 › UNR-02 a channel with unread messages opens with “New” above the first of them, and “Mark as read” removes it 
+2026/11/16 08:20:08 socat[1178645] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:20:08 socat[1180721] W exiting on signal 15
+2026/11/16 08:20:08 socat[1178645] W exiting on signal 15

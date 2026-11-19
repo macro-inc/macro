@@ -1,0 +1,81 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 12 tests using 4 workers
+
+2026/11/16 09:51:29 socat[1482260] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:29 socat[1459264] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:51:29 socat[1482284] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:29 socat[1482290] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:29 socat[1482262] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:29 socat[1482286] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:31 socat[1482245] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:31 socat[1482285] E write(6, 0x5ac80d0b1000, 24): Broken pipe
+2026/11/16 09:51:38 socat[1489537] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (13.0s)
+2026/11/16 09:51:38 socat[1489548] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:51:38 socat[1489549] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:51:38 socat[1489546] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:38 socat[1489554] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (13.2s)
+2026/11/16 09:51:38 socat[1489560] E write(6, 0x5ac80d0b2000, 82): Broken pipe
+2026/11/16 09:51:38 socat[1489561] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:51:38 socat[1490348] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (13.4s)
+2026/11/16 09:51:38 socat[1490564] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:51:38 socat[1490565] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:51:38 socat[1489581] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (13.7s)
+2026/11/16 09:51:38 socat[1489583] E write(6, 0x5ac80d0b2000, 28): Broken pipe
+2026/11/16 09:51:38 socat[1489584] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/16 09:51:41 socat[1501432] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:42 socat[1501497] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:42 socat[1501519] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:42 socat[1501540] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:42 socat[1501672] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:44 socat[1453261] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:51:44 socat[1501531] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:49 socat[1508945] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:49 socat[1508966] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.7s)
+2026/11/16 09:51:49 socat[1508971] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:51:49 socat[1508972] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:51:50 socat[1509080] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:50 socat[1509097] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (11.3s)
+2026/11/16 09:51:50 socat[1509123] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:50 socat[1509801] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (11.2s)
+2026/11/16 09:51:50 socat[1509804] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:51 socat[1511010] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:51 socat[1511463] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (12.3s)
+2026/11/16 09:51:51 socat[1511585] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:51:51 socat[1511587] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:51:52 socat[1522070] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:53 socat[1523203] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:53 socat[1523295] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:54 socat[1523313] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:54 socat[1523321] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:51:55 socat[1524403] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:52:00 socat[1529915] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.9s)
+2026/11/16 09:52:00 socat[1530052] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:52:00 socat[1530053] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:52:00 socat[1532389] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:52:00 socat[1532396] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.4s)
+2026/11/16 09:52:00 socat[1532413] E write(6, 0x5ac80d0b2000, 26): Broken pipe
+2026/11/16 09:52:00 socat[1532414] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 09:52:01 socat[1532449] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (11.1s)
+2026/11/16 09:52:01 socat[1532458] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+2026/11/16 09:52:02 socat[1533298] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/offline.spec.ts:334:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.9s)
+2026/11/16 09:52:02 socat[1533302] E write(6, 0x5ac80d0b2000, 24): Broken pipe
+
+  12 passed (51.1s)
+2026/11/16 09:52:02 socat[1459264] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:52:02 socat[1453261] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:52:02 socat[1459264] W exiting on signal 15
+2026/11/16 09:52:02 socat[1453261] W exiting on signal 15

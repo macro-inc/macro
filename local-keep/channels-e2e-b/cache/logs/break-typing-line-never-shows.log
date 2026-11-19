@@ -1,0 +1,103 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:48:57 socat[3960596] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:48:57 socat[3960602] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:48:57 socat[3960608] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:48:57 socat[3940053] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:48:57 socat[3939247] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  2 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (17.5s)
+2026/11/16 08:48:59 socat[3961677] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:48:59 socat[3961709] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:49:00 socat[3960584] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:49:00 socat[3959352] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:49:00 socat[3960600] E write(6, 0x5f3a3e965000, 24): Broken pipe
+2026/11/16 08:49:00 socat[3960604] E write(6, 0x5f3a3e965000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (20.3s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      318 |   await benView.composerText.click();
+      319 |   await benPage.keyboard.type('yes, writing');
+    > 320 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      321 |
+      322 |   await benPage.keyboard.press('Enter');
+      323 |   await expect(view.message('yes, writing')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:320:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-09-while-the--88335--is-typing”-until-they-send/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+
+
+      339 |
+      340 |   await ben.typing(channel.id);
+    > 341 |   await expect(typingLine(page, 'Ben Member')).toBeVisible();
+          |                                                ^
+      342 |
+      343 |   await ben.typing(channel.id, false);
+      344 |   await expect(typingLine(page, 'Ben Member')).toBeHidden({ timeout: 5_000 });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:341:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-typing-line-never-shows/test-results/composer-CMP-10-typing-rep-74d5d-ng”-and-goes-when-they-stop/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send 
+    tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop 
+2026/11/16 08:49:01 socat[3940053] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:49:01 socat[3940053] W exiting on signal 15
+2026/11/16 08:49:01 socat[3939247] W exiting on signal 15

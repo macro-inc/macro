@@ -1,0 +1,63 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:35:24 socat[2631807] E write(6, 0x5e3c87334000, 24): Broken pipe
+2026/11/16 08:35:24 socat[2632093] E write(6, 0x5e3c87334000, 24): Broken pipe
+2026/11/16 08:35:24 socat[2632101] E write(6, 0x5e3c87334000, 24): Broken pipe
+2026/11/16 08:35:25 socat[2633362] E write(6, 0x5e3c87334000, 24): Broken pipe
+2026/11/16 08:35:25 socat[2633950] E write(6, 0x5e3c87334000, 24): Broken pipe
+2026/11/16 08:35:25 socat[2633966] E write(6, 0x5e3c87334000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (19.6s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e37e-e239-7749-bc50-beaaeca105a0"]').locator('[contenteditable="true"]').first()
+    Expected: "copied from somewhere else"
+    Received: ""
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e37e-e239-7749-bc50-beaaeca105a0"]').locator('[contenteditable="true"]').first()
+        6 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" aria-label="Type @ to share" data-hotkey-scope="channel-input-intercept_7">…</div>
+          - unexpected value ""
+        26 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" data-hotkey-scope="channel-input-intercept_7" aria-label="Type @ to share with #e2e-mwj0cxt2umjm">…</div>
+           - unexpected value ""
+
+
+      362 |   await view.composerText.click();
+      363 |   await paste(page, 'copied from somewhere else');
+    > 364 |   await expect(view.composerText).toHaveText('copied from somewhere else');
+          |                                   ^
+      365 |   await page.keyboard.press('Enter');
+      366 |
+      367 |   await view.expectEndsWith(['copied from somewhere else']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:364:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-paste-inserts-nothing/test-results/composer-CMP-11-text-paste-4f4c8-er-is-sent-as-it-was-copied/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied 
+2026/11/16 08:35:26 socat[2613208] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:35:26 socat[2613208] W exiting on signal 15
+2026/11/16 08:35:26 socat[2607017] W exiting on signal 15

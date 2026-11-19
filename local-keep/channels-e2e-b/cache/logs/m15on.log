@@ -1,0 +1,360 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 30 tests using 4 workers
+
+2026/11/17 05:09:04 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:04 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:11 socat[3775483] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775469] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775557] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775581] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775512] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775578] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775575] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775494] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:11 socat[3775573] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3775465] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3775556] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3775562] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785931] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3774067] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785956] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785985] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785981] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3774071] E write(6, 0x5d395d0df000, 2851): Broken pipe
+2026/11/17 05:09:12 socat[3785989] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3786002] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785896] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785948] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785983] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.4s)
+2026/11/17 05:09:12 socat[3785895] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785938] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785962] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785973] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3774070] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785987] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:12 socat[3785993] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.4s)
+2026/11/17 05:09:13 socat[3785863] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:13 socat[3774006] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:13 socat[3785868] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:13 socat[3785903] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.4s)
+2026/11/17 05:09:13 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:13 socat[3788302] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:13 socat[3788349] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:13 socat[3788367] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:14 socat[3788350] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:14 socat[3788366] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (9.4s)
+2026/11/17 05:09:14 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:19 socat[3791397] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:19 socat[3791399] E write(6, 0x555555624000, 40): Broken pipe
+2026/11/17 05:09:19 socat[3791574] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:19 socat[3791575] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:19 socat[3791271] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:19 socat[3790907] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:19 socat[3791204] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:19 socat[3791227] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:20 socat[3795752] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:20 socat[3795763] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803234] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3788803] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803307] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803293] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803289] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803305] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.6s)
+2026/11/17 05:09:21 socat[3788759] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803359] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803510] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803321] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3788758] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803463] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803517] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:21 socat[3788768] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3804019] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3804044] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3803999] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3804022] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:21 socat[3804046] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.1s)
+2026/11/17 05:09:21 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:22 socat[3807657] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:22 socat[3807780] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:22 socat[3807781] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.3s)
+2026/11/17 05:09:22 socat[3807661] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:23 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:23 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:23 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:23 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:27 socat[3809604] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:27 socat[3810183] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:27 socat[3810182] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:27 socat[3810341] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:27 socat[3810340] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:28 socat[3810590] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:28 socat[3810638] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:28 socat[3810587] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:28 socat[3810627] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:28 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:29 socat[3806365] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:29 socat[3820153] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3806369] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3820517] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:29 socat[3820150] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3806367] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3820514] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3820900] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.7s)
+2026/11/17 05:09:29 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:29 socat[3812165] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3812210] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3812212] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3807397] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:29 socat[3807399] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821170] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821177] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821162] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3807394] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821172] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821186] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:29 socat[3809252] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821478] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821501] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3809253] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3821479] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:29 socat[3821502] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:29 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:31 socat[3810411] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:31 socat[3823787] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:31 socat[3823586] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:31 socat[3810412] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:31 socat[3823533] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:31 socat[3823740] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:33 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:33 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:36 socat[3825141] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3825117] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3824432] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3824764] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3825100] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:36 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:36 socat[3825309] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3825316] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3825579] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:36 socat[3825580] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:37 socat[3835419] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:37 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:37 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:37 socat[3835444] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:37 socat[3835420] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:37 socat[3835443] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:38 socat[3827920] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3828024] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3827919] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3828025] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3824001] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:38 socat[3824003] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836052] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836059] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836050] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836031] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3824000] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836043] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836054] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3823040] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836074] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:38 socat[3836047] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.5s)
+2026/11/17 05:09:38 socat[3836056] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (9.0s)
+2026/11/17 05:09:39 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:39 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:39 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:39 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:39 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:40 socat[3825304] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3838781] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3838934] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3838678] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3838754] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3825302] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:40 socat[3838822] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.7s)
+2026/11/17 05:09:40 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:40 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:44 socat[3840294] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:44 socat[3840295] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:45 socat[3841567] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3841590] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3841467] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3841637] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3841465] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3841629] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3838087] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3849553] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3849598] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3849503] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3838086] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3849535] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:45 socat[3849583] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.3s)
+2026/11/17 05:09:46 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:46 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:46 socat[3838833] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:46 socat[3845829] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3850758] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3850723] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3845859] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3845810] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3845855] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3850518] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3838834] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3850728] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:46 socat[3850760] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.6s)
+2026/11/17 05:09:47 socat[3851130] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:47 socat[3851150] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:47 socat[3851149] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.8s)
+2026/11/17 05:09:47 socat[3851129] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:48 socat[3855596] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:48 socat[3855880] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:48 socat[3856342] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:48 socat[3856048] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:48 socat[3856579] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (8.1s)
+2026/11/17 05:09:51 socat[3855143] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:51 socat[3854972] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:51 socat[3855502] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:51 socat[3855510] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:52 socat[3858224] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:52 socat[3858460] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3858187] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3858413] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3857958] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3858186] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3863058] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3851145] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:53 socat[3740717] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:53 socat[3863184] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3863301] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3863198] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:53 socat[3863384] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.3s)
+2026/11/17 05:09:54 socat[3860349] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3860448] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3860346] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3860442] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3865982] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866054] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866117] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3855353] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:54 socat[3855355] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3865699] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866019] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.2s)
+2026/11/17 05:09:54 socat[3866027] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866143] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866240] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3865816] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3854913] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:09:54 socat[3866056] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:54 socat[3866118] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.4s)
+2026/11/17 05:09:56 socat[3869866] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3858921] E read(6, 0x5d395d0df000, 8192): Connection reset by peer
+2026/11/17 05:09:56 socat[3858923] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3869939] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3870052] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3869865] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3858922] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3869920] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:09:56 socat[3870010] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (6.9s)
+2026/11/17 05:10:00 socat[3870769] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:00 socat[3870472] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3871831] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3871912] E write(6, 0x5d395d0df000, 88): Broken pipe
+2026/11/17 05:10:01 socat[3871913] E write(6, 0x555555624000, 106): Broken pipe
+2026/11/17 05:10:01 socat[3871953] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:10:01 socat[3871858] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3871957] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3871965] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881097] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3867154] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881111] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881254] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881098] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3867155] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881110] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:01 socat[3881252] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.9s)
+2026/11/17 05:10:02 socat[3875013] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3874691] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3875027] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:10:02 socat[3869893] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882192] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882212] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882160] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882214] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882188] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.6s)
+2026/11/17 05:10:02 socat[3882234] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3869970] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882245] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882264] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882244] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:02 socat[3882263] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.6s)
+2026/11/17 05:10:03 socat[3882887] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:03 socat[3882918] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:03 socat[3882852] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:03 socat[3871968] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:03 socat[3882872] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:03 socat[3882881] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (7.2s)
+2026/11/17 05:10:07 socat[3883543] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:07 socat[3883375] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:07 socat[3883544] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:08 socat[3885811] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:08 socat[3885845] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:08 socat[3885830] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3892285] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3882682] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3892312] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3892334] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3882681] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3892310] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3892332] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (6.6s)
+2026/11/17 05:10:09 socat[3893073] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3893096] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3893130] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3893071] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3893128] E write(6, 0x5d395d0df000, 24): Broken pipe
+2026/11/17 05:10:09 socat[3893094] E write(6, 0x5d395d0df000, 24): Broken pipe
+  ✓  30 tests/channels-e2e/messages.spec.ts:676:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (6.6s)
+
+  30 passed (1.3m)
+2026/11/17 05:10:10 socat[3740717] W exiting on signal 15
+2026/11/17 05:10:10 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:10:10 socat[3739273] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:10:10 socat[3739273] W exiting on signal 15

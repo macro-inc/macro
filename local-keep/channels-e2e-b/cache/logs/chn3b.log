@@ -1,0 +1,279 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 2 workers
+
+2026/11/16 15:14:22 socat[3429656] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:22 socat[3429677] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:22 socat[3429703] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:22 socat[3429665] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:22 socat[3429699] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:22 socat[3429711] E write(6, 0x57136be1b000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (17.9s)
+  ✘  2 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (17.9s)
+2026/11/16 15:14:41 socat[3462102] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:41 socat[3462112] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:41 socat[3462279] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:42 socat[3462114] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:42 socat[3462291] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:14:42 socat[3462295] E write(6, 0x57136be1b000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (17.9s)
+  ✘  4 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (18.3s)
+2026/11/16 15:15:00 socat[3494386] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:15:00 socat[3494406] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:15:00 socat[3494425] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:15:01 socat[3494716] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:15:01 socat[3494792] E write(6, 0x57136be1b000, 24): Broken pipe
+2026/11/16 15:15:01 socat[3494815] E write(6, 0x57136be1b000, 24): Broken pipe
+  ✘  5 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (17.9s)
+  ✘  6 tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded (17.9s)
+
+
+  1) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjem1fb522c"
+    Received string:    "e2e-mwjem1ds41qyMessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        3 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjem1ds41qyMessagesAttachmentsCallsParticipantsCall"
+        25 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjem1ds41qyMessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjem1go5wle"
+    Received string:    "e2e-mwjem1e075ooMessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        2 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjem1e075ooMessagesAttachmentsCallsParticipantsCall"
+        25 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjem1e075ooMessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjemg0nmowt"
+    Received string:    "e2e-mwjemfxso248MessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        3 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjemfxso248MessagesAttachmentsCallsParticipantsCall"
+        25 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjemfxso248MessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjemg1umlvv"
+    Received string:    "e2e-mwjemg05pwjiMessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        3 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjemg05pwjiMessagesAttachmentsCallsParticipantsCall"
+        25 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjemg05pwjiMessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjemun52nk8"
+    Received string:    "e2e-mwjemuk82t39MessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        3 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjemuk82t39MessagesAttachmentsCallsParticipantsCall"
+        24 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjemuk82t39MessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat4/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ─────────────────
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjemv1vhfif"
+    Received string:    "e2e-mwjemv008t0wMessagesAttachmentsCallsParticipantsCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        4 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+          - unexpected value "e2e-mwjemv008t0wMessagesAttachmentsCallsParticipantsCall"
+        24 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjemv008t0wMessagesAttachmentsCallsParticipantsCallInvite"
+
+
+      15 |   await dialog.getByRole('textbox', { name: 'Name' }).fill(renamed);
+      16 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+    > 17 |   await expect(channelHeader(page)).toContainText(renamed);
+         |                                     ^
+      18 | });
+      19 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe2.spec.ts:17:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat5/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat5/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat5/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3b/test-results/zz-probe2-P-RENAME-after-the-list-has-loaded-repeat5/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6 failed
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+    tests/channels-e2e/zz-probe2.spec.ts:5:1 › P-RENAME after the list has loaded ──────────────────
+2026/11/16 15:15:02 socat[3421580] W exiting on signal 15
+2026/11/16 15:15:02 socat[3420838] W exiting on signal 15

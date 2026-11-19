@@ -1,0 +1,51 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:50:14 socat[2574163] E write(6, 0x5ebb314d5000, 24): Broken pipe
+2026/11/16 07:50:14 socat[2574178] E write(6, 0x5ebb314d5000, 24): Broken pipe
+2026/11/16 07:50:14 socat[2574181] E write(6, 0x5ebb314d5000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:357:1 › CHN-11 the Attachments tab of a channel with no files says there are none (18.0s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:357:1 › CHN-11 the Attachments tab of a channel with no files says there are none 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('No documents in this channel yet.')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByText('No documents in this channel yet.')
+
+
+      371 |   await expect(
+      372 |     page.getByText('No documents in this channel yet.')
+    > 373 |   ).toBeVisible();
+          |     ^
+      374 |   await expect(page.getByText('only words')).toHaveCount(0);
+      375 | });
+      376 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:373:5
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachments-tab-says-nothing-when-empty/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-attachments-tab-says-nothing-when-empty/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-attachments-tab-says-nothing-when-empty/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-attachments-tab-says-nothing-when-empty/test-results/channels-CHN-11-the-Attach-2da4a-o-files-says-there-are-none/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/channels.spec.ts:357:1 › CHN-11 the Attachments tab of a channel with no files says there are none 
+2026/11/16 07:50:14 socat[2555685] W exiting on signal 15
+2026/11/16 07:50:14 socat[2549156] W exiting on signal 15

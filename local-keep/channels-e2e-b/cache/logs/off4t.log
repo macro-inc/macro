@@ -1,0 +1,113 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 16 tests using 2 workers
+
+2026/11/16 16:39:45 socat[3957826] E write(6, 0x5a77767e1000, 24): Broken pipe
+2026/11/16 16:39:45 socat[3957855] E write(6, 0x5a77767e1000, 24): Broken pipe
+2026/11/16 16:39:45 socat[3957854] E write(6, 0x5a77767e1000, 24): Broken pipe
+2026/11/16 16:40:04 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:40:04 socat[3987354] E write(6, 0x5a77767e1000, 24): Broken pipe
+2026/11/16 16:40:04 socat[3987358] E write(6, 0x5a77767e1000, 28): Broken pipe
+2026/11/16 16:40:04 socat[3987359] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 16:40:04 socat[3987453] E write(6, 0x5a77767e1000, 24): Broken pipe
+2026/11/16 16:40:04 socat[3987483] E write(6, 0x5a77767e1000, 56): Broken pipe
+2026/11/16 16:40:04 socat[3987489] E write(6, 0x555555624000, 28): Broken pipe
+  ✓   2 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.2s)
+  ✓   1 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (37.4s)
+2026/11/16 16:40:21 socat[4019922] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:21 socat[4020009] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:22 socat[4019999] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:40 socat[4046436] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:40 socat[4046486] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:40:40 socat[4046487] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 16:40:41 socat[4046565] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:41 socat[4046578] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:41 socat[4046592] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:40:41 socat[4046593] E write(6, 0x555555624000, 28): Broken pipe
+  ✓   3 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.0s)
+  ✓   4 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.4s)
+2026/11/16 16:40:57 socat[4078091] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:57 socat[4078344] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:57 socat[4078888] E read(6, 0x5a77767e2000, 8192): Connection reset by peer
+2026/11/16 16:40:57 socat[4078857] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:40:57 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:40:57 socat[4078891] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:17 socat[4097854] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:17 socat[4097647] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:17 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:41:17 socat[3929048] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:41:17 socat[4098090] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:17 socat[4098107] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:41:17 socat[4098108] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 16:41:17 socat[4098117] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:41:17 socat[4098118] E write(6, 0x555555624000, 28): Broken pipe
+  ✓   6 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.0s)
+  ✓   5 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.5s)
+2026/11/16 16:41:35 socat[4138116] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:35 socat[4138141] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:54 socat[4160795] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:54 socat[4160843] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:41:54 socat[4160844] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 16:41:55 socat[4161071] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:41:55 socat[4161273] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:41:55 socat[4161274] E write(6, 0x555555624000, 28): Broken pipe
+  ✓   7 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.0s)
+  ✓   8 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (36.4s)
+2026/11/16 16:42:10 socat[4192314] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:42:11 socat[4194236] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:42:29 socat[27289] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:42:29 socat[27300] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:42:29 socat[27301] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 16:42:30 socat[28025] E write(6, 0x5a77767e2000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.6s)
+2026/11/16 16:42:30 socat[28027] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:42:30 socat[28028] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  10 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.8s)
+2026/11/16 16:42:45 socat[57940] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:42:45 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:42:45 socat[58131] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:42:45 socat[58528] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:03 socat[80921] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:03 socat[81010] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:03 socat[81082] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:43:03 socat[81084] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  11 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.8s)
+2026/11/16 16:43:04 socat[81990] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:04 socat[82053] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:04 socat[82162] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:43:04 socat[82163] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  12 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.9s)
+2026/11/16 16:43:18 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:43:18 socat[3929048] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:43:18 socat[110681] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:19 socat[111256] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:36 socat[129868] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:36 socat[130117] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:43:36 socat[130129] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  13 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.4s)
+2026/11/16 16:43:37 socat[135844] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:37 socat[135862] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:37 socat[135874] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:43:37 socat[135875] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  14 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.4s)
+2026/11/16 16:43:52 socat[165895] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:52 socat[3929048] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:43:52 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:43:52 socat[165906] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:52 socat[165974] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:43:52 socat[3929048] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:43:52 socat[166081] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:44:10 socat[184667] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:44:10 socat[184677] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:44:10 socat[185116] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:44:10 socat[185117] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  15 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (32.6s)
+2026/11/16 16:44:11 socat[3929742] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 16:44:11 socat[185405] E write(6, 0x5a77767e2000, 24): Broken pipe
+2026/11/16 16:44:11 socat[185428] E write(6, 0x5a77767e2000, 28): Broken pipe
+2026/11/16 16:44:11 socat[185429] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  16 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (33.1s)
+
+  16 passed (5.0m)
+2026/11/16 16:44:12 socat[3929742] W exiting on signal 15
+2026/11/16 16:44:12 socat[3929048] W exiting on signal 15

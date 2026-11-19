@@ -1,0 +1,32 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 4 workers
+
+2026/11/17 05:03:40 socat[3083877] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:03:42 socat[3121507] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:42 socat[3121609] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.1s)
+2026/11/17 05:03:42 socat[3121300] E write(6, 0x605f897e9000, 24): Broken pipe
+2026/11/17 05:03:42 socat[3121508] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:42 socat[3121608] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (3.2s)
+2026/11/17 05:03:45 socat[3128711] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:45 socat[3129112] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:45 socat[3129079] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (3.0s)
+2026/11/17 05:03:45 socat[3129150] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:45 socat[3129260] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (2.9s)
+2026/11/17 05:03:56 socat[3121542] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.2s)
+2026/11/17 05:03:56 socat[3121337] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:56 socat[3121328] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:56 socat[3121554] E write(6, 0x605f897ea000, 24): Broken pipe
+2026/11/17 05:03:56 socat[3121740] E write(6, 0x605f897ea000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.3s)
+
+  6 passed (33.3s)
+2026/11/17 05:03:56 socat[3082527] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:03:56 socat[3083877] W exiting on signal 15
+2026/11/17 05:03:56 socat[3082527] W exiting on signal 15

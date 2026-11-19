@@ -1,0 +1,506 @@
+waiting for another Nix process to finish fetching input 'git+file:///home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b'...
+error (ignored): SQLite database '/home/teo/.cache/nix/eval-cache-v6/1905961cf9041353ed75314ca14023102bb06dffab2cbe22ec842819965a45d6.sqlite' is busy
+cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack -- stack "$@"
+
+[+] macro local stack update — instance che2e-by
+  ✗ Rebuilding & reloading services                  Failed 1m37s
+  `cargo` exited with exit status: 101
+   Compiling ring v0.17.14
+   Compiling code_mode_assets v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/code_mode_assets)
+   Compiling macro_db_migrator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_db_migrator)
+   Compiling dynamic_ui v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dynamic_ui)
+   Compiling password_import v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/password_import)
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling russh v0.65.1
+   Compiling tokio-rustls v0.26.4
+   Compiling sqlx-core v0.8.6
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling tungstenite v0.28.0
+   Compiling hyper-rustls v0.27.9
+   Compiling redis v1.2.1
+   Compiling lettre v0.11.22
+   Compiling tokio-tungstenite v0.28.0
+   Compiling aws-smithy-http-client v1.1.12
+   Compiling reqwest v0.13.4
+   Compiling reqwest v0.12.28
+   Compiling sqlx-postgres v0.8.6
+   Compiling agent_runtime_protocol v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_runtime_protocol)
+   Compiling aws-smithy-runtime v1.11.3
+   Compiling rig-core v0.41.0
+   Compiling async-openai v0.36.1
+   Compiling rmcp v3.9.0
+   Compiling livekit-api v0.4.24
+   Compiling doppler-config v0.1.2
+   Compiling progenitor-client v0.15.1
+   Compiling opensearch v2.4.0
+   Compiling sqlx-macros-core v0.8.6
+   Compiling aws-runtime v1.7.4
+   Compiling sqlx-macros v0.8.6
+   Compiling aws-sdk-ssooidc v1.101.0
+   Compiling aws-sdk-sso v1.99.0
+   Compiling aws-sdk-sts v1.104.0
+   Compiling aws-sdk-sqs v1.99.0
+   Compiling aws-sdk-sns v1.100.0
+   Compiling aws-sdk-sesv2 v1.119.0
+   Compiling aws-sdk-s3 v1.133.0
+   Compiling aws-sdk-secretsmanager v1.105.0
+   Compiling aws-sdk-dynamodb v1.112.0
+   Compiling aws-sdk-kms v1.109.0
+   Compiling rig-agent v0.41.0
+   Compiling aws-config v1.8.17
+   Compiling sqlx v0.8.6
+   Compiling macro_user_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_user_id)
+   Compiling document_sub_type v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification_state)
+   Compiling pgvector v0.4.1
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling workspace-hack v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/workspace-hack)
+   Compiling model_owner v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_owner)
+   Compiling models_databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_databases)
+   Compiling serde_dynamo v4.3.0
+   Compiling item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/item_filters)
+   Compiling item-filter-index v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/item_filter_index)
+   Compiling agent_fold v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/folds/agent_fold)
+   Compiling macro_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env_var)
+   Compiling model-error-response v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-error-response)
+   Compiling model_user v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_user)
+   Compiling bot_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/bot_token)
+   Compiling harness_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_token)
+   Compiling harness_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_id)
+   Compiling model-entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-entity)
+   Compiling models_bulk_upload v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_bulk_upload)
+   Compiling prompt v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/prompt)
+   Compiling models_entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_entity_access_management)
+   Compiling single_flight v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/single_flight)
+   Compiling macro_event_topics v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_topics)
+   Compiling macro_tower_layers v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_tower_layers)
+   Compiling broadcast v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/broadcast)
+   Compiling last_online_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/last_online_tracker)
+   Compiling rate_limit v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/rate_limit)
+   Compiling channel_sender v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_sender)
+   Compiling harnessd_protocol v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harnessd_protocol)
+   Compiling models_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_properties)
+   Compiling ip_extractor v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ip_extractor)
+   Compiling channel_change_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_change_db_utils)
+   Compiling message_write_gate v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/message_write_gate)
+   Compiling models_opensearch v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_opensearch)
+   Compiling models_team v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_team)
+   Compiling models_dcs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_dcs)
+   Compiling user_quota v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_quota)
+   Compiling sqs_worker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sqs_worker)
+   Compiling models_sfs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_sfs)
+   Compiling email_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_utils)
+   Compiling s3_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/s3_key)
+   Compiling generic_email_domains v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/generic_email_domains)
+   Compiling trigger_context v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/trigger_context)
+   Compiling roles_and_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/roles_and_permissions)
+   Compiling computer_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/computer_id)
+   Compiling pairing_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/pairing_id)
+   Compiling email_validator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_validator)
+   Compiling unfurl v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/unfurl)
+   Compiling readonly_pool v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/readonly_pool)
+   Compiling git_patch v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/git_patch)
+   Compiling models_grouping v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_grouping)
+   Compiling upstream_error v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/upstream_error)
+   Compiling macro_cors v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_cors)
+   Compiling models_search_cursor v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_search_cursor)
+   Compiling opensearch_query_builder v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/opensearch_query_builder)
+   Compiling suggestions_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/suggestions_db_utils)
+   Compiling shown_text v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/shown_text)
+   Compiling incus_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/incus_client)
+   Compiling cursor_api_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/cursor_api_key)
+   Compiling ensure_exists v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ensure_exists)
+   Compiling whatsmeow_proto v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow_proto)
+   Compiling s3_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/s3_client)
+   Compiling saved_views v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/saved_views)
+   Compiling macro_redis v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_redis)
+   Compiling webhook_signature v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/webhook_signature)
+   Compiling sync_router v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_router)
+   Compiling loops_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/loops_client)
+   Compiling stripe_inbox v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/stripe_inbox)
+   Compiling mobile_welcome_email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mobile_welcome_email_db_client)
+   Compiling macro_axum_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_axum_utils)
+   Compiling serde_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/serde_utils)
+   Compiling sns_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sns_client)
+   Compiling macro_env v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env)
+   Compiling genai_telemetry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/genai_telemetry)
+   Compiling models_pagination v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_pagination)
+   Compiling attachment v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/attachment)
+   Compiling mention_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mention_utils)
+   Compiling connection_gateway_models v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_models)
+   Compiling shared_entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/shared_entity_registry)
+   Compiling macro_aws_config v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_aws_config)
+   Compiling frecency v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/frecency)
+   Compiling macro_config_derive v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_config_derive)
+   Compiling connect_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connect_client)
+   Compiling database_env_vars v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/database_env_vars)
+   Compiling models_forms v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_forms)
+   Compiling openbao_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/openbao_client)
+   Compiling stream v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/stream)
+   Compiling remote_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_service_urls)
+   Compiling system_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/system_properties)
+   Compiling feature_flags v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/feature_flags)
+   Compiling analytics_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/analytics_client)
+   Compiling macro_entrypoint v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_entrypoint)
+   Compiling macro_queues v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_queues)
+   Compiling opensearch_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/opensearch_client)
+   Compiling macro_cache_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_cache_client)
+   Compiling ses_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ses_client)
+   Compiling native_app_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/native_app_service)
+   Compiling ai_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_toolset)
+   Compiling connection_gateway_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_client)
+   Compiling static_file_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/static_file_service_client)
+   Compiling models_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_email)
+   Compiling database_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/database_sql)
+   Compiling embedding v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/embedding)
+   Compiling dynamodb_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dynamodb_client)
+   Compiling static_file v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/static_file)
+   Compiling macro_auth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_auth)
+   Compiling secretsmanager_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/secretsmanager_client)
+   Compiling fusionauth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/fusionauth)
+   Compiling cal v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/cal)
+   Compiling mcp_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_toolset)
+   Compiling gmail_emulator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gmail_emulator)
+   Compiling outlook_emulator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/outlook_emulator)
+   Compiling macro_authorization v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_authorization)
+   Compiling agent_correlation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_correlation)
+   Compiling decode_jwt v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/decode_jwt)
+   Compiling macro_config v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_config)
+   Compiling gmail_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gmail_client)
+   Compiling email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_db_client)
+   Compiling ai_usage v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry)
+   Compiling sync_service_hex v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service)
+   Compiling graphql_common v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_common)
+   Compiling pipedream_mcp v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/pipedream_mcp)
+   Compiling user_api_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_api_key)
+   Compiling gtm_invite v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gtm_invite)
+   Compiling system_status v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/system_status)
+   Compiling user_language v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_language)
+   Compiling models_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_permissions)
+   Compiling macro_event_broker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_broker)
+   Compiling unfurl_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/unfurl_service)
+   Compiling entity_access_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_db_utils)
+   Compiling agent_credentials v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_credentials)
+   Compiling graphql_soup_filter_input v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_soup_filter_input)
+   Compiling notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification)
+   Compiling user_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_events)
+   Compiling password_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/password_events)
+   Compiling import_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_tracker)
+   Compiling import_notion v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_notion)
+   Compiling agent v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent)
+   Compiling dictation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dictation)
+   Compiling import_jira v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_jira)
+   Compiling import_linear v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_linear)
+   Compiling share_permission_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/share_permission_db_utils)
+   Compiling entity_registry_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry_db_utils)
+   Compiling harnesses v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harnesses)
+   Compiling entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_management)
+   Compiling model v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model)
+   Compiling whatsmeow v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow)
+   Compiling entity_access v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access)
+   Compiling sqs_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sqs_client)
+   Compiling authentication_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/authentication_service_client)
+   Compiling sync_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service_client)
+   Compiling macro_sha_count_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_sha_count_client)
+   Compiling document_storage_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/document_storage_service_client)
+   Compiling mcp_auth_proxy v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/mcp_auth_proxy)
+   Compiling google_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/google_token)
+   Compiling mcp_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_client)
+   Compiling static_file_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/static_file_service)
+   Compiling invite_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/invite_email)
+   Compiling mcp_select v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_select)
+   Compiling onboarding v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/onboarding)
+   Compiling whatsapp_store_pg v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsapp_store_pg)
+   Compiling whatsmeow_signal v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow_signal)
+   Compiling activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/activity)
+   Compiling entity_mutation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_mutation)
+   Compiling connection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection)
+   Compiling foreign_entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/foreign_entity)
+   Compiling favorites v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/favorites)
+   Compiling graphql_permission v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_permission)
+   Compiling hosted_runtimes v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/hosted_runtimes)
+   Compiling external_chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/external_chat)
+   Compiling connection_gateway v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/connection_gateway)
+   Compiling agent_preview v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_preview)
+   Compiling access_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/access_requests)
+   Compiling channel_labels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_labels)
+   Compiling model_notifications v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_notifications)
+   Compiling referral v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/referral)
+   Compiling github_pull_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/github_pull_requests)
+   Compiling chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/chat)
+   Compiling graphql_activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_activity)
+   Compiling whatsapp_linked v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsapp_linked)
+   Compiling properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/properties)
+   Compiling graphql_notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_notification)
+   Compiling email_formatting v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_formatting)
+   Compiling notification_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification_db_client)
+   Compiling whatsapp_session_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/whatsapp_session_service)
+   Compiling initiative v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/initiative)
+   Compiling databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/databases)
+   Compiling graphql_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_properties)
+   Compiling messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/messages)
+error: could not compile `databases` (lib)
+
+Caused by:
+  process didn't exit successfully: `/nix/store/5q4q3j4pv7dq6l0iviyfsnyi7d87dmvn-kache-rustc-wrapper rustc --crate-name databases --edition=2024 crates/databases/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=line-tables-only --cfg 'feature="ai_tools"' --cfg 'feature="default"' --cfg 'feature="entity_mutation"' --cfg 'feature="gateway"' --cfg 'feature="inbound"' --cfg 'feature="outbound"' --cfg 'feature="ports"' --cfg 'feature="postgres"' --cfg 'feature="view_rows"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("ai_tools", "backfill_binary", "default", "entity_mutation", "gateway", "inbound", "outbound", "ports", "postgres", "view_rows"))' -C metadata=0385a4e568fe2cb0 -C extra-filename=-d9a824face158e2c --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps -C incremental=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/incremental -L dependency=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps --extern activity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libactivity-1cfaeaff5deb9ec4.rmeta --extern ai_toolset=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libai_toolset-ceb2cfb12354a832.rmeta --extern anyhow=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libanyhow-3611bacd62ff3325.rmeta --extern async_trait=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libasync_trait-cc6a317f6833df61.so --extern axum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libaxum-3723b6797b1d7c4e.rmeta --extern bot_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libbot_id-a76a657bf2ff2ecd.rmeta --extern chrono=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchrono-a64bfda5ee904b51.rmeta --extern connection_gateway_client=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libconnection_gateway_client-1d83480aae77b185.rmeta --extern database_sql=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libdatabase_sql.rlib --extern entity_access=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access-010dceab10bb3465.rmeta --extern entity_access_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access_db_utils-255ae6f4e34c18d9.rmeta --extern entity_mutation=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_mutation-ba10201b702b21b0.rmeta --extern macro_authorization=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_authorization-b1b7784e7d3bcd69.rmeta --extern macro_event_broker=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_broker-0eddab70167f2bf2.rmeta --extern macro_event_topics=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_topics-3c083ffd019774e5.rmeta --extern macro_user_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_user_id-f3878ddd796c6b4b.rmeta --extern macro_uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_uuid-a312f06c4b8d5e9d.rmeta --extern model_entity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_entity-d57b2d98901eaf4c.rmeta --extern model_error_response=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_error_response-2715bd925dd3cc8e.rmeta --extern models_databases=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_databases-4fe3d22dee671dc0.rmeta --extern models_permissions=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_permissions-ecf678a7d46ed498.rmeta --extern models_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_properties-c4a7b9a675245c45.rmeta --extern properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libproperties-5012d4ad89ecbe44.rmeta --extern rootcause=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librootcause-390eeef8ceb0ea68.rmeta --extern schemars=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libschemars-6c259581682949fe.rmeta --extern serde=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde-f1d4639318bdeb42.rmeta --extern serde_json=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde_json-2a12b806ee7c7403.rmeta --extern sha2=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsha2-83ceb052acb2bd37.rmeta --extern share_permission_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libshare_permission_db_utils-aa66087908dc74ba.rmeta --extern sqlx=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsqlx-d5a09bdf869282a2.rmeta --extern strum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libstrum-bf0035d71544cafb.rmeta --extern thiserror=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libthiserror-1d5110b6e8fd3018.rmeta --extern tokio=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtokio-5997475673c4abac.rmeta --extern tracing=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtracing-367bfc325d7aed4e.rmeta --extern url=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/liburl-9cc3e2f9a1a48914.rmeta --extern utoipa=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libutoipa-4be20ecd7c254272.rmeta --extern uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libuuid-f70082932139b4fe.rmeta --extern workspace_hack=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libworkspace_hack-e37e8b9cd7dd09f6.rmeta -C link-arg=-fuse-ld=mold -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/aws-lc-sys-d42d486f183efc42/out/build/artifacts -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/ring-3ea3738e5e58a255/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/zstd-sys-e3b5be6694ec5234/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/rdkafka-sys-655bbe542ec4af77/out/lib -L native=/nix/store/1p2gjq4x396yj65rig8fyzhrdza0psd6-openssl-3.6.3/lib` (exit status: 1)
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `messages` (lib)
+
+Caused by:
+  process didn't exit successfully: `/nix/store/5q4q3j4pv7dq6l0iviyfsnyi7d87dmvn-kache-rustc-wrapper rustc --crate-name messages --edition=2024 crates/messages/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=line-tables-only --cfg 'feature="ai_tools"' --cfg 'feature="annotations"' --cfg 'feature="broker"' --cfg 'feature="default"' --cfg 'feature="delivery"' --cfg 'feature="inbound"' --cfg 'feature="outbound"' --cfg 'feature="ports"' --cfg 'feature="schema"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("ai_tools", "annotations", "broker", "default", "delivery", "inbound", "json-schema", "outbound", "ports", "schema", "test-utils"))' -C metadata=011a6cfedb395633 -C extra-filename=-0ad7c9acb1b39804 --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps -C incremental=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/incremental -L dependency=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps --extern activity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libactivity-1cfaeaff5deb9ec4.rmeta --extern ai_toolset=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libai_toolset-ceb2cfb12354a832.rmeta --extern async_trait=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libasync_trait-cc6a317f6833df61.so --extern axum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libaxum-3723b6797b1d7c4e.rmeta --extern bot_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libbot_id-a76a657bf2ff2ecd.rmeta --extern channel_change_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchannel_change_db_utils-77091335feb493a3.rmeta --extern channel_sender=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchannel_sender-a6070c2de449345c.rmeta --extern chrono=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchrono-a64bfda5ee904b51.rmeta --extern connection_gateway_client=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libconnection_gateway_client-1d83480aae77b185.rmeta --extern entity_access=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access-010dceab10bb3465.rmeta --extern futures=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libfutures-9861ca3816cfc9be.rmeta --extern initiative=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libinitiative-5f7b017e7a1e3559.rmeta --extern ip_extractor=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libip_extractor-5c5d59c86e54d2cb.rmeta --extern macro_authorization=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_authorization-b1b7784e7d3bcd69.rmeta --extern macro_event_broker=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_broker-0eddab70167f2bf2.rmeta --extern macro_event_topics=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_topics-3c083ffd019774e5.rmeta --extern macro_user_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_user_id-f3878ddd796c6b4b.rmeta --extern macro_uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_uuid-a312f06c4b8d5e9d.rmeta --extern mention_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmention_utils-baf603ff144c3c60.rmeta --extern message_write_gate=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmessage_write_gate-c16d2b38598ee20b.rmeta --extern model=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel-ca88850385c583fd.rmeta --extern model_entity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_entity-d57b2d98901eaf4c.rmeta --extern model_notifications=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_notifications-6ad563059d87c3e9.rmeta --extern model_owner=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_owner-f142118e0fa31fc2.rmeta --extern models_pagination=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_pagination-bf1839bc93564533.rmeta --extern models_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_properties-c4a7b9a675245c45.rmeta --extern notification=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libnotification-66cd0797ee604056.rmeta --extern properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libproperties-5012d4ad89ecbe44.rmeta --extern rate_limit=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librate_limit-a7c1aae741158467.rmeta --extern rootcause=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librootcause-390eeef8ceb0ea68.rmeta --extern schemars=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libschemars-6c259581682949fe.rmeta --extern serde=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde-f1d4639318bdeb42.rmeta --extern serde_json=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde_json-2a12b806ee7c7403.rmeta --extern sqlx=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsqlx-d5a09bdf869282a2.rmeta --extern system_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsystem_properties-bb7e2116e021ab95.rmeta --extern thiserror=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libthiserror-1d5110b6e8fd3018.rmeta --extern tracing=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtracing-367bfc325d7aed4e.rmeta --extern utoipa=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libutoipa-4be20ecd7c254272.rmeta --extern uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libuuid-f70082932139b4fe.rmeta --extern workspace_hack=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libworkspace_hack-e37e8b9cd7dd09f6.rmeta -C link-arg=-fuse-ld=mold -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/aws-lc-sys-d42d486f183efc42/out/build/artifacts -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/ring-3ea3738e5e58a255/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/zstd-sys-e3b5be6694ec5234/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/rdkafka-sys-655bbe542ec4af77/out/lib -L native=/nix/store/1p2gjq4x396yj65rig8fyzhrdza0psd6-openssl-3.6.3/lib` (exit status: 1)
+      Timing report saved to /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/cargo-timings/cargo-timing-20261117T002057.91435181Z.html
+Error: `cargo` exited with exit status: 101
+   Compiling ring v0.17.14
+   Compiling code_mode_assets v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/code_mode_assets)
+   Compiling macro_db_migrator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_db_migrator)
+   Compiling dynamic_ui v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dynamic_ui)
+   Compiling password_import v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/password_import)
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling russh v0.65.1
+   Compiling tokio-rustls v0.26.4
+   Compiling sqlx-core v0.8.6
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling tungstenite v0.28.0
+   Compiling hyper-rustls v0.27.9
+   Compiling redis v1.2.1
+   Compiling lettre v0.11.22
+   Compiling tokio-tungstenite v0.28.0
+   Compiling aws-smithy-http-client v1.1.12
+   Compiling reqwest v0.13.4
+   Compiling reqwest v0.12.28
+   Compiling sqlx-postgres v0.8.6
+   Compiling agent_runtime_protocol v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_runtime_protocol)
+   Compiling aws-smithy-runtime v1.11.3
+   Compiling rig-core v0.41.0
+   Compiling async-openai v0.36.1
+   Compiling rmcp v3.9.0
+   Compiling livekit-api v0.4.24
+   Compiling doppler-config v0.1.2
+   Compiling progenitor-client v0.15.1
+   Compiling opensearch v2.4.0
+   Compiling sqlx-macros-core v0.8.6
+   Compiling aws-runtime v1.7.4
+   Compiling sqlx-macros v0.8.6
+   Compiling aws-sdk-ssooidc v1.101.0
+   Compiling aws-sdk-sso v1.99.0
+   Compiling aws-sdk-sts v1.104.0
+   Compiling aws-sdk-sqs v1.99.0
+   Compiling aws-sdk-sns v1.100.0
+   Compiling aws-sdk-sesv2 v1.119.0
+   Compiling aws-sdk-s3 v1.133.0
+   Compiling aws-sdk-secretsmanager v1.105.0
+   Compiling aws-sdk-dynamodb v1.112.0
+   Compiling aws-sdk-kms v1.109.0
+   Compiling rig-agent v0.41.0
+   Compiling aws-config v1.8.17
+   Compiling sqlx v0.8.6
+   Compiling macro_user_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_user_id)
+   Compiling document_sub_type v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification_state)
+   Compiling pgvector v0.4.1
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling workspace-hack v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/workspace-hack)
+   Compiling model_owner v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_owner)
+   Compiling models_databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_databases)
+   Compiling serde_dynamo v4.3.0
+   Compiling item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/item_filters)
+   Compiling item-filter-index v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/item_filter_index)
+   Compiling agent_fold v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/folds/agent_fold)
+   Compiling macro_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env_var)
+   Compiling model-error-response v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-error-response)
+   Compiling model_user v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_user)
+   Compiling bot_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/bot_token)
+   Compiling harness_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_token)
+   Compiling harness_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_id)
+   Compiling model-entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-entity)
+   Compiling models_bulk_upload v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_bulk_upload)
+   Compiling prompt v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/prompt)
+   Compiling models_entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_entity_access_management)
+   Compiling single_flight v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/single_flight)
+   Compiling macro_event_topics v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_topics)
+   Compiling macro_tower_layers v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_tower_layers)
+   Compiling broadcast v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/broadcast)
+   Compiling last_online_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/last_online_tracker)
+   Compiling rate_limit v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/rate_limit)
+   Compiling channel_sender v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_sender)
+   Compiling harnessd_protocol v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harnessd_protocol)
+   Compiling models_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_properties)
+   Compiling ip_extractor v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ip_extractor)
+   Compiling channel_change_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_change_db_utils)
+   Compiling message_write_gate v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/message_write_gate)
+   Compiling models_opensearch v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_opensearch)
+   Compiling models_team v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_team)
+   Compiling models_dcs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_dcs)
+   Compiling user_quota v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_quota)
+   Compiling sqs_worker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sqs_worker)
+   Compiling models_sfs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_sfs)
+   Compiling email_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_utils)
+   Compiling s3_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/s3_key)
+   Compiling generic_email_domains v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/generic_email_domains)
+   Compiling trigger_context v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/trigger_context)
+   Compiling roles_and_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/roles_and_permissions)
+   Compiling computer_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/computer_id)
+   Compiling pairing_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/pairing_id)
+   Compiling email_validator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_validator)
+   Compiling unfurl v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/unfurl)
+   Compiling readonly_pool v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/readonly_pool)
+   Compiling git_patch v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/git_patch)
+   Compiling models_grouping v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_grouping)
+   Compiling upstream_error v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/upstream_error)
+   Compiling macro_cors v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_cors)
+   Compiling models_search_cursor v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_search_cursor)
+   Compiling opensearch_query_builder v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/opensearch_query_builder)
+   Compiling suggestions_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/suggestions_db_utils)
+   Compiling shown_text v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/shown_text)
+   Compiling incus_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/incus_client)
+   Compiling cursor_api_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/cursor_api_key)
+   Compiling ensure_exists v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ensure_exists)
+   Compiling whatsmeow_proto v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow_proto)
+   Compiling s3_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/s3_client)
+   Compiling saved_views v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/saved_views)
+   Compiling macro_redis v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_redis)
+   Compiling webhook_signature v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/webhook_signature)
+   Compiling sync_router v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_router)
+   Compiling loops_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/loops_client)
+   Compiling stripe_inbox v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/stripe_inbox)
+   Compiling mobile_welcome_email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mobile_welcome_email_db_client)
+   Compiling macro_axum_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_axum_utils)
+   Compiling serde_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/serde_utils)
+   Compiling sns_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sns_client)
+   Compiling macro_env v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env)
+   Compiling genai_telemetry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/genai_telemetry)
+   Compiling models_pagination v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_pagination)
+   Compiling attachment v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/attachment)
+   Compiling mention_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mention_utils)
+   Compiling connection_gateway_models v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_models)
+   Compiling shared_entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/shared_entity_registry)
+   Compiling macro_aws_config v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_aws_config)
+   Compiling frecency v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/frecency)
+   Compiling macro_config_derive v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_config_derive)
+   Compiling connect_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connect_client)
+   Compiling database_env_vars v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/database_env_vars)
+   Compiling models_forms v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_forms)
+   Compiling openbao_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/openbao_client)
+   Compiling stream v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/stream)
+   Compiling remote_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_service_urls)
+   Compiling system_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/system_properties)
+   Compiling feature_flags v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/feature_flags)
+   Compiling analytics_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/analytics_client)
+   Compiling macro_entrypoint v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_entrypoint)
+   Compiling macro_queues v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_queues)
+   Compiling opensearch_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/opensearch_client)
+   Compiling macro_cache_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_cache_client)
+   Compiling ses_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ses_client)
+   Compiling native_app_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/native_app_service)
+   Compiling ai_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_toolset)
+   Compiling connection_gateway_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_client)
+   Compiling static_file_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/static_file_service_client)
+   Compiling models_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_email)
+   Compiling database_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/database_sql)
+   Compiling embedding v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/embedding)
+   Compiling dynamodb_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dynamodb_client)
+   Compiling static_file v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/static_file)
+   Compiling macro_auth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_auth)
+   Compiling secretsmanager_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/secretsmanager_client)
+   Compiling fusionauth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/fusionauth)
+   Compiling cal v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/cal)
+   Compiling mcp_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_toolset)
+   Compiling gmail_emulator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gmail_emulator)
+   Compiling outlook_emulator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/outlook_emulator)
+   Compiling macro_authorization v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_authorization)
+   Compiling agent_correlation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_correlation)
+   Compiling decode_jwt v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/decode_jwt)
+   Compiling macro_config v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_config)
+   Compiling gmail_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gmail_client)
+   Compiling email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_db_client)
+   Compiling ai_usage v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry)
+   Compiling sync_service_hex v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service)
+   Compiling graphql_common v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_common)
+   Compiling pipedream_mcp v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/pipedream_mcp)
+   Compiling user_api_key v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_api_key)
+   Compiling gtm_invite v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/gtm_invite)
+   Compiling system_status v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/system_status)
+   Compiling user_language v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_language)
+   Compiling models_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_permissions)
+   Compiling macro_event_broker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_broker)
+   Compiling unfurl_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/unfurl_service)
+   Compiling entity_access_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_db_utils)
+   Compiling agent_credentials v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_credentials)
+   Compiling graphql_soup_filter_input v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_soup_filter_input)
+   Compiling notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification)
+   Compiling user_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_events)
+   Compiling password_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/password_events)
+   Compiling import_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_tracker)
+   Compiling import_notion v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_notion)
+   Compiling agent v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent)
+   Compiling dictation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/dictation)
+   Compiling import_jira v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_jira)
+   Compiling import_linear v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/import_linear)
+   Compiling share_permission_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/share_permission_db_utils)
+   Compiling entity_registry_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry_db_utils)
+   Compiling harnesses v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harnesses)
+   Compiling entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_management)
+   Compiling model v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model)
+   Compiling whatsmeow v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow)
+   Compiling entity_access v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access)
+   Compiling sqs_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sqs_client)
+   Compiling authentication_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/authentication_service_client)
+   Compiling sync_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service_client)
+   Compiling macro_sha_count_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_sha_count_client)
+   Compiling document_storage_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/document_storage_service_client)
+   Compiling mcp_auth_proxy v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/mcp_auth_proxy)
+   Compiling google_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/google_token)
+   Compiling mcp_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_client)
+   Compiling static_file_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/static_file_service)
+   Compiling invite_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/invite_email)
+   Compiling mcp_select v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mcp_select)
+   Compiling onboarding v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/onboarding)
+   Compiling whatsapp_store_pg v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsapp_store_pg)
+   Compiling whatsmeow_signal v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsmeow_signal)
+   Compiling activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/activity)
+   Compiling entity_mutation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_mutation)
+   Compiling connection v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection)
+   Compiling foreign_entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/foreign_entity)
+   Compiling favorites v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/favorites)
+   Compiling graphql_permission v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_permission)
+   Compiling hosted_runtimes v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/hosted_runtimes)
+   Compiling external_chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/external_chat)
+   Compiling connection_gateway v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/connection_gateway)
+   Compiling agent_preview v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_preview)
+   Compiling access_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/access_requests)
+   Compiling channel_labels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_labels)
+   Compiling model_notifications v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_notifications)
+   Compiling referral v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/referral)
+   Compiling github_pull_requests v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/github_pull_requests)
+   Compiling chat v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/chat)
+   Compiling graphql_activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_activity)
+   Compiling whatsapp_linked v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/whatsapp_linked)
+   Compiling properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/properties)
+   Compiling graphql_notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_notification)
+   Compiling email_formatting v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_formatting)
+   Compiling notification_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification_db_client)
+   Compiling whatsapp_session_service v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/services/whatsapp_session_service)
+   Compiling initiative v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/initiative)
+   Compiling databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/databases)
+   Compiling graphql_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/graphql_properties)
+   Compiling messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/messages)
+error: could not compile `databases` (lib)
+
+Caused by:
+  process didn't exit successfully: `/nix/store/5q4q3j4pv7dq6l0iviyfsnyi7d87dmvn-kache-rustc-wrapper rustc --crate-name databases --edition=2024 crates/databases/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=line-tables-only --cfg 'feature="ai_tools"' --cfg 'feature="default"' --cfg 'feature="entity_mutation"' --cfg 'feature="gateway"' --cfg 'feature="inbound"' --cfg 'feature="outbound"' --cfg 'feature="ports"' --cfg 'feature="postgres"' --cfg 'feature="view_rows"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("ai_tools", "backfill_binary", "default", "entity_mutation", "gateway", "inbound", "outbound", "ports", "postgres", "view_rows"))' -C metadata=0385a4e568fe2cb0 -C extra-filename=-d9a824face158e2c --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps -C incremental=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/incremental -L dependency=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps --extern activity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libactivity-1cfaeaff5deb9ec4.rmeta --extern ai_toolset=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libai_toolset-ceb2cfb12354a832.rmeta --extern anyhow=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libanyhow-3611bacd62ff3325.rmeta --extern async_trait=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libasync_trait-cc6a317f6833df61.so --extern axum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libaxum-3723b6797b1d7c4e.rmeta --extern bot_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libbot_id-a76a657bf2ff2ecd.rmeta --extern chrono=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchrono-a64bfda5ee904b51.rmeta --extern connection_gateway_client=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libconnection_gateway_client-1d83480aae77b185.rmeta --extern database_sql=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libdatabase_sql.rlib --extern entity_access=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access-010dceab10bb3465.rmeta --extern entity_access_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access_db_utils-255ae6f4e34c18d9.rmeta --extern entity_mutation=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_mutation-ba10201b702b21b0.rmeta --extern macro_authorization=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_authorization-b1b7784e7d3bcd69.rmeta --extern macro_event_broker=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_broker-0eddab70167f2bf2.rmeta --extern macro_event_topics=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_topics-3c083ffd019774e5.rmeta --extern macro_user_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_user_id-f3878ddd796c6b4b.rmeta --extern macro_uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_uuid-a312f06c4b8d5e9d.rmeta --extern model_entity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_entity-d57b2d98901eaf4c.rmeta --extern model_error_response=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_error_response-2715bd925dd3cc8e.rmeta --extern models_databases=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_databases-4fe3d22dee671dc0.rmeta --extern models_permissions=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_permissions-ecf678a7d46ed498.rmeta --extern models_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_properties-c4a7b9a675245c45.rmeta --extern properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libproperties-5012d4ad89ecbe44.rmeta --extern rootcause=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librootcause-390eeef8ceb0ea68.rmeta --extern schemars=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libschemars-6c259581682949fe.rmeta --extern serde=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde-f1d4639318bdeb42.rmeta --extern serde_json=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde_json-2a12b806ee7c7403.rmeta --extern sha2=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsha2-83ceb052acb2bd37.rmeta --extern share_permission_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libshare_permission_db_utils-aa66087908dc74ba.rmeta --extern sqlx=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsqlx-d5a09bdf869282a2.rmeta --extern strum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libstrum-bf0035d71544cafb.rmeta --extern thiserror=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libthiserror-1d5110b6e8fd3018.rmeta --extern tokio=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtokio-5997475673c4abac.rmeta --extern tracing=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtracing-367bfc325d7aed4e.rmeta --extern url=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/liburl-9cc3e2f9a1a48914.rmeta --extern utoipa=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libutoipa-4be20ecd7c254272.rmeta --extern uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libuuid-f70082932139b4fe.rmeta --extern workspace_hack=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libworkspace_hack-e37e8b9cd7dd09f6.rmeta -C link-arg=-fuse-ld=mold -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/aws-lc-sys-d42d486f183efc42/out/build/artifacts -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/ring-3ea3738e5e58a255/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/zstd-sys-e3b5be6694ec5234/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/rdkafka-sys-655bbe542ec4af77/out/lib -L native=/nix/store/1p2gjq4x396yj65rig8fyzhrdza0psd6-openssl-3.6.3/lib` (exit status: 1)
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `messages` (lib)
+
+Caused by:
+  process didn't exit successfully: `/nix/store/5q4q3j4pv7dq6l0iviyfsnyi7d87dmvn-kache-rustc-wrapper rustc --crate-name messages --edition=2024 crates/messages/src/lib.rs --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat --crate-type lib --emit=dep-info,metadata,link -C embed-bitcode=no -C debuginfo=line-tables-only --cfg 'feature="ai_tools"' --cfg 'feature="annotations"' --cfg 'feature="broker"' --cfg 'feature="default"' --cfg 'feature="delivery"' --cfg 'feature="inbound"' --cfg 'feature="outbound"' --cfg 'feature="ports"' --cfg 'feature="schema"' --check-cfg 'cfg(docsrs,test)' --check-cfg 'cfg(feature, values("ai_tools", "annotations", "broker", "default", "delivery", "inbound", "json-schema", "outbound", "ports", "schema", "test-utils"))' -C metadata=011a6cfedb395633 -C extra-filename=-0ad7c9acb1b39804 --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps -C incremental=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/incremental -L dependency=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps --extern activity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libactivity-1cfaeaff5deb9ec4.rmeta --extern ai_toolset=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libai_toolset-ceb2cfb12354a832.rmeta --extern async_trait=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libasync_trait-cc6a317f6833df61.so --extern axum=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libaxum-3723b6797b1d7c4e.rmeta --extern bot_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libbot_id-a76a657bf2ff2ecd.rmeta --extern channel_change_db_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchannel_change_db_utils-77091335feb493a3.rmeta --extern channel_sender=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchannel_sender-a6070c2de449345c.rmeta --extern chrono=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libchrono-a64bfda5ee904b51.rmeta --extern connection_gateway_client=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libconnection_gateway_client-1d83480aae77b185.rmeta --extern entity_access=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libentity_access-010dceab10bb3465.rmeta --extern futures=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libfutures-9861ca3816cfc9be.rmeta --extern initiative=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libinitiative-5f7b017e7a1e3559.rmeta --extern ip_extractor=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libip_extractor-5c5d59c86e54d2cb.rmeta --extern macro_authorization=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_authorization-b1b7784e7d3bcd69.rmeta --extern macro_event_broker=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_broker-0eddab70167f2bf2.rmeta --extern macro_event_topics=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_event_topics-3c083ffd019774e5.rmeta --extern macro_user_id=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_user_id-f3878ddd796c6b4b.rmeta --extern macro_uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmacro_uuid-a312f06c4b8d5e9d.rmeta --extern mention_utils=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmention_utils-baf603ff144c3c60.rmeta --extern message_write_gate=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmessage_write_gate-c16d2b38598ee20b.rmeta --extern model=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel-ca88850385c583fd.rmeta --extern model_entity=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_entity-d57b2d98901eaf4c.rmeta --extern model_notifications=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_notifications-6ad563059d87c3e9.rmeta --extern model_owner=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodel_owner-f142118e0fa31fc2.rmeta --extern models_pagination=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_pagination-bf1839bc93564533.rmeta --extern models_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libmodels_properties-c4a7b9a675245c45.rmeta --extern notification=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libnotification-66cd0797ee604056.rmeta --extern properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libproperties-5012d4ad89ecbe44.rmeta --extern rate_limit=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librate_limit-a7c1aae741158467.rmeta --extern rootcause=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/librootcause-390eeef8ceb0ea68.rmeta --extern schemars=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libschemars-6c259581682949fe.rmeta --extern serde=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde-f1d4639318bdeb42.rmeta --extern serde_json=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libserde_json-2a12b806ee7c7403.rmeta --extern sqlx=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsqlx-d5a09bdf869282a2.rmeta --extern system_properties=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libsystem_properties-bb7e2116e021ab95.rmeta --extern thiserror=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libthiserror-1d5110b6e8fd3018.rmeta --extern tracing=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libtracing-367bfc325d7aed4e.rmeta --extern utoipa=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libutoipa-4be20ecd7c254272.rmeta --extern uuid=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libuuid-f70082932139b4fe.rmeta --extern workspace_hack=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/deps/libworkspace_hack-e37e8b9cd7dd09f6.rmeta -C link-arg=-fuse-ld=mold -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/aws-lc-sys-d42d486f183efc42/out/build/artifacts -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/ring-3ea3738e5e58a255/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libz-sys-e6cf948b4d39cc85/out/lib -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/zstd-sys-e3b5be6694ec5234/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/libwebp-sys-e40feb676f5fc52a/out -L native=/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/build/rdkafka-sys-655bbe542ec4af77/out/lib -L native=/nix/store/1p2gjq4x396yj65rig8fyzhrdza0psd6-openssl-3.6.3/lib` (exit status: 1)
+      Timing report saved to /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/cargo-timings/cargo-timing-20261117T002057.91435181Z.html
+error: recipe `stack` failed on line 54 with exit code 1
+exit 1

@@ -1,0 +1,13 @@
+fix-on-1 start 21:20:15 load 16.45 25.99 26.77
+fix-on-1 end 21:25:47 load 27.16 31.05 29.19 exit 0
+fix-on-2 start 21:25:47 load 27.16 31.05 29.19
+fix-on-2 end 21:30:48 load 42.49 34.90 31.04 exit 0
+fix-on-3 start 21:30:48 load 42.49 34.90 31.04
+fix-on-3 end 21:36:01 load 35.91 36.60 33.00 exit 0
+fix-on-4 start 21:36:01 load 35.91 36.60 33.00
+fix-on-4 end 21:41:37 load 25.77 33.21 32.97 exit 0
+fix-on-5 start 21:41:37 load 25.77 33.21 32.97
+fix-on-5 end 21:47:03 load 33.42 32.68 32.72 exit 0
+fix-off-1 start 21:47:05 load 33.42 32.68 32.72
+fix-off-1 end 21:50:14 load 27.56 31.72 32.43
+ALLDONE

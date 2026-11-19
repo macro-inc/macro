@@ -1,0 +1,119 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 2 workers
+
+2026/11/16 09:23:12 socat[2969438] E write(6, 0x5963a7285000, 24): Broken pipe
+2026/11/16 09:23:12 socat[2969448] E write(6, 0x5963a7285000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order (16.4s)
+2026/11/16 09:23:13 socat[2969779] E write(6, 0x5963a7285000, 24): Broken pipe
+2026/11/16 09:23:13 socat[2969822] E write(6, 0x5963a7285000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end (17.4s)
+
+
+  1) tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+    @@ -7,8 +7,7 @@
+        "open 006",
+        "open 007",
+        "open 008",
+        "open 009",
+        "open 010",
+    -   "open 011",
+        "open 012",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/open.spec.ts:28:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/open-OPEN-01-a-channel-ope-7da4d-essages-in-order-at-the-end/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+    +   "history 225",
+        "history 226",
+        "history 227",
+        "history 228",
+    -   "history 229",
+        "history 230",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/scroll.spec.ts:14:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-page-loses-a-message/test-results/scroll-SCROLL-01-scrolling-4ab68-every-message-once-in-order/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/open.spec.ts:13:1 › OPEN-01 a channel opened by its address shows its latest messages in order, at the end 
+    tests/channels-e2e/scroll.spec.ts:7:1 › SCROLL-01 scrolling back to the start of a long channel shows every message once, in order 
+2026/11/16 09:23:14 socat[2940055] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:23:14 socat[2946335] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:23:14 socat[2946335] W exiting on signal 15
+2026/11/16 09:23:14 socat[2940055] W exiting on signal 15

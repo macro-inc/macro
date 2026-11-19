@@ -1,0 +1,67 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 1 worker
+
+2026/11/16 23:39:03 socat[698453] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:39:03 socat[736842] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:03 socat[736869] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:03 socat[739442] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:03 socat[739488] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:03 socat[739554] E write(6, 0x57789f600000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (22.1s)
+2026/11/16 23:39:10 socat[784902] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:10 socat[785349] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:12 socat[782343] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:12 socat[782369] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:12 socat[782380] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:12 socat[793724] E write(6, 0x57789f600000, 24): Broken pipe
+2026/11/16 23:39:12 socat[793928] E write(6, 0x57789f600000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.3s)
+
+
+  1) tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1e6ba-3789-7538-85b5-f33c3cc9f43e"]')
+    Expected substring: "Ada Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="direct_messages"]').locator('[data-key="channel:01a1e6ba-3789-7538-85b5-f33c3cc9f43e"]')
+
+
+      101 |     `[data-key="channel:${id}"]`
+      102 |   );
+    > 103 |   await expect(cyRow).toContainText('Ada Owner');
+          |                       ^
+      104 |   await cyRow.getByRole('treeitem').click();
+      105 |   const cyView = new ChannelView(cyPage, id);
+      106 |   await cyView.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:103:23
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/dm2-main/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/dm2-main/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/dm2-main/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/dm2-main/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/dm2-main/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+  1 passed (43.7s)
+2026/11/16 23:39:13 socat[699030] W exiting on signal 15
+2026/11/16 23:39:13 socat[698453] W exiting on signal 15

@@ -1,0 +1,107 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:21:13 socat[1303927] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:13 socat[1303946] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:13 socat[1303831] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:13 socat[1303924] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305081] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305099] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305122] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305079] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305100] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+2026/11/16 08:21:14 socat[1305121] E write(6, 0x58e5f4a8b000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (20.5s)
+  ✘  2 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (20.5s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@Ben can you look?', { exact: true }) })
+
+
+      165 |   for (const each of [view, benView]) {
+      166 |     const message = each.message('@Ben can you look?');
+    > 167 |     await expect(message).toBeVisible();
+          |                           ^
+      168 |     await expect(personMentions(message)).toHaveText(['@Ben']);
+      169 |     await expect(personMentions(message)).toHaveAttribute(
+      170 |       'data-user-id',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:167:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-05-a-person-p-a5906-essage-for-both-people-live/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@here standup now', { exact: true }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('@here standup now', { exact: true }) })
+
+
+      199 |   for (const each of [view, benView]) {
+      200 |     const message = each.message('@here standup now');
+    > 201 |     await expect(message).toBeVisible();
+          |                           ^
+      202 |     await expect(groupMentions(message)).toHaveText(['@here']);
+      203 |   }
+      204 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:201:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-mention-sent-as-plain-text/test-results/composer-CMP-06-here-picke-da84f--a-mention-of-everyone-here/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live 
+    tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here 
+2026/11/16 08:21:15 socat[1277205] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:21:15 socat[1276779] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:21:15 socat[1277205] W exiting on signal 15
+2026/11/16 08:21:15 socat[1276779] W exiting on signal 15

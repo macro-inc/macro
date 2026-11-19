@@ -1,0 +1,180 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 3 workers
+
+2026/11/16 08:10:18 socat[274663] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274670] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274678] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274596] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274622] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274634] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274047] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274680] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:18 socat[274691] E write(6, 0x555c52d3f000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches (17.9s)
+  ✘  2 tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first (18.1s)
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view (18.0s)
+2026/11/16 08:10:36 socat[305300] E write(6, 0x555c52d3f000, 24): Broken pipe
+2026/11/16 08:10:36 socat[305302] E write(6, 0x555c52d3f000, 24): Broken pipe
+  ✘  4 tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message (17.3s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByPlaceholder('Find')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByPlaceholder('Find')
+
+
+      13 |   await page.keyboard.press('ControlOrMeta+f');
+      14 |   const box = page.getByPlaceholder('Find');
+    > 15 |   await expect(box).toBeFocused();
+         |                     ^
+      16 |   return box;
+      17 | }
+      18 |
+        at openFind (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:15:21)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:43:15
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-01-find--5917b-s-through-them-newest-first/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-01-find--5917b-s-through-them-newest-first/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-01-find--5917b-s-through-them-newest-first/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-01-find--5917b-s-through-them-newest-first/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByPlaceholder('Find')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByPlaceholder('Find')
+
+
+      13 |   await page.keyboard.press('ControlOrMeta+f');
+      14 |   const box = page.getByPlaceholder('Find');
+    > 15 |   await expect(box).toBeFocused();
+         |                     ^
+      16 |   return box;
+      17 | }
+      18 |
+        at openFind (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:15:21)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:83:15
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-02-find--06b4e-up-a-long-history-into-view/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-02-find--06b4e-up-a-long-history-into-view/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-02-find--06b4e-up-a-long-history-into-view/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-02-find--06b4e-up-a-long-history-into-view/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByPlaceholder('Find')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByPlaceholder('Find')
+
+
+      13 |   await page.keyboard.press('ControlOrMeta+f');
+      14 |   const box = page.getByPlaceholder('Find');
+    > 15 |   await expect(box).toBeFocused();
+         |                     ^
+      16 |   return box;
+      17 | }
+      18 |
+        at openFind (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:15:21)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:105:15
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-03-find--2ce14-e-says-there-are-no-matches/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-03-find--2ce14-e-says-there-are-no-matches/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-03-find--2ce14-e-says-there-are-no-matches/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-03-find--2ce14-e-says-there-are-no-matches/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator: getByPlaceholder('Find')
+    Expected: focused
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByPlaceholder('Find')
+
+
+      13 |   await page.keyboard.press('ControlOrMeta+f');
+      14 |   const box = page.getByPlaceholder('Find');
+    > 15 |   await expect(box).toBeFocused();
+         |                     ^
+      16 |   return box;
+      17 | }
+      18 |
+        at openFind (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:15:21)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:129:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-04-the-f-87881-annel-still-takes-a-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-04-the-f-87881-annel-still-takes-a-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-04-the-f-87881-annel-still-takes-a-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-find-bar-does-not-open/test-results/find-and-keys-KEY-04-the-f-87881-annel-still-takes-a-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/find-and-keys.spec.ts:26:1 › KEY-01 find counts the messages that match and steps through them, newest first 
+    tests/channels-e2e/find-and-keys.spec.ts:75:1 › KEY-02 find brings an old message far up a long history into view 
+    tests/channels-e2e/find-and-keys.spec.ts:95:1 › KEY-03 find for words nobody wrote says there are no matches 
+    tests/channels-e2e/find-and-keys.spec.ts:119:1 › KEY-04 the find bar closes with its button and with Escape, and the channel still takes a message 
+2026/11/16 08:10:37 socat[256192] W exiting on signal 15
+2026/11/16 08:10:37 socat[254975] W exiting on signal 15

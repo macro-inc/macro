@@ -1,0 +1,93 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 07:51:18 socat[2672520] E write(6, 0x6189c6685000, 24): Broken pipe
+2026/11/16 07:51:18 socat[2672536] E write(6, 0x6189c6685000, 24): Broken pipe
+2026/11/16 07:51:18 socat[2672540] E write(6, 0x6189c6685000, 24): Broken pipe
+2026/11/16 07:51:18 socat[2672534] E write(6, 0x6189c6685000, 24): Broken pipe
+2026/11/16 07:51:18 socat[2672538] E write(6, 0x6189c6685000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed (17.8s)
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message (18.3s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Delete message' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('dialog', { name: 'Delete message' })
+
+
+      286 |   await selectLast(view, 'to be deleted');
+      287 |   await page.keyboard.press('Backspace');
+    > 288 |   await expect(dialog).toBeVisible();
+          |                        ^
+      289 |
+      290 |   // Escape answers no.
+      291 |   await page.keyboard.press('Escape');
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:288:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-08-Backs-48187-nd-Escape-keeps-the-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('dialog', { name: 'Delete message' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('dialog', { name: 'Delete message' })
+
+
+      308 |   await selectLast(view, 'to be deleted');
+      309 |   await page.keyboard.press('Backspace');
+    > 310 |   await expect(dialog).toBeVisible();
+          |                        ^
+      311 |   await dialog.getByRole('button', { name: 'Delete' }).click();
+      312 |
+      313 |   await expect(view.message('to be deleted')).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:310:24
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-backspace-does-not-ask-to-delete/test-results/find-and-keys-KEY-12-Backs-988dd-e-deletes-it-once-confirmed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/find-and-keys.spec.ts:275:1 › KEY-08 Backspace on a person’s own selected message asks first, and Escape keeps the message 
+    tests/channels-e2e/find-and-keys.spec.ts:297:1 › KEY-12 Backspace on a person’s own selected message deletes it once confirmed 
+2026/11/16 07:51:19 socat[2652818] W exiting on signal 15
+2026/11/16 07:51:19 socat[2652048] W exiting on signal 15

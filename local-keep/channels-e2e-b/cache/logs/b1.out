@@ -1,0 +1,27 @@
+device-not-used	SYN-05	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	OFF-01	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	OFF-02	PASSED	
+device-not-used	OFF-03	PASSED	
+device-not-used	OFF-04	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	OFF-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1dfb9-054f-76de-9fed-e2b969dd4fdf"]')
+device-not-used	OFF-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1dfb9-ce49-7180-9ecc-fce513dd36e6"]')
+device-not-used	OFF-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1dfb9-d76a-76a2-8ac7-5ce06fa2edab"]')
+device-not-used	OFF-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1dfba-3d89-75f5-9f6b-65cbd56b16a6"]')
+device-not-used	OFF-09	DEFECT-CHECK-FAILED	Error: the channel as it is on the screen
+device-not-used	OFF-10	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	OFF-11	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+device-not-used	PRE-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1dfba-eede-7a42-bc53-5f0964d8a417"]')
+device-not-used	WRT-01	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-02	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-03	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-04	PASSED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-05	FAILED	Error: the channel as the services hold it | the channel as the services hold it
+device-not-used	WRT-06	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	WRT-07	FAILED	Test timeout of 90000ms exceeded.
+device-not-used	WRT-08	FAILED	Error: the channel as it is on the screen | the channel as it is on the screen
+device-not-used	WRT-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+device-not-used	WRT-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+device-not-used	WRT-11	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+device-not-used	WRT-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+device-not-used	WRT-13	DEFECT-CHECK-FAILED	Error: the channel as the services hold it
+device-not-used	WRT-14	PASSED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'

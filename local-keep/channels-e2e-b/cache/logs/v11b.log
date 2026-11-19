@@ -1,0 +1,51 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 1 worker
+
+2026/11/16 23:44:42 socat[1505469] E write(6, 0x5d4f97fa5000, 24): Broken pipe
+2026/11/16 23:44:42 socat[1505917] E write(6, 0x5d4f97fa5000, 24): Broken pipe
+2026/11/16 23:45:02 socat[1546341] E write(6, 0x5d4f97fa5000, 24): Broken pipe
+2026/11/16 23:45:02 socat[1546540] E write(6, 0x5d4f97fa5000, 24): Broken pipe
+2026/11/16 23:45:02 socat[1461030] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:45:02 socat[1455961] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  1 tests/channels-e2e/offline.spec.ts:134:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (39.2s)
+2026/11/16 23:45:02 socat[1546583] E write(6, 0x5d4f97fa5000, 28): Broken pipe
+2026/11/16 23:45:02 socat[1546587] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 23:45:06 socat[1588358] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:45:06 socat[1588422] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:13 socat[1599016] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:13 socat[1461030] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  2 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.2m)
+2026/11/16 23:46:13 socat[1599059] E write(6, 0x5d4f97fa6000, 28): Broken pipe
+2026/11/16 23:46:13 socat[1599060] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 23:46:17 socat[1739552] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:17 socat[1461030] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:46:17 socat[1739684] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:25 socat[1751071] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:25 socat[1751446] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/offline.spec.ts:383:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (11.9s)
+2026/11/16 23:46:25 socat[1751506] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:46:44 socat[1769744] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:47:06 socat[1810756] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:47:06 socat[1810875] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/offline.spec.ts:134:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (40.4s)
+2026/11/16 23:47:06 socat[1810992] E write(6, 0x5d4f97fa6000, 28): Broken pipe
+2026/11/16 23:47:06 socat[1810993] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 23:47:12 socat[1872294] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:47:12 socat[1872518] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:48:19 socat[1888010] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:48:19 socat[1888092] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+  ✘  5 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.2m)
+2026/11/16 23:48:19 socat[1888142] E write(6, 0x5d4f97fa6000, 28): Broken pipe
+2026/11/16 23:48:19 socat[1888143] E write(6, 0x555555624000, 47): Broken pipe
+2026/11/16 23:48:22 socat[2038040] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:48:22 socat[2038249] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+2026/11/16 23:48:29 socat[2047855] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/offline.spec.ts:383:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.5s)
+2026/11/16 23:48:29 socat[2047938] E write(6, 0x5d4f97fa6000, 24): Broken pipe
+
+  6 passed (4.4m)
+2026/11/16 23:48:29 socat[1455961] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:48:29 socat[1461030] W exiting on signal 15
+2026/11/16 23:48:29 socat[1455961] W exiting on signal 15

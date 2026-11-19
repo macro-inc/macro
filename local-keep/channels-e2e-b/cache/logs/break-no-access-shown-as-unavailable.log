@@ -1,0 +1,184 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 4 tests using 3 workers
+
+2026/11/16 08:51:48 socat[33993] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[34008] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[33989] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[34006] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[34017] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[34014] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:48 socat[34019] E write(6, 0x5a6404588000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages (16.4s)
+  ✘  2 tests/channels-e2e/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join (16.5s)
+  ✘  1 tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join (16.5s)
+2026/11/16 08:51:53 socat[66693] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:51:53 socat[66717] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:52:09 socat[67864] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:52:09 socat[67867] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:52:09 socat[67279] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:52:09 socat[67293] E write(6, 0x5a6404588000, 24): Broken pipe
+2026/11/16 08:52:09 socat[67295] E write(6, 0x5a6404588000, 24): Broken pipe
+  ✘  4 tests/channels-e2e/members.spec.ts:140:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel (20.4s)
+
+
+  1) tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      22 |   await cyPage.goto(`/app/channel/${channel.id}`);
+      23 |
+    > 24 |   await expect(noAccess(cyPage)).toBeVisible();
+         |                                  ^
+      25 |   await expect(noAccess(cyPage)).toContainText(
+      26 |     `Signed in as ${people.cy.email}`
+      27 |   );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:24:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-01-a-teammate-w-8f74f-d-is-offered-to-ask-to-join/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      48 |   await deePage.goto(`/app/channel/${channel.id}`);
+      49 |
+    > 50 |   await expect(noAccess(deePage)).toBeVisible();
+         |                                   ^
+      51 |   await expect(noAccess(deePage)).toContainText(
+      52 |     `Signed in as ${people.dee.email}`
+      53 |   );
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:50:35
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-02-a-person-out-b17ea-’s-address-sees-no-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      225 |     const deePage = await pageFor('dee');
+      226 |     await deePage.goto(`/app/channel/${channel.id}`);
+    > 227 |     await expect(noAccess(deePage)).toBeVisible();
+          |                                     ^
+      228 |     await expect(deePage.getByText('for the whole team')).toHaveCount(0);
+      229 |     await expect(new ChannelView(deePage, channel.id).composer).toHaveCount(0);
+      230 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:227:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/access-ACC-07-a-person-out-5cc7d--channel-or-find-it-to-join/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/members.spec.ts:140:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+
+
+      166 |
+      167 |   await cyPage.reload();
+    > 168 |   await expect(noAccess(cyPage)).toBeVisible();
+          |                                  ^
+      169 |   await expect(
+      170 |     cyPage.getByRole('button', { name: 'Ask to join' })
+      171 |   ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:168:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-no-access-shown-as-unavailable/test-results/members-MEM-04-a-removed-p-17533-oad-cannot-open-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4 failed
+    tests/channels-e2e/access.spec.ts:13:1 › ACC-01 a teammate who is not in a private channel sees no messages and is offered to ask to join 
+    tests/channels-e2e/access.spec.ts:39:1 › ACC-02 a person outside the team who opens a private channel’s address sees no messages 
+    tests/channels-e2e/access.spec.ts:212:1 › ACC-07 a person outside the team cannot read a team channel or find it to join 
+    tests/channels-e2e/members.spec.ts:140:1 › MEM-04 a removed person never sees what is said after, and after a reload cannot open the channel 
+2026/11/16 08:52:10 socat[26247] W exiting on signal 15
+2026/11/16 08:52:10 socat[25812] W exiting on signal 15

@@ -1,0 +1,39 @@
+## Why
+
+Channels kept on the device (opened from the device, kept current by sequence, writes queued there) had no end-to-end proof. This adds tests of that behaviour to the channels end-to-end suite and records what they found on this branch's base.
+
+## What
+
+- Carries the channels end-to-end suite onto this stack: its 16 commits are cherry-picked, not merged, because a merge conflicted in generated SDK code, a calendar service file and the GraphQL schema.
+- Adds 35 tests: `current.spec.ts` (SYN, a device catches up on what changed while away), `offline.spec.ts` (OFF, what shows with no connection), `writes.spec.ts` (WRT, writes made offline or blocked), `prewarm.spec.ts` (PRE, an unread channel never opened).
+- Adds harness steps for connection states (`harness/network.ts`), a device that holds channels (`harness/device.ts`) and the channel as the services hold it (`harness/server.ts`).
+- Each new test has a row in the inventory and a proof that it fails under a deliberate break of the product (seven new breaks in `ledger/breaks/`).
+- Checks the build does not meet are marked, never weakened: 2 known defects with the flag on, 13 that show only in some runs.
+- Updates the suite's README and AGENTS.md.
+
+## What the tests found with the flag on
+
+Always:
+- "Not sent yet" never shows on a waiting message that follows the sender's own message (WRT-11).
+- A message written offline in one window does not show in the same device's other window until it is sent (WRT-14).
+- A message sent just before a reload is gone after it (CMP-13, 4 of 4 whole-suite runs; passes with the flag off).
+
+In some runs (rates from ten runs of the new tests on a busy machine):
+- Messages blocked from being sent are gone after a reload, or sent only about five minutes after the services can be reached (WRT-04, 13 of 14).
+- A channel opened once and left at once does not open offline (OFF-09, 5 of 10; every run on a quiet machine).
+- A held channel says it cannot load offline, sometimes with a new-version notice (OFF-01 2, OFF-11 3, OFF-04 5 of 10).
+- A message that arrived while the channel was open is missing offline (OFF-10, 7 of 10).
+- After catching up, the device shows an older copy offline (SYN-05, 4 of 10).
+- A long thread shows only its first three replies offline, with no word of the rest (OFF-06 10, OFF-07 9 of 10).
+- Messages written offline end in a different order from the services' (WRT-12 4, WRT-13 5, WRT-03 1 of 10), or are gone from the screen after reconnecting (WRT-01 1, WRT-07 1 of 10).
+
+Holds in every run: sending, editing, deleting, reacting and replying offline; a write whose answer was lost is sent once; a refused write is taken off the screen with a notice; catching up on every kind of change, across a reset of more than a thousand changes; an unread channel never opened opens offline.
+
+## Checks run locally
+
+CI does not run on a stacked pull request, so everything was run on a local stack:
+- New tests ten times each with the flag on: 318 of 360 passed before the intermittent checks were marked.
+- Whole suite (154 tests) three times with the flag on and once with it off. Unexpected failures besides the above, not yet classified as defects of the build or of the tests on a heavily loaded machine: join requests (ACC-03, 04, 05), a removed person keeping the composer (MEM-03), a repeated direct message (DM-02), a reaction count (MSG-13), a muted channel's mark (UNR-06), attachments with the flag off (CMP-07), a team owner's held channel offline (OFF-08).
+- `ledger/check.ts`, Biome, `just check`.
+
+Not covered end to end: jumping to an older held message offline, prewarm limits, thirty-day eviction, a storage reset with queued writes, document discussions.

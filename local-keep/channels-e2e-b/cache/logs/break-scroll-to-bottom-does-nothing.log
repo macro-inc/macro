@@ -1,0 +1,54 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:40:13 socat[3096961] E write(6, 0x56f9a1da6000, 24): Broken pipe
+2026/11/16 08:40:13 socat[3097021] E write(6, 0x56f9a1da6000, 24): Broken pipe
+2026/11/16 08:40:13 socat[3097078] E write(6, 0x56f9a1da6000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message (18.7s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message 
+
+    Error: distance of the list from its end
+
+    distance of the list from its end
+
+    expect(received).toBeLessThanOrEqual(expected)
+
+    Expected: <= 2
+    Received:    2460
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:201
+
+      199 |         message: 'distance of the list from its end',
+      200 |       })
+    > 201 |       .toBeLessThanOrEqual(2);
+          |        ^
+      202 |   }
+      203 |
+      204 |   /** Turns the wheel over the list, as a person reading back does. */
+        at ChannelView.expectAtBottom (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:201:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:338:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-scroll-to-bottom-does-nothing/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-scroll-to-bottom-does-nothing/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-scroll-to-bottom-does-nothing/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-scroll-to-bottom-does-nothing/test-results/find-and-keys-KEY-09-Shift-0afb1--goes-to-the-latest-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:319:1 › KEY-09 Shift+G in the message list goes to the latest message 
+2026/11/16 08:40:14 socat[3064210] W exiting on signal 15
+2026/11/16 08:40:14 socat[3063456] W exiting on signal 15

@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:07:03 socat[4161172] E write(6, 0x627c2330e000, 24): Broken pipe
+2026/11/16 08:07:03 socat[4161181] E write(6, 0x627c2330e000, 24): Broken pipe
+2026/11/16 08:07:03 socat[4161190] E write(6, 0x627c2330e000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations (17.6s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations 
+
+    Error: expect(locator).toBeFocused() failed
+
+    Locator:  getByRole('tree', { name: 'Conversations' })
+    Expected: focused
+    Received: inactive
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toBeFocused" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' })
+        31 × locator resolved to <div role="tree" tabindex="-1" aria-label="Conversations" class="flex min-h-0 flex-1 flex-col outline-none">…</div>
+           - unexpected value "inactive"
+
+
+      382 |
+      383 |   await page.keyboard.press('Escape');
+    > 384 |   await expect(page.getByRole('tree', { name: 'Conversations' })).toBeFocused();
+          |                                                                   ^
+      385 | });
+      386 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:384:67
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-escape-does-not-return-to-the-list/test-results/find-and-keys-KEY-11-Escap-da978-o-the-list-of-conversations/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:368:1 › KEY-11 Escape steps out of the composer to the messages, then to the list of conversations 
+2026/11/16 08:07:04 socat[4133643] W exiting on signal 15
+2026/11/16 08:07:04 socat[4132058] W exiting on signal 15

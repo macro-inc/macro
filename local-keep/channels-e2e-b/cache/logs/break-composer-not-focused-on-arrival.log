@@ -1,0 +1,13 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 09:27:22 socat[3391272] E write(6, 0x56516ff92000, 24): Broken pipe
+2026/11/16 09:27:22 socat[3391299] E write(6, 0x56516ff92000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/find-and-keys.spec.ts:247:1 › KEY-07 “e” on a person’s own selected message edits it (2.9s)
+
+  1 passed (4.3s)
+2026/11/16 09:27:22 socat[3387375] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:27:22 socat[3387375] W exiting on signal 15
+2026/11/16 09:27:22 socat[3386981] W exiting on signal 15

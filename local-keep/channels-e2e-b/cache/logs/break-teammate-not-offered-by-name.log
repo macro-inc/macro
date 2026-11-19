@@ -1,0 +1,62 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 2 workers
+
+2026/11/17 05:00:41 socat[2727671] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2725342] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2725687] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2725600] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2736880] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2726458] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2736893] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:42 socat[2736919] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (8.4s)
+2026/11/17 05:00:52 socat[2725346] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+2026/11/17 05:00:52 socat[2725689] E write(6, 0x5e2f9c4e7000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/direct-messages.spec.ts:274:1 › DM-06 typing a teammate’s name in “New direct message” offers that person (17.9s)
+
+
+  1) tests/channels-e2e/direct-messages.spec.ts:274:1 › DM-06 typing a teammate’s name in “New direct message” offers that person 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('option', { name: /Ben Member/ })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('option', { name: /Ben Member/ })
+
+
+      284 |   await page.keyboard.type('Ben');
+      285 |
+    > 286 |   await expect(page.getByRole('option', { name: /Ben Member/ })).toBeVisible();
+          |                                                                  ^
+      287 | });
+      288 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:286:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-teammate-not-offered-by-name/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-teammate-not-offered-by-name/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-teammate-not-offered-by-name/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-teammate-not-offered-by-name/test-results/direct-messages-DM-06-typi-110fe-message”-offers-that-person/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/direct-messages.spec.ts:274:1 › DM-06 typing a teammate’s name in “New direct message” offers that person 
+  1 passed (33.0s)
+2026/11/17 05:00:53 socat[2691351] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:00:53 socat[2692568] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:00:53 socat[2692568] W exiting on signal 15
+2026/11/17 05:00:53 socat[2691351] W exiting on signal 15

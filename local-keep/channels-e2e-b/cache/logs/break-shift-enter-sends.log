@@ -1,0 +1,59 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:43:27 socat[3446553] E write(6, 0x6529c1190000, 24): Broken pipe
+2026/11/16 08:43:27 socat[3446559] E write(6, 0x6529c1190000, 24): Broken pipe
+2026/11/16 08:43:28 socat[3446552] E write(6, 0x6529c1190000, 24): Broken pipe
+2026/11/16 08:43:28 socat[3446557] E write(6, 0x6529c1190000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines (18.5s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+    Expected: 1
+    Received: 3
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]')
+        30 × locator resolved to 3 elements
+           - unexpected value "3"
+
+
+      136 |   for (const view of [mine, bens]) {
+      137 |     const message = view.list.locator('[data-message]');
+    > 138 |     await expect(message).toHaveCount(1);
+          |                           ^
+      139 |     await expect.poll(() => view.lines(message)).toEqual(lines);
+      140 |   }
+      141 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:138:27
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-shift-enter-sends/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-shift-enter-sends/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-shift-enter-sends/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-shift-enter-sends/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-shift-enter-sends/test-results/messages-MSG-04-a-message--9ce9a-Shift-Enter-keeps-its-lines/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:116:1 › MSG-04 a message written on several lines with Shift+Enter keeps its lines 
+2026/11/16 08:43:29 socat[3425131] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:43:29 socat[3425131] W exiting on signal 15
+2026/11/16 08:43:29 socat[3421298] W exiting on signal 15

@@ -1,0 +1,6 @@
+cargo run --quiet --manifest-path Cargo.toml --target-dir target/xtask -p xtask_local --features local-stack -- stack "$@"
+
+[+] macro local stack update — instance che2e-by
+  ✓ Rebuilding & reloading services                  Done 7m56s
+  ✓ Waiting for backend (proxy /auth/health)         Done 0s
+exit 0

@@ -1,0 +1,163 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:24:19 socat[1586975] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:19 socat[1586996] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1586967] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1586984] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1587027] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594205] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594224] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594235] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594170] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594178] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:20 socat[1594198] E write(6, 0x58e24bdab000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (21.2s)
+  ✘  1 tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer (21.6s)
+2026/11/16 08:24:22 socat[1586962] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:22 socat[1586973] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:22 socat[1586994] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:22 socat[1594218] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:22 socat[1594230] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:22 socat[1594239] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:23 socat[1595119] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:23 socat[1595187] E write(6, 0x58e24bdab000, 24): Broken pipe
+2026/11/16 08:24:23 socat[1595196] E write(6, 0x58e24bdab000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it (24.5s)
+
+
+  1) tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:23309/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        32 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:23309/app/component/channel-compose"
+
+
+      40 |   await page.keyboard.press('Enter');
+      41 |
+    > 42 |   await expect(page).toHaveURL(CONVERSATION);
+         |                      ^
+      43 |   const id = openConversationId(page);
+      44 |   const view = new ChannelView(page, id);
+      45 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:42:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-01-a-di-4a900-ssages”-and-they-can-answer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:23309/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        32 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:23309/app/component/channel-compose"
+
+
+      82 |   await page.keyboard.type(first);
+      83 |   await page.keyboard.press('Enter');
+    > 84 |   await expect(page).toHaveURL(CONVERSATION);
+         |                      ^
+      85 |   const id = openConversationId(page);
+      86 |   const view = new ChannelView(page, id);
+      87 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:84:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-02-writ-8cce8-tinues-the-one-conversation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+    Received string:  "https://localhost:23309/app/component/channel-compose"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 15000ms
+        34 × locator resolved to <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html>
+           - unexpected value "https://localhost:23309/app/component/channel-compose"
+
+
+      195 |   await page.keyboard.press('Enter');
+      196 |
+    > 197 |   await expect(page).toHaveURL(CONVERSATION);
+          |                      ^
+      198 |   const id = openConversationId(page);
+      199 |   const view = new ChannelView(page, id);
+      200 |   await view.shown();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/direct-messages.spec.ts:197:22
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-message-to-people-is-not-sent/test-results/direct-messages-DM-04-a-na-e0a00-eaches-everyone-I-put-in-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/direct-messages.spec.ts:22:1 › DM-01 a direct message I start reaches the other person at once under “Direct messages”, and they can answer 
+    tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation 
+    tests/channels-e2e/direct-messages.spec.ts:173:1 › DM-04 a named group started from “New direct message” reaches everyone I put in it 
+2026/11/16 08:24:24 socat[1566982] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:24:24 socat[1567747] W exiting on signal 15
+2026/11/16 08:24:24 socat[1566982] W exiting on signal 15

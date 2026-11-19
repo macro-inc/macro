@@ -1,0 +1,45 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 9 tests using 3 workers
+
+2026/11/15 15:58:53 socat[2169622] E write(6, 0x5e1387235000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (3.9s)
+2026/11/15 15:58:54 socat[2176426] E write(6, 0x5e1387235000, 24): Broken pipe
+2026/11/15 15:58:54 socat[2176072] E write(6, 0x5e1387235000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.7s)
+2026/11/15 15:58:54 socat[2176431] E write(6, 0x5e1387235000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.7s)
+2026/11/15 15:58:58 socat[2179194] E write(6, 0x5e1387235000, 24): Broken pipe
+2026/11/15 15:58:58 socat[2125788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:58:58 socat[2127614] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  4 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.4s)
+2026/11/15 15:58:58 socat[2180264] E write(6, 0x5e1387235000, 24): Broken pipe
+2026/11/15 15:58:59 socat[2125788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:58:59 socat[2180212] E write(6, 0x5e1387235000, 24): Broken pipe
+2026/11/15 15:58:59 socat[2178079] E read(6, 0x5e1387235000, 8192): Connection reset by peer
+2026/11/15 15:58:59 socat[2178081] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/15 15:58:59 socat[2180268] E write(6, 0x5e1387235000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.6s)
+2026/11/15 15:58:59 socat[2180262] E write(6, 0x5e1387235000, 24): Broken pipe
+2026/11/15 15:58:59 socat[2180265] E write(6, 0x5e1387235000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.7s)
+2026/11/15 15:59:02 socat[2188438] E write(6, 0x5e1387236000, 24): Broken pipe
+2026/11/15 15:59:02 socat[2127614] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:59:02 socat[2125788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:59:02 socat[2190378] E write(6, 0x5e1387236000, 24): Broken pipe
+2026/11/15 15:59:02 socat[2190601] E write(6, 0x5e1387236000, 24): Broken pipe
+  ✓  9 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (2.9s)
+2026/11/15 15:59:03 socat[2188049] E write(6, 0x5e1387236000, 24): Broken pipe
+2026/11/15 15:59:03 socat[2188795] E write(6, 0x5e1387236000, 24): Broken pipe
+2026/11/15 15:59:03 socat[2189223] E write(6, 0x5e1387236000, 24): Broken pipe
+  ✓  7 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (4.4s)
+2026/11/15 15:59:05 socat[2190153] E write(6, 0x5e1387236000, 24): Broken pipe
+2026/11/15 15:59:05 socat[2190367] E write(6, 0x5e1387236000, 24): Broken pipe
+  ✓  8 tests/channels-e2e/writes.spec.ts:276:1 › WRT-09 a message the services refuse is taken back off the screen and the person is told it failed (5.7s)
+
+  9 passed (38.6s)
+2026/11/15 15:59:05 socat[2125788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:59:05 socat[2127614] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:59:05 socat[2127614] W exiting on signal 15
+2026/11/15 15:59:05 socat[2125788] W exiting on signal 15

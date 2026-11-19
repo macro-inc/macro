@@ -1,0 +1,41 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 4 workers
+
+2026/11/15 15:24:59 socat[2548482] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:24:59 socat[2548525] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:00 socat[2548470] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:00 socat[2548528] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:02 socat[2554233] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:02 socat[2554262] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:02 socat[2554296] E write(6, 0x5675d0b50000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (7.0s)
+2026/11/15 15:25:03 socat[2555696] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:03 socat[2556051] E write(6, 0x5675d0b50000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (8.2s)
+2026/11/15 15:25:05 socat[2558905] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:06 socat[2561126] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:06 socat[2561581] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:06 socat[2559202] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:06 socat[2559262] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:09 socat[2536241] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:25:09 socat[2566123] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:09 socat[2566143] E write(6, 0x5675d0b50000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/current.spec.ts:275:1 › SYN-07 an edit made while away shows after coming back through a link to an older message (14.4s)
+2026/11/15 15:25:09 socat[2568377] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:09 socat[2568596] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:09 socat[2533593] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  5 tests/channels-e2e/current.spec.ts:178:1 › SYN-04 a channel changed while the app was closed is right when the app is opened again (7.1s)
+2026/11/15 15:25:11 socat[2567387] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:11 socat[2567408] E write(6, 0x5675d0b50000, 24): Broken pipe
+2026/11/15 15:25:11 socat[2567420] E write(6, 0x5675d0b50000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/current.spec.ts:275:1 › SYN-07 an edit made while away shows after coming back through a link to an older message (16.4s)
+2026/11/15 15:25:13 socat[2573226] E write(6, 0x5675d0b51000, 24): Broken pipe
+2026/11/15 15:25:17 socat[2582615] E write(6, 0x5675d0b51000, 24): Broken pipe
+2026/11/15 15:25:17 socat[2582888] E write(6, 0x5675d0b51000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/current.spec.ts:275:1 › SYN-07 an edit made while away shows after coming back through a link to an older message (14.1s)
+
+  6 passed (24.0s)
+2026/11/15 15:25:17 socat[2536241] W exiting on signal 15
+2026/11/15 15:25:17 socat[2533593] W exiting on signal 15

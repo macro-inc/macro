@@ -1,0 +1,47 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 2 workers
+
+2026/11/16 15:15:45 socat[3690188] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3669566] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3660355] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3661460] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3662636] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.5s)
+2026/11/16 15:15:45 socat[3692130] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3693226] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3662981] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:45 socat[3664052] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.8s)
+2026/11/16 15:15:50 socat[3703656] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3703677] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702416] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702481] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702489] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.6s)
+2026/11/16 15:15:50 socat[3704149] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3704151] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702694] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702749] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:50 socat[3702784] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.6s)
+2026/11/16 15:15:55 socat[3713717] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712694] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3713720] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3713724] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712071] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712266] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712271] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.7s)
+2026/11/16 15:15:55 socat[3713747] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3714230] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3714258] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712494] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712511] E write(6, 0x6208b2fa3000, 24): Broken pipe
+2026/11/16 15:15:55 socat[3712523] E write(6, 0x6208b2fa3000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (4.7s)
+
+  6 passed (26.1s)
+2026/11/16 15:15:55 socat[3636479] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:15:55 socat[3638125] W exiting on signal 15
+2026/11/16 15:15:55 socat[3636479] W exiting on signal 15

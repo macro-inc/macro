@@ -1,0 +1,62 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:15:37 socat[778744] E write(6, 0x5c0db6369000, 24): Broken pipe
+2026/11/16 08:15:37 socat[772658] E write(6, 0x5c0db6369000, 24): Broken pipe
+2026/11/16 08:15:37 socat[751459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:15:37 socat[778757] E write(6, 0x5c0db6369000, 24): Broken pipe
+2026/11/16 08:15:37 socat[778782] E write(6, 0x5c0db6369000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it (18.1s)
+
+
+  1) tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it 
+
+    Error: messages marked as the target of the link
+
+    messages marked as the target of the link
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "01a1e36c-bc77-72fb-ac49-a082ca3f907e",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:87
+
+      85 |         message: 'messages marked as the target of the link',
+      86 |       })
+    > 87 |       .toEqual([id]);
+         |        ^
+      88 |   }
+      89 |
+      90 |   /**
+        at ChannelView.expectMarked (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:87:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:19:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-link-target-not-marked/test-results/location-NAV-01-a-link-to--77b1d-n-that-message-and-marks-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/location.spec.ts:7:1 › NAV-01 a link to a recent message opens the channel on that message and marks it 
+2026/11/16 08:15:38 socat[751459] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:15:38 socat[752049] W exiting on signal 15
+2026/11/16 08:15:38 socat[751459] W exiting on signal 15

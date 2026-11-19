@@ -1,0 +1,346 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 60 tests using 4 workers
+
+2026/11/17 21:55:08 socat[2821885] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:09 socat[2821943] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:09 socat[2822090] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:09 socat[2821877] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:09 socat[2821950] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2856843] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2856900] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2857021] E write(6, 0x61c340a9e000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (18.4s)
+2026/11/17 21:55:10 socat[2857725] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2857769] E write(6, 0x61c340a9e000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (18.8s)
+2026/11/17 21:55:10 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:55:10 socat[2857877] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2858128] E write(6, 0x61c340a9e000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (19.0s)
+2026/11/17 21:55:10 socat[2818105] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2858381] E write(6, 0x61c340a9e000, 24): Broken pipe
+2026/11/17 21:55:10 socat[2858700] E write(6, 0x61c340a9e000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (19.0s)
+2026/11/17 21:55:15 socat[2864725] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2867113] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2867072] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2867105] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2867337] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2860417] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2875391] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:17 socat[2875888] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.9s)
+2026/11/17 21:55:18 socat[2862996] E read(6, 0x61c340a9f000, 8192): Connection reset by peer
+2026/11/17 21:55:18 socat[2880803] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:18 socat[2863002] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:55:18 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:55:18 socat[2881052] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:18 socat[2881224] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.7s)
+2026/11/17 21:55:19 socat[2862529] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:19 socat[2881448] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:19 socat[2881493] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.0s)
+2026/11/17 21:55:19 socat[2863599] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:19 socat[2881607] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:19 socat[2881769] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.9s)
+2026/11/17 21:55:24 socat[2885535] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:24 socat[2885882] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2887211] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2887326] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2895675] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2887871] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2895711] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:25 socat[2887996] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.7s)
+2026/11/17 21:55:25 socat[2887877] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:26 socat[2899051] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:26 socat[2899242] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:26 socat[2899451] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.5s)
+2026/11/17 21:55:27 socat[2886127] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:27 socat[2899873] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:27 socat[2900243] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.8s)
+2026/11/17 21:55:27 socat[2886023] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:27 socat[2900233] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:27 socat[2900475] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:27 socat[2900508] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.9s)
+2026/11/17 21:55:31 socat[2901905] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:32 socat[2902436] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:32 socat[2902747] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:32 socat[2902346] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:33 socat[2902857] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:33 socat[2903405] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:33 socat[2911441] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:33 socat[2911458] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.1s)
+2026/11/17 21:55:34 socat[2901948] E read(6, 0x61c340a9f000, 8192): Connection reset by peer
+2026/11/17 21:55:34 socat[2901949] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2912402] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.1s)
+2026/11/17 21:55:34 socat[2912422] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2901195] E read(6, 0x61c340a9f000, 8192): Connection reset by peer
+2026/11/17 21:55:34 socat[2912435] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2901196] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2912471] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2912481] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.7s)
+2026/11/17 21:55:34 socat[2912756] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2912844] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:34 socat[2912885] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.8s)
+2026/11/17 21:55:38 socat[2913670] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:38 socat[2913877] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:39 socat[2915159] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:39 socat[2924606] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:39 socat[2924767] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (5.8s)
+2026/11/17 21:55:39 socat[2915157] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:39 socat[2915305] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:40 socat[2916258] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:40 socat[2916375] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:40 socat[2913226] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:40 socat[2925173] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:40 socat[2925278] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.2s)
+2026/11/17 21:55:41 socat[2927003] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.6s)
+2026/11/17 21:55:41 socat[2926971] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:41 socat[2927710] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:41 socat[2928146] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.5s)
+2026/11/17 21:55:45 socat[2930859] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:45 socat[2931583] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:46 socat[2941395] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:46 socat[2941420] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.5s)
+2026/11/17 21:55:46 socat[2933966] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:47 socat[2934479] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:47 socat[2934922] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:48 socat[2937152] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:48 socat[2929133] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:48 socat[2943794] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.2s)
+2026/11/17 21:55:48 socat[2943738] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:49 socat[2945341] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:49 socat[2945492] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:49 socat[2945508] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:55:49 socat[2933156] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:49 socat[2946640] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:49 socat[2946575] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.6s)
+2026/11/17 21:55:52 socat[2945878] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2957480] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2957701] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2957828] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.9s)
+2026/11/17 21:55:54 socat[2953140] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2953363] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2949578] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:54 socat[2949688] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:55 socat[2954346] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:55 socat[2954661] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:55 socat[2961030] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:55 socat[2961068] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:55 socat[2961095] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.4s)
+2026/11/17 21:55:56 socat[2961054] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:56 socat[2946546] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:56 socat[2961090] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:56 socat[2961093] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.2s)
+2026/11/17 21:55:56 socat[2963498] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:56 socat[2964172] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.6s)
+2026/11/17 21:55:59 socat[2961402] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:55:59 socat[2961823] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:01 socat[2972902] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:01 socat[2973026] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.7s)
+2026/11/17 21:56:01 socat[2972977] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:01 socat[2970215] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:02 socat[2970197] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:02 socat[2971829] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:03 socat[2978031] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:03 socat[2966135] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:03 socat[2978598] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:03 socat[2978917] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.6s)
+2026/11/17 21:56:03 socat[2981991] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  30 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:03 socat[2981985] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:04 socat[2985832] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:04 socat[2986228] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:04 socat[2986392] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.9s)
+2026/11/17 21:56:06 socat[2981990] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:06 socat[2982265] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:08 socat[2994062] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:08 socat[2993904] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.8s)
+2026/11/17 21:56:09 socat[2988390] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:09 socat[2988580] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:09 socat[2989152] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:09 socat[2989399] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:09 socat[2990453] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:10 socat[2770015] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:10 socat[3000636] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:10 socat[3000619] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:11 socat[3000912] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:11 socat[3000992] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.0s)
+2026/11/17 21:56:11 socat[3001322] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:11 socat[3001344] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  36 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.7s)
+2026/11/17 21:56:14 socat[3000817] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:14 socat[3000914] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:16 socat[2997979] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:16 socat[3009531] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:16 socat[3009576] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.2s)
+2026/11/17 21:56:16 socat[3005166] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:16 socat[3005369] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:16 socat[3004646] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:17 socat[3004057] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:17 socat[3004078] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3014610] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3014735] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.3s)
+2026/11/17 21:56:18 socat[3002950] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3014781] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3014913] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  39 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.5s)
+2026/11/17 21:56:18 socat[3015468] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3015532] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:18 socat[3015599] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:21 socat[3015458] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:21 socat[3015585] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:22 socat[3012979] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:22 socat[3027456] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:22 socat[3027958] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.2s)
+2026/11/17 21:56:24 socat[3020210] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:24 socat[3020428] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:24 socat[3021041] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:24 socat[3021686] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:25 socat[3033290] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:25 socat[3033298] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  42 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.8s)
+2026/11/17 21:56:26 socat[3017215] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[3034125] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[3034134] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[3034242] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[2770015] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  43 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.6s)
+2026/11/17 21:56:26 socat[3018000] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[3034135] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:26 socat[3034149] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:28 socat[3033175] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:29 socat[2770015] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:29 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:29 socat[3044257] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:29 socat[3044271] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  45 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.5s)
+2026/11/17 21:56:31 socat[3038208] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:31 socat[3038317] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:31 socat[3041316] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:31 socat[3041501] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:32 socat[3042298] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3048990] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3035780] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3049101] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3049124] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  46 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:33 socat[3037779] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3049197] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:33 socat[3049151] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  47 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.5s)
+2026/11/17 21:56:34 socat[3037932] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:34 socat[3050820] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:34 socat[2770015] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:34 socat[3051080] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  48 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:36 socat[3047135] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:36 socat[3047314] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:37 socat[3061437] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:37 socat[3061691] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:37 socat[3062063] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  49 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.6s)
+2026/11/17 21:56:39 socat[3059604] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:39 socat[3058709] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:39 socat[3059641] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3060604] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3060689] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3065503] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3052337] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3065629] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:40 socat[3065649] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  50 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.0s)
+2026/11/17 21:56:41 socat[3052491] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:41 socat[3066025] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  51 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.5s)
+2026/11/17 21:56:41 socat[3066175] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:41 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:42 socat[3069732] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:42 socat[3070325] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:42 socat[3058163] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:42 socat[3070899] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  52 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:44 socat[3065628] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:46 socat[3079260] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:46 socat[3079300] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  53 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.2s)
+2026/11/17 21:56:46 socat[3075331] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:46 socat[3075804] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:47 socat[3074993] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3076608] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3073606] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3083214] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3083424] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  55 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.1s)
+2026/11/17 21:56:48 socat[3085625] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3085724] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:48 socat[3085769] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  54 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (7.3s)
+2026/11/17 21:56:49 socat[3087340] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:49 socat[3087448] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  56 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (6.8s)
+2026/11/17 21:56:52 socat[3086370] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:52 socat[3086853] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:52 socat[2770015] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:55 socat[3089029] E read(6, 0x61c340a9f000, 8192): Connection reset by peer
+2026/11/17 21:56:55 socat[3096634] E read(6, 0x61c340a9f000, 8192): Connection reset by peer
+2026/11/17 21:56:55 socat[3081339] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:55 socat[3096815] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:55 socat[3089359] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:55 socat[3096959] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  57 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.1s)
+2026/11/17 21:56:56 socat[3090192] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3102565] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3102654] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3102792] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  58 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.4s)
+2026/11/17 21:56:57 socat[3091321] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3091457] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3104113] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:57 socat[3104168] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  59 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.5s)
+2026/11/17 21:56:58 socat[3105973] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:58 socat[3106000] E write(6, 0x61c340a9f000, 24): Broken pipe
+2026/11/17 21:56:58 socat[3106138] E write(6, 0x61c340a9f000, 24): Broken pipe
+  ✓  60 tests/channels-e2e/unread.spec.ts:223:1 › UNR-06 a muted channel shows a crossed bell and is not marked unread by new messages; unmuted, it is again (8.8s)
+
+  60 passed (2.4m)
+2026/11/17 21:56:59 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:59 socat[2772673] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:56:59 socat[2772673] W exiting on signal 15
+2026/11/17 21:56:59 socat[2770015] W exiting on signal 15

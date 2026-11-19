@@ -1,0 +1,31 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 4 workers
+
+2026/11/17 05:04:33 socat[3206021] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206061] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206101] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.1s)
+2026/11/17 05:04:33 socat[3206088] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206153] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.1s)
+2026/11/17 05:04:33 socat[3206105] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206159] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206406] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.2s)
+2026/11/17 05:04:33 socat[3206116] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:33 socat[3206166] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.2s)
+2026/11/17 05:04:51 socat[3243737] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:51 socat[3243755] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.0s)
+2026/11/17 05:04:51 socat[3243724] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:51 socat[3243777] E write(6, 0x5ca334930000, 24): Broken pipe
+2026/11/17 05:04:51 socat[3243795] E write(6, 0x5ca334930000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.1s)
+
+  6 passed (51.2s)
+2026/11/17 05:04:51 socat[3161938] W exiting on signal 15
+2026/11/17 05:04:51 socat[3161176] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:04:51 socat[3161176] W exiting on signal 15

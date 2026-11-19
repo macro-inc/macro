@@ -1,0 +1,136 @@
+<title>Channels device proof</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f7f6f2;--fg:#1d1c1a;--mut:#66625a;--line:#dcd8cf;--card:#fff;--ok:#1f7a4d;--some:#a86400;--bad:#b3261e;--okb:#e6f3ec;--someb:#fbf0dc;--badb:#fbe6e4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161614;--fg:#ecebe6;--mut:#a09b91;--line:#34322d;--card:#1f1e1b;--ok:#6fcf9b;--some:#f0b65a;--bad:#f2857d;--okb:#17301f;--someb:#3a2c12;--badb:#3d1b18;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161614;--fg:#ecebe6;--mut:#a09b91;--line:#34322d;--card:#1f1e1b;--ok:#6fcf9b;--some:#f0b65a;--bad:#f2857d;--okb:#17301f;--someb:#3a2c12;--badb:#3d1b18;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 Inter,system-ui,sans-serif;padding-block:28px 60px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:920px;margin:0 auto}
+h1{font-size:28px;line-height:1.2;margin:0 0 6px;text-wrap:balance}
+h2{font-size:19px;margin:38px 0 10px;text-wrap:balance}
+p,li{max-width:70ch}.mut,.m{color:var(--mut)}.m{font-size:12px}
+a{color:inherit}
+.verdict{border:1px solid var(--line);border-left:4px solid var(--bad);background:var(--card);padding:14px 16px;border-radius:6px;margin:18px 0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.tile b{display:block;font-size:22px}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--card)}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th,td{text-align:left;vertical-align:top;padding:7px 10px;border-bottom:1px solid var(--line)}
+th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+td.id{white-space:nowrap;font-weight:600}td.n{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:600}
+tr.ok td.n{color:var(--ok)}tr.some td.n{color:var(--some)}tr.bad td.n{color:var(--bad)}
+tr.some{background:var(--someb)}tr.bad{background:var(--badb)}
+code{font:12px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:9px;margin-right:6px}
+.t-bad{background:var(--badb);color:var(--bad)}.t-some{background:var(--someb);color:var(--some)}.t-ok{background:var(--okb);color:var(--ok)}
+ul.f{padding-left:0;list-style:none}ul.f li{padding:9px 0;border-bottom:1px solid var(--line);max-width:none}
+</style>
+<main>
+<h1>Channels kept on the device: what end-to-end tests prove</h1>
+<p class="mut">Approach B, flag on, branch <code>synoet/channels-local-sync-pr5-writes</code> at <code>63e04cd9b1</code>, compared with <code>c060e4667f</code> and <code>8408dabf70</code> · 16 November 2026 · pull request <a href="https://github.com/macro-inc/macro/pull/10868">#10868</a> (ready for review, not merged)</p>
+
+<div class="verdict"><b>Most of what failed before now holds, but this is still not proof that B causes no regressions.</b> On this head 34 of the 35 device tests held in five of five whole-suite runs, and both defects that failed in every run are fixed. One device behaviour still fails (blocked messages sent late after a reload), and two older channel tests fail only with the flag on: a reaction count that does not go down on the other person's page (3 of 5 runs) and a message sent just before a reload that is gone after it (1 of 5). Part of the improvement is a change to the tests, set out below. The machine was not quiet: load 17 to 47.</div>
+
+<div class="tiles">
+<div class="tile"><b>5 + 1</b>whole runs flag on, and one flag off, alone on the stack</div>
+<div class="tile"><b>34</b>of 35 device tests held 5 of 5</div>
+<div class="tile"><b>1</b>device check still fails (WRT-04, 3 of 5)</div>
+<div class="tile"><b>6</b>unexpected failures in 775 flag-on test runs</div>
+<div class="tile"><b>0</b>failures with the flag off (one run)</div>
+</div>
+
+<h2>What changed in the tests, and why</h2>
+<ul class="f">
+<li><span class="tag t-some">test</span><b>A device is now cut off only after its page has stopped fetching code.</b> The tests used to lose the connection one to three seconds after a page opened. The app is then still fetching the code of the views it expects next; the failed fetches make it say "New version available", and with the flag on a held channel might not open, typing went to the command palette, and an offline write came back as "Failed to send message". Nearly every intermittent failure on this head had those failed fetches in its trace. That moment is real, and happens with and without the flag, so it has a test of its own (REC-04) instead of being mixed into every offline test.</li>
+<li><span class="tag t-bad">defect, both builds</span><b>REC-04: a page cut off just after it opened says a new version is available.</b> Failed 5 of 5 with the flag on and 5 of 5 with it off. It is on main too. With the flag on the same moment does more harm, because more depends on working offline.</li>
+<li><span class="tag t-some">test</span><b>WRT-13</b> now has the other person write only after the laptop's message is at the services. I did not see the order differ in my three failure traces (what failed was the phone's writes not arriving), but the order was left to chance.</li>
+<li><span class="tag t-some">limit</span><b>The wait has a cost.</b> While waiting, a connected device left alone also brings its recent channels up to date, so OFF-09, OFF-10 and SYN-05 cannot tell "held" from "fetched in that pause". With the old step on this head, OFF-09 and SYN-05 still held 5 of 5; OFF-10 held 3 of 5, and its failures had the failed code fetches.</li>
+</ul>
+
+<h2>Fixed on this head</h2>
+<ul class="f">
+<li><span class="tag t-ok">fixed</span><b>"Not sent yet" shows on a waiting message that follows the sender's own</b> (WRT-11: 0 of 10, 0 of 5, now 5 of 5, and 5 of 5 with the old offline step).</li>
+<li><span class="tag t-ok">fixed</span><b>A message written offline shows in the same device's other window</b> (WRT-14: 0 of 10, 0 of 5, now 5 of 5, and 5 of 5 with the old step).</li>
+<li><span class="tag t-ok">fixed</span><b>A channel glanced at and left opens offline</b> (OFF-09: 0 of 5 on the last head, 5 of 5 now with either step).</li>
+<li><span class="tag t-ok">holds</span><b>Long threads offline</b> (OFF-06, OFF-07: 2 and 1 of 5 before, 5 of 5 now; OFF-06 failed once in five with the old step, with the new-version notice up).</li>
+</ul>
+
+<h2>Still failing with the flag on</h2>
+<ul class="f">
+<li><span class="tag t-bad">10 of 15</span><b>WRT-04: messages blocked from being sent, then a reload, are not at the services 40 s after they can be reached.</b> Timed once, they arrived 301 s after, which matches the queue's five-minute lease; without the reload they arrive in 5 to 6 s. The owner reports 0 failures in 11 on its stack; mine failed 5 of 5, 2 of 5 and 3 of 5 in three sets.</li>
+<li><span class="tag t-some">3 of 5</span><b>MSG-13: a reaction one person takes off still counts 2 on the other person's page</b> after 15 s (2 of 5 on the last head, none in two flag-off runs). The owner reports 0 in 14. Traces are kept for all three failures.</li>
+<li><span class="tag t-some">1 of 5</span><b>CMP-13: a message sent just before a reload is gone after it.</b> This was the one sure regression on the first head; it passed 5 of 5 on the last one and failed once here.</li>
+<li><span class="tag t-some">1 of 5 each</span><b>MEM-01</b> (an invitation timed out at 90 s, also once on the last head) and <b>UNR-04</b> (a check already recorded as failing sometimes ran out the whole test's time). Not classified.</li>
+</ul>
+
+<h2>Every device test, three heads side by side</h2>
+<p class="mut">How often the check held. First column: ten runs of the new tests at load about 50. Second: five whole-suite runs at load 16 to 42. Third: five whole-suite runs at load 17 to 47, with the changed offline step. Fourth: five runs of the device tests on the same head with the old step, at load 15 to 31.</p>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Behaviour</th><th>8408dabf70</th><th>c060e4667f</th><th>63e04cd9b1</th><th>63e04, old step</th><th>Break that makes it fail</th></tr></thead><tbody>
+<tr class="ok"><td class="id">SYN-01</td><td>a channel left for another one shows everything that changed meanwhile when the person comes back</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-02</td><td>an open channel whose connection dropped shows every change made meanwhile once it is back, without a reload</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-03</td><td>a channel changed while the person was offline and in another channel is right when they come back to it</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>changes-reach-neither-screen-nor-device</code></td></tr>
+<tr class="ok"><td class="id">SYN-04</td><td>a channel changed while the app was closed is right when the app is opened again</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-05</td><td>what a device caught up on is what it shows the next time it opens the channel with no connection</td><td class="n">6/10</td><td class="n">4/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-changes-not-applied</code></td></tr>
+<tr class="ok"><td class="id">SYN-06</td><td>a channel more than a thousand changes behind is right when it is opened again</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-08</td><td>a person removed from a channel while away is not shown the messages their device kept</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>no-access-shown-as-unavailable</code></td></tr>
+<tr class="ok"><td class="id">SYN-09</td><td>changes made while the page is reloading are all there when it has loaded</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">SYN-10</td><td>a channel stays right through rounds of leaving it, losing the connection and reloading</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>held-channel-shown-as-it-was-left</code></td></tr>
+<tr class="ok"><td class="id">OFF-01</td><td>a channel the person has read opens whole with no connection</td><td class="n">8/10</td><td class="n">4/5</td><td class="n">5/5</td><td class="n">4/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-02</td><td>a channel the device has never held says it cannot load offline, and loads when the connection is back</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-load-error-not-shown</code></td></tr>
+<tr class="ok"><td class="id">OFF-03</td><td>on a very slow connection a held channel shows at once, and what changed meanwhile shows when the answer arrives</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>channel-changes-not-applied</code></td></tr>
+<tr class="ok"><td class="id">OFF-04</td><td>messages read far back in a long channel can be scrolled through again with no connection</td><td class="n">5/10</td><td class="n">3/5</td><td class="n">5/5</td><td class="n">2/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-05</td><td>scrolling past the oldest held message with no connection keeps what is held on screen</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-06</td><td>a thread read while connected shows its replies with no connection, a long one included</td><td class="n">0/10</td><td class="n">2/5</td><td class="n">5/5</td><td class="n">4/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-07</td><td>a long thread never opened, opened with no connection, shows every reply or says that there are more</td><td class="n">1/10</td><td class="n">1/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-08</td><td>a team owner opening a held channel with no connection sees the channel</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-09</td><td>a channel left as soon as its messages showed opens with no connection</td><td class="n">5/10</td><td class="n">0/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-10</td><td>a message that arrived while the channel was open is there when the channel opens with no connection</td><td class="n">3/10</td><td class="n">2/5</td><td class="n">5/5</td><td class="n">3/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">OFF-11</td><td>opening a held channel with no connection does not say that a new version is out</td><td class="n">7/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">PRE-01</td><td>an unread channel never opened on this device opens with no connection once the app has been left alone</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-01</td><td>a message sent with no connection shows at once and reaches the other person once when the connection is back</td><td class="n">9/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-02</td><td>an edit, a deletion and a reaction made with no connection show at once and all reach the services</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-03</td><td>several messages sent with no connection arrive once each, in the order they were written</td><td class="n">8/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="some"><td class="id">WRT-04</td><td>messages that could not be sent are still there after a reload and are sent once when the services can be reached</td><td class="n">0/10</td><td class="n">1/5</td><td class="n">2/5</td><td class="n">0/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-05</td><td>a message the services took but whose answer never came back is in the channel once</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-06</td><td>a message edited and reacted to before it could be sent arrives as it was last left</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-07</td><td>a message deleted before it could be sent is not shown to anyone once the connection is back</td><td class="n">9/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>device-not-used</code></td></tr>
+<tr class="ok"><td class="id">WRT-08</td><td>a reply written with no connection shows in its thread at once and reaches the services</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-09</td><td>a message the services refuse is taken back off the screen and the person is told it failed</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>refused-write-kept</code></td></tr>
+<tr class="ok"><td class="id">WRT-10</td><td>a message still waiting to be sent says that it is not sent yet</td><td class="n">10/10</td><td class="n">5/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-message-not-marked</code></td></tr>
+<tr class="ok"><td class="id">WRT-11</td><td>a waiting message written right after another of the same person says that it is not sent yet</td><td class="n">0/10</td><td class="n">0/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-message-not-marked</code></td></tr>
+<tr class="ok"><td class="id">WRT-12</td><td>a message written offline with the channel open in two windows is sent once and shows in both</td><td class="n">6/10</td><td class="n">3/5</td><td class="n">5/5</td><td class="n">2/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-13</td><td>two devices of one person, one of them offline, end up showing the same channel as the services hold</td><td class="n">4/10</td><td class="n">2/5</td><td class="n">5/5</td><td class="n">2/5</td><td><code>queued-writes-never-sent</code></td></tr>
+<tr class="ok"><td class="id">WRT-14</td><td>a message written offline in one window shows in the other window of the same device</td><td class="n">0/10</td><td class="n">0/5</td><td class="n">5/5</td><td class="n">5/5</td><td><code>waiting-write-not-shown-in-other-window</code></td></tr>
+</tbody></table></div>
+<p class="mut">Every break in the last column was rebuilt on <code>63e04cd9b1</code> and its tests failed under it. The tests of delivery (WRT-01, 03, 04, 08, 12, 13) now fail a break that stops the device's queue from sending, at the services or on the other person's screen, not at "shows at once". WRT-14 fails at the other window. SYN-01 and SYN-03 no longer fail with catching up alone switched off (live changes are enough on this head), so their proof is the break that drops both. WRT-04's check is marked, so its break shows as the marked check failing. The 53 older breaks of the suite were not rebuilt.</p>
+
+<h2>Run counts on this head</h2>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Build</th><th>Load average, start → end</th><th>Result</th></tr></thead><tbody>
+<tr><td>Whole suite, run 1 (155)</td><td>flag on</td><td class="n">17 → 34</td><td>153 passed; MEM-01, MSG-13 unexpected</td></tr>
+<tr><td>Whole suite, run 2</td><td>flag on</td><td class="n">34 → 43</td><td>155 passed</td></tr>
+<tr><td>Whole suite, run 3</td><td>flag on</td><td class="n">43 → 25</td><td>152 passed; CMP-13, MSG-13, UNR-04 unexpected</td></tr>
+<tr><td>Whole suite, run 4</td><td>flag on</td><td class="n">25 → 47</td><td>154 passed; MSG-13 unexpected</td></tr>
+<tr><td>Whole suite, run 5</td><td>flag on</td><td class="n">47 → 41</td><td>155 passed</td></tr>
+<tr><td>Whole suite once</td><td>flag off</td><td class="n">38 → 25</td><td>128 passed, 27 skipped (flag-only tests), none failed</td></tr>
+</tbody></table></div>
+<p>A test "passed" when its check held, when a check marked as failing sometimes failed, or when a test marked as a known defect failed as expected; the table above counts only checks that held. Load is the one-minute average and includes this suite's own four workers. No other suite ran on this stack; other sessions were using the same machine. CI does not run on a pull request stacked on another branch, so none of this ran in CI.</p>
+
+<h2>Where I disagree with B's owner</h2>
+<ul>
+<li><b>WRT-04 is not fixed.</b> Reported as 0 failures in 11; here it failed 10 of 15, and one timed delivery took 301 s after a reload.</li>
+<li><b>MSG-13 is not gone.</b> Reported as 0 in 14; here 3 of 5, flag on only.</li>
+<li><b>The early-offline hazard is real, but it does not "blank or reload the page".</b> What the traces show is the new-version notice, a held channel that says it cannot load, typing landing in the command palette, and an offline write returned as failed once online. The test change is agreed; the hazard is kept as REC-04.</li>
+<li><b>WRT-13's order at the services</b> was not what failed in my traces. The test is made deterministic anyway.</li>
+<li><b>OFF-04</b> is said to be unfixed. It held 5 of 5 in the whole-suite runs and 2 of 5 with the old step; it stays marked.</li>
+</ul>
+
+<h2>What is not proven</h2>
+<ul>
+<li><b>No channel regressions: not shown.</b> MSG-13 and CMP-13 fail in some flag-on runs and never with the flag off, and the flag-off suite ran once on this head.</li>
+<li><b>Five runs, not a quiet machine.</b> A failure rarer than about one in five can be missed.</li>
+<li><b>The third column is not a like-for-like comparison</b> with the first two: the offline step changed. The fourth column is the like-for-like one, from the device tests alone.</li>
+<li><b>Not tested end to end:</b> how long the first send after opening takes (the owner says 1 to 2 s), jumping to an older held message offline, a sequence that goes down, the prewarm limits, thirty-day eviction, a storage reset with queued writes, document discussions, phones and the desktop app. OFF-07 still accepts "there are more" without a count.</li>
+</ul>
+<p class="mut">Evidence is under <code>~/.cache/channels-e2e-b/</code> on the machine that ran this: <code>runs/f3-on-1</code> to <code>f3-on-5</code> and <code>f3-off-1</code> (<code>playwright-report.json</code>; traces of failures under <code>test-results/</code>, MSG-13 in runs 1, 3 and 4, CMP-13 in run 3), <code>runs/probe3</code> for the old step, <code>logs/final3.log</code> for the load, <code>breaks/results.tsv</code> for the breaks.</p>
+</main>

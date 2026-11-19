@@ -1,0 +1,143 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 6 tests using 3 workers
+
+2026/11/15 15:57:33 socat[1995805] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:48 socat[2033932] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:57:48 socat[2045624] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2048819] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2034477] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2046108] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2046716] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2022766] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2031627] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2043417] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2031638] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:57:49 socat[2043486] E write(6, 0x60ee53245000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (23.2s)
+  ✘  2 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (23.3s)
+2026/11/15 15:57:54 socat[2070144] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:54 socat[2070256] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2067756] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2070147] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2070200] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2073475] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[1994036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:55 socat[2073521] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2066339] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2066374] E write(6, 0x60ee53245000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (5.3s)
+2026/11/15 15:57:55 socat[2066357] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2066345] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2066365] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:55 socat[2066401] E write(6, 0x60ee53245000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (5.3s)
+2026/11/15 15:57:59 socat[2079938] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:59 socat[1994036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:59 socat[1995805] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:59 socat[2079945] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:59 socat[1994036] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:59 socat[1995805] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/15 15:57:59 socat[2075387] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:57:59 socat[2076310] E write(6, 0x60ee53245000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (4.4s)
+2026/11/15 15:58:00 socat[2049248] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:58:00 socat[2026132] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:58:00 socat[2035259] E write(6, 0x60ee53244000, 24): Broken pipe
+2026/11/15 15:58:00 socat[2046576] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:58:00 socat[2046932] E write(6, 0x60ee53245000, 24): Broken pipe
+2026/11/15 15:58:00 socat[2043485] E write(6, 0x60ee53245000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (34.6s)
+2026/11/15 15:58:00 socat[2031640] E write(6, 0x60ee53244000, 24): Broken pipe
+
+
+  1) tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+    Expected substring: "Your request was denied."
+    Received string:    "@keyframes esDrop{0%{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}@keyframes esFd{0%{opacity:0}to{opacity:.5}}You don't have access to this channelSigned in as cy.1[at]channels-e2e.seed.macro.localRequest sent. You'll get access as soon as a channel member approves it.Withdraw request"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access to this channel' }) })
+        34 × locator resolved to <div role="status" class="flex size-full flex-col overflow-y-auto px-10 pb-8 @4xl:px-2 touch:pt-(--mobile-content-inset-top) items-center text-center">…</div>
+           - unexpected value "@keyframes esDrop{0%{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:translateY(0)}}@keyframes esFd{0%{opacity:0}to{opacity:.5}}You don't have access to this channelSigned in as cy.1[at]channels-e2e.seed.macro.localRequest sent. You'll get access as soon as a channel member approves it.Withdraw request"
+
+
+      126 |   await expect(view.list.getByText('Denied by Ada Owner')).toBeVisible();
+      127 |   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+    > 128 |   await expect(noAccess(cyPage)).toContainText('Your request was denied.');
+          |                                  ^
+      129 |   await expect(cyPage.getByText('members only')).toHaveCount(0);
+      130 |   await expect(new ChannelView(cyPage, channel.id).composer).toHaveCount(0);
+      131 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:128:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-channel-scroll]').getByText('Request withdrawn')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').getByText('Request withdrawn')
+
+
+      158 |     cyPage.getByRole('button', { name: 'Withdraw request' })
+      159 |   ).toHaveCount(0);
+    > 160 |   await expect(view.list.getByText('Request withdrawn')).toBeVisible();
+          |                                                          ^
+      161 |   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+      162 |   await expect(page.getByRole('button', { name: 'Deny' })).toHaveCount(0);
+      163 |   await expect(cyPage.getByText('members only')).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:160:58
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/acc-on/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+    tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved ─
+  4 passed (48.8s)
+2026/11/15 15:58:00 socat[1995805] W exiting on signal 15
+2026/11/15 15:58:00 socat[1994036] W exiting on signal 15

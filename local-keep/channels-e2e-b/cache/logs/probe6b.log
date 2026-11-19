@@ -1,0 +1,69 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+[link] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:58:05 socat[653486] E write(6, 0x56cbc94b3000, 24): Broken pipe
+[recent] target-message {from: idle, event: reset, to: idle}
+[link] target-message {from: targeting, event: reset, to: idle}
+LINKHTML <div data-message-content="" class="whitespace-pre-wrap wrap-break-word max-w-full text-base"><div class="markdown-content md channel-markdown min-w-0 wrap-break-word max-w-full"><p class="my-4 first:mt-1.5 last:mb-1.5 md-p text-[1em]"><a target="_blank" rel="noopener" draggable="false" href="https://localhost:23309/app/channel/01a1e38f-1cb1-7d31-b756-6589cc45f528?channel_message_id=01a1e38f-1f60-7929-8e22-073b61769184" class="text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.15em] hover:decoration-current cursor-default"><span class="">https://localhost:23309/app/channel/01a1e38f-1cb1-7d31-b756-6589cc45f528?channel_message_id=01a1e38f-1f60-7929-8e22-073b61769184</span></a></p></div></div>
+LINKURL https://localhost:23309/app/channels/01a1e38f-1cb1-7d31-b756-6589cc45f528?channel_message_id=01a1e38f-1f60-7929-8e22-073b61769184&s0.channels.messageId=01a1e38f-1f60-7929-8e22-073b61769184
+LINKTEXTS ["history 003","history 004","history 005","history 006","history 007","history 008","history 009","history 010","history 011","history 012","history 013","history 014","history 015","history 016","history 017","history 018","history 019","history 020","history 021","history 022","history 023","history 024","history 025","history 026"]
+2026/11/16 08:58:13 socat[654549] E write(6, 0x56cbc94b3000, 24): Broken pipe
+2026/11/16 08:58:13 socat[654819] E write(6, 0x56cbc94b3000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-probe.spec.ts:49:1 › P-LINK a link in a message, clicked offline (10.7s)
+2026/11/16 08:58:13 socat[654873] E write(6, 0x56cbc94b3000, 26): Broken pipe
+2026/11/16 08:58:13 socat[654874] E write(6, 0x555555624000, 24): Broken pipe
+[recent] target-message {from: idle, event: reset, to: idle}
+[recent] target-message {from: idle, event: reset, to: idle}
+2026/11/16 09:00:31 socat[654488] E write(6, 0x56cbc94b3000, 24): Broken pipe
+2026/11/16 09:00:31 socat[654547] E write(6, 0x56cbc94b3000, 24): Broken pipe
+2026/11/16 09:00:31 socat[654817] E write(6, 0x56cbc94b3000, 212): Broken pipe
+2026/11/16 09:00:31 socat[654818] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent (2.5m)
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent ────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      149 |   await expectShown(inside, ['recent 1']);
+      150 |   await page.getByText(recent[0].name).first().click();
+    > 151 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+          |                                    ^
+      152 | });
+      153 |
+      154 | test('P-FIFTY fifty messages', async ({ pageFor, ada, ben }) => {
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:151:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent ─────────────────────────────
+  1 passed (2.5m)
+2026/11/16 09:00:32 socat[645498] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:00:32 socat[644827] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:00:32 socat[645498] W exiting on signal 15
+2026/11/16 09:00:32 socat[644827] W exiting on signal 15

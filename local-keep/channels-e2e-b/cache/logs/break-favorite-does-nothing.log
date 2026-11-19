@@ -1,0 +1,94 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 2 tests using 2 workers
+
+2026/11/17 04:54:23 socat[1928893] E write(6, 0x61803c0c9000, 24): Broken pipe
+2026/11/17 04:54:23 socat[1929180] E write(6, 0x61803c0c9000, 24): Broken pipe
+2026/11/17 04:54:23 socat[1929547] E write(6, 0x61803c0c9000, 24): Broken pipe
+2026/11/17 04:54:23 socat[1929182] E write(6, 0x61803c0c9000, 24): Broken pipe
+2026/11/17 04:54:23 socat[1929666] E write(6, 0x61803c0c9000, 24): Broken pipe
+2026/11/17 04:54:23 socat[1930019] E write(6, 0x61803c0c9000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (17.7s)
+  ✘  2 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (18.0s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90b-761e-b094-d5c9da7e376e"]')
+    Expected: "e2e-mwk7wkxjl06r"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90b-761e-b094-d5c9da7e376e"]')
+
+
+      198 |   await chooseChannelAction(page, 'Favorite');
+      199 |
+    > 200 |   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
+          |                                               ^
+      201 |   await page.reload();
+      202 |   await view.shown();
+      203 |   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:200:47
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-05-a-channel--7c61a-n-and-both-survive-a-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90d-765c-974b-999e293e7524"]')
+    Expected: "e2e-mwk7wkxjd1la"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e7da-e90d-765c-974b-999e293e7524"]')
+
+
+      296 |   await new ChannelView(page, channel.id).open();
+      297 |   await chooseChannelAction(page, 'Favorite');
+    > 298 |   await expect(favoriteRow(page, channel.id)).toHaveText(channel.name);
+          |                                               ^
+      299 |
+      300 |   await chooseChannelAction(page, 'Delete');
+      301 |   await page
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:298:47
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-favorite-does-nothing/test-results/channels-CHN-08-a-deleted--e3924-s-its-owner’s-Favorites-too/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload 
+    tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too 
+2026/11/17 04:54:24 socat[1888906] W exiting on signal 15
+2026/11/17 04:54:24 socat[1884539] W exiting on signal 15

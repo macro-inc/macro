@@ -1,0 +1,52 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 09:32:52 socat[3880545] E write(6, 0x600c985a7000, 24): Broken pipe
+2026/11/16 09:32:52 socat[3877911] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:32:52 socat[3880562] E write(6, 0x600c985a7000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives (17.6s)
+
+
+  1) tests/channels-e2e/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj2ev9kyyb7-found' }).getByLabel('Unread', { exact: true })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj2ev9kyyb7-found' }).getByLabel('Unread', { exact: true })
+
+
+      402 |   await ben.post(made.found, 'while you were searching');
+      403 |
+    > 404 |   await expect(unreadDot(found)).toBeVisible();
+          |                                  ^
+      405 | });
+      406 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/unread.spec.ts:404:34
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-unread-mark-never-shows/test-results/unread-UNR-10-a-row-found--9d88c-once-when-a-message-arrives/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/unread.spec.ts:385:1 › UNR-10 a row found with “Search conversations” is marked unread at once when a message arrives 
+2026/11/16 09:32:53 socat[3878501] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:32:53 socat[3878501] W exiting on signal 15
+2026/11/16 09:32:53 socat[3877911] W exiting on signal 15

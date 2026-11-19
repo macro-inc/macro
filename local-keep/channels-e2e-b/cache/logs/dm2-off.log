@@ -1,0 +1,23 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 1 worker
+
+2026/11/16 23:38:11 socat[655855] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+2026/11/16 23:38:11 socat[656013] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+2026/11/16 23:38:13 socat[654333] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+2026/11/16 23:38:13 socat[624788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:38:13 socat[654416] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+2026/11/16 23:38:13 socat[666908] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+2026/11/16 23:38:13 socat[666969] E write(6, 0x5e9f31bf7000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (8.3s)
+2026/11/16 23:38:20 socat[679181] E write(6, 0x5e9f31bf8000, 24): Broken pipe
+2026/11/16 23:38:20 socat[679288] E write(6, 0x5e9f31bf8000, 24): Broken pipe
+2026/11/16 23:38:21 socat[670478] E write(6, 0x5e9f31bf8000, 24): Broken pipe
+2026/11/16 23:38:22 socat[684039] E write(6, 0x5e9f31bf8000, 24): Broken pipe
+2026/11/16 23:38:22 socat[624788] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:38:22 socat[684058] E write(6, 0x5e9f31bf8000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/direct-messages.spec.ts:66:1 › DM-02 writing to the same person again from “New direct message” continues the one conversation (7.6s)
+
+  2 passed (29.5s)
+2026/11/16 23:38:22 socat[624788] W exiting on signal 15
+2026/11/16 23:38:22 socat[616343] W exiting on signal 15

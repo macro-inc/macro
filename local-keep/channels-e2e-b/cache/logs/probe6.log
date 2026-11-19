@@ -1,0 +1,310 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 19 tests using 4 workers
+
+2026/11/16 08:53:04 socat[174263] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[180612] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[173583] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[180621] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[180616] E write(6, 0x57b23db52000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/composer.spec.ts:47:1 › CMP-02 a draft is still in the composer after a reload (4.1s)
+2026/11/16 08:53:06 socat[173604] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[152398] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:53:06 socat[153796] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   2 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (4.4s)
+2026/11/16 08:53:06 socat[174230] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:06 socat[174267] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:07 socat[180520] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:07 socat[180614] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:09 socat[182701] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:09 socat[182703] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/composer.spec.ts:121:1 › CMP-04 the send button is off while the composer is empty, and after sending I can go on typing (2.8s)
+2026/11/16 08:53:09 socat[173614] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:09 socat[174255] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:09 socat[174287] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:09 socat[174371] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:09 socat[182814] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:09 socat[182827] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (7.4s)
+2026/11/16 08:53:10 socat[174290] E read(6, 0x57b23db52000, 8192): Connection reset by peer
+2026/11/16 08:53:10 socat[174291] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/16 08:53:10 socat[174265] E write(6, 0x57b23db52000, 24): Broken pipe
+2026/11/16 08:53:10 socat[182818] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:10 socat[182834] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:10 socat[182861] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (8.5s)
+2026/11/16 08:53:11 socat[182754] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:11 socat[182773] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:11 socat[182911] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:11 socat[183798] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/composer.spec.ts:148:1 › CMP-05 a person picked from the @ menu is named in the message for both people, live (5.2s)
+2026/11/16 08:53:11 socat[183814] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[183879] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[183340] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[183894] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[183915] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[191450] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:13 socat[191613] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/composer.spec.ts:178:1 › CMP-06 @here picked from the @ menu is sent as a mention of everyone here (4.9s)
+2026/11/16 08:53:15 socat[192837] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:15 socat[193668] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:15 socat[193681] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/composer.spec.ts:329:1 › CMP-10 typing reported from the other person’s other device shows “… is typing”, and goes when they stop (1.9s)
+2026/11/16 08:53:15 socat[191434] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:15 socat[191432] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:16 socat[192766] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:16 socat[192805] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:16 socat[192830] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/composer.spec.ts:265:1 › CMP-08 a file can be sent on its own, with no text (5.4s)
+2026/11/16 08:53:18 socat[152398] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:53:18 socat[193382] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[193372] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[192012] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[192301] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/composer.spec.ts:303:1 › CMP-09 while the other person types in their composer I see “… is typing”, until they send (6.4s)
+2026/11/16 08:53:18 socat[186477] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[153796] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:53:18 socat[188078] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[188519] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[191934] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[191956] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:18 socat[191975] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/composer.spec.ts:208:1 › CMP-07 a text file and a picture attached to a message show before sending, for both people, and under Attachments (8.8s)
+2026/11/16 08:53:20 socat[195352] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[195588] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[194269] E write(6, 0x57b23db53000, 8192): Broken pipe
+2026/11/16 08:53:20 socat[194270] E write(6, 0x555555624000, 8192): Broken pipe
+2026/11/16 08:53:20 socat[195701] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[202241] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[203370] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[203375] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/composer.spec.ts:349:1 › CMP-11 text pasted into the composer is sent as it was copied (4.6s)
+[link] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:53:20 socat[153796] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:53:20 socat[152398] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:53:20 socat[203831] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[197063] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[199501] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[201014] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[203421] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[202718] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[203430] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:53:20 socat[203440] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/composer.spec.ts:372:1 › CMP-12 a message of 2,499 characters is sent whole (4.9s)
+[link] [observability] graphql.mutation_queue.loaded {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.depth: 1, mutation_queue.age_unknown_items: 0}
+[link] [observability] graphql.mutation_queue.skipped {auth.state: signed-in, network.online: false, graphql.websocket.state: connected, mutation_queue.pending_items: 0, mutation_queue.oldest_observed_wait_ms: 0}
+[link] target-message {from: targeting, event: reset, to: idle}
+[unread] target-message {from: idle, event: reset, to: idle}
+LINKHTML <div data-message-content="" class="whitespace-pre-wrap wrap-break-word max-w-full text-base"><div class="markdown-content md channel-markdown min-w-0 wrap-break-word max-w-full"><p class="my-4 first:mt-1.5 last:mb-1.5 md-p text-[1em]"><a target="_blank" rel="noopener" draggable="false" href="https://localhost:23309/app/channel/01a1e38f-1cb1-7d31-b756-6589cc45f528?channel_message_id=01a1e38f-1f60-7929-8e22-073b61769184" class="text-link hover:text-link-hover visited:text-link-visited underline decoration-current/20 decoration-[max(1px,0.1em)] underline-offset-[0.15em] hover:decoration-current cursor-default"><span class="">https://localhost:23309/app/channel/01a1e38f-1cb1-7d31-b756-6589cc45f528?channel_message_id=01a1e38f-1f60-7929-8e22-073b61769184</span></a></p></div></div>
+[recent] target-message {from: idle, event: reset, to: idle}
+[fifty] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:54:28 socat[204833] E read(6, 0x57b23db53000, 8192): Connection reset by peer
+2026/11/16 08:54:28 socat[204834] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 08:54:28 socat[204831] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/zz-probe.spec.ts:49:1 › P-LINK a link in a message, clicked offline (1.2m)
+[fifty] target-message {from: idle, event: reset, to: idle}
+FIFTYREAD 50 long 06
+[evict] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:54:32 socat[315342] E write(6, 0x57b23db53000, 24): Broken pipe
+[evict] target-message {from: idle, event: reset, to: idle}
+FIFTYTOP ["long 06","long 07","long 08","long 09"]
+FIFTYBODY Today
+AO
+Ada Owner
+8:53 AM
+
+long 06
+
+long 07
+
+long 08
+
+long 09
+
+long 10
+
+long 11
+
+long 12
+
+long 13
+
+long 14
+
+8:53 AM
+❤️
+👍
+😂
+
+long 15
+
+long 16
+
+long 17
+
+long 18
+
+long 19
+
+long 20
+
+long 21
+
+long 22
+
+long 23
+
+long 24
+
+long 25
+
+long 26
+
+long 27
+
+long 28
+
+long 29
+
+long 30
+
+long 31
+2026/11/16 08:54:33 socat[212823] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:54:33 socat[212872] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/zz-probe.spec.ts:149:1 › P-FIFTY fifty messages (1.2m)
+2026/11/16 08:54:33 socat[212941] E write(6, 0x57b23db53000, 850): Broken pipe
+2026/11/16 08:54:33 socat[212942] E write(6, 0x555555624000, 212): Broken pipe
+[evict] target-message {from: idle, event: reset, to: idle}
+[evict] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:54:34 socat[321585] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:54:34 socat[153796] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:54:34 socat[321845] E write(6, 0x57b23db53000, 24): Broken pipe
+[reset] target-message {from: idle, event: reset, to: idle}
+[reset] [observability] graphql.mutation_queue.retry_scheduled {mutation_queue.item_id: 01a1e390-bb28-788e-93dd-2540c326c4a1, mutation_queue.transaction_id: 1, graphql.operation.name: SendChannelMessage, mutation_queue.attempt_count: 1, mutation_queue.server_failure_count: 0}
+[evict] target-message {from: idle, event: reset, to: idle}
+[evict] target-message {from: idle, event: reset, to: idle}
+[evict] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:54:37 socat[323070] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:54:37 socat[323358] E write(6, 0x57b23db53000, 24): Broken pipe
+[evict] target-message {from: idle, event: reset, to: idle}
+PAGEDATE 2026-12-17T08:54:31.591Z
+2026/11/16 08:54:40 socat[322995] E write(6, 0x57b23db53000, 24): Broken pipe
+RESETREMOVED ["removed graphql-cache:47179d24-36cd-40ba-baad-dd29d00c5afb:s4.v4.t13-wal","removed graphql-cache:47179d24-36cd-40ba-baad-dd29d00c5afb:s4.v4.t13"]
+[reset] target-message {from: idle, event: reset, to: idle}
+RESETSHOWN1 ["one"]
+RESETBODY1 e2e-mwixfat5l77x e2e-mwixf156a9pr e2e-mwiwjk4wjgdu e2e-mwiwj8msrd8i e2e-mwiwj2tbg0ek e2e-mwiwix6yjnn4 e2e-mwiwix7ajd45 e2e-mwiwiplkqzlh e2e-mwiwiplt7mit e2e-mwiwifggazxw e2e-mwiwif40yyqp e2e-mwiwif4agn3v e2e-mwiwicrg43iu e2e-mwj11ysm6tcw Messages Attachments Calls Participants Call Invite Channel e2e-mwj11ysm6tcw created 8:54 AM Today AO Ada Owner 8:54 AM one Type @ to share with #e2e-mwj11ysm6tcw
+RESETSHOWN2 ["one"]
+RESETSERVER ["one"]
+2026/11/16 08:55:20 socat[332801] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:55:20 socat[333163] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:55:20 socat[333335] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/zz-probe.spec.ts:216:1 › P-RESET storage reset with queued writes (46.7s)
+[unread] target-message {from: idle, event: reset, to: idle}
+[unread] target-message {from: idle, event: reset, to: idle}
+[recent] target-message {from: idle, event: reset, to: idle}
+[recent] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:55:29 socat[205838] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:55:29 socat[205852] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/zz-probe.spec.ts:87:1 › P-UNREAD forty unread (2.2m)
+2026/11/16 08:55:29 socat[205876] E write(6, 0x57b23db53000, 212): Broken pipe
+2026/11/16 08:55:29 socat[205878] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 08:55:49 socat[208145] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:55:49 socat[209833] E write(6, 0x57b23db53000, 212): Broken pipe
+2026/11/16 08:55:49 socat[209846] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  16 tests/channels-e2e/zz-probe.spec.ts:122:1 › P-RECENT twenty recent (2.5m)
+[evict] target-message {from: idle, event: reset, to: idle}
+[evict] target-message {from: idle, event: reset, to: idle}
+2026/11/16 08:57:15 socat[330542] E write(6, 0x57b23db53000, 24): Broken pipe
+2026/11/16 08:57:15 socat[330585] E write(6, 0x57b23db53000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/zz-probe.spec.ts:178:1 › P-EVICT thirty days (2.8m)
+2026/11/16 08:57:15 socat[330604] E write(6, 0x57b23db53000, 28): Broken pipe
+2026/11/16 08:57:15 socat[330605] E write(6, 0x555555624000, 26): Broken pipe
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:49:1 › P-LINK a link in a message, clicked offline ────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e38f-1cb1-7d31-b756-6589cc45f528"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e38f-1cb1-7d31-b756-6589cc45f528"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at ChannelView.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:77:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-LINK-a-link-in-a-message-clicked-offline/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-LINK-a-link-in-a-message-clicked-offline/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-LINK-a-link-in-a-message-clicked-offline/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-LINK-a-link-in-a-message-clicked-offline/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-LINK-a-link-in-a-message-clicked-offline/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/zz-probe.spec.ts:122:1 › P-RECENT twenty recent ────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      144 |   await expectShown(inside, ['recent 1']);
+      145 |   await page.getByText(recent[0].name).first().click();
+    > 146 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+          |                                    ^
+      147 | });
+      148 |
+      149 | test('P-FIFTY fifty messages', async ({ pageFor, ada, ben }) => {
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:146:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/zz-probe.spec.ts:49:1 › P-LINK a link in a message, clicked offline ─────────
+    tests/channels-e2e/zz-probe.spec.ts:122:1 › P-RECENT twenty recent ─────────────────────────────
+  17 passed (4.4m)
+2026/11/16 08:57:15 socat[153796] W exiting on signal 15
+2026/11/16 08:57:15 socat[152398] W exiting on signal 15

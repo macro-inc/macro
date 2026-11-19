@@ -1,0 +1,9 @@
+head 596c31be38 21:36:28 load 39.69 57.28 66.20
+engine built 21:36:41 load 51.18 58.96 66.61
+on bundle built 21:37:13 load 37.07 54.79 64.98
+off bundle built 21:37:44 load 36.29 52.82 63.99
+f17-on-1 start 21:37:44 load 33.78 52.03 63.68
+f17-on-1 end 21:46:48 load 29.88 33.64 49.38
+f17-off-1 start 21:46:52 load 38.86 35.44 49.87
+f17-off-1 end 21:50:55 load 93.43 56.87 54.65
+ALLDONE17

@@ -1,0 +1,1 @@
+[["The one read\n  of what a page has fetched is in `goOffline`, which lets a page finish\n  fetching the app's code before it cuts it off: no test asserts on it.\n", "The one read\n  of what a page has fetched is `codeFetched`, with which `goOffline` lets a\n  page finish fetching the app's code before it cuts it off: no test asserts\n  on it.\n"]]

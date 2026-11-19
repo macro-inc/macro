@@ -1,0 +1,64 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:36:29 socat[2731849] E write(6, 0x5f0296011000, 24): Broken pipe
+2026/11/16 08:36:29 socat[2737478] E write(6, 0x5f0296011000, 24): Broken pipe
+2026/11/16 08:36:29 socat[2738227] E write(6, 0x5f0296011000, 24): Broken pipe
+2026/11/16 08:36:30 socat[2731850] E read(6, 0x5f0296011000, 8192): Connection reset by peer
+2026/11/16 08:36:30 socat[2735892] E write(6, 0x5f0296011000, 24): Broken pipe
+2026/11/16 08:36:30 socat[2731852] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 08:36:30 socat[2737566] E write(6, 0x5f0296011000, 24): Broken pipe
+2026/11/16 08:36:30 socat[2738231] E write(6, 0x5f0296011000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload (18.8s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "🚀",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      564 |   await actions.getByRole('button', { name: 'More reactions' }).click();
+      565 |   await mine.pickEmoji('rocket');
+    > 566 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['🚀']);
+          |                                                      ^
+      567 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['🚀']);
+      568 |
+      569 |   // With a reaction on it, the message has its own button for another.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:566:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-picked-emoji-not-added/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-picked-emoji-not-added/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-picked-emoji-not-added/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-picked-emoji-not-added/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-picked-emoji-not-added/test-results/messages-MSG-14-a-reaction-fb331-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:548:1 › MSG-14 a reaction chosen in the emoji picker shows for both people and after reload 
+2026/11/16 08:36:31 socat[2712870] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:36:31 socat[2712050] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:36:31 socat[2712050] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:36:31 socat[2712870] W exiting on signal 15
+2026/11/16 08:36:31 socat[2712050] W exiting on signal 15

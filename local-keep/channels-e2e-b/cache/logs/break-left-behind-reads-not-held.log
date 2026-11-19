@@ -1,0 +1,73 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/17 04:46:00 socat[866295] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:00 socat[866222] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:00 socat[866307] E write(6, 0x61a0e61be000, 26): Broken pipe
+2026/11/17 04:46:00 socat[866308] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:46:01 socat[866384] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:01 socat[866621] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:07 socat[868564] E write(6, 0x61a0e61be000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (9.6s)
+2026/11/17 04:46:07 socat[868570] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:09 socat[870845] E write(6, 0x61a0e61be000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (11.6s)
+2026/11/17 04:46:09 socat[871076] E write(6, 0x61a0e61be000, 26): Broken pipe
+2026/11/17 04:46:09 socat[871077] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:46:09 socat[870951] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:21 socat[868565] E write(6, 0x61a0e61be000, 24): Broken pipe
+2026/11/17 04:46:21 socat[838082] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:46:21 socat[868568] E write(6, 0x61a0e61be000, 28): Broken pipe
+2026/11/17 04:46:21 socat[868569] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  3 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (24.1s)
+
+
+  1) tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "reply 1",
+        "reply 2",
+        "reply 3",
+    -   "reply 4",
+    -   "reply 5",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      406 |   await offline.hiddenReplies(root.id).click();
+      407 |
+    > 408 |   await expect.poll(() => offline.replies(root.id)).toEqual(replies);
+          |                                                     ^
+      409 | });
+      410 |
+      411 | // If this fails, a person cannot go back to an old message they followed a
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:408:53
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-left-behind-reads-not-held/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-left-behind-reads-not-held/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-left-behind-reads-not-held/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-left-behind-reads-not-held/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection 
+  2 passed (36.9s)
+2026/11/17 04:46:22 socat[837018] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:46:22 socat[838082] W exiting on signal 15
+2026/11/17 04:46:22 socat[837018] W exiting on signal 15

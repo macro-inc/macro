@@ -1,0 +1,58 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 12:57:10 socat[2372979] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 12:57:11 socat[2376144] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 12:57:11 socat[2376151] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 12:57:15 socat[2376496] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 12:57:15 socat[2377876] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 13:02:46 socat[2386854] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 13:02:46 socat[2386865] E write(6, 0x589007abe000, 24): Broken pipe
+2026/11/16 13:02:46 socat[2386876] E write(6, 0x589007abe000, 28): Broken pipe
+2026/11/16 13:02:46 socat[2386877] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is (5.7m)
+
+
+  1) tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      214 |   await goOffline(page.context());
+      215 |   await conversationRow(page, old.name).click();
+    > 216 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+          |                                    ^
+      217 | });
+      218 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:216:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-idle-channels-never-evicted/test-results/prewarm-PRE-05-a-channel-n-331cd-ned-two-days-later-still-is/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-idle-channels-never-evicted/test-results/prewarm-PRE-05-a-channel-n-331cd-ned-two-days-later-still-is/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-idle-channels-never-evicted/test-results/prewarm-PRE-05-a-channel-n-331cd-ned-two-days-later-still-is/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-idle-channels-never-evicted/test-results/prewarm-PRE-05-a-channel-n-331cd-ned-two-days-later-still-is/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Slow test file: tests/channels-e2e/prewarm.spec.ts (5.7m)
+  Consider running tests from slow files in parallel. See: https://playwright.dev/docs/test-parallel
+  1 failed
+    tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is 
+2026/11/16 13:02:47 socat[2363487] W exiting on signal 15
+2026/11/16 13:02:47 socat[2362542] W exiting on signal 15

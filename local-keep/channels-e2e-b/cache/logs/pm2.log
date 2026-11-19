@@ -1,0 +1,860 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 150 tests using 4 workers
+
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:24 socat[478685] E write(6, 0x55a2fb736000, 24): Broken pipe
+  ✓    2 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:24 socat[473679] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[478606] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[478875] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[479099] E write(6, 0x55a2fb736000, 24): Broken pipe
+  ✓    3 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:24 socat[473663] E read(6, 0x55a2fb736000, 8192): Connection reset by peer
+2026/11/17 21:03:24 socat[473664] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:03:24 socat[478774] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[478870] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:03:24 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓    1 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:24 socat[478413] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[478805] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[479208] E write(6, 0x55a2fb736000, 24): Broken pipe
+2026/11/17 21:03:24 socat[473684] E write(6, 0x55a2fb736000, 24): Broken pipe
+  ✓    4 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:28 socat[490292] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:03:28 socat[490296] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:03:28 socat[490531] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓    5 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:28 socat[487796] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:03:28 socat[490715] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:28 socat[490438] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:28 socat[487797] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:03:28 socat[490973] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓    6 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:29 socat[488181] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:29 socat[491050] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓    7 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 21:03:29 socat[490999] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:29 socat[488438] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:29 socat[491740] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓    8 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:33 socat[505844] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:33 socat[506089] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓    9 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 21:03:33 socat[501157] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:03:33 socat[506297] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:33 socat[501165] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:03:33 socat[506430] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   10 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:33 socat[502040] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:33 socat[506572] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:33 socat[506607] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   11 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:33 socat[506570] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:33 socat[506605] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   12 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:38 socat[513351] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[519420] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[519315] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   14 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 21:03:38 socat[519678] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[519793] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   15 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.1s)
+  ✓   13 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 21:03:38 socat[519291] E write(6, 0x55a2fb737000, 24): Broken pipe
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:38 socat[520031] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[520677] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:38 socat[521220] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   16 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:43 socat[531937] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:43 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   17 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.1s)
+2026/11/17 21:03:43 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   18 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:03:43 socat[533766] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:43 socat[534248] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   19 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:03:43 socat[535320] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   20 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:47 socat[547301] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:47 socat[547389] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   21 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+  ✓   22 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:47 socat[544603] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:47 socat[547587] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:47 socat[547640] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:47 socat[547651] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   23 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:48 socat[547715] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:48 socat[547924] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:48 socat[547953] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   24 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:51 socat[555148] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:51 socat[560451] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:51 socat[560644] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   25 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:52 socat[555456] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:03:52 socat[560939] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:52 socat[555457] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:03:52 socat[561400] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:52 socat[561592] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   27 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+2026/11/17 21:03:52 socat[561575] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:52 socat[561067] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   26 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:52 socat[563983] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:52 socat[564117] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:52 socat[564199] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   28 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:03:56 socat[569750] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:56 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:03:56 socat[569870] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   29 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:56 socat[570975] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:56 socat[571459] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   31 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:56 socat[571047] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:56 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:03:56 socat[571177] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   30 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:03:56 socat[573008] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:03:56 socat[573062] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   32 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:04:00 socat[579564] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:00 socat[583109] E write(6, 0x55a2fb737000, 24): Broken pipe
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+  ✓   33 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:04:00 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:00 socat[583247] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:00 socat[583305] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:00 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   35 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:01 socat[583693] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:01 socat[583765] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   36 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:05 socat[589918] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:05 socat[593745] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:05 socat[593875] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   37 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+2026/11/17 21:04:05 socat[593971] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:05 socat[594079] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   38 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:05 socat[596223] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:05 socat[596883] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:05 socat[596722] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   39 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+PMUTE-RUN held=false remadeBeforeEnter=true enterTarget=body
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:08 socat[602639] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:08 socat[600953] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:08 socat[602812] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:08 socat[602849] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   40 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:08 socat[600983] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:08 socat[602816] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:08 socat[602851] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   41 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:04:09 socat[583064] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:09 socat[583228] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:09 socat[583294] E write(6, 0x55a2fb737000, 24): Broken pipe
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:09 socat[605076] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:09 socat[605205] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:09 socat[605256] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   42 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+  ✘   34 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (12.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:12 socat[612956] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:12 socat[612978] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   43 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:12 socat[613048] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:12 socat[613052] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   44 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:13 socat[613389] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:13 socat[613399] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   45 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:13 socat[613397] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:13 socat[612285] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:13 socat[613422] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:13 socat[613455] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   46 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:16 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:16 socat[618661] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:16 socat[618771] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:16 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   47 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:16 socat[619174] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:16 socat[619199] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   48 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:04:17 socat[619764] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:17 socat[620182] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:17 socat[620481] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   49 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:17 socat[620686] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   50 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:20 socat[629107] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:20 socat[629190] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   51 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:20 socat[627398] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:20 socat[629331] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   52 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:21 socat[629637] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:21 socat[629734] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:21 socat[629738] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   54 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:24 socat[635265] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:24 socat[635759] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:24 socat[635651] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   55 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:24 socat[637483] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:24 socat[637696] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   57 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:27 socat[639996] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   58 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.0s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:28 socat[641174] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:28 socat[641546] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:28 socat[641352] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   59 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=false remadeBeforeEnter=true enterTarget=body
+2026/11/17 21:04:29 socat[629660] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:29 socat[629736] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✘   53 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (11.7s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:31 socat[647809] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:31 socat[648195] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:31 socat[648764] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   60 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=false remadeBeforeEnter=true enterTarget=body
+2026/11/17 21:04:32 socat[651480] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:32 socat[651300] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   61 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:04:32 socat[636090] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:32 socat[636119] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:32 socat[636132] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✘   56 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (11.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:33 socat[652870] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:33 socat[652872] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   62 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:35 socat[654116] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:35 socat[654665] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   63 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:37 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:37 socat[659906] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   65 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:37 socat[660526] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:37 socat[660631] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:37 socat[660691] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   66 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:39 socat[664873] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:39 socat[664884] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   67 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:41 socat[666681] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:41 socat[666954] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:41 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:41 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   68 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:41 socat[667676] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:41 socat[667976] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   69 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:42 socat[670989] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:42 socat[671104] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   70 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=false remadeBeforeEnter=true enterTarget=body
+2026/11/17 21:04:44 socat[656619] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:44 socat[656589] E write(6, 0x55a2fb737000, 24): Broken pipe
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:44 socat[675920] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:44 socat[672536] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:04:44 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:44 socat[672539] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:04:44 socat[676022] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:44 socat[676176] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   71 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+  ✘   64 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (11.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:45 socat[676997] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:45 socat[673171] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:45 socat[677172] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:45 socat[677079] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:45 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   72 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:46 socat[677860] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:46 socat[677862] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   73 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:48 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:48 socat[681488] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:48 socat[681599] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   74 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:49 socat[681924] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:49 socat[681931] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   76 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:04:49 socat[681910] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:49 socat[681946] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   75 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:50 socat[684563] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:50 socat[684689] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:50 socat[684609] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   77 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:52 socat[689524] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:52 socat[689601] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   78 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+2026/11/17 21:04:53 socat[689612] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:53 socat[689739] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:53 socat[689802] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   79 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:53 socat[690059] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   80 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:54 socat[691158] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:54 socat[691326] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   81 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:57 socat[696137] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:57 socat[696188] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   82 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+2026/11/17 21:04:57 socat[696186] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:57 socat[696200] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:57 socat[696198] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:57 socat[696205] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   83 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+  ✓   84 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:04:58 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:04:58 socat[700295] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:04:58 socat[700375] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   85 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:00 socat[701934] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:00 socat[702004] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   86 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:01 socat[702029] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:01 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:01 socat[702119] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   87 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:01 socat[702022] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:01 socat[701097] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:01 socat[702035] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:01 socat[702154] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   88 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:02 socat[702121] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:02 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:02 socat[705695] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:02 socat[705709] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   89 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:04 socat[711698] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:04 socat[711769] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   90 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:05:04 socat[708193] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:04 socat[711795] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:04 socat[711803] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   92 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+2026/11/17 21:05:04 socat[711778] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:04 socat[711802] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   91 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:06 socat[712668] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:06 socat[712692] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   93 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:08 socat[717927] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:08 socat[718052] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   95 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:05:08 socat[717434] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:08 socat[717759] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:08 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:08 socat[717925] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   94 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:05:08 socat[717854] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:08 socat[718023] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   96 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:09 socat[720211] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:09 socat[720364] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:09 socat[720395] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   97 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:12 socat[723297] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:12 socat[725236] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:12 socat[725303] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   98 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:12 socat[725298] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:12 socat[725313] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓   99 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:05:12 socat[725317] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:12 socat[725327] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  100 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:13 socat[725311] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:13 socat[726238] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:13 socat[726277] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  101 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:15 socat[728724] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:15 socat[730382] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:15 socat[730680] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  103 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:15 socat[730750] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:15 socat[731141] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  102 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:05:15 socat[730827] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:15 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:15 socat[731196] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  104 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:17 socat[734341] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:17 socat[730573] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:05:17 socat[730579] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:05:17 socat[734388] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:17 socat[734467] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  105 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:19 socat[736719] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:19 socat[736780] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:19 socat[736797] E write(6, 0x55a2fb737000, 24): Broken pipe
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+  ✓  106 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+2026/11/17 21:05:19 socat[736778] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:19 socat[736801] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:19 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:19 socat[736818] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  107 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:05:19 socat[736815] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:19 socat[736829] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  108 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:20 socat[739645] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:20 socat[739714] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  109 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:23 socat[743434] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:05:23 socat[740958] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+  ✓  111 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:05:23 socat[740959] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:05:23 socat[743438] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:23 socat[743436] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  110 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:24 socat[743911] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:24 socat[744354] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  112 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.6s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:26 socat[747462] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:26 socat[747496] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  113 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:31 socat[751637] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:31 socat[751817] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:31 socat[751967] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  114 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.5s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:05:31 socat[751979] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:31 socat[748292] E read(6, 0x55a2fb737000, 8192): Connection reset by peer
+2026/11/17 21:05:31 socat[748293] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:05:31 socat[752601] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:31 socat[752807] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  115 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.5s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:05:31 socat[754331] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:31 socat[754403] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  116 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.5s)
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:35 socat[763864] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:35 socat[763924] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  118 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+2026/11/17 21:05:35 socat[763926] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:35 socat[763934] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  119 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:35 socat[764003] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:35 socat[764011] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:35 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:35 socat[764029] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  120 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:39 socat[769761] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772352] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772389] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  121 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:05:39 socat[772457] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772419] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  122 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:39 socat[770151] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772455] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772505] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:39 socat[772542] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  123 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=false remadeBeforeEnter=true enterTarget=body
+2026/11/17 21:05:41 socat[758734] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:41 socat[758738] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✘  117 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (13.8s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:43 socat[776947] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:43 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:43 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:43 socat[779329] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:43 socat[779283] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  125 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:43 socat[779086] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:43 socat[779288] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  124 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+2026/11/17 21:05:43 socat[779294] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:43 socat[779336] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:43 socat[779485] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  126 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:45 socat[783045] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:45 socat[785018] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:45 socat[785025] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  127 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:46 socat[786127] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:46 socat[786102] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  128 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:47 socat[786364] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  130 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:05:47 socat[786254] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:47 socat[786246] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:47 socat[784982] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:47 socat[786407] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:47 socat[786575] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  129 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:49 socat[792960] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:49 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:49 socat[793300] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  131 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:50 socat[796138] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:50 socat[796232] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  132 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:50 socat[796299] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:50 socat[796357] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  133 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:50 socat[796353] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:50 socat[796401] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  134 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:53 socat[799016] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:53 socat[799019] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  135 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:54 socat[801785] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:54 socat[801858] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  136 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=true enterTarget=item
+2026/11/17 21:05:54 socat[802270] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:54 socat[802521] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  138 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+2026/11/17 21:05:54 socat[801818] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:54 socat[801909] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  137 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:56 socat[805767] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:56 socat[805628] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:56 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  139 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:58 socat[809497] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:58 socat[809526] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  140 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:05:58 socat[809553] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:58 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:05:58 socat[809636] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:05:58 socat[809587] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  142 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+2026/11/17 21:05:58 socat[809645] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  141 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:00 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:00 socat[813582] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:00 socat[813631] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  143 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:01 socat[814969] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:01 socat[815081] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  144 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:01 socat[815183] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:01 socat[815230] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  145 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:06:01 socat[813330] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:01 socat[815310] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:01 socat[815431] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  146 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:04 socat[817220] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:04 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:04 socat[821138] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  147 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.1s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:05 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:05 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:05 socat[822147] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:05 socat[822169] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  148 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+PMUTE-RUN held=true remadeBeforeEnter=false enterTarget=item
+2026/11/17 21:06:05 socat[822174] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:05 socat[822181] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  149 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+2026/11/17 21:06:05 socat[822176] E write(6, 0x55a2fb737000, 24): Broken pipe
+2026/11/17 21:06:05 socat[822183] E write(6, 0x55a2fb737000, 24): Broken pipe
+  ✓  150 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      111 |     `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+      112 |   );
+    > 113 |   expect(held).toBe(true);
+          |                ^
+      114 | });
+      115 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:113:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat33/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat33/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat33/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat33/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      111 |     `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+      112 |   );
+    > 113 |   expect(held).toBe(true);
+          |                ^
+      114 | });
+      115 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:113:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat52/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat52/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat52/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat52/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      111 |     `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+      112 |   );
+    > 113 |   expect(held).toBe(true);
+          |                ^
+      114 | });
+      115 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:113:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat55/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat55/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat55/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat55/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      111 |     `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+      112 |   );
+    > 113 |   expect(held).toBe(true);
+          |                ^
+      114 | });
+      115 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:113:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat63/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat63/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat63/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat63/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      111 |     `PMUTE-RUN held=${held} remadeBeforeEnter=${remade >= 0 && (enter < 0 || remade < enter)} enterTarget=${target}`
+      112 |   );
+    > 113 |   expect(held).toBe(true);
+          |                ^
+      114 | });
+      115 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:113:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat116/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat116/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat116/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm2/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat116/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+  145 passed (3.1m)
+2026/11/17 21:06:05 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:05 socat[406863] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:05 socat[411848] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:06:05 socat[411848] W exiting on signal 15
+2026/11/17 21:06:05 socat[406863] W exiting on signal 15

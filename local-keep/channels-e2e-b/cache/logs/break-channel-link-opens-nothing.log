@@ -1,0 +1,62 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:55:22 socat[2993632] E write(6, 0x594d2a255000, 24): Broken pipe
+2026/11/16 07:55:22 socat[2993650] E write(6, 0x594d2a255000, 24): Broken pipe
+2026/11/16 07:55:22 socat[2993664] E write(6, 0x594d2a255000, 24): Broken pipe
+2026/11/16 07:55:22 socat[2986131] E write(6, 0x594d2a255000, 24): Broken pipe
+2026/11/16 07:55:22 socat[2986157] E write(6, 0x594d2a255000, 24): Broken pipe
+2026/11/16 07:55:22 socat[2986159] E write(6, 0x594d2a255000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:219:1 › CHN-06 Copy Link gives an address that opens the channel for another member (1.1m)
+
+
+  1) tests/channels-e2e/channels.spec.ts:219:1 › CHN-06 Copy Link gives an address that opens the channel for another member 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e359-87b4-7f1e-b452-2198ab876fba"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e359-87b4-7f1e-b452-2198ab876fba"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at ChannelView.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:236:17
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-link-opens-nothing/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-link-opens-nothing/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-channel-link-opens-nothing/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-channel-link-opens-nothing/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-channel-link-opens-nothing/test-results/channels-CHN-06-Copy-Link--7a6ae--channel-for-another-member/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/channels.spec.ts:219:1 › CHN-06 Copy Link gives an address that opens the channel for another member 
+2026/11/16 07:55:23 socat[2958796] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 07:55:23 socat[2959835] W exiting on signal 15
+2026/11/16 07:55:23 socat[2958796] W exiting on signal 15

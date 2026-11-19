@@ -1,0 +1,145 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:34:16 socat[2528759] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:16 socat[2528796] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:16 socat[2528788] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:16 socat[2508424] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:34:16 socat[2509170] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:34:16 socat[2528792] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:16 socat[2528798] E write(6, 0x637796b9e000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/members.spec.ts:240:1 › MEM-07 a member who does not own the channel cannot remove its owner (17.7s)
+  ✘  2 tests/channels-e2e/channels.spec.ts:334:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (17.7s)
+2026/11/16 08:34:18 socat[2530466] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:18 socat[2530474] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:18 socat[2530476] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:18 socat[2528794] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:18 socat[2528800] E write(6, 0x637796b9e000, 24): Broken pipe
+2026/11/16 08:34:18 socat[2508424] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:34:18 socat[2509170] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  1 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (20.2s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:334:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+    Expected substring: "Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+
+
+      345 |   await showTab(page, 'Participants');
+      346 |
+    > 347 |   await expect(participant(page, 'Ada Owner')).toContainText('Owner');
+          |                                                ^
+      348 |   await expect(participant(page, 'Ben Member')).toContainText('Member');
+      349 |   await expect(participant(page, 'Cy Teammate')).toContainText('Member');
+      350 |   await expect(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:347:48
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/channels-CHN-10-the-Partic-bd2c6--name-with-the-owner-marked/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+
+
+      87 |
+      88 |   await showTab(page, 'Participants');
+    > 89 |   await expect(participant(page, 'Cy Teammate')).toBeVisible();
+         |                                                  ^
+      90 |   await removeParticipantInApp(page, 'Cy Teammate');
+      91 |
+      92 |   await expect(participant(page, 'Ada Owner')).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:89:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-02-the-owner-r-662c6--everyone-who-stays-is-told/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/members.spec.ts:240:1 › MEM-07 a member who does not own the channel cannot remove its owner 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+    Expected substring: "Owner"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+
+
+      252 |   await showTab(benPage, 'Participants');
+      253 |
+    > 254 |   await expect(participant(benPage, 'Ada Owner')).toContainText('Owner');
+          |                                                   ^
+      255 |   await expect(
+      256 |     participantRow(benPage, 'Ada Owner').getByRole('button', {
+      257 |       name: 'Cannot remove participant',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:254:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-participants-tab-empty/test-results/members-MEM-07-a-member-wh-ab833-nel-cannot-remove-its-owner/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/channels.spec.ts:334:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked 
+    tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told 
+    tests/channels-e2e/members.spec.ts:240:1 › MEM-07 a member who does not own the channel cannot remove its owner 
+2026/11/16 08:34:19 socat[2508424] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:34:19 socat[2509170] W exiting on signal 15
+2026/11/16 08:34:19 socat[2508424] W exiting on signal 15

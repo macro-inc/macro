@@ -1,0 +1,156 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:37:17 socat[2815612] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:17 socat[2815612] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:18 socat[2815612] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:18 socat[2815612] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:18 socat[2816004] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:18 socat[2815612] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:37:35 socat[2837393] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837680] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837676] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837708] E write(6, 0x6342c62dd000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837655] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837711] E write(6, 0x6342c62dd000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837716] E write(6, 0x6342c62dd000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837382] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837392] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837678] E write(6, 0x6342c62dc000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837710] E write(6, 0x6342c62dd000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837714] E write(6, 0x6342c62dd000, 24): Broken pipe
+2026/11/16 08:37:35 socat[2837723] E write(6, 0x6342c62dd000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload (17.9s)
+  ✘  1 tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed (18.4s)
+  ✘  2 tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react (18.6s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "👍",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      505 |
+      506 |   await mine.quickReact(myMessage, '👍');
+    > 507 |   await expect.poll(() => mine.reactions(myMessage)).toEqual(['👍']);
+          |                                                      ^
+      508 |   await expect.poll(() => bens.reactions(bensMessage)).toEqual(['👍']);
+      509 |   await expect(mine.reaction(myMessage, '👍')).toBeEnabled();
+      510 |   await expect(mine.reaction(myMessage, '👍')).toHaveAttribute(
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:507:54
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "🎉",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      605 |
+      606 |   await ben.react(channel.id, answer.id, '🎉');
+    > 607 |   await expect.poll(() => view.reactions(message)).toEqual(['🎉']);
+          |                                                    ^
+      608 |   await expect(view.reaction(message, '🎉')).toHaveAttribute(
+      609 |     'aria-pressed',
+      610 |     'false'
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:607:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/messages-MSG-15-another-pe-8b6e2-open-channel-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "❤️",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      273 |     await expect
+      274 |       .poll(() => view.reactions(view.messageById(reply.id)))
+    > 275 |       .toEqual(['❤️']);
+          |        ^
+      276 |     // The only reaction in the channel is the one on that reply.
+      277 |     await expect(view.list.locator('[data-message-reaction-chip]')).toHaveCount(
+      278 |       1
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:275:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reaction-not-shown/test-results/threads-THR-06-a-reaction--1a1ce-nd-counts-2-when-both-react/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/messages.spec.ts:491:1 › MSG-13 a quick reaction shows for both people, counts 2 when the other adds the same, and goes when removed 
+    tests/channels-e2e/messages.spec.ts:582:1 › MSG-15 another person’s edit, reactions and deletion show on an open channel without reload 
+    tests/channels-e2e/threads.spec.ts:253:1 › THR-06 a reaction to a reply shows on that reply for both people, and counts 2 when both react 
+2026/11/16 08:37:37 socat[2816004] W exiting on signal 15
+2026/11/16 08:37:37 socat[2815612] W exiting on signal 15

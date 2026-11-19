@@ -1,0 +1,148 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:16:43 socat[875314] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+2026/11/16 08:16:43 socat[875324] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+2026/11/16 08:16:43 socat[875321] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was (20.3s)
+2026/11/16 08:16:49 socat[877306] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+2026/11/16 08:16:49 socat[877362] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+2026/11/16 08:16:49 socat[877374] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message (25.5s)
+2026/11/16 08:16:52 socat[877390] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+2026/11/16 08:16:52 socat[877412] E write(6, 0x5e1fd1bee000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read (28.7s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36d-b546-7b57-8abd-823874c293ee"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e36d-b546-7b57-8abd-823874c293ee"]')
+
+
+      396 |   await showTab(page, 'Messages');
+      397 |
+    > 398 |   await expect(view.messageById(reading.id)).toBeInViewport();
+          |                                              ^
+      399 |   await expect
+      400 |     .poll(() => view.topVisible(), {
+      401 |       message: 'the first message wholly in the window',
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:398:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/channels-CHN-12-going-to-a-89709-e-message-list-where-it-was/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Scroll to bottom' })
+    Expected: visible
+    Timeout: 400ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 400ms
+      - waiting for getByRole('button', { name: 'Scroll to bottom' })
+
+
+    Call Log:
+    - Timeout 20000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:284
+
+      282 |       await this.wheel(100);
+      283 |       await expect(button).toBeVisible({ timeout: 400 });
+    > 284 |     }).toPass({ timeout: 20_000, intervals: [50] });
+          |        ^
+      285 |     return button;
+      286 |   }
+      287 |
+        at ChannelView.scrollDownUntilOffered (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:284:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/scroll.spec.ts:47:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-02-scrolling-1b198-turns-to-the-latest-message/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Scroll to bottom' })
+    Expected: visible
+    Timeout: 400ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 400ms
+      - waiting for getByRole('button', { name: 'Scroll to bottom' })
+
+
+    Call Log:
+    - Timeout 20000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:284
+
+      282 |       await this.wheel(100);
+      283 |       await expect(button).toBeVisible({ timeout: 400 });
+    > 284 |     }).toPass({ timeout: 20_000, intervals: [50] });
+          |        ^
+      285 |     return button;
+      286 |   }
+      287 |
+        at ChannelView.scrollDownUntilOffered (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:284:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/scroll.spec.ts:118:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-list-always-follows-new-messages/test-results/scroll-SCROLL-04-scrolled--2e997-not-move-what-is-being-read/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/channels.spec.ts:379:1 › CHN-12 going to another tab and back keeps the message list where it was 
+    tests/channels-e2e/scroll.spec.ts:26:1 › SCROLL-02 scrolling back down from far up offers “Scroll to bottom”, which returns to the latest message 
+    tests/channels-e2e/scroll.spec.ts:78:1 › SCROLL-04 scrolled up, a message from someone else does not move what is being read 
+2026/11/16 08:16:53 socat[851050] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:16:53 socat[851050] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:16:53 socat[854570] W exiting on signal 15
+2026/11/16 08:16:53 socat[851050] W exiting on signal 15

@@ -1,0 +1,351 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.46
+   Compiling rustls-webpki v0.103.16
+   Compiling tokio-rustls v0.26.4
+   Compiling sqlx-core v0.8.6
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling tungstenite v0.28.0
+   Compiling hyper-rustls v0.27.9
+   Compiling redis v1.2.1
+   Compiling aws-smithy-http-client v1.1.12
+   Compiling reqwest v0.13.4
+   Compiling aws-smithy-runtime v1.11.3
+   Compiling rig-core v0.41.0
+   Compiling rmcp v3.9.0
+   Compiling async-openai v0.36.1
+   Compiling sqlx-postgres v0.8.6
+   Compiling aws-runtime v1.7.4
+   Compiling aws-sdk-ssooidc v1.101.0
+   Compiling aws-sdk-sso v1.99.0
+   Compiling aws-sdk-sts v1.104.0
+   Compiling aws-sdk-sqs v1.99.0
+   Compiling aws-sdk-sesv2 v1.119.0
+   Compiling aws-sdk-sns v1.100.0
+   Compiling aws-sdk-s3 v1.133.0
+   Compiling sqlx-macros-core v0.8.6
+   Compiling sqlx-macros v0.8.6
+   Compiling aws-config v1.8.17
+   Compiling sqlx v0.8.6
+   Compiling macro_user_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_user_id)
+   Compiling document_sub_type v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/document_sub_type)
+   Compiling notification_state v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification_state)
+   Compiling model_owner v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_owner)
+   Compiling models_databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_databases)
+   Compiling agent_fold v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/folds/agent_fold)
+   Compiling item_filters v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/item_filters)
+   Compiling aws-msk-iam-sasl-signer v1.0.1
+   Compiling database_sql v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/database_sql)
+   Compiling rig-agent v0.41.0
+   Compiling workspace-hack v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/workspace-hack)
+   Compiling macro_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env_var)
+   Compiling model-entity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-entity)
+   Compiling model-error-response v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model-error-response)
+   Compiling agent_correlation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent_correlation)
+   Compiling harness_id v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_id)
+   Compiling harness_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harness_token)
+   Compiling bot_token v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/bot_token)
+   Compiling model_user v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_user)
+   Compiling macro_event_topics v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_topics)
+   Compiling models_entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_entity_access_management)
+   Compiling prompt v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/prompt)
+   Compiling models_bulk_upload v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_bulk_upload)
+   Compiling channel_sender v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_sender)
+   Compiling single_flight v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/single_flight)
+   Compiling models_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_properties)
+   Compiling broadcast v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/broadcast)
+   Compiling rate_limit v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/rate_limit)
+   Compiling last_online_tracker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/last_online_tracker)
+   Compiling message_write_gate v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/message_write_gate)
+   Compiling harnessd_protocol v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/harnessd_protocol)
+   Compiling channel_change_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channel_change_db_utils)
+   Compiling macro_tower_layers v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_tower_layers)
+   Compiling email_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_utils)
+   Compiling models_sfs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_sfs)
+   Compiling contacts v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/contacts)
+   Compiling trigger_context v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/trigger_context)
+   Compiling models_opensearch v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_opensearch)
+   Compiling sync_service_hex v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service)
+   Compiling upstream_error v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/upstream_error)
+   Compiling models_team v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_team)
+   Compiling models_dcs v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_dcs)
+   Compiling user_quota v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/user_quota)
+   Compiling roles_and_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/roles_and_permissions)
+   Compiling macro_env v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_env)
+   Compiling models_pagination v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_pagination)
+   Compiling genai_telemetry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/genai_telemetry)
+   Compiling mention_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/mention_utils)
+   Compiling macro_db_migrator v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_db_migrator)
+   Compiling remote_env_var v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/remote_env_var)
+   Compiling kafka_util v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/kafka_util)
+   Compiling macro_service_urls v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_service_urls)
+   Compiling macro_entrypoint v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_entrypoint)
+   Compiling ai_toolset v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_toolset)
+   Compiling macro_auth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_auth)
+   Compiling models_permissions v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_permissions)
+   Compiling attachment v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/attachment)
+   Compiling shared_entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/shared_entity_registry)
+   Compiling frecency v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/frecency)
+   Compiling connection_gateway_models v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_models)
+   Compiling models_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/models_email)
+   Compiling fusionauth v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/fusionauth)
+   Compiling macro_event_broker v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_event_broker)
+   Compiling connection_gateway_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/connection_gateway_client)
+   Compiling entity_access_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_db_utils)
+   Compiling entity_access_management v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access_management)
+   Compiling macro_authorization v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_authorization)
+   Compiling activity v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/activity)
+   Compiling notification v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/notification)
+   Compiling calendar_events v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/calendar_events)
+   Compiling system_properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/system_properties)
+   Compiling ai_usage v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/ai_usage)
+   Compiling entity_registry v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry)
+   Compiling share_permission_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/share_permission_db_utils)
+   Compiling entity_registry_db_utils v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_registry/entity_registry_db_utils)
+   Compiling macro_aws_config v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_aws_config)
+   Compiling static_file_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/static_file_service_client)
+   Compiling agent v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/agent)
+   Compiling email_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_db_client)
+   Compiling email_api_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email_api_client)
+   Compiling model v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model)
+   Compiling invite_email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/invite_email)
+   Compiling model_notifications v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/model_notifications)
+   Compiling entity_access v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_access)
+   Compiling sync_service_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/sync_service_client)
+   Compiling initiative v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/initiative)
+   Compiling databases v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/databases)
+   Compiling properties v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/properties)
+   Compiling entity_mutation v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/entity_mutation)
+   Compiling messages v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/messages)
+   Compiling crm v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/crm)
+   Compiling lexical_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/lexical_client)
+   Compiling channels v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/channels)
+   Compiling macro_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/macro_db_client)
+   Compiling email v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/email)
+   Compiling comms_db_client v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/crates/comms_db_client)
+   Compiling seed_cli v0.1.0 (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/tooling/seed_cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 16s
+     Running `/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/target/debug/seed_cli scenario apply --file seed/scenarios/channels-e2e.json`
+People for the channels end-to-end suite (apps/web/tests/channels-e2e), as six casts of four so that each parallel worker has people of its own: in each cast Ada owns a team, Ben and Cy are members, Dee is outside it. The suite creates its own channels and messages through the app, so nothing else is seeded.
+
+Resetting scenario `channels-e2e` (marker 5eed2d3f)
+Seeding 24 users
+  [2m2026-11-16T20:15:30.078815Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada`: created FusionAuth account
+  [2m2026-11-16T20:15:30.149060Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada.1[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada1`: created FusionAuth account
+  [2m2026-11-16T20:15:30.218613Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada.2[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada2`: created FusionAuth account
+  [2m2026-11-16T20:15:30.276023Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada.3[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada3`: created FusionAuth account
+  [2m2026-11-16T20:15:30.326128Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada.4[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada4`: created FusionAuth account
+  [2m2026-11-16T20:15:30.372954Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ada.5[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ada5`: created FusionAuth account
+  [2m2026-11-16T20:15:30.424049Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben`: created FusionAuth account
+  [2m2026-11-16T20:15:30.470707Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben.1[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben1`: created FusionAuth account
+  [2m2026-11-16T20:15:30.528364Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben.2[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben2`: created FusionAuth account
+  [2m2026-11-16T20:15:30.594893Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben.3[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben3`: created FusionAuth account
+  [2m2026-11-16T20:15:30.644216Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben.4[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben4`: created FusionAuth account
+  [2m2026-11-16T20:15:30.686975Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "ben.5[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `ben5`: created FusionAuth account
+  [2m2026-11-16T20:15:30.732163Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy`: created FusionAuth account
+  [2m2026-11-16T20:15:30.795944Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy.1[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy1`: created FusionAuth account
+  [2m2026-11-16T20:15:30.842712Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy.2[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy2`: created FusionAuth account
+  [2m2026-11-16T20:15:30.890987Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy.3[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy3`: created FusionAuth account
+  [2m2026-11-16T20:15:30.932327Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy.4[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy4`: created FusionAuth account
+  [2m2026-11-16T20:15:30.991531Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "cy.5[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `cy5`: created FusionAuth account
+  [2m2026-11-16T20:15:31.038189Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee`: created FusionAuth account
+  [2m2026-11-16T20:15:31.091451Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee.1[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee1`: created FusionAuth account
+  [2m2026-11-16T20:15:31.139035Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee.2[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee2`: created FusionAuth account
+  [2m2026-11-16T20:15:31.187142Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee.3[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee3`: created FusionAuth account
+  [2m2026-11-16T20:15:31.238712Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee.4[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee4`: created FusionAuth account
+  [2m2026-11-16T20:15:31.326885Z[0m [33m WARN[0m [1;33mseed_cli::service::auth[0m[33m: [33muser registration failed, continuing, [1;33merror[0m[33m: UserAlreadyRegistered[0m
+    [2;3mat[0m tooling/seed_cli/src/service/auth.rs:75
+    [2;3min[0m seed_cli::service::auth::[1mensure_user[0m [2;3mwith[0m [1memail[0m: "dee.5[at]channels-e2e.seed.macro.local"
+    [2;3min[0m seed_cli::entity::scenario::apply::[1mapply[0m [2;3mwith[0m [1mscenario[0m: channels-e2e
+    [2;3min[0m seed_cli::entity::scenario::[1mapply_scenario[0m [2;3mwith[0m [1margs[0m: ApplyScenarioArgs { file: "seed/scenarios/channels-e2e.json", force: false }
+
+  user `dee5`: created FusionAuth account
+  user `ada` -> macro|ada[at]channels-e2e.seed.macro.local
+  user `ada1` -> macro|ada.1[at]channels-e2e.seed.macro.local
+  user `ada2` -> macro|ada.2[at]channels-e2e.seed.macro.local
+  user `ada3` -> macro|ada.3[at]channels-e2e.seed.macro.local
+  user `ada4` -> macro|ada.4[at]channels-e2e.seed.macro.local
+  user `ada5` -> macro|ada.5[at]channels-e2e.seed.macro.local
+  user `ben` -> macro|ben[at]channels-e2e.seed.macro.local
+  user `ben1` -> macro|ben.1[at]channels-e2e.seed.macro.local
+  user `ben2` -> macro|ben.2[at]channels-e2e.seed.macro.local
+  user `ben3` -> macro|ben.3[at]channels-e2e.seed.macro.local
+  user `ben4` -> macro|ben.4[at]channels-e2e.seed.macro.local
+  user `ben5` -> macro|ben.5[at]channels-e2e.seed.macro.local
+  user `cy` -> macro|cy[at]channels-e2e.seed.macro.local
+  user `cy1` -> macro|cy.1[at]channels-e2e.seed.macro.local
+  user `cy2` -> macro|cy.2[at]channels-e2e.seed.macro.local
+  user `cy3` -> macro|cy.3[at]channels-e2e.seed.macro.local
+  user `cy4` -> macro|cy.4[at]channels-e2e.seed.macro.local
+  user `cy5` -> macro|cy.5[at]channels-e2e.seed.macro.local
+  user `dee` -> macro|dee[at]channels-e2e.seed.macro.local
+  user `dee1` -> macro|dee.1[at]channels-e2e.seed.macro.local
+  user `dee2` -> macro|dee.2[at]channels-e2e.seed.macro.local
+  user `dee3` -> macro|dee.3[at]channels-e2e.seed.macro.local
+  user `dee4` -> macro|dee.4[at]channels-e2e.seed.macro.local
+  user `dee5` -> macro|dee.5[at]channels-e2e.seed.macro.local
+Seeding 6 teams
+Seeding 18 contact connections
+
+Scenario `channels-e2e` applied.
+  ada: https://ada.localhost:29409/app/login?email=ada[at]channels-e2e.seed.macro.local
+  ada1: https://ada1.localhost:29409/app/login?email=ada.1[at]channels-e2e.seed.macro.local
+  ada2: https://ada2.localhost:29409/app/login?email=ada.2[at]channels-e2e.seed.macro.local
+  ada3: https://ada3.localhost:29409/app/login?email=ada.3[at]channels-e2e.seed.macro.local
+  ada4: https://ada4.localhost:29409/app/login?email=ada.4[at]channels-e2e.seed.macro.local
+  ada5: https://ada5.localhost:29409/app/login?email=ada.5[at]channels-e2e.seed.macro.local
+  ben: https://ben.localhost:29409/app/login?email=ben[at]channels-e2e.seed.macro.local
+  ben1: https://ben1.localhost:29409/app/login?email=ben.1[at]channels-e2e.seed.macro.local
+  ben2: https://ben2.localhost:29409/app/login?email=ben.2[at]channels-e2e.seed.macro.local
+  ben3: https://ben3.localhost:29409/app/login?email=ben.3[at]channels-e2e.seed.macro.local
+  ben4: https://ben4.localhost:29409/app/login?email=ben.4[at]channels-e2e.seed.macro.local
+  ben5: https://ben5.localhost:29409/app/login?email=ben.5[at]channels-e2e.seed.macro.local
+  cy: https://cy.localhost:29409/app/login?email=cy[at]channels-e2e.seed.macro.local
+  cy1: https://cy1.localhost:29409/app/login?email=cy.1[at]channels-e2e.seed.macro.local
+  cy2: https://cy2.localhost:29409/app/login?email=cy.2[at]channels-e2e.seed.macro.local
+  cy3: https://cy3.localhost:29409/app/login?email=cy.3[at]channels-e2e.seed.macro.local
+  cy4: https://cy4.localhost:29409/app/login?email=cy.4[at]channels-e2e.seed.macro.local
+  cy5: https://cy5.localhost:29409/app/login?email=cy.5[at]channels-e2e.seed.macro.local
+  dee: https://dee.localhost:29409/app/login?email=dee[at]channels-e2e.seed.macro.local
+  dee1: https://dee1.localhost:29409/app/login?email=dee.1[at]channels-e2e.seed.macro.local
+  dee2: https://dee2.localhost:29409/app/login?email=dee.2[at]channels-e2e.seed.macro.local
+  dee3: https://dee3.localhost:29409/app/login?email=dee.3[at]channels-e2e.seed.macro.local
+  dee4: https://dee4.localhost:29409/app/login?email=dee.4[at]channels-e2e.seed.macro.local
+  dee5: https://dee5.localhost:29409/app/login?email=dee.5[at]channels-e2e.seed.macro.local

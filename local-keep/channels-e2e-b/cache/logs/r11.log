@@ -1,0 +1,230 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 32 tests using 4 workers
+
+2026/11/16 17:30:29 socat[472852] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:30 socat[472692] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:30 socat[465890] E read(6, 0x5d845dceb000, 8192): Connection reset by peer
+2026/11/16 17:30:30 socat[465369] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:30 socat[465920] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:30 socat[465933] E write(6, 0x5d845dceb000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (9.9s)
+2026/11/16 17:30:31 socat[471885] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:30:31 socat[472862] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[472898] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[474824] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[474895] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[465893] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[465922] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:31 socat[465935] E write(6, 0x5d845dceb000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (11.5s)
+2026/11/16 17:30:36 socat[472663] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:36 socat[472686] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:36 socat[472734] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:36 socat[465895] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:36 socat[465916] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:36 socat[465929] E write(6, 0x5d845dceb000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (16.8s)
+2026/11/16 17:30:39 socat[465901] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:39 socat[465931] E write(6, 0x5d845dceb000, 24): Broken pipe
+2026/11/16 17:30:39 socat[465968] E write(6, 0x5d845dceb000, 24): Broken pipe
+  ✘   4 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (19.8s)
+2026/11/16 17:30:40 socat[485111] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:40 socat[485106] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:40 socat[483309] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:40 socat[483633] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:40 socat[483637] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (9.9s)
+2026/11/16 17:30:45 socat[495482] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[495775] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[502448] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[502461] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[502500] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[493460] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[493481] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:45 socat[493648] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.8s)
+2026/11/16 17:30:46 socat[504066] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:46 socat[504068] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:46 socat[504233] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:47 socat[501641] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:47 socat[501814] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.6s)
+2026/11/16 17:30:50 socat[484183] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:50 socat[484570] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.4s)
+2026/11/16 17:30:50 socat[504825] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:50 socat[504822] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:50 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:30:50 socat[442400] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:30:50 socat[502557] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:50 socat[502882] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (9.8s)
+2026/11/16 17:30:55 socat[513775] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[513782] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[513784] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[515074] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[515111] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[515122] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[512741] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[512906] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:55 socat[512744] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (8.3s)
+2026/11/16 17:30:57 socat[515668] E write(6, 0x5d845dcec000, 8192): Broken pipe
+2026/11/16 17:30:57 socat[518429] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:57 socat[515669] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 17:30:57 socat[520029] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:57 socat[515055] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:57 socat[515071] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:30:57 socat[515083] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.5s)
+2026/11/16 17:31:01 socat[522346] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:01 socat[522376] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:01 socat[515137] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:01 socat[515248] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:01 socat[515168] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (10.3s)
+2026/11/16 17:31:04 socat[506407] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:04 socat[506410] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  10 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.8s)
+2026/11/16 17:31:05 socat[531400] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[525865] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[531532] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[531463] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:05 socat[532713] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[532723] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[525754] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[525466] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:05 socat[442400] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:05 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  15 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.3s)
+2026/11/16 17:31:07 socat[533238] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:07 socat[534292] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:07 socat[534294] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:07 socat[532734] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:07 socat[532739] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.0s)
+2026/11/16 17:31:14 socat[524296] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:14 socat[524331] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.1s)
+2026/11/16 17:31:15 socat[542735] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[542756] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[542780] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[546200] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[546198] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[536342] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[536591] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[536630] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  17 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (10.4s)
+2026/11/16 17:31:15 socat[547818] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[547832] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[545453] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:15 socat[545518] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.2s)
+2026/11/16 17:31:20 socat[559484] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[558853] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[559751] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[559796] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[558019] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[558112] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:20 socat[558395] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.2s)
+2026/11/16 17:31:23 socat[539540] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:23 socat[541513] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:23 socat[542003] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  18 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.2s)
+2026/11/16 17:31:26 socat[560014] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:26 socat[560029] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:26 socat[560031] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:26 socat[559278] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:26 socat[559318] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (10.4s)
+2026/11/16 17:31:29 socat[568178] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[569033] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[569076] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[575619] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[569881] E read(6, 0x5d845dcec000, 8192): Connection reset by peer
+2026/11/16 17:31:29 socat[569882] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 17:31:29 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:29 socat[576056] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[576155] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[568052] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[568060] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:29 socat[568062] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.8s)
+2026/11/16 17:31:30 socat[576490] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[576772] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[576818] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[576820] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[570296] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[570305] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:30 socat[570307] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (6.4s)
+2026/11/16 17:31:34 socat[559274] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:34 socat[559308] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:34 socat[559335] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  22 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.4s)
+2026/11/16 17:31:37 socat[577901] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:37 socat[577942] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:37 socat[577988] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:37 socat[576895] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:37 socat[576923] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:37 socat[577195] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (10.8s)
+2026/11/16 17:31:38 socat[586511] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:38 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:38 socat[586597] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:38 socat[586607] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:38 socat[442400] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:38 socat[443214] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:38 socat[442400] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:38 socat[588257] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:38 socat[588212] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:39 socat[585387] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:39 socat[585191] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  27 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.8s)
+2026/11/16 17:31:40 socat[589165] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:40 socat[589179] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:40 socat[589183] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:40 socat[588159] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:40 socat[588173] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:40 socat[588181] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (5.5s)
+2026/11/16 17:31:47 socat[601353] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[601362] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[607545] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[608099] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[608331] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[599513] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[599520] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:47 socat[599522] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (7.4s)
+2026/11/16 17:31:48 socat[578916] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:48 socat[578924] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  26 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.4s)
+2026/11/16 17:31:48 socat[599091] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:48 socat[599118] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:48 socat[599127] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:48 socat[597392] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:48 socat[442400] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 17:31:48 socat[597429] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/channels.spec.ts:119:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (10.8s)
+2026/11/16 17:31:48 socat[597407] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:53 socat[611743] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:53 socat[611777] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:53 socat[612039] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:53 socat[610237] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:53 socat[610866] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✓  32 tests/channels-e2e/members.spec.ts:71:1 › MEM-02 the owner removes a person in the Participants tab and everyone who stays is told (5.2s)
+2026/11/16 17:31:53 socat[610733] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:57 socat[599068] E write(6, 0x5d845dcec000, 24): Broken pipe
+2026/11/16 17:31:57 socat[599072] E write(6, 0x5d845dcec000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/channels.spec.ts:474:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (17.9s)
+
+  32 passed (1.9m)
+2026/11/16 17:31:57 socat[443214] W exiting on signal 15
+2026/11/16 17:31:57 socat[442400] W exiting on signal 15

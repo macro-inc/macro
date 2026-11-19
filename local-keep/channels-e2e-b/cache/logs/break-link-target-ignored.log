@@ -1,0 +1,132 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/16 09:28:52 socat[3512522] E write(6, 0x59926a682000, 24): Broken pipe
+2026/11/16 09:28:52 socat[3512623] E write(6, 0x59926a682000, 24): Broken pipe
+2026/11/16 09:28:53 socat[3512610] E write(6, 0x59926a682000, 24): Broken pipe
+2026/11/16 09:28:53 socat[3512520] E write(6, 0x59926a682000, 24): Broken pipe
+2026/11/16 09:28:53 socat[3512628] E write(6, 0x59926a682000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply (17.2s)
+  ✘  1 tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours (17.3s)
+  ✘  2 tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages (17.4s)
+
+
+  1) tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d83f-7eb0-8a24-d0e497a11c71"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d83f-7eb0-8a24-d0e497a11c71"]')
+
+
+      32 |
+      33 |   const row = view.messageById(target.id);
+    > 34 |   await expect(row).toBeInViewport();
+         |                     ^
+      35 |   await view.expectMarked(target.id);
+      36 |
+      37 |   const texts = await view.texts();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:34:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-02-a-link-to--d4b87-s-it-between-its-neighbours/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-fb0a-708d-bd69-3250362afa6b"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-fb0a-708d-bd69-3250362afa6b"]')
+
+
+      58 |
+      59 |   const row = view.messageById(reply.id);
+    > 60 |   await expect(row).toBeInViewport();
+         |                     ^
+      61 |   await expect(row).toContainText('old reply 12');
+      62 |   await view.expectMarked(reply.id);
+      63 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:60:21
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-03-a-link-to--9b69f-ns-the-thread-on-that-reply/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+
+    Error: expect(locator).toBeInViewport() failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d7e6-7e8a-b2b5-dc43968992bf"]')
+    Expected: in viewport
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeInViewport" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message-id="01a1e36b-d7e6-7e8a-b2b5-dc43968992bf"]')
+
+
+      124 |   const view = new ChannelView(page, history.id);
+      125 |   await view.open({ messageId: history.messages[14].id });
+    > 126 |   await expect(view.messageById(history.messages[14].id)).toBeInViewport();
+          |                                                           ^
+      127 |
+      128 |   await (await view.scrollDownUntilOffered()).click();
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/location.spec.ts:126:59
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-link-target-ignored/test-results/location-NAV-06-scrolling--ee522-urns-to-the-latest-messages/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/location.spec.ts:24:1 › NAV-02 a link to an old message, pages back, shows it between its neighbours 
+    tests/channels-e2e/location.spec.ts:47:1 › NAV-03 a link to a reply deep in an old thread opens the thread on that reply 
+    tests/channels-e2e/location.spec.ts:120:1 › NAV-06 scrolling down from an old message offers “Scroll to bottom”, which returns to the latest messages 
+2026/11/16 09:28:53 socat[3503240] W exiting on signal 15
+2026/11/16 09:28:53 socat[3503176] W exiting on signal 15

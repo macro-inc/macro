@@ -1,0 +1,70 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/17 05:00:12 socat[2603829] E write(6, 0x58bd22fda000, 24): Broken pipe
+2026/11/17 05:00:12 socat[2603864] E read(6, 0x58bd22fda000, 8192): Connection reset by peer
+2026/11/17 05:00:12 socat[2567192] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:00:12 socat[2564991] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:00:12 socat[2603853] E write(6, 0x58bd22fda000, 24): Broken pipe
+2026/11/17 05:00:12 socat[2606285] E write(6, 0x58bd22fda000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/writes.spec.ts:410:1 › WRT-14 a message written offline in one window shows in the other window of the same device (39.6s)
+
+
+  1) tests/channels-e2e/writes.spec.ts:410:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "one",
+        "two",
+        "three",
+    -   "from the second window",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:427:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-write-not-shown-in-other-window/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-write-not-shown-in-other-window/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-waiting-write-not-shown-in-other-window/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-waiting-write-not-shown-in-other-window/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-waiting-write-not-shown-in-other-window/test-results/writes-WRT-14-a-message-wr-5e142-r-window-of-the-same-device/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/writes.spec.ts:410:1 › WRT-14 a message written offline in one window shows in the other window of the same device 
+2026/11/17 05:00:13 socat[2564991] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:00:13 socat[2567192] W exiting on signal 15
+2026/11/17 05:00:13 socat[2564991] W exiting on signal 15

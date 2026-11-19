@@ -1,0 +1,144 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:12:31 socat[486220] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:12:31 socat[486239] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:12:31 socat[486277] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:12:31 socat[477942] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:12:31 socat[477952] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:12:31 socat[478151] E write(6, 0x56430ed7a000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved (20.4s)
+2026/11/16 08:13:41 socat[485871] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:41 socat[485904] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:41 socat[486212] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:41 socat[486233] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:42 socat[477916] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:42 socat[477944] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:42 socat[477953] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:42 socat[477924] E write(6, 0x56430ed7a000, 24): Broken pipe
+2026/11/16 08:13:42 socat[477946] E write(6, 0x56430ed7a000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once (1.5m)
+  ✘  2 tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel (1.5m)
+
+
+  1) tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Approve' })
+
+
+      83 |   );
+      84 |   await expect(request).toBeVisible();
+    > 85 |   await page.getByRole('button', { name: 'Approve' }).click();
+         |                                                       ^
+      86 |   await expect(view.list.getByText('Approved by Ada Owner')).toBeVisible();
+      87 |
+      88 |   // Cy is in without a reload, with everything said before.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:85:55
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-03-a-request-to-2ca38--lets-the-person-in-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Deny' })
+
+
+      122 |   ).toBeVisible();
+      123 |
+    > 124 |   await page.getByRole('button', { name: 'Deny' }).click();
+          |                                                    ^
+      125 |
+      126 |   await expect(view.list.getByText('Denied by Ada Owner')).toBeVisible();
+      127 |   await expect(page.getByRole('button', { name: 'Approve' })).toHaveCount(0);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:124:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-04-a-denied-req-62a52-them-nothing-of-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('button', { name: 'Approve' })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('button', { name: 'Approve' })
+
+
+      151 |   await cyPage.goto(`/app/channel/${channel.id}`);
+      152 |   await cyPage.getByRole('button', { name: 'Ask to join' }).click();
+    > 153 |   await expect(page.getByRole('button', { name: 'Approve' })).toBeVisible();
+          |                                                               ^
+      154 |
+      155 |   await cyPage.getByRole('button', { name: 'Withdraw request' }).click();
+      156 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/access.spec.ts:153:63
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-join-request-not-shown-to-members/test-results/access-ACC-05-a-withdrawn-request-can-no-longer-be-approved/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/access.spec.ts:61:1 › ACC-03 a request to join reaches the owner at once, and approving it lets the person in at once 
+    tests/channels-e2e/access.spec.ts:104:1 › ACC-04 a denied request tells the person so and shows them nothing of the channel 
+    tests/channels-e2e/access.spec.ts:139:1 › ACC-05 a withdrawn request can no longer be approved ─
+2026/11/16 08:13:43 socat[457165] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:13:43 socat[457308] W exiting on signal 15
+2026/11/16 08:13:43 socat[457165] W exiting on signal 15

@@ -1,0 +1,63 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 09:19:27 socat[2633550] E write(6, 0x5de7a5da8000, 24): Broken pipe
+2026/11/16 09:19:27 socat[2633572] E write(6, 0x5de7a5da8000, 24): Broken pipe
+2026/11/16 09:20:29 socat[2642442] E write(6, 0x5de7a5da8000, 24): Broken pipe
+2026/11/16 09:20:29 socat[2642444] E write(6, 0x5de7a5da8000, 24): Broken pipe
+2026/11/16 09:20:29 socat[2642882] E write(6, 0x5de7a5da8000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (1.2m)
+
+
+  1) tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later 
+
+    Error: the channel as the services hold it
+
+    the channel as the services hold it
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three",
+        "after",
+    +   "waiting when the data went",
+      ]
+
+    Call Log:
+    - Timeout 60000ms exceeded while waiting on the predicate
+
+      40 |       timeout,
+      41 |     })
+    > 42 |     .toEqual(lines);
+         |      ^
+      43 | }
+      44 |
+      45 | // If this fails, a message written offline does not show until it is sent,
+        at expectServer (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:42:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:457:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-stored-send-never-forgotten/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-stored-send-never-forgotten/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-stored-send-never-forgotten/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-stored-send-never-forgotten/test-results/writes-WRT-15-a-message-wa-957c2--sent-and-is-not-sent-later/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later 
+2026/11/16 09:20:30 socat[2611468] W exiting on signal 15
+2026/11/16 09:20:30 socat[2610941] W exiting on signal 15

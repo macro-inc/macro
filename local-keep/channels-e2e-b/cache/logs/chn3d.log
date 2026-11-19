@@ -1,0 +1,77 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 2 workers
+
+2026/11/16 15:16:18 socat[3779546] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:18 socat[3716766] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:16:18 socat[3779577] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:18 socat[3779589] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:18 socat[3776557] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:18 socat[3776629] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:18 socat[3776658] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (9.1s)
+2026/11/16 15:16:27 socat[3793300] E write(6, 0x61c1b9cec000, 24): Broken pipe
+2026/11/16 15:16:27 socat[3793335] E write(6, 0x61c1b9cec000, 24): Broken pipe
+2026/11/16 15:16:27 socat[3793346] E write(6, 0x61c1b9cec000, 24): Broken pipe
+2026/11/16 15:16:27 socat[3792345] E write(6, 0x61c1b9cec000, 24): Broken pipe
+2026/11/16 15:16:27 socat[3792354] E write(6, 0x61c1b9cec000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (8.5s)
+2026/11/16 15:16:30 socat[3779557] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:30 socat[3779591] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:30 socat[3779602] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:30 socat[3776547] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:30 socat[3776625] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+2026/11/16 15:16:30 socat[3776654] E write(6, 0x61c1b9ceb000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (20.8s)
+
+
+  1) tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: getByRole('main').locator('[data-view-shell-top-bar]')
+    Expected substring: "renamed-mwjeopqtcioi"
+    Received string:    "e2e-mwjeopo5ynjgMessagesAttachmentsCallsParticipantsBMCallInvite"
+    Timeout: 15000ms
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for getByRole('main').locator('[data-view-shell-top-bar]')
+        - locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+        - unexpected value "e2e-mwjeopo5ynjgMessagesAttachmentsCallsParticipantsBMCall"
+        29 × locator resolved to <div data-view-shell-top-bar="" class="flex h-12 min-w-0 shrink-0 items-center px-2 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden @container/channel-header gap-3 py-0">…</div>
+           - unexpected value "e2e-mwjeopo5ynjgMessagesAttachmentsCallsParticipantsBMCallInvite"
+
+
+      137 |   await dialog.getByRole('button', { name: 'Save name' }).click();
+      138 |
+    > 139 |   await expect(channelHeader(page)).toContainText(renamed);
+          |                                     ^
+      140 |   await expectTimelineEndsWith(view, [
+      141 |     'before the rename',
+      142 |     `Ada Owner renamed the channel to ${renamed}`,
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/channels.spec.ts:139:37
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3d/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3d/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/chn3d/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/chn3d/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/chn3d/test-results/channels-CHN-03-renaming-a-9b020-both-members-in-the-channel-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/channels.spec.ts:118:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel 
+  2 passed (33.0s)
+2026/11/16 15:16:31 socat[3716766] W exiting on signal 15
+2026/11/16 15:16:31 socat[3716028] W exiting on signal 15

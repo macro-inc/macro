@@ -1,0 +1,555 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 100 tests using 4 workers
+
+2026/11/17 20:59:47 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:59:47 socat[4128814] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓    1 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 20:59:47 socat[4126537] E read(6, 0x56949842c000, 8192): Connection reset by peer
+2026/11/17 20:59:47 socat[4128443] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4126538] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4128498] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4128513] E write(6, 0x56949842c000, 24): Broken pipe
+  ✓    2 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 20:59:47 socat[4129159] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4126813] E write(6, 0x56949842c000, 24): Broken pipe
+  ✓    3 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.9s)
+2026/11/17 20:59:47 socat[4126892] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 20:59:47 socat[4129326] E write(6, 0x56949842c000, 24): Broken pipe
+2026/11/17 20:59:47 socat[4129570] E write(6, 0x56949842c000, 24): Broken pipe
+  ✓    4 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.1s)
+2026/11/17 20:59:53 socat[4142715] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4142754] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓    5 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.3s)
+2026/11/17 20:59:53 socat[4143529] E write(6, 0x56949842d000, 26): Broken pipe
+2026/11/17 20:59:53 socat[4143530] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4143569] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓    6 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.3s)
+2026/11/17 20:59:53 socat[4141628] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4143801] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4144084] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓    8 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.2s)
+2026/11/17 20:59:53 socat[4141341] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4143632] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:53 socat[4143665] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓    7 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.4s)
+2026/11/17 20:59:57 socat[4154022] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 20:59:57 socat[4156203] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:57 socat[4154024] E write(6, 0x555555624000, 24): Broken pipe
+  ✓    9 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 20:59:57 socat[4156554] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4154742] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4156913] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4156918] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   10 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 20:59:58 socat[4157325] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4157463] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   11 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 20:59:58 socat[4155132] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4157341] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 20:59:58 socat[4157468] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   12 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+2026/11/17 21:00:03 socat[4169417] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4164542] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:03 socat[4169467] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4164548] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   13 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.5s)
+2026/11/17 21:00:03 socat[4169594] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169542] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169599] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169562] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169610] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   14 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+  ✓   15 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 21:00:03 socat[4169622] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169756] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:03 socat[4169858] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   16 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 21:00:08 socat[4182322] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   17 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.3s)
+2026/11/17 21:00:08 socat[4182279] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:09 socat[4182316] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:09 socat[4182346] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   18 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 21:00:09 socat[4173332] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:09 socat[4173344] E read(6, 0x555555624000, 8192): Connection reset by peer
+2026/11/17 21:00:09 socat[4182390] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:09 socat[4182486] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   19 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 21:00:12 socat[4189768] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   21 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+2026/11/17 21:00:13 socat[4190481] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:13 socat[4191042] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:13 socat[4190729] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:13 socat[4190282] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   23 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.2s)
+  ✓   22 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:00:16 socat[8602] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:16 socat[8674] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   24 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.0s)
+2026/11/17 21:00:16 socat[8778] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[7121] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[8962] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[8972] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   25 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.0s)
+2026/11/17 21:00:16 socat[7179] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[9018] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:16 socat[9036] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   26 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (2.9s)
+PMUTE-FAILED
+2364 focusin  target=DIV[||ChatNewAllRecentThreadsL|connected=true] active=DIV[||ChatNewAllRecentThreadsL|connected=true] prevented=false
+4029 focusout  target=DIV[||ChatNewReorder Favorites|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4030 focusin  target=DIV[treeitem||pm-mwl6etrqhdc0-muted9:0|connected=true] active=DIV[treeitem||pm-mwl6etrqhdc0-muted9:0|connected=true] prevented=false
+4210 focusout  target=DIV[treeitem||pm-mwl6etrqhdc0-muted9:0|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4212 focusin  target=DIV[menu||Open in new splitShift+↵|connected=true] active=DIV[menu||Open in new splitShift+↵|connected=true] prevented=false
+4215 keydown ArrowDown target=DIV[menu||Open in new splitShift+↵|connected=true] active=DIV[menu||Open in new splitShift+↵|connected=true] prevented=false
+4219 focusout  target=DIV[menu||Open in new splitShift+↵|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4220 focusin  target=DIV[menuitem||Open in new splitShift+↵|connected=true] active=DIV[menuitem||Open in new splitShift+↵|connected=true] prevented=false
+4220 keydown-bubbled ArrowDown prevented=true active=DIV[menuitem||Open in new splitShift+↵|connected=true]
+4285 focusout  target=DIV[menuitem||Open in new splitShift+↵|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4288 focusin  target=DIV[menuitem||Mute notifications|connected=true] active=DIV[menuitem||Mute notifications|connected=true] prevented=false
+4292 keydown ArrowRight target=DIV[menuitem||Mute notifications|connected=true] active=DIV[menuitem||Mute notifications|connected=true] prevented=false
+4311 focusout  target=DIV[menuitem||Mute notifications|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4312 focusin  target=DIV[menu||Only @mentionsUntil I tu|connected=true] active=DIV[menu||Only @mentionsUntil I tu|connected=true] prevented=false
+4315 focusout  target=DIV[menu||Only @mentionsUntil I tu|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4315 focusin  target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=DIV[menuitem|mentions-only|Only @mentions|connected=true] prevented=false
+4321 added DIV[||Only @mentionsUntil I tu|connected=true]
+4332 keyup ArrowRight target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=DIV[menuitem|mentions-only|Only @mentions|connected=true] prevented=false
+--- press Enter
+4534 focusout  target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4538 focusin  target=DIV[menuitem|mute|Until I turn it off|connected=true] active=DIV[menuitem|mute|Until I turn it off|connected=true] prevented=false
+4713 focusout  target=DIV[menuitem|mute|Until I turn it off|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4717 removed DIV[menuitem|mentions-only|Only @mentions|connected=false]
+4717 removed DIV[menuitem|mute|Until I turn it off|connected=false]
+4717 removed DIV[menuitem|30-minutes|For 30 minutesTue, Nov 1|connected=false]
+4717 removed DIV[menuitem|1-hour|For 1 hourTue, Nov 17, 1|connected=false]
+4717 removed DIV[menuitem|3-hours|For 3 hoursWed, Nov 18, |connected=false]
+4717 removed DIV[menuitem|morning|Until the morningWed, No|connected=false]
+4717 removed DIV[menuitem|weekend|Until MondayMon, Nov 23,|connected=false]
+4717 removed DIV[menuitem|week|For a weekTue, Nov 24, 9|connected=false]
+4717 removed DIV[menuitem|custom|Custom…|connected=false]
+4717 added DIV[menuitem|mentions-only|Only @mentions|connected=true]
+4717 added DIV[menuitem|mute|Until I turn it off|connected=true]
+4717 added DIV[menuitem|30-minutes|For 30 minutesTue, Nov 1|connected=true]
+4717 added DIV[menuitem|1-hour|For 1 hourTue, Nov 17, 1|connected=true]
+4717 added DIV[menuitem|3-hours|For 3 hoursWed, Nov 18, |connected=true]
+4717 added DIV[menuitem|morning|Until the morningWed, No|connected=true]
+4717 added DIV[menuitem|weekend|Until MondayMon, Nov 23,|connected=true]
+4717 added DIV[menuitem|week|For a weekTue, Nov 24, 9|connected=true]
+4717 added DIV[menuitem|custom|Custom…|connected=true]
+4724 keydown Enter target=BODY[||
+    You need to enable |connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+4725 keydown-bubbled Enter prevented=false active=BODY[||
+    You need to enable |connected=true]
+4727 keyup Enter target=BODY[||
+    You need to enable |connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+PMUTE-END
+2026/11/17 21:00:17 socat[4182625] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:17 socat[4182627] E write(6, 0x56949842d000, 24): Broken pipe
+  ✘   20 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (13.7s)
+2026/11/17 21:00:21 socat[16077] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:21 socat[16429] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:21 socat[16379] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   28 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:00:21 socat[15782] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:21 socat[15908] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:21 socat[15936] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   27 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 21:00:21 socat[16728] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:21 socat[16787] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   29 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 21:00:22 socat[22188] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:22 socat[22201] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   30 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:00:24 socat[24907] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:24 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:24 socat[24925] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   31 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.4s)
+2026/11/17 21:00:25 socat[24970] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:25 socat[25013] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   32 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+2026/11/17 21:00:25 socat[24985] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:25 socat[25108] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   33 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.5s)
+2026/11/17 21:00:26 socat[28440] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:26 socat[28733] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:26 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:26 socat[28904] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   34 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+2026/11/17 21:00:29 socat[30846] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:29 socat[30848] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:00:29 socat[37227] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:29 socat[37290] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   35 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+2026/11/17 21:00:29 socat[37477] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:29 socat[37524] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   36 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:00:29 socat[37785] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:29 socat[37826] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   37 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:00:31 socat[41037] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   38 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:00:34 socat[47861] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   41 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.3s)
+2026/11/17 21:00:34 socat[47482] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:34 socat[47493] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   39 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.8s)
+2026/11/17 21:00:35 socat[47381] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:35 socat[47510] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   40 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.9s)
+2026/11/17 21:00:36 socat[55455] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:36 socat[55666] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   42 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.5s)
+2026/11/17 21:00:39 socat[60025] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:39 socat[60049] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   43 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+2026/11/17 21:00:39 socat[58772] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:39 socat[60493] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:39 socat[58773] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:00:39 socat[60269] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:39 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓   44 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:00:40 socat[60426] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:40 socat[60480] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   45 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+  ✓   46 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+2026/11/17 21:00:41 socat[64580] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:41 socat[64624] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:43 socat[73111] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   47 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.7s)
+2026/11/17 21:00:44 socat[74017] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:44 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:44 socat[74051] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   49 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:00:45 socat[75883] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:45 socat[75954] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   50 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:00:47 socat[81181] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:47 socat[81196] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:47 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:47 socat[81452] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   51 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.6s)
+2026/11/17 21:00:48 socat[83796] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:48 socat[84117] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   52 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.3s)
+2026/11/17 21:00:48 socat[84289] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:51 socat[86855] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:51 socat[82696] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:51 socat[86962] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:51 socat[86820] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:51 socat[82698] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:00:51 socat[86963] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   53 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.0s)
+PMUTE-FAILED
+1239 focusin  target=DIV[||ChatNewAllRecentThreadsL|connected=true] active=DIV[||ChatNewAllRecentThreadsL|connected=true] prevented=false
+2470 focusout  target=DIV[||ChatNewReorder Favorites|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2471 focusin  target=DIV[treeitem||pm-mwl6flq6alyp-muted9:0|connected=true] active=DIV[treeitem||pm-mwl6flq6alyp-muted9:0|connected=true] prevented=false
+2589 focusout  target=DIV[treeitem||pm-mwl6flq6alyp-muted9:0|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2590 focusin  target=DIV[menu||Open in new splitShift+↵|connected=true] active=DIV[menu||Open in new splitShift+↵|connected=true] prevented=false
+2592 keydown ArrowDown target=DIV[menu||Open in new splitShift+↵|connected=true] active=DIV[menu||Open in new splitShift+↵|connected=true] prevented=false
+2595 focusout  target=DIV[menu||Open in new splitShift+↵|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2596 focusin  target=DIV[menuitem||Open in new splitShift+↵|connected=true] active=DIV[menuitem||Open in new splitShift+↵|connected=true] prevented=false
+2596 keydown-bubbled ArrowDown prevented=true active=DIV[menuitem||Open in new splitShift+↵|connected=true]
+2710 focusout  target=DIV[menuitem||Open in new splitShift+↵|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2712 focusin  target=DIV[menuitem||Mute notifications|connected=true] active=DIV[menuitem||Mute notifications|connected=true] prevented=false
+2714 keydown ArrowRight target=DIV[menuitem||Mute notifications|connected=true] active=DIV[menuitem||Mute notifications|connected=true] prevented=false
+2729 focusout  target=DIV[menuitem||Mute notifications|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2730 focusin  target=DIV[menu||Only @mentionsUntil I tu|connected=true] active=DIV[menu||Only @mentionsUntil I tu|connected=true] prevented=false
+2732 focusout  target=DIV[menu||Only @mentionsUntil I tu|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2733 focusin  target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=DIV[menuitem|mentions-only|Only @mentions|connected=true] prevented=false
+2737 added DIV[||Only @mentionsUntil I tu|connected=true]
+2744 keyup ArrowRight target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=DIV[menuitem|mentions-only|Only @mentions|connected=true] prevented=false
+--- press Enter
+2895 focusout  target=DIV[menuitem|mentions-only|Only @mentions|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+2900 focusin  target=DIV[menuitem|mute|Until I turn it off|connected=true] active=DIV[menuitem|mute|Until I turn it off|connected=true] prevented=false
+3145 focusout  target=DIV[menuitem|mute|Until I turn it off|connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+3149 removed DIV[menuitem|mentions-only|Only @mentions|connected=false]
+3149 removed DIV[menuitem|mute|Until I turn it off|connected=false]
+3149 removed DIV[menuitem|30-minutes|For 30 minutesTue, Nov 1|connected=false]
+3149 removed DIV[menuitem|1-hour|For 1 hourTue, Nov 17, 1|connected=false]
+3149 removed DIV[menuitem|3-hours|For 3 hoursWed, Nov 18, |connected=false]
+3149 removed DIV[menuitem|morning|Until the morningWed, No|connected=false]
+3149 removed DIV[menuitem|weekend|Until MondayMon, Nov 23,|connected=false]
+3149 removed DIV[menuitem|week|For a weekTue, Nov 24, 9|connected=false]
+3149 removed DIV[menuitem|custom|Custom…|connected=false]
+3149 added DIV[menuitem|mentions-only|Only @mentions|connected=true]
+3149 added DIV[menuitem|mute|Until I turn it off|connected=true]
+3149 added DIV[menuitem|30-minutes|For 30 minutesTue, Nov 1|connected=true]
+3149 added DIV[menuitem|1-hour|For 1 hourTue, Nov 17, 1|connected=true]
+3149 added DIV[menuitem|3-hours|For 3 hoursWed, Nov 18, |connected=true]
+3149 added DIV[menuitem|morning|Until the morningWed, No|connected=true]
+3149 added DIV[menuitem|weekend|Until MondayMon, Nov 23,|connected=true]
+3149 added DIV[menuitem|week|For a weekTue, Nov 24, 9|connected=true]
+3149 added DIV[menuitem|custom|Custom…|connected=true]
+3157 keydown Enter target=BODY[||
+    You need to enable |connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+3158 keydown-bubbled Enter prevented=false active=BODY[||
+    You need to enable |connected=true]
+3214 keyup Enter target=BODY[||
+    You need to enable |connected=true] active=BODY[||
+    You need to enable |connected=true] prevented=false
+PMUTE-END
+2026/11/17 21:00:52 socat[73307] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:52 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   48 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (12.8s)
+2026/11/17 21:00:54 socat[91542] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:54 socat[91484] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   54 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.1s)
+2026/11/17 21:00:55 socat[88928] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:55 socat[88929] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:00:55 socat[94653] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:00:55 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:55 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:00:55 socat[94819] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   55 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.3s)
+2026/11/17 21:00:57 socat[102425] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   56 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 21:00:57 socat[102531] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   57 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.1s)
+2026/11/17 21:00:59 socat[105102] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:59 socat[105031] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:59 socat[102059] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:00:59 socat[102060] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:00:59 socat[105140] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:00 socat[105413] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:00 socat[105541] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   58 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.9s)
+  ✓   59 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.1s)
+2026/11/17 21:01:02 socat[106647] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:02 socat[106724] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:04 socat[116987] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:04 socat[117004] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   60 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.6s)
+2026/11/17 21:01:06 socat[118742] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   61 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.6s)
+2026/11/17 21:01:06 socat[118783] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:07 socat[117046] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:07 socat[119361] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:07 socat[119393] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   62 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.4s)
+2026/11/17 21:01:08 socat[122383] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:08 socat[122523] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   63 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.0s)
+2026/11/17 21:01:10 socat[127859] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:10 socat[128097] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   64 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+  ✓   65 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 21:01:13 socat[131490] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:13 socat[135318] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:13 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:13 socat[135360] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   66 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.9s)
+2026/11/17 21:01:14 socat[137066] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:14 socat[137166] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:14 socat[137307] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   67 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 21:01:14 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:14 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:16 socat[144427] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:16 socat[144698] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   68 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.1s)
+2026/11/17 21:01:19 socat[151734] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:19 socat[151755] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:19 socat[144693] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   69 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.1s)
+2026/11/17 21:01:19 socat[147390] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:19 socat[147391] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:19 socat[152042] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:19 socat[152079] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   70 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.2s)
+  ✓   71 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.4s)
+2026/11/17 21:01:20 socat[152923] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:20 socat[152824] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:20 socat[150548] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:20 socat[150549] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:24 socat[156910] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:24 socat[153073] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:24 socat[153074] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:24 socat[156914] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:24 socat[156742] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   72 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (7.0s)
+2026/11/17 21:01:26 socat[164103] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   73 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.8s)
+2026/11/17 21:01:27 socat[164977] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:27 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:27 socat[164987] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   74 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.9s)
+2026/11/17 21:01:28 socat[161310] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:28 socat[165429] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   75 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (6.8s)
+2026/11/17 21:01:31 socat[173035] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   76 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 21:01:33 socat[179146] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:33 socat[179169] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   77 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.5s)
+2026/11/17 21:01:33 socat[180213] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:33 socat[180430] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   78 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.9s)
+2026/11/17 21:01:33 socat[180650] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:33 socat[175588] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:33 socat[180762] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:33 socat[180888] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   79 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.0s)
+2026/11/17 21:01:33 socat[175596] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:37 socat[181863] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:37 socat[181870] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:01:37 socat[188393] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   80 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 21:01:39 socat[195986] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:39 socat[196199] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   81 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 21:01:40 socat[187225] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:40 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:40 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:01:40 socat[196261] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   82 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.9s)
+2026/11/17 21:01:40 socat[197094] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   83 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.6s)
+2026/11/17 21:01:43 socat[205482] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:43 socat[205255] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:43 socat[198854] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   84 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.9s)
+2026/11/17 21:01:45 socat[201234] E write(6, 0x56949842d000, 270): Broken pipe
+2026/11/17 21:01:45 socat[201235] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   85 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.0s)
+2026/11/17 21:01:46 socat[209917] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   86 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.6s)
+2026/11/17 21:01:47 socat[212850] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:01:47 socat[212912] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:47 socat[212853] E write(6, 0x555555624000, 24): Broken pipe
+  ✓   87 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.4s)
+2026/11/17 21:01:50 socat[219092] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   88 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.9s)
+2026/11/17 21:01:52 socat[225111] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[225328] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[218446] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   89 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.8s)
+2026/11/17 21:01:52 socat[227064] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[221705] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[227249] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[227443] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   90 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.2s)
+2026/11/17 21:01:52 socat[228882] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:52 socat[229438] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   91 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (5.0s)
+2026/11/17 21:01:55 socat[235787] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:55 socat[236036] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   92 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+2026/11/17 21:01:57 socat[240347] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:57 socat[240441] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   93 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.4s)
+2026/11/17 21:01:58 socat[241618] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:01:58 socat[241496] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   95 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.5s)
+2026/11/17 21:01:58 socat[241548] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   94 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.6s)
+2026/11/17 21:02:00 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:02:00 socat[251039] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:02:00 socat[250980] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   96 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+  ✓   97 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.2s)
+2026/11/17 21:02:02 socat[254331] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:02:02 socat[250971] E read(6, 0x56949842d000, 8192): Connection reset by peer
+2026/11/17 21:02:02 socat[250973] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:02:02 socat[254333] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 21:02:02 socat[254454] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:02:02 socat[254932] E read(6, 0x56949842d000, 8192): Connection reset by peer
+  ✓   99 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.8s)
+2026/11/17 21:02:02 socat[254979] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:02:02 socat[252274] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:02:02 socat[255207] E write(6, 0x56949842d000, 24): Broken pipe
+2026/11/17 21:02:02 socat[255064] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓   98 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (3.9s)
+2026/11/17 21:02:04 socat[261183] E write(6, 0x56949842d000, 24): Broken pipe
+  ✓  100 tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes (4.0s)
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      106 |     console.log(`PMUTE-FAILED\n${log.slice(from).join('\n')}\nPMUTE-END`);
+      107 |   }
+    > 108 |   expect(held).toBe(true);
+          |                ^
+      109 | });
+      110 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:108:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat19/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat19/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat19/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat19/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ─────────────────────────────
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: false
+
+      106 |     console.log(`PMUTE-FAILED\n${log.slice(from).join('\n')}\nPMUTE-END`);
+      107 |   }
+    > 108 |   expect(held).toBe(true);
+          |                ^
+      109 | });
+      110 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:108:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat47/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat47/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat47/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/pm1/test-results/zz-probe-P-MUTE-where-Enter-goes-repeat47/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+    tests/channels-e2e/zz-probe.spec.ts:7:1 › P-MUTE where Enter goes ──────────────────────────────
+  98 passed (2.7m)
+2026/11/17 21:02:05 socat[4080481] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:02:05 socat[4081756] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 21:02:05 socat[4081756] W exiting on signal 15
+2026/11/17 21:02:05 socat[4080481] W exiting on signal 15

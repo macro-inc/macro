@@ -1,0 +1,60 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/16 23:49:36 socat[2222195] E write(6, 0x5c9fe2b6f000, 24): Broken pipe
+2026/11/16 23:50:43 socat[2237081] E write(6, 0x5c9fe2b6f000, 24): Broken pipe
+2026/11/16 23:50:43 socat[2237173] E write(6, 0x5c9fe2b6f000, 24): Broken pipe
+2026/11/16 23:50:44 socat[2237213] E write(6, 0x5c9fe2b6f000, 28): Broken pipe
+2026/11/16 23:50:44 socat[2237216] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.2m)
+
+
+  1) tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e6c4-09fc-737b-9194-28199a267107"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e6c4-09fc-737b-9194-28199a267107"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at ChannelView.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:376:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/v11c/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/v11c/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/v11c/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/v11c/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made 
+2026/11/16 23:50:44 socat[2167531] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:50:44 socat[2167531] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:50:44 socat[2167531] W exiting on signal 15
+2026/11/16 23:50:44 socat[2165296] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 23:50:44 socat[2165296] W exiting on signal 15

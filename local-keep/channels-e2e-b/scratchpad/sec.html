@@ -1,0 +1,15 @@
+<h2>Today: the breaks leave the suite</h2>
+<p class="mut">Tests at <code>a386ce3c92</code>; runs at <code>6c0266e155</code>, one merge of main earlier. B's base at <code>b7023c79d8</code> (no new changes of its own since <code>ce183ced7f</code>, only main). Stack rebuilt and seeded anew. Load: one-minute average 32 to 67.</p>
+<div class="scroll"><table><thead><tr><th>Run</th><th>Result</th><th>Unexpected</th></tr></thead><tbody>
+<tr><td>Local sync on</td><td>163 passed, 1 failed</td><td>UNR-06</td></tr>
+<tr><td>Local sync off</td><td>129 passed, 35 skipped</td><td>none</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-some">once</span><b>UNR-06, local sync on.</b> "Until I turn it off" in the Mute notifications submenu took Enter and the menu stayed open, so the channel was never muted. Repeated afterwards: 1 of 50 with local sync on, 0 of 30 with it off. Main added an entry to that submenu since the last round. Cause not established; the test is not marked. Trace: <code>runs/f16b-on-1/test-results/unread-UNR-06-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">removed</span><b>The 74 break patches and <code>proofs.tsv</code> are out of the pull request</b>, with the checker's rule that every test names one. They are kept here with their results: <a href="breaks/">the deliberate breaks</a>.</li>
+<li><span class="tag t-ok">kept</span><b>The inventory and both defect lists stay</b>, and the checker still holds the tests and a run against them. Known defects still name a build, because this suite runs with and without <code>VITE_ENABLE_CHANNEL_LOCAL_SYNC</code>.</li>
+<li><span class="tag t-ok">from the base suite</span><b>DM-01, DM-02, DM-03 and MEM-03 go on after a reload</b> when their recorded defect shows; a run with video records every person's page; UNR-04's click is bounded.</li>
+<li><span class="tag t-some">marked</span><b>Marked defects that showed:</b> ACC-06 and CHN-02 on both builds, MEM-03 on, DM-01, DM-03 and MSG-18 off.</li>
+<li><span class="tag t-some">my mistake</span><b>A first pair of runs failed 34 tests each and is void.</b> Rebuilding the stack's services emptied its database, and I ran before seeding it again, so people had no names or team. Seeded, the same tests passed.</li>
+</ul>
+

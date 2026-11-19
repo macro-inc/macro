@@ -1,0 +1,112 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 2 tests using 2 workers
+
+2026/11/16 08:03:29 socat[3834464] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:03:49 socat[3854145] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854154] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854127] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854152] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854109] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854125] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854150] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854122] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3834464] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:03:49 socat[3854148] E write(6, 0x62c16c19b000, 24): Broken pipe
+2026/11/16 08:03:49 socat[3854156] E write(6, 0x62c16c19b000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload (20.2s)
+  ✘  2 tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload (20.5s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "second wording",
+    +   "first wording",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      276 |   const shown = ['before', 'second wording', 'after'];
+      277 |   for (const view of [mine, bens]) {
+    > 278 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+          |                                              ^
+      279 |     await expect(
+      280 |       view.messageById(original.id).getByText('(edited)')
+      281 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:278:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/messages-MSG-07-editing-my-770bf-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "Ben Member: ben replies",
+    -   "Ada Owner: ada replies well",
+    +   "Ada Owner: ada replies badly",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      195 |   const replies = ['Ben Member: ben replies', 'Ada Owner: ada replies well'];
+      196 |   for (const view of [mine, bens]) {
+    > 197 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+          |                                                            ^
+      198 |     await expect(
+      199 |       view.messageById(reply.id).getByText('(edited)')
+      200 |     ).toBeVisible();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:197:60
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-edit-keeps-the-old-text/test-results/threads-THR-04-editing-my--5cf5f-other-person-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2 failed
+    tests/channels-e2e/messages.spec.ts:254:1 › MSG-07 editing my message from its buttons shows the new text and “(edited)” to both people, and after reload 
+    tests/channels-e2e/threads.spec.ts:171:1 › THR-04 editing my reply shows the new text and “(edited)” to the other person without reload 
+2026/11/16 08:03:51 socat[3834585] W exiting on signal 15
+2026/11/16 08:03:51 socat[3834464] W exiting on signal 15

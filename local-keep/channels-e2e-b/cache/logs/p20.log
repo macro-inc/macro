@@ -1,0 +1,57 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 8 tests using 4 workers
+
+2026/11/17 03:36:02 socat[792854] E read(6, 0x562a01bc9000, 8192): Connection reset by peer
+2026/11/17 03:36:02 socat[792819] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:02 socat[792889] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:02 socat[792798] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:02 socat[792870] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:04 socat[794008] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:04 socat[757325] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 03:36:04 socat[792754] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:09 socat[795389] E write(6, 0x562a01bc9000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (10.1s)
+2026/11/17 03:36:09 socat[795623] E write(6, 0x562a01bc9000, 24): Broken pipe
+2026/11/17 03:36:10 socat[795173] E write(6, 0x562a01bc9000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.1s)
+2026/11/17 03:36:10 socat[795281] E write(6, 0x562a01bc9000, 26): Broken pipe
+2026/11/17 03:36:10 socat[795282] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 03:36:11 socat[802647] E write(6, 0x562a01bca000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.3s)
+2026/11/17 03:36:11 socat[802788] E write(6, 0x562a01bca000, 26): Broken pipe
+2026/11/17 03:36:11 socat[802808] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 03:36:12 socat[802898] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:12 socat[802918] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:12 socat[757325] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  4 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (12.8s)
+2026/11/17 03:36:12 socat[802930] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:14 socat[817306] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:15 socat[816756] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:15 socat[816814] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:15 socat[757325] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 03:36:15 socat[817970] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:17 socat[817667] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:20 socat[818185] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:20 socat[818339] E write(6, 0x562a01bca000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (9.8s)
+2026/11/17 03:36:20 socat[818413] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:22 socat[818944] E write(6, 0x562a01bca000, 24): Broken pipe
+2026/11/17 03:36:22 socat[818960] E write(6, 0x562a01bca000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (12.3s)
+2026/11/17 03:36:22 socat[818964] E write(6, 0x562a01bca000, 26): Broken pipe
+2026/11/17 03:36:22 socat[818965] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 03:36:23 socat[818979] E write(6, 0x562a01bca000, 24): Broken pipe
+  ✓  8 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (11.0s)
+2026/11/17 03:36:23 socat[818982] E write(6, 0x562a01bca000, 26): Broken pipe
+2026/11/17 03:36:23 socat[818983] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 03:36:25 socat[826869] E write(6, 0x562a01bca000, 24): Broken pipe
+  ✓  7 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (13.0s)
+2026/11/17 03:36:25 socat[826939] E write(6, 0x562a01bca000, 24): Broken pipe
+
+  8 passed (43.7s)
+2026/11/17 03:36:25 socat[757325] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 03:36:25 socat[757325] W exiting on signal 15
+2026/11/17 03:36:25 socat[756323] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 03:36:25 socat[756323] W exiting on signal 15

@@ -1,0 +1,11 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:50:05 socat[4067065] E write(6, 0x5e8c8311c000, 24): Broken pipe
+2026/11/16 08:50:05 socat[4067085] E write(6, 0x5e8c8311c000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/unread.spec.ts:160:1 › UNR-04 scrolled up in an open channel, a new message shows “1 unread … below”, which leads to it (18.5s)
+
+  1 passed (30.8s)
+2026/11/16 08:50:05 socat[4041151] W exiting on signal 15
+2026/11/16 08:50:05 socat[4037330] W exiting on signal 15

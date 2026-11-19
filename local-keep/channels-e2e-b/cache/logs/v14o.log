@@ -1,0 +1,375 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 64 tests using 4 workers
+
+2026/11/17 01:56:51 socat[2160900] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:52 socat[2170524] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:52 socat[2170553] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:54 socat[2171078] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:54 socat[2159883] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:54 socat[2171085] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:54 socat[2171109] E write(6, 0x64d7f0618000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.6s)
+2026/11/17 01:56:55 socat[2163909] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:55 socat[2163935] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:55 socat[2161107] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:55 socat[2161554] E write(6, 0x64d7f0618000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (7.2s)
+2026/11/17 01:56:57 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:56:57 socat[2174748] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2183101] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2183170] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2183164] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2175497] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2175510] E write(6, 0x64d7f0618000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/channels.spec.ts:217:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.2s)
+2026/11/17 01:56:59 socat[2183062] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:56:59 socat[2183105] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:00 socat[2172746] E read(6, 0x64d7f0618000, 8192): Connection reset by peer
+2026/11/17 01:57:00 socat[2184277] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:00 socat[2172747] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 01:57:00 socat[2184580] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:00 socat[2184589] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.3s)
+2026/11/17 01:57:03 socat[2185347] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:03 socat[2185592] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:06 socat[2184613] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:06 socat[2184673] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:07 socat[2185337] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:07 socat[2185342] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (6.3s)
+2026/11/17 01:57:07 socat[2185339] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2160894] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2161105] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2161547] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2164034] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2164266] E write(6, 0x64d7f0618000, 24): Broken pipe
+  ✘   2 tests/channels-e2e/channels.spec.ts:154:1 › CHN-04 a rename shows in the header of a member who has the channel open (20.1s)
+2026/11/17 01:57:08 socat[2161556] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2193541] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:08 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:08 socat[2193935] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2193985] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2195675] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2195721] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:08 socat[2195678] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (9.6s)
+2026/11/17 01:57:09 socat[2195674] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2196232] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2196251] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/channels.spec.ts:313:1 › CHN-09 a member who does not own the channel is not offered Delete (2.1s)
+2026/11/17 01:57:09 socat[2196647] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2159949] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2196698] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2196711] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2163922] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2164117] E write(6, 0x64d7f0618000, 24): Broken pipe
+2026/11/17 01:57:09 socat[2163957] E write(6, 0x64d7f0618000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (21.9s)
+2026/11/17 01:57:10 socat[2197033] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:10 socat[2197123] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.0s)
+2026/11/17 01:57:10 socat[2196682] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/channels.spec.ts:354:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.0s)
+2026/11/17 01:57:10 socat[2198951] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:10 socat[2199227] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was (3.9s)
+2026/11/17 01:57:13 socat[2199398] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:13 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:13 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:13 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:13 socat[2204963] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:13 socat[2204954] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/channels.spec.ts:404:1 › CHN-13 a channel’s history starts with “Channel <name> created” (3.3s)
+2026/11/17 01:57:13 socat[2205322] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (2.7s)
+2026/11/17 01:57:13 socat[2205335] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:13 socat[2205332] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:16 socat[2207880] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:17 socat[2215930] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:17 socat[2215983] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:19 socat[2216602] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:19 socat[2206517] E read(6, 0x64d7f0619000, 8192): Connection reset by peer
+2026/11/17 01:57:19 socat[2206518] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 01:57:19 socat[2216658] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:19 socat[2216925] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (5.9s)
+2026/11/17 01:57:26 socat[2220578] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:26 socat[2220873] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:26 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:26 socat[2219152] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:26 socat[2219192] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.5s)
+2026/11/17 01:57:26 socat[2204961] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:26 socat[2205037] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:26 socat[2205074] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/channels.spec.ts:424:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.8s)
+2026/11/17 01:57:30 socat[2232941] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:30 socat[2233491] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:31 socat[2206824] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:31 socat[2206840] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  16 tests/channels-e2e/channels.spec.ts:465:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.1s)
+2026/11/17 01:57:32 socat[2240747] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:33 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:33 socat[2241532] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:33 socat[2241538] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  21 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.2s)
+2026/11/17 01:57:33 socat[2208001] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2242847] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2206722] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2243036] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2243280] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2215200] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2215577] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2215845] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (21.6s)
+2026/11/17 01:57:35 socat[2244109] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2244137] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2241521] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:35 socat[2241536] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  22 tests/channels-e2e/channels.spec.ts:217:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.1s)
+2026/11/17 01:57:38 socat[2251433] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:38 socat[2250692] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:38 socat[2251471] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:38 socat[2251498] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  25 tests/channels-e2e/channels.spec.ts:313:1 › CHN-09 a member who does not own the channel is not offered Delete (2.2s)
+2026/11/17 01:57:38 socat[2251171] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:40 socat[2252463] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:40 socat[2253287] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:40 socat[2253298] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  26 tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.0s)
+2026/11/17 01:57:40 socat[2243041] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:40 socat[2243756] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2251191] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2251303] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  24 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (6.6s)
+2026/11/17 01:57:42 socat[2251219] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2255855] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2253978] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2255927] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2255877] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:42 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  27 tests/channels-e2e/channels.spec.ts:354:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.1s)
+2026/11/17 01:57:43 socat[2245469] E read(6, 0x64d7f0619000, 8192): Connection reset by peer
+2026/11/17 01:57:43 socat[2245470] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 01:57:43 socat[2253171] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:43 socat[2253184] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:43 socat[2256503] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:43 socat[2256414] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  23 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (9.7s)
+2026/11/17 01:57:43 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:57:45 socat[2261874] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2262730] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2262814] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  28 tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was (2.9s)
+2026/11/17 01:57:45 socat[2231739] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2231799] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2233936] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2233938] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2233954] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  20 tests/channels-e2e/channels.spec.ts:154:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.3s)
+2026/11/17 01:57:45 socat[2262748] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2262846] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:45 socat[2262860] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  29 tests/channels-e2e/channels.spec.ts:404:1 › CHN-13 a channel’s history starts with “Channel <name> created” (3.3s)
+2026/11/17 01:57:49 socat[2266043] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:49 socat[2266524] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:50 socat[2275097] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:50 socat[2275116] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:52 socat[2276342] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:52 socat[2264725] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:52 socat[2276370] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:52 socat[2276373] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  33 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.4s)
+2026/11/17 01:57:59 socat[2263382] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:59 socat[2263412] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:57:59 socat[2263422] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  30 tests/channels-e2e/channels.spec.ts:424:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.7s)
+2026/11/17 01:58:01 socat[2264834] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:01 socat[2264853] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:01 socat[2264892] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  31 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.9s)
+2026/11/17 01:58:03 socat[2265707] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:03 socat[2265952] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  32 tests/channels-e2e/channels.spec.ts:465:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.1s)
+2026/11/17 01:58:03 socat[2265809] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2300433] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2300442] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2298507] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2298558] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2298529] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:06 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:07 socat[2297551] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:07 socat[2297703] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:07 socat[2297709] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  35 tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.6s)
+2026/11/17 01:58:08 socat[2308873] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:08 socat[2308885] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:10 socat[2299076] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:10 socat[2309984] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:10 socat[2309986] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  37 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (6.9s)
+2026/11/17 01:58:11 socat[2309842] E read(6, 0x64d7f0619000, 8192): Connection reset by peer
+2026/11/17 01:58:11 socat[2309845] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 01:58:11 socat[2310065] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:11 socat[2310331] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:11 socat[2308992] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:11 socat[2309007] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:11 socat[2309137] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  38 tests/channels-e2e/channels.spec.ts:217:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.1s)
+2026/11/17 01:58:12 socat[2278535] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:12 socat[2278601] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:12 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:14 socat[2317791] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:14 socat[2318719] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:14 socat[2286872] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:14 socat[2286896] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  34 tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (21.9s)
+2026/11/17 01:58:15 socat[2319220] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:15 socat[2319262] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:16 socat[2319344] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:16 socat[2319911] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:16 socat[2319931] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  41 tests/channels-e2e/channels.spec.ts:313:1 › CHN-09 a member who does not own the channel is not offered Delete (2.1s)
+2026/11/17 01:58:17 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:17 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:17 socat[2312982] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  40 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (6.4s)
+2026/11/17 01:58:17 socat[2312975] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:17 socat[2312950] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:18 socat[2322255] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:18 socat[2322296] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  42 tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.0s)
+2026/11/17 01:58:19 socat[2323967] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:19 socat[2323990] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:19 socat[2323994] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  43 tests/channels-e2e/channels.spec.ts:354:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.1s)
+2026/11/17 01:58:20 socat[2320785] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2320809] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2320819] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2323963] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2323992] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2323984] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:20 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  39 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (9.7s)
+2026/11/17 01:58:21 socat[2324426] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2326515] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2328444] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  44 tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was (2.9s)
+2026/11/17 01:58:21 socat[2298819] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2298887] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2300447] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2300691] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:21 socat[2300765] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  36 tests/channels-e2e/channels.spec.ts:154:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.6s)
+2026/11/17 01:58:23 socat[2330994] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:23 socat[2331039] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:23 socat[2331082] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  45 tests/channels-e2e/channels.spec.ts:404:1 › CHN-13 a channel’s history starts with “Channel <name> created” (3.5s)
+2026/11/17 01:58:26 socat[2335118] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:26 socat[2335447] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:28 socat[2344500] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:28 socat[2344526] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:29 socat[2345168] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:29 socat[2345170] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  49 tests/channels-e2e/channels.spec.ts:24:1 › CHN-01 a private channel made in the app opens empty, shows in the list and takes its first message (6.2s)
+2026/11/17 01:58:37 socat[2331950] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:37 socat[2331967] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:37 socat[2331974] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  46 tests/channels-e2e/channels.spec.ts:424:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.7s)
+2026/11/17 01:58:38 socat[2332316] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:38 socat[2332385] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:38 socat[2332504] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  47 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.9s)
+2026/11/17 01:58:40 socat[2332915] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:40 socat[2333136] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  48 tests/channels-e2e/channels.spec.ts:465:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (18.1s)
+2026/11/17 01:58:43 socat[2368588] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:44 socat[2366833] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:44 socat[2366849] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:44 socat[2366906] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:44 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:44 socat[2366031] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:44 socat[2366047] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  51 tests/channels-e2e/channels.spec.ts:113:1 › CHN-03 renaming a channel updates its header and list row, and tells both members in the channel (6.7s)
+2026/11/17 01:58:46 socat[2371043] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:46 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:46 socat[2371098] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:47 socat[2377620] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:47 socat[2377616] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  53 tests/channels-e2e/channels.spec.ts:187:1 › CHN-05 a channel can be made a favorite and taken out again, and both survive a reload (7.0s)
+2026/11/17 01:58:48 socat[2378486] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:48 socat[2378489] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:48 socat[2376919] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:48 socat[2376940] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:48 socat[2377208] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  54 tests/channels-e2e/channels.spec.ts:217:1 › CHN-06 Copy Link gives an address that opens the channel for another member (4.0s)
+2026/11/17 01:58:49 socat[2347350] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:49 socat[2347365] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2346083] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:51 socat[2129230] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:51 socat[2382426] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2382523] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2354191] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2354195] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2354197] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  50 tests/channels-e2e/channels.spec.ts:54:1 › CHN-02 a team channel made in the app appears for a teammate under the team’s channels and can be read (21.6s)
+2026/11/17 01:58:51 socat[2381392] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2381444] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:51 socat[2381464] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  56 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.7s)
+2026/11/17 01:58:52 socat[2382834] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:53 socat[2388209] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:53 socat[2389446] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:53 socat[2389451] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  57 tests/channels-e2e/channels.spec.ts:313:1 › CHN-09 a member who does not own the channel is not offered Delete (2.2s)
+2026/11/17 01:58:54 socat[2389704] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:54 socat[2389738] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  58 tests/channels-e2e/channels.spec.ts:331:1 › CHN-10 the Participants tab lists the channel’s members by name, with the owner marked (2.0s)
+2026/11/17 01:58:54 socat[2389721] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:54 socat[2381147] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:55 socat[2391677] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:55 socat[2391969] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:55 socat[2392296] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  59 tests/channels-e2e/channels.spec.ts:354:1 › CHN-11 the Attachments tab of a channel with no files says there are none (2.1s)
+2026/11/17 01:58:56 socat[2392879] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:56 socat[2390475] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:56 socat[2392882] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:56 socat[2393356] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  60 tests/channels-e2e/channels.spec.ts:376:1 › CHN-12 going to another tab and back keeps the message list where it was (3.0s)
+2026/11/17 01:58:57 socat[2389750] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:57 socat[2389760] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:57 socat[2394464] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:57 socat[2394466] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  55 tests/channels-e2e/channels.spec.ts:243:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (10.0s)
+2026/11/17 01:58:58 socat[2366667] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2365931] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2366675] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2366678] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2367615] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2367890] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:58 socat[2368002] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  52 tests/channels-e2e/channels.spec.ts:154:1 › CHN-04 a rename shows in the header of a member who has the channel open (19.7s)
+2026/11/17 01:58:59 socat[2395154] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:59 socat[2128590] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 01:58:59 socat[2395169] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:58:59 socat[2395321] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  61 tests/channels-e2e/channels.spec.ts:404:1 › CHN-13 a channel’s history starts with “Channel <name> created” (3.5s)
+2026/11/17 01:59:00 socat[2402568] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:59:00 socat[2402575] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:59:00 socat[2402577] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✓  63 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (2.7s)
+2026/11/17 01:59:13 socat[2402113] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:59:13 socat[2402141] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:59:13 socat[2402165] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  62 tests/channels-e2e/channels.spec.ts:424:1 › CHN-14 a brand-new channel with no messages shows its “Channel <name> created” line (16.7s)
+2026/11/17 01:59:16 socat[2402954] E write(6, 0x64d7f0619000, 24): Broken pipe
+2026/11/17 01:59:16 socat[2402957] E write(6, 0x64d7f0619000, 24): Broken pipe
+  ✘  64 tests/channels-e2e/channels.spec.ts:465:1 › CHN-16 a rename saved while the list of channels is still being read shows in the header (17.9s)
+
+  64 passed (2.7m)
+2026/11/17 01:59:16 socat[2129230] W exiting on signal 15
+2026/11/17 01:59:16 socat[2128590] W exiting on signal 15

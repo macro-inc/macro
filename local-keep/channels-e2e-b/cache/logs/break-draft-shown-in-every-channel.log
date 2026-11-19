@@ -1,0 +1,54 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 08:02:43 socat[3750625] E write(6, 0x59dee90c4000, 24): Broken pipe
+2026/11/16 08:02:43 socat[3753310] E write(6, 0x59dee90c4000, 24): Broken pipe
+2026/11/16 08:02:43 socat[3754058] E write(6, 0x59dee90c4000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there (19.5s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e360-f23e-715c-8f70-87a7dd09aa25"]').locator('[contenteditable="true"]').first()
+    Expected: ""
+    Received: "half a thought"
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveText" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e360-f23e-715c-8f70-87a7dd09aa25"]').locator('[contenteditable="true"]').first()
+        32 × locator resolved to <div class="md" role="textbox" aria-multiline="true" aria-readonly="false" contenteditable="true" data-markdown-editable="" data-lexical-editor="true" data-hotkey-scope="channel-input-intercept_10" aria-label="Type @ to share with #e2e-mwiz6vy32xds">…</div>
+           - unexpected value "half a thought"
+
+
+      35 |   await conversationRow(page, second.name).click();
+      36 |   await secondView.shown();
+    > 37 |   await expect(secondView.composerText).toHaveText('');
+         |                                         ^
+      38 |
+      39 |   await findConversations(page, first.name);
+      40 |   await conversationRow(page, first.name).click();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:37:41
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-draft-shown-in-every-channel/test-results/composer-CMP-01-a-draft-st-03291--one-and-is-not-shown-there/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-draft-shown-in-every-channel/test-results/composer-CMP-01-a-draft-st-03291--one-and-is-not-shown-there/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-draft-shown-in-every-channel/test-results/composer-CMP-01-a-draft-st-03291--one-and-is-not-shown-there/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-draft-shown-in-every-channel/test-results/composer-CMP-01-a-draft-st-03291--one-and-is-not-shown-there/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/composer.spec.ts:21:1 › CMP-01 a draft stays in its channel while I look at another one, and is not shown there 
+2026/11/16 08:02:44 socat[3726927] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:02:44 socat[3727905] W exiting on signal 15
+2026/11/16 08:02:44 socat[3726927] W exiting on signal 15

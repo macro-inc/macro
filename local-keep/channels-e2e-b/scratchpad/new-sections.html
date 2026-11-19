@@ -1,0 +1,49 @@
+<h2>Twenty runs with the flag on, five with it off</h2>
+<p class="mut">All at <code>94876dc650</code> with the engine rebuilt and the stale-engine check on. Five runs of 155 tests from the last round and fifteen of 161 (with the six new tests). No other suite ran on this stack, but the machine was not idle: other sessions kept its one-minute load between 10 and 36.</p>
+<div class="scroll"><table><thead><tr><th>Runs</th><th>Build</th><th>Load, start → end</th><th>Result</th></tr></thead><tbody>
+<tr><td>1 to 5 (155 tests)</td><td>flag on</td><td class="n">24 → 31</td><td>155 passed each time</td></tr>
+<tr><td>6, 9, 10, 12, 17, 20 (161 tests)</td><td>flag on</td><td class="n">21 → 34</td><td>161 passed</td></tr>
+<tr><td>8</td><td>flag on</td><td class="n">26 → 24</td><td class="warn">OFF-04 failed: B, now marked</td></tr>
+<tr><td>14, 15, 18</td><td>flag on</td><td class="n">23 → 31</td><td class="warn">MEM-01 failed: open</td></tr>
+<tr><td>7, 13, 16</td><td>flag on</td><td class="n">23 → 33</td><td>PRE-05 failed: my test, fixed</td></tr>
+<tr><td>11, 19</td><td>flag on</td><td class="n">25 → 32</td><td>WRT-05 failed: my test step, fixed</td></tr>
+<tr><td>1 to 5 (128 run, 27 or 33 skipped)</td><td>flag off</td><td class="n">25 → 37</td><td>none failed</td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-bad">B, 1 of 20</span><b>OFF-04: a long channel read back to its start while connected could not be loaded offline after a reload.</b> The page said "Unable to load this channel". It had held 21 of 21 before, so I had unmarked it; it is recorded as failing in some runs again. Trace: <code>runs/f7-on-8/test-results/offline-OFF-04-…/trace.zip</code>.</li>
+<li><span class="tag t-some">open, 3 of 15</span><b>MEM-01: the invite dialog closed by itself.</b> The one row "Invite &lt;address&gt;" was replaced as it was being clicked, and the dialog was gone; nobody was invited. Not seen in six flag-off runs, which is too few to say it needs the flag. It is the people picker, not message storage. I did not find the cause and did not mark it. Traces: <code>runs/f7-on-14</code>, <code>-15</code>, <code>-18</code>, <code>members-MEM-01-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">my test</span><b>PRE-05, 3 of 15.</b> The old channel was still among the twenty its reader looked at last when the clock first moved; a device that fetches such a channel again records it as opened that day, so it was 29 days idle, not 31. The test now keeps it out of the twenty. Traces: <code>runs/f7-on-7</code>, <code>-13</code>, <code>-16</code>, <code>prewarm-PRE-05-…/trace.zip</code>.</li>
+<li><span class="tag t-ok">my test</span><b>WRT-05, 2 of 15.</b> The step that loses an answer tried to drop a request that was already gone ("Route is already handled"). Traces: <code>runs/f7-on-11</code>, <code>-19</code>, <code>writes-WRT-05-…/trace.zip</code>.</li>
+</ul>
+<h3>Eight more runs after those fixes</h3>
+<ul class="f">
+<li><span class="tag t-ok">held</span><b>Three of seven flag-on runs had no unexpected failure;</b> the six new tests held in all six runs after PRE-05's last fix (it failed once more before it, <code>runs/f8-on-6</code>).</li>
+<li><span class="tag t-bad">both builds, new</span><b>CHN-03: a renamed channel's header kept the old name</b> in three of the last four flag-on runs and in the flag-off run, after holding in every run before. The rename was answered 200. I did not find the cause; that it started late on a stack that by then held the channels of some fifty runs is a guess, not a finding. Traces: <code>runs/f9-on-3</code>, <code>-5</code>, <code>-6</code>, <code>f9-off-2</code>, <code>channels-CHN-03-…/trace.zip</code>.</li>
+<li><span class="tag t-some">1 of 7</span><b>MEM-03 with the flag:</b> a person removed from a channel kept it on their open page. It is a known defect without the flag; the suite says the flag cures it, and once it did not. Trace: <code>runs/f8-on-7/test-results/members-MEM-03-…/trace.zip</code>.</li>
+<li><span class="tag t-some">1 of 7</span><b>MEM-01 again</b> (<code>runs/f9-on-3</code>): four of twenty-two flag-on runs in all.</li>
+</ul>
+
+<h2>The six new tests</h2>
+<div class="scroll"><table><thead><tr><th>Test</th><th>Behaviour</th><th>Held, whole-suite runs</th><th>Break that makes it fail</th></tr></thead><tbody>
+<tr><td class="id">OFF-12</td><td>going back to a link to an old message read while connected shows it between its neighbours with no connection</td><td class="n">21/21</td><td><code>device-not-used</code>, <code>device-link-target-ignored</code></td></tr>
+<tr><td class="id">PRE-02</td><td>of forty-one unread channels never opened, the fortieth opens with no connection and the forty-first does not</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-03</td><td>of twenty-one channels looked at, the twentieth opens with no connection and the twenty-first does not</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-04</td><td>a fetched channel holds its latest fifty messages; older ones come when the connection is back</td><td class="n">23/23</td><td><code>prewarm-limits-changed</code></td></tr>
+<tr><td class="id">PRE-05</td><td>a channel not opened for thirty days is no longer on the device, and one opened two days later still is</td><td class="n">6/6 since its fix</td><td><code>idle-channels-never-evicted</code></td></tr>
+<tr><td class="id">WRT-15</td><td>a message waiting to be sent when the device's kept data is lost is not shown again and not sent later</td><td class="n">23/23</td><td><code>stored-send-never-forgotten</code></td></tr>
+</tbody></table></div>
+<ul class="f">
+<li><span class="tag t-bad">for a decision</span><b>A waiting message is lost silently when the device's cache files go.</b> WRT-15 asserts the behaviour the design states (the message is gone and never sent), and it holds. Nothing on screen tells the person their message was dropped.</li>
+<li><span class="tag t-some">observation</span><b>Offline, at the top of the fifty messages a fetched channel holds, nothing says older ones exist.</b></li>
+<li><span class="tag t-some">observation</span><b>OFF-12 first failed once</b> when the channel had been opened by its link only once: it could not be loaded offline, the defect OFF-09 already records. The test now reads the place twice, as the other tests do.</li>
+<li><span class="tag t-some">limit</span><b>A link inside a message opens a new tab, which cannot load offline</b>, so the offline jump is tested by going Back to a link read while connected. PRE-05 moves the device's clock; the services keep the real time.</li>
+</ul>
+
+<h2>The 55 older breaks, rebuilt</h2>
+<ul class="f">
+<li><span class="tag t-ok">held</span><b>Every break was applied and built on this head with the fresh engine, flag on, and its tests run.</b> All tests failed under their break except the ones below.</li>
+<li><span class="tag t-bad">blind with the flag</span><b>Eleven tests passed under their break with the flag on:</b> NAV-02, 03, 06; CMP-03, CMP-13, MSG-18; MSG-01, 03, 16; OPEN-01, SCROLL-01. Their four breaks change the message path a flag-on build does not use. Built flag off, all eleven fail. I added three breaks of the path the flag uses and reused one; all eleven now fail with the flag on too, and both proofs are recorded.</li>
+<li><span class="tag t-some">stale proof</span><b>KEY-07 no longer failed under its break on either build</b> (the test reaches the list another way now). It fails under <code>e-key-does-not-edit</code>, which replaces it.</li>
+<li><span class="tag t-bad">no proof</span><b>UNR-08 does not fail under its recorded break</b> on either build, nor under a corrected one: the rows it checks come from a different source than the break changes. I found no working break. Its row says so.</li>
+</ul>
+

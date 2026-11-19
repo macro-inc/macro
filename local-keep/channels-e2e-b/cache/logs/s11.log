@@ -1,0 +1,88 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 5 tests using 4 workers
+
+2026/11/16 20:16:55 socat[1451836] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 20:16:58 socat[1481765] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:58 socat[1482088] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:58 socat[1481789] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:58 socat[1482093] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:59 socat[1489669] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:59 socat[1481052] E write(6, 0x6397eeba2000, 24): Broken pipe
+2026/11/16 20:16:59 socat[1490568] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:16:59 socat[1490621] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:00 socat[1490566] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:00 socat[1490609] E write(6, 0x6397eeba3000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/messages.spec.ts:7:1 › MSG-01 a message sent with Enter shows once at the end for both people, and stays after reload (6.0s)
+2026/11/16 20:17:02 socat[1481755] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:02 socat[1482083] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:03 socat[1493072] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:03 socat[1493214] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:04 socat[1491692] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:04 socat[1492219] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:05 socat[1481021] E read(6, 0x6397eeba2000, 8192): Connection reset by peer
+2026/11/16 20:17:05 socat[1481022] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 20:17:05 socat[1451836] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 20:17:05 socat[1494589] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:05 socat[1494654] E write(6, 0x6397eeba3000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/channels.spec.ts:247:1 › CHN-07 deleting a channel removes it for its owner at once, and its address no longer opens for anyone (11.0s)
+2026/11/16 20:17:10 socat[1502899] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:10 socat[1482103] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:10 socat[1502909] E write(6, 0x6397eeba3000, 26): Broken pipe
+2026/11/16 20:17:10 socat[1502910] E write(6, 0x555555624000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/offline.spec.ts:337:1 › OFF-12 going back to a link to an old message read while connected shows it between its neighbours with no connection (10.1s)
+2026/11/16 20:17:12 socat[1482029] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:12 socat[1482089] E write(6, 0x6397eeba3000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once (17.7s)
+2026/11/16 20:17:29 socat[1513103] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:29 socat[1513162] E write(6, 0x6397eeba3000, 24): Broken pipe
+2026/11/16 20:17:29 socat[1513241] E write(6, 0x6397eeba3000, 28): Broken pipe
+2026/11/16 20:17:29 socat[1513242] E write(6, 0x555555624000, 28): Broken pipe
+  ✓  4 tests/channels-e2e/offline.spec.ts:128:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (35.5s)
+
+
+  1) tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-input-id="channel-input-01a1e601-6844-7e52-b308-eb9ba660dbf0"]')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e601-6844-7e52-b308-eb9ba660dbf0"]')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      131 |   await ada.removeParticipants(channel.id, [people.cy]);
+      132 |
+    > 133 |   await expect(cyView.composer).toHaveCount(0);
+          |                                 ^
+      134 |   await expect(noAccess(cyPage)).toBeVisible();
+      135 |   await expect(cyPage.getByText('all three here')).toHaveCount(0);
+      136 | });
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:133:33
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/s11/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/s11/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/s11/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/s11/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/members.spec.ts:111:1 › MEM-03 a person removed while the channel is open loses it at once 
+  4 passed (51.4s)
+2026/11/16 20:17:30 socat[1451836] W exiting on signal 15
+2026/11/16 20:17:30 socat[1451220] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 20:17:30 socat[1451220] W exiting on signal 15

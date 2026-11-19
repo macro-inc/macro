@@ -1,0 +1,69 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/15 14:05:13 socat[1631992] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:05:14 socat[1632202] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:05:14 socat[1631993] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:05:14 socat[1632200] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:05:14 socat[1632205] E write(6, 0x5c001c35c000, 24): Broken pipe
+[6.6] 2 after reload [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[6.7] 3 after reload [ 'one' ] composer: "kept one"
+[7.0] 1 after reload [ 'one' ] composer: "kept one"
+[36.7] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[36.9] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[37.1] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[66.8] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[66.9] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[67.1] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[96.8] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[96.9] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[97.2] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[126.9] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[127.0] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[127.2] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[156.9] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[157.0] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[157.3] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[186.9] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[187.1] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[187.3] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[217.0] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[217.1] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[217.4] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[247.0] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[247.2] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[247.4] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[277.1] 2 server [ 'one' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+[277.2] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[277.5] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+2026/11/15 14:10:11 socat[1621667] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+[307.1] 2 server [ 'one', 'kept one', 'kept two' ] screen [ 'one', 'kept one', 'kept two' ] composer: "\n"
+2026/11/15 14:10:18 socat[1633610] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:10:18 socat[1633623] E write(6, 0x5c001c35c000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/zz-lease.spec.ts:11:3 › P4 blocked sends then reload at once 2 (5.1m)
+[307.3] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[307.5] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[337.3] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[337.6] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[367.4] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[367.6] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[397.4] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[397.7] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[427.4] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[427.7] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[457.5] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[457.8] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+[487.5] 3 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+2026/11/15 14:13:19 socat[1633614] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:13:19 socat[1633635] E write(6, 0x5c001c35c000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/zz-lease.spec.ts:11:3 › P4 blocked sends then reload at once 3 (8.1m)
+[487.8] 1 server [ 'one' ] screen [ 'one' ] composer: "kept one"
+2026/11/15 14:13:19 socat[1633658] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:13:19 socat[1633666] E write(6, 0x5c001c35c000, 24): Broken pipe
+2026/11/15 14:13:19 socat[1633671] E write(6, 0x5c001c35c000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/zz-lease.spec.ts:11:3 › P4 blocked sends then reload at once 1 (8.1m)
+
+  3 passed (8.1m)
+2026/11/15 14:13:19 socat[1622661] W exiting on signal 15
+2026/11/15 14:13:19 socat[1621667] W exiting on signal 15

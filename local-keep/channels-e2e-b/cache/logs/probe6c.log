@@ -1,0 +1,73 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"and":{"left":{"literal":{"channelType":"TEAM"}},"right":{"literal":{"isParticipant":true}}}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmCompanyFilte
+LISTRES 0 []
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"and":{"left":{"literal":{"channelType":"DIRECT_MESSAGE"}},"right":{"literal":{"isParticipant":true}}}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmCo
+LISTRES 2 [".","."]
+[recent] target-message {from: idle, event: reset, to: idle}
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"and":{"left":{"not":{"or":{"left":{"literal":{"channelType":"DIRECT_MESSAGE"}},"right":{"literal":{"channelType":"TEAM"}}}}},"right":{"literal":{"isParticipant":true}}}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{
+LISTRES 100 ["more20","more19","more18","more17","more16","more15","more14","more13","more12","more11","more10","more09","more08","more07","more06","more05","more04","more03","more02","edge01","edge00",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".","."]
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"literal":{"channelId":"01a1e104-de72-7123-955d-eb42f7c1444c"}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmCompanyFilter":{"literal":{"id":"00000000-
+LISTRES 1 ["."]
+LISTREQ variables":{"input":{"continuation":{"cursor":"eyJpZCI6IjAxYTFlMTA0LWRlNzItNzEyMy05NTVkLWViNDJmN2MxNDQ0YyIsImxpbWl0IjoxLCJ2YWwiOnsic29ydF90eXBlIjoiY3JlYXRlZF9hdCIsImxhc3RfdmFsIjoiMjAyNi0xMS0xNVQyMTowMjozNS4xMjIyOTNaIn0sImZpbHRlciI6eyJjYWxmIjp7ImwiOnsiaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAifX0sImRmIjp7ImwiOnsiaWQiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAifX0sInBmIjp7ImwiOnsicGlkcyI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMCJ9fSwiY2YiOnsibCI6eyJjaWQiOiIwMDAwMDAwM
+LISTRES 0 []
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"and":{"left":{"literal":{"notificationState":"UNSEEN"}},"right":{"literal":{"isParticipant":true}}}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmComp
+LISTRES 40 ["more20","more19","more18","more17","more16","more15","more14","more13","more12","more11","more10","more09","more08","more07","more06","more05","more04","more03","more02","edge01","edge00",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".","."]
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"literal":{"isParticipant":true}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmCompanyFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}}
+LISTRES 20 ["more20","more19","more18","more17","more16","more15","more14","more13","more12","more11","more10","more09","more08","more07","more06","more05","more04","more03","more02","edge01"]
+LISTREQ variables":{"input":{"initial":{"expand":true,"filters":{"calendarEventFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}},"callFilter":{"literal":{"callId":"00000000-0000-0000-0000-000000000000"}},"channelFilter":{"literal":{"isParticipant":true}},"channelThreadFilter":{"literal":{"threadId":"00000000-0000-0000-0000-000000000000"}},"chatFilter":{"literal":{"chatId":"00000000-0000-0000-0000-000000000000"}},"crmCompanyFilter":{"literal":{"id":"00000000-0000-0000-0000-000000000000"}}
+LISTRES 100 ["more20","more19","more18","more17","more16","more15","more14","more13","more12","more11","more10","more09","more08","more07","more06","more05","more04","more03","more02","edge01","edge00",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".",".","."]
+[recent] target-message {from: idle, event: reset, to: idle}
+[recent] target-message {from: idle, event: reset, to: idle}
+2026/11/16 09:03:36 socat[937738] E write(6, 0x56c2018db000, 24): Broken pipe
+2026/11/16 09:03:36 socat[928072] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:03:36 socat[928287] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:03:36 socat[937775] E write(6, 0x56c2018db000, 24): Broken pipe
+2026/11/16 09:03:36 socat[937778] E write(6, 0x56c2018db000, 210): Broken pipe
+2026/11/16 09:03:36 socat[937779] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  1 tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent (2.5m)
+
+
+  1) tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent ────────────────────────────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('Unable to load this channel')
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for getByText('Unable to load this channel')
+
+
+      160 |   await expectShown(inside, ['recent 1']);
+      161 |   await page.getByText(recent[0].name).first().click();
+    > 162 |   await expect(couldNotLoad(page)).toBeVisible({ timeout: 20_000 });
+          |                                    ^
+      163 | });
+      164 |
+      165 | test('P-FIFTY fifty messages', async ({ pageFor, ada, ben }) => {
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/zz-probe.spec.ts:162:36
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/probe6/test-results/zz-probe-P-RECENT-twenty-recent/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/zz-probe.spec.ts:126:1 › P-RECENT twenty recent ─────────────────────────────
+2026/11/16 09:03:36 socat[928287] W exiting on signal 15
+2026/11/16 09:03:36 socat[928072] W exiting on signal 15

@@ -1,0 +1,111 @@
+start 07:46:53 load 11.38 12.93 14.96
+arrow-up-does-not-leave-the-composer	KEY-05	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+attachment-not-sent	CMP-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+attachment-not-sent	CMP-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByRole('link', { name: 'alone.txt' })
+attachments-tab-says-nothing-when-empty	CHN-11	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('No documents in this channel yet.')
+backspace-does-not-ask-to-delete	KEY-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+backspace-does-not-ask-to-delete	KEY-12	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('dialog', { name: 'Delete message' })
+bold-shown-plain	MSG-05	FAILED	Error: expect(locator).toHaveCSS(expected) failed | Locator: locator('[data-channel-scroll]').getByText('bold', { exact: true })
+cancel-saves-the-edit	MSG-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+channel-link-opens-nothing	CHN-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e359-87b4-7f1e-b452-2198ab876fba"]')
+channel-start-line-missing	CHN-13	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Channel e2e-mwiyyvai6pqq created')
+composer-not-focused-on-arrival	KEY-07	PASSED	
+composer-not-focused-on-arrival	KEY-10	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  locator('[data-input-id="channel-input-01a1e35c-36b4-7fe8-a435-4e2af4fe41c9"]').locator('[contenteditabl
+copied-link-loses-its-message	NAV-07	FAILED	Error: expect(received).toContain(expected) // indexOf | Expected substring: "01a1e35d-24b0-7053-81f6-76a6130c564a"
+copy-text-copies-nothing	MSG-17	FAILED	Error: expect(received).toBe(expected) // Object.is equality | Expected: "copy exactly this, please"
+delete-leaves-the-message	MSG-10	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+delete-leaves-the-message	MSG-11	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+delete-leaves-the-message	THR-05	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+draft-lost-on-reload	CMP-02	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1e35f-f443-7aae-8a56-471650845ed2"]').locator('[content
+draft-shown-in-every-channel	CMP-01	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1e360-f23e-715c-8f70-87a7dd09aa25"]').locator('[content
+edit-keeps-the-old-text	MSG-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-keeps-the-old-text	THR-04	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+edit-offered-on-others-messages	MSG-12	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1e362-f9fb-7aa9-9f06-28a77ab32e83
+e-key-does-not-edit	MSG-08	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: locator('[data-input-id="edit-message-input-01a1e363-f44b-7231-8b14-8e35f8fe2a1a"]').getByRole('te
+escape-does-not-return-to-the-list	KEY-11	FAILED	Error: expect(locator).toBeFocused() failed | Locator:  getByRole('tree', { name: 'Conversations' })
+every-message-repeats-its-author	MSG-06	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').getByText('Ada Owner', { exact: true })
+favorite-does-nothing	CHN-05	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator: getByRole('tree', { name: 'Conversations' }).locator('[data-key="favorite:channel:01a1e366-ea31-7b
+find-bar-does-not-open	KEY-01	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-02	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-03	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+find-bar-does-not-open	KEY-04	FAILED	Error: expect(locator).toBeFocused() failed | Locator: getByPlaceholder('Find')
+found-list-misses-new-channels	UNR-08	PASSED	
+join-request-not-shown-to-members	ACC-03	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-04	FAILED	Test timeout of 90000ms exceeded.
+join-request-not-shown-to-members	ACC-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Approve' })
+link-target-ignored	NAV-02	PASSED	
+link-target-ignored	NAV-03	PASSED	
+link-target-ignored	NAV-06	PASSED	
+link-target-not-marked	NAV-01	FAILED	Error: messages marked as the target of the link | messages marked as the target of the link
+list-always-follows-new-messages	CHN-12	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message-id="01a1e36d-b546-7b57-8abd-823874c293ee"]')
+list-always-follows-new-messages	SCROLL-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+list-always-follows-new-messages	SCROLL-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Scroll to bottom' })
+live-events-ignored	CMP-03	PASSED	
+live-events-ignored	CMP-13	PASSED	
+live-events-ignored	MSG-18	PASSED	
+long-message-cut-short	CMP-12	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-content]')
+mark-as-read-does-nothing	UNR-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwiztax17t9z-ch
+mention-sent-as-plain-text	CMP-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+mention-sent-as-plain-text	CMP-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+message-link-forgets-the-conversation	DM-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-input-id="channel-input-01a1e116-849d-7570-8632-ffa8865003fc"]')
+message-to-people-is-not-sent	DM-01	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-02	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+message-to-people-is-not-sent	DM-04	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/app\/channels?\/[0-9a-f-]{36}/
+missing-channel-shown-as-no-access	ACC-08	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-channel-shown-as-no-access	CHN-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('heading', { name: 'Conversation unavailable' })
+missing-message-not-recognised	NAV-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('Message no longer available')
+muted-channel-shows-no-bell	UNR-06	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj031mh0atp-mu
+new-channel-not-opened	CHN-01	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+new-channel-not-opened	CHN-02	FAILED	Error: expect(page).toHaveURL(expected) failed | Expected pattern: /\/channels?\/[0-9a-f-]{36}/
+new-message-goes-above-the-last	MSG-01	PASSED	
+new-message-goes-above-the-last	MSG-03	PASSED	
+new-message-goes-above-the-last	MSG-16	PASSED	
+non-owner-offered-delete	CHN-09	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  getByRole('menu', { name: 'Channel actions' }).getByRole('menuitem', { name: 'Delete' })
+opened-thread-shows-only-its-first-replies	THR-03	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 13
+opened-thread-shows-only-its-first-replies	THR-07	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 2
+opened-thread-shows-only-its-first-replies	THR-08	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+page-loses-a-message	OPEN-01	PASSED	
+page-loses-a-message	SCROLL-01	PASSED	
+participants-tab-empty	CHN-10	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+participants-tab-empty	MEM-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('link', { name: 'Message Cy Teammate' })
+participants-tab-empty	MEM-07	FAILED	Error: expect(locator).toContainText(expected) failed | Locator: getByRole('main').getByRole('link', { name: 'Message Ada Owner' })
+paste-inserts-nothing	CMP-11	FAILED	Error: expect(locator).toHaveText(expected) failed | Locator:  locator('[data-input-id="channel-input-01a1e37e-e239-7749-bc50-beaaeca105a0"]').locator('[content
+picked-emoji-not-added	MSG-14	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-13	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	MSG-15	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reaction-not-shown	THR-06	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reply-goes-to-the-channel	THR-01	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 3
+reply-goes-to-the-channel	THR-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 0
+reply-goes-to-the-channel	THR-09	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+scroll-to-bottom-does-nothing	KEY-09	FAILED	Error: distance of the list from its end | distance of the list from its end
+send-button-always-on	CMP-04	FAILED	Error: expect(locator).toBeDisabled() failed | Locator:  locator('[data-input-id="channel-input-01a1e384-47bb-7bb4-b629-1d149eef1252"]').getByRole('button', { n
+send-button-always-on	DM-05	FAILED	Error: expect(locator).toBeDisabled() failed | Locator:  getByRole('main').getByRole('button', { name: 'Send message' })
+send-button-does-nothing	MSG-02	FAILED	Error: expect(received).toEqual(expected) // deep equality | - Expected  - 1
+shift-enter-sends	MSG-04	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message]')
+signed-out-not-offered-login	ACC-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('button', { name: 'Login' })
+system-lines-not-drawn	ACC-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	CHN-03	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-01	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-05	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll] [data-system-activity]').filter({ hasText: 'Ada Owner added Cy Teammate' }
+system-lines-not-drawn	MEM-06	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+system-lines-not-drawn	MEM-08	FAILED	Error: the last messages and system lines in the list | the last messages and system lines in the list
+timeline-cache-ignores-the-channel	OPEN-02	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	REC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]'
+timeline-cache-ignores-the-channel	REC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByText('written offline')
+timeline-cache-ignores-the-channel	REC-03	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	SCROLL-03	FAILED	Error: expect(locator).toBeInViewport() failed | Locator: locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-conten
+timeline-cache-ignores-the-channel	TAB-01	FAILED	Error: the last messages in the list | the last messages in the list
+timeline-cache-ignores-the-channel	TAB-02	FAILED	Error: expect(locator).toHaveCount(expected) failed | Locator:  locator('[data-channel-scroll]').locator('[data-message-id="01a1e38a-3f86-7dab-817b-87b0cb6ab531
+typing-line-never-shows	CMP-09	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+typing-line-never-shows	CMP-10	FAILED	Error: expect(locator).toBeVisible() failed | Locator: locator('[data-channel-scroll]').getByText('Ben Member is typing', { exact: true })
+unread-below-notice-missing	UNR-04	DEFECT-CHECK-FAILED	Error: expect(locator).toBeVisible() failed
+unread-mark-never-shows	UNR-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj0x7sm63cl-ot
+unread-mark-never-shows	UNR-03	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj0x7t5emt9-be
+unread-mark-never-shows	UNR-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj0x7rgz4kc-ch
+unread-mark-never-shows	UNR-10	PASSED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('tree', { name: 'Conversations' }).getByRole('treeitem').filter({ hasText: 'unr-mwj0xltwg3qy-fo
+no-access-shown-as-unavailable	ACC-01	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-02	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	ACC-07	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+no-access-shown-as-unavailable	MEM-04	FAILED	Error: expect(locator).toBeVisible() failed | Locator: getByRole('main').getByRole('status').filter({ has: getByRole('heading', { name: 'You don\'t have access 
+end 08:52:10 load 15.37 17.27 18.38
+OLDERDONE

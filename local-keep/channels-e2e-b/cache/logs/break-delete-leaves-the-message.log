@@ -1,0 +1,161 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:00:29 socat[3547478] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:29 socat[3547500] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:29 socat[3547454] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:29 socat[3547472] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:29 socat[3547489] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3524655] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:00:30 socat[3547504] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3547530] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3547463] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3547482] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3547511] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:30 socat[3524655] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:00:30 socat[3519376] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 08:00:30 socat[3547537] E write(6, 0x65000e769000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others (19.4s)
+2026/11/16 08:00:31 socat[3547465] E write(6, 0x65000e769000, 24): Broken pipe
+2026/11/16 08:00:31 socat[3547483] E write(6, 0x65000e769000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies (20.3s)
+  ✘  2 tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload (20.9s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "before",
+    +   "delete me",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      403 |
+      404 |   for (const view of [mine, bens]) {
+    > 405 |     await expect.poll(() => view.topLevel()).toEqual(['before', 'after']);
+          |                                              ^
+      406 |   }
+      407 |   await expect(mine.deleteDialog).toBeHidden();
+      408 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:405:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-10-deleting-m-544ce-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "before",
+    -   "This message was deleted.",
+    +   "regretted",
+        "after",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      439 |   const replies = ['Ben Member: ben replied', 'Ada Owner: ada replied'];
+      440 |   for (const view of [mine, bens]) {
+    > 441 |     await expect.poll(() => view.topLevel()).toEqual(shown);
+          |                                              ^
+      442 |     await expect.poll(() => view.repliesByAuthor(root.id)).toEqual(replies);
+      443 |     await expect(view.list.getByText('regretted')).toHaveCount(0);
+      444 |   }
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:441:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/messages-MSG-11-a-deleted--cda30-ted-”-and-keeps-its-replies/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 1
+
+      Array [
+        "ben replies",
+    +   "ada regrets this",
+        "ben replies again",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      237 |   const replies = ['ben replies', 'ben replies again'];
+      238 |   for (const view of [mine, bens]) {
+    > 239 |     await expect.poll(() => view.replies(root.id)).toEqual(replies);
+          |                                                    ^
+      240 |     await expect.poll(() => view.topLevel()).toEqual(['thread start']);
+      241 |   }
+      242 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:239:52
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-delete-leaves-the-message/test-results/threads-THR-05-deleting-my-aa5b5-eload-and-leaves-the-others/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/messages.spec.ts:376:1 › MSG-10 deleting my message, once confirmed, removes it for both people and after reload 
+    tests/channels-e2e/messages.spec.ts:418:1 › MSG-11 a deleted message that has replies reads “This message was deleted.” and keeps its replies 
+    tests/channels-e2e/threads.spec.ts:216:1 › THR-05 deleting my reply removes it for the other person without reload, and leaves the others 
+2026/11/16 08:00:32 socat[3524655] W exiting on signal 15
+2026/11/16 08:00:32 socat[3519376] W exiting on signal 15

@@ -1,0 +1,183 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 3 tests using 3 workers
+
+2026/11/16 09:25:44 socat[3234703] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:25:48 socat[3244808] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:25:48 socat[3244950] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:02 socat[3242987] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:02 socat[3242998] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3242963] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3233983] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:26:03 socat[3242984] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3242999] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3242939] E write(6, 0x575ea0f8e000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3242980] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:03 socat[3242990] E write(6, 0x575ea0f8f000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once (20.0s)
+2026/11/16 09:26:04 socat[3245344] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:04 socat[3245367] E write(6, 0x575ea0f8f000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back (21.3s)
+2026/11/16 09:26:05 socat[3242982] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:05 socat[3242992] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:06 socat[3252844] E write(6, 0x575ea0f8f000, 24): Broken pipe
+2026/11/16 09:26:06 socat[3253059] E write(6, 0x575ea0f8f000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once (23.0s)
+
+
+  1) tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent, not a draft",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:83:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-03-sending-a--c5330-load-does-not-bring-it-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+
+    Error: the last messages in the list
+
+    the last messages in the list
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "sent just before a reload",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+       at harness/channel.ts:186
+
+      184 |         message: 'the last messages in the list',
+      185 |       })
+    > 186 |       .toEqual(expected);
+          |        ^
+      187 |   }
+      188 |
+      189 |   /** How far the list is from showing its very end, in pixels. */
+        at ChannelView.expectEndsWith (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:186:8)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/composer.spec.ts:111:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 4
+    + Received  + 0
+
+      Array [
+        "ada 1",
+        "ada 2",
+        "ada 3",
+        "ada 4",
+    -   "ben 1",
+    -   "ben 2",
+    -   "ben 3",
+    -   "ben 4",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      716 |     await expect
+      717 |       .poll(async () => (await view.topLevel()).sort())
+    > 718 |       .toEqual(everyMessage);
+          |        ^
+      719 |     expect(
+      720 |       (await view.topLevel()).filter((text) => text.startsWith('ada'))
+      721 |     ).toEqual(['ada 1', 'ada 2', 'ada 3', 'ada 4']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:718:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-changes-reach-neither-screen-nor-device/test-results/messages-MSG-18-messages-t-caf49-ne-order-for-both-each-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/composer.spec.ts:67:1 › CMP-03 sending a message clears its draft, and a reload does not bring it back 
+    tests/channels-e2e/composer.spec.ts:93:1 › CMP-13 a message shown as sent is still sent when the page is reloaded at once 
+    tests/channels-e2e/messages.spec.ts:677:1 › MSG-18 messages two people send at the same moment end in one order for both, each once 
+2026/11/16 09:26:07 socat[3233983] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:26:07 socat[3234703] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:26:07 socat[3233983] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:26:07 socat[3234703] W exiting on signal 15
+2026/11/16 09:26:07 socat[3233983] W exiting on signal 15

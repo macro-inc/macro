@@ -1,0 +1,155 @@
+ACC-01	passed	-	-	-
+ACC-02	passed	-	-	-
+ACC-03	passed	-	-	-
+ACC-04	passed	-	-	-
+ACC-05	passed	-	-	-
+ACC-06	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+ACC-07	passed	-	-	-
+ACC-08	passed	-	-	-
+ACC-09	passed	-	-	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CMP-01	passed	-	-	-
+CMP-02	passed	-	-	-
+CMP-03	passed	-	-	-
+CMP-13	failed	-	Error: the last messages in the list	/home/teo/.cache/channels-e2e-b/runs/f3-on-3/test-results/composer-CMP-13-a-message--bd722-he-page-is-reloaded-at-once/trace.zip
+CMP-04	passed	-	-	-
+CMP-05	passed	-	-	-
+CMP-06	passed	-	-	-
+CMP-07	passed	-	-	-
+CMP-08	passed	-	-	-
+CMP-09	passed	-	-	-
+CMP-10	passed	-	-	-
+CMP-11	passed	-	-	-
+CMP-12	passed	-	-	-
+SYN-01	passed	-	-	-
+SYN-02	passed	-	-	-
+SYN-03	passed	-	-	-
+SYN-04	passed	-	-	-
+SYN-05	passed	-	-	-
+SYN-06	passed	-	-	-
+SYN-08	passed	-	-	-
+SYN-09	passed	-	-	-
+SYN-10	passed	-	-	-
+DM-01	passed	-	-	-
+DM-02	passed	-	-	-
+DM-03	passed	-	-	-
+DM-04	passed	-	-	-
+DM-05	passed	-	-	-
+DM-06	passed	-	-	-
+KEY-01	passed	-	-	-
+KEY-02	passed	-	-	-
+KEY-03	passed	-	-	-
+KEY-04	passed	-	-	-
+KEY-05	passed	-	-	-
+KEY-06	failed	-	Error: expect(locator).toBeFocused() failed	-
+KEY-07	passed	-	-	-
+KEY-08	passed	-	-	-
+KEY-12	passed	-	-	-
+KEY-09	passed	-	-	-
+KEY-10	passed	-	-	-
+KEY-11	passed	-	-	-
+NAV-01	passed	-	-	-
+NAV-02	passed	-	-	-
+NAV-03	passed	-	-	-
+NAV-04	passed	-	-	-
+NAV-05	failed	-	Error: lost my place below "history 148": the list shows ["history 217","history 218","history 219","history 220","history 221","history 222","history 223","history 224","history 225","history 226","history 227","history 228","history 229","history 230"]	-
+NAV-06	passed	-	-	-
+NAV-07	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MSG-01	passed	-	-	-
+MSG-02	passed	-	-	-
+MSG-03	passed	-	-	-
+MSG-04	passed	-	-	-
+MSG-05	passed	-	-	-
+MSG-06	passed	-	-	-
+MSG-07	passed	-	-	-
+MSG-08	passed	-	-	-
+MSG-09	passed	-	-	-
+MSG-10	passed	-	-	-
+MSG-11	passed	-	-	-
+MSG-12	passed	-	-	-
+MSG-13	failed	-	Error: expect(received).toEqual(expected) // deep equality	/home/teo/.cache/channels-e2e-b/runs/f3-on-3/test-results/messages-MSG-13-a-quick-re-7a686--same-and-goes-when-removed/trace.zip
+MSG-14	passed	-	-	-
+MSG-15	passed	-	-	-
+MSG-16	passed	-	-	-
+MSG-17	passed	-	-	-
+MSG-18	passed	-	-	-
+OFF-01	passed	-	-	-
+OFF-02	passed	-	-	-
+OFF-03	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-05	passed	-	-	-
+OFF-06	passed	-	-	-
+OFF-07	passed	-	-	-
+OFF-08	passed	-	-	-
+OFF-09	passed	-	-	-
+OFF-10	passed	-	-	-
+OFF-11	passed	-	-	-
+OPEN-01	passed	-	-	-
+OPEN-02	passed	-	-	-
+PRE-01	passed	-	-	-
+REC-01	passed	-	-	-
+REC-02	passed	-	-	-
+REC-03	passed	-	-	-
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	-
+SCROLL-01	passed	-	-	-
+SCROLL-02	passed	-	-	-
+SCROLL-03	passed	-	-	-
+SCROLL-04	passed	-	-	-
+THR-01	passed	-	-	-
+THR-02	passed	-	-	-
+THR-03	passed	-	-	-
+THR-04	passed	-	-	-
+THR-05	passed	-	-	-
+THR-06	passed	-	-	-
+THR-07	passed	-	-	-
+THR-08	passed	-	-	-
+THR-09	passed	-	-	-
+THR-10	failed	-	Error: expect(locator).toBeFocused() failed	-
+TAB-01	passed	-	-	-
+TAB-02	passed	-	-	-
+UNR-01	passed	-	-	-
+UNR-02	passed	-	-	-
+UNR-03	passed	-	-	-
+UNR-04	timedOut	Error: locator.click: Test timeout of 90000ms exceeded.	Test timeout of 90000ms exceeded.	/home/teo/.cache/channels-e2e-b/runs/f3-on-3/test-results/unread-UNR-04-scrolled-up--377c1--…-below”-which-leads-to-it/trace.zip
+UNR-05	failed	-	Error: expect(locator).toBeVisible() failed	-
+UNR-06	passed	-	-	-
+UNR-07	passed	-	-	-
+UNR-08	passed	-	-	-
+UNR-09	failed	-	Error: expect(locator).toBeVisible() failed	-
+UNR-10	failed	-	Error: expect(locator).toBeVisible() failed	-
+WRT-01	passed	-	-	-
+WRT-02	passed	-	-	-
+WRT-03	passed	-	-	-
+WRT-04	passed	Error: the channel as the services hold it	-	-
+WRT-05	passed	-	-	-
+WRT-06	passed	-	-	-
+WRT-07	passed	-	-	-
+WRT-08	passed	-	-	-
+WRT-09	passed	-	-	-
+WRT-10	passed	-	-	-
+WRT-11	passed	-	-	-
+WRT-12	passed	-	-	-
+WRT-13	passed	-	-	-
+WRT-14	passed	-	-	-

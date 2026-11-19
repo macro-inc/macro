@@ -1,0 +1,20 @@
+OFF-02	passed	-	-	-
+OFF-09	passed	-	-	-
+OFF-02	passed	-	-	-
+OFF-09	passed	-	-	-
+OFF-02	passed	-	-	-
+OFF-09	passed	-	-	-
+OFF-02	passed	-	-	-
+OFF-09	passed	-	-	-
+OFF-02	passed	-	-	-
+OFF-09	passed	-	-	-
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/p3c/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out/trace.zip
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/p3c/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat1/trace.zip
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/p3c/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat2/trace.zip
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/p3c/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat3/trace.zip
+REC-04	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/p3c/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat4/trace.zip
+WRT-09	passed	-	-	-
+WRT-09	passed	-	-	-
+WRT-09	passed	-	-	-
+WRT-09	passed	-	-	-
+WRT-09	passed	-	-	-

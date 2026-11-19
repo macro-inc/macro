@@ -1,0 +1,750 @@
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: expect(locator).toBeVisible() failed	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: the heading the channel sits under for Ben	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: the heading the channel sits under for Ben	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r10-on/test-results/channels-CHN-07-deleting-a-97616--no-longer-opens-for-anyone-repeat9/trace.zip
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: expect(locator).toContainText(expected) failed	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: expect(locator).toContainText(expected) failed	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: the heading the channel sits under for Ben	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	Error: expect(locator).toHaveCount(expected) failed	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	Error: the heading the channel sits under for Ben	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-01	passed	-	-	-
+CHN-02	passed	-	-	-
+CHN-03	passed	-	-	-
+CHN-04	failed	-	Error: expect(locator).toContainText(expected) failed	-
+CHN-05	passed	-	-	-
+CHN-06	passed	-	-	-
+CHN-07	passed	-	-	-
+CHN-08	passed	-	-	-
+CHN-09	passed	-	-	-
+CHN-10	passed	-	-	-
+CHN-11	passed	-	-	-
+CHN-12	passed	-	-	-
+CHN-13	passed	-	-	-
+CHN-14	failed	-	Error: expect(locator).toBeVisible() failed	-
+CHN-15	passed	-	-	-
+CHN-16	failed	-	Error: expect(locator).toContainText(expected) failed	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	failed	-	Error: expect(locator).toHaveCount(expected) failed	/home/teo/.cache/channels-e2e-b/runs/r10-on/test-results/members-MEM-03-a-person-re-3c0d9-el-is-open-loses-it-at-once-repeat13/trace.zip
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+MEM-01	passed	-	-	-
+MEM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-04	passed	-	-	-
+MEM-05	passed	-	-	-
+MEM-06	passed	-	-	-
+MEM-07	passed	-	-	-
+MEM-08	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	-
+OFF-04	passed	-	-	-
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	-
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	-
+OFF-04	passed	Error: expect(locator).toBeVisible() failed	-	-

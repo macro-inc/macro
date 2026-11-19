@@ -1,0 +1,162 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:38:42 socat[2943406] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:42 socat[2943441] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:43 socat[2943378] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:43 socat[2943404] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:43 socat[2943439] E write(6, 0x5ec3e53db000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload (19.1s)
+2026/11/16 08:38:45 socat[2943353] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:45 socat[2943398] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:45 socat[2943430] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:46 socat[2943402] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:38:46 socat[2943432] E write(6, 0x5ec3e53db000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in (22.0s)
+2026/11/16 08:39:05 socat[2943391] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:39:05 socat[2943436] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:39:05 socat[2943445] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:39:06 socat[2943366] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:39:06 socat[2943400] E write(6, 0x5ec3e53db000, 24): Broken pipe
+2026/11/16 08:39:06 socat[2943433] E write(6, 0x5ec3e53db000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone (42.2s)
+
+
+  1) tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 1
+
+    - Array [
+    -   "Ada Owner: an answer",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      27 |     await expect
+      28 |       .poll(() => view.repliesByAuthor(root.id))
+    > 29 |       .toEqual(['Ada Owner: an answer']);
+         |        ^
+      30 |     await expect
+      31 |       .poll(() => view.topLevel())
+      32 |       .toEqual(['a question', 'something later']);
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:29:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-01-a-reply-wri-85772-oth-people-and-after-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 0
+    + Received  + 4
+
+      Array [
+        "the old message",
+        "a newer message",
+        "the newest message",
+    +   "ada replies first",
+    +   "ben replies second",
+    +   "ada replies third",
+    +   "ben replies fourth",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      89 |   });
+      90 |   for (const view of [mine, bens]) {
+    > 91 |     await expect.poll(() => view.topLevel()).toEqual(channelMessages);
+         |                                              ^
+      92 |   }
+      93 |
+      94 |   // A reloaded channel shows a thread's first three replies and a button
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:91:46
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-02-replies-fro-f300e-e-the-channel’s-order-alone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 0
+
+      Array [
+        "already said",
+    -   "about the second",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      414 |     await expect
+      415 |       .poll(() => view.replies(second.id))
+    > 416 |       .toEqual(['already said', 'about the second']);
+          |        ^
+      417 |     await expect.poll(() => view.replies(first.id)).toEqual([]);
+      418 |   }
+      419 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:416:8
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-reply-goes-to-the-channel/test-results/threads-THR-09-with-replie-e9b56-he-thread-it-was-written-in/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/threads.spec.ts:6:1 › THR-01 a reply written from “Reply” shows under its message for both people, and after reload 
+    tests/channels-e2e/threads.spec.ts:48:1 › THR-02 replies from two people to an old message read in one order for both, and leave the channel’s order alone 
+    tests/channels-e2e/threads.spec.ts:384:1 › THR-09 with replies being written to two messages, each goes to the thread it was written in 
+2026/11/16 08:39:08 socat[2916106] W exiting on signal 15
+2026/11/16 08:39:08 socat[2915446] W exiting on signal 15

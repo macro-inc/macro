@@ -1,0 +1,41 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 6 tests using 4 workers
+
+2026/11/16 09:08:31 socat[1614001] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:31 socat[1604409] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:08:31 socat[1614018] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:32 socat[1604409] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:08:32 socat[1614016] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:33 socat[1624184] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:34 socat[1624205] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:35 socat[1630707] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:35 socat[1613449] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:35 socat[1630709] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:35 socat[1630732] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (10.9s)
+2026/11/16 09:08:35 socat[1630776] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:35 socat[1631081] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (11.1s)
+2026/11/16 09:08:35 socat[1630853] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:43 socat[1632282] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:45 socat[1644406] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:45 socat[1644437] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:46 socat[1646569] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:08:46 socat[1650310] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/writes.spec.ts:433:1 › WRT-15 a message waiting to be sent when the device loses what it kept is not shown as sent and is not sent later (11.0s)
+2026/11/16 09:08:46 socat[1648639] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:09:34 socat[1621165] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/16 09:09:34 socat[1621153] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:09:34 socat[1621252] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:09:34 socat[1621274] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/16 09:09:45 socat[1633989] E write(6, 0x585195270000, 24): Broken pipe
+2026/11/16 09:09:45 socat[1633992] E write(6, 0x585195270000, 24): Broken pipe
+  ✓  5 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+
+  6 passed (1.4m)
+2026/11/16 09:09:45 socat[1611428] W exiting on signal 15
+2026/11/16 09:09:45 socat[1604409] W exiting on signal 15

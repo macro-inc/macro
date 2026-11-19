@@ -1,0 +1,10 @@
+DM-02	passed	-	-	-
+DM-02	passed	-	-	-
+MEM-03	passed	-	-	-
+MEM-03	passed	-	-	-
+OFF-06	passed	-	-	-
+OFF-13	failed	-	Error: expect(locator).toBeVisible() failed	-
+OFF-12	passed	-	-	-
+OFF-06	passed	Error: expect(received).toEqual(expected) // deep equality	-	-
+OFF-13	failed	-	Error: expect(locator).toBeVisible() failed	-
+OFF-12	failed	-	Error: expect(locator).toBeVisible() failed	/home/teo/.cache/channels-e2e-b/runs/v11/test-results/offline-OFF-12-going-back--b8232-ighbours-with-no-connection-repeat1/trace.zip

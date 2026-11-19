@@ -1,0 +1,49 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 1 test using 1 worker
+
+2026/11/17 04:55:04 socat[2023151] E write(6, 0x58782e479000, 24): Broken pipe
+2026/11/17 04:55:04 socat[1982024] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:55:04 socat[1980842] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:55:04 socat[2023206] E write(6, 0x58782e479000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text (16.6s)
+
+
+  1) tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text ───
+
+    Error: expect(received).toBe(expected) // Object.is equality
+
+    Expected: "copy exactly this, please"
+    Received: ""
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      669 |   await expect
+      670 |     .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+    > 671 |     .toBe('copy exactly this, please');
+          |      ^
+      672 | });
+      673 |
+      674 | // If this fails, two people writing at the same moment are left reading
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/messages.spec.ts:671:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-copy-text-copies-nothing/test-results/messages-MSG-17-“Copy-Text”-on-a-message-copies-its-text/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-copy-text-copies-nothing/test-results/messages-MSG-17-“Copy-Text”-on-a-message-copies-its-text/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-copy-text-copies-nothing/test-results/messages-MSG-17-“Copy-Text”-on-a-message-copies-its-text/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-copy-text-copies-nothing/test-results/messages-MSG-17-“Copy-Text”-on-a-message-copies-its-text/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/messages.spec.ts:655:1 › MSG-17 “Copy Text” on a message copies its text ────
+2026/11/17 04:55:05 socat[1982024] W exiting on signal 15
+2026/11/17 04:55:05 socat[1980842] W exiting on signal 15

@@ -1,0 +1,159 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 3 tests using 3 workers
+
+2026/11/16 08:32:09 socat[2335578] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:09 socat[2335593] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:09 socat[2335604] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:09 socat[2335713] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:09 socat[2335728] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:09 socat[2335733] E write(6, 0x5b5fd150a000, 24): Broken pipe
+  ✘  2 tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload (17.5s)
+  ✘  1 tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again (17.8s)
+2026/11/16 08:32:10 socat[2335584] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:10 socat[2335602] E write(6, 0x5b5fd150a000, 24): Broken pipe
+2026/11/16 08:32:10 socat[2335642] E write(6, 0x5b5fd150a000, 24): Broken pipe
+  ✘  3 tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened (18.6s)
+
+
+  1) tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 13
+    + Received  +  0
+
+      Array [
+        "reply 01",
+        "reply 02",
+        "reply 03",
+    -   "reply 04",
+    -   "reply 05",
+    -   "reply 06",
+    -   "reply 07",
+    -   "reply 08",
+    -   "reply 09",
+    -   "reply 10",
+    -   "reply 11",
+    -   "reply 12",
+    -   "reply 13",
+    -   "reply 14",
+    -   "reply 15",
+    -   "reply 16",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      153 |
+      154 |   await view.hiddenReplies(root.id).click();
+    > 155 |   await expect.poll(() => view.replies(root.id)).toEqual(sixteen);
+          |                                                  ^
+      156 |   await expect(view.hiddenReplies(root.id)).toHaveCount(0);
+      157 |   await expect.poll(() => view.topLevel()).toEqual(channelMessages);
+      158 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:155:50
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-03-a-long-thre-ae9b7-y-in-order-and-closes-again/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-03-a-long-thre-ae9b7-y-in-order-and-closes-again/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-03-a-long-thre-ae9b7-y-in-order-and-closes-again/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-03-a-long-thre-ae9b7-y-in-order-and-closes-again/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 2
+    + Received  + 0
+
+      Array [
+        "one",
+        "two",
+        "three",
+    -   "four",
+    -   "five",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      317 |   await expect
+      318 |     .poll(() => view.replies(root.id))
+    > 319 |     .toEqual(['one', 'two', 'three', 'four', 'five']);
+          |      ^
+      320 |
+      321 |   await ben.post(channel.id, 'six, live', { threadId: root.id });
+      322 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:319:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-07-a-reply-fro-40eaa--open-thread-without-reload/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 3
+    + Received  + 0
+
+      Array [
+        "one",
+        "two",
+        "three",
+    -   "four",
+    -   "five",
+    -   "six, live",
+      ]
+
+    Call Log:
+    - Timeout 15000ms exceeded while waiting on the predicate
+
+      378 |   await expect
+      379 |     .poll(() => view.replies(root.id))
+    > 380 |     .toEqual(['one', 'two', 'three', 'four', 'five', 'six, live']);
+          |      ^
+      381 | });
+      382 |
+      383 | // If this fails, a reply written under one message is posted under another.
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/threads.spec.ts:380:6
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-opened-thread-shows-only-its-first-replies/test-results/threads-THR-08-a-reply-fro-5fd48-ad-and-is-there-when-opened/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3 failed
+    tests/channels-e2e/threads.spec.ts:108:1 › THR-03 a long thread shows its first three replies and a count, opens to every reply in order, and closes again 
+    tests/channels-e2e/threads.spec.ts:302:1 › THR-07 a reply from someone else arrives at the end of an open thread without reload 
+    tests/channels-e2e/threads.spec.ts:341:1 › THR-08 a reply from someone else to a closed thread raises its count without reload, and is there when opened 
+2026/11/16 08:32:11 socat[2306685] W exiting on signal 15
+2026/11/16 08:32:11 socat[2305228] W exiting on signal 15

@@ -1,0 +1,11 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+scripts/cached-wasm-build.sh cache-wasm /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/src/lib/graphql-cache/wasm -- env CARGO_TARGET_DIR="/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/../../target/cache-wasm" wasm-pack build /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/../../crates/client/cache-wasm --target web --release --out-dir /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/src/lib/graphql-cache/wasm
+[INFO]: 🎯  Checking for the Wasm target...
+[INFO]: 🌀  Compiling to Wasm...
+    Finished `release` profile [optimized] target(s) in 0.92s
+[INFO]: found wasm-opt at "/nix/store/p7j7pwaj6izvwkzqahz3l85lfm19ls95-binaryen-129/bin/wasm-opt"
+[INFO]: Optimizing wasm binaries with `wasm-opt`...
+[INFO]: Optional fields missing from Cargo.toml: 'description', 'repository', and 'license'. These are not necessary, but recommended
+[INFO]: ✨   Done in 11.30s
+[INFO]: 📦   Your wasm pkg is ready to publish at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/src/lib/graphql-cache/wasm.
+[WARN]: ⚠️   There's a newer version of wasm-pack available, the new version is: 0.15.1, you are using: 0.15.0. To update, navigate to: https://wasm-bindgen.github.io/wasm-pack/installer/

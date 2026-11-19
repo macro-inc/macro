@@ -1,0 +1,51 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 1 test using 1 worker
+
+2026/11/16 07:48:00 socat[2366170] E write(6, 0x5e62d840f000, 24): Broken pipe
+2026/11/16 07:48:00 socat[2366172] E write(6, 0x5e62d840f000, 24): Broken pipe
+2026/11/16 07:48:00 socat[2366174] E write(6, 0x5e62d840f000, 24): Broken pipe
+  ✘  1 tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer (17.8s)
+
+
+  1) tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer 
+
+    Error: expect(locator).toContainText(expected) failed
+
+    Locator: locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+    Expected substring: "third"
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toContainText" with timeout 15000ms
+      - waiting for locator('[data-channel-scroll]').locator('[data-message][data-selected]')
+
+
+      178 |   // back a moment after ArrowUp selected the message, so the next key is
+      179 |   // typed into it. Escape, which does not have the defect, goes on from there.
+    > 180 |   await expect(selected(view)).toContainText('third');
+          |                                ^
+      181 |   await failsSometimes(async () => {
+      182 |     await expect(list).toBeFocused({ timeout: 5000 });
+      183 |     await expect(view.composerText).not.toBeFocused();
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/find-and-keys.spec.ts:180:32
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-arrow-up-does-not-leave-the-composer/test-results/find-and-keys-KEY-05-the-a-c5102-back-down-into-the-composer/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    tests/channels-e2e/find-and-keys.spec.ts:163:1 › KEY-05 the arrow keys walk from the composer up the messages and back down into the composer 
+2026/11/16 07:48:00 socat[2343685] W exiting on signal 15
+2026/11/16 07:48:00 socat[2342801] W exiting on signal 15

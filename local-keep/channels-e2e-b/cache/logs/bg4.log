@@ -1,0 +1,87 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 20 tests using 4 workers
+
+2026/11/17 05:10:43 socat[3946675] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:43 socat[3946695] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:43 socat[3946741] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.9s)
+2026/11/17 05:10:47 socat[3955100] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:47 socat[3954230] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:47 socat[3955122] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:47 socat[3955180] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (4.1s)
+2026/11/17 05:10:56 socat[3946722] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:56 socat[3946813] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.2s)
+2026/11/17 05:10:56 socat[3946673] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:56 socat[3946693] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:56 socat[3946736] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.2s)
+2026/11/17 05:10:59 socat[3946690] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:59 socat[3946739] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:10:59 socat[3946879] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (19.5s)
+2026/11/17 05:11:03 socat[3982253] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:03 socat[3982461] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:03 socat[3982749] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.9s)
+2026/11/17 05:11:03 socat[3977567] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:03 socat[3978887] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (6.9s)
+2026/11/17 05:11:03 socat[3978671] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:04 socat[3962274] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:04 socat[3962436] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.8s)
+2026/11/17 05:11:08 socat[3989171] E write(6, 0x57cc10f8a000, 35): Broken pipe
+2026/11/17 05:11:08 socat[3989564] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:08 socat[3989705] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.7s)
+2026/11/17 05:11:14 socat[3978817] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:14 socat[3978925] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.0s)
+2026/11/17 05:11:15 socat[3998781] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:15 socat[3998897] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:15 socat[3998911] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (6.7s)
+2026/11/17 05:11:19 socat[4009642] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:19 socat[4008080] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:19 socat[4009673] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:19 socat[4009683] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (4.2s)
+2026/11/17 05:11:20 socat[3989159] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:20 socat[3989173] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:20 socat[3989195] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.8s)
+2026/11/17 05:11:22 socat[3991756] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:22 socat[3992116] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  12 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.0s)2026/11/17 05:11:22 socat[3991781] E write(6, 0x57cc10f8a000, 24): Broken pipe
+
+2026/11/17 05:11:24 socat[4020046] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:24 socat[4020058] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (4.0s)
+2026/11/17 05:11:28 socat[4026156] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:28 socat[3915247] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:11:28 socat[3917790] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:11:28 socat[4026212] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:28 socat[4026216] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/channels.spec.ts:286:1 › CHN-08 a deleted channel leaves its owner’s Favorites too (3.8s)
+2026/11/17 05:11:31 socat[4008281] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:31 socat[4008395] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (17.0s)
+2026/11/17 05:11:36 socat[4016680] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:36 socat[4017695] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:36 socat[4018594] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.9s)
+2026/11/17 05:11:39 socat[3915247] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 05:11:39 socat[4022005] E write(6, 0x57cc10f8a000, 24): Broken pipe
+2026/11/17 05:11:39 socat[4021970] E write(6, 0x57cc10f8a000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.8s)
+2026/11/17 05:11:45 socat[4032233] E write(6, 0x57cc10f8b000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/channels.spec.ts:443:1 › CHN-15 a channel deleted elsewhere closes on its owner’s open page (16.7s)
+2026/11/17 05:11:45 socat[4032213] E write(6, 0x57cc10f8b000, 24): Broken pipe
+
+  20 passed (1.3m)
+2026/11/17 05:11:45 socat[3917790] W exiting on signal 15
+2026/11/17 05:11:45 socat[3915247] W exiting on signal 15

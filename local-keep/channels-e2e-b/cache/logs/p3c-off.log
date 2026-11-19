@@ -1,0 +1,287 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 20 tests using 4 workers
+
+2026/11/16 00:06:10 socat[238761] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:10 socat[238793] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   4 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (6.9s)
+  ✓   1 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (7.8s)
+2026/11/16 00:06:11 socat[238754] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:11 socat[231237] E read(6, 0x558d2f7f7000, 8192): Connection reset by peer
+2026/11/16 00:06:11 socat[231238] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 00:06:11 socat[238772] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:13 socat[249406] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:13 socat[250206] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:13 socat[238738] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:13 socat[238763] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   2 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (9.3s)
+2026/11/16 00:06:13 socat[250853] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   5 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.7s)
+2026/11/16 00:06:15 socat[252793] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:15 socat[252797] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   7 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.5s)
+2026/11/16 00:06:16 socat[252897] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:16 socat[251088] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:16 socat[251120] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.4s)
+2026/11/16 00:06:18 socat[260857] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:18 socat[260895] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓   9 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.5s)
+2026/11/16 00:06:21 socat[262637] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:21 socat[207593] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:21 socat[262650] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:21 socat[261019] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.3s)
+2026/11/16 00:06:21 socat[262589] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:21 socat[262617] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓  11 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.5s)
+2026/11/16 00:06:24 socat[271627] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓  13 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.7s)
+2026/11/16 00:06:28 socat[274479] E read(6, 0x558d2f7f7000, 8192): Connection reset by peer
+2026/11/16 00:06:28 socat[275546] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:28 socat[274480] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/16 00:06:28 socat[208392] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:28 socat[275837] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:28 socat[273269] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✓  14 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.1s)
+2026/11/16 00:06:31 socat[282978] E write(6, 0x558d2f7f8000, 24): Broken pipe
+  ✓  15 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.6s)
+2026/11/16 00:06:32 socat[238798] E read(6, 0x558d2f7f7000, 8192): Connection reset by peer
+2026/11/16 00:06:32 socat[238752] E write(6, 0x558d2f7f7000, 24): Broken pipe
+2026/11/16 00:06:32 socat[238799] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 00:06:32 socat[207593] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘   3 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (28.7s)
+2026/11/16 00:06:35 socat[285621] E write(6, 0x558d2f7f8000, 24): Broken pipe
+2026/11/16 00:06:35 socat[285629] E write(6, 0x558d2f7f8000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/reconnect.spec.ts:8:1 › REC-01 after the connection comes back, messages sent meanwhile appear in order without a reload (2.7s)
+2026/11/16 00:06:40 socat[208392] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:40 socat[294522] E write(6, 0x558d2f7f8000, 24): Broken pipe
+2026/11/16 00:06:40 socat[293305] E write(6, 0x558d2f7f8000, 24): Broken pipe
+2026/11/16 00:06:40 socat[207593] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:40 socat[293313] E write(6, 0x558d2f7f8000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/reconnect.spec.ts:38:1 › REC-02 a message sent with no connection is neither lost nor sent twice (4.6s)
+2026/11/16 00:06:41 socat[252850] E read(6, 0x558d2f7f7000, 8192): Connection reset by peer
+2026/11/16 00:06:41 socat[252851] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 00:06:41 socat[252831] E write(6, 0x558d2f7f7000, 24): Broken pipe
+  ✘   8 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (27.2s)
+2026/11/16 00:06:43 socat[298142] E write(6, 0x558d2f7f8000, 24): Broken pipe
+2026/11/16 00:06:43 socat[207593] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:43 socat[208392] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 00:06:43 socat[300804] E write(6, 0x558d2f7f8000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/reconnect.spec.ts:83:1 › REC-03 a message that arrives while the page is hidden is there when the person comes back (2.6s)
+2026/11/16 00:06:48 socat[265491] E read(6, 0x558d2f7f7000, 8192): Connection reset by peer
+2026/11/16 00:06:48 socat[265492] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  12 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (27.3s)
+2026/11/16 00:06:58 socat[284361] E read(6, 0x558d2f7f8000, 8192): Connection reset by peer
+2026/11/16 00:06:58 socat[284362] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  16 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (27.1s)
+2026/11/16 00:07:09 socat[304023] E read(6, 0x558d2f7f8000, 8192): Connection reset by peer
+2026/11/16 00:07:09 socat[304024] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  20 tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out (27.3s)
+
+
+  1) tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('New version available')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('New version available')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      124 |   await leaveAlone(page, 10);
+      125 |
+    > 126 |   await expect(page.getByText('New version available')).toHaveCount(0);
+          |                                                         ^
+      127 |   await expect(view.message('before')).toBeVisible();
+      128 | });
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:126:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('New version available')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('New version available')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      124 |   await leaveAlone(page, 10);
+      125 |
+    > 126 |   await expect(page.getByText('New version available')).toHaveCount(0);
+          |                                                         ^
+      127 |   await expect(view.message('before')).toBeVisible();
+      128 | });
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:126:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat1/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('New version available')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('New version available')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      124 |   await leaveAlone(page, 10);
+      125 |
+    > 126 |   await expect(page.getByText('New version available')).toHaveCount(0);
+          |                                                         ^
+      127 |   await expect(view.message('before')).toBeVisible();
+      128 | });
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:126:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat2/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat2/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat2/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat2/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('New version available')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('New version available')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      124 |   await leaveAlone(page, 10);
+      125 |
+    > 126 |   await expect(page.getByText('New version available')).toHaveCount(0);
+          |                                                         ^
+      127 |   await expect(view.message('before')).toBeVisible();
+      128 | });
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:126:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat3/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  getByText('New version available')
+    Expected: 0
+    Received: 1
+    Timeout:  15000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 15000ms
+      - waiting for getByText('New version available')
+        34 × locator resolved to 1 element
+           - unexpected value "1"
+
+
+      124 |   await leaveAlone(page, 10);
+      125 |
+    > 126 |   await expect(page.getByText('New version available')).toHaveCount(0);
+          |                                                         ^
+      127 |   await expect(view.message('before')).toBeVisible();
+      128 | });
+      129 |
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/reconnect.spec.ts:126:57
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat4/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/p3c-off/test-results/reconnect-REC-04-losing-th-4d8d3-y-that-a-new-version-is-out-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5 failed
+    tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+    tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+    tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+    tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+    tests/channels-e2e/reconnect.spec.ts:109:1 › REC-04 losing the connection just after the app opened does not say that a new version is out 
+  15 passed (1.3m)
+2026/11/16 00:07:09 socat[208392] W exiting on signal 15
+2026/11/16 00:07:09 socat[207593] W exiting on signal 15

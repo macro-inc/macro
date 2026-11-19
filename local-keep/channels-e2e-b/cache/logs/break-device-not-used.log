@@ -1,0 +1,757 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 16 tests using 3 workers
+
+2026/11/17 04:46:48 socat[951146] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:46:48 socat[951191] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:46:54 socat[965206] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:46:54 socat[965449] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:47:01 socat[951194] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:47:56 socat[923098] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:47:56 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:47:56 socat[956829] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:47:56 socat[956832] E write(6, 0x64ed8291f000, 28): Broken pipe
+2026/11/17 04:47:56 socat[956833] E write(6, 0x555555624000, 28): Broken pipe
+  ✘   1 tests/channels-e2e/offline.spec.ts:66:1 › OFF-01 a channel the person has read opens whole with no connection (1.2m)
+2026/11/17 04:48:01 socat[1104706] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:48:01 socat[1104842] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:48:01 socat[972481] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:48:01 socat[972626] E write(6, 0x64ed8291f000, 28): Broken pipe
+2026/11/17 04:48:01 socat[972627] E write(6, 0x555555624000, 28): Broken pipe
+  ✘   2 tests/channels-e2e/offline.spec.ts:163:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen (1.3m)
+2026/11/17 04:48:07 socat[1117687] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:48:07 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:48:07 socat[1117741] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:48:08 socat[987416] E write(6, 0x64ed8291f000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/offline.spec.ts:137:1 › OFF-04 messages read far back in a long channel can be scrolled through again with no connection (1.4m)
+2026/11/17 04:48:08 socat[987450] E write(6, 0x64ed8291f000, 28): Broken pipe
+2026/11/17 04:48:08 socat[987451] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/17 04:48:08 socat[987430] E write(6, 0x64ed8291f000, 24): Broken pipe
+2026/11/17 04:48:11 socat[1127324] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:48:11 socat[1127798] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:08 socat[1108042] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:08 socat[1108164] E write(6, 0x64ed82920000, 28): Broken pipe
+2026/11/17 04:49:08 socat[1108166] E write(6, 0x555555624000, 28): Broken pipe
+  ✘   4 tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included (1.2m)
+2026/11/17 04:49:12 socat[1257042] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:14 socat[1121939] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:14 socat[1122113] E write(6, 0x64ed82920000, 56): Broken pipe
+2026/11/17 04:49:14 socat[1122114] E write(6, 0x555555624000, 28): Broken pipe
+  ✘   5 tests/channels-e2e/offline.spec.ts:227:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more (1.2m)
+2026/11/17 04:49:19 socat[1132114] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:19 socat[1132255] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:19 socat[1132531] E write(6, 0x64ed82920000, 28): Broken pipe
+2026/11/17 04:49:19 socat[1132532] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/17 04:49:19 socat[1271118] E write(6, 0x64ed82920000, 24): Broken pipe
+  ✘   6 tests/channels-e2e/offline.spec.ts:266:1 › OFF-08 a team owner opening a held channel with no connection sees the channel (1.2m)
+2026/11/17 04:49:24 socat[1282055] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:49 socat[1263455] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:49 socat[923098] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:49:49 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:49:50 socat[1263665] E write(6, 0x64ed82920000, 28): Broken pipe
+2026/11/17 04:49:50 socat[1263668] E write(6, 0x555555624000, 56): Broken pipe
+  ✘   7 tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection (40.1s)
+2026/11/17 04:49:56 socat[1380794] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:56 socat[1381210] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:49:56 socat[1381034] E write(6, 0x64ed82920000, 88): Broken pipe
+2026/11/17 04:49:56 socat[1381036] E write(6, 0x555555624000, 88): Broken pipe
+2026/11/17 04:50:27 socat[1278135] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:50:27 socat[1278193] E write(6, 0x64ed82920000, 28): Broken pipe
+2026/11/17 04:50:27 socat[1278194] E write(6, 0x555555624000, 24): Broken pipe
+  ✘   8 tests/channels-e2e/offline.spec.ts:306:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection (1.2m)
+2026/11/17 04:50:31 socat[1461306] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:50:32 socat[1298038] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:50:33 socat[1298751] E write(6, 0x64ed82920000, 89): Broken pipe
+  ✘   9 tests/channels-e2e/offline.spec.ts:325:1 › OFF-11 opening a held channel with no connection does not say that a new version is out (1.2m)
+2026/11/17 04:51:04 socat[1392881] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:51:04 socat[1392925] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:51:04 socat[1392949] E write(6, 0x64ed82920000, 28): Broken pipe
+2026/11/17 04:51:04 socat[1392951] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  10 tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made (1.2m)
+2026/11/17 04:51:39 socat[1464850] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:51:39 socat[1465078] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:51:39 socat[1465146] E write(6, 0x64ed82920000, 56): Broken pipe
+2026/11/17 04:51:39 socat[1465147] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  11 tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection (1.2m)
+2026/11/17 04:51:44 socat[1538509] E read(6, 0x64ed82920000, 8192): Connection reset by peer
+2026/11/17 04:51:44 socat[1537524] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:51:44 socat[1538510] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:51:44 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:51:44 socat[923098] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:51:44 socat[1537968] E write(6, 0x64ed82920000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services (39.2s)
+2026/11/17 04:52:06 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:52:06 socat[923098] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:52:06 socat[1472962] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:52:06 socat[1473047] E write(6, 0x64ed82920000, 56): Broken pipe
+2026/11/17 04:52:06 socat[1473068] E write(6, 0x555555624000, 28): Broken pipe
+  ✘  12 tests/channels-e2e/prewarm.spec.ts:27:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone (1.5m)
+2026/11/17 04:52:44 socat[1614347] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:52:44 socat[1614280] E write(6, 0x64ed82920000, 24): Broken pipe
+  ✘  14 tests/channels-e2e/writes.spec.ts:154:1 › WRT-05 a message the services took but whose answer never came back is in the channel once (1.1m)
+2026/11/17 04:53:16 socat[1629041] E read(6, 0x64ed82920000, 8192): Connection reset by peer
+2026/11/17 04:53:16 socat[1628979] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:53:16 socat[1629042] E write(6, 0x555555624000, 53): Broken pipe
+2026/11/17 04:53:16 socat[924363] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:53:16 socat[923098] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/17 04:53:16 socat[1629014] E write(6, 0x64ed82920000, 24): Broken pipe
+  ✘  15 tests/channels-e2e/writes.spec.ts:180:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left (1.5m)
+2026/11/17 04:53:38 socat[1678865] E read(6, 0x64ed82920000, 8192): Connection reset by peer
+2026/11/17 04:53:38 socat[1678713] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:53:38 socat[1678866] E write(6, 0x555555624000, 24): Broken pipe
+2026/11/17 04:53:38 socat[1678761] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:53:39 socat[1672710] E write(6, 0x64ed82920000, 24): Broken pipe
+2026/11/17 04:53:39 socat[1672947] E write(6, 0x64ed82920000, 24): Broken pipe
+  ✘  16 tests/channels-e2e/writes.spec.ts:206:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back (1.5m)
+
+
+  1) tests/channels-e2e/offline.spec.ts:66:1 › OFF-01 a channel the person has read opens whole with no connection 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d4-304c-7233-b0ac-f39d6b030466"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d4-304c-7233-b0ac-f39d6b030466"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:77:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-01-a-channel-t-28f06-ns-whole-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-01-a-channel-t-28f06-ns-whole-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-01-a-channel-t-28f06-ns-whole-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-01-a-channel-t-28f06-ns-whole-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/offline.spec.ts:163:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d4-3261-7755-b53c-1229d66263bc"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d4-3261-7755-b53c-1229d66263bc"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:183:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-05-scrolling-p-15bf9-eeps-what-is-held-on-screen/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-05-scrolling-p-15bf9-eeps-what-is-held-on-screen/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-05-scrolling-p-15bf9-eeps-what-is-held-on-screen/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-05-scrolling-p-15bf9-eeps-what-is-held-on-screen/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d5-4a04-77c1-a83e-7a1ec8d668a0"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d5-4a04-77c1-a83e-7a1ec8d668a0"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:219:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-06-a-thread-re-c002b-nection-a-long-one-included/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/offline.spec.ts:227:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d5-5f1e-7b60-b8d0-f138db541451"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d5-5f1e-7b60-b8d0-f138db541451"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:249:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-07-a-long-thre-88834-or-says-that-there-are-more/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/offline.spec.ts:266:1 › OFF-08 a team owner opening a held channel with no connection sees the channel 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d5-7493-772c-9397-d64f109a3e22"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d5-7493-772c-9397-d64f109a3e22"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:276:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-08-a-team-owne-6bc93-connection-sees-the-channel/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-08-a-team-owne-6bc93-connection-sees-the-channel/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-08-a-team-owne-6bc93-connection-sees-the-channel/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-08-a-team-owne-6bc93-connection-sees-the-channel/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 7
+    + Received  + 1
+
+    - Array [
+    -   "one, edited",
+    -   "This message was deleted.",
+    -   "  > a reply",
+    -   "three [👍]",
+    -   "four",
+    - ]
+    + Array []
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:300:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-09-a-channel-l-880e8-ed-opens-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-09-a-channel-l-880e8-ed-opens-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-09-a-channel-l-880e8-ed-opens-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-09-a-channel-l-880e8-ed-opens-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/offline.spec.ts:306:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d6-7c1b-79b8-a8ea-22a7171c1d82"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d6-7c1b-79b8-a8ea-22a7171c1d82"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:318:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-10-a-message-t-36a77-el-opens-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/offline.spec.ts:325:1 › OFF-11 opening a held channel with no connection does not say that a new version is out 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d6-8eb8-7879-b374-832b1371c59e"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d6-8eb8-7879-b374-832b1371c59e"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:336:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-11-opening-a-h-f0660-y-that-a-new-version-is-out/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-11-opening-a-h-f0660-y-that-a-new-version-is-out/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-11-opening-a-h-f0660-y-that-a-new-version-is-out/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-11-opening-a-h-f0660-y-that-a-new-version-is-out/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d7-0651-7722-b9e1-303b2495d26b"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d7-0651-7722-b9e1-303b2495d26b"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at ChannelView.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:373:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-13-a-channel-r-574d2-twenty-newer-ones-were-made/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  10) tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d7-986a-7385-804a-58c50390c6f1"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d7-986a-7385-804a-58c50390c6f1"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/offline.spec.ts:405:19
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/offline-OFF-14-a-thread-re-1125c--replies-with-no-connection/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  11) tests/channels-e2e/prewarm.spec.ts:27:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-input-id="channel-input-01a1e7d7-ae01-7340-9783-fa4240a69ca4"]')
+    Expected: visible
+    Timeout: 60000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 60000ms
+      - waiting for locator('[data-input-id="channel-input-01a1e7d7-ae01-7340-9783-fa4240a69ca4"]')
+
+
+       at harness/channel.ts:112
+
+      110 |   /** Waits until this channel, and not another, is the one on screen. */
+      111 |   async shown(): Promise<void> {
+    > 112 |     await expect(this.composer).toBeVisible({ timeout: 60_000 });
+          |                                 ^
+      113 |   }
+      114 |
+      115 |   /** The message with exactly this text, wherever it is in the list. */
+        at Conversation.shown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:112:33)
+        at openFromList (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:78:14)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/prewarm.spec.ts:43:16
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/prewarm-PRE-01-an-unread-c-d8133-the-app-has-been-left-alone/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/prewarm-PRE-01-an-unread-c-d8133-the-app-has-been-left-alone/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/prewarm-PRE-01-an-unread-c-d8133-the-app-has-been-left-alone/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/prewarm-PRE-01-an-unread-c-d8133-the-app-has-been-left-alone/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  12) tests/channels-e2e/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services 
+
+    Error: the channel as it is on the screen
+
+    the channel as it is on the screen
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 2
+
+      Array [
+        "one [👍]",
+        "two",
+    -   "three, edited offline",
+    +   "three",
+    +   "four",
+      ]
+
+    Call Log:
+    - Timeout 30000ms exceeded while waiting on the predicate
+
+       at harness/device.ts:59
+
+      57 |       timeout: 30_000,
+      58 |     })
+    > 59 |     .toEqual(lines);
+         |      ^
+      60 | }
+      61 |
+      62 | /**
+        at expectShown (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/device.ts:59:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:92:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-02-an-edit-a-de-5b766--and-all-reach-the-services/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-02-an-edit-a-de-5b766--and-all-reach-the-services/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-02-an-edit-a-de-5b766--and-all-reach-the-services/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-02-an-edit-a-de-5b766--and-all-reach-the-services/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  13) tests/channels-e2e/writes.spec.ts:154:1 › WRT-05 a message the services took but whose answer never came back is in the channel once 
+
+    Error: the channel as the services hold it
+
+    the channel as the services hold it
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 1
+
+      Array [
+        "one",
+        "two",
+        "three",
+        "answer lost",
+    -   "and one more",
+    +   "and one moreanswer lost",
+      ]
+
+    Call Log:
+    - Timeout 60000ms exceeded while waiting on the predicate
+
+      40 |       timeout,
+      41 |     })
+    > 42 |     .toEqual(lines);
+         |      ^
+      43 | }
+      44 |
+      45 | // If this fails, a message written offline does not show until it is sent,
+        at expectServer (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:42:6)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:172:9
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-05-a-message-th-dae40-back-is-in-the-channel-once/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-05-a-message-th-dae40-back-is-in-the-channel-once/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-05-a-message-th-dae40-back-is-in-the-channel-once/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-05-a-message-th-dae40-back-is-in-the-channel-once/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  14) tests/channels-e2e/writes.spec.ts:180:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.hover: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('first wording', { exact: true }) })
+
+
+       at harness/channel.ts:297
+
+      295 |   /** The row of buttons that shows when the pointer is over a message. */
+      296 |   async actions(message: Locator): Promise<Locator> {
+    > 297 |     await message.hover();
+          |                   ^
+      298 |     const actions = message.locator('[data-message-hover-actions]');
+      299 |     await expect(actions).toBeVisible();
+      300 |     return actions;
+        at Conversation.actions (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:297:19)
+        at Conversation.action (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:304:32)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:192:14
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-06-a-message-ed-41223-arrives-as-it-was-last-left/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-06-a-message-ed-41223-arrives-as-it-was-last-left/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-06-a-message-ed-41223-arrives-as-it-was-last-left/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-06-a-message-ed-41223-arrives-as-it-was-last-left/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15) tests/channels-e2e/writes.spec.ts:206:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.hover: Target page, context or browser has been closed
+    Call log:
+      - waiting for locator('[data-channel-scroll]').locator('[data-message]').filter({ has: locator('[data-message-content]').getByText('thought better of it', { exact: true }) })
+
+
+       at harness/channel.ts:297
+
+      295 |   /** The row of buttons that shows when the pointer is over a message. */
+      296 |   async actions(message: Locator): Promise<Locator> {
+    > 297 |     await message.hover();
+          |                   ^
+      298 |     const actions = message.locator('[data-message-hover-actions]');
+      299 |     await expect(actions).toBeVisible();
+      300 |     return actions;
+        at Conversation.actions (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:297:19)
+        at Conversation.action (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/channel.ts:304:32)
+        at Conversation.delete (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/messages.ts:120:16)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/writes.spec.ts:221:20
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/break-device-not-used/test-results/writes-WRT-07-a-message-de-275df-once-the-connection-is-back/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  15 failed
+    tests/channels-e2e/offline.spec.ts:66:1 › OFF-01 a channel the person has read opens whole with no connection 
+    tests/channels-e2e/offline.spec.ts:163:1 › OFF-05 scrolling past the oldest held message with no connection keeps what is held on screen 
+    tests/channels-e2e/offline.spec.ts:196:1 › OFF-06 a thread read while connected shows its replies with no connection, a long one included 
+    tests/channels-e2e/offline.spec.ts:227:1 › OFF-07 a long thread never opened, opened with no connection, shows every reply or says that there are more 
+    tests/channels-e2e/offline.spec.ts:266:1 › OFF-08 a team owner opening a held channel with no connection sees the channel 
+    tests/channels-e2e/offline.spec.ts:284:1 › OFF-09 a channel left as soon as its messages showed opens with no connection 
+    tests/channels-e2e/offline.spec.ts:306:1 › OFF-10 a message that arrived while the channel was open is there when the channel opens with no connection 
+    tests/channels-e2e/offline.spec.ts:325:1 › OFF-11 opening a held channel with no connection does not say that a new version is out 
+    tests/channels-e2e/offline.spec.ts:346:1 › OFF-13 a channel read while connected opens with no connection after a hundred and twenty newer ones were made 
+    tests/channels-e2e/offline.spec.ts:380:1 › OFF-14 a thread read on a page reloaded before the device kept it shows its replies with no connection 
+    tests/channels-e2e/prewarm.spec.ts:27:1 › PRE-01 an unread channel never opened on this device opens with no connection once the app has been left alone 
+    tests/channels-e2e/writes.spec.ts:74:1 › WRT-02 an edit, a deletion and a reaction made with no connection show at once and all reach the services 
+    tests/channels-e2e/writes.spec.ts:154:1 › WRT-05 a message the services took but whose answer never came back is in the channel once 
+    tests/channels-e2e/writes.spec.ts:180:1 › WRT-06 a message edited and reacted to before it could be sent arrives as it was last left 
+    tests/channels-e2e/writes.spec.ts:206:1 › WRT-07 a message deleted before it could be sent is not shown to anyone once the connection is back 
+  1 passed (7.1m)
+2026/11/17 04:53:40 socat[924363] W exiting on signal 15
+2026/11/17 04:53:40 socat[923098] W exiting on signal 15

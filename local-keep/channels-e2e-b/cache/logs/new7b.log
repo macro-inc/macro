@@ -1,0 +1,56 @@
+unpacking 'https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst' into the Git cache...
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+warning: Git tree '/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b' is dirty
+
+Running 8 tests using 4 workers
+
+2026/11/16 09:52:23 socat[1570701] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:52:24 socat[1575145] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:52:30 socat[1580987] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:53:29 socat[1572221] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:53:29 socat[1572223] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:53:29 socat[1572226] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  4 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/16 09:54:28 socat[1571761] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:54:28 socat[1571771] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  1 tests/channels-e2e/prewarm.spec.ts:114:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first (2.2m)
+2026/11/16 09:54:28 socat[1571780] E write(6, 0x5b2d5216b000, 28): Broken pipe
+2026/11/16 09:54:28 socat[1571781] E write(6, 0x555555624000, 212): Broken pipe
+2026/11/16 09:54:29 socat[1573304] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:54:29 socat[1573313] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  2 tests/channels-e2e/prewarm.spec.ts:88:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first (2.2m)
+2026/11/16 09:54:29 socat[1573316] E write(6, 0x5b2d5216b000, 210): Broken pipe
+2026/11/16 09:54:29 socat[1573317] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 09:54:41 socat[1588866] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:54:41 socat[1588936] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  3 tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is (2.4m)
+2026/11/16 09:54:41 socat[1589205] E write(6, 0x5b2d5216b000, 28): Broken pipe
+2026/11/16 09:54:41 socat[1589224] E write(6, 0x555555624000, 26): Broken pipe
+2026/11/16 09:54:46 socat[1792321] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:54:46 socat[1542761] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:54:46 socat[1792347] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:54:47 socat[1794814] E write(6, 0x5b2d5216c000, 24): Broken pipe
+2026/11/16 09:54:51 socat[1801149] E write(6, 0x5b2d5216c000, 24): Broken pipe
+2026/11/16 09:55:39 socat[1775555] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:55:39 socat[1775567] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  7 tests/channels-e2e/prewarm.spec.ts:137:1 › PRE-04 a fetched channel opens with its latest fifty messages with no connection, and the older ones come when the connection is back (1.2m)
+2026/11/16 09:55:40 socat[1685716] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:55:40 socat[1541862] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  5 tests/channels-e2e/prewarm.spec.ts:88:1 › PRE-02 a device left alone fetches the forty unread channels written in last, and not the forty-first (2.2m)
+2026/11/16 09:55:40 socat[1685732] E write(6, 0x5b2d5216b000, 212): Broken pipe
+2026/11/16 09:55:40 socat[1685733] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 09:56:38 socat[1774356] E write(6, 0x5b2d5216b000, 24): Broken pipe
+2026/11/16 09:56:38 socat[1774363] E write(6, 0x5b2d5216b000, 24): Broken pipe
+  ✓  6 tests/channels-e2e/prewarm.spec.ts:114:1 › PRE-03 a device left alone fetches the twenty channels its person looked at last, and not the twenty-first (2.2m)
+2026/11/16 09:56:38 socat[1774366] E write(6, 0x5b2d5216b000, 212): Broken pipe
+2026/11/16 09:56:38 socat[1774367] E write(6, 0x555555624000, 28): Broken pipe
+2026/11/16 09:57:02 socat[1804017] E write(6, 0x5b2d5216c000, 24): Broken pipe
+2026/11/16 09:57:02 socat[1542761] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 09:57:02 socat[1804040] E write(6, 0x5b2d5216c000, 24): Broken pipe
+  ✓  8 tests/channels-e2e/prewarm.spec.ts:171:1 › PRE-05 a channel not opened for thirty days is no longer on the device, and one opened two days later still is (2.3m)
+2026/11/16 09:57:02 socat[1804066] E write(6, 0x5b2d5216c000, 28): Broken pipe
+2026/11/16 09:57:02 socat[1804067] E write(6, 0x555555624000, 24): Broken pipe
+
+  8 passed (4.9m)
+2026/11/16 09:57:02 socat[1542761] W exiting on signal 15
+2026/11/16 09:57:02 socat[1541862] W exiting on signal 15

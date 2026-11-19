@@ -1,0 +1,11 @@
+--- a/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
++++ b/apps/web/src/features/channel/Channel/create-channel-message-actions.ts
+@@ -187,7 +187,7 @@
+         !isDeleted && message.content
+           ? async ({ silent }) => {
+               try {
+-                await effects.copyToClipboard(message.content);
++                await effects.copyToClipboard("");
+                 if (!silent) effects.notifyCopyMessageTextSuccess();
+                 return true;
+               } catch (error) {

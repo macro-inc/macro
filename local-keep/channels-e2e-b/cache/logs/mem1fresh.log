@@ -1,0 +1,700 @@
+path "/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web" does not contain a 'flake.nix', searching up
+
+Running 20 tests using 2 workers
+
+2026/11/16 15:24:43 socat[447958] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:24:43 socat[471663] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:24:43 socat[471636] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:24:43 socat[473058] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:24:43 socat[474039] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:24:43 socat[470836] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:24:43 socat[470899] E write(6, 0x55e3a69b4000, 24): Broken pipe
+  ✓   1 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.2s)
+2026/11/16 15:24:50 socat[483762] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[483778] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[483797] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[490487] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[447574] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:24:50 socat[490589] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[490611] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[481812] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[481836] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:24:50 socat[481844] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓   3 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.5s)
+2026/11/16 15:26:07 socat[471621] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:07 socat[471628] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:07 socat[471632] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:07 socat[472846] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:07 socat[472875] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:07 socat[472891] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:08 socat[470769] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:08 socat[470813] E write(6, 0x55e3a69b4000, 24): Broken pipe
+2026/11/16 15:26:08 socat[470838] E write(6, 0x55e3a69b4000, 24): Broken pipe
+  ✘   2 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:26:21 socat[495072] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[495098] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[495103] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[501843] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[447958] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:26:21 socat[501859] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[501861] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[493223] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[447574] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:26:21 socat[493229] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:21 socat[493254] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘   4 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:26:28 socat[654015] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:28 socat[654124] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[655667] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[655674] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[655671] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[653464] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[653470] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:26:29 socat[653634] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓   6 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.1s)
+2026/11/16 15:27:39 socat[632534] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:39 socat[632537] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:39 socat[633605] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:39 socat[633883] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:39 socat[633905] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:40 socat[631983] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:40 socat[631990] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:40 socat[632127] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘   5 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:27:47 socat[784562] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[784568] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[784765] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[785923] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[786114] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[777735] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[778001] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:47 socat[779460] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓   8 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:27:59 socat[665676] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:59 socat[665679] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:27:59 socat[665736] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:00 socat[666369] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:00 socat[666485] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:00 socat[664935] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:00 socat[664955] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:00 socat[664958] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘   7 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:28:07 socat[819428] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[819437] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[819488] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[447958] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:28:07 socat[447574] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:28:07 socat[820151] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[820154] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[818549] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[818625] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:28:07 socat[818628] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  10 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.3s)
+2026/11/16 15:29:18 socat[796756] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[796765] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[796770] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[797637] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[797797] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[797971] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[795294] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[795302] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:18 socat[795439] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘   9 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:29:26 socat[954389] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[954530] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[954581] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[957084] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[957267] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[957269] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[947763] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:26 socat[447574] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✓  12 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.6s)
+2026/11/16 15:29:38 socat[829155] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:38 socat[829165] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:38 socat[829167] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:38 socat[830222] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:38 socat[830265] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:38 socat[830274] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:39 socat[828571] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:39 socat[828599] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:29:39 socat[828601] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘  11 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:30:57 socat[970121] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[447574] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+2026/11/16 15:30:57 socat[970271] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[970290] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[971802] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[971860] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[961416] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:30:57 socat[961446] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘  13 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:31:10 socat[993514] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:10 socat[993573] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:10 socat[993587] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:10 socat[994801] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:11 socat[992162] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:11 socat[992226] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:11 socat[992184] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:11 socat[447958] W waitpid(-1, {}, WNOHANG): no (more) child has exited
+  ✘  14 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+2026/11/16 15:31:18 socat[1149698] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1149710] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1149858] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1151233] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1150918] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1151235] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1151465] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1143085] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:18 socat[1143088] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  16 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.2s)
+2026/11/16 15:31:24 socat[1161433] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:24 socat[1161485] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:24 socat[1161834] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:24 socat[1162775] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:24 socat[1162777] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:25 socat[1154220] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:25 socat[1154250] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  17 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.2s)
+2026/11/16 15:31:31 socat[1172160] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1172326] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1172701] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1173917] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1172774] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1174022] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1174028] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1165083] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1165107] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:31 socat[1165359] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  18 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.1s)
+2026/11/16 15:31:37 socat[1183242] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1183244] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1184208] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1184212] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1184214] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1177119] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:37 socat[1178760] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  19 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.1s)
+2026/11/16 15:31:44 socat[1193144] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1192365] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1193164] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1193166] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1193888] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1193901] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1194068] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1190911] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1191938] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:31:44 socat[1191997] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✓  20 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (6.2s)
+2026/11/16 15:32:29 socat[1123896] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1123919] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1123937] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1130664] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1130698] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1121960] E write(6, 0x55e3a69b5000, 24): Broken pipe
+2026/11/16 15:32:29 socat[1121981] E write(6, 0x55e3a69b5000, 24): Broken pipe
+  ✘  15 tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after (1.5m)
+
+
+  1) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.5[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-183-listbox-item-cl-187" aria-labelledby="combobox-cl-183-listbox-item-cl-187-label" data-key="current-user-input-cy.5[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat1/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  2) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.4[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-191-listbox-item-cl-195" aria-labelledby="combobox-cl-191-listbox-item-cl-195-label" data-key="current-user-input-cy.4[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat3/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  3) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.5[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-187-listbox-item-cl-191" aria-labelledby="combobox-cl-187-listbox-item-cl-191-label" data-key="current-user-input-cy.5[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+        - element is not visible
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat4/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  4) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.4[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-199-listbox-item-cl-203" aria-labelledby="combobox-cl-199-listbox-item-cl-203-label" data-key="current-user-input-cy.4[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat6/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  5) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.5[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-195-listbox-item-cl-199" aria-labelledby="combobox-cl-195-listbox-item-cl-199-label" data-key="current-user-input-cy.5[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat8/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  6) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.4[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-211-listbox-item-cl-215" aria-labelledby="combobox-cl-211-listbox-item-cl-215-label" data-key="current-user-input-cy.4[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat10/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  7) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.5[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-203-listbox-item-cl-207" aria-labelledby="combobox-cl-203-listbox-item-cl-207-label" data-key="current-user-input-cy.5[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is visible, enabled and stable
+        - scrolling into view if needed
+        - done scrolling
+        - performing click action
+        - <html lang="en" data-platform="web" data-theme-light="true" data-modality="keyboard" data-touch-device="false">…</html> intercepts pointer events
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat12/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  8) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.4[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-219-listbox-item-cl-223" aria-labelledby="combobox-cl-219-listbox-item-cl-223-label" data-key="current-user-input-cy.4[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+        - element is not stable
+      - retrying click action
+        - waiting 100ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat13/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9) tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+
+    Test timeout of 90000ms exceeded.
+
+    Error: locator.click: Test timeout of 90000ms exceeded.
+    Call log:
+      - waiting for getByRole('option', { name: 'Invite cy.5[at]channels-e2e.seed.macro.local' })
+        - locator resolved to <li role="option" aria-setsize="1" aria-posinset="1" data-highlighted="" aria-disabled="false" aria-selected="false" id="combobox-cl-211-listbox-item-cl-215" aria-labelledby="combobox-cl-211-listbox-item-cl-215-label" data-key="current-user-input-cy.5[at]channels-e2e.seed.macro.local" class="flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5">…</li>
+      - attempting click action
+        2 × waiting for element to be visible, enabled and stable
+          - element is not stable
+        - retrying click action
+        - waiting 20ms
+        - waiting for element to be visible, enabled and stable
+      - element was detached from the DOM, retrying
+
+
+       at harness/management.ts:196
+
+      194 |   await box.click();
+      195 |   await box.fill(email);
+    > 196 |   await page.getByRole('option', { name: `Invite ${email}` }).click();
+          |                                                               ^
+      197 |   await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+      198 |   await expect(dialog).toBeHidden();
+      199 | }
+        at inviteByEmail (/home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/harness/management.ts:196:63)
+        at /home/teo/.herdr/worktrees/macro/synoet-channels-e2e-b/apps/web/tests/channels-e2e/members.spec.ts:35:3
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/test-failed-2.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #3: screenshot (image/png) ──────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/test-failed-3.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/error-context.md
+
+    attachment #5: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/trace.zip
+    Usage:
+
+        npx playwright show-trace ../../../../../../.cache/channels-e2e-b/runs/mem1fresh/test-results/members-MEM-01-a-person-in-dd3f2-t-was-said-before-and-after-repeat14/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  9 failed
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+    tests/channels-e2e/members.spec.ts:18:1 › MEM-01 a person invited from the app gets the channel at once, with what was said before and after 
+  11 passed (8.1m)
+2026/11/16 15:32:30 socat[447958] W exiting on signal 15
+2026/11/16 15:32:30 socat[447574] W exiting on signal 15
