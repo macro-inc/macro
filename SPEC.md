@@ -10,12 +10,17 @@ Xvnc `127.0.0.1:5901` in the guest, but the owner can't see it). Builds on `/hom
 
 The agent can share one of two surfaces, and picks the one that fits:
 
-| Surface | What people see | Where | How |
+| Surface | What people see | In calls | In the "View screen" panel |
 | --- | --- | --- | --- |
-| **Tab** (exists today) | One browser tab in a clean, signed-out browser context, with the URL blocklist enforced at the wire | Calls only | CDP screencast → LiveKit screen-share track (kept as is) |
-| **Desktop** (new) | The agent's own virtual desktop `:1`: every window, dialog and app, plus its signed-in browser | The "View screen" panel, and calls (phase 4) | Panel: VNC/RFB through the harness → noVNC. Call: x11grab → the existing LiveKit publish |
+| **Desktop** | The agent's own virtual desktop `:1`: every window, dialog and app, plus its signed-in browser | **Already shipped** in `packages/starter-agent`: x11grab on `:1` → LiveKit screen share | **New:** VNC/RFB through the harness → noVNC |
+| **Tab** | One browser tab in a clean, signed-out browser context, with the URL blocklist enforced at the wire | **Add:** port the CDP screencast share from the older `agent-teammates/` template | Not in v1 (D8) |
 
 Never the desktop of the person who owns the agent: only the agent's computer, display `:1`.
+
+A correction to the brief: on hosted agents the call share **already is the desktop**, not a CDP tab
+(`packages/starter-agent/behavior/capabilities/calls/DESIGN.md` "Showing the screen"). The tab-only CDP screencast
+exists only in `agent-teammates/starter-agent`, which is outside the workspace. "Support both" therefore means
+adding the tab mode to the hosted template, not adding a desktop mode to calls.
 
 **Rules for both surfaces**
 - The viewer always says which surface is shown ("Scout's tab: example.com" or "Scout's desktop"). People who
@@ -66,7 +71,7 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
 | 1 | View screen (member card, DM header, Machines row), side panel, view-only, watch on phone, audit | harness screen WebSocket over `Fleet::exec` socat, noVNC panel |
 | 2 | Take over / Hand back, driver lease, agent held | harness lease + held tool calls (D7) |
 | 3 | Agent's "Watch my screen" chip, surface label + Switch/Stop | agent tool, chip attachment |
-| 4 | Desktop into calls, tab ⇄ desktop switch in calls | muppet: x11grab feed into the existing publish |
+| 4 | Tab mode in calls, tab ⇄ desktop switch, D9 participant rule | `packages/starter-agent` calls: add the CDP tab share next to the desktop share |
 
 ## Decisions for Wolf
 
@@ -83,10 +88,11 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
   CDP servers only (needs an image change, and the agent can still reach X through Bash).
 - **D8 Tab surface outside calls?** I recommend no in v1. Today a tab can only be published into a call. Outside a
   call the desktop covers it.
-- **D9 Desktop in a call:** the tab's safety rules (clean signed-out browser, blocklist, no typing into password
-  fields) don't exist on the desktop, and a call can include guests who may not watch. I recommend allowing it only
-  when everyone in the call may `View` the computer. Otherwise the share falls back to the tab, and the agent says
-  why.
+- **D9 Desktop in a call (this is how it works today):** the agent's signed-in desktop already goes to everyone
+  in the call, and a call can include guests. Anyone with view access on the call can mint a guest link, and
+  `POST /call/meetings/join/{token}` admits the holder (see Details). The tab's safety rules (clean signed-out
+  browser, blocklist) don't exist on the desktop. I recommend showing the desktop only when everyone in the call
+  may `View` the computer. Otherwise the share falls back to the tab, and the agent says why.
 
 ## Acceptance checks
 
@@ -102,14 +108,20 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
    "ended" state.
 7. Releasing or hibernating the computer closes the panel's socket with "asleep/off".
 8. One trace from the ticket to the socket close (`computer.screen.*`), and the audit rows match.
-9. `cargo test -p agent_harness_service` covers tickets and the RFB input gate. muppet tests cover the
+9. `cargo test -p agent_harness_service` covers tickets and the RFB input gate. `packages/starter-agent` tests cover the
    surface-choice rule and the D9 fallback.
 
-## Open questions (to t2j2: calls/runtime owner)
+## Answered questions
 
-- **Q3** On a hosted agent computer, does the call worker (`@livekit/rtc-node`, muppet `calls/`) run inside the
-  guest as the agent's user, so it can read display `:1` with x11grab?
-- **Q4** Who may join a call the agent is in: only team members, or outside guests too? D9 depends on it.
+- **Q3: the call worker sees `:1`.** The agent spawns `cli.ts joinCall` as its own child process.
+  `macro-agent.service` uses `agentUnit`, which sets `inherit environment`, with `DISPLAY` from
+  `desktopEnvironment` and `JoinsNamespaceOf = "macro-agent-display.service"`, so it shares the display's `/tmp`
+  and X socket (`nix/macro-box/_agent.nix:151-153,229-249,389`). `ffmpeg-x11grab` is on the agent's PATH for
+  exactly this (`_agent.nix:67-82`).
+- **Q4: guests can join.** `POST /call/record/{call_id}/link` lets anyone with view access on the call mint a
+  meeting link (`crates/call/src/inbound/axum_router/meetings.rs:259`, `CallAccessLevelExtractor<ViewAccessLevel>`).
+  Agents' programs are refused (`refuse_program_link`). Anyone holding the link joins as a guest through
+  `POST /call/meetings/join/{token}`. Hence D9.
 
 ---
 
@@ -140,32 +152,36 @@ In a call: agent shares   tab ⇄ desktop   (call tile shows which; Stop)
   replicas, and shares the ACP socket); WebRTC for the panel (needs a guest encoder and our own input injection,
   for a panel that VNC already serves).
 
-## Desktop into a call: findings
+## Calls: what exists and what to add
 
-- **How the tab share works today** (`agent-teammates/muppet/packages/lib/utilities/macro/calls/share.ts`,
-  `frames.ts`, `starter-agent/behavior/capabilities/calls/DESIGN.md` "Showing a browser"):
-  - CDP `Page.startScreencast` sends a JPEG on each damage.
-  - A worker decodes it with ffmpeg into fixed-size I420 frames: 1280×720, 10 fps, quality 65. It re-sends the
-    newest frame to keep the track alive.
-  - The SDK `publishScreenShare` puts them on a `VideoSource` and publishes it as `TrackSource.SOURCE_SCREENSHARE`
-    (`packages/sdk/src/calls/node.ts:67-165`). libwebrtc in `@livekit/rtc-node` encodes it in software, in the
-    agent's process.
-  - Lifecycle: the share starts with `share_screen` and is driven by `drive_screen`. It ends on `stop_share`, a
-    blocked navigation, a stall, the track ending or the call ending.
-- **VNC does not plug into calls.** RFB frames are a protocol for remote viewers. Inside the guest, decoding RFB
-  from Xvnc only to re-encode it is strictly worse than reading the display directly. The desktop source for a
-  call is therefore **ffmpeg `x11grab` on `:1`**, scaled to the same 1280×720 I420 at 10 fps, fed into the
-  **same** `ScreenFrame` stream and `publishScreenShare`. Only the source changes. Encoding, the track, the
-  source type and the lifecycle are all unchanged.
-- **Not faster, not slower:** the encode is the same libwebrtc encode the tab already pays for (estimated at a few
-  tens of percent of one vCPU at 720p10; not measured). x11grab adds a small capture and scale cost. x11grab also
-  sends frames at a steady rate rather than on damage, so it uses more CPU when the screen is idle unless we skip
-  unchanged frames.
-- **Server-side alternative (rejected for now):** the harness decodes RFB and publishes into LiveKit as its own
-  participant. That keeps the encode out of the guest, but it adds a media publisher service and a second
-  participant identity. Revisit only if guest CPU in calls becomes a problem.
-- **Switching surfaces in a call:** stop one publication and start the other on the same `SOURCE_SCREENSHARE`.
-  There is one screen share per agent at a time.
+- **Desktop share, shipped in the hosted template** (`packages/starter-agent/behavior/capabilities/calls/share.ts`,
+  `context/desktop.ts`, `context/share-frames.ts`, `DESIGN.md` "Showing the screen"):
+  - Tools `share_screen(url?)` and `stop_share`.
+  - `ffmpeg-x11grab` captures `DISPLAY` (`:1`, 1920×1080) and scales it to 720p at 10 fps, in a worker.
+  - I420 `ScreenFrame`s go to the SDK `publishScreenShare` → `VideoSource` → `TrackSource.SOURCE_SCREENSHARE`
+    (`packages/sdk/src/calls/node.ts:67-165`). libwebrtc in `@livekit/rtc-node` encodes them in software in the
+    guest.
+  - The desktop's sound goes out as screen-share audio.
+  - "I'm sharing my screen" and "Stopped sharing" are said by code. The share is refused when the agent joined
+    uninvited, and it stops with the call.
+  - Passwords are pasted, never typed on screen.
+- **Tab share, only in the older template** (`agent-teammates/muppet/.../calls/share.ts`,
+  `agent-teammates/starter-agent/.../calls/context/share-browser.ts`):
+  - CDP `Page.startScreencast` from a new signed-out browser context.
+  - `Fetch.enable` checks the blocklist on every Document request at the wire.
+  - JPEGs are decoded by ffmpeg to the same 1280×720 I420 frames, then the same `publishScreenShare`.
+- **VNC does not go into calls, and doesn't need to.** The desktop already reaches calls by x11grab in the guest.
+  Decoding RFB from Xvnc only to re-encode it would be strictly worse. The two paths stay separate: RFB for the
+  panel, x11grab or screencast for calls. Neither is faster; the encode, track and lifecycle are the same.
+- **To add (phase 4):**
+  - Port the tab share into `packages/starter-agent` as a second mode of `share_screen`
+    (`surface: "tab" | "desktop"`).
+  - Apply the selection rule and the D9 participant check in code before the capture starts.
+  - Switching = stop one publication and start the other on the same `SOURCE_SCREENSHARE`. One share at a time.
+  - Each agent's repository starts as a copy of the template (`docs/design/agent-teammates.md:7`), so how the
+    change reaches existing agents needs checking with t2j2.
+- **Server-side publish (rejected):** the harness would decode RFB and publish into LiveKit as its own
+  participant. That adds a media service and a second identity, with no gain while the guest already publishes.
 
 ## Security details
 
