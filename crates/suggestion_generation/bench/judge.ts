@@ -22,7 +22,7 @@ export const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
  * schema or what a judgement reads, so `compare` never weighs the marks of
  * two judges against each other.
  */
-export const JUDGE = `${JUDGE_MODEL} v2`;
+export const JUDGE = `${JUDGE_MODEL} v3`;
 /**
  * The accounts the judges call as. Each judges one attempt at a time, so a
  * judgement's cost is the account's spend while it ran; several let
@@ -132,7 +132,7 @@ const inboxDigest = (persona: Persona, variant: Variant, now: number) =>
   recentMessages(persona, variant, now)
     .messages.map(
       (m, i) =>
-        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} <${m.from.email}> | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
+        `[${i + 1}] ${m.received_at.slice(0, 16)} from ${shown(m.from.name)} <${shown(m.from.email)}> | ${shown(m.subject)} | labels: ${m.labels.map(shown).join(', ')}\n${shown(m.snippet)}`,
     )
     .join('\n\n');
 

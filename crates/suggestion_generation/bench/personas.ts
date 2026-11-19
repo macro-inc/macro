@@ -76,15 +76,18 @@ export type Persona = {
   inbox: Inbox;
   feedTruth?: FeedTruth;
   routinesTruth?: RoutinesTruth;
+  /** How many of its addresses are read spelled in ASCII (`asciiSpellings`). */
+  respelled: number;
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
 // accent ("inès@…") or another script, which the seed CLI refuses. Each such
 // address is read with its local part spelled in ASCII, the same way in every
 // file of the persona (its mail, its workspace and its answer keys): without
-// its accents, or tagged with its original spelling where that would leave it
-// empty or the same as another address of the persona. Files are parsed
-// first, so an escaped spelling ("in\\u00e8s") reads the same.
+// its accents (and without the empty dot runs that can leave), or tagged with
+// its original spelling where that would leave it empty or the same as
+// another address of the persona. Files are parsed first, so an escaped
+// spelling ("in\\u00e8s") reads the same.
 const ADDRESS = /([^\s<>"',;:()@]+)@([\w.-]+\.\w+)/gu;
 const isAscii = (text: string) => /^[\x21-\x7e]*$/.test(text);
 
@@ -109,9 +112,17 @@ export function asciiSpellings(values: unknown[]): Map<string, string> {
   const spelled = new Map<string, string>();
   for (const address of addresses.filter((address) => !isAscii(address.split('@')[0]))) {
     const [local, domain] = address.split('@');
-    const plain = local.normalize('NFD').replace(/[^\x21-\x7e]/g, '');
+    const plain = local
+      .normalize('NFD')
+      .replace(/[^\x21-\x7e]/g, '')
+      .replace(/\.{2,}/g, '.')
+      .replace(/^\.+|\.+$/g, '');
     let ascii = `${plain}@${domain}`;
-    if (!plain || taken.has(ascii.toLowerCase())) ascii = `${plain || 'x'}-${Bun.hash(local).toString(36).slice(0, 6)}@${domain}`;
+    // A tag hashes the original spelling, then that with a counter until it is free.
+    for (let n = 0; !plain || taken.has(ascii.toLowerCase()); n++) {
+      ascii = `${plain || 'x'}-${Bun.hash(n ? `${local}#${n}` : local).toString(36).slice(0, 6)}@${domain}`;
+      if (!taken.has(ascii.toLowerCase())) break;
+    }
     taken.add(ascii.toLowerCase());
     spelled.set(address, ascii);
   }
@@ -140,8 +151,12 @@ function load(dir: string, name: string, heldout: boolean): Persona {
     inbox: spellAddresses(inbox, spelled),
     feedTruth: spellAddresses(feedTruth, spelled),
     routinesTruth: spellAddresses(routinesTruth, spelled),
+    respelled: spelled.size,
   };
 }
+
+/** What a generation for `persona` reads (its workspace and mail, as spelled here), as a short digest a rejudge checks it reads the same. */
+export const personaDigest = (persona: Persona) => Bun.hash(JSON.stringify([persona.workspace, persona.inbox])).toString(36);
 
 /** A set's people: its folders, leaving out the hidden ones a held-out writer is still filling. */
 export const folders = (root: string) =>
@@ -203,18 +218,20 @@ export const slotName = (persona: Persona) => `${persona.name}${(persona.seat ??
 /** The owner's address in `variant`. */
 export const ownerEmail = (persona: Persona, variant: Variant) => variantOf(persona, variant).inbox.owner.email;
 
-/** `text` written about `persona`'s seat, with its addresses as the first seat's: every seat is a copy of the first, under a domain of its own. */
+const escaped = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** `text` written about `persona`'s seat, with its addresses as the first seat's: every seat is a copy of the first, under a domain of its own. Domains match in any case. */
 export function asFirstSeat(persona: Persona, variant: Variant, text: string): string {
   const seat = domainOf(ownerEmail(persona, variant));
   const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
-  return seat === first ? text : text.replaceAll(seat, first);
+  return seat === first ? text : text.replace(new RegExp(escaped(seat), 'gi'), first);
 }
 
-/** Whether `text`, written about a later seat of `persona`, names the first seat's domain, which renaming the seat's own to it would hide. */
+/** Whether `text`, written about a later seat of `persona`, names the first seat's domain in any case, which renaming the seat's own to it would hide. */
 export function namesFirstSeat(persona: Persona, variant: Variant, text: string): boolean {
   const seat = domainOf(ownerEmail(persona, variant));
   const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
-  return seat !== first && text.includes(first);
+  return seat !== first && text.toLowerCase().includes(first.toLowerCase());
 }
 
 /** Minutes before the anchor a message arrived; at least one, as the seed CLI needs. */

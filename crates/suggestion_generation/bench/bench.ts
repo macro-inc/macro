@@ -11,7 +11,7 @@ import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
 import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
-import { type Persona, type Variant, contentKey, ownerEmail, personas, scenarioName, seatOf, slotName } from './personas';
+import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
@@ -213,6 +213,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     seats,
     reps,
     judge: JUDGE,
+    personas: Object.fromEntries(people.map((persona) => [persona.name, personaDigest(persona)])),
     flags: spec.flags,
     attempts: [],
   };
@@ -282,6 +283,19 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
   const run = readRun(path);
   const at = stack(values.instance!, values.tempo!);
   const people = new Map(personas(run.set).map((persona) => [persona.name, persona]));
+  // The judge must read what the generations read: the same workspace and mail, spelled the same.
+  for (const name of new Set(run.attempts.map((attempt) => attempt.persona))) {
+    const persona = people.get(name);
+    if (!persona) throw new Error(`${path}: set ${run.set} no longer has ${name}`);
+    const digest = run.personas?.[name];
+    if (digest ? digest !== personaDigest(persona) : persona.respelled > 0) {
+      throw new Error(
+        digest
+          ? `${path}: ${name}'s workspace or mail changed since this run: run it again instead`
+          : `${path} predates persona digests and ${name} has addresses spelled in ASCII, maybe not as they were then: run it again instead`,
+      );
+    }
+  }
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
     await seedGraders(at.instance);
@@ -300,6 +314,10 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
 
 /** Two sides judged by one judge, or why they can't be set side by side. */
 function sameJudge(a: RunFile, b: RunFile) {
+  for (const side of [a, b]) {
+    // Runs from before the judge was recorded may come from different judges too.
+    if (!side.judge) throw new Error(`${side.label} has no judge recorded: rejudge it first`);
+  }
   if (a.judge !== b.judge) {
     throw new Error(`${a.label} and ${b.label} were judged by different judges (${a.judge ?? 'unrecorded'}, ${b.judge ?? 'unrecorded'}): rejudge the older one first`);
   }
@@ -360,6 +378,7 @@ async function main() {
     }
     case 'noise': {
       const [a, b] = rest.map(readSide);
+      if (a.section !== b.section) throw new Error('noise takes two runs of the same section');
       sameJudge(a, b);
       const n = noiseMargins(a.attempts, b.attempts);
       console.log(`${a.section}: ${n.score.attempts.join(' and ')} attempts of the same build over ${n.score.people} personas`);

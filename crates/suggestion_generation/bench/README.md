@@ -87,23 +87,27 @@ The judge (`anthropic/claude-opus-5-5` through the stack's structured
 completion) sees the persona's mail or workspace, the answer key and the
 suggestions, never the build, the label or other runs, and gets the run's own
 "now" and time zone. Every seat copies the first under a domain of its own,
-so where renaming a seat's domain to the first seat's loses nothing (none of
-its mail or suggestions names the first seat's domain, and its mail renamed
-is the first seat's word for word: a snippet cut at 500 characters can cut a
-longer domain's copy elsewhere), a routines judgement reads the first seat's
-mail and the seat's suggestions renamed (`routinesEvidence`), so the seats of
-one round share the person, mail, catalog and key word for word; those go
-after the rubric, which the route caches, and the round's first judgement
-writes the cache the others then read. Any other seat is judged on its own
+so where renaming a seat's domain to the first seat's loses nothing (none
+of its mail or suggestions names the first seat's domain in any case, and
+its mail renamed is the first seat's word for word: a snippet cut at 500
+characters can cut a longer domain's copy elsewhere), a routines judgement
+reads the first seat's mail and the seat's suggestions renamed
+(`routinesEvidence`), so the seats of one round share the person, mail,
+catalog and key word for word; those go after the rubric, which the route
+caches, and the round's first judgement writes the cache the others then
+read. Any other seat is judged on its own
 mail, uncached. Rejudged that way, the same generations scored within the
 judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
 single-session build 64.7 against 66.3) at about half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
-`compare` and `noise` refuse two sides judged by different judges. A run from
-before the judge was recorded reads as `unrecorded`: `rejudge` it before
-setting it beside a newer one.
+`compare` and `noise` refuse two sides judged by different judges, or a side
+whose judge wasn't recorded: `rejudge` that one first. A run also records a
+digest of each persona's workspace and mail as its generations read them, and
+`rejudge` refuses a run whose persona has changed since, so the judge reads
+what the generation read; a run from before the digest was kept is rejudged
+only when no address of its personas is respelled in ASCII.
 
 ## Running it
 
