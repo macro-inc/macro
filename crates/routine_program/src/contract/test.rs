@@ -15,12 +15,11 @@ fn code(title: &str, id: Option<&str>) -> serde_json::Value {
     step
 }
 
-/// The context of a step in a routine without sub-routines: `base`, with
-/// nothing to schedule.
-fn unscheduled(base: &str) -> String {
-    format!(
-        "type StepContext = Omit<{base}, 'macro'> & {{ macro: {base}['macro'] & {{ routines: {{ schedule: never }} }} }};"
-    )
+/// The context of a step in a routine with neither sub-routines nor inputs:
+/// the line it got before either existed, byte for byte, so a stored
+/// routine's check files are no longer than they were.
+fn plain(base: &str) -> String {
+    format!("type StepContext = {base};")
 }
 
 fn ids(program: &RoutineProgram) -> Vec<String> {
@@ -83,13 +82,10 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
             )
         );
     }
-    assert_eq!(
-        context(&files[0]),
-        unscheduled("RoutineStepContext<{  }, {  }>")
-    );
+    assert_eq!(context(&files[0]), plain("RoutineStepContext<{  }, {  }>"));
     assert_eq!(
         context(&files[1]),
-        unscheduled(
+        plain(
             "RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }, {  }>"
         )
     );
@@ -121,7 +117,7 @@ fn a_step_sees_its_knobs_typed_but_not_their_values() {
     let files = with("Low", 7.0).check_files();
     assert_eq!(
         files[0].source.lines().rev().nth(1).unwrap(),
-        unscheduled(
+        plain(
             r#"RoutineStepContext<{  }, { priority: "Low" | "High \"now\""; days: number; note: string; urgent: string; notify: boolean }>"#
         )
     );
@@ -178,9 +174,10 @@ fn a_routines_sub_routines_type_its_schedule_and_their_steps_inputs() {
     let schedule = |base: &str, inputs: &str| {
         format!(
             "type $SubRoutines = {{ remind: {{ inputs: {{ taskId: string; urgent: boolean }} }}; nudge: {{ inputs?: Record<string, never> }} }};\n\
-             type $Macro = {base}['macro'];\n\
+             type $Macro = import('@macro-inc/sdk').Macro;\n\
              type $Routines = $Macro['routines'];\n\
-             interface $ScheduledRoutines extends $Routines {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']>; }}\n\
+             type $Schedule = {{ [Name in keyof $SubRoutines]: [name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]] }}[keyof $SubRoutines];\n\
+             interface $ScheduledRoutines extends $Routines {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']>; }}\n\
              interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
              type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};"
         )

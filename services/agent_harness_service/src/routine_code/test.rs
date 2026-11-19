@@ -700,6 +700,46 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         assert!(failing[0].problems[0].contains("Property 'dueAt' does not exist"));
     }
 
+    /// A name that could be either of two sub-routines takes neither's
+    /// inputs, so a value fitting one can't reach the other.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_schedule_call_takes_the_inputs_of_the_one_sub_routine_it_names() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let routine = |body: &str| {
+            let mut program = RoutineProgram::from_task(&json!({
+                "steps": [{ "type": "code", "title": "Schedule", "source": format!(
+                    "export async function main({{ macro, run }}: StepContext) {{ const trigger = {{ type: 'once' as const, at: run.at }}; {body} }}"
+                ) }],
+                "sub_routines": [
+                    {
+                        "name": "remind",
+                        "title": "Remind me",
+                        "inputs": [{ "type": "text", "name": "taskId", "label": "Task" }],
+                        "steps": [{ "type": "agent", "model": "m", "instructions": "Remind me" }],
+                    },
+                    {
+                        "name": "count",
+                        "title": "Count",
+                        "inputs": [{ "type": "number", "name": "n", "label": "N" }],
+                        "steps": [{ "type": "agent", "model": "m", "instructions": "Count" }],
+                    },
+                ],
+            }))
+            .unwrap();
+            program.assign_step_ids();
+            program
+        };
+        let each = "await macro.routines.schedule('remind', { trigger, inputs: { taskId: 't' } }); await macro.routines.schedule('count', { trigger, inputs: { n: 42 } });";
+        assert_eq!(
+            code.check_program(&routine(each)).await.unwrap(),
+            Vec::new()
+        );
+        let either = "const name = run.dryRun ? ('remind' as const) : ('count' as const); await macro.routines.schedule(name, { trigger, inputs: { n: 42 } });";
+        let failing = code.check_program(&routine(either)).await.unwrap();
+        assert_eq!(failing.len(), 1, "{failing:?}");
+    }
+
     /// `macro` stays the SDK's `Macro`, so a helper typed with it takes it,
     /// and only a routine that defines sub-routines can call `schedule`.
     #[tokio::test]

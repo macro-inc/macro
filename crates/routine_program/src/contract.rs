@@ -28,8 +28,12 @@ pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';
 declare global {
   /** What a routine code step's `main` receives. */
   interface RoutineStepContext<Steps, Knobs> {
-    /** Macro's SDK, acting as the routine's owner. */
-    macro: Macro;
+    /**
+     * Macro's SDK, acting as the routine's owner. `routines.schedule` is
+     * there only in a routine that defines sub-routines, typed with their
+     * names and inputs.
+     */
+    macro: Macro & { routines: { schedule: never } };
     /** This run. */
     run: RoutineRunInfo;
     /** The routine this step belongs to. */
@@ -329,14 +333,14 @@ impl Walk {
         }
     }
 
-    /// The step's module-scoped `StepContext`. A routine's sub-routines
-    /// replace the SDK's `macro.routines.schedule` with one that takes only
-    /// their names, each with its inputs; a routine without any has nothing
-    /// to schedule, so code calling it doesn't check, and can't be saved
-    /// while the rollout is off. Either way `macro` stays assignable to the
-    /// SDK's `Macro`, private members included, so helpers typed with it
-    /// still take it. Whether a routine needs checking again compares check
-    /// files of one build, so changing this re-checks no routine by itself.
+    /// The step's module-scoped `StepContext`. [`STEP_CONTEXT`] types
+    /// `macro.routines.schedule` as `never`, and a routine's sub-routines
+    /// replace it with one that takes only their names, each with its
+    /// inputs. `macro` stays assignable to the SDK's `Macro`, private
+    /// members included, so helpers typed with it still take it. A routine
+    /// with neither sub-routines nor inputs gets the line it got before
+    /// either existed, so its check files are as long as they were: the
+    /// checker limits a file's size with this appended.
     fn context(&self, code: &CodeStep) -> String {
         let base = format!("RoutineStepContext<{}, {}>", self.outputs(), knobs(code));
         let inputs = self
@@ -345,17 +349,18 @@ impl Walk {
             .map(|inputs| format!(" & {{ inputs: {inputs} }}"))
             .unwrap_or_default();
         let Some(schedules) = &self.schedules else {
-            return format!(
-                "type StepContext = Omit<{base}, 'macro'> & {{ macro: {base}['macro'] & {{ routines: {{ schedule: never }} }} }}{inputs};\n"
-            );
+            return format!("type StepContext = {base}{inputs};\n");
         };
         // Interfaces that extend the SDK's types keep their private members,
         // where `Omit` would drop them and break assignability to `Macro`.
+        // One argument list per name, so a name that could be either of two
+        // takes neither's inputs.
         format!(
             "type $SubRoutines = {schedules};\n\
-             type $Macro = {base}['macro'];\n\
+             type $Macro = import('@macro-inc/sdk').Macro;\n\
              type $Routines = $Macro['routines'];\n\
-             interface $ScheduledRoutines extends $Routines {{ schedule<Name extends keyof $SubRoutines>(name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]): ReturnType<$Routines['schedule']>; }}\n\
+             type $Schedule = {{ [Name in keyof $SubRoutines]: [name: Name, options: Omit<Parameters<$Routines['schedule']>[1], 'inputs'> & $SubRoutines[Name]] }}[keyof $SubRoutines];\n\
+             interface $ScheduledRoutines extends $Routines {{ schedule(...call: $Schedule): ReturnType<$Routines['schedule']>; }}\n\
              interface $ScheduledMacro extends $Macro {{ routines: $ScheduledRoutines; }}\n\
              type StepContext = Omit<{base}, 'macro'> & {{ macro: $ScheduledMacro }}{inputs};\n"
         )

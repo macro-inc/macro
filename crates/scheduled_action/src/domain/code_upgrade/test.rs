@@ -418,12 +418,12 @@ async fn a_rewrite_must_still_suit_the_steps_that_read_its_output() {
     assert!(
         rewrites[0]
             .0
-            .starts_with("type StepContext = Omit<RoutineStepContext<")
+            .starts_with("type StepContext = RoutineStepContext<")
     );
 }
 
-/// A sub-routine's code is rewritten seeing how its routine types
-/// `schedule`: the interfaces as well as the types.
+/// A sub-routine's code is rewritten seeing its own context: how its
+/// routine types `schedule`, interfaces as well as types, and its inputs.
 #[tokio::test]
 async fn a_rewrite_of_a_definitions_code_sees_how_schedule_is_typed() {
     let code = Code {
@@ -431,17 +431,19 @@ async fn a_rewrite_of_a_definitions_code_sees_how_schedule_is_typed() {
         ..Code::default()
     };
     let parent = action(json!({
-        "steps": [{ "type": "code", "title": "Plan", "source": "await macro.tasks.create(x)" }],
+        "steps": [{ "type": "code", "title": "Plan", "source": "return 1" }],
         "sub_routines": [{
             "name": "file",
             "title": "File it",
-            "steps": [{ "type": "agent", "model": "m", "instructions": "File it" }],
+            "inputs": [{ "type": "text", "name": "taskId", "label": "Task" }],
+            "steps": [{ "type": "code", "title": "File", "source": "await macro.tasks.create(x)" }],
         }],
     }));
     upgrade(&code, &Upgrades::default(), &parent)
         .await
         .unwrap_err();
     let rewrites = code.rewrites.lock().unwrap().clone();
+    assert_eq!(rewrites.len(), 1);
     let view = &rewrites[0].0;
     assert!(view.starts_with("type $SubRoutines = { file:"), "{view}");
     assert!(
@@ -452,7 +454,10 @@ async fn a_rewrite_of_a_definitions_code_sees_how_schedule_is_typed() {
         view.contains("interface $ScheduledMacro extends $Macro"),
         "{view}"
     );
-    assert!(view.ends_with("{ macro: $ScheduledMacro };"), "{view}");
+    assert!(
+        view.ends_with("{ macro: $ScheduledMacro } & { inputs: { taskId: string } };"),
+        "{view}"
+    );
 }
 
 /// A later step reads outputs that don't exist before the run, so its
