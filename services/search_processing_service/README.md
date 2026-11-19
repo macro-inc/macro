@@ -319,8 +319,8 @@ counts, and deletes nothing. Run the dry run first. The job record's entity is
 `deleted-chat-messages-dry-run` for a dry run and `deleted-chat-messages` for
 a run. The status poll reports
 `enqueued` (indexed messages read), `missing` (messages whose row is gone, the
-documents a run deletes), `updated` (documents deleted, 0 in a dry run),
-`failed`, and `cursor`, the last message id it finished. Each page's
+documents a run deletes), `updated` (documents deleted, 0 in a dry run), and
+`cursor`, the last message id it finished. Each page's
 `search.deleted_chat_messages.page` span also records `gone_with_chat`, how
 many of its gone messages belong to a chat whose row is gone too, and
 `gone_sample`, up to 10 of them as `chat_id:message_id`, to check a dry run's
@@ -329,10 +329,13 @@ finds against `ChatMessage` before the real run.
 It reads at most `messages_per_second` (default 1000) indexed messages a
 second, in pages of `page_size` (default 500, at most 1000), and deletes with
 routed `_bulk` deletes. A 429 or a cluster block stops it with status
-`stopped`, as does a page with any failed delete; resume a run with
+`stopped`, as does a page with any failed delete, and `error` says how many
+of the page's deletes failed. A stopped page records nothing, so `cursor` is
+the page before it; resume a run with
 `{"dry_run": false, "after_message_id": "<cursor>"}`, which repeats that page
-(without `dry_run` the resume only counts). A failed or cancelled job resumes
-the same way.
+(without `dry_run` the resume only counts). Documents the stopped page did
+delete then count as already gone, not in `updated`. A failed or cancelled job
+resumes the same way.
 
 ### Against dev (deployed service)
 
