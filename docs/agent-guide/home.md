@@ -308,7 +308,7 @@ is `/app/notifications`.
 | `enable-new-home` | `disable-old-home` | Rail | `/home` | `/notifications` | `g h` |
 | --- | --- | --- | --- | --- | --- |
 | off | any | Home, and Notifications with unified notifications | old Home | today's view | old Home |
-| on | off | Home, then **New Home** (house with a sparkle) in Notifications' place | old Home; on the Recent tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
+| on | off | Home, then **New Home** (house with a plus) right under it; no Notifications entry | old Home; on the Recent tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
 | on | on | **New Home** as Home | New Home | New Home's Notifications tab | New Home |
 
 `g i` goes away with New Home on: Notifications is a New Home tab. The rail

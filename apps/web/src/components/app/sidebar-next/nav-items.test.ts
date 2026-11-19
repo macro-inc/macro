@@ -16,6 +16,12 @@ const defaultPrefs = (overrides: Partial<SidebarPrefs> = {}): SidebarPrefs => ({
   ...overrides,
 });
 
+// The catalog as the rail shows it with New Home off, which is how these
+// order tests read it.
+const WITHOUT_NEW_HOME = SIDEBAR_NEXT_NAV_ITEMS.filter(
+  (item) => item.id !== 'new-home'
+);
+
 const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showCustomers: true,
   showNotifications: true,
@@ -169,7 +175,7 @@ describe('External', () => {
 
 describe('orderNavItems', () => {
   it('keeps home first and applies a custom order', () => {
-    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, [
+    const ordered = orderNavItems(WITHOUT_NEW_HOME, [
       'tasks',
       'mail',
       'home',
@@ -186,7 +192,7 @@ describe('orderNavItems', () => {
   });
 
   it('keeps For you where the person put it', () => {
-    const ordered = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, ['tasks', 'for-you']);
+    const ordered = orderNavItems(WITHOUT_NEW_HOME, ['tasks', 'for-you']);
 
     expect(ordered.map((item) => item.id).slice(0, 3)).toEqual([
       'home',
@@ -221,9 +227,7 @@ describe('Passwords on the rail', () => {
 
   it('joins a saved order right after Calendar and keeps every other position', () => {
     const order = ['home', 'agents', 'mail', 'calendar', 'tasks', 'documents'];
-    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
-      (item) => item.id
-    );
+    const ids = orderNavItems(WITHOUT_NEW_HOME, order).map((item) => item.id);
     // For you keeps its place under Home in an order saved before it existed.
     expect(ids.slice(0, 8)).toEqual([
       'home',
@@ -239,9 +243,7 @@ describe('Passwords on the rail', () => {
 
   it('keeps a saved position the user chose for it', () => {
     const order = ['home', 'passwords', 'mail', 'calendar', 'agents'];
-    const ids = orderNavItems(SIDEBAR_NEXT_NAV_ITEMS, order).map(
-      (item) => item.id
-    );
+    const ids = orderNavItems(WITHOUT_NEW_HOME, order).map((item) => item.id);
     expect(ids.filter((id) => id !== 'for-you').slice(0, 5)).toEqual(order);
   });
 });
@@ -278,10 +280,26 @@ describe('New Home on the rail', () => {
     expect(newHome?.hotkeyToken).toBe(TOKENS.sidebar.goTo.home);
   });
 
-  it('keeps the place a saved order gave Notifications', () => {
-    const gates = defaultGates({
+  it('sits right under Home, also ahead of an order saved before it', () => {
+    expect(
+      ids(defaultGates({ homeMode: 'both', showForYou: true })).slice(0, 3)
+    ).toEqual(['home', 'new-home', 'for-you']);
+    const saved = defaultGates({
       homeMode: 'both',
       prefs: defaultPrefs({ order: ['documents', 'notifications', 'mail'] }),
+    });
+    expect(ids(saved).slice(0, 4)).toEqual([
+      'home',
+      'new-home',
+      'documents',
+      'mail',
+    ]);
+  });
+
+  it('keeps the place the person moved New Home to', () => {
+    const gates = defaultGates({
+      homeMode: 'both',
+      prefs: defaultPrefs({ order: ['documents', 'new-home', 'mail'] }),
     });
     expect(ids(gates).slice(0, 4)).toEqual([
       'home',

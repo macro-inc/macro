@@ -13,7 +13,7 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
-import HouseSparkleFillIcon from '@icon/system/fill/house-sparkle-fill.svg';
+import HousePlusFillIcon from '@icon/system/fill/house-plus-fill.svg';
 import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import LockFillIcon from '@icon/system/fill/lock-fill.svg';
@@ -29,7 +29,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
-import HouseSparkleIcon from '@icon/system/regular/house-sparkle.svg';
+import HousePlusIcon from '@icon/system/regular/house-plus.svg';
 import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PasswordIcon from '@icon/system/regular/lock.svg';
@@ -84,6 +84,19 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
   },
+  // Right under old Home while both are on the rail; once old Home is off,
+  // New Home is the Home item.
+  {
+    id: 'new-home',
+    get label() {
+      return t('home.newHome');
+    },
+    href: '/new-home',
+    icon: HousePlusIcon,
+    iconActive: HousePlusFillIcon,
+    hotkey: 'h',
+    hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
   {
     id: 'for-you',
     get label() {
@@ -103,19 +116,6 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     iconActive: BellFillIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.notifications,
-  },
-  // In Notifications' place while old Home is still on the rail; once old
-  // Home is off, New Home is the Home item.
-  {
-    id: 'new-home',
-    get label() {
-      return t('home.newHome');
-    },
-    href: '/new-home',
-    icon: HouseSparkleIcon,
-    iconActive: HouseSparkleFillIcon,
-    hotkey: 'h',
-    hotkeyToken: TOKENS.sidebar.goTo.home,
   },
   {
     id: 'documents',
@@ -308,14 +308,6 @@ const withPasswords = (order: readonly string[]): readonly string[] => {
 };
 
 /**
- * New Home takes Notifications' place in an order saved before it existed.
- */
-const withNewHome = (order: readonly string[]): readonly string[] =>
-  order.includes('new-home')
-    ? order
-    : order.map((id) => (id === 'notifications' ? 'new-home' : id));
-
-/**
  * Beside New Home, old Home gives up `g h`, which opens New Home, and opens
  * on its own tab: New Home's Recent is `/home` too. Once old Home is off,
  * the Home item opens New Home on the tab it was left on.
@@ -359,6 +351,14 @@ export const orderNavItems = (
     used.add('home');
   }
 
+  // New Home sits right under Home, ahead of an order saved before it
+  // existed, until the person moves it themselves.
+  const newHome = byId.get('new-home');
+  if (newHome && !order.includes('new-home')) {
+    result.push(newHome);
+    used.add('new-home');
+  }
+
   // For you sits under Home until the person gives it a place of its own.
   const forYou = byId.get('for-you');
   if (forYou && !order.includes('for-you')) {
@@ -393,9 +393,7 @@ export const customizableNavItems = (
     SIDEBAR_NEXT_NAV_ITEMS.filter((item) =>
       isNavItemAvailable(item, gates)
     ).map((item) => withHomeMode(item, gates)),
-    gates.homeMode === 'both'
-      ? withNewHome(gates.prefs.order)
-      : gates.prefs.order
+    gates.prefs.order
   );
 
 /** Hidden rail items, available for quick open in the More menu. */
