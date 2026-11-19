@@ -421,7 +421,7 @@ function SplitLabelContextMenu(props: ParentProps) {
       <>
         {action().label}
         <Show when={action().disabledReason}>
-          <span class="ml-2 text-xs text-ink-muted">
+          <span class="block whitespace-normal text-xs text-ink-muted">
             {action().disabledReason}
           </span>
         </Show>

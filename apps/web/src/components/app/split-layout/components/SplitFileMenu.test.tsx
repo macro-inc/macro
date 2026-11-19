@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
-import { SplitFileMenu } from './SplitFileMenu';
+import { type FileOperation, SplitFileMenu } from './SplitFileMenu';
 
 const mocks = vi.hoisted(() => ({
   touch: true,
@@ -91,7 +91,10 @@ const channelTools = (): BlockTool[] => [
   },
 ];
 
-const renderMenu = () => {
+const renderMenu = (
+  ops: FileOperation[] = [],
+  permissions = Permissions.OWNER
+) => {
   let openMenu: Accessor<(() => void) | undefined> = () => undefined;
   const panel = {
     setTitleFileMenuTrigger: (value: Accessor<() => void> | undefined) => {
@@ -105,10 +108,10 @@ const renderMenu = () => {
         id="channel"
         itemType="channel"
         name="General"
-        ops={[]}
+        ops={ops}
         tools={channelTools()}
         entityKind="channel"
-        permissions={Permissions.OWNER}
+        permissions={permissions}
       />
     </SplitPanelContext.Provider>
   ));
@@ -177,4 +180,34 @@ describe('SplitFileMenu tools', () => {
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((item) => item.textContent?.trim())).toEqual(MENU_ROWS);
   });
+
+  it('keeps a custom semantic ID distinct from the built-in rename row', async () => {
+    const customRename = vi.fn();
+    const custom = Object.freeze({
+      id: 'rename',
+      label: 'Custom rename',
+      icon: Icon,
+      group: 'modify' as const,
+      action: customRename,
+    });
+    const menu = renderMenu([{ op: 'rename' }, custom]);
+    menu.open();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Custom rename' })
+    );
+    expect(customRename).toHaveBeenCalledOnce();
+  });
+
+  it.each([Permissions.CAN_VIEW, Permissions.OWNER])(
+    'retains the owner-only delete gate for %s',
+    async (permissions) => {
+      const menu = renderMenu([{ op: 'delete' }], permissions);
+      menu.open();
+      await screen.findByRole('dialog');
+      const deleteAction = screen.queryByRole('button', {
+        name: 'entityActions.delete',
+      });
+      expect(Boolean(deleteAction)).toBe(permissions === Permissions.OWNER);
+    }
+  );
 });

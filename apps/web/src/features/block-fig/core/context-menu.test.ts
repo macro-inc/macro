@@ -92,11 +92,9 @@ describe('layer context menu', () => {
   });
 
   it('offers only viewing actions when read-only', () => {
-    expect(labels(layerMenu(facts({ canEdit: false })))).toEqual([
-      'Zoom to selection',
-      'Copy',
-      'Copy as PNG',
-    ]);
+    const menu = layerMenu(facts({ canEdit: false }));
+    expect(menu.at(-1)).not.toBe('separator');
+    expect(labels(menu)).toEqual(['Zoom to selection', 'Copy', 'Copy as PNG']);
   });
 });
 

@@ -28,6 +28,8 @@ export type SplitBottomPanelRegistration = {
 export type SplitFileMenuAction = {
   /** Stable identity for a row while its metadata changes. */
   id?: string;
+  /** Semantic order is separate from the unique rendered row identity. */
+  orderKey?: string;
   label: string | JSX.Element;
   disabledReason?: string;
   icon?: Component;

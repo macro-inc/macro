@@ -176,10 +176,13 @@ function groupedLayerEntries(entries: MenuEntry[]): MenuEntry[] {
     if (entry.action === 'delete') return 'delete';
     return 'modify';
   };
-  return groupMenuItems(entries, groupOf).flatMap((section, index) => [
-    ...(index ? (['separator'] as const) : []),
-    ...tidy(section.items),
-  ]);
+  return groupMenuItems(entries, groupOf)
+    .map((section) => tidy(section.items))
+    .filter((section) => section.length > 0)
+    .flatMap((section, index) => [
+      ...(index ? (['separator'] as const) : []),
+      ...section,
+    ]);
 }
 /** The menu for a right-click on selected layers. */
 export function layerMenu(f: SelectionFacts): MenuEntry[] {

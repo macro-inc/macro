@@ -81,7 +81,10 @@ export type DefaultFileOperation = {
   op: FileOperationName;
 };
 
-export type CustomFileOperation = {
+export type CustomFileOperation = Pick<
+  SplitFileMenuAction,
+  'id' | 'orderKey'
+> & {
   label: string;
   icon: Component;
   action?: () => void | Promise<unknown>;
@@ -365,7 +368,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('delete', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                id: 'delete',
+                orderKey: 'delete',
                 label: t('entityActions.delete'),
                 action: () => {
                   const entity = menuEntity();
@@ -393,7 +396,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('rename', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                id: 'rename',
+                orderKey: 'rename',
                 label: t('entityActions.rename'),
                 action: () => {
                   const entity = menuEntity();
@@ -418,7 +421,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('copy', () => {
               if (!canDuplicateItemType(props.itemType)) return null;
               return {
-                id: 'duplicate',
+                orderKey: 'duplicate',
                 label: t('entityActions.duplicate'),
                 action: async () => {
                   const res = await itemOperations.copyItem({
@@ -446,7 +449,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('moveToProject', () => {
               if (!ownsMenuEntity()) return null;
               return {
-                id: 'move-to-folder',
+                orderKey: 'move-to-folder',
                 label: t('entityActions.moveToFolder'),
                 action: () => {
                   const entity = menuEntity();
@@ -475,12 +478,18 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       .map((op, index): SplitFileMenuAction | null => {
         if (!op) return null;
         // Preserve live getters (notably hotkey availability) when assigning a key.
-        const action: SplitFileMenuAction = Object.defineProperties(
+        return Object.defineProperties(
           { label: op.label },
-          Object.getOwnPropertyDescriptors(op)
+          {
+            ...Object.getOwnPropertyDescriptors(op),
+            // Define identity while cloning: a caller can freeze its descriptor.
+            id: { value: `operation-${index}`, enumerable: true },
+            orderKey: {
+              get: () => op.orderKey ?? op.id,
+              enumerable: true,
+            },
+          }
         );
-        action.id ??= `operation-${index}`;
-        return action;
       })
       .filter((op) => !!op);
     const appearance = appearanceOp();

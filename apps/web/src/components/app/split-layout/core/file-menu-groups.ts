@@ -1,6 +1,6 @@
 import { groupMenuItems, type MenuGroup } from '@core/menu/group-menu-items';
 
-type FileMenuAction = { id?: string; group?: MenuGroup };
+type FileMenuAction = { id?: string; orderKey?: string; group?: MenuGroup };
 
 const MODIFY_ORDER: Record<string, number> = {
   rename: 0,
@@ -35,10 +35,14 @@ export function fileMenuGroups<T extends FileMenuAction>(
     groups[section.id] = section.items;
   }
   groups.copy.sort(
-    (a, b) => (COPY_ORDER[a.id ?? ''] ?? 2) - (COPY_ORDER[b.id ?? ''] ?? 2)
+    (a, b) =>
+      (COPY_ORDER[a.orderKey ?? a.id ?? ''] ?? 2) -
+      (COPY_ORDER[b.orderKey ?? b.id ?? ''] ?? 2)
   );
   groups.modify.sort(
-    (a, b) => (MODIFY_ORDER[a.id ?? ''] ?? 6) - (MODIFY_ORDER[b.id ?? ''] ?? 6)
+    (a, b) =>
+      (MODIFY_ORDER[a.orderKey ?? a.id ?? ''] ?? 6) -
+      (MODIFY_ORDER[b.orderKey ?? b.id ?? ''] ?? 6)
   );
   return groups;
 }

@@ -12,6 +12,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import {
   ContextMenuContent,
   MenuGroup,
@@ -259,54 +260,51 @@ function RecordItems(props: {
       )}
     </For>
   );
-  const render = (action: TimelineRecordAction) => {
-    switch (action) {
-      case 'open':
-        return item('open', 'Open record', ArrowSquareOutIcon, false);
-      case 'edit-range':
-        return item('edit-range', 'Edit time range…', CalendarIcon);
-      case 'rename':
-        return item('rename', 'Rename', PencilIcon);
-      case 'add-dates':
-        return item('add-dates', 'Add dates', CalendarPlusIcon);
-      case 'remove-dates':
-        return item('remove-dates', 'Remove dates', CalendarXIcon);
-      case 'duplicate':
-        return item('duplicate', 'Duplicate', CopyIcon);
-      case 'move':
-        return (
-          <Show
-            when={!isMobile()}
-            fallback={
-              <>
-                <ContextMenu.GroupLabel class="mt-2 px-2 py-1 text-xs text-ink-muted">
-                  Move to group
-                </ContextMenu.GroupLabel>
-                {groups()}
-              </>
-            }
-          >
-            <ContextMenu.Sub>
-              <SubTrigger text="Move to group" icon={FolderIcon} />
-              <ContextMenuContent submenu class="max-h-80 min-w-44">
-                {groups()}
-              </ContextMenuContent>
-            </ContextMenu.Sub>
-          </Show>
-        );
-      case 'delete':
-        return (
-          <MenuItem
-            closeOnSelect
-            icon={TrashIcon}
-            text="Delete record"
-            class="text-failure"
-            disabled={props.menu.pending}
-            onClick={() => props.onAction('delete')}
-          />
-        );
-    }
-  };
+  const render = (action: TimelineRecordAction) =>
+    match(action)
+      .with('open', () =>
+        item('open', 'Open record', ArrowSquareOutIcon, false)
+      )
+      .with('edit-range', () =>
+        item('edit-range', 'Edit time range…', CalendarIcon)
+      )
+      .with('rename', () => item('rename', 'Rename', PencilIcon))
+      .with('add-dates', () => item('add-dates', 'Add dates', CalendarPlusIcon))
+      .with('remove-dates', () =>
+        item('remove-dates', 'Remove dates', CalendarXIcon)
+      )
+      .with('duplicate', () => item('duplicate', 'Duplicate', CopyIcon))
+      .with('move', () => (
+        <Show
+          when={!isMobile()}
+          fallback={
+            <>
+              <ContextMenu.GroupLabel class="mt-2 px-2 py-1 text-xs text-ink-muted">
+                Move to group
+              </ContextMenu.GroupLabel>
+              {groups()}
+            </>
+          }
+        >
+          <ContextMenu.Sub>
+            <SubTrigger text="Move to group" icon={FolderIcon} />
+            <ContextMenuContent submenu class="max-h-80 min-w-44">
+              {groups()}
+            </ContextMenuContent>
+          </ContextMenu.Sub>
+        </Show>
+      ))
+      .with('delete', () => (
+        <MenuItem
+          closeOnSelect
+          icon={TrashIcon}
+          text="Delete record"
+          class="text-failure"
+          disabled={props.menu.pending}
+          onClick={() => props.onAction('delete')}
+        />
+      ))
+      .exhaustive();
   return (
     <For
       each={timelineRecordActionGroups(

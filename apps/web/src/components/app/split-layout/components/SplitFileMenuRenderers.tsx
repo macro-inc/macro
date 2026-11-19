@@ -49,12 +49,14 @@ function SplitMenuItemContent(
           />
         )}
       </Show>
-      <div class="min-w-0 flex-1 truncate">{props.label}</div>
-      <Show when={props.disabledReason}>
-        <span class="max-w-40 truncate text-xs text-ink-muted">
-          {props.disabledReason}
-        </span>
-      </Show>
+      <div class="min-w-0 flex-1">
+        <div class="truncate">{props.label}</div>
+        <Show when={props.disabledReason}>
+          <div class="whitespace-normal text-xs text-ink-muted">
+            {props.disabledReason}
+          </div>
+        </Show>
+      </div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
           token={props.hotkeyToken}

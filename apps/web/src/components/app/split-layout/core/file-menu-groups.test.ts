@@ -43,6 +43,19 @@ describe('fileMenuGroups', () => {
     expect(operations[0].id).toBe('delete');
   });
 
+  it('sorts by semantic keys without merging distinct contribution identities', () => {
+    const actions = [
+      { id: 'operation-0', orderKey: 'duplicate', group: 'modify' as const },
+      { id: 'operation-1', orderKey: 'rename', group: 'modify' as const },
+      { id: 'operation-2', orderKey: 'rename', group: 'modify' as const },
+    ];
+    expect(fileMenuGroups([], actions).modify).toEqual([
+      actions[1],
+      actions[2],
+      actions[0],
+    ]);
+  });
+
   it('does not restore an unavailable action or snapshot a getter', () => {
     let label = 'Favorite';
     const favorite = {
