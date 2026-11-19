@@ -338,6 +338,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   harness's `POST /cognition/calendar/events/create-confirmed`
   (`CreateConfirmedCalendarEvent`, the SDK's `calendar.createConfirmed`),
   never an event the user has not seen.
+- Answering a join request (`PUT /join-requests/{id}`) refuses every program
+  (`is_program_run`, 403 `person_must_decide`), owner routines included:
+  who joins is the user's decision, and accepting invites the requester.
 - No provider field says whose calendar it is. An inbox syncs every calendar
   its account can see under its own address, and Google gives `accessRole`
   `owner` to anyone with manage rights, on a colleague's primary calendar too;

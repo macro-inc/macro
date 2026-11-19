@@ -258,6 +258,32 @@ fn an_owner_routine_code_step_creates_events_but_an_agent_program_does_not() {
     assert!(refuse_program_create(CredentialAttribution::Agent, &code_step).is_err());
 }
 
+#[test]
+fn no_program_answers_a_join_request() {
+    let mut code_execution = axum::http::HeaderMap::new();
+    code_execution.insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    let browser = axum::http::HeaderMap::new();
+
+    let refusal = refuse_program_join_answer(CredentialAttribution::Agent, &browser).unwrap_err();
+    assert_eq!(refusal.status, StatusCode::FORBIDDEN);
+    assert_eq!(refusal.code, CalendarMutationErrorCode::PersonMustDecide);
+    assert_eq!(refusal.message, PROGRAM_JOIN_ANSWER_REFUSAL);
+    assert!(refuse_program_join_answer(CredentialAttribution::Routine, &browser).is_err());
+    assert!(refuse_program_join_answer(CredentialAttribution::Person, &code_execution).is_err());
+    assert!(refuse_program_join_answer(CredentialAttribution::Routine, &code_execution).is_err());
+}
+
+#[test]
+fn a_person_in_the_app_answers_a_join_request() {
+    assert!(
+        refuse_program_join_answer(CredentialAttribution::Person, &axum::http::HeaderMap::new())
+            .is_ok()
+    );
+}
+
 /// Two inboxes hold the meeting, so a request that names no copy is refused.
 struct TwoCopies;
 

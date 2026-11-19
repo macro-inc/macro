@@ -803,7 +803,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Calendar is read-only, the organizer doesn't let guests invite others, or the calendar needs reauthorization",
+            "description": "Calendar is read-only, the organizer doesn't let guests invite others, the calendar needs reauthorization, or a program answered (code person_must_decide)",
             "content": {
               "application/json": {
                 "schema": {
@@ -2779,7 +2779,8 @@
           "persist_failed",
           "macro_call_failed",
           "copy_choice_required",
-          "confirmation_required"
+          "confirmation_required",
+          "person_must_decide"
         ]
       },
       "CalendarProvider": {

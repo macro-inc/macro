@@ -34,4 +34,5 @@ export const CalendarMutationErrorCode = {
   macro_call_failed: 'macro_call_failed',
   copy_choice_required: 'copy_choice_required',
   confirmation_required: 'confirmation_required',
+  person_must_decide: 'person_must_decide',
 } as const;
