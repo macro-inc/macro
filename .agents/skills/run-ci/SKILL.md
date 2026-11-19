@@ -40,8 +40,6 @@ releases fail on a Projects (classic) error before adding the label.
 
 - Adding the label again starts a fresh run. A run still going for the same PR
   is cancelled.
-- If `run-ci` is still present when requesting another run, remove it before
-  adding it again so GitHub emits a new label event.
 - Draft PRs run too.
 - Only PRs into `main` run. A stacked PR, based on another branch, gets no
   `CI gate` and the label does nothing until its base is `main`. To run
@@ -69,8 +67,7 @@ releases fail on a Projects (classic) error before adding the label.
 
 Use the `babysit-pr` skill's watcher: `pr-wait <pr> --until green`. It exits 1
 with the command to run when CI has not run on the head, and exits 1 when
-`CI gate` fails. If the watcher is unavailable, use
-`gh run watch <run-id> --exit-status`. Never poll with your own loop.
+`CI gate` fails. Never poll with your own loop.
 
 To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
@@ -91,18 +88,10 @@ and says why in `CI gate`.
 
 ## Fix a failure
 
-- After every run, inspect `gh pr checks <pr>` and read each failed job with
-  `gh run view <run-id> --log-failed`; use `--job <job-id>` to narrow the logs.
-- Match each failed check to its run and commit; distinguish cancelled checks
-  from superseded runs from failures on the current head.
-- Fix every real failure in the branch without waiting for another request;
-  run affected tests and checks, commit, review, push, and request CI again.
-- For an unrelated failure, record the job and exact error in the PR body and
-  `PROGRESS.md`, then rerun the failed jobs once with
-  `gh run rerun <run-id> --failed`. Call it flaky only if that retry passes;
-  investigate persistent failures instead of claiming completion.
-- Continue this cycle whenever CI fails later; finish only when `CI gate`
-  passes on the latest pushed commit.
+- A flaky job: re-run the failed jobs of the `PR CI` run
+  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
+  the status; no new label is needed.
+- A real failure: fix it, push, and add the label again.
 - The checks inside the run are named `<workflow> / <job>`, such as
   `Web App / Typecheck` or `Cloud Storage / test`.
 
