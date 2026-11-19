@@ -122,6 +122,37 @@ it('keeps a proven denial through a failed local commit and failed proof until a
   expect(authority.state()).toBe('allowed');
 });
 
+it('retires its own copies once when a proven denial cannot be committed', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const { authority, fetchProof, retire } = client(owner);
+  await authority.refresh();
+  retire.mockClear();
+  fetchProof.mockResolvedValue(`${team}:denied`);
+  vi.spyOn(owner, 'transition').mockRejectedValue(new Error('disk failure'));
+  await expect(authority.refresh()).rejects.toThrow('disk failure');
+  expect(retire).toHaveBeenCalledExactlyOnceWith(
+    'permission',
+    owner.snapshot()?.generation
+  );
+  await expect(authority.refresh()).rejects.toThrow('disk failure');
+  expect(retire).toHaveBeenCalledOnce();
+  expect(authority.state()).toBe('denied');
+});
+
+it('follows a regrant committed by another window after proving the denial itself', async () => {
+  const owner = sharedOwner(`${team}:allowed`);
+  const first = client(owner);
+  const second = client(owner);
+  await Promise.all([first.authority.refresh(), second.authority.refresh()]);
+  first.fetchProof.mockResolvedValue(`${team}:denied`);
+  await first.authority.refresh();
+  expect(first.authority.state()).toBe('denied');
+  second.fetchProof.mockResolvedValue(`${team}:allowed`);
+  await second.authority.refresh();
+  expect(second.authority.state()).toBe('allowed');
+  expect(first.authority.state()).toBe('allowed');
+});
+
 it.each([null, `${team}:denied`, `${team}:allowed`])(
   'uses an early proof only for UI and commits the later proof after the %s baseline',
   async (policy) => {
