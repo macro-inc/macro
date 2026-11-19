@@ -69,12 +69,15 @@ export function SidebarSectionDragHandle<Key extends string>(props: {
     event.preventDefault();
     event.stopPropagation();
   };
+  // The 24px grip uses the outer 8px gutter plus 16px reserved here, so it
+  // never overlaps navigation rows. Hidden grips also opt out of hit testing.
   return (
     <div
       ref={draggable.ref}
       data-sidebar-section-handle={props.section}
       class={cn(
         'relative group/sidebar-reorder',
+        !props.disabled && props.gutter && 'pl-4',
         !props.disabled && !props.gutter && 'cursor-grab active:cursor-grabbing'
       )}
       onMouseDown={start}
@@ -87,7 +90,7 @@ export function SidebarSectionDragHandle<Key extends string>(props: {
         <div
           class={cn(
             props.gutter
-              ? 'absolute -left-2 top-0 z-20 opacity-0 not-touch:group-hover/sidebar-reorder:opacity-100 group-focus-within/sidebar-reorder:opacity-100'
+              ? 'pointer-events-none absolute -left-2 top-0 z-20 opacity-0 not-touch:group-hover/sidebar-reorder:pointer-events-auto not-touch:group-hover/sidebar-reorder:opacity-100 group-focus-within/sidebar-reorder:pointer-events-auto group-focus-within/sidebar-reorder:opacity-100'
               : 'pointer-events-none sr-only focus-within:not-sr-only focus-within:absolute focus-within:inset-x-0 focus-within:top-0 focus-within:z-30'
           )}
         >

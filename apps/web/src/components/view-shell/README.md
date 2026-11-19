@@ -40,7 +40,10 @@ its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
 sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
 For an unnamed navigation group, use `headerless`: `label` supplies only its
 accessible name, while a hover/focus gutter grip provides mouse and Up/Down
-keyboard reordering without adding a heading. Both kinds share one order.
+keyboard reordering without adding a heading. The desktop grip reserves 16px
+inside the group plus the existing 8px outer gutter, so its 24px hit target never
+covers a navigation row; hidden grips do not receive pointer events. Touch
+layout is unchanged. Both kinds share one order.
 Mark fixed account/workspace selectors or other controls inside Content with
 `pinned`; pinned sections have no drag handle or drop target, retain their DOM
 slot, and their keys are ignored in stored orders. Header, Primary, and Footer
