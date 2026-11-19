@@ -255,14 +255,14 @@ export function fetchChildren(scheduleId: string) {
   const pending = queryClient
     .getQueryCache()
     .find({ queryKey: options.queryKey, exact: true });
+  // Taken now: the read in flight when Delete asked, not one started later.
   const earlier =
-    pending?.state.fetchStatus === 'fetching' && pending.promise
-      ? Promise.allSettled([pending.promise])
-      : Promise.resolve();
-  return ResultAsync.fromPromise(
-    earlier.then(() => queryClient.fetchQuery(options)),
-    (error) => error
-  );
+    pending?.state.fetchStatus === 'fetching' ? pending.promise : undefined;
+  const read = async () => {
+    if (earlier) await Promise.allSettled([earlier]);
+    return queryClient.fetchQuery(options);
+  };
+  return ResultAsync.fromPromise(read(), (error) => error);
 }
 
 /** Every active routine another routine's run created. */
