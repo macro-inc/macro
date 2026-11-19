@@ -53,9 +53,11 @@ projects.
   CI runs it whenever this crate is selected. Locally, on a free port:
   `docker build -t search-opensearch infra/local/opensearch`, `docker run -d
   -p 127.0.0.1:<port>:9200 -e discovery.type=single-node search-opensearch`,
-  then `create_indices.ts` (`infra/stacks/opensearch/helpers`, with
-  `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=http://127.0.0.1:<port>`
-  and any username and password) and
+  then in `infra/stacks/opensearch/helpers` `bun install --frozen-lockfile`
+  and `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=http://127.0.0.1:<port>
+  OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin bun run
+  scripts/create_indices.ts` (the node has no security plugin; the helper
+  only needs the credentials set), and
   `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
   opensearch_client --test content_search`. A search the test keeps for a
   known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.

@@ -14,7 +14,7 @@ for attempt in 1 2 3; do
   echo "::warning::the OpenSearch image did not build (attempt $attempt); trying again"
   sleep $((attempt * 15))
 done
-docker run --detach --name search-opensearch --publish 9200:9200 \
+docker run --detach --name search-opensearch --publish 127.0.0.1:9200:9200 \
   --env discovery.type=single-node \
   --env OPENSEARCH_JAVA_OPTS="-Xms1g -Xmx1g" \
   search-opensearch

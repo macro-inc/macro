@@ -966,11 +966,30 @@ fn compare(case: &Case, entities: &[Seeded], expected: &Expected, found: &Found)
             .filter(|part| !expected.parts.contains(*part))
             .map(|(_, id, part)| format!("part {part} of {}", name(kind, *id)))
             .collect();
-        if missing.is_empty() && unexpected.is_empty() && unexpected_parts.is_empty() {
+        // A match points to at least one of its matching parts; the builders
+        // cap how many, so not to all of them.
+        let without_parts: Vec<String> = expected
+            .entities
+            .iter()
+            .filter(|(expected_kind, id)| {
+                *expected_kind == kind
+                    && found.entities.contains(&(kind, *id))
+                    && !found
+                        .parts
+                        .iter()
+                        .any(|part| part.0 == kind && part.1 == *id)
+            })
+            .map(|(_, id)| format!("{} ({id})", name(kind, *id)))
+            .collect();
+        if missing.is_empty()
+            && unexpected.is_empty()
+            && unexpected_parts.is_empty()
+            && without_parts.is_empty()
+        {
             continue;
         }
         failures.push(format!(
-            "{label} {kind:?}: missing {missing:?}, unexpected {unexpected:?}, unmatched parts {unexpected_parts:?}"
+            "{label} {kind:?}: missing {missing:?}, unexpected {unexpected:?}, unmatched parts {unexpected_parts:?}, found without a part {without_parts:?}"
         ));
     }
     failures
@@ -1039,6 +1058,9 @@ async fn remove_seeded(raw: &OpenSearch, entities: &[Seeded]) -> anyhow::Result<
             }
         }
         let index = kind.index().index_name();
+        // A seed that failed part way has written documents no search sees
+        // until a refresh, and the delete finds only what a search sees.
+        refresh(raw, index).await?;
         raw.delete_by_query(DeleteByQueryParts::Index(&[index]))
             .refresh(true)
             .body(serde_json::json!({ "query": { "terms": { "entity_id": ids } } }))
