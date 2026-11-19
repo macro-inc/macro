@@ -25,7 +25,11 @@ export type CodeReview = {
   /** The SDK the update is for. */
   sdk: string;
   /** The update a model proposed, when there is one to approve. */
-  proposal?: { task: RoutineTask; changes: CodeChange[] };
+  proposal?: {
+    previousTask: RoutineTask;
+    task: RoutineTask;
+    changes: CodeChange[];
+  };
 };
 
 /** The SDK a stored task's code was last checked against. */
@@ -91,7 +95,7 @@ export function pendingCodeReview(
     sdk: latest.toSdk,
     proposal:
       latest.task && changes.length
-        ? { task: latest.task, changes }
+        ? { previousTask: latest.previousTask, task: latest.task, changes }
         : undefined,
   };
 }

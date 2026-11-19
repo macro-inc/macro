@@ -40,7 +40,7 @@ import {
   scheduleToDuplicateBody,
 } from './routine-draft';
 import { traceRoutineRequest, withRoutineQueryTrace } from './routine-trace';
-import { useRoutineQuery } from './routines';
+import { readFreshRoutine, useRoutineQuery } from './routines';
 import { toHistoryRecord } from './run-resource';
 import {
   fetchChildren,
@@ -94,7 +94,7 @@ function toRoutine(schedule: ScheduledActionResponse): RoutineSnapshot {
 }
 
 type DetailCallbacks = {
-  onError(title: string, error: unknown): void;
+  onError(title: string, error?: unknown): void;
   onDuplicated(id: string): void;
   /** The sub-routine became the owner's own routine. */
   onKept(): void;
@@ -243,10 +243,17 @@ export function createRoutineDetailSource(
   };
   const save = async (
     draft: ScheduleDraft,
-    { approval, queuedAt }: { approval?: Span; queuedAt?: number }
+    {
+      approval,
+      queuedAt,
+      previous = raw(),
+    }: {
+      approval?: Span;
+      queuedAt?: number;
+      previous?: ScheduledActionResponse;
+    }
   ) => {
     const scheduleId = id();
-    const previous = raw();
     const body = previous && draftToUpdateBody(draft, previous);
     if (!body) throw new Error('Choose a valid execution target.');
     if (
@@ -334,37 +341,54 @@ export function createRoutineDetailSource(
     async approveCodeUpdate() {
       const scheduleId = id();
       const proposal = codeReview()?.proposal;
-      const current = raw();
+      const cached = raw();
       if (
-        !current ||
-        current.owner !== userId() ||
+        !proposal ||
+        !cached ||
+        cached.owner !== userId() ||
         !canEditTask() ||
         approving() ||
         activate.isPending
       )
         return;
-      const steps = proposal && programSteps(proposal.task);
-      const subRoutines = proposal && subRoutinesFromWire(proposal.task);
-      const draft = toRoutine(current).draft;
-      if (!steps || !subRoutines || !draft) return;
+      const steps = programSteps(proposal.task);
+      const subRoutines = subRoutinesFromWire(proposal.task);
+      if (!steps || !subRoutines) return;
       setApproving(true);
       const start = () =>
         Telemetry.span('routine.code_approval', {
           attributes: { 'routine.id': scheduleId },
         });
       const approval = flow ? flow.run(start) : start();
-      const failed = (title: string, error: unknown) => {
+      const failed = (title: string, error?: unknown) => {
         approval.error(title);
         callbacks.onError(title, error);
       };
       try {
+        let current: ScheduledActionResponse;
+        try {
+          const phase = approval.span('routine.code_approval.check');
+          current = await traceRoutineRequest(phase, () =>
+            readFreshRoutine(scheduleId, phase)
+          );
+        } catch (error) {
+          failed(t('subRoutines.approvalCheckFailed'), error);
+          return;
+        }
+        if (id() !== scheduleId || current.owner !== userId()) return;
+        if (!deepEqual(proposal.previousTask, current.task)) {
+          failed(t('subRoutines.approvalTaskChanged'));
+          return;
+        }
+        const draft = toRoutine(current).draft;
+        if (!draft) return;
         try {
           await save(
             {
               ...withDraftSteps(draft, steps),
               ...(subRoutines.length ? { subRoutines } : {}),
             },
-            { approval }
+            { approval, previous: current }
           );
         } catch (error) {
           failed('Failed to update the routine’s code', error);

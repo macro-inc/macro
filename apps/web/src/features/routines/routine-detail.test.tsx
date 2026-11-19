@@ -6,6 +6,7 @@ import {
   Telemetry,
   type TraceContext,
 } from '@macro-inc/observability';
+import { queryClient } from '@queries/client';
 import type {
   CodeUpgrade,
   RoutineTask,
@@ -18,6 +19,8 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { QueryClientProvider } from '@tanstack/solid-query';
+import { ok } from 'neverthrow';
 import {
   type Accessor,
   createEffect,
@@ -28,6 +31,7 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RoutineTarget } from './core/routine-target';
+import { scheduledActionKeys } from './queries/keys';
 import { Routine } from './routine-detail';
 import type { HistoryRecord } from './views/routine-history';
 
@@ -91,6 +95,8 @@ const mocks = vi.hoisted(() => ({
   stopSharing: vi.fn(),
   detach: vi.fn(),
   connectedApps: (): ReadonlySet<string> | undefined => new Set(),
+  realRoutineQuery: false,
+  getRoutine: vi.fn(),
 }));
 vi.mock('@app/observability/flow', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@app/observability/flow')>()),
@@ -99,22 +105,44 @@ vi.mock('@app/observability/flow', async (importOriginal) => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|owner@example.com',
 }));
-vi.mock('./queries/routines', () => ({
-  useRoutineQuery: () => ({
-    get isSuccess() {
-      return mocks.status() === 'success';
+vi.mock('@service-scheduled-action/client', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@service-scheduled-action/client')>();
+  return {
+    ...actual,
+    scheduledActionClient: {
+      ...actual.scheduledActionClient,
+      getRoutine: mocks.getRoutine,
     },
-    get isError() {
-      return mocks.status() === 'error';
-    },
-    get isPending() {
-      return mocks.status() === 'pending';
-    },
-    get data() {
-      return mocks.readSchedules()[0];
-    },
-  }),
-}));
+  };
+});
+vi.mock('./queries/routines', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./queries/routines')>();
+  return {
+    ...actual,
+    readFreshRoutine: (id: string, parent: TraceContext) =>
+      mocks.realRoutineQuery
+        ? actual.readFreshRoutine(id, parent)
+        : Promise.resolve(mocks.readSchedules()[0]),
+    useRoutineQuery: (id: Accessor<string>) =>
+      mocks.realRoutineQuery
+        ? actual.useRoutineQuery(id)
+        : {
+            get isSuccess() {
+              return mocks.status() === 'success';
+            },
+            get isError() {
+              return mocks.status() === 'error';
+            },
+            get isPending() {
+              return mocks.status() === 'pending';
+            },
+            get data() {
+              return mocks.readSchedules()[0];
+            },
+          },
+  };
+});
 vi.mock('./routine-triggers', () => ({
   RoutineTriggers: () => <div>Triggers</div>,
 }));
@@ -486,6 +514,7 @@ beforeEach(() => {
   mocks.shared = () => false;
   mocks.templateError = () => false;
   mocks.connectedApps = () => new Set();
+  mocks.realRoutineQuery = false;
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1260,6 +1289,54 @@ describe('routine code that needs an update', () => {
       enabled: true,
     });
     expect(mocks.refetchUpgrades).toHaveBeenCalled();
+  });
+
+  it('rejects approval when a fresh server read differs from the cached task', async () => {
+    const fresh: ScheduledAction = {
+      ...paused,
+      configuration_revision: paused.configuration_revision + 1,
+      task: {
+        steps: [{ type: 'agent', model: 'm', instructions: 'Summarize' }],
+      },
+    };
+    setSchedules([paused]);
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    mocks.realRoutineQuery = true;
+    mocks.getRoutine.mockImplementation(async (_id, options) =>
+      ok(options?.cache === 'no-store' ? fresh : paused)
+    );
+    const key = scheduledActionKeys.detail({
+      scheduleId: 'routine-id',
+    }).queryKey;
+    queryClient.setQueryData(key, paused);
+    const { unmount } = render(() => (
+      <QueryClientProvider client={queryClient}>
+        <Routine />
+      </QueryClientProvider>
+    ));
+    try {
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Approve and resume' })
+      );
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mocks.update).not.toHaveBeenCalled();
+      expect(mocks.setEnabled).not.toHaveBeenCalled();
+      expect(mocks.getRoutine).toHaveBeenCalledWith('routine-id', {
+        cache: 'no-store',
+      });
+      expect(queryClient.getQueryData(key)).toEqual(fresh);
+      expect(
+        screen.queryByRole('button', { name: 'Approve and resume' })
+      ).toBeNull();
+      expect(toast.alert).toHaveBeenCalledWith(
+        'The routine changed since the code update was proposed'
+      );
+    } finally {
+      unmount();
+      queryClient.removeQueries({ queryKey: key });
+    }
   });
 
   it('holds approval while an autosave is queued or in flight', async () => {

@@ -94,8 +94,10 @@ export function RoutineDetail(props: {
     () => props.scheduleId,
     userId,
     {
-      onError: (title, error) =>
-        toast.alert(title, { subtext: getErrorMessage(error) }),
+      onError: (title, error) => {
+        if (error === undefined) toast.alert(title);
+        else toast.alert(title, { subtext: getErrorMessage(error) });
+      },
       onDuplicated: (id) => {
         toast.success('Duplicated');
         open(id);

@@ -32,6 +32,7 @@ describe('code review', () => {
       reason: '“File invoices” failed a dry run.',
       sdk: '0.3.0+new',
       proposal: {
+        previousTask: needsUpdate().previousTask,
         task: task('macro.tasks.add(x)', '0.3.0+new'),
         changes: [
           {
@@ -90,6 +91,7 @@ describe('code review', () => {
       previous
     );
     expect(review?.proposal).toEqual({
+      previousTask: previous,
       task: proposed,
       changes: [
         {

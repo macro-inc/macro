@@ -1067,8 +1067,10 @@ definitions' code needs updating and the routine is active, it stays active and
 shows **Its sub-routines’ code needs an update**. **Review the update** shows
 each changed step, including steps inside definitions. The notice disappears
 when the editor receives a saved task that differs from the task the proposal
-was made from. Approval waits for autosave and holds editing, settings and
-activation controls while checking and saving. **Approve and resume** turns a
+was made from. Approval waits for autosave and reads the routine again from
+the server before saving. If the task changed, the notice disappears and the
+page says the routine changed since the proposal. Editing, settings and
+activation controls are locked during the check and save. **Approve and resume** turns a
 paused routine on after the code saves. A resume or review refresh failure
 after the save has its own message.
 

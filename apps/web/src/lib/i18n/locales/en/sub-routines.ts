@@ -27,6 +27,8 @@ export default {
   stopSharingFailed: 'Could not stop sharing',
   retrySharing: 'Retry sharing status',
   discardEdits: 'Discard unsaved edits',
+  approvalCheckFailed: 'Could not check the current routine before approving',
+  approvalTaskChanged: 'The routine changed since the code update was proposed',
   approvalResumeFailed: 'Code saved, but the routine could not resume',
   approvalRefreshFailed: 'Code saved, but the review status could not refresh',
   deleteNote: {

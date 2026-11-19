@@ -101,9 +101,10 @@ function scheduledActionFetch<T extends ObjectLike = never>(
 }
 
 export const scheduledActionClient = {
-  getRoutine: (id: string) =>
+  getRoutine: (id: string, options?: Pick<SafeFetchInit, 'cache'>) =>
     scheduledActionFetch<ScheduledAction>(`/scheduled-actions/${id}`, {
       method: 'GET',
+      ...options,
     }),
   // Include every trigger type in the routine list.
   listSchedules: async () =>
