@@ -169,7 +169,7 @@ enforced by the ordinary backend APIs.
   then `bun run generate`. `hey-api-openapi-ts-0.99.0.patch` makes stopping an
   SSE stream quiet; carry it forward on a generator upgrade.
 - Keep the human-session-only Passwords vault endpoints, including batch import
-  and name matching and the human review of agent access requests, in coverage
+  and name matching, private favorites and the human review of agent access requests, in coverage
   exclusions; normal human-session authorization and secret disclosure are
   outside v1 agent capabilities.
 - `src/entities/passwords/`: `macro.passwords.forAgent(team, { wake })` is the

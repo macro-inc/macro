@@ -26558,6 +26558,126 @@
         }
       }
     },
+    "/passwords/teams/{team}/items/{item}/favorite": {
+      "put": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_set_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["passwords"],
+        "summary": "Change only the authenticated viewer's private preference.",
+        "operationId": "passwords_remove_favorite",
+        "parameters": [
+          {
+            "name": "team",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "item",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Macro-Passwords",
+            "in": "header",
+            "description": "Required CSRF header; send 1",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordFailure"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/passwords/teams/{team}/items/{item}/history": {
       "get": {
         "tags": ["passwords"],
@@ -56936,7 +57056,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "The current viewer's private favorite in responses; legacy initial flag in storage."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57088,7 +57208,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Legacy accepted field, ignored; change private preferences through the favorite endpoint."
           },
           "folderId": {
             "type": ["string", "null"],
@@ -57307,7 +57427,7 @@
           },
           "favorite": {
             "type": "boolean",
-            "description": "Whether the item is marked as a favorite."
+            "description": "Initial creator preference on create; ignored on update. Use the favorite endpoint afterward."
           },
           "folderId": {
             "type": ["string", "null"],

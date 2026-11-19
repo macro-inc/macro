@@ -80671,7 +80671,9 @@ export const passwordsListResponseItem = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -80761,7 +80763,9 @@ export const passwordsCreateBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -80844,7 +80848,9 @@ export const passwordsCreateResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -80945,7 +80951,9 @@ export const passwordsMatchResponseItem = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81031,7 +81039,9 @@ export const passwordsDetailResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81121,7 +81131,9 @@ export const passwordsUpdateBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81204,7 +81216,9 @@ export const passwordsUpdateResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81305,7 +81319,9 @@ export const passwordsPatchBody = zod
       .describe('Version observed by the editor; absent only for creation.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        'Legacy accepted field, ignored; change private preferences through the favorite endpoint.'
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81338,7 +81354,9 @@ export const passwordsPatchResponse = zod
     createdAt: zod.iso.datetime({}).describe('Resource creation timestamp.'),
     favorite: zod
       .boolean()
-      .describe('Whether the item is marked as a favorite.'),
+      .describe(
+        "The current viewer's private favorite in responses; legacy initial flag in storage."
+      ),
     folderId: zod
       .uuid()
       .nullish()
@@ -81664,6 +81682,30 @@ export const passwordsCopyResponse = zod
     version: zod.number().describe('Committed provider value version.'),
   })
   .describe('Secret response used only by explicit reveal\/copy routes.');
+
+/**
+ * @summary Change only the authenticated viewer's private preference.
+ */
+export const passwordsSetFavoriteParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsSetFavoriteHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
+
+/**
+ * @summary Change only the authenticated viewer's private preference.
+ */
+export const passwordsRemoveFavoriteParams = zod.object({
+  team: zod.uuid(),
+  item: zod.uuid(),
+});
+
+export const passwordsRemoveFavoriteHeader = zod.object({
+  'X-Macro-Passwords': zod.string().describe('Required CSRF header; send 1'),
+});
 
 /**
  * @summary List protected-value version metadata.

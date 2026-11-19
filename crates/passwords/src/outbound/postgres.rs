@@ -588,6 +588,23 @@ impl Repository for PgRepository {
             })
             .collect()
     }
+    async fn favorites(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        items: &[ItemId],
+    ) -> Result<Vec<ItemId>, Error> {
+        self.list_favorites(actor, team, items).await
+    }
+    async fn set_favorite(
+        &self,
+        actor: &Actor,
+        team: TeamId,
+        item: ItemId,
+        favorite: bool,
+    ) -> Result<(), Error> {
+        self.store_favorite(actor, team, item, favorite).await
+    }
     async fn get(&self, team: TeamId, item: ItemId) -> Result<Record, Error> {
         let row=sqlx::query!(r#"SELECT metadata,user_id,grants,(deleting OR deleted_at IS NOT NULL) AS "deleting!",revision,totp_key_id FROM password_item_entities WHERE team_id=$1 AND id=$2"#,team.0,item.0).fetch_optional(&self.pool).await.map_err(|_|Error::Unavailable)?.ok_or(Error::NotFound)?;
         decode(
@@ -605,15 +622,16 @@ impl Repository for PgRepository {
         transaction.commit().await.map_err(database_error)
     }
     async fn delete(&self, team: TeamId, item: ItemId) -> Result<(), Error> {
+        let mut transaction = self.bounded_transaction().await?;
         sqlx::query!(
             "UPDATE password_item_entities SET deleted_at=COALESCE(deleted_at,now()),cleanup_due_at=now()+interval '1 hour' WHERE team_id=$1 AND id=$2",
             team.0,
             item.0
         )
-        .execute(&self.pool)
+        .execute(&mut *transaction)
         .await
         .map_err(|_| Error::Unavailable)?;
-        Ok(())
+        transaction.commit().await.map_err(database_error)
     }
     #[tracing::instrument(skip_all,err,name="passwords.audit",fields(team_id=%team.0,item_id=%item.0,event_id=%id))]
     async fn audit(
@@ -700,3 +718,5 @@ mod cleanup;
 mod folders;
 
 mod import;
+
+mod favorites;

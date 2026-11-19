@@ -722,6 +722,45 @@ async fn panic_and_folder_error_release_the_shared_lease() {
 }
 
 #[tokio::test]
+async fn imported_favorite_belongs_to_importer_and_retry_does_not_restore_it() {
+    let (service, repository, _, actor, team) = fixture();
+    let viewer = Actor {
+        user_id: MacroUserIdStr::parse_from_str("macro|viewer@example.test")
+            .expect("fixture")
+            .into_owned(),
+    };
+    repository
+        .memberships
+        .lock()
+        .expect("fixture")
+        .insert(viewer.user_id.to_string(), vec![team]);
+    let import = Uuid::now_v7();
+    service
+        .import_batch(&actor, team, import, batch())
+        .await
+        .expect("import");
+    let owner_items = service.list(&actor, team, "").await.expect("importer list");
+    let item = &owner_items[0];
+    assert!(item.favorite);
+    assert!(!service.list(&viewer, team, "").await.expect("viewer list")[0].favorite);
+    service
+        .set_favorite(&actor, team, item.id, false)
+        .await
+        .expect("unfavorite");
+    service
+        .import_batch(&actor, team, import, batch())
+        .await
+        .expect("retry");
+    assert!(
+        !service
+            .get(&actor, team, item.id)
+            .await
+            .expect("preference retained")
+            .favorite
+    );
+}
+
+#[tokio::test]
 async fn unprovisioned_team_vault_fails_every_item_as_not_provisioned() {
     let (service, repository, provider, actor, team) = fixture();
     provider.unprovisioned.store(true, Ordering::SeqCst);

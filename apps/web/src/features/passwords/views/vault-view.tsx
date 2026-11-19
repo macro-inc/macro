@@ -162,6 +162,7 @@ function ItemPane(props: {
             >
               <FavoriteToggle
                 favorite={props.item.favorite}
+                pending={props.vault.favoritePending(props.item.id)}
                 onToggle={() =>
                   fireAndForget(
                     props.vault.toggleFavorite(props.item),

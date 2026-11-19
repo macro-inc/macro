@@ -6,7 +6,7 @@ use uuid::Uuid;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// Vault item identity, UUIDv7 for new items.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, utoipa::ToSchema)]
 #[serde(transparent)]
 #[schema(as=PasswordItemId)]
 pub struct ItemId(
@@ -101,7 +101,7 @@ pub struct ItemMetadata {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// The current viewer's private favorite in responses; legacy initial flag in storage.
     pub favorite: bool,
     /// Committed provider value version.
     pub version: i32,
@@ -158,7 +158,7 @@ pub struct WriteItem {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
     pub favorite: bool,
     /// Create without the default team edit grant. Updates preserve existing grants.
     #[serde(default)]
@@ -382,7 +382,7 @@ pub struct PatchItem {
     pub url: Option<LoginUrl>,
     /// Optional folder belonging to this same team.
     pub folder_id: Option<Uuid>,
-    /// Whether the item is marked as a favorite.
+    /// Legacy accepted field, ignored; change private preferences through the favorite endpoint.
     pub favorite: bool,
     /// Version observed by the editor; absent only for creation.
     pub expected_version: i32,

@@ -105,6 +105,13 @@ export function createFakePasswordSource(
       );
       return ok(updated);
     },
+    async setFavorite(id, favorite) {
+      if (!items.some((item) => item.id === id)) return err('failed');
+      items = items.map((item) =>
+        item.id === id ? { ...item, favorite } : item
+      );
+      return ok(undefined);
+    },
     async remove(id) {
       items = items.filter((item) => item.id !== id);
       values.delete(id);

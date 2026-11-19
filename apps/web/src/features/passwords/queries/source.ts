@@ -350,6 +350,15 @@ export function createPasswordSource(
         } satisfies PasswordPatchItem)
       ).map(metadata);
     },
+    async setFavorite(id, favorite) {
+      return (
+        await action(
+          'passwords.favorite',
+          `/items/${id}/favorite`,
+          favorite ? 'PUT' : 'DELETE'
+        )
+      ).map(() => undefined);
+    },
     async grants(id) {
       return (await request<GrantDto[]>(`/items/${id}/share`, 'GET')).map(
         (grants) =>

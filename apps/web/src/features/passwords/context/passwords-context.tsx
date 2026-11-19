@@ -61,6 +61,8 @@ export type PasswordSource = {
     item: PasswordItem,
     folderId: string | null
   ): PasswordResult<PasswordItem>;
+  /** Personal preference; requires view access, independent of item edits. */
+  setFavorite(id: string, favorite: boolean): PasswordResult<void>;
   grants(id: string): PasswordResult<PasswordGrant[]>;
   remove(id: string): PasswordResult<void>;
   username(id: string): PasswordResult<{ username: string; version: number }>;

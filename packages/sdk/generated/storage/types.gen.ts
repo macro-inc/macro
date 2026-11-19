@@ -16746,7 +16746,7 @@ export type PasswordItemFields = {
      */
     createdAt: string;
     /**
-     * Whether the item is marked as a favorite.
+     * The current viewer's private favorite in responses; legacy initial flag in storage.
      */
     favorite: boolean;
     /**
@@ -16860,7 +16860,7 @@ export type PasswordPatchItem = {
      */
     expectedVersion: number;
     /**
-     * Whether the item is marked as a favorite.
+     * Legacy accepted field, ignored; change private preferences through the favorite endpoint.
      */
     favorite: boolean;
     /**
@@ -17035,7 +17035,7 @@ export type PasswordWriteItem = {
      */
     expectedVersion?: number | null;
     /**
-     * Whether the item is marked as a favorite.
+     * Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
      */
     favorite: boolean;
     /**
@@ -36095,6 +36095,64 @@ export type PasswordsCopyResponses = {
 };
 
 export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
+
+export type PasswordsRemoveFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsRemoveFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsRemoveFavoriteError = PasswordsRemoveFavoriteErrors[keyof PasswordsRemoveFavoriteErrors];
+
+export type PasswordsRemoveFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFavoriteResponse = PasswordsRemoveFavoriteResponses[keyof PasswordsRemoveFavoriteResponses];
+
+export type PasswordsSetFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsSetFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsSetFavoriteError = PasswordsSetFavoriteErrors[keyof PasswordsSetFavoriteErrors];
+
+export type PasswordsSetFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsSetFavoriteResponse = PasswordsSetFavoriteResponses[keyof PasswordsSetFavoriteResponses];
 
 export type PasswordsHistoryData = {
     body?: never;
