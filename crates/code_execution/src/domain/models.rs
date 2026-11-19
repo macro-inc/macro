@@ -9,12 +9,14 @@ use uuid::Uuid;
 pub struct RunId(pub Uuid);
 
 /// A program to run: a JavaScript ES module exporting an async `main`
-/// function, or an OCaml `main.ml` calling `Code_mode.run`.
+/// function, an OCaml `main.ml` calling `Code_mode.run`, or a JS tools
+/// script.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ExecuteRequest {
     /// The complete program: a JavaScript module, including imports and
-    /// `export async function main`, or an OCaml compilation unit.
+    /// `export async function main`, an OCaml compilation unit, or a JS tools
+    /// script.
     pub source: String,
     /// Total budget including queueing, compiling and API requests.
     pub timeout_ms: u64,
@@ -34,6 +36,12 @@ pub enum Language {
     /// An OCaml program written against the OCaml SDK and `Code_mode`,
     /// compiled to WebAssembly against the prebuilt bundle, then run by Deno.
     Ocaml,
+    /// A script in `@opencode/codemode`'s JavaScript dialect, run by its
+    /// interpreter inside Deno: it calls SDK operations as
+    /// `tools.<service>.<operation>(input)` and nothing else reaches the
+    /// network. Every run analyzes it first and runs only what the analysis
+    /// found.
+    JsTools,
 }
 
 impl Language {
@@ -42,6 +50,7 @@ impl Language {
         match self {
             Self::Javascript => "javascript",
             Self::Ocaml => "ocaml",
+            Self::JsTools => "js_tools",
         }
     }
 }
@@ -66,10 +75,11 @@ pub struct RunEnvironment {
     /// instead of an agent's or a person's call.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unattended: Option<Unattended>,
-    /// OCaml only: the only requests the program may send, as the permission
-    /// gate admitted them. The bootstrap refuses any other SDK request, and
-    /// any authenticated request that doesn't name its operation. `None`
-    /// sends every request, as before the gate.
+    /// OCaml and JS tools only: the only requests the program may send, as
+    /// the permission gate admitted them. The bootstrap refuses any other SDK
+    /// request, and any authenticated request that doesn't name its
+    /// operation; a JS tools program that may call anything outside them
+    /// doesn't start. `None` sends every request, as before the gate.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub allowed_operations: Option<Vec<SdkCall>>,
 }
@@ -194,8 +204,9 @@ pub enum AdmissionError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureCode {
-    /// The program didn't compile, or failed the policy check (OCaml).
-    /// Older persisted outcomes use it for JavaScript too.
+    /// The program didn't compile, failed the policy check (OCaml), or
+    /// didn't parse or pass the analysis (JS tools). Older persisted
+    /// outcomes use it for JavaScript too.
     Compile,
     /// Program threw or exited without a result.
     Runtime,

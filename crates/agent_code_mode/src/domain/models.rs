@@ -86,11 +86,20 @@ impl From<ProgramLanguage> for code_execution::domain::Language {
     }
 }
 
-impl From<code_execution::domain::Language> for ProgramLanguage {
-    fn from(language: code_execution::domain::Language) -> Self {
+/// The runner language a session can't run yet: JS tools programs, which
+/// sessions are not offered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("{} programs are not available in this session", .0.as_str())]
+pub struct UnofferedLanguage(pub code_execution::domain::Language);
+
+impl TryFrom<code_execution::domain::Language> for ProgramLanguage {
+    type Error = UnofferedLanguage;
+
+    fn try_from(language: code_execution::domain::Language) -> Result<Self, Self::Error> {
         match language {
-            code_execution::domain::Language::Javascript => Self::Javascript,
-            code_execution::domain::Language::Ocaml => Self::Ocaml,
+            code_execution::domain::Language::Javascript => Ok(Self::Javascript),
+            code_execution::domain::Language::Ocaml => Ok(Self::Ocaml),
+            code_execution::domain::Language::JsTools => Err(UnofferedLanguage(language)),
         }
     }
 }

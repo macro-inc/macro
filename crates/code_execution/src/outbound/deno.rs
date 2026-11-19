@@ -1,6 +1,7 @@
 //! Fresh JavaScript processes with run-only credentials and allowlisted API
 //! egress. OCaml programs are compiled to WebAssembly first
-//! (`super::ocaml`) and run by the same bootstrap.
+//! (`super::ocaml`) and run by the same bootstrap, as are JS tools programs,
+//! in the interpreter `code_mode_assets::JS_TOOLS` bundles.
 
 use super::ocaml::{OcamlBundle, PROGRAM as OCAML_PROGRAM};
 use crate::domain::*;
@@ -36,6 +37,13 @@ const IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"
 const UNATTENDED_IMPORTS: &str = r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","node:net":"./unavailable.mjs","node:tls":"./unavailable.mjs","node:http":"./unavailable.mjs","node:https":"./unavailable.mjs","node:http2":"./unavailable.mjs","node:dgram":"./unavailable.mjs","node:worker_threads":"./unavailable.mjs","worker_threads":"./unavailable.mjs","node:child_process":"./unavailable.mjs","node:cluster":"./unavailable.mjs","node:inspector":"./unavailable.mjs"}}"#;
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
+/// Where a JS tools program's source is written; its diagnostics name it.
+const JS_TOOLS_PROGRAM: &str = "main.js";
+/// The most tool calls one JS tools run makes.
+const JS_TOOLS_MAX_TOOL_CALLS: u16 = 256;
+/// What a JS tools run leaves of its deadline for the bootstrap to report how
+/// it ended: the interpreter stops this much before the process is stopped.
+const JS_TOOLS_REPORT_MARGIN: std::time::Duration = std::time::Duration::from_millis(500);
 
 /// The supervisor owns process lifecycle; Deno owns the permission boundary.
 pub struct DenoRunner {
@@ -124,15 +132,21 @@ impl DenoRunner {
         }
         let language = job.request.language;
         let ocaml = match language {
-            // Only the OCaml fetch names each request's operation, so only
-            // an OCaml run can be held to a set of them.
+            // Only OCaml and JS tools requests name their operation, so only
+            // those runs can be held to a set of them.
             Language::Javascript if job.environment.allowed_operations.is_some() => {
                 return Err(ExecutionFailure::new(
                     FailureCode::Internal,
-                    "only OCaml programs can be limited to operations",
+                    "only OCaml and JS tools programs can be limited to operations",
                 ));
             }
-            Language::Javascript => None,
+            Language::JsTools if job.environment.unattended.is_some() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Runtime,
+                    "JS tools programs can't run unattended",
+                ));
+            }
+            Language::Javascript | Language::JsTools => None,
             Language::Ocaml => Some(self.ocaml.as_ref().ok_or_else(|| {
                 ExecutionFailure::new(
                     FailureCode::Internal,
@@ -155,6 +169,7 @@ impl DenoRunner {
         // An unattended program is TypeScript; Deno strips its types on load.
         let program = match (language, &job.environment.unattended) {
             (Language::Ocaml, _) => OCAML_PROGRAM,
+            (Language::JsTools, _) => JS_TOOLS_PROGRAM,
             (Language::Javascript, Some(_)) => "main.ts",
             (Language::Javascript, None) => "main.mjs",
         };
@@ -174,6 +189,19 @@ impl DenoRunner {
         tokio::fs::write(root.join("timers.mjs"), TIMERS)
             .await
             .map_err(internal)?;
+        // The interpreter and catalog sit in scratch like the SDK, so a JS
+        // tools run has exactly a JavaScript run's read permission.
+        if language == Language::JsTools {
+            tokio::fs::write(root.join("js-tools.mjs"), code_mode_assets::JS_TOOLS)
+                .await
+                .map_err(internal)?;
+            tokio::fs::write(
+                root.join("js-tools.json"),
+                code_mode_assets::JS_TOOLS_CATALOG,
+            )
+            .await
+            .map_err(internal)?;
+        }
         tokio::fs::write(
             root.join("imports.json"),
             if job.environment.unattended.is_some() {
@@ -260,18 +288,33 @@ impl DenoRunner {
             language = language.as_str(),
             outcome = tracing::field::Empty,
         );
+        let context = ChildContext {
+            environment: &job.environment,
+            max_result_bytes: job.limits.max_result_bytes,
+            language: (language != Language::Javascript).then(|| language.as_str()),
+            ocaml_assets: ocaml.map(|bundle| bundle.assets()),
+            operations: job
+                .environment
+                .unattended
+                .as_ref()
+                .map(|_| CATALOG.as_slice()),
+            js_tools: (language == Language::JsTools).then(|| JsToolsLimits {
+                timeout_ms: u64::try_from(
+                    job.deadline
+                        .saturating_duration_since(tokio::time::Instant::now())
+                        .saturating_sub(JS_TOOLS_REPORT_MARGIN)
+                        .as_millis(),
+                )
+                .unwrap_or(u64::MAX)
+                .max(1),
+                max_tool_calls: JS_TOOLS_MAX_TOOL_CALLS,
+                max_output_bytes: job.limits.max_frame_bytes,
+            }),
+        };
         let execution = async {
-            let candidate = bridge(
-                &job.environment,
-                ocaml.map(|bundle| bundle.assets()),
-                stdin,
-                stdout,
-                stderr,
-                events,
-                &job.limits,
-            )
-            .instrument(deno.clone())
-            .await?;
+            let candidate = bridge(context, stdin, stdout, stderr, events, &job.limits)
+                .instrument(deno.clone())
+                .await?;
             // Both streams have closed, so the process is exiting.
             let status = child.wait().await.map_err(internal)?;
             if std::os::unix::process::ExitStatusExt::signal(&status)
@@ -393,7 +436,8 @@ struct ChildContext<'a> {
     #[serde(flatten)]
     environment: &'a RunEnvironment,
     max_result_bytes: usize,
-    /// `ocaml` for a compiled OCaml program (main.js); absent for JavaScript.
+    /// `ocaml` for a compiled OCaml program (main.js), `js_tools` for a JS
+    /// tools program (main.js); absent for JavaScript.
     #[serde(skip_serializing_if = "Option::is_none")]
     language: Option<&'static str>,
     /// The bundle's prebuilt library modules an OCaml program's loader reads.
@@ -403,6 +447,20 @@ struct ChildContext<'a> {
     /// writes with, both for SDK operations and the requests they send.
     #[serde(skip_serializing_if = "Option::is_none")]
     operations: Option<&'static [CatalogEntry]>,
+    /// For a JS tools program, the interpreter's limits.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    js_tools: Option<JsToolsLimits>,
+}
+
+/// What `@opencode/codemode` enforces on a JS tools run.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JsToolsLimits {
+    /// The run's remaining deadline, less the margin to report how it ended.
+    timeout_ms: u64,
+    max_tool_calls: u16,
+    /// Bytes of result and logs the interpreter keeps: the frame limit.
+    max_output_bytes: usize,
 }
 
 #[derive(Serialize)]
@@ -443,26 +501,32 @@ enum ChildFrame {
     },
     Error {
         message: String,
+        /// Set when the program was refused before it ran.
+        #[serde(default)]
+        failure: Option<FrameFailure>,
     },
 }
 
+/// Why an error frame's program failed, when it's not a runtime error.
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum FrameFailure {
+    /// A JS tools program that doesn't parse or can't be analyzed.
+    Compile,
+    /// A JS tools program its interpreter stopped at the deadline.
+    TimedOut,
+}
+
 async fn bridge(
-    environment: &RunEnvironment,
-    ocaml_assets: Option<PathBuf>,
+    context: ChildContext<'_>,
     mut stdin: tokio::process::ChildStdin,
     stdout: tokio::process::ChildStdout,
     stderr: tokio::process::ChildStderr,
     events: &mut EventSink,
     limits: &Limits,
 ) -> Result<Option<Outcome>, ExecutionFailure> {
-    let mut initial = serde_json::to_vec(&ChildContext {
-        environment,
-        max_result_bytes: limits.max_result_bytes,
-        language: ocaml_assets.as_ref().map(|_| Language::Ocaml.as_str()),
-        ocaml_assets,
-        operations: environment.unattended.as_ref().map(|_| CATALOG.as_slice()),
-    })
-    .map_err(internal)?;
+    let environment = context.environment;
+    let mut initial = serde_json::to_vec(&context).map_err(internal)?;
     initial.push(b'\n');
     stdin.write_all(&initial).await.map_err(internal)?;
     // Credentials travel once through the private pipe, never argv or a file.
@@ -509,7 +573,13 @@ async fn bridge(
                         }
                         outcome = Some(Outcome::Succeeded { value });
                     }
-                    ChildFrame::Error { message } => outcome = Some(ExecutionFailure::new(FailureCode::Runtime, message).into()),
+                    ChildFrame::Error { message, failure } => {
+                        outcome = Some(match failure {
+                            Some(FrameFailure::Compile) => ExecutionFailure::new(FailureCode::Compile, message).into(),
+                            Some(FrameFailure::TimedOut) => Outcome::TimedOut,
+                            None => ExecutionFailure::new(FailureCode::Runtime, message).into(),
+                        });
+                    }
                 }
             }
             line = stderr.next(), if stderr_open => {
