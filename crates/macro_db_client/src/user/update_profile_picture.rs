@@ -1,6 +1,9 @@
 use model::user::{AvatarFace, ProfilePictures, UserProfilePicture};
 
-#[tracing::instrument(skip(db))]
+#[cfg(test)]
+mod test;
+
+#[tracing::instrument(skip_all, err)]
 pub async fn update_profile_picture(
     db: &sqlx::PgPool,
     macro_user_id: &str,
@@ -30,7 +33,7 @@ pub async fn update_profile_picture(
 }
 
 /// Given a list of user profile ids (from "Users" table), return a list of profile pictures
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip_all, fields(count = user_profile_ids_list.len()), err)]
 pub async fn get_profile_pictures(
     db: &sqlx::PgPool,
     user_profile_ids_list: &Vec<String>,

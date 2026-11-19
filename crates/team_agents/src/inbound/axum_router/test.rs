@@ -344,6 +344,31 @@ async fn an_admin_can_reach_the_agent_avatar_edit_service() {
     assert_eq!(service.0.load(Ordering::SeqCst), 1);
 }
 
+#[tokio::test]
+async fn avatar_edits_refuse_members_before_the_service() {
+    let service = Arc::new(Reached::default());
+    let app = team_agents_router(TeamAgentsRouterState {
+        service: service.clone(),
+        entity_access_service: Arc::new(FakeEntityAccessService::with_membership(
+            USER_ID,
+            TeamRole::Member,
+        )),
+        authorization_state: MacroAuthorizationState::new(Arc::new(FakeAuthorization)),
+    });
+    let response = app
+        .oneshot(
+            Request::put("/macro%7Cagent%40example.com/avatar")
+                .header(header::AUTHORIZATION, "Bearer valid")
+                .header(header::CONTENT_TYPE, "application/json")
+                .body(Body::from(r#"{"face":null,"url":null}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(service.0.load(Ordering::SeqCst), 0);
+}
+
 async fn error_body(error: TeamAgentError) -> (StatusCode, serde_json::Value) {
     let response = error.into_response();
     let status = response.status();
