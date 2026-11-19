@@ -293,6 +293,14 @@ impl DenoRunner {
                     "JS tools programs can't run unattended",
                 ));
             }
+            // A JS tools run is always held to the operations its check
+            // allowed, so a caller that skipped the check fails closed here.
+            Language::JsTools if job.environment.allowed_operations.is_none() => {
+                return Err(ExecutionFailure::new(
+                    FailureCode::Internal,
+                    "JS tools programs run only with the operations they were checked to call",
+                ));
+            }
             Language::Javascript | Language::JsTools => None,
             Language::Ocaml => Some(self.ocaml.as_ref().ok_or_else(|| {
                 ExecutionFailure::new(

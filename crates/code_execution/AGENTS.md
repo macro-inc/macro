@@ -119,7 +119,9 @@ or whose path a more specific rival route also matches (a parameter equal to a
 sibling's literal segment, `/documents/{}` reaching `/documents/system_skills`;
 the analyzer lists each call's `rivals`, from the SDK's routes only: a
 route a service serves outside its OpenAPI spec is not one), reporting it as
-`refused` activity; `None` sends everything as before. The policy check
+`refused` activity; `None` sends everything as before for OCaml, and a JS
+tools run without it never starts (`DenoRunner` refuses it, and the bootstrap
+again). The policy check
 (`packages/sdk-ocaml/code_mode/policy`) is defense in depth: keep the Deno
 flags the boundary for OCaml as for JavaScript.
 

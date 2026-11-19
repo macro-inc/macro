@@ -243,6 +243,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
    * itself for this session only (`sessionRules`).
    *
    * @readonly
+   * @flag enable-agent-permissions
    */
   async toolPermissions(): Promise<ToolPermissions> {
     const view = unwrap(

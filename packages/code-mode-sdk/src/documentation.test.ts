@@ -328,3 +328,18 @@ it('external chats and WhatsApp are their own entities without pairing methods',
   expect(index('whatsapp')).not.toContain('whatsappConnect');
   expect(index('channels')).not.toContain('WhatsAppNamespace');
 });
+
+it('leaves out SDK methods behind a flag: tool permissions while enable-agent-permissions is off', async () => {
+  const text = await readFile(artifact, 'utf8');
+  const docs = JSON.parse(text) as SdkDocs;
+  expect(
+    docs.entities.find((entry) => entry.name === 'agents')?.index
+  ).toContain('AgentNamespace');
+  for (const name of [
+    'toolPermissions',
+    'tightenToolPermissions',
+    'toolPermissionCatalog',
+    'TightenedToolPermissions',
+  ])
+    expect(text).not.toContain(name);
+});

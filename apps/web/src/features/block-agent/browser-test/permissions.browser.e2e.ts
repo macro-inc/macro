@@ -90,6 +90,11 @@ for (const { language, program } of LANGUAGES) {
       await expect(request).toContainText('Rename document');
       await request.getByRole('button', { name: 'View program' }).click();
       await expect(request).toContainText(program);
+      // Long lines wrap, so nothing the person approves is cut off.
+      const source = request.locator('pre');
+      expect(
+        await source.evaluate((pre) => pre.scrollWidth <= pre.clientWidth)
+      ).toBe(true);
       await shot(page, `approval-${language}`, isMobile);
       await request.getByRole('button', { name: 'Hide program' }).click();
       await request
@@ -100,20 +105,23 @@ for (const { language, program } of LANGUAGES) {
   });
 }
 
-test('the permissions page names no program language', async ({
+test('the permissions page says which programs it covers', async ({
   page,
   isMobile,
 }) => {
   await page.goto(fixture('view=page'));
   await expect(
-    page.getByText('Applies to checked programs only, for now.')
+    page.getByText('Applies to JS tools and OCaml programs only, for now.')
   ).toBeVisible();
   await expect(
-    page.getByText('What Scout may do when it runs a program for you.', {
-      exact: false,
-    })
+    page.getByText(
+      'What Scout may do in the JS tools and OCaml programs it runs for you.',
+      { exact: false }
+    )
   ).toBeVisible();
-  await expect(page.locator('main')).not.toContainText(/OCaml|JavaScript/);
+  await expect(
+    page.getByText('Scout’s plain JavaScript programs', { exact: false })
+  ).toBeVisible();
   await page.getByRole('button', { name: /Email/ }).first().click();
   const send = page.getByRole('radiogroup', { name: 'Email: Send' });
   await expect(send.getByRole('radio', { name: 'Ask' })).toBeChecked();

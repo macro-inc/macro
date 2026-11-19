@@ -81,7 +81,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (`src/code_mode/permissions.rs`, `PermissionGate`, wired into
   `RunCredentials` where the build can analyze some language): OCaml
   (`OcamlAnalyzer`, with the OCaml bundle) and JavaScript tools
-  (`JsToolsAnalyzer`, on every Deno build), each in `Analyzers`. For an owner
+  (`JsToolsAnalyzer`, on every Deno build; one that can't start is logged
+  and left out, so startup goes on without JS tools), each in `Analyzers`. For an owner
   with `enable-agent-permissions` (and, for OCaml, `enable-ocaml-code-mode`;
   `LanguageRollout`) it analyzes the program, refuses it on any `never`
   operation or when it can't be analyzed, holds it for the run's account on

@@ -202,6 +202,7 @@ export class Agent extends MacroEntity<AgentRecord> {
    * agent itself reads them in a session, that session's restrictions too.
    *
    * @readonly
+   * @flag enable-agent-permissions
    */
   async toolPermissions(): Promise<ToolPermissions> {
     const view = unwrap(
@@ -222,6 +223,7 @@ export class Agent extends MacroEntity<AgentRecord> {
    *
    * @write
    * @idempotent
+   * @flag enable-agent-permissions
    */
   async tightenToolPermissions(
     changes: ToolPermissionChanges,

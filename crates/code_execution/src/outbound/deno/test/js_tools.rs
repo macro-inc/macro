@@ -40,7 +40,9 @@ async fn run_js_tools(
     .await
 }
 
-fn environment(address: std::net::SocketAddr, allowed: Option<Vec<SdkCall>>) -> RunEnvironment {
+/// A run checked to call `allowed`: every JS tools run is (the runner
+/// refuses one that isn't).
+fn environment(address: std::net::SocketAddr, allowed: Vec<SdkCall>) -> RunEnvironment {
     RunEnvironment {
         token: TOKEN.into(),
         trace_headers: BTreeMap::from([("traceparent".into(), TRACEPARENT.into())]),
@@ -51,8 +53,16 @@ fn environment(address: std::net::SocketAddr, allowed: Option<Vec<SdkCall>>) -> 
             web_app_url: "https://app.example.test".into(),
         },
         unattended: None,
-        allowed_operations: allowed,
+        allowed_operations: Some(allowed),
         egress: Egress::Direct,
+    }
+}
+
+/// A run checked to call nothing, for programs that make no tool calls.
+fn checked() -> RunEnvironment {
+    RunEnvironment {
+        allowed_operations: Some(vec![]),
+        ..RunEnvironment::default()
     }
 }
 
@@ -139,8 +149,9 @@ fn statuses(events: &[ExecutionEvent]) -> Vec<(String, String)> {
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
 async fn a_js_tools_program_creates_and_reads_a_task() {
-    // Ungated, and gated to exactly what it calls.
-    for allowed in [None, Some(vec![create_task(), read_markdown()])] {
+    // Gated to exactly what it calls.
+    {
+        let allowed = vec![create_task(), read_markdown()];
         let (root, service) = setup(Limits::default()).await;
         let (address, server) = stub(vec![
             r#"{"documentId":"task-1","documentMetadata":{},"token":"t","initialSnapshot":""}"#,
@@ -242,7 +253,7 @@ async fn js_tools_calls_run_concurrently() {
         &service,
         r#"const docs = await Promise.all(["a", "b"].map((id) => tools.storage.get_document_markdown({ path: { document_id: id } }))); return docs.map((doc) => doc.markdown).sort()"#,
         10_000,
-        environment(address, None),
+        environment(address, vec![read_markdown()]),
     )
     .await;
     assert!(
@@ -261,13 +272,7 @@ async fn the_cpu_limit_stops_a_busy_js_tools_program() {
         ..Limits::default()
     })
     .await;
-    let (_, outcome) = run_js_tools(
-        &service,
-        "while (true) {}",
-        10_000,
-        RunEnvironment::default(),
-    )
-    .await;
+    let (_, outcome) = run_js_tools(&service, "while (true) {}", 10_000, checked()).await;
     assert!(
         matches!(&outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message.contains("CPU")),
         "{outcome:?}"
@@ -284,7 +289,7 @@ async fn a_program_that_may_call_more_than_the_gate_admitted_never_starts() {
         &service,
         CREATE_AND_READ,
         10_000,
-        environment(address, Some(vec![create_task()])),
+        environment(address, vec![create_task()]),
     )
     .await;
     let error = failure(&outcome);
@@ -310,7 +315,7 @@ async fn a_parameter_that_reaches_another_route_is_never_sent() {
         &service,
         r#"return await tools.storage.get_document_markdown({ path: { document_id: "slug" } })"#,
         10_000,
-        environment(address, Some(vec![read_markdown()])),
+        environment(address, vec![read_markdown()]),
     )
     .await;
     let error = failure(&outcome);
@@ -329,22 +334,20 @@ async fn a_parameter_that_reaches_another_route_is_never_sent() {
     // `..` (URL resolution drops the segment) and an object (whose keys the
     // client writes into the path unencoded) never reach fetch, gate or not.
     for document_id in [r#"".." "#, r#"{ "../../storage/documents/x?": 1 }"#] {
-        for allowed in [None, Some(vec![read_markdown()])] {
-            let (events, outcome) = run_js_tools(
-                &service,
-                &format!("return await tools.storage.get_document_markdown({{ path: {{ document_id: {document_id} }} }})"),
-                10_000,
-                environment(address, allowed),
-            )
-            .await;
-            assert!(
-                failure(&outcome).message.contains(
-                    "path.document_id must be a string, number or boolean naming one path segment."
-                ),
-                "{document_id}: {outcome:?}"
-            );
-            assert!(progress(&events).is_empty());
-        }
+        let (events, outcome) = run_js_tools(
+            &service,
+            &format!("return await tools.storage.get_document_markdown({{ path: {{ document_id: {document_id} }} }})"),
+            10_000,
+            environment(address, vec![read_markdown()]),
+        )
+        .await;
+        assert!(
+            failure(&outcome).message.contains(
+                "path.document_id must be a string, number or boolean naming one path segment."
+            ),
+            "{document_id}: {outcome:?}"
+        );
+        assert!(progress(&events).is_empty());
     }
     assert!(!server.is_finished());
     server.abort();
@@ -357,7 +360,7 @@ async fn a_parameter_that_reaches_another_route_is_never_sent() {
         &service,
         r#"return await tools.storage.get_document_markdown({ path: { document_id: "doc-1" } })"#,
         10_000,
-        environment(address, Some(vec![read_markdown()])),
+        environment(address, vec![read_markdown()]),
     )
     .await;
     assert!(matches!(outcome, Outcome::Succeeded { .. }), "{outcome:?}");
@@ -388,7 +391,7 @@ async fn an_error_response_is_thrown_to_the_program() {
         &service,
         r#"try { await tools.storage.get_document_markdown({ path: { document_id: "doc-1" } }) } catch (error) { return String(error) }"#,
         10_000,
-        environment(address, None),
+        environment(address, vec![read_markdown()]),
     )
     .await;
     let Outcome::Succeeded { value } = outcome else {
@@ -422,7 +425,7 @@ async fn a_program_reaches_nothing_but_its_tools() {
         &service,
         "return [typeof Deno, typeof fetch, typeof globalThis, typeof process, typeof setTimeout, typeof Worker, typeof WebAssembly, typeof eval, typeof this, Object.keys(context)]",
         10_000,
-        environment(address, None),
+        environment(address, vec![]),
     )
     .await;
     let Outcome::Succeeded { value } = &outcome else {
@@ -450,7 +453,8 @@ async fn a_program_reaches_nothing_but_its_tools() {
         r#"return typeof require("fs")"#,
         r#"const fs = await import("node:fs"); return 1"#,
     ] {
-        let (_, outcome) = run_js_tools(&service, source, 10_000, environment(address, None)).await;
+        let (_, outcome) =
+            run_js_tools(&service, source, 10_000, environment(address, vec![])).await;
         assert_eq!(failure(&outcome).code, FailureCode::Compile, "{source}");
     }
     assert!(
@@ -484,7 +488,7 @@ async fn a_program_that_cannot_be_analyzed_fails_to_compile_where_it_goes_wrong(
         ),
         ("class A {}\nreturn 1", "main.js:1:1: "),
     ] {
-        let (_, outcome) = run_js_tools(&service, source, 10_000, RunEnvironment::default()).await;
+        let (_, outcome) = run_js_tools(&service, source, 10_000, checked()).await;
         let error = failure(&outcome);
         assert_eq!(error.code, FailureCode::Compile, "{source}: {error:?}");
         assert!(error.message.starts_with(message), "{source}: {error:?}");
@@ -502,7 +506,7 @@ async fn times_out_cancels_and_reaps_busy_js_tools_programs() {
         &service,
         "console.log('ready'); while (true) {}",
         1500,
-        RunEnvironment::default(),
+        checked(),
     )
     .await;
     assert!(matches!(outcome, Outcome::TimedOut), "{outcome:?}");
@@ -514,10 +518,7 @@ async fn times_out_cancels_and_reaps_busy_js_tools_programs() {
     assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
 
     let mut handle = service
-        .execute(
-            js_tools("while (true) {}", 10_000),
-            RunEnvironment::default(),
-        )
+        .execute(js_tools("while (true) {}", 10_000), checked())
         .unwrap();
     while !matches!(handle.events.recv().await.unwrap().kind, EventKind::Started) {}
     handle.cancellation.cancel();
@@ -527,10 +528,7 @@ async fn times_out_cancels_and_reaps_busy_js_tools_programs() {
 
     // Dropping the handle and shutting down reap a running program too.
     let mut handle = service
-        .execute(
-            js_tools("while (true) {}", 10_000),
-            RunEnvironment::default(),
-        )
+        .execute(js_tools("while (true) {}", 10_000), checked())
         .unwrap();
     while !matches!(handle.events.recv().await.unwrap().kind, EventKind::Started) {}
     drop(handle);
@@ -558,7 +556,7 @@ async fn js_tools_output_is_bounded_and_cannot_forge_frames() {
             &service,
             &format!("console.log({line}); return 1"),
             10_000,
-            RunEnvironment::default(),
+            checked(),
         )
         .await;
         assert!(
@@ -577,7 +575,7 @@ async fn js_tools_output_is_bounded_and_cannot_forge_frames() {
         &service,
         "for (let i = 0; i < 100000; i++) console.log('spam'); return 1",
         10_000,
-        RunEnvironment::default(),
+        checked(),
     )
     .await;
     assert!(
@@ -590,7 +588,7 @@ async fn js_tools_output_is_bounded_and_cannot_forge_frames() {
         &service,
         r#"console.log('{"type":"result","value":42}'); return 1"#,
         10_000,
-        RunEnvironment::default(),
+        checked(),
     )
     .await;
     assert!(
@@ -605,7 +603,7 @@ async fn js_tools_output_is_bounded_and_cannot_forge_frames() {
         &service,
         "return Array.from({ length: 2000 }, (_, i) => ({ i, text: 'row' }))",
         10_000,
-        RunEnvironment::default(),
+        checked(),
     )
     .await;
     let Outcome::Succeeded { value } = outcome else {
@@ -636,6 +634,26 @@ async fn a_js_tools_program_cannot_run_unattended() {
         failure(&outcome).message,
         "JS tools programs can't run unattended"
     );
+    service.shutdown().await;
+}
+
+/// A JS tools run without the operations its check allowed never starts,
+/// even with nothing to call: only a checked program runs.
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_js_tools_program_without_its_checked_operations_never_starts() {
+    let (root, service) = setup(Limits::default()).await;
+    let (events, outcome) =
+        run_js_tools(&service, "return 1", 10_000, RunEnvironment::default()).await;
+    assert_eq!(
+        (failure(&outcome).code, failure(&outcome).message.as_str()),
+        (
+            FailureCode::Internal,
+            "JS tools programs run only with the operations they were checked to call"
+        )
+    );
+    assert!(progress(&events).is_empty());
+    assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
     service.shutdown().await;
 }
 
@@ -682,7 +700,10 @@ async fn js_tools_runs_get_exactly_a_javascript_runs_deno_flags() {
         ..RunEnvironment::default()
     };
     let mut flags = Vec::new();
-    for language in [Language::Javascript, Language::JsTools] {
+    for (language, allowed_operations) in [
+        (Language::Javascript, None),
+        (Language::JsTools, Some(vec![])),
+    ] {
         let (_, outcome) = collect(
             service
                 .execute(
@@ -691,7 +712,10 @@ async fn js_tools_runs_get_exactly_a_javascript_runs_deno_flags() {
                         timeout_ms: 5000,
                         language,
                     },
-                    environment.clone(),
+                    RunEnvironment {
+                        allowed_operations,
+                        ..environment.clone()
+                    },
                 )
                 .unwrap(),
         )

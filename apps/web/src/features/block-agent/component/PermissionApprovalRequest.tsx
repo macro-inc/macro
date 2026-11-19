@@ -150,7 +150,9 @@ export function PermissionApprovalRequest(props: {
                     : t('agentPermissionsChat.viewProgram')}
                 </Button>
                 <Show when={showProgram()}>
-                  <pre class="mt-1 max-h-60 overflow-auto rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 text-ink-muted">
+                  {/* Long lines wrap: the person approves all of it, so
+                      none of it may sit past the card's edge. */}
+                  <pre class="mt-1 max-h-60 overflow-y-auto rounded-lg bg-ink/3 p-3 font-mono text-xs leading-5 whitespace-pre-wrap text-ink-muted [overflow-wrap:anywhere]">
                     {source()}
                   </pre>
                 </Show>
