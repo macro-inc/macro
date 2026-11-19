@@ -7,7 +7,7 @@ snippets, task projects (initiatives), forms, databases, and saved views.
 
 ## Start here
 
-- `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
+- `entity-appearance.tsx`: lazy editor launcher and header-only trigger, which draws the entity's type icon or the icon its host passes (a routine passes the icon its page shows).
 - `appearance-menu.tsx`: device entry for desktop `views/appearance-menu.tsx` and touch `views/mobile/appearance-menu.tsx`.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.

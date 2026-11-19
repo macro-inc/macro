@@ -2004,3 +2004,68 @@ for (const mobile of [false, true]) {
     });
   });
 }
+
+for (const [device, viewport] of [
+  ['phone', { width: 390, height: 844 }],
+  ['tablet', { width: 820, height: 1180 }],
+] as const) {
+  test.describe(`${device} timeline end`, () => {
+    test.use({ viewport, isMobile: true, hasTouch: true });
+
+    test('the last message stays above the floating composer', async ({
+      page,
+    }) => {
+      const state = server();
+      // Enough history that the timeline scrolls.
+      state.imported = Array.from({ length: 30 }, (_, index) => ({
+        ...incomingMessage,
+        id: `message-history-${index}`,
+        body: `Earlier message ${index}`,
+        sentAt: new Date(Date.UTC(2026, 9, 20, 8, index)).toISOString(),
+        reactions: [],
+        attachments: [],
+      }));
+      const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
+      const composer = page.getByRole('textbox', {
+        name: 'Message Design Crit',
+      });
+      await expect(composer).toBeVisible();
+      const timeline = page.getByRole('log', { name: 'WhatsApp messages' });
+      await expect(
+        timeline.getByText('Looking now. Thanks, Ana!')
+      ).toBeVisible();
+      // Room between the last message and the top of the bottom chrome.
+      const clearance = () =>
+        page.evaluate(() => {
+          const last = [
+            ...document.querySelectorAll('[role="log"] [data-message-id]'),
+          ].at(-1);
+          const chrome = document.querySelector(
+            '[data-float-region="accessory"]'
+          );
+          if (!last || !chrome) return Number.NaN;
+          return (
+            chrome.getBoundingClientRect().top -
+            last.getBoundingClientRect().bottom
+          );
+        });
+      await expect.poll(clearance).toBeGreaterThanOrEqual(0);
+
+      // A draft growing to several lines raises the composer; the timeline
+      // follows it.
+      const accessory = page.locator('[data-float-region="accessory"]');
+      const before = (await accessory.boundingBox())?.height ?? 0;
+      await composer.click();
+      await page.keyboard.type('One');
+      for (const line of ['Two', 'Three', 'Four']) {
+        await page.keyboard.press('Enter');
+        await page.keyboard.type(line);
+      }
+      await expect
+        .poll(async () => (await accessory.boundingBox())?.height ?? 0)
+        .toBeGreaterThan(before + 40);
+      await expect.poll(clearance).toBeGreaterThanOrEqual(0);
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
