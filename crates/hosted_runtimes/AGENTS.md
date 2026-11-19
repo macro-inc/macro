@@ -125,6 +125,8 @@ read it before changing behaviour.
   `Failure::AgentNotStarted`; a macrod that declared no `apply-agent`
   capability when it dialed applies `Event::MacrodConnectedWithoutAgentHandOff`
   instead, which fails it at once with `Failure::AgentUnsupported` and pages).
+  An `AgentOnline` after the deadline recovers the computer (`Running`,
+  failure cleared); see the recovery rules in the architecture doc.
   A give-up during the first start counts in `first_start_failures`, except
   `Failure::HostLost` (a host outage is not the computer's failure); the first
   leaves the computer for a team retry
