@@ -1,0 +1,19 @@
+crates/agent_permissions/src/domain/model.rs
+  s_6e9511fcd4b64b::t_a319017c13d2ad 202
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "46c0c261443e57b297b1b41585611a7f2de9c85f",
+  "prompts": {},
+  "sessions": {
+    "s_6e9511fcd4b64b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b73d9930-5a2a-44b1-8373-7101adf46fc8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
