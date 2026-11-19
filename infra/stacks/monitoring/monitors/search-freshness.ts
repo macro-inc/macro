@@ -24,9 +24,14 @@
 //   Datadog does not interpolate a stopped sampler's last reading.
 // - `search.index.dropped_events`: events committed without reaching the
 //   index (counter), tagged `entity_type`. Events dropped after their
-//   processing retries also carry `event_type`; records lost outside the
+//   attempts and replay also carry `event_type`, `delivery` (`kafka` or
+//   `sqs_replay`) and the last attempt's `failure` (`bulk_items`,
+//   `overloaded`, `source_missing`, `error`); records lost outside the
 //   workers carry `failure` (`undecodable`, `cut_off_at_stop`, `not_rewound`,
 //   `rewind_unconfirmed`, `queued_without_rewind`).
+// - `search.index.failed_bulk_items`: items OpenSearch failed in the last
+//   attempt of an event queued for a replay or dropped (counter), tagged
+//   `entity_type` and `outcome`.
 // - `kafka.consumer.offset_resets`: partition positions librdkafka reset after
 //   an error (counter), tagged `topic`. Usually the position was out of range,
 //   older than the topic's retention, and the consumer moved to the newest
