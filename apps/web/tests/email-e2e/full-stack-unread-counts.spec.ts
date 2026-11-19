@@ -130,6 +130,13 @@ function mailList(page: Page) {
 function mailUnread(page: Page, scroll = false): Promise<number> {
   return mailList(page)
     .evaluate(async (grid, walk) => {
+      // A list still loading, or showing its load error, can't be read.
+      if (
+        grid.querySelector('[aria-label="Loading email"]') ||
+        grid.textContent?.includes('Email couldn’t be loaded')
+      ) {
+        return -1;
+      }
       const ids = new Set<string>();
       const read = () => {
         for (const row of grid.querySelectorAll('[data-soup-entity]')) {
@@ -171,14 +178,33 @@ async function mailUnreadLoaded(page: Page): Promise<number> {
   const more = mailList(page).getByRole('button', {
     name: /^(Load More|Loading\.\.\.)$/,
   });
-  for (let pages = 0; (await more.count()) > 0; pages += 1) {
-    if (pages === 10) return -1;
-    await more.first().click();
+  for (let pages = 0; pages < 10; pages += 1) {
+    // The list renders only the rows near its viewport, Load More among them.
+    await scrollMailListToEnd(page);
+    if ((await more.count()) === 0) return mailUnread(page, true);
+    if (await more.first().isEnabled()) {
+      await more
+        .first()
+        .click({ timeout: 5_000 })
+        .catch(() => undefined);
+    }
     await expect(more.filter({ hasText: 'Loading...' })).toHaveCount(0, {
       timeout: 30_000,
     });
   }
-  return mailUnread(page, true);
+  return -1;
+}
+
+function scrollMailListToEnd(page: Page): Promise<void> {
+  return mailList(page).evaluate(async (grid) => {
+    const scroller = [...grid.querySelectorAll('*')].find(
+      (element) =>
+        element.scrollHeight > element.clientHeight + 1 &&
+        /auto|scroll/.test(getComputedStyle(element).overflowY)
+    );
+    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  });
 }
 
 /** The Mail list's row of a thread. */
@@ -561,6 +587,10 @@ test.describe('the unread numbers beside each view', {
         row.locator('[role="img"][aria-label="Unread"]')
       ).toHaveCount(0);
     }
+    // The view itself holds 99 unread once every page is in.
+    await expect
+      .poll(() => mailUnreadLoaded(page), { timeout: 90_000 })
+      .toBe(99);
     await seen.check(
       page,
       'six read: 99 unread, five of them past the first page',
