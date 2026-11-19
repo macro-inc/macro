@@ -1304,7 +1304,9 @@ cancel it before restoring and sending again. The server starts the undo delay
 at first admission, so reconnecting does not consume that delay while offline.
 The send toast's **Undo** works after navigation closes the composer. It shows
 **Cancelling send…** until the server confirms, then **Send cancelled**, and
-restores the draft only after that confirmation. The open conversation reads the
+restores the draft only after that confirmation. Once recovery has restored a
+confirmed send, a failed status read still leaves Undo able to confirm the
+cancellation. The open conversation reads the
 thread again, so the cancelled message never stays visible as sent beside the
 restored draft. The restored draft carries the server's advanced generation, so
 it can be edited, sent again, or discarded. Cancellation that cannot be confirmed in time, an expired undo

@@ -970,6 +970,59 @@ describe('independent send recovery records', () => {
       revision: restored?.draft.revision,
     });
     expect(await store.sends(owner)).toEqual([]);
+    landBeforeAbort();
+    expect(await store.takeCancellationReceipt(owner, sendIntent().uuid)).toBe(
+      true
+    );
+    expect(await store.takeCancellationReceipt(owner, sendIntent().uuid)).toBe(
+      false
+    );
+  });
+  it('shares the cancellation receipt across tabs of the same active account and consumes it once', async () => {
+    const name = crypto.randomUUID();
+    const recovery = open(name);
+    const undo = open(name);
+    const owner = await recovery.activate('owner');
+    await undo.activate('owner', owner.epoch);
+    await recovery.save(owner, snapshot());
+    const row = await recovery.putSend(
+      owner,
+      { ...sendIntent(), cancellationRequested: true },
+      true
+    );
+    expect(await undo.takeCancellationReceipt(owner, row.uuid)).toBe(false);
+
+    await recovery.restoreSend(owner, row.uuid);
+    expect(await undo.sends(owner)).toEqual([]);
+    expect(await undo.read(owner, 'local')).toBeDefined();
+    expect(
+      await undo.takeCancellationReceipt(
+        { ...owner, accountId: 'other' },
+        row.uuid
+      )
+    ).toBe(false);
+    expect(
+      await undo.takeCancellationReceipt(
+        { ...owner, epoch: 'retired' },
+        row.uuid
+      )
+    ).toBe(false);
+    expect(await undo.takeCancellationReceipt(owner, row.uuid)).toBe(true);
+    expect(await recovery.takeCancellationReceipt(owner, row.uuid)).toBe(false);
+  });
+  it('retains only the latest 64 unread cancellation receipts', async () => {
+    const store = open();
+    const owner = await store.activate('owner');
+    for (let index = 0; index < 65; index += 1) {
+      const row = sendIntent(`attempt-${index}`);
+      row.cancellationRequested = true;
+      row.metadata.payload.workingCopy = undefined;
+      await store.putSend(owner, row, true);
+      await store.restoreSend(owner, row.uuid);
+    }
+    expect(await store.takeCancellationReceipt(owner, 'attempt-0')).toBe(false);
+    expect(await store.takeCancellationReceipt(owner, 'attempt-1')).toBe(true);
+    expect(await store.takeCancellationReceipt(owner, 'attempt-64')).toBe(true);
   });
   it('clears send content and fences old sessions on account changes and logout', async () => {
     const store = open(),
