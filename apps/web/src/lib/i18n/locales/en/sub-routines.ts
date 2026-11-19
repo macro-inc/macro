@@ -42,6 +42,7 @@ export default {
   hideCodeUpdate: 'Hide the update',
   approvalCheckFailed: 'Could not check the current routine before approving',
   approvalTaskChanged: 'The routine changed since the code update was proposed',
+  approvalSaveFailed: 'Failed to update the routine’s code',
   approvalResumeFailed: 'Code saved, but the routine could not resume',
   approvalRefreshFailed: 'Code saved, but the review status could not refresh',
   deleteNote: {

@@ -509,7 +509,7 @@ export function createRoutineDetailSource(
                 { approval, previous: current }
               );
             } catch (error) {
-              failed('Failed to update the routine’s code', error);
+              failed(t('subRoutines.approvalSaveFailed'), error);
               return;
             }
             if (!current.enabled) {
