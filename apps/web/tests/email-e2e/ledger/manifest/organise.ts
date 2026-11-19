@@ -949,7 +949,6 @@ export const organise = {
         'unread toggle label "Mark as read" (accent closed envelope) / "Mark as unread"',
       trigger: 'thread read state',
       source: ['src/features/block-email/views/email-thread-parts.tsx'],
-      note: 'tested: "Mark as unread" on a read thread; "Mark as read" after marking unread is the known bug thread-unread-toggle-resets-on-own-write (STL-077)',
     },
     {
       id: 'STL-073',

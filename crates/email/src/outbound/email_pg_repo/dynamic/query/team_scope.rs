@@ -27,6 +27,8 @@
 //! The inbox stream's page is final when its window filled the page;
 //! otherwise the superset stream reads it.
 
+use crate::outbound::email_pg_repo::{PreviewReadError, RuleDiscoveryPort};
+use crm::domain::email_rule_discovery::EmailRuleDiscoveryRequest;
 use std::time::{Duration, Instant};
 
 use filter_ast::Expr;
@@ -57,7 +59,7 @@ mod test;
 /// if the caller disconnects.
 const TEAM_READ_BUDGET: Duration = Duration::from_secs(10);
 
-/// Resolve contributor modes and read the optimized page in one snapshot.
+/// Resolve contributor modes, discover rules and read any Team page in one snapshot.
 /// With no selected contributors, the generated page SQL stays unchanged.
 pub(super) async fn read_team_page(
     pool: &PgPool,
@@ -65,7 +67,8 @@ pub(super) async fn read_team_page(
     email_filter: &Expr<EmailLiteral>,
     mut params: QueryParams,
     tuning: Option<TeamReadTuning>,
-) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    discovery: Option<&RuleDiscoveryPort>,
+) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
     let deadline = Instant::now() + TEAM_READ_BUDGET;
     let mut transaction = begin_snapshot(pool).await?;
     params.resolved = resolve_filters_on(
@@ -88,12 +91,36 @@ pub(super) async fn read_team_page(
         None => Err(Box::new(params)),
     };
     let rows = match team_read {
-        Ok(read) => read.fetch(&mut transaction, deadline).await?,
+        Ok(read) => read.fetch(&mut transaction, deadline, discovery).await?,
         Err(params) => {
-            // General reads retain their existing ordinary transaction and
-            // recheck eligibility in their single page statement.
-            transaction.commit().await?;
-            transaction = pool.begin().await?;
+            // A top-level Owner conjunction can exclude a selected mailbox
+            // entirely. Its live growth must not block another owner's page.
+            let owners = top_level_owners(email_filter);
+            let selected: Vec<_> = params
+                .resolved
+                .selected_link_ids()
+                .unwrap_or_default()
+                .iter()
+                .copied()
+                .filter(|inbox| owners.iter().all(|owner| owner == inbox))
+                .collect();
+            if !selected.is_empty() {
+                discovery
+                    .ok_or(PreviewReadError::RuleDiscoveryUnavailable)?
+                    .discover(
+                        &mut transaction,
+                        EmailRuleDiscoveryRequest {
+                            team_id: params.team_id.ok_or(PreviewReadError::MissingTeamScope)?,
+                            links: Some(selected),
+                            proposed: None,
+                        },
+                        deadline,
+                    )
+                    .await?;
+            }
+            // Keep the page with the mode decision and discovery. A new
+            // snapshot could see selected rules that were never checked, or
+            // a different policy from the one whose discovery completed.
             limit_statement_time(&mut transaction, deadline).await?;
             let mut qb = build_query(view, email_filter, *params);
             qb.build()
@@ -179,6 +206,8 @@ pub(super) struct TeamRead<'a> {
     /// Selected inboxes enter through their positive targets instead.
     all_mail_superset: AddressSuperset,
     selected_inboxes: Vec<Uuid>,
+    /// Complete discovery in this read snapshot, reused by probe and page.
+    selected_contacts: Option<Vec<(Uuid, Uuid)>>,
     /// The full message match on `t`, `build_thread_message_exists_filter`.
     message_match: SqlFragment,
     /// The filter's top-level thread-level terms on `t`, which the streams
@@ -275,6 +304,7 @@ impl<'a> TeamRead<'a> {
             superset,
             all_mail_superset,
             selected_inboxes,
+            selected_contacts: None,
         })
     }
 
@@ -294,14 +324,30 @@ impl<'a> TeamRead<'a> {
         err
     )]
     pub(super) async fn fetch(
-        self,
+        mut self,
         connection: &mut PgConnection,
         deadline: Instant,
-    ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+        discovery: Option<&RuleDiscoveryPort>,
+    ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
         let span = tracing::Span::current();
         let (stream, rows) = if self.inboxes.is_empty() || self.superset.branches.is_empty() {
             ("none", Vec::new())
         } else {
+            if !self.selected_inboxes.is_empty() {
+                let complete = discovery
+                    .ok_or(PreviewReadError::RuleDiscoveryUnavailable)?
+                    .discover(
+                        connection,
+                        EmailRuleDiscoveryRequest {
+                            team_id: self.team_id,
+                            links: Some(self.selected_inboxes.clone()),
+                            proposed: None,
+                        },
+                        deadline,
+                    )
+                    .await?;
+                self.selected_contacts = Some(complete.contacts);
+            }
             self.read(connection, deadline).await?
         };
         span.record("stream", stream);
@@ -314,14 +360,14 @@ impl<'a> TeamRead<'a> {
         &self,
         connection: &mut PgConnection,
         deadline: Instant,
-    ) -> Result<(&'static str, Vec<ThreadPreviewCursorDbRow>), sqlx::Error> {
+    ) -> Result<(&'static str, Vec<ThreadPreviewCursorDbRow>), PreviewReadError> {
         // A sparse selected policy can be much smaller than the CRM record's
         // mailbox history. Resolve that bounded stream before probing the
         // record, including when its only selected thread is far in the past.
         if !self.selected_inboxes.is_empty() {
             limit_statement_time(connection, deadline).await?;
             let selection_rows: i64 = self
-                .selection_probe()
+                .selection_probe()?
                 .build_query_scalar()
                 .persistent(false)
                 .fetch_one(&mut *connection)
@@ -361,15 +407,15 @@ impl<'a> TeamRead<'a> {
         connection: &mut PgConnection,
         deadline: Instant,
         stream: Stream,
-    ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
+    ) -> Result<Vec<ThreadPreviewCursorDbRow>, PreviewReadError> {
         limit_statement_time(connection, deadline).await?;
-        let mut builder = self.build_page(stream);
-        builder
+        let mut builder = self.build_page(stream)?;
+        Ok(builder
             .build()
             .persistent(false)
             .try_map(map_row)
             .fetch_all(&mut *connection)
-            .await
+            .await?)
     }
 
     /// Counts the superset's rows (a thread once per message that lists
@@ -399,25 +445,37 @@ impl<'a> TeamRead<'a> {
     /// A sparse selected policy must not walk every record-matching thread
     /// to discover the few it includes. Probe its positive target indexes,
     /// together with the all-mail contributors' ordinary record superset.
-    fn selection_probe(&self) -> QueryBuilder<'static, Postgres> {
+    fn selection_probe(&self) -> Result<QueryBuilder<'static, Postgres>, PreviewReadError> {
         let mut builder = QueryBuilder::new("");
-        self.push_ctes(&mut builder, Stream::Inboxes);
-        self.push_selection_contacts(&mut builder);
+        self.push_ctes(&mut builder, Stream::Inboxes)?;
+        self.push_selection_contacts(&mut builder)?;
         builder.push(" SELECT count(*) FROM (SELECT 1 FROM (");
         self.push_selection_threads(&mut builder);
         builder.push(") AS selected_matches LIMIT ");
         builder.push_bind(self.tuning.superset_limit.saturating_add(1).max(0));
         builder.push(") AS capped");
-        builder
+        Ok(builder)
     }
 
-    fn push_selection_contacts(&self, builder: &mut QueryBuilder<'static, Postgres>) {
-        builder.push(include_str!("team_scope/selection_contacts.sql"));
+    fn push_selection_contacts(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+    ) -> Result<(), PreviewReadError> {
+        if let Some(contacts) = &self.selected_contacts {
+            builder.push(", selected_email_contacts AS MATERIALIZED (SELECT * FROM unnest(");
+            builder.push_bind(contacts.iter().map(|(link, _)| *link).collect::<Vec<_>>());
+            builder.push("::uuid[], ");
+            builder.push_bind(contacts.iter().map(|(_, id)| *id).collect::<Vec<_>>());
+            builder.push("::uuid[]) AS contact(link_id, id))");
+        } else {
+            return Err(PreviewReadError::IncompleteRuleDiscovery);
+        }
         for (name, body) in self.all_mail_superset.contact_ctes.clone() {
             builder.push(format!(",\n        {name} AS MATERIALIZED (\n            "));
             body.push_into(builder, &self.params.user_id);
             builder.push("\n        )");
         }
+        Ok(())
     }
 
     fn push_selection_threads(&self, builder: &mut QueryBuilder<'static, Postgres>) {
@@ -446,10 +504,13 @@ impl<'a> TeamRead<'a> {
         }
     }
 
-    fn build_page(&self, stream: Stream) -> QueryBuilder<'static, Postgres> {
+    fn build_page(
+        &self,
+        stream: Stream,
+    ) -> Result<QueryBuilder<'static, Postgres>, PreviewReadError> {
         let sort_ts_field = get_sort_timestamp_field(self.view);
         let mut builder = QueryBuilder::new("");
-        self.push_ctes(&mut builder, stream);
+        self.push_ctes(&mut builder, stream)?;
         push_page_head(&mut builder, &self.params, true);
         builder.push(format!(
             r#"
@@ -541,12 +602,16 @@ impl<'a> TeamRead<'a> {
             &self.params,
             true,
         );
-        builder
+        Ok(builder)
     }
 
     /// The `WITH` list: the privacy rule's mailboxes and blocklists, and for
     /// the superset stream the record's threads.
-    fn push_ctes(&self, builder: &mut QueryBuilder<'static, Postgres>, stream: Stream) {
+    fn push_ctes(
+        &self,
+        builder: &mut QueryBuilder<'static, Postgres>,
+        stream: Stream,
+    ) -> Result<(), PreviewReadError> {
         builder.push(
             r#"
         WITH contributing AS MATERIALIZED (
@@ -637,11 +702,12 @@ impl<'a> TeamRead<'a> {
             self.push_branches(builder, branches, "UNION");
             builder.push("\n        )");
         } else if stream == Stream::Selection {
-            self.push_selection_contacts(builder);
+            self.push_selection_contacts(builder)?;
             builder.push(", matching_threads AS MATERIALIZED (SELECT DISTINCT thread_id FROM (");
             self.push_selection_threads(builder);
             builder.push(") AS selected_matches)");
         }
+        Ok(())
     }
 
     fn push_stream(
@@ -745,10 +811,16 @@ impl<'a> TeamRead<'a> {
     }
 
     fn push_allowed(&self, builder: &mut QueryBuilder<'static, Postgres>) {
-        builder.push(ALLOWED_HEAD);
         if !self.selected_inboxes.is_empty() {
+            // Inclusion and exclusions inspect the same full thread. Share
+            // its participants so long threads are not expanded twice for
+            // each candidate or competing copy. All-mail-only SQL is unchanged.
+            builder.push(include_str!("team_scope/selected_participants.sql"));
             builder.push(include_str!("team_scope/selected_match.sql"));
+            builder.push(include_str!("team_scope/selected_allowed.sql").trim_end());
+        } else {
+            builder.push(ALLOWED_HEAD);
+            builder.push(ALLOWED.trim_end());
         }
-        builder.push(ALLOWED.trim_end());
     }
 }

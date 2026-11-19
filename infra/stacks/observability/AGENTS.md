@@ -21,6 +21,10 @@ us-east-1. `README.md` is the full operations guide.
   (rules and the `Prod alerts` dashboard panel both read it), and its Datadog
   copy in `infra/stacks/monitoring/monitors/` by hand. A new entry takes the next
   free `panelId`; never renumber one, since sent notifications link to it.
+- Change the Macro computers fleet dashboard: `nixos/computers-dashboard.nix`.
+  Its series come from Alloy on each Firecracker host
+  (`nix/hosts/_nixos/firecracker-host.alloy`); rename a label there and here
+  together.
 - Change an Email Focus rollout check: edit `nixos/email-focus.nix`; its rules
   and the `Email Focus rollout` dashboard both read it. No Datadog copy.
 - Change a CI percentile, queue or CI hours query: edit `nixos/ci-report.json`;

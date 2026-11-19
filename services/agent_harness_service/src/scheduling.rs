@@ -64,6 +64,7 @@ use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
 use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_draft_hand_backs::PgDraftHandBacks;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
+use scheduled_action::outbound::pg_inbox_delegates::PgInboxDelegates;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
@@ -503,6 +504,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         access.as_ref().clone(),
         PgGithubInstallationClaims::new(db.clone()),
     ));
+    let inbox_delegates = Arc::new(PgInboxDelegates::new(db.clone()));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
@@ -669,6 +671,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
             let admission = EventAdmissionService::new(
                 Arc::clone(&event_repo),
                 Arc::clone(&event_access),
+                Arc::clone(&inbox_delegates),
                 PageSize::try_from(ADMISSION_PAGE_SIZE).expect("valid admission bound"),
             );
             let brokers = brokers.clone();

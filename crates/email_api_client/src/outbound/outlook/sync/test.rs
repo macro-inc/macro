@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde_json::json;
 use wiremock::{Mock, Request, Respond, ResponseTemplate, matchers::method};
 
-use crate::domain::models::{ProviderId, StreamPosition};
+use crate::domain::models::{ProviderId, RoundStart, StreamPosition};
 use crate::domain::ports::FolderChangeReader;
 use crate::outbound::outlook::test::setup;
 
@@ -69,7 +69,7 @@ async fn a_folder_round_lists_every_message_past_the_first_hundred() {
     let mut position = None;
     let delta = loop {
         let page = api
-            .folder_changes(&token, &folder, position.as_ref())
+            .folder_changes(&token, &folder, position.as_ref(), RoundStart::Unordered)
             .await
             .unwrap();
         listed.extend(page.changed);
@@ -100,4 +100,77 @@ async fn a_folder_round_lists_every_message_past_the_first_hundred() {
             ["IdType=\"ImmutableId\"", "odata.maxpagesize=100"]
         );
     }
+}
+
+/// The query of every request a whole round sends, in order.
+async fn round_queries(start: RoundStart) -> Vec<Vec<(String, String)>> {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .respond_with(GraphFolderDelta {
+            root: server.uri(),
+            messages: 250,
+        })
+        .mount(&server)
+        .await;
+    let folder = ProviderId::new("inbox").unwrap();
+    let mut position = None;
+    loop {
+        let page = api
+            .folder_changes(&token, &folder, position.as_ref(), start)
+            .await
+            .unwrap();
+        match page.position {
+            StreamPosition::Continue(next) => position = Some(next),
+            StreamPosition::Checkpoint(_) => break,
+        }
+    }
+    server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .map(|request| request.url.query_pairs().into_owned().collect())
+        .collect()
+}
+
+fn pairs(query: &[(&str, &str)]) -> Vec<(String, String)> {
+    query
+        .iter()
+        .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
+        .collect()
+}
+
+#[tokio::test]
+async fn a_newest_first_round_asks_for_its_order_once() {
+    let queries = round_queries(RoundStart::NewestFirst).await;
+
+    assert_eq!(
+        queries,
+        vec![
+            pairs(&[("$select", "id"), ("$orderby", "receivedDateTime desc")]),
+            pairs(&[("$skiptoken", "100")]),
+            pairs(&[("$skiptoken", "200")]),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_round_since_a_time_filters_from_its_whole_second_once() {
+    let since = chrono::DateTime::parse_from_rfc3339("2026-11-18T09:30:15.750+01:00")
+        .unwrap()
+        .to_utc();
+
+    let queries = round_queries(RoundStart::ReceivedSince(since)).await;
+
+    assert_eq!(
+        queries,
+        vec![
+            pairs(&[
+                ("$select", "id"),
+                ("$filter", "receivedDateTime ge 2026-11-18T08:30:15Z"),
+            ]),
+            pairs(&[("$skiptoken", "100")]),
+            pairs(&[("$skiptoken", "200")]),
+        ]
+    );
 }

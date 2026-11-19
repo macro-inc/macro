@@ -72,19 +72,10 @@ pub async fn process_call_record(
         })
         .collect::<Result<Vec<_>, _>>()?;
 
-    let result = opensearch_client
+    opensearch_client
         .bulk_upsert_call_record_segments(&segments, index_override)
         .await
         .context("failed to bulk upsert call record segments")?;
-
-    if result.failed > 0 {
-        tracing::warn!(
-            failed = result.failed,
-            errors = ?result.errors,
-            call_id = %call_id,
-            "some call-record segments failed to upsert"
-        );
-    }
 
     Ok(())
 }
