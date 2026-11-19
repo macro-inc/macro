@@ -207,8 +207,9 @@ async fn process_message(
             tracing::warn!(error = ?error, "retryable calendar backfill error; leaving message for redelivery");
             Ok(())
         }
-        // A failed visibility change still redelivers after the queue's
-        // visibility timeout, which the resumed round tolerates.
+        // `extend_visibility` logs its own failure, and the message then
+        // redelivers after the queue's visibility timeout, which the resumed
+        // round tolerates.
         Disposition::Defer(retry_after) => {
             let seconds = i32::try_from(retry_after.as_secs()).unwrap_or(i32::MAX);
             ctx.sqs_worker

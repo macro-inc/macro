@@ -554,9 +554,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   window admits reaches all of them over a few deliveries. A rate limit
   Google itself returns stays a transient failure of that calendar, as
   Microsoft's do. The `backfill` span records `calendars`,
-  `calendars_reached`, `outcome` (`complete`, `deferred`) and
-  `retry_after_s`, and each deferral logs `deferring a Google Calendar
-  account round at the inbox's request limit`.
+  `calendars_reached`, `resumed_from` (calendars earlier deliveries of the
+  round synced), `outcome` (`complete`, `deferred`), `retry_after_s` and
+  `deferred_until`, and each deferral logs `deferring a Google Calendar
+  account round at the inbox's request limit` with the same fields.
 
 ## Related
 

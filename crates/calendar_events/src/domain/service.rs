@@ -962,8 +962,10 @@ where
         fields(
             calendars = tracing::field::Empty,
             calendars_reached = tracing::field::Empty,
+            resumed_from = tracing::field::Empty,
             outcome = tracing::field::Empty,
             retry_after_s = tracing::field::Empty,
+            deferred_until = tracing::field::Empty,
         ),
         err
     )]
@@ -988,13 +990,16 @@ where
         {
             Ok(calendars) => calendars,
             Err(error) if error.kind() == CalendarProviderErrorKind::Deferred => {
-                return Ok(defer_round(&error, 0, None));
+                return Ok(defer_round(&error, None));
             }
             Err(error) => return Err(rootcause::report!(error).into()),
         };
-        let calendar_count = calendars.len();
-        tracing::Span::current().record("calendars", calendar_count);
-        let mut calendar_ids = Vec::with_capacity(calendar_count);
+        let mut walk = Walk {
+            calendars: calendars.len(),
+            reached: 0,
+            resumed_from: 0,
+        };
+        let mut calendar_ids = Vec::with_capacity(walk.calendars);
         // One calendar's provider failure is recorded and skipped rather than
         // failing the account. The run fails only when no calendar is healthy,
         // so the coordinator can still classify a wholesale outage.
@@ -1002,7 +1007,8 @@ where
         let mut isolated_failures: Vec<(Uuid, CalendarSyncFailure, String)> = Vec::new();
         let mut last_isolated_error: Option<CalendarProviderError> = None;
 
-        for (calendars_reached, provider_calendar) in calendars.into_iter().enumerate() {
+        for (reached, provider_calendar) in calendars.into_iter().enumerate() {
+            walk.reached = reached;
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let watch_provider_calendar_id = provider_calendar.provider_calendar_id.clone();
             let observed_access_role = provider_calendar.access_role.clone();
@@ -1024,6 +1030,9 @@ where
                 && stored_calendar.synced_at.is_some_and(|synced_at| {
                     synced_at > Utc::now() - super::models::SYSTEM_CALENDAR_SYNC_INTERVAL
                 });
+            if synced_this_round {
+                walk.resumed_from += 1;
+            }
             if synced_this_round || system_calendar_current {
                 any_calendar_healthy = true;
                 continue;
@@ -1085,7 +1094,7 @@ where
                     // They stay due, unfailed, and so does this one; the
                     // calendar list is not reconciled from a partial walk.
                     if error.kind() == CalendarProviderErrorKind::Deferred {
-                        return Ok(defer_round(&error, calendars_reached, Some(calendar_count)));
+                        return Ok(defer_round(&error, Some(&walk)));
                     }
                     tracing::warn!(
                         error=?error,
@@ -1280,33 +1289,58 @@ where
         report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
 
-        let span = tracing::Span::current();
-        span.record("calendars_reached", calendar_count);
-        span.record("outcome", "complete");
+        walk.reached = walk.calendars;
+        walk.record(&tracing::Span::current());
+        tracing::Span::current().record("outcome", "complete");
         Ok(GoogleBackfillOutcome::Complete)
     }
 }
 
+/// How far one delivery's walk of the calendar list got.
+struct Walk {
+    /// Calendars the provider listed.
+    calendars: usize,
+    /// Calendars the walk got to before it ended, the one refused excluded.
+    reached: usize,
+    /// Calendars earlier deliveries of this round synced, which this one
+    /// skipped; zero on a round's first delivery.
+    resumed_from: usize,
+}
+
+impl Walk {
+    fn record(&self, span: &tracing::Span) {
+        span.record("calendars", self.calendars);
+        span.record("calendars_reached", self.reached);
+        span.record("resumed_from", self.resumed_from);
+    }
+}
+
 /// End a round at Macro's per-inbox request limit, recording how far its walk
-/// got (`calendars` is `None` when the calendar list itself was refused) and
-/// when the next delivery may resume it.
-fn defer_round(
-    error: &CalendarProviderError,
-    calendars_reached: usize,
-    calendars: Option<usize>,
-) -> GoogleBackfillOutcome {
+/// got (`None` when the calendar list itself was refused) and when the next
+/// delivery may resume it.
+fn defer_round(error: &CalendarProviderError, walk: Option<&Walk>) -> GoogleBackfillOutcome {
     let retry_after = error
         .retry_after()
         .unwrap_or(DEFERRAL)
         .clamp(std::time::Duration::from_secs(1), MAX_DEFERRAL);
+    let deferred_until = chrono::TimeDelta::from_std(retry_after)
+        .ok()
+        .map(|delay| (Utc::now() + delay).to_rfc3339());
     let span = tracing::Span::current();
-    span.record("calendars_reached", calendars_reached);
+    if let Some(walk) = walk {
+        walk.record(&span);
+    }
     span.record("outcome", "deferred");
     span.record("retry_after_s", retry_after.as_secs());
+    if let Some(deferred_until) = &deferred_until {
+        span.record("deferred_until", deferred_until.as_str());
+    }
     tracing::info!(
-        calendars_reached,
-        calendars,
+        calendars = walk.map(|walk| walk.calendars),
+        calendars_reached = walk.map(|walk| walk.reached),
+        resumed_from = walk.map(|walk| walk.resumed_from),
         retry_after_s = retry_after.as_secs(),
+        deferred_until,
         "deferring a Google Calendar account round at the inbox's request limit"
     );
     GoogleBackfillOutcome::Deferred { retry_after }
