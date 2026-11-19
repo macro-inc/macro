@@ -1,5 +1,5 @@
 import { beginInteraction } from '@app/observability/flow';
-import { NOOP_SPAN } from '@macro-inc/observability';
+import { NOOP_SPAN, type Span } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import { cleanup, render } from '@solidjs/testing-library';
@@ -458,7 +458,13 @@ describe('routine row operations', () => {
       const release = vi.fn();
       counts.push({ span, release });
       return {
-        span: { ...NOOP_SPAN, span: () => span },
+        span: {
+          ...NOOP_SPAN,
+          span: ((
+            _name: string,
+            operation?: (child: Span) => Promise<unknown>
+          ) => (operation ? operation(span) : span)) as Span['span'],
+        },
         hold: () => release,
         end: vi.fn(),
       };
