@@ -1,0 +1,55 @@
+.github/workspace-dep-closures.json
+  s_d68827eef00d3d::t_9af702ff985aaf 413-414,1204-1205,1427,2138-2139,3528-3529,5821-5822
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/executionReceipt.ts
+  s_d68827eef00d3d::t_f3683f2fd6fd92 12,24-25
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/index.ts
+  s_d68827eef00d3d::t_fe299fb84cdda0 351-353
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelImage.ts
+  s_d68827eef00d3d::t_f1cadbd5bd2a90 1-20
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelImageMediaType.ts
+  s_d68827eef00d3d::t_1f63316bdd292a 1-17
+apps/web/src/lib/service-clients/service-agent-harness/generated/schemas/modelMediaType.ts
+  s_d68827eef00d3d::t_418e1ad9a5c7db 1-17
+apps/web/src/lib/service-clients/service-agent-harness/openapi.json
+  s_d68827eef00d3d::t_ef484a0d4a57ac 3492,6853-6857,7259-7350,7397-7407,7534-7587,7602-7620,8077-8105,8437,9252-9325,9760-9775
+apps/web/src/lib/service-clients/service-cognition/generated/tools/schemas.ts
+  s_d68827eef00d3d::t_6fa25176df5ed7 20953,20985-21209
+apps/web/src/lib/service-clients/service-cognition/generated/tools/types.ts
+  s_d68827eef00d3d::t_d6d41b52474b52 4927-4932,4941-4977,16775-16779,16806-16839
+packages/sdk-ocaml/generated/agent_harness.ml
+  s_32cf564cb23845::t_5cca2ca51f5214 4756-4778,5130,5140,5150,5184-5439,5542,5570-5571,5591,5601,5611,6152-6179,7149-7276
+packages/sdk-ocaml/generated/agent_harness.mli
+  s_32cf564cb23845::t_46284a983d889d 2755-2764,2989,3015-3153,3217,3243,3518-3531,4132-4208
+packages/sdk-ocaml/generated/untyped.txt
+  s_32cf564cb23845::t_50ebfd9cb36a55 11
+packages/sdk/generated/agent-harness/index.ts
+  s_d68827eef00d3d::t_59d2387b30a69a 4
+packages/sdk/generated/agent-harness/types.gen.ts
+  s_d68827eef00d3d::t_1005185550fe7b 1731-1735,1988-2039,2072,2165-2202,2217-2230,2528-2555,2830,3239-3301,3651-3664,5438
+packages/sdk/specs/agent-harness.json
+  s_d68827eef00d3d::t_bd01380fcd7160 3492,6853-6857,7259-7350,7397-7407,7534-7587,7602-7620,8077-8105,8437,9252-9325,9760-9775
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "5e5e1dbf41cbbdf9dd29c17a3b716be2acd26e23",
+  "prompts": {},
+  "sessions": {
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_d68827eef00d3d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a7845e4f-e917-4189-85b6-0d6704e36200",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
