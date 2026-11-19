@@ -1,0 +1,21 @@
+docs/agent-guide/calendar.md
+  s_32cf564cb23845::t_bb67971348804f 457-458,460-465
+docs/agent-guide/calls.md
+  s_32cf564cb23845::t_d5394b40a7a197 264-265,281-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "baffd345b14c49a01e3cd4252d440031ab5e6294",
+  "prompts": {},
+  "sessions": {
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
