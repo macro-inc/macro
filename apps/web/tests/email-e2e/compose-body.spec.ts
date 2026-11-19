@@ -8,6 +8,7 @@ import { body, composeNew, loadAppSteadily } from './harness/drafts';
 import { expect, type Mailbox, test } from './harness/fixtures';
 import { type ReadMessage, readMailbox } from './harness/journeys';
 import {
+  mentionRow,
   notice,
   occurrences,
   replyEditor,
@@ -214,7 +215,7 @@ for (const provider of PROVIDERS) {
       did('AC-081');
 
       await page.keyboard.type('@ada');
-      await expect(page.getByText('People', { exact: true })).toBeVisible();
+      await expect(mentionRow(page, mailbox.inbox.email)).toBeVisible();
       await page.keyboard.press('Enter');
       did('AC-082');
       await expect(

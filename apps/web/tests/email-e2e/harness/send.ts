@@ -33,6 +33,16 @@ export function notice(page: Page, text: string | RegExp): Locator {
   return page.getByRole('status').filter({ hasText: text });
 }
 
+/**
+ * A person's row in the open @ menu, by the address it shows. Wait for it,
+ * not for the People heading, before pressing Enter: the heading holds its
+ * place while the menu is still searching, before anyone is listed, and Enter
+ * then leaves the typed name as plain text.
+ */
+export function mentionRow(page: Page, address: string): Locator {
+  return page.locator('.menu-surface').getByText(address, { exact: true });
+}
+
 /** The editor of the composer open in the thread. */
 export function replyEditor(page: Page): Locator {
   return page.getByRole('textbox', { name: /^(Reply|Forward) — / });

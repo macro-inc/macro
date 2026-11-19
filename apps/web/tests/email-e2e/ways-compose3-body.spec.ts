@@ -10,7 +10,7 @@ import {
 } from './harness/drafts';
 import { expect, test } from './harness/fixtures';
 import { readMailbox } from './harness/journeys';
-import { notice, replyEditor } from './harness/send';
+import { mentionRow, notice, replyEditor } from './harness/send';
 import {
   createDocument,
   linkShare,
@@ -96,7 +96,7 @@ for (const provider of ['GMAIL', 'OUTLOOK'] as const) {
       await page.keyboard.type('Looping myself in. ');
 
       await page.keyboard.type('@ada');
-      await expect(page.getByText('People', { exact: true })).toBeVisible();
+      await expect(mentionRow(page, mailbox.inbox.email)).toBeVisible();
       await page.keyboard.press('Enter');
       did('AC-023', 'F-106');
       await expect(
