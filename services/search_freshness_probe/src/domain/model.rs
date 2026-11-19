@@ -196,6 +196,8 @@ pub enum Outcome {
     WriteFailed,
     /// The search that would have decided the round failed.
     SearchFailed,
+    /// The fixture the type renames does not exist yet: nothing was probed.
+    FixtureMissing,
 }
 
 impl Outcome {
@@ -207,6 +209,7 @@ impl Outcome {
             Self::Unseen => "unseen",
             Self::WriteFailed => "write_failed",
             Self::SearchFailed => "search_failed",
+            Self::FixtureMissing => "fixture_missing",
         }
     }
 }

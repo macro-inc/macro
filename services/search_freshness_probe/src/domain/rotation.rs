@@ -4,8 +4,8 @@
 
 use super::model::{Change, Check, EntityId, EntityType, Operation, Presence, SearchQuery, Token};
 use super::ports::{
-    Body, CreatedWrites, FixtureWrites, PropertyWrites, Rotation, TextField, Title, TitleOrBody,
-    WriteFailed,
+    Body, CreatedWrites, FixtureWrites, NoChange, PropertyWrites, Rotation, TextField, Title,
+    TitleOrBody, WriteFailed,
 };
 
 #[cfg(test)]
@@ -79,7 +79,7 @@ impl<A: CreatedWrites> Created<A> {
         }
     }
 
-    async fn create(&mut self) -> Result<Change, WriteFailed> {
+    async fn create(&mut self) -> Result<Change, NoChange> {
         let texts: Vec<_> = A::FIELDS
             .iter()
             .map(|field| (*field, Token::random()))
@@ -103,7 +103,7 @@ impl<A: CreatedWrites> Created<A> {
         })
     }
 
-    async fn delete(&mut self, id: EntityId) -> Result<Change, WriteFailed> {
+    async fn delete(&mut self, id: EntityId) -> Result<Change, NoChange> {
         self.api
             .delete(id)
             .await
@@ -126,7 +126,7 @@ impl<A: CreatedWrites> Rotation for Created<A> {
         A::ENTITY_TYPE
     }
 
-    async fn change(&mut self) -> Result<Change, WriteFailed> {
+    async fn change(&mut self) -> Result<Change, NoChange> {
         let Some(live) = self.live.as_ref() else {
             return self.create().await;
         };
@@ -143,7 +143,7 @@ impl<A: CreatedWrites> Rotation for Created<A> {
             // The entity may be gone or broken: delete it next round and
             // start over with a new one, rather than failing on it forever.
             self.next_field = live.texts.len();
-            return Err(failed(operation)(error));
+            return Err(failed(operation)(error).into());
         }
 
         if let Some(live) = self.live.as_mut()
@@ -177,11 +177,6 @@ impl<A: CreatedWrites> Rotation for Created<A> {
     }
 }
 
-/// The probe user has no fixture of the type.
-#[derive(Debug, thiserror::Error)]
-#[error("the probe user has no {0:?} fixture named with the probe's marker")]
-pub struct NoFixture(EntityType);
-
 /// An entity seeded once for the probe user, because the probe cannot create
 /// one every minute, renamed every round.
 pub struct Fixture<A: FixtureWrites> {
@@ -207,7 +202,7 @@ impl<A: FixtureWrites> Rotation for Fixture<A> {
         A::ENTITY_TYPE
     }
 
-    async fn change(&mut self) -> Result<Change, WriteFailed> {
+    async fn change(&mut self) -> Result<Change, NoChange> {
         let id = match self.id {
             Some(id) => id,
             None => self
@@ -215,7 +210,7 @@ impl<A: FixtureWrites> Rotation for Fixture<A> {
                 .find()
                 .await
                 .map_err(failed(Operation::Rename))?
-                .ok_or_else(|| failed(Operation::Rename)(NoFixture(A::ENTITY_TYPE)))?,
+                .ok_or(NoChange::FixtureMissing(Operation::Rename))?,
         };
 
         let new = Token::random();
@@ -224,7 +219,7 @@ impl<A: FixtureWrites> Rotation for Fixture<A> {
             // next round.
             self.id = None;
             self.title = None;
-            return Err(failed(Operation::Rename)(error));
+            return Err(failed(Operation::Rename)(error).into());
         }
         self.id = Some(id);
 
@@ -303,7 +298,7 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
         EntityType::Property
     }
 
-    async fn change(&mut self) -> Result<Change, WriteFailed> {
+    async fn change(&mut self) -> Result<Change, NoChange> {
         self.delete_stale().await;
         let definition = match self.definition {
             Some(definition) => definition,
@@ -343,7 +338,7 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
             self.delete_stale().await;
             self.definition = None;
             self.value = None;
-            return Err(failed(Operation::Edit)(error));
+            return Err(failed(Operation::Edit)(error).into());
         }
         self.holder = Some(holder);
 

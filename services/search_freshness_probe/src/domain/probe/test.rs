@@ -10,7 +10,7 @@ use super::*;
 use crate::domain::model::{
     Change, Check, EntityId, EntityType, Operation, Presence, SearchQuery, Token,
 };
-use crate::domain::ports::WriteFailed;
+use crate::domain::ports::{NoChange, WriteFailed};
 
 const ENTITY: EntityId = EntityId(Uuid::from_u128(3));
 
@@ -18,19 +18,26 @@ const ENTITY: EntityId = EntityId(Uuid::from_u128(3));
 #[error("the API refused the write")]
 struct Refused;
 
-/// Edits one document every round, or fails every write when `fails` is set,
-/// and notes when each write started.
+/// What every round of the fake rotation does.
+#[derive(Clone, Copy)]
+enum Answer {
+    Edit,
+    Fail,
+    NoFixture,
+}
+
+/// Answers every round the same way and notes when each write started.
 #[derive(Clone)]
 struct EditEveryRound {
-    fails: bool,
+    answer: Answer,
     writes: Arc<Mutex<Vec<Instant>>>,
     cleaned_up: Arc<AtomicBool>,
 }
 
 impl EditEveryRound {
-    fn new(fails: bool) -> Self {
+    fn new(answer: Answer) -> Self {
         Self {
-            fails,
+            answer,
             writes: Arc::default(),
             cleaned_up: Arc::default(),
         }
@@ -47,16 +54,20 @@ impl Rotation for EditEveryRound {
         EntityType::Document
     }
 
-    async fn change(&mut self) -> Result<Change, WriteFailed> {
+    async fn change(&mut self) -> Result<Change, NoChange> {
         self.writes
             .lock()
             .expect("writes lock")
             .push(Instant::now());
-        if self.fails {
-            return Err(WriteFailed {
-                operation: Operation::Delete,
-                error: Box::new(Refused),
-            });
+        match self.answer {
+            Answer::Edit => {}
+            Answer::Fail => {
+                return Err(NoChange::Failed(WriteFailed {
+                    operation: Operation::Delete,
+                    error: Box::new(Refused),
+                }));
+            }
+            Answer::NoFixture => return Err(NoChange::FixtureMissing(Operation::Rename)),
         }
         Ok(Change {
             operation: Operation::Edit,
@@ -130,7 +141,7 @@ async fn run_until(rotation: EditEveryRound, shows: bool, stop_after: Duration) 
 
 #[tokio::test(start_paused = true)]
 async fn a_round_runs_every_period_until_shutdown_then_the_probe_cleans_up() {
-    let rotation = EditEveryRound::new(false);
+    let rotation = EditEveryRound::new(Answer::Edit);
     let started = Instant::now();
 
     let recorded = run_until(rotation.clone(), true, Duration::from_secs(150)).await;
@@ -150,7 +161,12 @@ async fn a_round_runs_every_period_until_shutdown_then_the_probe_cleans_up() {
 
 #[tokio::test(start_paused = true)]
 async fn a_failed_write_is_recorded_with_the_operation_it_attempted() {
-    let recorded = run_until(EditEveryRound::new(true), true, Duration::from_secs(30)).await;
+    let recorded = run_until(
+        EditEveryRound::new(Answer::Fail),
+        true,
+        Duration::from_secs(30),
+    )
+    .await;
 
     assert_eq!(
         recorded.rounds(),
@@ -164,7 +180,7 @@ async fn a_failed_write_is_recorded_with_the_operation_it_attempted() {
 
 #[tokio::test(start_paused = true)]
 async fn a_shutdown_while_searching_records_nothing_and_still_cleans_up() {
-    let rotation = EditEveryRound::new(false);
+    let rotation = EditEveryRound::new(Answer::Edit);
 
     let recorded = run_until(rotation.clone(), false, Duration::from_secs(30)).await;
 
@@ -174,7 +190,7 @@ async fn a_shutdown_while_searching_records_nothing_and_still_cleans_up() {
 
 #[tokio::test(start_paused = true)]
 async fn a_round_that_overruns_the_period_delays_the_next_one() {
-    let rotation = EditEveryRound::new(false);
+    let rotation = EditEveryRound::new(Answer::Edit);
     let started = Instant::now();
 
     let recorded = run_until(rotation.clone(), false, Duration::from_secs(350)).await;
@@ -190,5 +206,24 @@ async fn a_round_that_overruns_the_period_delays_the_next_one() {
     assert_eq!(
         rotation.write_times(started),
         [0, 300].map(Duration::from_secs)
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_missing_fixture_is_its_own_outcome_not_a_failed_write() {
+    let recorded = run_until(
+        EditEveryRound::new(Answer::NoFixture),
+        true,
+        Duration::from_secs(30),
+    )
+    .await;
+
+    assert_eq!(
+        recorded.rounds(),
+        vec![Round {
+            entity_type: EntityType::Document,
+            operation: Operation::Rename,
+            outcome: Outcome::FixtureMissing,
+        }]
     );
 }

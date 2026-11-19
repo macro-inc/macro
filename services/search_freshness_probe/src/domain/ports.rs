@@ -28,6 +28,22 @@ pub struct WriteFailed {
     pub error: Box<dyn std::error::Error + Send + Sync>,
 }
 
+/// Why a round made no change.
+#[derive(Debug)]
+pub enum NoChange {
+    /// A write failed: the probe's own failure.
+    Failed(WriteFailed),
+    /// The probe user has no fixture for the type yet, so there is nothing to
+    /// probe; not a failure.
+    FixtureMissing(Operation),
+}
+
+impl From<WriteFailed> for NoChange {
+    fn from(failed: WriteFailed) -> Self {
+        Self::Failed(failed)
+    }
+}
+
 /// One entity type's cycle of changes.
 pub trait Rotation: Send {
     /// The type it changes.
@@ -35,7 +51,7 @@ pub trait Rotation: Send {
 
     /// Makes the next change in the cycle, and says what search must show
     /// once it is indexed.
-    fn change(&mut self) -> impl Future<Output = Result<Change, WriteFailed>> + Send;
+    fn change(&mut self) -> impl Future<Output = Result<Change, NoChange>> + Send;
 
     /// Deletes what this process created, at shutdown. Fixtures stay.
     fn clean_up(&mut self) -> impl Future<Output = ()> + Send;

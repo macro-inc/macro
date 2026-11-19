@@ -57,8 +57,9 @@
 //   delete round measures that, not the index.
 // - `search.freshness.probe_rounds`: finished probe rounds (counter), tagged
 //   `entity_type`, `operation` and `outcome` (`seen` within 60 s, `late`
-//   after it, `unseen` at 300 s, and the probe's own failures `write_failed`
-//   and `search_failed`).
+//   after it, `unseen` at 300 s, the probe's own failures `write_failed`
+//   and `search_failed`, and `fixture_missing` for a type whose fixture is
+//   not seeded yet, which probed nothing and no monitor counts).
 //
 // All are exported every 60 s, and percentiles are not enabled on the
 // histograms, so they are graphed by max and count. The probe records one
@@ -109,7 +110,10 @@ const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
 // only when it ends, so slow rounds leave the minutes between them empty.
 const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:late} by {entity_type}.as_count()`;
 const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},outcome:unseen} by {entity_type}.as_count()`;
-const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen} by {entity_type}.as_count()`;
+// A round skipped because its fixture is not seeded yet (`fixture_missing`)
+// probed nothing, so it counts neither as a failure nor in the share.
+const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen,!outcome:fixture_missing} by {entity_type}.as_count()`;
+const PROBE_PROBED = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:fixture_missing} by {entity_type}.as_count()`;
 const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
 
 // The probe runs in prod only once RUNS_IN_PROD is set in
@@ -233,7 +237,7 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         }),
         thresholdGraph({
           title: TITLES.probeFailing,
-          query: `${PROBE_FAILING}.rollup(sum, 900) / ${PROBE_ROUNDS}.rollup(sum, 900)`,
+          query: `${PROBE_FAILING}.rollup(sum, 900) / ${PROBE_PROBED}.rollup(sum, 900)`,
           critical: '0.5',
         }),
         thresholdGraph({
@@ -433,7 +437,7 @@ prodMonitor('search-probe-unseen', {
 prodMonitor('search-probe-failing', {
   title: TITLES.probeFailing,
   service: PROBE_SERVICE,
-  query: `sum(last_15m):${PROBE_FAILING} / ${PROBE_ROUNDS} > 0.5`,
+  query: `sum(last_15m):${PROBE_FAILING} / ${PROBE_PROBED} > 0.5`,
   monitorThresholds: { critical: '0.5' },
   pages: false,
   description:

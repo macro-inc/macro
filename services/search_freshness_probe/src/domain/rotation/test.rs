@@ -157,7 +157,10 @@ async fn a_failed_write_is_tried_again_next_round() {
                 .change()
                 .await
                 .map(|change| change.operation)
-                .map_err(|failed| failed.operation),
+                .map_err(|skipped| match skipped {
+                    NoChange::Failed(failed) => failed.operation,
+                    NoChange::FixtureMissing(operation) => operation,
+                }),
         );
     }
 
@@ -234,7 +237,7 @@ impl FixtureWrites for FakeSessions {
 }
 
 #[tokio::test]
-async fn a_missing_fixture_fails_the_rename_until_one_exists() {
+async fn a_missing_fixture_skips_the_rename_until_one_exists() {
     let mut rotation = Fixture::new(FakeSessions {
         fixture: None,
         finds: 0,
@@ -242,8 +245,11 @@ async fn a_missing_fixture_fails_the_rename_until_one_exists() {
         refuse_rename: false,
     });
 
-    let failed = rotation.change().await.expect_err("no fixture");
-    assert_eq!(failed.operation, Operation::Rename);
+    let skipped = rotation.change().await.expect_err("no fixture");
+    assert!(matches!(
+        skipped,
+        NoChange::FixtureMissing(Operation::Rename)
+    ));
 
     rotation.api.fixture = Some(id(9));
     let first = rotation.change().await.expect("renamed");
@@ -340,7 +346,13 @@ async fn a_property_value_is_replaced_every_round_on_one_document() {
         .change()
         .await
         .expect_err("the document create is refused");
-    assert_eq!(failed.operation, Operation::Edit);
+    assert!(matches!(
+        failed,
+        NoChange::Failed(WriteFailed {
+            operation: Operation::Edit,
+            ..
+        })
+    ));
 
     let first = rotation.change().await.expect("set");
     let second = rotation.change().await.expect("set");

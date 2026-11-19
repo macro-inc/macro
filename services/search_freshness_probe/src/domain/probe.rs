@@ -7,7 +7,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::field::{Empty, display};
 
 use super::model::{Outcome, Round};
-use super::ports::{Rotation, RoundSink, Search};
+use super::ports::{NoChange, Rotation, RoundSink, Search};
 use super::watch::{Schedule, watch};
 
 #[cfg(test)]
@@ -78,10 +78,11 @@ async fn round<R: Rotation, S: Search>(
     span.record("write_ms", millis(written_at - started));
 
     let (operation, outcome) = match written {
-        Err(failed) => {
+        Err(NoChange::Failed(failed)) => {
             tracing::warn!(error = ?failed, "the probe's write failed");
             (failed.operation, Outcome::WriteFailed)
         }
+        Err(NoChange::FixtureMissing(operation)) => (operation, Outcome::FixtureMissing),
         Ok(change) => {
             span.record("entity_id", display(change.entity_id));
             let watched = tokio::select! {
@@ -106,6 +107,7 @@ async fn round<R: Rotation, S: Search>(
             span.record("otel.status_code", "ERROR");
             None
         }
+        Outcome::FixtureMissing => None,
     };
     tracing::debug!(
         entity_type = entity_type.as_str(),

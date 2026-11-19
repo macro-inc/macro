@@ -20,7 +20,8 @@ API besides `GET /health`.
 - `domain/watch.rs`: searches every 1 s for 60 s, then every 5 s to 300 s,
   until every check holds in one poll: the new token matches, the replaced one
   does not, a deleted entity matches nothing. Shown within 60 s is `seen`,
-  later `late`, never `unseen`. Searches failing for 30 s in a row, or at the
+  later `late`, never `unseen`; a fixture type without its fixture is
+  `fixture_missing`. Searches failing for 30 s in a row, or at the
   deadline, end the round `search_failed`, not a miss.
 - `domain/rotation.rs`: the cycles. Documents edit, rename, purge, create;
   messages post, edit, delete (in a private channel of the probe's own);
@@ -39,7 +40,7 @@ dedicated probe user. Required, no fallback. `ENVIRONMENT` picks the gateway
 
 - Seed a call record once per probe user: one with a transcript (one without
   is never indexed), titled `Search probe`. Until one exists, call rounds are
-  `write_failed` (`NoFixture`). The probe creates its agent session itself
+  skipped as `fixture_missing`, which no monitor counts. The probe creates its agent session itself
   when search shows none, once per process; an idle session costs nothing.
 - Run it against dev from a machine, with the key of a user no running probe
   acts as (see Gotchas): `ENVIRONMENT=dev PORT=<free port>
