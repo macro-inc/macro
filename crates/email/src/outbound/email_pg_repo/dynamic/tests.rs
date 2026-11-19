@@ -2092,8 +2092,10 @@ fn test_build_query_keeps_preview_pick_after_limit_when_candidates_are_discarded
 /// The Important tab's unread facet (the Mail view's Unread filter and the
 /// navigation's Mail number) must read only unread Important inbox threads.
 /// Here each of two inboxes holds three unread Important threads, its oldest,
-/// behind 20,000 others: without `idx_email_threads_inbox_signal_unread` each
-/// page walks both whole inboxes to find them.
+/// behind 20,000 others, and 1,000 unread Important threads the Inbox does
+/// not list: without `idx_email_threads_inbox_signal_unread` each page walks
+/// both whole inboxes to find them, and an index that kept the unlisted ones
+/// would read those first.
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
 async fn unread_important_page_reads_only_unread_important_threads(
     pool: sqlx::PgPool,
@@ -2121,6 +2123,19 @@ async fn unread_important_page_reads_only_unread_important_threads(
             link,
             unread_plan_prefix(n),
             n as f64,
+        )
+        .execute(&mut *connection)
+        .await?;
+        // Unread Important threads the Inbox does not list (no message
+        // received, no reminder returned). They have no sort time, so a
+        // descending scan meets them first unless the index leaves them out.
+        sqlx::query!(
+            r#"INSERT INTO email_threads
+                   (id, provider_id, link_id, inbox_visible, is_signal, is_read)
+               SELECT md5($2 || i)::uuid, $2 || i, $1, TRUE, TRUE, FALSE
+               FROM generate_series(20001, 21000) i"#,
+            link,
+            unread_plan_prefix(n),
         )
         .execute(&mut *connection)
         .await?;

@@ -4,9 +4,12 @@
 -- idx_email_threads_inbox_reminder_sort and read every thread row to test
 -- is_signal and is_read. With fewer unread Important threads than its LIMIT,
 -- that read the whole inbox: tens of thousands of rows for a large mailbox.
--- This index holds only the unread Important inbox threads, in the same
--- order, so the scan stops at the LIMIT or at the last of them.
--- Partial on unread Important inbox threads: a read thread leaves it.
+-- This index holds only the unread Important threads the Inbox lists (a
+-- received message or a returned reminder), in the same order, so the scan
+-- stops at the LIMIT or at the last of them.
+-- Its predicate repeats the Inbox view's filter (build_view_thread_filter),
+-- so the planner drops those quals instead of testing each entry. A read
+-- thread leaves it.
 -- is_read was in no index before, so an update that changes only is_read
 -- among indexed columns can stop being HOT. Its writers also set
 -- updated_at, which other indexes cover, unless NOW() equals the stored
@@ -20,4 +23,5 @@
 -- Rollback: DROP INDEX CONCURRENTLY IF EXISTS idx_email_threads_inbox_signal_unread;
 CREATE INDEX CONCURRENTLY idx_email_threads_inbox_signal_unread
     ON email_threads (link_id, (GREATEST(latest_inbound_message_ts, reminder_returned_at)) DESC, id DESC)
-    WHERE inbox_visible = TRUE AND is_signal AND is_read = FALSE;
+    WHERE inbox_visible = TRUE AND is_signal AND is_read = FALSE
+        AND (latest_inbound_message_ts IS NOT NULL OR reminder_returned_at IS NOT NULL);

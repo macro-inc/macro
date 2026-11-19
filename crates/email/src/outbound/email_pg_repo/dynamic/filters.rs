@@ -886,7 +886,9 @@ pub(super) fn escape_like_pattern(s: &str) -> String {
         .replace('_', r"\_")
 }
 
-/// Builds thread-level WHERE conditions based on the view type
+/// Builds thread-level WHERE conditions based on the view type.
+/// `idx_email_threads_inbox_signal_unread` repeats the Inbox condition in its
+/// predicate: change them together.
 pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
     match view {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::raw(
