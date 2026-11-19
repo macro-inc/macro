@@ -1,0 +1,26 @@
+apps/web/src/features/channel/Channel/tests/channel-drop-zone.test.tsx
+  s_c540c7e02a57f1::t_c604311eb67bbe 23,25,56,69-82,88-90,107-113,141-163
+apps/web/src/features/channel/Channel/create-channel-drag-state.ts
+  s_c540c7e02a57f1::t_c604311eb67bbe 34
+  s_c540c7e02a57f1::t_e4f1dc43f4047e 7-10,14,19,39
+apps/web/src/features/channel/Channel/Channel.tsx
+  s_c540c7e02a57f1::t_c604311eb67bbe 490
+apps/web/src/features/channel/Channel/ChannelDropZone.tsx
+  s_c540c7e02a57f1::t_e4f1dc43f4047e 4,16-21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a5815db63caf216c83c9ab12a1705f865a9ed0a5",
+  "prompts": {},
+  "sessions": {
+    "s_c540c7e02a57f1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5486a23e-9155-493f-a124-bfed29b3c43f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
