@@ -96,6 +96,11 @@ function observations(testInfo: TestInfo) {
       await expect
         .soft(async () => {
           const viewUnread = await measure();
+          // A view that can't be read counts nothing, not zero.
+          expect(
+            viewUnread,
+            `${step}: the ${view} view can be read`
+          ).toBeGreaterThanOrEqual(0);
           seen = {
             viewUnread,
             expected: expectedFor(viewUnread),
@@ -158,6 +163,24 @@ function mailUnread(page: Page, scroll = false): Promise<number> {
     .catch(() => -1);
 }
 
+/**
+ * How many threads the mail list marks unread once it holds them all: Load
+ * More pressed until the list has nothing more to load.
+ */
+async function mailUnreadLoaded(page: Page): Promise<number> {
+  const more = mailList(page).getByRole('button', {
+    name: /^(Load More|Loading\.\.\.)$/,
+  });
+  for (let pages = 0; (await more.count()) > 0; pages += 1) {
+    if (pages === 10) return -1;
+    await more.first().click();
+    await expect(more.filter({ hasText: 'Loading...' })).toHaveCount(0, {
+      timeout: 30_000,
+    });
+  }
+  return mailUnread(page, true);
+}
+
 /** The Mail list's row of a thread. */
 function mailRow(page: Page, subject: string) {
   return mailList(page).locator('[data-soup-entity]').filter({
@@ -170,7 +193,7 @@ function notificationsGrid(page: Page) {
 }
 
 /** The Notifications list's top-level rows that it marks unread, by text. */
-function notificationsUnreadRows(page: Page): Promise<string[]> {
+function notificationsUnreadRows(page: Page): Promise<string[] | undefined> {
   return notificationsGrid(page)
     .evaluate((grid) =>
       [...grid.querySelectorAll('[data-notification-row]')]
@@ -181,11 +204,11 @@ function notificationsUnreadRows(page: Page): Promise<string[]> {
         )
         .map((row) => row.textContent ?? '')
     )
-    .catch(() => []);
+    .catch(() => undefined);
 }
 
 async function notificationsUnread(page: Page): Promise<number> {
-  return (await notificationsUnreadRows(page)).length;
+  return (await notificationsUnreadRows(page))?.length ?? -1;
 }
 
 type ChatRow = { name: string; dot: boolean; mentions: boolean };
@@ -224,8 +247,24 @@ async function chatMarked(page: Page): Promise<ChatRow[]> {
   return [...byKey.values()];
 }
 
-async function chatMarkedCount(page: Page): Promise<number> {
-  return (await chatMarked(page)).length;
+/**
+ * The unread conversations Chat's section headings count: Direct messages,
+ * Team channels and All channels each show how many of theirs are unread, and
+ * every conversation is in one of them.
+ */
+function chatSectionsUnread(page: Page): Promise<number> {
+  return page
+    .locator('[role="treeitem"][id*="-section:"]')
+    .evaluateAll((headings) => {
+      if (headings.length === 0) return -1;
+      let total = 0;
+      for (const heading of headings) {
+        const count = heading.lastElementChild?.textContent?.trim() ?? '';
+        if (/^\d+$/.test(count)) total += Number(count);
+      }
+      return total;
+    })
+    .catch(() => -1);
 }
 
 async function chatRow(page: Page, name: string): Promise<ChatRow | undefined> {
@@ -412,6 +451,13 @@ test.describe('the unread numbers beside each view', {
     ).toBeVisible();
     await expect.poll(unread, { timeout: 60_000 }).toBe(1);
     await seen.check(page, 'one read in another tab', 'mail', unread);
+    await seen.check(
+      other,
+      'one read in another tab: the number in that tab',
+      'mail',
+      unread,
+      { note: 'the same account, so the same Mail view' }
+    );
     await other.close();
 
     const invoice = await mailbox.deliver(mail('Invoice', 'Linus'));
@@ -506,6 +552,24 @@ test.describe('the unread numbers beside each view', {
       () => mailUnread(page, true),
       { note: 'the list shows its first 100 threads, then Load More' }
     );
+
+    for (const index of [105, 104, 103, 102, 101, 100]) {
+      const row = mailRow(page, `Note ${index}`);
+      await row.click({ button: 'right' });
+      await page.getByRole('menuitem', { name: /^Mark (as )?read/i }).click();
+      await expect(
+        row.locator('[role="img"][aria-label="Unread"]')
+      ).toHaveCount(0);
+    }
+    await seen.check(
+      page,
+      'six read: 99 unread, five of them past the first page',
+      'mail',
+      () => mailUnreadLoaded(page),
+      {
+        note: 'counted with Load More pressed until the list holds every thread',
+      }
+    );
   });
 
   test('Mail counts the unread mail of an inbox shared with the user', async ({
@@ -573,7 +637,7 @@ test.describe('the unread numbers beside each view', {
     const bob = await mailbox.stack.user(
       mailbox.stack.address('bob@example.com')
     );
-    const marked = () => chatMarkedCount(page);
+    const unread = () => chatSectionsUnread(page);
 
     const lunch = await createChannel(bob, 'Lunch crew', [ada]);
     const design = await createChannel(bob, 'Design review', [ada]);
@@ -582,7 +646,7 @@ test.describe('the unread numbers beside each view', {
     await expect(
       page.getByRole('treeitem').filter({ hasText: 'Standup' }).first()
     ).toBeVisible({ timeout: 60_000 });
-    await seen.check(page, 'three new conversations', 'channels', marked, {
+    await seen.check(page, 'three new conversations', 'channels', unread, {
       note: 'a welcome message the stack sends new users can be unread here',
     });
 
@@ -597,7 +661,7 @@ test.describe('the unread numbers beside each view', {
       page,
       'two unread messages in one conversation',
       'channels',
-      marked
+      unread
     );
 
     await post(bob, design, 'Can you look at the mockups?', { mention: ada });
@@ -610,7 +674,7 @@ test.describe('the unread numbers beside each view', {
       page,
       'a message that mentions the user, in a second conversation',
       'channels',
-      marked,
+      unread,
       { note: 'its row shows the mention count in place of the dot' }
     );
 
@@ -624,7 +688,7 @@ test.describe('the unread numbers beside each view', {
       page,
       'two thread replies to the user’s message',
       'channels',
-      marked,
+      unread,
       { note: 'Chat marks a conversation for its top-level messages only' }
     );
 
@@ -637,15 +701,13 @@ test.describe('the unread numbers beside each view', {
         timeout: 60_000,
       })
       .toBe(true);
-    const leavingOutStandup = (count: number) => label(count - 1);
     await seen.check(
       page,
       'a thread reply that mentions the user',
       'channels',
-      marked,
+      unread,
       {
-        expected: leavingOutStandup,
-        note: 'Standup shows a mention count for a thread reply; Chat’s Unread filter leaves it out, and so does the number',
+        note: 'Standup shows a mention count for a thread reply; Chat’s section counts leave it out, and so does the number',
       }
     );
 
@@ -657,8 +719,7 @@ test.describe('the unread numbers beside each view', {
     await expect
       .poll(() => chatRow(page, 'Lunch crew'), { timeout: 60_000 })
       .toBeUndefined();
-    await seen.check(page, 'one conversation opened', 'channels', marked, {
-      expected: leavingOutStandup,
+    await seen.check(page, 'one conversation opened', 'channels', unread, {
       note: 'Standup still has only its thread mention',
     });
   });
@@ -711,7 +772,7 @@ test.describe('the unread numbers beside each view', {
       .click();
     await expect
       .poll(async () =>
-        (await notificationsUnreadRows(page)).some((row) =>
+        (await notificationsUnreadRows(page))?.some((row) =>
           row.includes('Lunch?')
         )
       )
