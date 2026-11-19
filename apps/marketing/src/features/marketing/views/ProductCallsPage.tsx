@@ -81,8 +81,8 @@ export function RouteCalls() {
           demo={{
             tone: 'calls',
           }}
-          title="Recorded and shared by default."
-          description="Other tools make you choose to record a meeting and then share it, and extra steps get skipped, so the context never makes it to your agents. In Macro, channel calls are recorded and shared with your team by default. You can turn off team sharing; standalone meetings stay with their participants unless shared."
+          title="Team calls and private meetings."
+          description="Calls in team and public channels share their recording, transcript, and summary with your team by default. Calls in DMs and private channels start private. Standalone meeting links are private to participants. Use the call controls to change sharing during a call. Afterward, the person who started it can change access from Sharing in the call’s side panel."
         >
           <DemoInteractionBoundary
             class="feature-page-visual"
@@ -115,6 +115,11 @@ export function RouteCalls() {
             render={() => <CallStartDemo />}
           />
         </FeaturePageSection>
+        <FeaturePageSection
+          id="call-external"
+          title="External calls, shared by link."
+          description="Create a meeting link and send it to anyone outside your team. They can join in their browser without a Macro account or installing anything."
+        />
         <CallsComparison />
         <FeaturePageFaq
           guide={{ href: '/calls#guide', label: 'calls' }}

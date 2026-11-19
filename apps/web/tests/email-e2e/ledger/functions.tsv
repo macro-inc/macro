@@ -1,0 +1,198 @@
+id	area	function	gmail	outlook	ui	result_checked_at
+F-001	connect	Connect a Gmail inbox	yes	no	yes	provider
+F-002	connect	Connect an Outlook inbox	no	yes	yes	provider
+F-003	connect	Connect an Outlook inbox that needs administrator approval	no	yes	yes	provider
+F-004	connect	Connect a second inbox to the same account	yes	yes	yes	service
+F-005	connect	Share an inbox another user already connected	yes	yes	yes	service
+F-006	connect	Cancel or fail the provider consent and return to the app	yes	yes	yes	ui
+F-007	connect	Reconnect an inbox whose access expired or was revoked	yes	yes	yes	provider
+F-008	connect	Enable a disabled inbox	yes	yes	yes	service
+F-009	connect	Remove an inbox (own: clears its mail; shared: removes access)	yes	yes	yes	service
+F-010	connect	Connect an inbox during onboarding	yes	yes	yes	service
+F-011	connect	Link Gmail automatically on Google sign-in	yes	no	no	service
+F-012	connect	Refresh provider access tokens	yes	yes	no	provider
+F-013	connect	Renew the provider's change notifications (Gmail watch, Outlook subscriptions)	yes	yes	no	provider
+F-014	connect	Show inbox health and prompt to reconnect	yes	yes	yes	ui
+F-015	connect	Send-as aliases: list them and keep them in sync	yes	no	yes	provider
+F-016	sync	Import existing mail when an inbox is connected (backfill)	yes	yes	yes	service
+F-017	sync	Receive a new message from the provider	yes	yes	yes	service
+F-018	sync	Show a new message in the open list without reloading	yes	yes	yes	ui
+F-019	sync	Pick up a change made in the provider's own client (read, archive, star, trash, label)	yes	yes	yes	service
+F-020	sync	Pick up a message deleted at the provider	yes	yes	yes	service
+F-021	sync	Pick up a draft created or changed at the provider	yes	yes	yes	service
+F-022	sync	Pick up mail sent from the provider's own client	yes	yes	yes	service
+F-023	sync	Force a sync of an inbox	yes	yes	yes	service
+F-024	sync	Recover after missed or failed provider notifications	yes	yes	no	service
+F-025	sync	Thread messages into conversations	yes	yes	yes	service
+F-026	sync	Sync the provider address book into contacts	yes	yes	no	service
+F-027	sync	Classify mail as Focus, Signal or Noise	yes	yes	yes	service
+F-028	sync	Index mail for search	yes	yes	no	service
+F-029	list	Open the Inbox and switch between Focus, Signal and Noise	yes	yes	yes	ui
+F-030	list	Open a mailbox tab: Drafts, Sent, Scheduled, All mail, Archived, Starred	yes	yes	yes	ui
+F-031	list	Open Spam and Trash	yes	yes	yes	provider
+F-032	list	Open Shared with me	yes	yes	yes	service
+F-033	list	Choose which inboxes or alias the list shows	yes	yes	yes	ui
+F-034	list	Filter the list by read state, done state, star, attachments, people, tags, importance, activity	yes	yes	yes	ui
+F-035	list	Sort the list	yes	yes	yes	ui
+F-036	list	Page through a long list (load more)	yes	yes	yes	service
+F-037	list	Refresh the list	yes	yes	yes	ui
+F-038	list	Move through the list with the keyboard	yes	yes	yes	ui
+F-039	list	Select threads (one, range, all) and clear the selection	yes	yes	yes	ui
+F-040	list	Use the reading pane (toggle, resize, open beside the list)	yes	yes	yes	ui
+F-041	list	See a thread's row: sender, subject, snippet, time, unread, star, attachment, draft and count marks	yes	yes	yes	ui
+F-042	list	See the unread count badge on Mail	yes	yes	yes	ui
+F-043	list	See empty, loading and failed list states and retry	yes	yes	yes	ui
+F-044	list	Undo the last list action	yes	yes	yes	provider
+F-045	views	Create a saved view from filters	yes	yes	yes	service
+F-046	views	Open a saved view	yes	yes	yes	ui
+F-047	views	Edit, rename or duplicate a saved view	yes	yes	yes	service
+F-048	views	Delete a saved view	yes	yes	yes	service
+F-049	views	Reorder saved views	yes	yes	yes	service
+F-050	search	Search mail by text from the list	yes	yes	yes	service
+F-051	search	Search mail from global search and Cmd+K and open a result	yes	yes	yes	service
+F-052	search	Open a thread at the message a search hit names	yes	yes	yes	ui
+F-053	read	Open a thread	yes	yes	yes	ui
+F-054	read	Open a thread in a new split or tab	yes	yes	yes	ui
+F-055	read	Open a thread from a link, mention or notification	yes	yes	yes	ui
+F-056	read	Read a message: sanitized HTML body, plain text, inline images	yes	yes	yes	ui
+F-057	read	Load remote images through the image proxy	yes	yes	yes	service
+F-058	read	Expand and collapse messages and their header details	yes	yes	yes	ui
+F-059	read	Show quoted text and trimmed signatures	yes	yes	yes	ui
+F-060	read	Read a long thread (hidden middle messages, expand all)	yes	yes	yes	ui
+F-061	read	Go to the next or previous thread	yes	yes	yes	ui
+F-062	read	Move between messages with the keyboard	yes	yes	yes	ui
+F-063	read	See who a message is from and to (participants, hover card)	yes	yes	yes	ui
+F-064	read	Download a message as .eml	yes	yes	yes	service
+F-065	read	Copy a link to a thread	yes	yes	yes	ui
+F-066	read	See read receipts for sent mail	yes	yes	yes	service
+F-067	read	Turn read receipts on or off for an inbox	yes	yes	yes	service
+F-068	organise	Mark a thread read	yes	yes	yes	provider
+F-069	organise	Mark a thread unread	yes	yes	yes	provider
+F-070	organise	Mark a thread read automatically when it is opened	yes	yes	yes	provider
+F-071	organise	Mark a thread done (archive)	yes	yes	yes	provider
+F-072	organise	Mark a thread not done (back to the inbox)	yes	yes	yes	provider
+F-073	organise	Star a thread	yes	yes	yes	service
+F-074	organise	Unstar a thread	yes	yes	yes	service
+F-075	organise	Move a thread to Trash	yes	yes	yes	provider
+F-076	organise	Restore a thread from Trash	yes	yes	yes	provider
+F-077	organise	Delete a thread permanently	yes	yes	no	provider
+F-078	organise	Report a thread as not spam	yes	yes	yes	provider
+F-079	organise	Mute and unmute a thread's notifications	yes	yes	yes	service
+F-080	organise	Block a sender	yes	yes	yes	service
+F-081	organise	Set a sender to Signal or Noise	yes	yes	yes	service
+F-082	organise	Act on several selected threads at once (done, read, star, trash, tag)	yes	yes	yes	provider
+F-083	organise	Undo an action from its toast	yes	yes	yes	provider
+F-084	labels	Add and remove a tag on a thread	yes	yes	yes	service
+F-085	labels	Filter by a tag from a row's chip	yes	yes	yes	ui
+F-086	labels	Change a thread's provider labels or folder	yes	yes	no	provider
+F-087	labels	Move a thread to a folder or project in Macro	yes	yes	yes	service
+F-088	labels	Edit a thread's properties in the side panel	yes	yes	yes	service
+F-089	labels	List the provider's labels and folders	yes	yes	no	provider
+F-090	reminders	Set a reminder on a thread (preset, typed time, if no reply or regardless)	yes	yes	yes	service
+F-091	reminders	Change or remove a reminder	yes	yes	yes	service
+F-092	reminders	See reminders in the Reminders tab	yes	yes	yes	service
+F-093	reminders	A due reminder brings the thread back and notifies	yes	yes	yes	service
+F-094	reminders	A reply cancels an if-no-reply reminder	yes	yes	yes	service
+F-095	compose	Start a new message	yes	yes	yes	ui
+F-096	compose	Start a new message from a mailto link or prefilled parameters	yes	yes	yes	ui
+F-097	compose	Add recipients by typing, pasting or picking a suggestion	yes	yes	yes	provider
+F-098	compose	Remove a recipient and move one between To, Cc and Bcc	yes	yes	yes	provider
+F-099	compose	Add Cc and Bcc recipients	yes	yes	yes	provider
+F-100	compose	Choose the sending inbox or alias	yes	yes	yes	provider
+F-101	compose	Write the subject	yes	yes	yes	provider
+F-102	compose	Write the body	yes	yes	yes	provider
+F-103	compose	Format the body (bold, italic, lists, quote, code, highlight)	yes	yes	yes	provider
+F-104	compose	Insert and edit a link	yes	yes	yes	provider
+F-105	compose	Insert an inline image	yes	yes	yes	provider
+F-106	compose	Mention a person or a document in the body	yes	yes	yes	service
+F-107	compose	Send with the signature, or without it	yes	yes	yes	provider
+F-108	compose	Reply to a message	yes	yes	yes	provider
+F-109	compose	Reply to all	yes	yes	yes	provider
+F-110	compose	Forward a message	yes	yes	yes	provider
+F-111	compose	Include or leave out the quoted original	yes	yes	yes	provider
+F-112	compose	Switch an open reply between reply, reply all and forward	yes	yes	yes	ui
+F-113	compose	Compose on a phone (full-screen composer)	yes	yes	yes	provider
+F-114	compose	Create a calendar event from a draft or thread	yes	yes	yes	service
+F-115	drafts	Save a draft automatically while typing	yes	yes	yes	service
+F-116	drafts	Reopen a draft from Drafts and keep editing	yes	yes	yes	service
+F-117	drafts	Keep a reply draft with its thread and reopen it there	yes	yes	yes	service
+F-118	drafts	Restore an unsent draft after reload or offline	yes	yes	yes	ui
+F-119	drafts	Discard a draft	yes	yes	yes	service
+F-120	drafts	See and resolve a draft that failed to save or conflicts with the mailbox	yes	yes	yes	ui
+F-121	drafts	Keep local drafts across sign-out confirmation	yes	yes	yes	ui
+F-122	attachments	Attach a file to a message (picker, drop, paste)	yes	yes	yes	provider
+F-123	attachments	Remove an attachment from a draft	yes	yes	yes	provider
+F-124	attachments	Forward a message with its attachments	yes	yes	yes	provider
+F-125	attachments	Share a file too large to attach as a link	yes	yes	yes	service
+F-126	attachments	Open and preview a received attachment	yes	yes	yes	ui
+F-127	attachments	Download a received attachment	yes	yes	yes	ui
+F-128	attachments	Save a received attachment to Drive	yes	yes	no	service
+F-129	attachments	Open cloud attachments of an Outlook message	no	yes	yes	ui
+F-130	attachments	Clean up stored files of discarded drafts	yes	yes	no	service
+F-131	send	Send a new message	yes	yes	yes	provider
+F-132	send	Send a reply in its thread with the right headers	yes	yes	yes	provider
+F-133	send	Send and mark done	yes	yes	yes	provider
+F-134	send	Undo send	yes	yes	yes	provider
+F-135	send	See that a message is sending, sent or failed	yes	yes	yes	ui
+F-136	send	Retry or cancel a failed or queued send and get the draft back	yes	yes	yes	provider
+F-137	send	Send exactly once across retries, reloads and two tabs	yes	yes	yes	provider
+F-138	send	Send from an alias	yes	no	yes	provider
+F-139	send	Send while offline and deliver on reconnect	yes	yes	yes	provider
+F-140	send	Handle a bounce or a provider rejection	yes	yes	yes	service
+F-141	send	Reply on a thread shared by a teammate	yes	yes	yes	provider
+F-142	scheduled	Schedule a message for later (preset, typed, custom time)	yes	yes	yes	service
+F-143	scheduled	Change the time of a scheduled message	yes	yes	yes	service
+F-144	scheduled	Cancel a scheduled message back to a draft	yes	yes	yes	service
+F-145	scheduled	See scheduled messages in the Scheduled tab	yes	yes	yes	service
+F-146	scheduled	Deliver a scheduled message when it is due	yes	yes	yes	provider
+F-147	scheduled	Report and recover a scheduled send that failed	yes	yes	yes	service
+F-148	signature	Write and save a signature	yes	yes	yes	service
+F-149	signature	Edit a signature as rich text or HTML and preview it	yes	yes	yes	service
+F-150	signature	Clear a signature	yes	yes	yes	service
+F-151	signature	Import the signature from Gmail	yes	no	yes	provider
+F-152	signature	Choose whether replies and forwards get the signature	yes	yes	yes	service
+F-153	calendar	See an invitation card in a thread	yes	yes	yes	ui
+F-154	calendar	RSVP to an invitation from the thread	yes	yes	yes	provider
+F-155	calendar	Open the event or join the meeting from the invitation	yes	yes	yes	ui
+F-156	calendar	Add a forwarded invitation to the calendar	yes	yes	yes	provider
+F-157	calendar	Turn calendar access on or off for an inbox	yes	yes	yes	service
+F-158	sharing	Share a thread with people or channels and set their access	yes	yes	yes	service
+F-159	sharing	Open a thread shared by someone else	yes	yes	yes	ui
+F-160	sharing	Request and grant access to a thread	yes	yes	yes	service
+F-161	notifications	Notify about a new email (push, in-app, Mail badge)	yes	yes	yes	service
+F-162	notifications	Turn new-email notifications and the digest on or off	yes	yes	yes	service
+F-163	notifications	Open the thread from a notification	yes	yes	yes	ui
+F-164	elsewhere	See and act on mail from Home (open, mark done)	yes	yes	yes	provider
+F-165	elsewhere	Compose an email to a CRM contact and see their mail	yes	yes	yes	provider
+F-166	elsewhere	Draft or send an email from the universal input	yes	yes	yes	provider
+F-167	elsewhere	Create a task or ask the assistant about a thread	yes	yes	yes	service
+F-168	ai	Assistant drafts an email the user edits and sends from a card	yes	yes	yes	provider
+F-169	ai	Assistant reads threads and attachments	yes	yes	no	service
+F-170	ai	Assistant lists inboxes and labels and changes a thread's labels	yes	yes	no	provider
+F-171	ai	Assistant sets a sender policy	yes	yes	no	service
+F-172	maintenance	Remove a user's mail and links when the account is deleted	yes	yes	no	service
+F-173	maintenance	Stop sending to addresses that bounced or complained	yes	yes	no	service
+F-174	maintenance	Enforce the plan's inbox entitlement	yes	yes	yes	service
+F-175	maintenance	Feed mail events to activity, routines and suggestions	yes	yes	no	service
+F-176	maintenance	Enrich CRM contacts from mail and clean up after removal	yes	yes	no	service
+F-177	read	Close a thread and return to the list	yes	yes	yes	ui
+F-178	read	Copy a thread's subject	yes	yes	yes	ui
+F-179	organise	Open the action menu of a thread or row (command menu, context menu, title menu)	yes	yes	yes	ui
+F-180	organise	See that a change is waiting for, or was refused by, the mailbox	yes	yes	yes	service
+F-181	list	Show or hide the Email sidebar	yes	yes	yes	ui
+F-182	labels	Open the folder or project a thread is filed in	yes	yes	yes	ui
+F-183	list	Learn Mail: tutorial video and view tour	yes	yes	yes	ui
+F-184	list	See the keyboard shortcuts for Mail	yes	yes	yes	ui
+F-185	attachments	Open and preview an attachment on a draft	yes	yes	yes	service
+F-186	compose	See the Macro watermark without a paid plan and open the upgrade prompt	yes	yes	yes	ui
+F-187	read	Copy a thread's ID	yes	yes	yes	ui
+F-188	read	See a thread's details in the side panel (activity, references, dates)	yes	yes	yes	ui
+F-189	connect	See the connected inboxes in Settings (provider, primary or shared, loading and failed states)	yes	yes	yes	ui
+F-190	ai	See what the assistant read, listed or changed in mail (tool cards)	yes	yes	yes	ui
+F-191	elsewhere	Mention an email thread in a document, message or chat	yes	yes	yes	ui
+F-192	elsewhere	Exclude domains from the mail shared with CRM	yes	yes	yes	service
+F-193	labels	Create and delete a provider label	yes	yes	no	provider
+F-194	calendar	Forward a calendar event by email	yes	yes	no	provider
+F-195	sync	Cancel a running mail import	yes	no	no	service
+F-196	organise	Unblock a sender	yes	yes	yes	service
+F-197	organise	Report a thread as spam	yes	yes	no	provider

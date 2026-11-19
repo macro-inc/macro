@@ -1,7 +1,8 @@
-import { EntityDetailTopBar } from '@app/components/entity-detail/EntityDetailTopBar';
+import { useTouchTopBarsFloat } from '@app/components/view-shell';
 import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
+  useBlockEntityCommands,
 } from '@app/features/next-soup/actions';
 import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -23,13 +24,21 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { enableEntityAppearance } from '@core/constant/featureFlags';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
-import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
@@ -48,6 +57,7 @@ import {
   type ProjectSection,
 } from './core/project';
 import type { ProjectRoute } from './core/route';
+import { NewProjectTaskPill } from './new-project-task';
 import { openProject } from './open-project';
 import {
   ProjectBreadcrumbItem,
@@ -56,6 +66,7 @@ import {
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
+import { ProjectTopBar } from './project-top-bar';
 import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
@@ -67,6 +78,30 @@ type ProjectDetailProps = {
   onDelete?(): void;
   onSectionChange?(section: ProjectSection): void;
 };
+
+/** The project's Cmd+K entity commands (Copy link, Copy ID) and their keys. */
+function ProjectEntityCommands(props: {
+  projectId: string;
+  project: Accessor<ProjectDetailData | undefined>;
+  scopeId: string;
+}) {
+  useBlockEntityCommands({
+    id: props.projectId,
+    scopeId: props.scopeId,
+    resolveEntity: () => {
+      const project = props.project();
+      if (!project) return undefined;
+      return {
+        type: 'initiative',
+        id: project.id,
+        name: project.name,
+        ownerId: project.ownerId,
+        appearance: project.appearance,
+      };
+    },
+  });
+  return null;
+}
 
 function ProjectTitleMenu(props: {
   project: ProjectDetailData;
@@ -183,11 +218,13 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
   const source = context.createProjectSource(() => props.route.id);
   usePending('project.detail', source.loading);
+  createOpenTracker('initiative', () => source.project()?.id);
   useSplitDisplayName(
     () => source.project()?.name ?? t('tabs.projectFallbackName')
   );
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
+  const barFloats = useTouchTopBarsFloat();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigate = useNavigate();
@@ -214,14 +251,38 @@ function ProjectDetailHost(props: ProjectDetailProps) {
       },
     });
   };
+  const canCreateTask = () => {
+    const project = source.project();
+    return project !== undefined && canEditProject(project);
+  };
   return (
     <>
+      <NewProjectTaskPill
+        onCreateTask={canCreateTask() ? createTask : undefined}
+      />
       <Show when={props.breadcrumb}>
         {(breadcrumb) => (
           <ProjectBreadcrumbItem {...breadcrumb()} project={source.project()} />
         )}
       </Show>
-      <EntityDetailTopBar
+      {/* Overview only: the Tasks section's list registers the same commands
+          for its rows on the split's scope, and a second registration there
+          would replace theirs. Keyed by id, which the commands read once. */}
+      <Show
+        when={
+          props.route.section === 'overview' ? source.project()?.id : undefined
+        }
+        keyed
+      >
+        {(projectId) => (
+          <ProjectEntityCommands
+            projectId={projectId}
+            project={source.project}
+            scopeId={panel.splitHotkeyScope}
+          />
+        )}
+      </Show>
+      <ProjectTopBar
         titleMenu={
           <Show when={source.project()}>
             {(project) => (
@@ -262,19 +323,23 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             onChange={section}
           />
         )}
+        share={
+          <Show when={source.project()}>
+            {(project) => (
+              <ShareTrigger
+                onClick={openShare}
+                id={project().id}
+                blockType="initiative"
+                hotkeyScope={panel.splitHotkeyScope}
+              />
+            )}
+          </Show>
+        }
+      />
+      <div
+        class="relative min-h-0 min-w-0 flex-1"
+        classList={{ 'touch:[--mobile-content-inset-top:0px]': !barFloats() }}
       >
-        <Show when={source.project()}>
-          {(project) => (
-            <ShareTrigger
-              onClick={openShare}
-              id={project().id}
-              blockType="initiative"
-              hotkeyScope={panel.splitHotkeyScope}
-            />
-          )}
-        </Show>
-      </EntityDetailTopBar>
-      <div class="relative min-h-0 min-w-0 flex-1 touch:[--mobile-content-inset-top:0px]">
         <Suspense
           fallback={<ProjectContentSkeleton section={props.route.section} />}
         >

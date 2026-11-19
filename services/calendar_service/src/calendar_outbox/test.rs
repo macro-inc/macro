@@ -21,6 +21,10 @@ impl GoogleCalendarSyncRepository for Syncs {
         self.0.cancel();
         Ok(1)
     }
+
+    async fn disable_google_accounts_without_calendar_capability(&self) -> Result<usize, Report> {
+        Ok(2)
+    }
 }
 
 struct Pruner;
@@ -109,6 +113,8 @@ async fn each_scheduler_round_is_its_own_finished_root_span(db: PgPool) {
     assert_eq!(attribute(pruning, "published").as_deref(), Some("0"));
     assert_eq!(attribute(pruning, "pruned").as_deref(), Some("7"));
     assert_eq!(attribute(plain, "pruned"), None);
+    assert_eq!(attribute(pruning, "disabled").as_deref(), Some("2"));
+    assert_eq!(attribute(plain, "disabled"), None);
 
     let drains: Vec<_> = spans
         .iter()

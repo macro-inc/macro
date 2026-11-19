@@ -1,5 +1,7 @@
+import uFuzzy from '@leeoniya/ufuzzy';
 import { describe, expect, it } from 'vitest';
 import {
+  ANY_SCRIPT_FUZZY_OPTIONS,
   fuzzyMatch,
   fuzzyScoreCommaSpaceSeparated,
   fuzzyTestCommaSpaceSeparated,
@@ -290,5 +292,18 @@ describe('fuzzyMatch with delimiter-separated channel matching', () => {
     expect(results.length).toBe(3);
     expect(results[0].item.name).toBe('alice, bob');
     expect(results[1].item.name).toBe('alice, charlie, bob');
+  });
+});
+
+describe('ANY_SCRIPT_FUZZY_OPTIONS', () => {
+  const matcher = new uFuzzy(ANY_SCRIPT_FUZZY_OPTIONS);
+
+  it('matches a word written with combining marks only where the marks are too', () => {
+    expect(matcher.filter(['साथ मिलकर लिखें', 'थीम बदलें'], 'थीम')).toEqual([1]);
+  });
+
+  it('keeps an elided word whole and still matches contractions as typed', () => {
+    expect(matcher.filter(["Plan d'équipe"], "plan d'équipe")).toEqual([0]);
+    expect(matcher.filter(["Don't panic", 'Dont panic'], "don't")).toEqual([0]);
   });
 });

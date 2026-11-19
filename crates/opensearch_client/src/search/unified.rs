@@ -109,9 +109,11 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             page_size: args.page_size,
             match_type: args.match_type,
             collapse: args.collapse,
-            ids_only: false, // Email is never ids only at the moment
+            ids_only: args.email_search_args.ids_only,
             thread_ids: args.email_search_args.thread_ids,
+            required_thread_ids: args.email_search_args.required_thread_ids,
             link_ids: args.email_search_args.link_ids,
+            exclude_link_ids: args.email_search_args.exclude_link_ids,
             sender: args.email_search_args.sender,
             cc: args.email_search_args.cc,
             bcc: args.email_search_args.bcc,
@@ -247,8 +249,17 @@ pub struct UnifiedDocumentSearchArgs {
 pub struct UnifiedEmailSearchArgs {
     pub terms: Vec<String>,
     pub user_ids: Vec<String>,
+    /// Threads reachable besides the `user_ids` mailboxes, or, with
+    /// `ids_only`, the only threads searched.
     pub thread_ids: Vec<String>,
+    /// Search only `thread_ids`, not the `user_ids` mailboxes.
+    pub ids_only: bool,
+    /// When non-empty, every hit's thread must be one of these, on top of
+    /// the access filter.
+    pub required_thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
+    /// Links no hit may come from, whatever else matches it.
+    pub exclude_link_ids: Vec<String>,
     pub sender: Vec<String>,
     pub cc: Vec<String>,
     pub bcc: Vec<String>,

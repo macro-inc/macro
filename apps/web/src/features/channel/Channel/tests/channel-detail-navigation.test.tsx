@@ -86,6 +86,9 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 0, height: 0 }),
+}));
 vi.mock('@ui/components/Tabs', () => ({ Tabs: () => null }));
 vi.mock('@core/context/channels', () => ({
   useChannel: () => () => undefined,

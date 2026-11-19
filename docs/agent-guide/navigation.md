@@ -168,6 +168,31 @@ lost. It must report an uncertain outcome, not retry or fall through to a second
 API write. Verify this lost-reply case only with an isolated synthetic fixture,
 not by injecting mutation failures into a dev or production account.
 
+## iPhone Duo navigation
+
+Entity headers (tasks, documents, and email) float 0.5rem below the safe-area
+edge on touch, matching the list-view top gutter. The content inset includes
+that gutter and the header height, including when Duo is folded.
+
+With a native build containing `layout_plugin`, the mobile navigation dock
+follows UIKit's preferred edge: a right-side vertical sidebar in the usual Duo
+layouts, the outer edge in Split View, and the bottom when horizontal bars are
+appropriate. Search stays horizontal above the keyboard. More retains hidden
+destinations, Settings, and dock customization; opening or closing the phone
+must retain the current view and navigation order.
+
+The vertical dock must share the outer system column beneath the status controls,
+using UIKit's bar layout region. Verify that there is one column, with no second
+dock or extra blank strip to its left; the content safe-area inset alone is not
+a bar placement guide.
+
+Verify closed/open, both rotations, partial folds, and both Split View sides.
+Check Search focus, More, and a composer with the software keyboard showing.
+Rotate and fold with search focused, including after switching to a hardware
+keyboard: search must track the new viewport instead of retaining the old height.
+Controls and content must clear each safe-area edge independently. Repeat on
+a conventional iPhone; old native binaries retain the existing bottom dock.
+
 ## Android system navigation and sharing
 
 In the Android app, Back first hides the keyboard, then dismisses the active
@@ -186,8 +211,9 @@ multiline textboxes for TalkBack.
 With the keyboard closed, the Android dock sits above the measured system
 navigation inset with the usual 12px gutter. Check both gesture and three-button
 navigation, including after rotation and display-size changes. Opening the
-keyboard leaves only the usual gutter above it. iOS retains its existing 28px
-bottom padding with the keyboard closed and 12px with it open.
+keyboard leaves only the usual gutter above it. With a bottom dock, iOS retains its 28px minimum bottom padding with the keyboard
+closed (or its larger safe-area inset). With side navigation, composers use a
+12px minimum bottom gutter instead; the keyboard-open gutter remains 12px.
 
 Sharing text, links, images, or documents from another Android app opens Share to
 Macro after login. A second incoming share waits behind the current one. Back or
@@ -248,7 +274,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
 | `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
-| `/app/for-you` | For you: the person's suggestions as cards (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` shows that suggestion first, ringed |
+| `/app/for-you` | For you: the person's suggestions as cards, Suggestions (work Macro can do), To do, Running and Done today (`enable-suggestions`, desktop only); redirects to Home when the flag is off or on touch. `sN.forYou.suggestion=<id>` scrolls to that suggestion |
 | `/app/notifications` | Unified Notifications view (`enable-unified-notifications`); redirects to Home when the flag is off |
 | `/app/notifications/calendar/<month-or-week-or-day>` | Notifications with a calendar notification's event open in the Calendar beside the list; the event uses `sN.calendar.*` |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
@@ -262,7 +288,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/routines` | Routines list in the Agents workspace |
 | `/app/routines/new` | A new routine's page, saved only by **Create routine** |
 | `/app/routines/<uuid>` | Routine settings, triggers, and run history in the Agents workspace |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro` under the agents rollout, or `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro`, `@coder` or `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -367,12 +393,6 @@ favor of its owner and view-navigation islands, except while creating or editing
 a schedule: a separate **Back to availability** pill sits beside the editor
 title, matching other mobile routes.
 
-Projects are enabled by default in development; production uses the PostHog
-`enable-projects` flag. `VITE_ENABLE_PROJECTS` overrides either environment.
-When disabled, project navigation,
-creation, assignment, chips, and Cmd+K results are hidden; direct project links
-return to Tasks after flags resolve. Existing Files folders stay available.
-
 Projects open as native detail views within Tasks, preserving its sidebar and
 shared breadcrumb navigation. The Projects breadcrumb returns to the same list,
 filters, groups, and scroll position. Opening a task from a project extends the
@@ -391,9 +411,35 @@ on desktop and a bottom drawer on touch. It keeps focus in the project-name
 input, and `Continue editing in split` transfers the current draft. Existing
 folders remain available in Files search.
 
-The app views are referred to as **workspaces**. Expanded workspace sidebars start
-at the shared 256px width; manual resizing and narrow layouts can change the
-displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16px
+Touch collection filters and the top fade are bounded to their list pane, leaving
+sidebar titles and collapse controls clear. Tasks, Drive, Email, and CRM keep the
+list viewport full height: the measured filter inset is inside the scroller, so
+rows start below the controls and scroll behind them. Drive folder paths and
+stacked CRM activity controls contribute to that measured inset.
+
+The app views are referred to as **workspaces**. Desktop navigation sidebars
+start at 256px and dock above the shared 720px container breakpoint, overlaying
+at narrower widths. On wide touch, list-aside views (Chat, Agents, Notifications)
+keep their list on the left and open selections in the right preview. Their
+initial list width is 403px, with thin desktop-style pane dividers.
+
+Mail, Drive, Tasks, CRM, Calls, and Reviews instead keep their main list on the
+left and reserve an empty preview on the right until selection. Their outer
+sub-view navigation takes no column: **Show sidebar**, first in the list's
+filter row, opens a sheet from the left over that list pane. The preview stays
+in place to its right. Picking a destination closes the sheet; closing
+it restores focus to that button. Opening or closing it preserves the list's
+scroll, the selected detail, and its draft. Its temporary visibility does not
+change the saved desktop sidebar preference. Resizing a hosted detail preserves
+its mounted editor; existing narrow-touch standalone route transitions still
+apply. Ordinary wide-touch selections stay inline; modifier actions retain
+new-split behavior.
+
+At 720px or narrower, touch navigation keeps its existing single-pane behavior.
+Chat shows its full-frame conversation feed without a sidebar or expand button;
+Notifications fills its pane and opens items as standalone pages. Home's composer
+is desktop-only. The app shell and Duo navigation strip use the same panel
+background as the surrounding views. Workspace navigation uses shared 32px rows (44px on touch), 16px
 glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
 headings. Tags and folders have a separate disclosure button on the **right** of
 the row: clicking the label selects the destination; clicking Expand/Collapse
@@ -552,12 +598,10 @@ unread dot follows Home's unread dot.
 External (plug icon, `g x`) appears on the rail only with the
 `enable-whatsapp-linked` flag; it starts shown and can be hidden like other apps.
 
-- Top: buttons `Create` and `Search`. Clicking `Search` opens a menu
-  with `Command Menu` (⌘K on Mac / Ctrl+K elsewhere) and `Search everything`
-  (`/`). Choose the first to open commands, or the second to open and focus
-  global search. Hold Shift while selecting `Search everything` to open it in a
-  new split, including when Search is already active. This left-click menu shares
-  its surface and item styling with the sidebar right-click menus.
+- Top: buttons `Create` and `Search`. Clicking `Search` (or `/`) opens and
+  focuses global search with an empty query and no rows; Shift+click opens it in
+  a new split, including when Search is already active. The command menu stays
+  on ⌘K (Ctrl+K elsewhere).
 - Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
   `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
   their features are enabled. Calendar shows a next-meeting badge (`Now`, or
@@ -586,7 +630,9 @@ other splits remain intact.
 Ordinary rail, More-menu, and Go To shortcut navigation resumes opted-in apps'
 last locations during the current session, including nested details, tabs,
 filters, and local state registered with the split entry (such as scroll or
-selection). Views opt in with `useViewRestoration()`; views without the hook keep
+selection). A Go To shortcut that names a tab opens that tab
+instead: `g e` lands on Email's Signal and `g s` on Sent, as do their command
+menu entries. Views opt in with `useViewRestoration()`; views without the hook keep
 ordinary navigation behavior. The mobile dock uses the same memory; Search taps
 still start a fresh search. Memory is account-scoped and clears on reload,
 sign-out, or account changes. A leave guard stages each snapshot, but only a
@@ -643,6 +689,9 @@ same Signal membership, channel/thread scoping, and local read/done overrides as
 the list. Check that reading that item keeps the dot lit if another loaded row
 is unread, and that completing the last one clears it. Query bounds and
 pagination are unchanged.
+
+Wide touch Agents keeps its conversation list left of the selected session or
+legacy chat; narrow touch opens the standalone conversation.
 
 The Agents sidebar opens with a **Work** / **Code** switch (radio group
 "Agents mode") under New, using the shared pill tabs on desktop; touch keeps
@@ -713,29 +762,37 @@ lists, Routines' Discover tab), or the search found no rows, `ArrowDown` and
 search loads counts as having no rows until they arrive. `Enter` on one of Email's recent
 searches still moves to the list, which lands on the first row once that
 search's rows arrive.
-Home's and Chat's sidebar search fields follow the same rules, landing on the
-first matching row of the sidebar list; emptying the field from the list
+Home's, Chat's and Agents' sidebar search fields follow the same rules, landing
+on the first matching row of the sidebar list; emptying the field from the list
 collapses it back to the Search icon. An `Escape` pressed in the preview or
-conversation beside the sidebar leaves the search alone. Home's field stays
-open while its query filters the list, including after the sidebar remounts
-(a window narrowed and widened again), and its Search icon then closes the
-field and clears the query, as the field's X does in a list header. Agents' sidebar field does not yet: its
-conversation list has no keyboard navigation.
+conversation beside the sidebar leaves the search alone. Home's and Agents'
+fields stay open while their query filters the list, including after the
+sidebar remounts (a window narrowed and widened again), and the Search icon
+then closes the field and clears the query, as the field's X does in a list
+header.
+The Agents conversation list moves with `j`/`k` and the arrows through the rows
+of its open sections (Open PRs, the conversation groups, Archived), with `Home`
+and `End` for the ends; the row under the keyboard takes the hover fill.
+`Enter` opens it as a click does and `Shift+Enter` opens it in a new split.
+These keys belong to the sidebar only while focus is in it: pressed in the
+conversation beside it, they stay with the conversation. As in every list view,
+`Shift+Up`/`Shift+Down` belong to the list in that split, so moving to a split
+above or below takes `Shift+K`/`Shift+J` there.
 Mobile creation controls, search controls, and placement are unchanged.
 When multiple desktop splits are open, a **Close** (X) button appears in the
 sidebar title bar and closes that split, including
 when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
-sidebar close button; mobile chrome is unchanged.
+sidebar close button.
 A lone desktop split shows no X, in its header or its frame corner. On a
 non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
 list in its history, preserving that list’s state; if there is no prior list, it
 opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
-Tasks, and other views using the shared inner
-sidebar layout default to 256px. Each view type saves a manually resized width
+Tasks, and other desktop navigation sidebars default to 256px; wide touch list
+panes start at 403px. Each view type saves a manually resized navigation width
 (`asidePreferenceKey`) and restores it after reloads, view switches, and in
 other splits.
 
@@ -820,7 +877,12 @@ only update the open menu’s transient draft; they do not create email-service 
 unfinished emails with no subject, body, or recipients. Any supplied recipient
 must resolve to an email address, and a connected inbox is required. A successful
 save closes the menu and opens the saved draft when available; a
-failed save preserves the input. **Cmd/Ctrl+Enter** continues to send the email.
+failed save preserves the input. **Send email** (or **Cmd/Ctrl+Enter**) saves the
+email as a draft and sends that draft; a successful send closes the menu and
+opens the sent thread. While the menu stays open on a failed save or send, a
+retry uses the same draft rather than a second one; a retried send sends the
+saved draft without saving it again. Choosing another inbox after a failed
+send deletes that draft and saves a new one in the chosen inbox.
 Search mode embeds Global Search's editor, Type/In/From filter chips, and
 result rows with highlighted message snippets. Extraction first selects the search
 type, then uses its schema: Channels has In/From; Tasks has status, priority,
@@ -1047,12 +1109,13 @@ with a filled glyph also swap to it. More carries that selected state while the
 open view is one of the destinations it hides, so the island always shows where
 you are. Search, on its own island, stays an action at full ink.
 
-Notifications, Email, and Channels use the same reactive unread-presence checks
-as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
-the represented items are read or completed, not merely when opening a view.
-Overflow destinations keep their dots in More; More itself has a dot when any
-hidden destination is unread. Resizing or reordering moves the indicator with
-its destination. These remain presence indicators, with no extra pagination.
+Notifications, Email, and Channels get unread indicators from the same
+`useNavigationUnread` hook as the desktop sidebar. Their accent dots clear when
+the represented items are read or completed. Overflow destinations keep their
+dots in More, and More itself has a dot when any hidden destination is unread.
+Resizing or reordering moves the indicator with its destination. See
+[Notifications](notifications.md#notifications-view--appnotifications) for the
+source of the dots and the opt-in for unread numbers.
 
 Open **More views → Customize dock** to change the order. Drag a row's handle immediately,
 without holding first, and move it across the **In dock** / **In More** boundary. The counts use the
@@ -1099,8 +1162,7 @@ The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
 **+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
-Document, Event, Task, More. Event follows the calendar UI flag; unavailable
-launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
+Document, Event, Task, More. Unavailable launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
 or press Escape, to dismiss. More opens the full create menu as a glass bottom
 sheet on mobile, with broad, screen-scaled corners and an even 8px outer inset;
 home-indicator clearance is inside the glass. The mobile full menu is a scrollable
@@ -1138,7 +1200,7 @@ Filter sheets have a visible heading and Close filters button. Sort and filter
 options use rounded rows with trailing checkmarks; accordion sections retain
 their selection counts. Clear all resets selections without dismissing the sheet.
 In Soup-based list toolbars, Assignee and Created by menus and filter chips load
-suggestions only while open. Next options replaces the page; selected and unavailable
+suggestions only while open, and list further pages as they scroll; selected and unavailable
 saved IDs remain selected across searches. Me remains available, Assignee also has
 Unassigned, and Only changes its own filter group. Clearing a creator refinement on Owned
 restores the Owned constraint. Chip labels resolve separately while menus are closed.
@@ -1175,8 +1237,9 @@ Project opens the native project composer; Folder remains the Files folder actio
 ## Mobile glass feedback
 
 In the native iOS app, glass presses animate the enclosing surface over 300ms.
-Round buttons grow by 28%; wide pills and grouped controls extend their glass
-fill and rim by up to 6px per edge, with 18% icon growth around each icon's center.
+Round buttons grow by 28%; horizontal and vertical pills and grouped controls
+extend their glass fill and rim by up to 6px per edge, with 18% icon growth around
+each icon's center. The Duo navigation pill keeps this bounded expansion when tall.
 Labels and layout stay fixed; icons remain visually aligned through release.
 Selecting or deselecting a pill updates its fill and text together, including
 during release or a rapid second tap. The fill changes with a radial spotlight
@@ -1198,8 +1261,7 @@ Existing `/app/automation/<uuid>` links resolve to the canonical routine URL.
 Saved split layouts and document/channel/spreadsheet mentions using the old
 block name also open routines; newly copied links use `/app/routines/<uuid>`.
 On the legacy Agents screen, use the **Routines** button above the list. On touch devices,
-`/app/routines` opens the routines list directly, and the hidden Agents sidebar's
-entry moves to **Settings → Routines** (on phones **More views → Settings →
+`/app/routines` opens the routines list directly, and the Agents sidebar entry is also available in **Settings → Routines** (on phones **More views → Settings →
 Routines**): tapping a routine closes the settings sheet and opens it, and
 **Create Routine** opens the composer.
 
@@ -1231,8 +1293,7 @@ the catalog's first four available template cards (icon, name, one line and its 
 **New email → Label with AI**) with **All templates** at the right, which opens
 New routine's start screen. A card opens New routine already filled in from that
 template. The strip hides while searching and on **On**; on phones the cards
-scroll sideways. With `enable-routine-suggestions` and
-`enable-routine-code-steps` on (not on touch devices), suggestions take the
+scroll sideways. With `enable-routine-suggestions` on (not on touch devices), suggestions take the
 strip's place: **Suggested for you** above the rows on **All** shows one row
 of Discover's cards, as many as fit, and after them a narrow **N more · In
 Discover** column, which opens a third tab, **Discover**. Discover
@@ -1306,8 +1367,7 @@ enabled, for its trigger condition, then **Chase stuck tasks**, **Tag new
 email**, **Tag new documents**, **Tasks from my calls**, **Weekly pipeline
 review**, **Catch up on mentions**, **Sum up new pull requests** and **Weekly
 agent digest**; each shows its icon, what it does and its trigger → first
-step. Routines with code start with it when `enable-routine-code-steps` is on
-and the scheduler can save code, otherwise with an Ask AI step; schedules are
+step. Routines with code start with it when the scheduler can save code, otherwise with an Ask AI step; schedules are
 in the browser's zone), and
 **Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
@@ -1386,14 +1446,14 @@ Macro activity triggers by surface:
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, **Assignees changed**, **Due date changed**, **Project changed**, **Effort changed**, and **Any property changed**. Under **Changes to**, choose the values that start the routine, such as **Completed**, or leave **Any status**. A value counts only when the change adds it. Tags aren't properties and have no trigger.
-- **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
+- **Email:** **New email received** in any of the routine owner's inboxes (their own and each one delegated to them), excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
 - **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, use **Applies to** in the
 same panel to choose any accessible item or specific channels/documents/tasks.
-Specific-item pickers use Next options/PageDown to append later loaded pages.
-Creation triggers cover newly created accessible items; email covers the owner's inbox;
+Specific-item pickers append later loaded pages as they scroll (or on PageDown).
+Creation triggers cover newly created accessible items; email covers the owner's inboxes;
 **Call started** shows **Calls you start** and **Call ended** shows **Calls you
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
@@ -1428,7 +1488,7 @@ a controlled repository's delivery and matching routine history. Wildcard
 routines can run more often, and manually redelivering a webhook from GitHub
 can run a routine again.
 
-When `enable-routine-conditions` is on, every activity trigger can take one
+Every activity trigger can take one
 **Only if** check, a yes/no question about each event, such as **Is this email
 an invoice or a receipt?** (**+ Filter** on the page, **Only run if AI says
 yes** in the trigger panel). Before a run starts, the event's content (the email,
@@ -1645,7 +1705,10 @@ recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
 menu's `utils/mention-ranking.ts`.
 Broader entity matches remain reachable even when the local fuzzy matcher would
 omit them. Personal contacts preserve their local exact/word-prefix/contains and
-recent-first window order among equally good name matches; mixed menu scoring never
+recent-first window order among equally good name matches. People you have a direct
+message with lead every match at a word start, ahead of strangers whose whole name
+equals the query, and an exact first name counts as an exact name: `@rhea` lists
+the Rhea Okafor you message above accounts named just "Rhea" you never messaged; mixed menu scoring never
 drops reverse-word matches. In menus, further pages of people are listed below the
 earlier ones. Partial local contacts never trigger a remote suggestion search. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1657,6 +1720,23 @@ use the same paged personal directory. Channel people remain participant-scoped,
 and CRM discussions remain team-scoped; an empty or loading roster never opens
 personal-directory search. Available agents are added to the current window or
 scope with the existing rollout rules. Group mentions remain channel-only.
+Within a scoped people list, an exact full-name or first-name match comes before
+prefixes, literal contains matches, and scattered-letter matches. Recent interaction
+history only orders people within those name tiers. Phones choose their two pinned
+people after this ranking. To verify, search for a person's first name when that
+person has no interaction history and other recently contacted participants match
+only scattered letters: the named person must lead and be selected by Enter or tap.
+The controlled composer regression is `people-ranking.browser.e2e.ts` in
+`apps/web/src/features/channel/Input/browser-test/`.
+People rows follow the assignee menus' rule (`@core/user/people-before-agents`)
+with Macro lifted to the top: browsing lists Macro, then you, then other people,
+then the other agents. While searching, Macro stays first while its name starts
+with the query (`m`, `ma`, `mac`); otherwise, and for every other agent, an agent
+is listed only when its name or handle holds the typed words, not just their
+letters scattered, and never above a person whose name matches as well; bots get
+no score boost. Channel and DM composers still list `@here` above Macro while
+browsing. Phone rows keep that People order in the slots the blended ranking
+gives people, so Macro is the first pinned row (after `@here` in a channel or DM).
 
 Counts describe loaded results, not the full server corpus. Scans through
 incomplete or already-visible cache hits are bounded per action; continue
@@ -1698,12 +1778,27 @@ CRM record or the CRM feature. Search by name or email. Selecting a person opens
 their direct message; an existing one-to-one DM replaces the person row without
 losing name/email matches, including DMs found by typed search beyond the recent
 channel list. Group DMs stay separate, and the viewer is excluded
-from person results. Empty queries keep the existing recency lists. Verify a
-teammate with no DM or CRM record in both categories, including with CRM disabled,
+from person results. Empty queries keep the existing recency lists, with people
+outside the team after the recent rows, before the command catalog that starts
+at the first never-used command.
+Verify a teammate with no DM or CRM record in both categories, including with
+CRM disabled,
 then verify that loading their DM produces one row and that Files/Channels do not
 show that person. Also verify a typed match whose DM is absent from the recent
 list: desktop and mobile should show one DM row, including after a same-email CRM
 contact arrives, with its alias still searchable.
+
+People outside the viewer's team (email and CRM contacts, Macro users on other
+teams, and one-to-one DMs with them) list after every row from the team in
+Cmd+K and mobile name search, typed or not: after teammates, channels,
+documents and group DMs, even rows that only contain the query (before typing,
+ahead of the command catalog that ends the list). Among themselves they keep the
+usual order, people the viewer messages first. Typing such a person's exact
+email address, or a full name of two or more words, ranks them among the team's
+results where someone never messaged would rank, even when the viewer messages
+them. Verify with a team member and
+outside contacts sharing a first name, a one-letter query, the empty **All**
+list, a full name a teammate and an outside contact share, and an outside email.
 
 Duplicate-row verification: [desktop](media/command/deduplicated-person-desktop.png)
 and [phone](media/command/deduplicated-person-mobile.png) use the real command and
@@ -1726,11 +1821,26 @@ after typing stops and pages 100 contacts at a time, so contacts beyond the firs
 usual recency lists without contacts. A contact whose email belongs to a Macro user
 appears as that person instead, even when only the CRM name matched: their existing
 direct message when you have one, otherwise the person, and selecting them opens a
-direct message. Matching direct messages and Macro users rank ahead of CRM contacts,
-even when the conversation is old or has no recorded activity. Relevance and recency
-still order results within each group; other result types keep their positions.
+direct message. Matching direct messages rank ahead of CRM contacts that match as
+well, even when the conversation is old, and Macro users lead CRM contacts listed
+next to them that match as well. Relevance and recency still order results within
+each group.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
+
+People you never messaged (not a teammate, no direct message), CRM contacts and
+email-only correspondents included, rank after your own projects, channels,
+documents, agents and commands and after the people you know, among names with
+a word starting with what you typed, however exactly their name matches: typing
+`lee` lists Jordan Lee, whom you message, above a stranger named Leela. Rows
+that only contain the query mid-word follow, strangers last among them; people
+outside your team come after all of these (see above). The People tab ranks the
+same way over people only.
+To verify on dev as gab@, type `macro` and `rand` in All: your `macro`-named
+channels, companies, tasks and files, and the tasks and files with a word
+starting with `rand`, list before the email-only accounts whose names start
+with those letters; then type the first name of a teammate you DM and check
+they lead the never-messaged accounts with the same first name.
 Other contacts show their email and open the contact page; Enter and
 click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
@@ -1813,9 +1923,14 @@ restart rules still apply.
 - `#` — move email to Trash, with an Undo toast. Works on the selected or focused
   rows in a mail list and on the thread open in an email detail or block. Email
   only; other entity types keep Delete/Backspace and do not answer `#`.
-- `g` then `h` — Home; `g` then `i` remains an alias. While Email is focused,
-  `g i`/`o`/`s`/`t`/`d`/`e`/`a` open its tabs instead (`g i` Signal, `g t` Sent;
-  see `email.md`); `g h` still goes Home.
+- `g` then a letter goes to a view, the same from every view (no view takes
+  over an app-wide letter) and never while an editor or input has focus:
+  `h` Home (`i` too unless Notifications is on the rail), `a` Agents, `e` Email
+  on Signal, `s` Email on Sent, `f` Files, `d` Documents, `t` Tasks, `r`
+  Calendar, `c` Channels, `o` Customers, and with their flags `i`
+  Notifications, `n` Recent, `y` Activity, `l` Calls, `v` Reviews, `x`
+  External. A view may add letters the app doesn't use (`g g` jumps to the top
+  of a list).
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+Esc` maximize. `Shift+H`/`J`/`K`/`L` and
@@ -1858,6 +1973,13 @@ create a session before the user sends. Repeating it focuses the existing draft.
 
 ### Content already open
 
+From Customers' Sales Calls, Sales Tasks, and Sales Notes tabs, open Calls through
+the rail (or More) and confirm that the Calls list replaces CRM and remains
+interactive. Repeat at phone width through the dock. Return to Customers and
+confirm its selected tab resumes. On desktop, also open Calls in another split:
+ordinary navigation reuses and focuses that split. Shift-click opens and focuses
+a Calls split beside CRM without changing the CRM tab.
+
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.
 Inline details in Home, Email, Tasks, Channels, and Drive use typed split-router
@@ -1889,9 +2011,10 @@ Selecting an entity owned by another view from a detail view leaves the current
 detail and navigation history unchanged, focuses the owning view, and shows a
 **Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
-selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
-never render inline previews or detail views: a tap opens the entity in the
-split, so the toast only appears when the content is genuinely open elsewhere.
+selection, keyboard preview navigation, and detail breadcrumbs. Wide touch panes
+use the same inline preview and detail routing as desktop, including the
+Notifications feed. At 720px or less,
+a tap opens the entity in the split; duplicate-content handling still applies.
 
 Split-router ownership checks use the final redirected destination. Concurrent
 opens of the same claimed resource wait for the first outstanding request rather

@@ -1,3 +1,4 @@
+import { useViewShell } from '@app/components/view-shell';
 import { createTagFacetContext } from '@app/features/soup';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
@@ -47,7 +48,6 @@ import {
   type SavedViewRowReorder,
 } from '../../saved-views/components/saved-view-list';
 import { SavedViewMenuItems } from '../../saved-views/components/saved-view-menu';
-import { SavedViewPicker } from '../../saved-views/components/saved-view-picker';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import {
   savedViewErrorMessage,
@@ -479,7 +479,7 @@ function createEmailSavedViewOrder() {
 function EmailSavedViewRows(props: {
   onAction?: (action: () => void) => void;
   dialogOwner?: Owner | null;
-  /** Desktop rows drag to reorder; the phone picker moves through menus. */
+  /** Docked and overlay rows drag. Navigation sheet rows move through menus. */
   draggable?: boolean;
 }) {
   const { savedViewsList } = useEmailView();
@@ -618,8 +618,9 @@ function EmailSavedViewRows(props: {
   );
 }
 
-/** The desktop sidebar's Saved views section. */
+/** The Saved views section of the Mail sidebar. */
 export function EmailSavedViewsSection() {
+  const { aside } = useViewShell();
   const {
     savedViewsEnabled,
     savedViewsList,
@@ -644,31 +645,9 @@ export function EmailSavedViewsSection() {
           createButtonRef={attachCreateHotkeys}
         />
         <SavedViewList.Content>
-          <EmailSavedViewRows draggable />
+          <EmailSavedViewRows draggable={!aside.isSheet()} />
         </SavedViewList.Content>
       </SavedViewList.Root>
-    </Show>
-  );
-}
-
-/** The mobile pill after Filters; its drawer lists and manages views. */
-export function EmailSavedViewsPicker() {
-  const { savedViewsEnabled, savedViewsList, savedViewActive } = useEmailView();
-  const viewerId = useUserId();
-  const title = useEmailSavedViewTitle();
-  // The drawer closes before its action opens a dialog; keep the outer owner.
-  const owner = getOwner();
-  return (
-    <Show when={savedViewsList && savedViewsEnabled()}>
-      <SavedViewPicker
-        active={savedViewActive()}
-        scopeKey={viewerId()}
-        label={title() ?? t('viewMenus.savedViews')}
-      >
-        {(onAction) => (
-          <EmailSavedViewRows onAction={onAction} dialogOwner={owner} />
-        )}
-      </SavedViewPicker>
     </Show>
   );
 }

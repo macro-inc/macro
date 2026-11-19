@@ -32,6 +32,7 @@ import {
 import { type Accessor, createEffect, createMemo } from 'solid-js';
 import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
+import { channelTypesShownBy } from './core/channel-types';
 import type {
   ChannelListSort,
   ChannelsGroup,
@@ -324,7 +325,10 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
-  registerChannelListNotificationRefresh(query);
+  registerChannelListNotificationRefresh(
+    query,
+    channelTypesShownBy(CHANNELS_QUERY_DEFINITIONS[scope].filters)
+  );
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 
@@ -345,7 +349,17 @@ function useChannelsDataSource(
     items,
     isLoading: () => query.isEnabled && query.isLoading && items().length === 0,
     isFetching: () => query.isEnabled && query.isFetching,
-    error: () => (query.isEnabled ? (query.error ?? undefined) : undefined),
+    // The live query hides a network failure behind its local cache rows,
+    // which are empty when the list was never cached. An empty list after a
+    // failed fetch is unknown, not "no conversations".
+    error: () => {
+      if (!query.isEnabled) return undefined;
+      return (
+        query.error ??
+        (items().length === 0 ? query.fetchError : null) ??
+        undefined
+      );
+    },
     hasMore: () => query.isEnabled && query.hasNextPage,
     isLoadingMore: () => query.isEnabled && query.isFetchingNextPage,
     loadMore: async () => {

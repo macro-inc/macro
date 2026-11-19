@@ -1,6 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
-import { enableDatabases, enableForms } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -109,8 +107,6 @@ function appActivityContext(): ActivityContext {
   let databases: DatabasesQuery | undefined;
   const databasesQuery = () =>
     (databases ??= runWithOwner(owner, useDatabasesQuery));
-  const databasesFlag = useFeatureFlag(enableDatabases);
-  const formsFlag = useFeatureFlag(enableForms);
   return {
     graphql: () => getGraphqlSoupClient(),
     currentUserId: () => userId() ?? '',
@@ -128,9 +124,7 @@ function appActivityContext(): ActivityContext {
       if (!list || list.isPending) return undefined;
       return getBotDisplayName(`bot|${id}`, undefined, list.data ?? []);
     },
-    entityTypeShown: (entityType) =>
-      (entityType !== 'database' || databasesFlag().enabled) &&
-      (entityType !== 'form' || formsFlag().enabled),
+    entityTypeShown: () => true,
     entityDisplay: (entityId, entityType) => {
       const type = entityType();
       if (type === 'DATABASE') {

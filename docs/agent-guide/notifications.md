@@ -9,6 +9,19 @@ first. The flag is on in dev and comes from PostHog elsewhere;
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
 Home keeps `g h`.
 
+With unified notifications on, the outer rail and mobile dock show unread dots
+from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
+follow reads, done, clears and new activity within about a second on each open
+tab. With unified notifications off, the buttons use their earlier presence
+checks.
+
+Unread numbers are off by default in every environment while their accuracy is
+under investigation. Set `VITE_ENABLE_NAVIGATION_UNREAD_COUNTS=true` for a
+frontend build to show numbers alongside the unified inbox. The Notifications
+button counts all unread rows, Channels counts channel rows, and Mail counts
+mail rows. Counts above 99 show as `99+`. Home keeps a dot on the desktop rail.
+On the mobile dock the Home bell opens Notifications and carries the total.
+
 Each list row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one
 top-level message with everything about it (its replies, mentions and reactions,
@@ -110,19 +123,27 @@ large clear that is still at work says **so far; still clearing**, then
 announces its final count. Undo works while the clear is still at work and
 stops it. Undo, of a clear or of any Mark done, brings each notification back
 as it was: unread ones stay unread, and anything the reader changed since the
-clear is left alone. With every kind hidden by the filters, a clear takes
-nothing.
+clear is left alone.
 
 **Filter notifications** (funnel, or `f`) offers **Type** checkboxes that start
-checked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
-Calendar, Access requests, and Agents. Unchecking a type hides its rows (Mentions
-covers both channel and comment mentions, Replies both channel and comment
-threads). The trigger counts hidden types, and **Reset filters** shows them all
-again without changing All or Unread. Choices persist per user across reloads.
-Hiding every type shows **Every kind of notification is hidden** with Reset
-filters; types that hide every row show **No notifications match these filters**. The gear beside
-the filter opens **Settings → Notifications**, which decides what is delivered
-at all (including push and email).
+unchecked: Mentions, Replies, Messages, Comments, Email, Tasks, Pull requests,
+Calendar, Access requests, and Agents. Nothing selected shows every kind;
+selecting kinds narrows the feed to those kinds, and unchecking the last one
+restores everything. Selecting every current kind still excludes kinds added by
+a newer server; only no selection automatically includes those new kinds.
+Mentions covers both channel and comment mentions, Replies both channel and
+comment threads. A row that is two kinds shows when either is
+selected, once: a thread whose reply mentions you is under Mentions and Replies,
+a top-level message that mentions you and has replies likewise, an entity's
+comments that mention you under Mentions and Comments, and a pull request or
+agent session that mentions you under Mentions and Pull requests or Agents.
+Clearing either kind takes such a row whole. The trigger counts selected kinds;
+**Reset filters** (or **Clear** in the touch drawer) empties the selection without
+changing All or Unread. Choices persist per user across reloads. Old saved hidden
+kinds convert to the kinds that remained visible; an old empty hidden list becomes
+no selection. Selections without matching rows show **No notifications match
+these filters**. The gear beside the filter opens **Settings → Notifications**,
+which decides what is delivered at all (including push and email).
 
 On touch devices the dock's bell (**Notifications**) opens this view with the
 flag on, as the list alone under the floating controls Home, Email, Tasks and Drive
@@ -255,6 +276,14 @@ normal navigation without resetting the current page to the app root. Check
 both listener attachment and pending-intent reads, including a tap delivered
 before the pending read stalls. Receiving a push without tapping it must not
 navigate.
+
+On iOS, Macro stays visible whenever it leaves the foreground without a tap:
+opening the app switcher, Control Center, or Notification Center over it keeps
+its content on screen, including on its switcher card. A tap on a banner over
+the open app navigates in place. A tap that opens the app from the background
+or the Lock Screen goes from the system's blank launch screen to the
+destination, never through the previous page. A tap in Notification Center
+pulled down over Macro reveals the same blank cover, then the destination.
 
 For an iOS warm resume, leave the app running past its startup timeout before
 backgrounding it. Tap an uncached notification without a direct channel target
@@ -398,7 +427,7 @@ computer id, name, and outcome; opening one reopens that computer's setup
 dialog on Bring your AI (see the Macro computers walkthrough in
 [settings.md](settings.md)). An agent teammate's computer notifies its
 inviter with the agent instead (`agent { userId, name }`): "<name> is ready",
-with **Message <name>** and, for owners and admins, **Bring your AI**, or
+with **Message <name>** and, for owners and admins, **Connect Claude plan**, or
 "<name> couldn't be set up" with **Retry**; opening it goes to the DM or to
 Team → Members (see Agent teammates in [settings.md](settings.md)).
 

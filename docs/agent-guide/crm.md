@@ -1,8 +1,14 @@
 # Customers (CRM)
 
+On touch, CRM lists fill their pane behind floating filter controls and a list-local top fade. Activity controls stack below the main navigation pills; their combined measured height clears the first row.
+
 ## Customers (CRM) — `/app/companies`
 
-On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
+Desktop navigation docks above 720px and overlays at narrower widths. On wide
+touch, the selected list or pipeline stays left of the empty or selected record,
+item, or settings preview. Show sidebar leads the list's filter pills and opens
+sub-view navigation in a sheet; selecting a destination dismisses it. Narrow
+touch navigation is unchanged.
 Its **New** menu creates a **Company**, a **Contact**, or a **Pipeline** (Pipeline
 only when pipelines are enabled). The new-pipeline dialog's type menu
 (**Companies**, **Contacts**, **Generic**) shows the same icon, title and
@@ -20,12 +26,9 @@ dot, including desktop preview activation, keyboard opening, and phone navigatio
 The read is saved in the background; a failed request restores the dot so opening
 it again can retry. Marking read does not mark the notification done.
 
-**Rollout:** Sales Tasks, Sales Email, Sales Notes and Sales Calls require PostHog `enable-crm-activity`
-(off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
-this flag to decide whether to supply its task-composer preset, and with
-`enable-crm` to show the Customer / Contact pill when creating any task. With it off, only Companies and People
-appear in Records, activity queries do not run, and activity deep links return to
-Companies after flags finish loading. Global task creation uses the standard
+Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
+and People. CRM supplies its task-composer preset, and creating any task shows the
+Customer / Contact pill. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
 With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
@@ -86,8 +89,8 @@ uses the normal list and filter drawer. The default is open tasks grouped by dat
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
 Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
 uses bounded contact pages in the desktop submenu and mobile drawer; Me and
-persisted/unknown selections are independent of the suggestion window. Next
-options replaces the page, and Only affects creators without clearing other
+persisted/unknown selections are independent of the suggestion pages. Further
+pages list below the earlier ones as the end scrolls into view, and Only affects creators without clearing other
 facets or the fixed CRM association. Company owner/team selectors are unchanged.
 Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
 with stand-in data. Sales Email, Sales Notes and Sales Calls support
@@ -119,7 +122,7 @@ display options, and saved views), then the shared **New** menu and expandable
 Search. New has the same options as the sidebar.
 The header Owner menu remains team-scoped. An active Owner chip can search paged
 personal contacts on desktop or phone, with No owner and unavailable saved IDs
-preserved across window changes. Next options replaces its page; Only changes
+preserved as further pages load on scroll. Only changes
 Owner without clearing Stage. Closed chips resolve only their selected labels,
 not the full personal directory.
 
@@ -313,6 +316,9 @@ or New call. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
+When email sync processes a message sent to a manual unfiled contact's work
+address, it reuses that contact and preserves the Company field. It can still
+create or update the work domain's company independently.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
 restores the default action. Search remains visible for empty lists.
@@ -356,6 +362,17 @@ into view. Cells edit like the pipeline table's when you can edit that pipeline.
 `Open <pipeline>` button opens it. The `Pipelines` caret header collapses and expands the cards, like the Discussion
 header; both start expanded on each visit. The
 section is absent when the record is in no pipeline.
+When pipelines are enabled, **Add to pipeline** beside the title (a plus icon
+on phones) lists the team's pipelines of the record's type, by name; generic and
+trashed pipelines are never listed. A pipeline the record is in shows a check and
+`In <stage>`; one you can only view or comment on is greyed, with the reason in a
+tooltip (on touch, under its name). A contact cannot join a contact pipeline it
+is already in; a company can, as another deal. Hovering (on touch, tapping) a
+pipeline lists its stages under **Choose stage**, with a back row on phones.
+Choosing a stage adds the row at once and shows `Added to <pipeline> at <stage>`
+with the new card in Pipelines; a stage with required fields opens **Add deal**
+(or **Add contact**) with the record fixed and the stage chosen. With no
+matching pipelines the menu says `No company pipelines yet` (or contact).
 Team lists the contacts with `Add contact`. Emails keeps the
 `Signal`/`All` and `Team`/`Me` toggles; `Team` shows teammates' threads even to
 a viewer with no connected mailbox. Files, Tasks, and Calls list items
@@ -657,6 +674,27 @@ are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
 cannot opt in.
 
+When selective contribution is enabled, **Sharing rules** sits below **Your
+email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+**Preview counts**, and **History** open separate settings pages, including inside
+the phone settings sheet. Opening these pages never initializes consent.
+**Save and share** validates the JSON first and shows server validation problems,
+limit refusals and warnings inline; valid canonical rules replace the active
+policy. There is no separate Validate button or visual rule builder. Contact and
+company rules follow current records; company rules include current company
+domains only, so add people with contact rules. A matching rule shares the whole
+thread, including past and future messages, subject to exclusions.
+
+After a conflict, the draft stays visible and saving is disabled. **View current
+rules** loads the current policy for comparison; explicitly acknowledge that
+review before making a new save decision. Preview reads do not start work:
+**Run preview** explicitly starts it. Complete counts describe one snapshot;
+partial/running counts are lower bounds, and stale or unverified counts are
+hidden. History attributes changes to the verified member or their agent and
+opens immutable saved JSON separately. With the selective gate off, all-mail
+members retain the existing controls; selected contributors can still inspect
+rules/history and withdraw with the single **Stop sharing my emails** action.
+
 Any member can add a team domain; only team admins/owners can remove one.
 Personal domains affect only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
@@ -675,16 +713,27 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. In the contact company picker, Next
-options (or PageDown on desktop) appends later browse or search pages to the
-visible companies. The control shows loading and page failures with retry, and
-disappears at the end of the results. Selecting a company keeps singleton
+never enable sync or enroll a mailbox. In the contact company picker, later browse or
+search pages append to the visible companies as the end scrolls into view (or
+with PageDown on desktop). A failed page shows Retry options and waits for it. Selecting a company keeps singleton
 replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
 apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain
 change retains successful blocks and offers **Retry failed domains**.
+
+Blocking a domain equal to or above an affected connected primary mailbox's
+domain is refused. Team exclusions protect every member's primary mailbox;
+personal exclusions protect your own. The reason appears below the input,
+which keeps the typed domain for correction. Company-domain reasons explain
+that colleagues on the mailbox's own domain are already excluded from CRM;
+personal-provider reasons explain only that the block would hide all of the
+mailbox's email. Existing matching entries show the same note beside the entry
+and retain **Remove** with its usual permissions. Nothing is removed automatically.
+Company email-sharing off and archive also refuse the same whole-mailbox exclusion.
+Verify both scopes, an exact and parent domain, an allowed child or unrelated
+domain, and removal of an existing warned entry at desktop and phone widths.
 
 Contacts without a company add no CRM thread-access grant. Archiving one
 suppresses its team's CRM-derived grant; independent ownership, delegation,
@@ -710,26 +759,36 @@ flow, and disabled sources must not leave it waiting once metadata is ready.
 Traces hold opaque record ids and section categories, never names or addresses.
 Metadata errors may cancel the detail flow when the outer error panel replaces it.
 
-### Keep one thread out of CRM
+### Exclude one thread from CRM
 
 These controls require `enable-crm-thread-exclusions`, off by default everywhere.
 The API also refuses set/clear while its rollout flag is unavailable or disabled.
 Keep the flag off until ingestion and Team email reader binaries both support
 thread exceptions; older inlined readers ignore them.
 
-Open a thread from your own mailbox and choose **Keep this thread out of CRM**
-from its menu (the title menu on desktop, the thread menu on phone). This stops
+Open a thread from your contributed mailbox and choose **Exclude thread from CRM**
+beside sharing in its menu (the title menu on desktop, the thread menu on phone).
+The desktop header also has an exclusion icon immediately before the reminder
+bell; an excluded thread offers **Remove from excluded threads**, even after
+mailbox sharing is turned off. Both surfaces disable exclusion with a reason for another member’s thread, an unshared
+mailbox, or unavailable privacy state. The phone header keeps its existing
+title and Info controls. This stops
 sharing your copy through CRM, including mail already contributed, on the next
 CRM read. It does not remove the email from your mailbox. Another consenting
 teammate's copy of the same conversation may still appear, including the same
 messages. Separately granted thread access is also unaffected.
 Sales Email uses your own mailbox, so your copy remains visible there too.
 
-Open **Email settings → Threads kept out of CRM** to see your exceptions.
-**Remove exception** makes that thread eligible again when your consent and
-other privacy settings permit; restoration also queues a backfill. Use **Next
+Open **Email settings → Excluded threads** to see your exclusions. Each thread
+is an email mention with the same icon, subject, and hover preview as mentions
+in documents and channels. Click or press Enter to open it, reusing a split that
+already shows it. Desktop clicks and Shift-clicks prefer a new split when it is
+not already open; phones navigate in place. On phones the Settings
+sheet closes to reveal the thread. **Remove** makes that thread eligible again
+when your consent and other privacy settings permit; restoration also queues a backfill. Use **Next
 page** for further exceptions and **Back to first page** to return. Other members
-cannot see or change your exception list. Company and contact records and their
+cannot see or change your exclusion list. **Remove** never opens the thread;
+the empty list says **No excluded threads.** Company and contact records and their
 existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 

@@ -36,8 +36,8 @@ async fn test_generate_upsert() {
         },
     ];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert!(!upserts.is_empty());
     assert_eq!(upserts.len(), 2);
@@ -75,8 +75,8 @@ async fn test_generate_upsert_with_sub_type() {
         content: "Task content".to_string(),
     }];
 
-    let upserts =
-        generate_upserts(document_info, markdown_result).expect("Could not generate upserts");
+    let upserts = generate_upserts(document_info, markdown_result, false)
+        .expect("Could not generate upserts");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].sub_type, Some("task".to_string()));
@@ -117,7 +117,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
         content: "Bot document".to_string(),
     }];
 
-    let upserts = generate_upserts(document_info, markdown_result).expect("valid upsert");
+    let upserts = generate_upserts(document_info, markdown_result, false).expect("valid upsert");
 
     assert_eq!(upserts.len(), 1);
     assert_eq!(upserts[0].owner_id, BOT_PRINCIPAL);
@@ -125,7 +125,7 @@ fn generate_upserts_preserves_a_bot_owner_principal() {
 
 #[test]
 fn test_generate_parent_only_upsert() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -138,6 +138,38 @@ fn test_generate_parent_only_upsert() {
     assert_eq!(args.content, "");
     assert_eq!(args.raw_content, None);
     assert!(args.properties.is_empty());
+    assert!(!args.is_email_attachment);
+}
+
+#[test]
+fn a_parent_only_upsert_carries_the_email_attachment_flag() {
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("zip")), true)
+        .expect("could not generate parent-only upsert")
+        .expect("expected upsert args");
+
+    assert!(args.is_email_attachment);
+}
+
+#[test]
+fn every_markdown_chunk_carries_the_email_attachment_flag() {
+    let markdown_result = vec![
+        MarkdownParseResult {
+            node_id: "node1".to_string(),
+            raw_content: "# Forwarded".to_string(),
+            content: "Forwarded".to_string(),
+        },
+        MarkdownParseResult {
+            node_id: "node2".to_string(),
+            raw_content: "Body".to_string(),
+            content: "Body".to_string(),
+        },
+    ];
+
+    let upserts = generate_upserts(parent_only_document_info(Some("md")), markdown_result, true)
+        .expect("valid upserts");
+
+    assert_eq!(upserts.len(), 2);
+    assert!(upserts.iter().all(|upsert| upsert.is_email_attachment));
 }
 
 #[test]
@@ -147,7 +179,7 @@ fn test_canvas_routes_to_parent_only_indexing() {
 
 #[test]
 fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
-    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")))
+    let args = generate_parent_only_upsert(parent_only_document_info(Some("canvas")), false)
         .expect("could not generate parent-only upsert")
         .expect("expected upsert args");
 
@@ -163,7 +195,7 @@ fn test_generate_canvas_parent_only_upsert_has_no_content_chunk() {
 
 #[test]
 fn test_generate_parent_only_upsert_without_file_type() {
-    let args = generate_parent_only_upsert(parent_only_document_info(None))
+    let args = generate_parent_only_upsert(parent_only_document_info(None), false)
         .expect("could not generate parent-only upsert");
 
     assert!(args.is_none());
@@ -276,39 +308,80 @@ async fn fake_storage(object: &'static [u8]) -> (String, Requests) {
     use axum::{
         Json,
         body::Bytes,
-        http::{Method, StatusCode, Uri},
+        http::{HeaderMap, Method, StatusCode, Uri},
         response::IntoResponse,
     };
 
     let requests = Requests::default();
     let recorded = requests.clone();
-    let app = axum::Router::new().fallback(move |method: Method, uri: Uri, body: Bytes| {
-        let recorded = recorded.clone();
-        async move {
-            let path = uri.path().to_string();
-            recorded.lock().unwrap().push((
-                format!("{method} {path}"),
-                String::from_utf8_lossy(&body).into_owned(),
-            ));
-            if method == Method::GET {
-                object.into_response()
-            } else if path.ends_with("/_delete_by_query") {
-                Json(serde_json::json!({ "deleted": 1 })).into_response()
-            } else if path.ends_with("/_bulk") {
-                Json(serde_json::json!({
-                    "errors": false,
-                    "items": [{ "index": { "status": 201 } }],
-                }))
-                .into_response()
-            } else {
-                StatusCode::NOT_FOUND.into_response()
+    let app = axum::Router::new().fallback(
+        move |method: Method, uri: Uri, headers: HeaderMap, body: Bytes| {
+            let recorded = recorded.clone();
+            async move {
+                // Any process on the machine can connect to a loopback port, and
+                // a dev host can hand this server a port another tool is polling
+                // for readiness. Only requests from the clients under test count.
+                if !sent_by_test_client(&headers) {
+                    return StatusCode::NOT_FOUND.into_response();
+                }
+                let path = uri.path().to_string();
+                recorded.lock().unwrap().push((
+                    format!("{method} {path}"),
+                    String::from_utf8_lossy(&body).into_owned(),
+                ));
+                if method == Method::GET {
+                    object.into_response()
+                } else if path.ends_with("/_delete_by_query") {
+                    Json(serde_json::json!({ "deleted": 1 })).into_response()
+                } else if path.ends_with("/_bulk") {
+                    Json(serde_json::json!({
+                        "errors": false,
+                        "items": [{ "index": { "status": 201 } }],
+                    }))
+                    .into_response()
+                } else {
+                    StatusCode::NOT_FOUND.into_response()
+                }
             }
-        }
-    });
+        },
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let endpoint = format!("http://{}", listener.local_addr().unwrap());
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     (endpoint, requests)
+}
+
+/// Whether a request came from the OpenSearch or S3 client a test drives.
+fn sent_by_test_client(headers: &axum::http::HeaderMap) -> bool {
+    headers
+        .get(axum::http::header::USER_AGENT)
+        .and_then(|agent| agent.to_str().ok())
+        .is_some_and(|agent| {
+            agent.starts_with("opensearch-rs/") || agent.starts_with("aws-sdk-rust/")
+        })
+}
+
+#[tokio::test]
+async fn a_request_from_another_process_is_not_recorded() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let (endpoint, requests) = fake_storage(b"object").await;
+    let address = endpoint.trim_start_matches("http://");
+    let mut probe = tokio::net::TcpStream::connect(address).await.unwrap();
+    probe
+        .write_all(
+            format!(
+                "GET / HTTP/1.1\r\nHost: {address}\r\nUser-Agent: Go-http-client/1.1\r\nConnection: close\r\n\r\n"
+            )
+            .as_bytes(),
+        )
+        .await
+        .unwrap();
+    let mut response = String::new();
+    probe.read_to_string(&mut response).await.unwrap();
+
+    assert!(response.starts_with("HTTP/1.1 404"), "{response}");
+    assert_eq!(*requests.lock().unwrap(), Vec::new());
 }
 
 fn fake_s3(endpoint: &str) -> s3_client::S3 {
@@ -539,6 +612,26 @@ async fn legacy_markdown_with_invalid_utf8_is_indexed(pool: sqlx::PgPool) {
         "{lines:?}"
     );
     assert_eq!(indexed_content(&bulk), ["Caf\u{fffd} notes"]);
+}
+
+/// The parent doc among the lines of a `_bulk` body.
+fn indexed_parent(bulk: &[serde_json::Value]) -> &serde_json::Value {
+    bulk.iter()
+        .find(|line| line["document_relation"] == "document")
+        .expect("a parent doc is written")
+}
+
+#[sqlx::test(
+    migrations = "../../crates/macro_db_client/migrations",
+    fixtures(path = "../../../../fixtures", scripts("email_attachment_documents"))
+)]
+async fn a_full_index_marks_only_email_attachments(pool: sqlx::PgPool) {
+    let (_, attachment) =
+        index_text_file(&pool, "attachment-a", FileType::Html, b"<p>forwarded</p>").await;
+    let (_, own) = index_text_file(&pool, "plain-d", FileType::Html, b"<p>mine</p>").await;
+
+    assert_eq!(indexed_parent(&attachment)["is_email_attachment"], true);
+    assert_eq!(indexed_parent(&own)["is_email_attachment"], false);
 }
 
 #[tokio::test]

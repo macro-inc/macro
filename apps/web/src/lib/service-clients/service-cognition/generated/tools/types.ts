@@ -6082,6 +6082,12 @@ export interface Booking {
    */
   rescheduledAt?: string | null;
   /**
+   * When Macro stopped trying to update the host's calendar for the
+   * booking's latest change. A failed booking with this set is not being
+   * retried, and cancelling it is the way to release its time.
+   */
+  abandonedAt?: string | null;
+  /**
    * Final location or conference URL.
    */
   location: string;
@@ -7154,7 +7160,7 @@ export interface BookingLinkEvent {
   /**
    * Attach a Macro call when someone books. A join link is created for that
    * booking and written onto the calendar invitation. Mutually exclusive
-   * with `googleMeet`. Prefer this for a Macro booking; omit or false when
+   * with `googleMeet`. Set it when the user wants a Macro call; omit or false when
    * the link should use Google Meet or no video. False is omitted so drafts
    * saved before this field still round-trip unchanged.
    */
@@ -15472,7 +15478,7 @@ export interface SearchToolsResponse {
   already_available?: string[];
 }
 /**
- * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at docs.macro.com; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
+ * Learn what Macro is and how it works. Call this whenever the user asks an open-ended question about Macro itself — what it is, what it's for, what it can do, or how to do something in Macro — instead of answering from memory (your training data may be stale). Takes no arguments. Returns an overview of Macro and a map of links into the official docs at macro.com/docs; every docs page is readable as Markdown (append `.md` to its URL), so follow up with WebFetch on the relevant page for details and cite it.
  */
 export type SelfKnowledge = {};
 /**
@@ -15480,7 +15486,7 @@ export type SelfKnowledge = {};
  */
 export interface SelfKnowledgeResponse {
   /**
-   * An overview of Macro and a routing map into the docs at docs.macro.com.
+   * An overview of Macro and a routing map into the docs at macro.com/docs.
    */
   about: string;
 }
@@ -15504,6 +15510,10 @@ export interface SendChannelMessage {
    * Optional images, videos, or documents to attach, at most 10. Upload media before sending; a media attachment whose upload has not finished shows as broken.
    */
   attachments?: ChannelMessageAttachmentInput[];
+  /**
+   * Send without notifying anyone, mentioned people included: no push, email or inbox entry. The message still appears in the channel. Use it for routine updates nobody needs to be alerted to.
+   */
+  silent?: boolean;
 }
 /**
  * An attachment to send with a channel message.
@@ -16391,7 +16401,7 @@ export interface UpdateSharingResponse {
  * - Star: add `STARRED` (add=true) / Unstar: remove (add=false)
  * - Move to trash: add `TRASH` (add=true) / Restore: remove (add=false)
  * - Mark important: add `IMPORTANT` (add=true) / Mark unimportant: remove (add=false)
- * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
+ * - Report spam: add `SPAM` (add=true), which also takes the thread out of the inbox / Not spam: remove (add=false), which puts mail that was in Spam back in the inbox
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
  * In an Outlook inbox the same system label names set the matching mailbox state (archive, read, flag, trash, junk); IMPORTANT has no Outlook equivalent, and other names are Outlook categories.
@@ -16666,7 +16676,7 @@ export interface CodeGuide {
  *
  * Change the text of existing markdown documents and task bodies in place with the SDK document edit(instructions) method; pass {fast: true} for small edits, because a full edit can take tens of seconds of the execution deadline. Read and edit canvases with document.canvas(). Read, calculate and edit native spreadsheets with macro.documents.spreadsheet(document).
  *
- * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
+ * Start every program with a brief comment saying what it does. Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; for each item you create or point the user to, return its webUrl() as the URL rather than building one; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
  * For a workspace overview, fetch small pages for the relevant categories concurrently in one execution with macro.workspace.page({includeTypes:[type], limit:3}). A single mixed page can be dominated by one category; each page is a sample, not a category total. Return selected metadata and hasMore per category, not whole items or snapshots. Exact workspace types include agent_session, calendar_event, ai_chat and channel_thread. Tasks are documents: use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | combine exactly two expressions; do not wrap a single filter.
  *

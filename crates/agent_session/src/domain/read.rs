@@ -124,7 +124,7 @@ fn conversation(
         .into_iter()
         .skip(total_messages.saturating_sub(MAX_MESSAGES))
         .map(|message| {
-            let text = message.searchable_text();
+            let text = message.readable_text();
             let content: String = text.chars().take(MAX_MESSAGE_CHARS).collect();
             let (failure, failure_truncated) = match &message.stop {
                 Some(agent_fold::domain::model::StopReason::Failed { message, .. }) => {

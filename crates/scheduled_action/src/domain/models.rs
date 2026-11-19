@@ -295,6 +295,16 @@ pub enum ActionPolicyError {
     InvalidKey,
     #[error("this routine was not created by another routine")]
     NotSubRoutine,
+    #[error(
+        "Macro rewrote this routine's code and you haven't reviewed it yet: \
+         edit its code before it can write as you"
+    )]
+    UnreviewedRewrite,
+    #[error(
+        "only you can make a routine write as you: an agent or a routine can't create or \
+         change one to"
+    )]
+    OwnerIdentityNeedsPerson,
 }
 
 /// Most active sub-routines one routine can have; finished one-time ones
@@ -360,14 +370,27 @@ pub struct RunningRun {
     pub run_id: Uuid,
 }
 
-/// How a create request says it comes from a routine's run. Both come from
-/// the request's signed credential, never from its body.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+/// How a create request says it comes from a routine's run. All of it comes
+/// from the request's signed credential, never from its body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RunCaller {
     /// The routine a code step's credential is signed for.
     pub routine: Option<Uuid>,
     /// The code-mode invocation of an agent session, validated against it.
     pub correlation: Option<Uuid>,
+    /// Whether a person or a program sends the request.
+    pub requester: Requester,
+}
+
+/// Who sends a request, as far as a routine's identity goes: only a person
+/// may make a routine write as them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Requester {
+    /// The person in the app, with a credential signed for no program.
+    Person,
+    /// A program acting for them: an agent's or a routine's run
+    /// (`macro_authorization::is_program_run`), or an internal caller.
+    Program,
 }
 
 /// Which of a person's routines a list holds.

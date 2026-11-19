@@ -18,7 +18,7 @@ openssl x509 -req -in "$output_dir/server.csr" \
   -set_serial "0x$(openssl rand -hex 16)" -days 365 \
   -out "$output_dir/server-leaf.pem" \
   -extfile <(printf '%s\n' \
-    "subjectAltName=DNS:localhost,DNS:*.localhost,DNS:$host,IP:127.0.0.1,IP:::1" \
+    "subjectAltName=DNS:localhost,DNS:*.localhost,DNS:$host,DNS:proxy,IP:127.0.0.1,IP:::1" \
     'basicConstraints=critical,CA:FALSE' \
     'keyUsage=critical,digitalSignature' \
     'extendedKeyUsage=serverAuth')

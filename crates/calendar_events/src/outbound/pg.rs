@@ -1194,6 +1194,9 @@ impl CalendarRepository for PgCalendarRepository {
         let cursor_starts_at = cursor.as_ref().map(|cursor| cursor.starts_at);
         let cursor_event_id = cursor.as_ref().map(|cursor| cursor.event_id);
         let cursor_occurrence_key = cursor.as_ref().map(|cursor| cursor.occurrence_key.as_str());
+
+        // Materialize the owner set so Postgres can use owner_id in each
+        // occurrence index condition alongside the time window.
         let rows = sqlx::query_as!(
             OccurrenceJoinRow,
             r#"
@@ -1248,13 +1251,13 @@ impl CalendarRepository for PgCalendarRepository {
             LEFT JOIN calendar_event_overrides override
                 ON override.event_id = occurrence.event_id
                AND override.recurrence_id = occurrence.recurrence_id
-            WHERE occurrence.owner_id IN (
+            WHERE occurrence.owner_id = ANY(ARRAY(
                     SELECT $1::text
                     UNION
                     SELECT link.child_macro_id
                     FROM macro_user_links link
                     WHERE link.primary_macro_id = $1
-              )
+              ))
               AND event.status <> 'cancelled'
               AND NOT occurrence.is_cancelled
               AND (
@@ -2857,6 +2860,46 @@ impl CalendarRepository for PgCalendarRepository {
     }
 }
 
+impl PgCalendarRepository {
+    /// Turn one link's Google calendar off if its grant still lacks the
+    /// capability. The link row is the lock a grant or disconnect takes, so a
+    /// link one of them holds is left to the next round; the scopes row is
+    /// locked too, so a grant that committed since this statement's snapshot
+    /// is re-checked rather than read stale.
+    async fn disable_google_account_without_capability(
+        &self,
+        email_link_id: Uuid,
+        required_scopes: &[String],
+    ) -> Result<bool, Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        let locked = sqlx::query_scalar!(
+            r#"
+            SELECT link.id
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN email_link_google_scopes scopes ON scopes.link_id = link.id
+            WHERE link.id = $1
+              AND account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $2::text[]
+            FOR UPDATE OF link, scopes SKIP LOCKED
+            "#,
+            email_link_id,
+            required_scopes,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?;
+        if locked.is_none() {
+            return Ok(false);
+        }
+        let mut log = ChangeLogBatch::default();
+        disable_calendar_capability_tx(&mut tx, &mut log, email_link_id).await?;
+        log.commit(tx).await?;
+        Ok(true)
+    }
+}
+
 impl GoogleCalendarSyncRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self), err)]
     async fn schedule_due_google_syncs(&self, due_before: DateTime<Utc>) -> Result<usize, Report> {
@@ -2968,6 +3011,50 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .map_err(report)?;
         Ok(reaped as usize)
     }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn disable_google_accounts_without_calendar_capability(&self) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        // A grant from before Macro narrowed its calendar scopes still
+        // reports the broad scope, which never counts as the capability, so
+        // nothing syncs the account; Outlook's claim maintenance treats the
+        // same gap this way. Each account gets its own transaction, since
+        // removing a large calendar holds a lock per event until commit, and
+        // a round takes a few so the scheduler's other work is not held up.
+        let candidates = sqlx::query_scalar!(
+            r#"
+            SELECT account.email_link_id
+            FROM calendar_accounts account
+            JOIN email_link_google_scopes scopes ON scopes.link_id = account.email_link_id
+            WHERE account.provider = 'google'
+              AND account.sync_status <> 'disabled'
+              AND NOT scopes.granted_scopes @> $1::text[]
+            ORDER BY account.email_link_id
+            LIMIT 10
+            "#,
+            &required_scopes,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let mut disabled = 0;
+        for email_link_id in candidates {
+            match self
+                .disable_google_account_without_capability(email_link_id, &required_scopes)
+                .await
+            {
+                Ok(true) => {
+                    disabled += 1;
+                    tracing::info!(%email_link_id, "turned off a Google calendar without the calendar capability");
+                }
+                Ok(false) => {}
+                Err(error) => {
+                    tracing::warn!(%email_link_id, error = ?error, "could not turn off a Google calendar without the calendar capability");
+                }
+            }
+        }
+        Ok(disabled)
+    }
 }
 
 async fn fence_google_mutation_tx(
@@ -3032,6 +3119,10 @@ async fn upsert_calendar_tx(
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
+    // A source under another role counts only if written since the last
+    // committed sync. A full snapshot keeps a stored copy newer than Google's
+    // and its old role, and reading the calendar again keeps it again, so
+    // counting older sources would rebuild such a calendar on every poll.
     let previous = sqlx::query!(
         r#"
         SELECT
@@ -3040,6 +3131,7 @@ async fn upsert_calendar_tx(
                 SELECT 1 FROM calendar_event_sources source
                 WHERE source.calendar_id = calendars.id
                   AND source.provider_access_role IS DISTINCT FROM calendars.access_role
+                  AND source.last_seen_at >= calendars.synced_at
             )) AS "needs_verification!"
         FROM calendars
         WHERE account_id = $1 AND provider_calendar_id = $2

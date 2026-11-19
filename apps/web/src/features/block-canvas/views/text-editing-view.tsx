@@ -20,6 +20,8 @@ export function TextEditingView(props: {
   editor: GraphicsEditor;
   camera: () => { x: number; y: number; scale: number };
   onFinish: () => void;
+  /** Receives the editor's box, for a view that keeps it on screen. */
+  ref?: (element: HTMLElement) => void;
 }) {
   const draft = () => props.text.draft()!;
   const initialState: SerializedEditorState = JSON.parse(
@@ -49,6 +51,7 @@ export function TextEditingView(props: {
   };
   return (
     <div
+      ref={props.ref}
       data-canvas-text-editor
       class="canvas-lexical-text"
       style={{

@@ -3,6 +3,8 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+mod email_policy;
+
 use crate::api::saved_views::definitions::{
     CreateSavedViewDefinitionRequest, ReorderSavedViewDefinitionsRequest, SavedViewDefinition,
     SavedViewDefinitionPage, SavedViewSharingRequest, UpdateSavedViewDefinitionRequest,
@@ -223,12 +225,14 @@ use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
 use utoipa::OpenApi;
 
+use email_policy::EmailPolicySchemas;
+
 #[derive(OpenApi)]
 #[openapi(
     info(
         terms_of_service = "https://macro.com/terms",
     ),
-    modifiers(&FormsApiAddon),
+    modifiers(&FormsApiAddon, &EmailPolicySchemas),
     paths(
         passwords::inbound::router::teams,
         passwords::inbound::router::list,
@@ -667,6 +671,7 @@ use utoipa::OpenApi;
 
         // threads
         threads::edit_thread::edit_thread_handler,
+        threads::get_thread_channel_shares::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -718,6 +723,14 @@ use utoipa::OpenApi;
         crm::inbound::pipeline_workflows::pipeline_csv,
         crm::inbound::pipeline_workflows::export_pipeline,
         crm::inbound::axum_router::set_email_sync::handler,
+        crm::inbound::axum_router::email_policy::get_handler,
+        crm::inbound::axum_router::email_policy::update_handler,
+        crm::inbound::axum_router::email_policy::validate_handler,
+        crm::inbound::axum_router::email_policy::history_handler,
+        crm::inbound::axum_router::email_policy::revision_handler,
+        crm::inbound::axum_router::email_policy::start_preview_handler,
+        crm::inbound::axum_router::email_policy::preview_handler,
+        crm::inbound::axum_router::email_policy::cancel_preview_handler,
         crm::inbound::axum_router::email_privacy::get_handler,
         crm::inbound::axum_router::email_privacy::excluded_threads_handler,
         crm::inbound::axum_router::email_privacy::update_handler,
@@ -1221,6 +1234,7 @@ use utoipa::OpenApi;
             models_permissions::share_permission::LinkShare,
             models_permissions::share_permission::access_level::AccessLevel,
             models_permissions::share_permission::SharePermissionV2,
+            crate::service::entity_mutation::ThreadChannelShare,
             models_permissions::share_permission::UpdateSharePermissionRequestV2, // Share permission
             models_permissions::share_permission::channel_share_permission::ChannelSharePermission,
             models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission, // Channel share permissions

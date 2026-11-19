@@ -505,7 +505,9 @@ const DOCUMENT_BODY = {
         doc_values: true,
       },
       // True on a document linked to an email attachment (`document_email`).
-      // Only attachments carry it; a document without it is not one.
+      // Every full parent write sets it, true or false. A parent indexed
+      // before the field existed lacks it, and reads as not an attachment,
+      // until the email attachment status backfill sets it.
       is_email_attachment: {
         type: 'boolean',
         index: true,
@@ -935,6 +937,9 @@ const AGENT_SESSIONS_V1_BODY = {
       // Unified search sorts/collapses by entity_id; preserve existing projections.
       entity_id: { type: 'alias', path: 'agent_session_id' },
       projection_generation: { type: 'keyword' },
+      // Parent-only record of each child's content hash, read back by the
+      // indexer. Its keys are child ids, so it must never be mapped.
+      indexed_messages: { type: 'object', enabled: false },
       // Parent-only metadata.
       name: {
         type: 'text',

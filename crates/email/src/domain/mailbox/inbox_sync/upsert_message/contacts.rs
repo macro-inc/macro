@@ -130,6 +130,7 @@ where
             backfill_operation: BackfillOperation::PopulateCrmContact(LinkScopedPayload {
                 link_id,
                 payload: PopulateCrmContactPayload {
+                    live_mail: true,
                     contact_email,
                     contact_name,
                     first_at,
