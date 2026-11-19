@@ -41,9 +41,18 @@ Address: formal Sie.
 | notifications | Benachrichtigungen |
 | done | Erledigt |
 | mark as read | Als gelesen markieren |
-| snooze | Benachrichtigungen pausieren… |
+| snooze | Benachrichtigungen pausieren |
 | archive | Archivieren |
 | settings | Einstellungen |
+| computer (Macro computer) | Neuer Macro-Computer |
+| machine (runs agents) | Ihre Rechner |
+| session (agent) | Sitzung starten |
+| routine | Alle Routinen |
+| saved view | Neue gespeicherte Ansicht |
+| call | Anruf verlassen |
+| contact (CRM) | Kontakt |
+| company (CRM) | Unternehmen hinzufügen |
+| thread (email) | Ausgeschlossene Threads |
 
 ## French (`fr`)
 
@@ -65,9 +74,18 @@ Address: formal vous.
 | notifications | Notifications |
 | done | Terminés |
 | mark as read | Marquer comme lu |
-| snooze | Suspendre les notifications… |
+| snooze | Suspendre les notifications |
 | archive | Archiver |
 | settings | Paramètres |
+| computer (Macro computer) | Nouvel ordinateur Macro |
+| machine (runs agents) | Vos machines |
+| session (agent) | Lancer une session |
+| routine | Toutes les routines |
+| saved view | Nouvelle vue enregistrée |
+| call | Rejoindre l’appel |
+| contact (CRM) | Changer l’entreprise du contact |
+| company (CRM) | Aucune entreprise |
+| thread (email) | Exclure le fil du CRM |
 
 ## Spanish (`es`)
 
@@ -89,9 +107,18 @@ Address: informal tú.
 | notifications | Notificaciones |
 | done | Hechos |
 | mark as read | Marcar como leído |
-| snooze | Posponer notificaciones… |
+| snooze | Posponer notificaciones |
 | archive | Archivar |
 | settings | Configuración |
+| computer (Macro computer) | Nuevo ordenador de Macro |
+| machine (runs agents) | Tus máquinas |
+| session (agent) | Esta sesión está archivada |
+| routine | Todas las rutinas |
+| saved view | Nueva vista guardada |
+| call | Volver a la llamada |
+| contact (CRM) | Cambiar empresa del contacto |
+| company (CRM) | Añadir empresa |
+| thread (email) | Excluir hilo del CRM |
 
 ## Italian (`it`)
 
@@ -113,9 +140,18 @@ Address: informal tu.
 | notifications | Notifiche |
 | done | Completati |
 | mark as read | Segna come letto |
-| snooze | Posticipa notifiche… |
+| snooze | Posticipa notifiche |
 | archive | Archivia |
 | settings | Impostazioni |
+| computer (Macro computer) | Nuovo computer Macro |
+| machine (runs agents) | Le tue macchine |
+| session (agent) | Questa sessione è archiviata |
+| routine | Tutte le routine |
+| saved view | Nuova vista salvata |
+| call | Partecipa alla chiamata |
+| contact (CRM) | Cambia azienda del contatto |
+| company (CRM) | Aggiungi azienda |
+| thread (email) | Thread esclusi |
 
 ## Dutch (`nl`)
 
@@ -137,9 +173,18 @@ Address: informal je/jij.
 | notifications | Meldingen |
 | done | Voltooid |
 | mark as read | Markeren als gelezen |
-| snooze | Meldingen uitstellen… |
+| snooze | Meldingen uitstellen |
 | archive | Archiveren |
 | settings | Instellingen |
+| computer (Macro computer) | Nieuwe Macro-computer |
+| machine (runs agents) | Machines van teamgenoten |
+| session (agent) | Sessie starten |
+| routine | Alle routines |
+| saved view | Nieuwe opgeslagen weergave |
+| call | Gesprek starten |
+| contact (CRM) | Bedrijf van contact wijzigen |
+| company (CRM) | Bedrijf toevoegen |
+| thread (email) | Uitgesloten threads |
 
 ## Portuguese (Portugal) (`pt-PT`)
 
@@ -161,9 +206,18 @@ Address: neutral formal (o seu, si); European spelling and vocabulary, never Bra
 | notifications | Notificações |
 | done | Concluído |
 | mark as read | Marcar como lido |
-| snooze | Adiar notificações… |
+| snooze | Adiar notificações |
 | archive | Arquivar |
 | settings | Definições |
+| computer (Macro computer) | Novo computador Macro |
+| machine (runs agents) | As suas máquinas |
+| session (agent) | Iniciar uma sessão |
+| routine | Todas as rotinas |
+| saved view | Nova vista guardada |
+| call | Entrar na chamada |
+| contact (CRM) | Remover a empresa deste contacto? |
+| company (CRM) | Sem empresa |
+| thread (email) | Fios excluídos |
 
 ## Swedish (`sv`)
 
@@ -185,9 +239,18 @@ Address: du.
 | notifications | Aviseringar |
 | done | Klar |
 | mark as read | Markera som läst |
-| snooze | Snooza aviseringar… |
+| snooze | Snooza aviseringar |
 | archive | Arkivera |
 | settings | Inställningar |
+| computer (Macro computer) | Ny Macro-dator |
+| machine (runs agents) | Dina maskiner |
+| session (agent) | Starta en session |
+| routine | Alla rutiner |
+| saved view | Ny sparad vy |
+| call | Starta ett samtal |
+| contact (CRM) | Kontakter och företag |
+| company (CRM) | Ta bort företag |
+| thread (email) | Undantagna trådar |
 
 ## Danish (`da`)
 
@@ -209,9 +272,18 @@ Address: du.
 | notifications | Notifikationer |
 | done | Færdig |
 | mark as read | Markér som læst |
-| snooze | Udsæt notifikationer… |
+| snooze | Udsæt notifikationer |
 | archive | Arkivér |
 | settings | Indstillinger |
+| computer (Macro computer) | Ny Macro-computer |
+| machine (runs agents) | Dine maskiner |
+| session (agent) | Start en session |
+| routine | Alle rutiner |
+| saved view | Ny gemt visning |
+| call | Deltag i opkald |
+| contact (CRM) | Ingen kunder eller kontakter fundet |
+| company (CRM) | Ingen virksomhed |
+| thread (email) | Udelukkede tråde |
 
 ## Norwegian Bokmål (`nb`)
 
@@ -233,9 +305,18 @@ Address: du.
 | notifications | Varsler |
 | done | Ferdig |
 | mark as read | Merk som lest |
-| snooze | Utsett varsler… |
+| snooze | Utsett varsler |
 | archive | Arkiver |
 | settings | Innstillinger |
+| computer (Macro computer) | Ny Macro-datamaskin |
+| machine (runs agents) | Maskinene dine |
+| session (agent) | Start en økt |
+| routine | Alle rutiner |
+| saved view | Ny lagret visning |
+| call | Start en samtale |
+| contact (CRM) | Ingen kontaktpipeliner ennå |
+| company (CRM) | Legg til selskap |
+| thread (email) | Unntatte tråder |
 
 ## Finnish (`fi`)
 
@@ -257,9 +338,18 @@ Address: sinä, or avoid the pronoun.
 | notifications | Ilmoitukset |
 | done | Valmiit |
 | mark as read | Merkitse luetuksi |
-| snooze | Torkuta ilmoituksia… |
+| snooze | Torkuta ilmoitukset |
 | archive | Arkistoi |
 | settings | Asetukset |
+| computer (Macro computer) | Uusi Macro-tietokone |
+| machine (runs agents) | Tiimiläisten koneet |
+| session (agent) | Aloita istunto |
+| routine | Kaikki rutiinit |
+| saved view | Uusi tallennettu näkymä |
+| call | Liity puheluun |
+| contact (CRM) | Ei vielä yhteyshenkilöiden myyntiputkia |
+| company (CRM) | Hae yrityksiä… |
+| thread (email) | Poissuljetut ketjut |
 
 ## Polish (`pl`)
 
@@ -281,9 +371,18 @@ Address: informal, Ty capitalized.
 | notifications | Powiadomienia |
 | done | Ukończone |
 | mark as read | Oznacz jako przeczytane |
-| snooze | Wstrzymaj powiadomienia… |
+| snooze | Wstrzymaj powiadomienia |
 | archive | Archiwizuj |
 | settings | Ustawienia |
+| computer (Macro computer) | Nowy komputer Macro |
+| machine (runs agents) | Twoje maszyny |
+| session (agent) | Rozpocznij sesję |
+| routine | Wszystkie rutyny |
+| saved view | Nowy zapisany widok |
+| call | Rozpocznij rozmowę |
+| contact (CRM) | Zmień firmę kontaktu |
+| company (CRM) | Dodaj firmę |
+| thread (email) | Wyklucz wątek z CRM |
 
 ## Russian (`ru`)
 
@@ -305,9 +404,18 @@ Address: вы, lowercase.
 | notifications | Уведомления |
 | done | Выполненные |
 | mark as read | Отметить как прочитанное |
-| snooze | Отложить уведомления… |
+| snooze | Отложить уведомления |
 | archive | Архивировать |
 | settings | Настройки |
+| computer (Macro computer) | Новый компьютер Macro |
+| machine (runs agents) | Ваши машины |
+| session (agent) | Начать сеанс |
+| routine | Все рутины |
+| saved view | Новое сохранённое представление |
+| call | Начать звонок |
+| contact (CRM) | Клиенты и контакты не найдены |
+| company (CRM) | Добавить компанию |
+| thread (email) | Исключить цепочку из CRM |
 
 ## Japanese (`ja`)
 
@@ -329,9 +437,18 @@ Address: polite です/ます in sentences; menu labels as verb phrases (〜を�
 | notifications | 通知 |
 | done | 完了 |
 | mark as read | 既読にする |
-| snooze | 通知をスヌーズ… |
+| snooze | 通知をスヌーズ |
 | archive | アーカイブ |
 | settings | 設定 |
+| computer (Macro computer) | 新規Macroコンピューター |
+| machine (runs agents) | 自分のマシン |
+| session (agent) | セッションを開始 |
+| routine | すべてのルーティン |
+| saved view | 新規保存済みビュー |
+| call | 通話に参加 |
+| contact (CRM) | この連絡先から会社を削除しますか？ |
+| company (CRM) | 会社を追加 |
+| thread (email) | 除外したスレッド |
 
 ## Korean (`ko`)
 
@@ -353,9 +470,18 @@ Address: polite 합니다/해요 in sentences; avoid pronouns (내 for "my").
 | notifications | 알림 |
 | done | 완료 |
 | mark as read | 읽음으로 표시 |
-| snooze | 알림 일시 중지… |
+| snooze | 알림 일시 중지 |
 | archive | 보관 |
 | settings | 설정 |
+| computer (Macro computer) | 새 Macro 컴퓨터 |
+| machine (runs agents) | 내 머신 |
+| session (agent) | 세션 시작 |
+| routine | 모든 루틴 |
+| saved view | 새 저장된 보기 |
+| call | 통화 시작 |
+| contact (CRM) | 연락처 및 회사 |
+| company (CRM) | 회사 추가 |
+| thread (email) | 제외된 스레드 |
 
 ## Simplified Chinese (`zh-Hans`)
 
@@ -377,9 +503,18 @@ Address: 你.
 | notifications | 通知 |
 | done | 已完成 |
 | mark as read | 标记为已读 |
-| snooze | 暂停通知… |
+| snooze | 暂停通知 |
 | archive | 归档 |
 | settings | 设置 |
+| computer (Macro computer) | 获取 Macro 电脑 |
+| machine (runs agents) | 我的机器 |
+| session (agent) | 此会话已归档 |
+| routine | 所有例行任务 |
+| saved view | 新建已保存视图 |
+| call | 加入通话 |
+| contact (CRM) | 未找到客户或联系人 |
+| company (CRM) | 添加公司 |
+| thread (email) | 已排除的邮件串 |
 
 ## Traditional Chinese (Taiwan) (`zh-Hant`)
 
@@ -401,9 +536,18 @@ Address: 你; Taiwan vocabulary (資料夾, 專案).
 | notifications | 通知 |
 | done | 已完成 |
 | mark as read | 標示為已讀 |
-| snooze | 延後通知… |
+| snooze | 延後通知 |
 | archive | 封存 |
 | settings | 設定 |
+| computer (Macro computer) | 取得 Macro 電腦 |
+| machine (runs agents) | 團隊成員的機器 |
+| session (agent) | 開始工作階段 |
+| routine | 所有例行任務 |
+| saved view | 新增已儲存的檢視 |
+| call | 加入通話 |
+| contact (CRM) | 聯絡人與公司 |
+| company (CRM) | 新增公司 |
+| thread (email) | 已排除的郵件串 |
 
 ## Hindi (`hi`)
 
@@ -425,9 +569,18 @@ Address: आप; common English product terms transliterated.
 | notifications | सूचनाएं |
 | done | पूरे हुए |
 | mark as read | पढ़ा गया मार्क करें |
-| snooze | सूचनाएं स्नूज़ करें… |
+| snooze | सूचनाएं स्नूज़ करें |
 | archive | संग्रहित करें |
 | settings | सेटिंग |
+| computer (Macro computer) | नया Macro कंप्यूटर |
+| machine (runs agents) | आपकी मशीनें |
+| session (agent) | सेशन शुरू करें |
+| routine | सभी रूटीन |
+| saved view | नया सेव किया गया व्यू |
+| call | कॉल शुरू करें |
+| contact (CRM) | संपर्क की कंपनी बदलें |
+| company (CRM) | कंपनी जोड़ें |
+| thread (email) | थ्रेड को CRM से बाहर रखें |
 
 ## Indonesian (`id`)
 
@@ -449,9 +602,18 @@ Address: Anda, capitalized.
 | notifications | Notifikasi |
 | done | Selesai |
 | mark as read | Tandai sudah dibaca |
-| snooze | Tunda notifikasi… |
+| snooze | Tunda notifikasi |
 | archive | Arsipkan |
 | settings | Setelan |
+| computer (Macro computer) | Komputer Macro baru |
+| machine (runs agents) | Mesin Anda |
+| session (agent) | Mulai sesi |
+| routine | Semua rutinitas |
+| saved view | Tampilan tersimpan baru |
+| call | Keluar dari panggilan |
+| contact (CRM) | Belum ada pipeline kontak |
+| company (CRM) | Tambahkan perusahaan |
+| thread (email) | Utas yang dikecualikan |
 
 ## Vietnamese (`vi`)
 
@@ -473,9 +635,18 @@ Address: bạn.
 | notifications | Thông báo |
 | done | Đã xong |
 | mark as read | Đánh dấu là đã đọc |
-| snooze | Tạm ẩn thông báo… |
+| snooze | Tạm ẩn thông báo |
 | archive | Lưu trữ |
 | settings | Cài đặt |
+| computer (Macro computer) | Máy tính Macro mới |
+| machine (runs agents) | Máy của đồng đội |
+| session (agent) | Bắt đầu phiên |
+| routine | Tất cả quy trình |
+| saved view | Chế độ xem đã lưu mới |
+| call | Rời cuộc gọi |
+| contact (CRM) | Đổi công ty của liên hệ |
+| company (CRM) | Không có công ty |
+| thread (email) | Chuỗi thư bị loại trừ |
 
 ## Thai (`th`)
 
@@ -497,7 +668,16 @@ Address: คุณ; no polite particles in labels.
 | notifications | การแจ้งเตือน |
 | done | เสร็จแล้ว |
 | mark as read | ทำเครื่องหมายว่าอ่านแล้ว |
-| snooze | เลื่อนการแจ้งเตือน… |
+| snooze | เลื่อนการแจ้งเตือน |
 | archive | เก็บถาวร |
 | settings | การตั้งค่า |
+| computer (Macro computer) | คอมพิวเตอร์ Macro ใหม่ |
+| machine (runs agents) | เครื่องของคุณ |
+| session (agent) | เริ่มเซสชัน |
+| routine | รูทีนทั้งหมด |
+| saved view | มุมมองที่บันทึกไว้ใหม่ |
+| call | เข้าร่วมการโทร |
+| contact (CRM) | เปลี่ยนบริษัทของรายชื่อติดต่อ |
+| company (CRM) | เพิ่มบริษัท |
+| thread (email) | เธรดที่ยกเว้น |
 
