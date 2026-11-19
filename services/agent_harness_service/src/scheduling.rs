@@ -923,6 +923,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         routine_flags.clone(),
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
+            reference: crate::routine_code::suggestion_reference(),
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
             conditions: conditions_enabled,
         },

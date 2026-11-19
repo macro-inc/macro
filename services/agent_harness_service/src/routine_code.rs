@@ -593,6 +593,19 @@ fn drafter_index(index: &str) -> String {
         .join("\n")
 }
 
+/// The SDK reference for the two methods every routines session calls,
+/// `macro.routines.suggest` and `macro.routines.check`, as ReadCodeDocs
+/// reads them.
+pub(crate) fn suggestion_reference() -> String {
+    ["RoutineNamespace.suggest", "RoutineNamespace.check"]
+        .into_iter()
+        .filter_map(|symbol| {
+            symbol_reference(symbol).map(|reference| format!("## `{symbol}`\n{}", reference.trim()))
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 /// Every SDK area, one line each: its name and when to use it.
 fn sdk_areas() -> String {
     agent_code_mode::domain::sdk_documentation()

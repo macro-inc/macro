@@ -51,6 +51,9 @@ pub struct BriefData<'a> {
     pub events: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,
+    /// The SDK reference for `macro.routines.suggest` and
+    /// `macro.routines.check`; empty when there is none to give.
+    pub reference: &'a str,
 }
 
 /// How a drafted routine starts when the person may have event triggers.
@@ -106,9 +109,26 @@ pub fn brief(data: &BriefData<'_>) -> RoutineBrief {
              suggestions come once a week). {WEEKLY_REVIEW}"
         ),
     };
+    // Given the reference, the session writes its first program without
+    // reading documentation first.
+    let reference = data.reference.trim();
+    let (suggest_docs, reference) = if reference.is_empty() {
+        (
+            "read `RoutineNamespace.suggest` with ReadCodeDocs first",
+            String::new(),
+        )
+    } else {
+        (
+            "its reference is below",
+            format!(
+                "\n\nThe SDK's reference for `macro.routines.suggest` and `macro.routines.check`:\n<sdk-reference>\n{reference}\n</sdk-reference>"
+            ),
+        )
+    };
     let task = TASK
         .replace("{surfaces}", &surfaces)
         .replace("{occasion}", &occasion)
+        .replace("{suggest_docs}", suggest_docs)
         .replace(
             "{start}",
             if data.events {
@@ -145,7 +165,7 @@ pub fn brief(data: &BriefData<'_>) -> RoutineBrief {
         "{task}
 <routines-guide>
 {guide}
-</routines-guide>
+</routines-guide>{reference}
 
 {steps}
 

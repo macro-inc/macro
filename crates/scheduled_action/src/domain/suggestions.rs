@@ -82,6 +82,11 @@ const TEMPLATE_NAMESPACE: Uuid = Uuid::from_u128(0x7c1f_0b5e_3d2a_4e9b_9a41_5f6c
 pub struct RoutineBriefing {
     /// The SDK's routines guide, as drafts read it.
     pub guide: &'static str,
+    /// The SDK reference for `macro.routines.suggest` and
+    /// `macro.routines.check`, which every session calls: given it, a
+    /// session reads no documentation before its first program. Empty when
+    /// the SDK has neither.
+    pub reference: String,
     /// The model the Ask AI steps they write run on.
     pub agent_model: String,
     /// Whether this deployment evaluates trigger conditions, which a
@@ -454,6 +459,7 @@ where
             code,
             events,
             guide: self.briefing.guide,
+            reference: &self.briefing.reference,
         }))
     }
 

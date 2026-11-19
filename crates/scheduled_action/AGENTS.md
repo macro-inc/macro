@@ -206,8 +206,9 @@ each run.
   themselves belong to generations (`crates/suggestion_generation`: an
   onboarding run once the inbox connects, then nightly, and on request), which brief each
   routines session through `RoutineSuggestionApi::brief` (`suggestions/prompt.rs`:
-  instructions with the task, the routines guide and the catalog for its
-  surfaces, the same for everyone so the session keeps them in its cached
+  instructions with the task, the routines guide, the SDK reference for
+  `macro.routines.suggest` and `check` (`RoutineBriefing::reference`) and the
+  catalog for its surfaces, the same for everyone so the session keeps them in its cached
   prefix and runs out of sight with code mode alone, like a draft; then a
   prompt with the time, what was dismissed, and the newest 100 messages and
   connected apps inside `<untrusted>` tags, angle brackets in the data swapped

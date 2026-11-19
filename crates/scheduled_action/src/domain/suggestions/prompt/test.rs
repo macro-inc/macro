@@ -12,6 +12,7 @@ fn data<'a>(surfaces: &'a [Surface], inbox: &'a [InboxMessage], code: bool) -> B
         code,
         events: true,
         guide: "The guide.",
+        reference: "",
     }
 }
 
@@ -160,4 +161,23 @@ fn a_weekly_brief_says_its_limits_win() {
         );
     }
     assert!(!told(&data(&[Surface::Email], &[], false)).contains("this wins"));
+}
+
+/// Given the SDK's reference for `suggest` and `check`, the session reads
+/// none before its first program; without it, it reads `suggest` first.
+#[test]
+fn the_instructions_carry_the_suggest_reference_when_given_one() {
+    let with = told(&BriefData {
+        reference: "## `RoutineNamespace.suggest`\nSuggest a routine.",
+        ..data(&[Surface::Email], &[], true)
+    });
+    assert!(with.contains(
+        "<sdk-reference>\n## `RoutineNamespace.suggest`\nSuggest a routine.\n</sdk-reference>"
+    ));
+    assert!(with.contains("(its reference is below)"));
+    assert!(!with.contains("with ReadCodeDocs first"));
+    let without = told(&data(&[Surface::Email], &[], true));
+    assert!(!without.contains("<sdk-reference>"));
+    assert!(without.contains("(read `RoutineNamespace.suggest` with ReadCodeDocs first)"));
+    assert!(!with.contains("{suggest_docs}") && !without.contains("{suggest_docs}"));
 }

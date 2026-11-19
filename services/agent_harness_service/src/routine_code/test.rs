@@ -1237,3 +1237,12 @@ fn an_import_line_gives_the_generated_names_it_takes() {
     assert!(generated_imports("import type { Macro } from '../../macro';").is_empty());
     assert!(generated_imports("import * as all from '../generated/x';").is_empty());
 }
+
+/// Routines sessions are given `suggest` and `check` up front: the SDK still
+/// has both under these names.
+#[test]
+fn the_suggestion_reference_has_suggest_and_check() {
+    let reference = suggestion_reference();
+    assert!(reference.starts_with("## `RoutineNamespace.suggest`\n"));
+    assert!(reference.contains("\n\n## `RoutineNamespace.check`\n"));
+}
