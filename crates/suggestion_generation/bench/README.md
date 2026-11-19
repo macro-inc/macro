@@ -85,7 +85,14 @@ apart: it calls as a grader account of its own.
 The judge (`anthropic/claude-opus-5-5` through the stack's structured
 completion) sees the persona's mail or workspace, the answer key and the
 suggestions, never the build, the label or other runs, and gets the run's own
-"now" and time zone.
+"now" and time zone. A routines judgement reads the first seat's mail and
+each seat's suggestions with their addresses as the first seat's, so the
+seats of one round share the person, mail, catalog and key word for word;
+those go after the rubric, which the route caches, and the round's first
+judgement writes the cache the others then read. Rejudged that way, the
+same generations scored within the judge's own pass-to-pass difference
+(main 12.3 against 12.3 and 11.0, a single-session build 64.7 against
+66.3) at about half the judge's cost.
 
 ## Running it
 
@@ -299,7 +306,9 @@ cost nothing beyond the model calls.
   delivery has nothing scored and `compare` refuses it rather than calling it
   a loss. The feed section indexes the
   seeded items for search first. Judging runs alongside, three grader
-  accounts at a time, each judgement's cost read from its grader's usage.
+  accounts at a time, each judgement's cost read from its grader's usage
+  (a routines round's first judgement pays to write the cache its other
+  seats read).
 
 ## Adding a persona or a section
 

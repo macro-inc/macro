@@ -157,6 +157,13 @@ export const slotName = (persona: Persona) => `${persona.name}${(persona.seat ??
 /** The owner's address in `variant`. */
 export const ownerEmail = (persona: Persona, variant: Variant) => variantOf(persona, variant).inbox.owner.email;
 
+/** `text` written about `persona`'s seat, with its addresses as the first seat's: every seat is a copy of the first, under a domain of its own. */
+export function asFirstSeat(persona: Persona, variant: Variant, text: string): string {
+  const seat = domainOf(ownerEmail(persona, variant));
+  const first = domainOf(ownerEmail(seatOf(persona, 1), variant));
+  return seat === first ? text : text.replaceAll(seat, first);
+}
+
 /** Minutes before the anchor a message arrived; at least one, as the seed CLI needs. */
 const minutesBefore = (message: InboxMessage) => Math.max(1, Math.round((ANCHOR - Date.parse(message.date)) / 60_000));
 

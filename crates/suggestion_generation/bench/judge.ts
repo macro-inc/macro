@@ -10,7 +10,7 @@ import { SQL } from 'bun';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Stack, call, login } from '../../scheduled_action/bench/stack';
 import { CATALOG } from './catalog';
-import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, contentKey, plainKey, recentMessages, scenario, scenarioName, truthAt } from './personas';
+import { CONTENT_KINDS, type FeedTruth, type Persona, type RoutinesTruth, type Variant, asFirstSeat, contentKey, plainKey, recentMessages, scenario, scenarioName, seatOf, truthAt } from './personas';
 import { shiftDays } from './clock';
 import type { CardRow, Generation, RoutineRow } from './run';
 import { CACHE, seed } from './run';
@@ -220,35 +220,55 @@ export async function judgeRoutines(at: Stack, grader: string, persona: Persona,
   const catalog = Object.entries(CATALOG)
     .map(([key, entry]) => `- ${key}: ${entry.title}. ${entry.does} (sidebars: ${entry.surfaces.join(', ')})`)
     .join('\n');
-  const suggestions = generation.routines.map((row, i) => `S${i + 1}. ${describeRoutine(row)}`).join('\n\n');
-  const prompt = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
+  // Every seat of a persona copies the first under a domain of its own, so
+  // the judge reads the first seat's mail and each seat's suggestions with
+  // their addresses as the first seat's: what the seats of one round share
+  // (the person, their mail, the catalog and the key) is then the same text,
+  // sent as instructions after the rubric, which the route caches.
+  const first = seatOf(persona, 1);
+  const person = `Now is ${iso(generation.now)}; the person's time zone is ${generation.timezone}.
 
 Who they are: ${persona.inbox.persona}
 
 Their newest mail, newest first:
 <mail>
-${inboxDigest(persona, generation.variant, generation.now)}
+${inboxDigest(first, generation.variant, generation.now)}
 </mail>
 
 The catalog of ready-made routines:
 ${catalog}
 
 Answer key:
-${JSON.stringify(truth, null, 1)}
-
-The suggestions, in the order they were made:
+${JSON.stringify(truth, null, 1)}`;
+  const suggestions = generation.routines
+    .map((row, i) => `S${i + 1}. ${asFirstSeat(persona, generation.variant, describeRoutine(row))}`)
+    .join('\n\n');
+  const prompt = `The suggestions, in the order they were made:
 ${suggestions}
 
 Mark every suggestion, S1 to S${generation.routines.length}, in order.`;
-  // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
-  for (let attempt = 0; ; attempt++) {
-    const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, ROUTINES_RUBRIC, ROUTINES_SCHEMA);
-    const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
-    const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
-    if (!missing.length) return marks.map(([mark]) => mark);
-    if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
-  }
+  const judge = async () => {
+    // A suggestion the judge left unmarked, or marked twice, can't be scored: ask again, then give up.
+    for (let attempt = 0; ; attempt++) {
+      const result = await complete<{ marks: RoutineMark[] }>(at, grader, prompt, `${ROUTINES_RUBRIC}\n\n${person}`, ROUTINES_SCHEMA);
+      const marks = generation.routines.map((_, i) => result.marks.filter((mark) => mark.suggestion.replace(/^S/, '') === String(i + 1)));
+      const missing = marks.flatMap((found, i) => (found.length === 1 ? [] : [`S${i + 1}`]));
+      if (!missing.length) return marks.map(([mark]) => mark);
+      if (attempt === 1) throw new Error(`the judge didn't mark ${missing.join(', ')} exactly once`);
+    }
+  };
+  // The round's first seat judged writes the shared instructions to the
+  // cache; the others wait for it, then read them from there.
+  const round = `${scenarioName(first, generation.variant)} ${generation.now}`;
+  const ahead = warming.get(round);
+  if (ahead) return ahead.then(judge, judge);
+  const judged = judge();
+  warming.set(round, judged);
+  return judged;
 }
+
+/** Each round's first routines judgement, by persona and `now`. */
+const warming = new Map<string, Promise<unknown>>();
 
 // ---------- feed ----------
 
