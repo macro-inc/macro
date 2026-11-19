@@ -1,2 +1,3 @@
 config:
   aws:region: us-east-1
+  openbao:deployRoleArn: arn:aws:iam::169344408001:role/openbao-deploy/openbao-deploy-dev
