@@ -508,9 +508,13 @@ where
             .ok_or(PermissionError::Forbidden)?;
 
         // A tightening never stores `always`, which would exempt an operation
-        // from a stricter group setting made later. The check runs on the
+        // from a stricter group setting made later, so a tool's `always` is
+        // saved as clearing its own setting. The change is checked as asked
+        // too: an `always` the agent asks for, under a stricter group, is
+        // refused rather than quietly saved as a no-op. The checks run on the
         // rules as they stand under the store's lock, so a concurrent change
         // can't slip between the check and the write.
+        let requested = resolve::normalize(changes.clone(), false);
         let changes = resolve::normalize(changes, true);
         let catalog = &self.catalog;
         let write = Write {
@@ -522,19 +526,21 @@ where
         };
         self.store
             .write(write, |saved, overlay| {
-                match to {
+                let check = |changes: &[Change]| match to {
                     // The saved policy applies to every session, so it must
                     // not loosen whatever this session's overlay holds.
                     WriteTo::Saved => {
-                        let after = resolve::apply(saved, &changes);
+                        let after = resolve::apply(saved, changes);
                         resolve::tighten_only(catalog, (saved, &[]), (&after, &[]))
                     }
                     WriteTo::Session(_) => {
-                        let after = resolve::apply(overlay, &changes);
+                        let after = resolve::apply(overlay, changes);
                         resolve::tighten_only(catalog, (saved, overlay), (saved, &after))
                     }
-                }
-                .map_err(PermissionError::WouldLoosen)?;
+                };
+                check(&requested)
+                    .and_then(|()| check(&changes))
+                    .map_err(PermissionError::WouldLoosen)?;
                 Ok(changes)
             })
             .await
