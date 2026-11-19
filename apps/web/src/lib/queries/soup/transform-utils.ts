@@ -55,6 +55,7 @@ import type {
   SoupProperty,
 } from '@service-storage/generated/schemas';
 import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import type { SoupItemWithCalendarInvite } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';
 import { differenceInMilliseconds } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -81,7 +82,7 @@ type InnerSearchResult =
   | ProjectSearchResult
   | CallRecordSearchResult;
 
-type DisplayableSoupItem = SoupPage['items'][number];
+type DisplayableSoupItem = SoupItemWithCalendarInvite;
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
@@ -796,6 +797,7 @@ export const mapApiSoupItemToEntity = (
       }));
 
       const hasIcsAttachment =
+        item.hasCalendarInvite ||
         item.data.attachments?.some(isCalendarAttachment);
 
       // Inline images (signature logos, pasted screenshots) carry a Content-ID.

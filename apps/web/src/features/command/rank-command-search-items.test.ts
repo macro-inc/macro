@@ -1,6 +1,7 @@
 import type { EntityItem, UserItem } from '@core/context/quickAccess';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  listOutsidePeopleLast,
   rankCommandSearchItems,
   sameRankInput,
 } from './rank-command-search-items';
@@ -706,7 +707,44 @@ describe('command menu search ranking', () => {
   });
 
   it.each([false, true])(
-    'lists people the viewer never messaged after their own results and the people they know with GraphQL %s',
+    'lists people the viewer never messaged after their own results and the people they know, without a team, with GraphQL %s',
+    (cacheEnabled) => {
+      const windowed = (item: UserItem, personOrder: number): UserItem => ({
+        ...item,
+        personOrder,
+      });
+      const items = [
+        // The people window lists the never-messaged exact name first.
+        windowed(person('stranger-exact', 'macro'), 0),
+        windowed(person('stranger-prefix', 'macro.acct1'), 1),
+        windowed(messagedPerson('messaged', 'Macro Lee'), 2),
+        windowed(person('stranger-later-word', 'Jo Macropoulos'), 3),
+        windowed(person('stranger-contains', 'Bigmacro Fan'), 4),
+        project('project', 'Macro roadmap', NOW - 20 * DAY),
+        channel('channel', 'macro-eng', NOW - 20 * DAY),
+        note('later-word-note', 'Notes on macro', NOW),
+        note('contains-note', 'Nanomacros', NOW),
+      ];
+      const order = rankCommandSearchItems(items, 'macro', {
+        preserveAdditionalEntityMatches: cacheEnabled,
+      }).map((item) => item.id);
+
+      expect(order).toEqual([
+        'messaged',
+        'channel',
+        'project',
+        'later-word-note',
+        'stranger-exact',
+        'stranger-prefix',
+        'stranger-later-word',
+        'contains-note',
+        'stranger-contains',
+      ]);
+    }
+  );
+
+  it.each([false, true])(
+    'lists people outside the team after every result from it, people the viewer messages first among them, with GraphQL %s',
     (cacheEnabled) => {
       const windowed = (item: UserItem, personOrder: number): UserItem => ({
         ...item,
@@ -731,15 +769,16 @@ describe('command menu search ranking', () => {
       }).map((item) => item.id);
 
       expect(order).toEqual([
-        'messaged',
         'teammate',
         'channel',
         'project',
         'later-word-note',
+        // A document that only contains the query is still the team's.
+        'contains-note',
+        'messaged',
         'stranger-exact',
         'stranger-prefix',
         'stranger-later-word',
-        'contains-note',
         'stranger-contains',
       ]);
     }
@@ -832,6 +871,221 @@ describe('command menu search ranking', () => {
       note('other', 'План запуска'),
     ];
     expect(ids(items, 'отчёт квартал', false)).toEqual(['report']);
+  });
+});
+
+describe('people outside the team', () => {
+  beforeEach(() => vi.useFakeTimers({ now: NOW }));
+  afterEach(() => vi.useRealTimers());
+
+  const VIEWER = 'viewer';
+  const TEAM = new Set([VIEWER, 'adams', 'baker', 'macro|lena@example.com']);
+
+  function dm(id: string, name: string, participantIds: string[]): EntityItem {
+    const row = channel(id, name, NOW - DAY, 'dm');
+    if (row.data.type !== 'channel') throw new Error('not a channel');
+    return { ...row, data: { ...row.data, participantIds } };
+  }
+
+  function rank(items: CommandMenuItem[], query: string, preserved?: string[]) {
+    return rankCommandSearchItems(items, query, {
+      preserveAdditionalEntityMatches: true,
+      preservedIds: preserved ? new Set(preserved) : undefined,
+      teammateIds: TEAM,
+      viewerId: VIEWER,
+    }).map((item) => item.id);
+  }
+
+  it('lists every result from the team before anyone outside it, however well they match', () => {
+    const items = [
+      { ...person('outside-exact', 'Jacob'), personOrder: 0 },
+      contact('outside-crm', 'Jacob Diaz'),
+      dm('outside-dm', 'Jacob Rivera', [VIEWER, 'rivera']),
+      { ...person('adams', 'Jacob Adams'), personOrder: 1 },
+      channel('channel', 'jacob-team', NOW - 30 * DAY),
+      // A group conversation is the viewer's, whoever else is in it.
+      dm('group-dm', 'Jacob Rivera, Jacob Adams', [VIEWER, 'rivera', 'adams']),
+      // Only contains the query: still the team's.
+      note('contains-note', 'Ajacobs plan', NOW - 90 * DAY),
+    ];
+    const order = rank(items, 'jacob');
+    const firstOutside = Math.min(
+      order.indexOf('outside-exact'),
+      order.indexOf('outside-crm'),
+      order.indexOf('outside-dm')
+    );
+
+    expect(order.slice(0, firstOutside).sort()).toEqual(
+      ['adams', 'channel', 'contains-note', 'group-dm'].sort()
+    );
+    // Among people outside the team, the one the viewer messages leads.
+    expect(order.slice(firstOutside)).toEqual([
+      'outside-dm',
+      'outside-exact',
+      'outside-crm',
+    ]);
+  });
+
+  it('keeps the team’s server-matched rows ahead of people outside the team', () => {
+    const items = [
+      { ...person('outside', 'Jacob Diaz'), personOrder: 0 },
+      // Matched by the server, not by the menu's own matcher.
+      note('server-note', 'Quarterly plan', NOW - 60 * DAY),
+      { ...person('baker', 'Sam Baker'), personOrder: 1 },
+    ];
+
+    expect(rank(items, 'jacob', ['baker'])).toEqual([
+      'server-note',
+      'baker',
+      'outside',
+    ]);
+  });
+
+  it('keeps window people the menu’s matcher leaves out on their own side of the team', () => {
+    const items = [
+      // The people search matched these two by an alias or by words in
+      // another order; the menu's own matcher does not.
+      { ...person('outside', 'Jordan Lee'), personOrder: 0 },
+      { ...person('adams', 'Jacob Adams'), personOrder: 1 },
+      { ...person('baker', 'Baker Sam'), personOrder: 2 },
+      note('note', 'Baker Sam onboarding', NOW - DAY),
+    ];
+
+    expect(rank(items, 'baker sam')).toEqual([
+      'baker',
+      'adams',
+      'note',
+      'outside',
+    ]);
+    expect(
+      rank(
+        [
+          ...items,
+          { ...person('outside-sam', 'Baker Samuels'), personOrder: 3 },
+        ],
+        'baker sam'
+      )
+    ).toEqual(['baker', 'adams', 'note', 'outside-sam', 'outside']);
+  });
+
+  it('counts a CRM contact with a teammate’s email address as the teammate', () => {
+    const items = [
+      { ...person('outside', 'Lena Park'), personOrder: 0 },
+      contact('lena', 'Lena Ortiz'),
+      note('note', 'Lena onboarding', NOW - 90 * DAY),
+    ];
+
+    expect(rank(items, 'lena')).toEqual(['lena', 'note', 'outside']);
+  });
+
+  it('keeps someone outside the team among the team’s results when the query is their full name or email address', () => {
+    const outsideAdams = {
+      ...person('outside-adams', 'Jacob Adams'),
+      searchText: 'Jacob Adams | jacob.adams@example.com',
+      data: {
+        id: 'outside-adams',
+        name: 'Jacob Adams',
+        email: 'jacob.adams@example.com',
+      },
+    };
+    const items = [
+      { ...outsideAdams, personOrder: 0 },
+      { ...person('outside-other', 'Jacob Adamson'), personOrder: 1 },
+      { ...person('adams', 'Jacob Adams'), personOrder: 2 },
+      note('note', 'Jacob Adams intro call', NOW),
+      // Matched by the server, not by the menu's own matcher.
+      note('server-note', 'Quarterly plan', NOW - DAY),
+    ];
+
+    // The namesake outside the team ranks as a stranger among the team's
+    // results: after the teammate and the document whose words start with
+    // the name, before the team's server matches.
+    expect(rank(items, 'jacob adams')).toEqual([
+      'adams',
+      'note',
+      'outside-adams',
+      'server-note',
+      'outside-other',
+    ]);
+    expect(rank(items, 'jacob.adams@example.com')[0]).toBe('outside-adams');
+    // One word is a first name many people share: no exception.
+    expect(rank(items, 'jacob')).toEqual([
+      'adams',
+      'note',
+      'server-note',
+      'outside-adams',
+      'outside-other',
+    ]);
+  });
+
+  it('ranks an exactly named person outside the team as a stranger, even one the viewer messages', () => {
+    const items = [
+      dm('outside-dm', 'Jacob Adams', [VIEWER, 'other-adams']),
+      messagedPerson('outside-person', 'Jacob Adams'),
+      note('note', 'Jacob Adams onboarding', NOW - 30 * DAY),
+      note('contains-note', 'Bjacob adamsplan', NOW),
+    ];
+
+    expect(rank(items, 'jacob adams')).toEqual([
+      'note',
+      'outside-dm',
+      'outside-person',
+      'contains-note',
+    ]);
+  });
+
+  it('changes nothing while the roster is unknown or the viewer has no team', () => {
+    const items = [
+      dm('outside-dm', 'Jacob Rivera', [VIEWER, 'rivera']),
+      note('contains-note', 'Ajacobs plan', NOW),
+    ];
+
+    expect(
+      rankCommandSearchItems(items, 'jacob', {
+        preserveAdditionalEntityMatches: true,
+        teammateIds: new Set(),
+        viewerId: VIEWER,
+      }).map((item) => item.id)
+    ).toEqual(['outside-dm', 'contains-note']);
+  });
+
+  it('lists people outside the team last in the list shown before typing', () => {
+    const items = [
+      dm('outside-dm', 'Jacob Rivera', [VIEWER, 'rivera']),
+      channel('channel', 'general'),
+      dm('teammate-dm', 'Sam Baker', [VIEWER, 'baker']),
+      contact('outside-crm', 'Jacob Diaz'),
+      command('recent-command', 'Create doc', NOW),
+      dm('group-dm', 'Jacob Rivera, Sam Baker', [VIEWER, 'rivera', 'baker']),
+      note('note', 'Plan'),
+      // A command used before the last DM is still one of the team's rows.
+      command('older-command', 'Open settings', NOW - 2 * DAY),
+      dm('older-outside-dm', 'Jordan Lee', [VIEWER, 'lee']),
+      // The command catalog follows the recent rows. Go To commands are
+      // listed after the others, so a used one can follow never-used ones.
+      command('catalog-a', 'Create task', 0),
+      command('catalog-go-to', 'Go to Tasks', NOW - 3 * DAY),
+      command('catalog-b', 'Go to Home', 0),
+    ];
+    const team = { teammateIds: TEAM, viewerId: VIEWER };
+
+    expect(listOutsidePeopleLast(items, team).map((item) => item.id)).toEqual([
+      'channel',
+      'teammate-dm',
+      'recent-command',
+      'group-dm',
+      'note',
+      'older-command',
+      'outside-dm',
+      'outside-crm',
+      'older-outside-dm',
+      'catalog-a',
+      'catalog-go-to',
+      'catalog-b',
+    ]);
+    expect(
+      listOutsidePeopleLast(items, { viewerId: VIEWER }).map((item) => item.id)
+    ).toEqual(items.map((item) => item.id));
   });
 });
 
