@@ -938,6 +938,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
         RoutineBriefing {
             guide: agent_code_mode::domain::entity_guide("routines").unwrap_or_default(),
             agent_model: chat::domain::models::FREE_MODEL.to_owned(),
+            conditions: conditions_enabled,
         },
     ));
     let feed_repo = Arc::new(PgSuggestionRepo::new(db.clone()));

@@ -53,6 +53,7 @@ use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
 use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
 use self::state::{RoutineSuggestionState, Transition};
+use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
     RequestSessions, RoutineCode, ScheduledActionService, SuggestionOrigin, SuggestionOrigins,
@@ -83,6 +84,9 @@ pub struct RoutineBriefing {
     pub guide: &'static str,
     /// The model the Ask AI steps they write run on.
     pub agent_model: String,
+    /// Whether this deployment evaluates trigger conditions, which a
+    /// routine started on mail is drafted with.
+    pub conditions: bool,
 }
 
 pub(crate) const ALL_SURFACES: [Surface; 9] = [
@@ -408,6 +412,7 @@ where
         routine.suggestions.inbox_messages = tracing::field::Empty,
         routine.suggestions.apps = tracing::field::Empty,
         routine.suggestions.code = tracing::field::Empty,
+        routine.suggestions.events = tracing::field::Empty,
     ), err)]
     async fn brief(
         &self,
@@ -416,7 +421,11 @@ where
         trigger: GenerationTrigger,
         timezone: Tz,
     ) -> Result<String> {
-        self.require_flag(user).await?;
+        // A drafted routine starts on mail through a condition, and saving
+        // one needs both conditions and this flag: told otherwise, a session
+        // would draft what a check refuses.
+        let flags = self.require_flag(user).await?;
+        let events = self.briefing.conditions && flags.is_enabled(EVENT_ROUTINES_FLAG);
         let code = self.code.sdk().is_some();
         let (inbox, apps, dismissed) = tokio::join!(
             self.sources.inbox(user, INBOX_MESSAGES),
@@ -433,6 +442,7 @@ where
         span.record("routine.suggestions.inbox_messages", inbox.len());
         span.record("routine.suggestions.apps", apps.len());
         span.record("routine.suggestions.code", code);
+        span.record("routine.suggestions.events", events);
         Ok(prompt::brief(&prompt::BriefData {
             surfaces,
             trigger,
@@ -442,6 +452,7 @@ where
             timezone: timezone.name(),
             agent_model: &self.briefing.agent_model,
             code,
+            events,
             guide: self.briefing.guide,
         }))
     }
