@@ -29,6 +29,7 @@ mod list_contacts_for_soup;
 mod member_access;
 mod personal_emails;
 mod populate_contact;
+mod population_lifecycle;
 mod population_locks;
 #[cfg(feature = "inbound")]
 mod previews;

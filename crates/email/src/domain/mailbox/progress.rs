@@ -101,6 +101,9 @@ pub struct MailboxBacklog {
     pub seconds_since_last_import: Option<i64>,
     pub sync_active: bool,
     pub needs_reauth: bool,
+    /// Subscription upkeep runs in a row that failed: while above zero the
+    /// mailbox may get no change notifications and syncs by polling alone.
+    pub watch_failures: i32,
 }
 
 pub trait MailboxProgressRepository: Send + Sync + 'static {
@@ -157,6 +160,7 @@ impl<R: MailboxProgressRepository> MailboxProgressService<R> {
                 seconds_since_last_import = backlog.seconds_since_last_import,
                 sync_active = backlog.sync_active,
                 needs_reauth = backlog.needs_reauth,
+                watch_failures = backlog.watch_failures,
                 "outlook mailbox health"
             );
         }

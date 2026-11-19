@@ -1,8 +1,9 @@
-/** The persisted coding context rendered beneath an agent conversation. */
+/** The persisted coding context shown in conversation rows and previews. */
 export type SessionCodeDetails = {
   repository?: string;
   branch?: string;
   pullRequest?: {
+    id?: string;
     number: number;
     url: string;
     status?: 'open' | 'draft' | 'merged' | 'closed';

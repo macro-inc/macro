@@ -1,19 +1,24 @@
 import { t } from '@app/lib/i18n';
+import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import LinkIcon from '@icon/system/regular/link.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
-import { Dropdown } from '@ui';
-import { For, Show } from 'solid-js';
+import { CopyButton, Dropdown } from '@ui';
+import { children, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { savedViewMenuGroups } from '../core/saved-view-menu';
 
 export function SavedViewMenuItems(props: {
   owned: boolean;
   disabled?: boolean;
+  mobile?: boolean;
   onEdit: () => void;
+  editLabel?: string;
+  deleteLabel?: string;
+  appearance?: JSX.Element;
   onDuplicate: () => void;
   /** Offered only by consumers whose links can open the view for someone. */
   onCopyLink?: () => void | boolean | Promise<void | boolean>;
@@ -22,84 +27,138 @@ export function SavedViewMenuItems(props: {
   onMoveUp?: () => void;
   onMoveDown?: () => void;
 }) {
+  const appearance = children(() => props.appearance);
   const groups = () =>
     savedViewMenuGroups({
       owned: props.owned,
       copyLink: Boolean(props.onCopyLink),
+      appearance: Boolean(props.appearance),
       moveUp: Boolean(props.onMoveUp),
       moveDown: Boolean(props.onMoveDown),
     });
+  const Group = props.mobile ? MobileDrawer.Section : Dropdown.Group;
+  const Item = (item: {
+    children: JSX.Element;
+    disabled?: boolean;
+    class?: string;
+    onSelect: () => void;
+  }) => {
+    const content = children(() => item.children);
+    return (
+      <Show
+        when={props.mobile}
+        fallback={
+          <Dropdown.Item
+            disabled={item.disabled}
+            class={item.class}
+            onSelect={item.onSelect}
+          >
+            {content()}
+          </Dropdown.Item>
+        }
+      >
+        <MobileDrawer.Item
+          disabled={item.disabled}
+          class={item.class}
+          onClick={item.onSelect}
+        >
+          {content()}
+        </MobileDrawer.Item>
+      </Show>
+    );
+  };
   return (
-    <div class="flex w-full flex-col divide-y divide-edge-divider">
+    <div
+      class={
+        props.mobile
+          ? 'flex w-full flex-col gap-2'
+          : 'flex w-full flex-col divide-y divide-edge-divider'
+      }
+    >
       <For each={groups()}>
         {(group) => (
-          <Dropdown.Group>
+          <Group>
             <For each={group}>
               {(item) =>
                 match(item)
                   .with('copy-link', () => (
                     <Show when={props.onCopyLink}>
                       {(onCopyLink) => (
-                        <Dropdown.CopyItem
-                          icon={<LinkIcon class="size-4" />}
-                          disabled={props.disabled}
-                          onCopy={onCopyLink()}
+                        <Show
+                          when={props.mobile}
+                          fallback={
+                            <Dropdown.CopyItem
+                              icon={<LinkIcon class="size-4" />}
+                              disabled={props.disabled}
+                              onCopy={onCopyLink()}
+                            >
+                              {t('entityActions.copyLinkCommand')}
+                            </Dropdown.CopyItem>
+                          }
                         >
-                          Copy link
-                        </Dropdown.CopyItem>
+                          <CopyButton
+                            as={MobileDrawer.Item}
+                            data-saved-view-copy
+                            icon={<LinkIcon class="size-4" />}
+                            disabled={props.disabled}
+                            onClick={onCopyLink()}
+                          >
+                            {t('entityActions.copyLinkCommand')}
+                          </CopyButton>
+                        </Show>
                       )}
                     </Show>
                   ))
                   .with('edit', () => (
-                    <Dropdown.Item
-                      disabled={props.disabled}
-                      onSelect={props.onEdit}
-                    >
+                    <Item disabled={props.disabled} onSelect={props.onEdit}>
                       <PencilIcon class="size-4" />
-                      Edit
-                    </Dropdown.Item>
+                      {props.editLabel ?? t('viewMenus.editView')}
+                    </Item>
                   ))
+                  .with('appearance', () => appearance())
                   .with('duplicate', () => (
-                    <Dropdown.Item
+                    <Item
                       disabled={props.disabled}
                       onSelect={props.onDuplicate}
                     >
                       <CopyIcon class="size-4" />
-                      Duplicate
-                    </Dropdown.Item>
+                      {t('viewMenus.duplicate')}
+                    </Item>
                   ))
                   .with('move-up', () => (
-                    <Dropdown.Item
-                      disabled={props.disabled}
-                      onSelect={props.onMoveUp}
-                    >
-                      <ArrowUpIcon class="size-4" />
-                      {t('viewMenus.moveUp')}
-                    </Dropdown.Item>
+                    <Show when={props.onMoveUp}>
+                      {(onMoveUp) => (
+                        <Item disabled={props.disabled} onSelect={onMoveUp()}>
+                          <ArrowUpIcon class="size-4" />
+                          {t('viewMenus.moveUp')}
+                        </Item>
+                      )}
+                    </Show>
                   ))
                   .with('move-down', () => (
-                    <Dropdown.Item
-                      disabled={props.disabled}
-                      onSelect={props.onMoveDown}
-                    >
-                      <ArrowDownIcon class="size-4" />
-                      {t('viewMenus.moveDown')}
-                    </Dropdown.Item>
+                    <Show when={props.onMoveDown}>
+                      {(onMoveDown) => (
+                        <Item disabled={props.disabled} onSelect={onMoveDown()}>
+                          <ArrowDownIcon class="size-4" />
+                          {t('viewMenus.moveDown')}
+                        </Item>
+                      )}
+                    </Show>
                   ))
                   .with('delete', () => (
-                    <Dropdown.Item
+                    <Item
                       class="text-failure-ink"
                       disabled={props.disabled}
                       onSelect={props.onDelete}
                     >
                       <TrashIcon class="size-4" />
-                      Delete view
-                    </Dropdown.Item>
+                      {props.deleteLabel ?? t('viewMenus.deleteView')}
+                    </Item>
                   ))
                   .exhaustive()
               }
             </For>
-          </Dropdown.Group>
+          </Group>
         )}
       </For>
     </div>

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- Lock the row by primary key and update it by ctid: with stale statistics a\n-- join back on (team_id,id) can still reach the target through the partial\n-- team search index and filter every item in the team. A Tid Scan cannot.\n-- FOR UPDATE returns the row's latest version, so the guards below always\n-- judge current data. Unlike a plain UPDATE, a row changed concurrently after\n-- this statement's snapshot is not re-checked and updates nothing (Conflict):\n-- every writer of a live item must bump revision, which fails the guard anyway.\nWITH target AS MATERIALIZED (\n    SELECT ctid FROM password_item_entities WHERE team_id=$1 AND id=$2 FOR UPDATE\n)\nUPDATE password_item_entities item\nSET metadata=$3,version=$4,grants=$5,deleting=$7,revision=item.revision+1,totp_key_id=$8,\n    cleanup_due_at=CASE WHEN $7 THEN COALESCE(item.cleanup_due_at,now()+interval '180 seconds') ELSE item.cleanup_due_at END\nFROM target\nWHERE item.ctid=target.ctid AND item.version=$6 AND item.revision=$9 AND item.deleted_at IS NULL\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Int4",
+        "Jsonb",
+        "Int4",
+        "Bool",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89526955c8808c5ced4e59b06eef7e25f86ecb9fc36f990abda09ae2100a1bf2"
+}

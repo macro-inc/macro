@@ -81,6 +81,7 @@ impl Network {
         Ok(())
     }
 
+    #[tracing::instrument(name = "firecracker_host.network_slot", skip(self), fields(remade = tracing::field::Empty), err)]
     async fn ensure_slot(&self, slot: u16) -> Result<(), NetworkError> {
         let netns = self.netns(slot);
         let veth = self.host_veth(slot);
@@ -89,7 +90,10 @@ impl Network {
             && Path::new("/sys/class/net").join(&veth).exists();
         // A slot made under another `jail.uid_base` has a tap the slot's
         // user cannot open: it is made again.
-        if present && tap_owner(&netns).await.as_deref() == Some(uid.as_str()) {
+        let reusable = present && tap_owner(&netns).await.as_deref() == Some(uid.as_str());
+        // Remade: present but unusable. A fresh or reused slot records false.
+        tracing::Span::current().record("remade", present && !reusable);
+        if reusable {
             return Ok(());
         }
         // A half-made slot from an interrupted start goes first.

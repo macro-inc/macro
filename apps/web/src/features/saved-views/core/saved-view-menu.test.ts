@@ -7,12 +7,13 @@ describe('saved view menu groups', () => {
       savedViewMenuGroups({
         owned: true,
         copyLink: true,
+        appearance: true,
         moveUp: true,
         moveDown: true,
       })
     ).toEqual([
       ['copy-link'],
-      ['edit', 'duplicate', 'move-up', 'move-down'],
+      ['edit', 'appearance', 'duplicate', 'move-up', 'move-down'],
       ['delete'],
     ]);
   });
@@ -22,6 +23,7 @@ describe('saved view menu groups', () => {
       savedViewMenuGroups({
         owned: false,
         copyLink: false,
+        appearance: false,
         moveUp: false,
         moveDown: true,
       })
@@ -31,8 +33,21 @@ describe('saved view menu groups', () => {
         owned: true,
         copyLink: false,
         moveUp: false,
+        appearance: false,
         moveDown: false,
       })
     ).toEqual([['edit', 'duplicate'], ['delete']]);
+  });
+
+  it('keeps appearance in Modify and never adds an empty Copy group', () => {
+    expect(
+      savedViewMenuGroups({
+        owned: false,
+        copyLink: false,
+        appearance: true,
+        moveUp: true,
+        moveDown: false,
+      })
+    ).toEqual([['appearance', 'duplicate', 'move-up']]);
   });
 });

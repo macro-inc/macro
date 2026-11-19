@@ -18,6 +18,7 @@ type TestGroup = {
     id: string;
     label: string;
     onClick: () => void;
+    copy?: boolean;
     menuItem?: Component;
   }[];
 };
@@ -243,6 +244,49 @@ describe('SoupEntityActionsMenu separators', () => {
     expect(view.container.querySelectorAll('hr')).toHaveLength(0);
     expect(view.container.textContent).toBe('Move to label');
   });
+});
+
+it('keeps host renderers and callbacks when inserting actions before Delete', () => {
+  const copy = vi.fn(() => false);
+  const remove = vi.fn();
+  actions.groups = [
+    {
+      id: 'copy',
+      items: [
+        { id: 'copy-link', label: 'Copy link', copy: true, onClick: copy },
+      ],
+    },
+    {
+      id: 'delete',
+      items: [{ id: 'delete', label: 'Delete', onClick: remove }],
+    },
+  ];
+  const view = render(() => (
+    <SoupEntityActionsMenu
+      entities={[]}
+      list={{} as EntityActionListState}
+      viewContext={viewContext}
+      extraItems={<button type="button">Host action</button>}
+      item={(props) => (
+        <button type="button" data-testid="host-item" onClick={props.onClick}>
+          {props.text}
+        </button>
+      )}
+      copyItem={(props) => (
+        <button type="button" data-testid="host-copy" onClick={props.onCopy}>
+          {props.text}
+        </button>
+      )}
+      separator={() => <hr data-testid="host-separator" />}
+    />
+  ));
+
+  expect(view.container.textContent).toBe('Copy linkHost actionDelete');
+  expect(screen.getAllByTestId('host-separator')).toHaveLength(2);
+  fireEvent.click(screen.getByTestId('host-copy'));
+  expect(copy).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByTestId('host-item'));
+  expect(remove).toHaveBeenCalledOnce();
 });
 
 describe('shared notification mute choices', () => {

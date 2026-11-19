@@ -1441,6 +1441,15 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+
+    /// Release the lease of a round Macro's own request admission stopped,
+    /// returning the job to pending with its round start kept and recording
+    /// no failure on the job or the account: nothing reached Google.
+    fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Dispatch use cases driven by the calendar reminder queue worker.

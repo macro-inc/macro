@@ -34,6 +34,8 @@ export type SplitFileMenuAction = {
   disabledReason?: string;
   icon?: Component;
   action?: (e?: MouseEvent) => void | Promise<unknown>;
+  /** Destructive presentation chosen by the action owner. */
+  danger?: boolean;
   /** Clipboard actions acknowledge completion inline without dismissing the menu. */
   copy?: boolean;
   children?: SplitFileMenuAction[];

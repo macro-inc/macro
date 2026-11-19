@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   claim: vi.fn(),
   remove: vi.fn(),
   check: vi.fn(),
+  takeCancellationReceipt: vi.fn(),
   publish: vi.fn(),
   status: vi.fn(),
   save: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock('./local-drafts', () => ({
     restoreSend: mocks.claim,
     removeSend: mocks.remove,
     requestSendCheck: mocks.check,
+    takeCancellationReceipt: mocks.takeCancellationReceipt,
   },
 }));
 vi.mock('./draft-queue', () => ({ saveEmailDraftQueued: mocks.save }));
@@ -86,6 +88,7 @@ beforeEach(() => {
   mocks.capture.mockResolvedValue(undefined);
   mocks.persist.mockImplementation(async (row) => row);
   mocks.claim.mockResolvedValue(undefined);
+  mocks.takeCancellationReceipt.mockResolvedValue(false);
   mocks.restore.mockImplementation(async (row) => ({
     ...row,
     restorationVersion: {
@@ -310,6 +313,67 @@ it('keeps scheduled cancellation pending until authoritative confirmation', asyn
     await cancellation;
     expect(completed).toBe(true);
     expect(mocks.claim).toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('confirms Undo from the receipt after recovery removes the send', async () => {
+  vi.useFakeTimers();
+  try {
+    await sendEmailQueued(args());
+    const row = { ...persisted(), accountId: 'owner', submissionStarted: true };
+    mocks.takeCancellationReceipt.mockResolvedValueOnce(true);
+
+    const confirmed = expect(
+      cancelEmailSendAndConfirm(row)
+    ).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(250);
+    await confirmed;
+
+    expect(mocks.takeCancellationReceipt).toHaveBeenCalledWith(
+      { accountId: 'owner', epoch: 'session' },
+      row.uuid
+    );
+    expect(mocks.status).not.toHaveBeenCalled();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('checks the service when a missing send has no cancellation receipt', async () => {
+  vi.useFakeTimers();
+  try {
+    await sendEmailQueued(args());
+    const row = { ...persisted(), submissionStarted: true };
+    mocks.status.mockRejectedValueOnce(new Error('Status unavailable'));
+    const refused = expect(cancelEmailSendAndConfirm(row)).rejects.toThrow(
+      'Status unavailable'
+    );
+    await vi.advanceTimersByTimeAsync(250);
+    await refused;
+    expect(mocks.status).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('can confirm with the service when local storage cannot consume a receipt', async () => {
+  vi.useFakeTimers();
+  try {
+    await sendEmailQueued(args());
+    const row = { ...persisted(), submissionStarted: true };
+    mocks.takeCancellationReceipt.mockRejectedValueOnce(
+      new Error('Journal unavailable')
+    );
+    mocks.status.mockResolvedValueOnce({ status: 'CANCELLED' });
+
+    const confirmed = expect(
+      cancelEmailSendAndConfirm(row)
+    ).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(250);
+    await confirmed;
+    expect(mocks.status).toHaveBeenCalledOnce();
   } finally {
     vi.useRealTimers();
   }

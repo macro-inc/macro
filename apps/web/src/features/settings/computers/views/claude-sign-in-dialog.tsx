@@ -7,6 +7,7 @@ import {
   useClaudeSignOutMutation,
 } from '@queries/computers/claude';
 import { ActionDialogShell, confirmDialog, Dialog } from '@ui';
+import { computerFailureMessage } from '../core/computer-display';
 import { ClaudeSignInFlow } from './claude-sign-in-flow';
 
 /**
@@ -44,8 +45,10 @@ export function ClaudeSignInDialog(props: {
     try {
       await signOut.mutateAsync(props.harnessId);
       props.onClose();
-    } catch {
-      toast.failure(t('computers.claudeCreditsFailed'));
+    } catch (error) {
+      toast.failure(
+        computerFailureMessage(error, t('computers.claudeCreditsFailed'))
+      );
     }
   };
   return (

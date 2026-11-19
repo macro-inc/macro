@@ -128,6 +128,10 @@ export type SplitFileMenuProps = {
   tools?: BlockTool[];
   /** See {@link SplitFileMenuViews}. Only the mobile drawer renders it. */
   mobileViews?: SplitFileMenuViews;
+  /** Presentation-only grouping for a host's phone action sheet. */
+  mobileActionGroups?: (
+    groups: SplitFileMenuActionGroups
+  ) => SplitFileMenuActionGroups;
   /**
    * Full entity for the menu's entity-gated items. Supply it when the block
    * can build one that generic chrome can't reconstruct from id/name/entityKind
@@ -135,6 +139,7 @@ export type SplitFileMenuProps = {
    */
   entity?: EntityData;
   buttonClass?: string;
+  triggerLabel?: string;
   entityKind: BlockName | BlockAlias;
   permissions: Permissions;
   onDuplicate?: (id: string) => void;
@@ -578,6 +583,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             open={open()}
             onOpenChange={setOpen}
             triggerClass={props.buttonClass}
+            triggerLabel={props.triggerLabel}
             groups={actionGroups()}
           />
         }
@@ -586,7 +592,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           open={open()}
           onOpenChange={setOpen}
           triggerClass={props.buttonClass}
-          groups={actionGroups()}
+          groups={props.mobileActionGroups?.(actionGroups()) ?? actionGroups()}
           views={props.mobileViews}
         />
       </Show>

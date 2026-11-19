@@ -114,6 +114,7 @@ where
     M: Machines,
     P: HostProbe,
 {
+    health.service.guard_guest_swap().await;
     health.service.reconcile_pass().await;
     health.service.collect_garbage().await;
     health.service.prepare_home_templates().await;

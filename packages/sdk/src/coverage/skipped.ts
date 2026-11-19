@@ -163,7 +163,9 @@ export const authBacklog = [
   'setTeamAgentVoice', // An agent teammate's call voice is an admin app setting for now.
   'cancelTeamComputer', // Computer billing and lifecycle controls belong to the app.
   'completeTeamComputerSetup', // The guided computer setup is an app flow.
+  'listTeamComputerUsage', // Computer usage graphs belong to the app.
   'listTeamComputerOffers', // Computer checkout offers belong to the app.
+  'listTeamComputerPurchaseOffers', // The buy dialog's offers belong to the app.
   'getTeamComputerRollout', // Whether the app shows computers is an app gate.
   'listTeamComputers', // Computer billing and lifecycle controls belong to the app.
   'restoreTeamComputer', // Computer billing and lifecycle controls belong to the app.
@@ -279,11 +281,15 @@ export const notificationExcluded = [
   'getTypedNotificationsByEventItemId',
   'getUnsubscribes',
   'healthHandler',
+  // Chat sidebar sections remain app-only navigation, like their storage
+  // endpoints; so do their notification settings.
+  'listSectionNotificationSettings',
   'removeUnsubscribeAll',
   'removeUnsubscribeItems',
   'unsubscribeAll',
   'unsubscribeEmail',
   'unsubscribeItems',
+  'updateSectionNotificationSettings',
 ] as const satisfies readonly (keyof NotificationSdk)[];
 
 export const notificationBacklog =
@@ -304,6 +310,7 @@ export const scheduledActionExcluded = [
   'getRoutineDraftJob', // The routine editor's background drafting.
   'discardRoutineDraftJob', // The routine editor's background drafting.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
+  'listScheduledActionUnusableItems', // The routine page's knobs needing a new pick; a run fails the step with the same reason.
   'routineCatalog', // The new-routine flow's templates.
   'listRoutineSuggestions', // The app's suggestion surfaces; agents use CreateRoutine.
   'startSuggestionGeneration', // Onboarding starts the person's generation once the inbox connects.
@@ -458,10 +465,12 @@ export const storageExcluded = [
   'passwordsMoveFolder',
   'passwordsPatch',
   'passwordsRemove',
+  'passwordsRemoveFavorite',
   'passwordsRemoveFolder',
   'passwordsRemoveTotp',
   'passwordsRenameFolder',
   'passwordsReveal',
+  'passwordsSetFavorite',
   'passwordsSetTotp',
   'passwordsShare',
   'passwordsTeams',

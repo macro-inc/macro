@@ -73,6 +73,7 @@ type SplitFileMenuRenderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerClass?: string;
+  triggerLabel?: string;
   groups: SplitFileMenuActionGroups;
 };
 
@@ -154,6 +155,7 @@ export function DesktopFileMenu(props: SplitFileMenuRenderProps) {
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
         class={cn(props.triggerClass)}
+        aria-label={props.triggerLabel ?? t('splitMenu.fileActions')}
         size="icon-sm"
         variant="ghost"
       >
@@ -249,7 +251,8 @@ export function MobileFileMenu(
             disabled={!!action().disabledReason}
             class={cn(
               nested ? 'pl-9 pr-4' : 'px-4',
-              action().group === 'delete' && 'text-failure-ink'
+              (action().danger || action().group === 'delete') &&
+                'text-failure-ink'
             )}
             onClick={(e) => {
               fireAndForget(action().action?.(e), 'split-file-menu');

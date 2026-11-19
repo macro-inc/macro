@@ -83,7 +83,12 @@ function UpcomingEventsSection() {
   const [open, setOpen] = createSignal(true);
 
   return (
-    <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+    <CollapsibleSection.Root
+      sectionId="upcoming"
+      sectionLabel="Upcoming events"
+      open={open()}
+      onOpenChange={setOpen}
+    >
       <CollapsibleSection.Header ref={tourTarget(CALENDAR_TOUR.upcoming)}>
         <CollapsibleSection.Trigger class="min-w-0 flex-1">
           <span class="min-w-0 truncate">Upcoming events</span>
@@ -104,11 +109,18 @@ function CalendarSourcesSection() {
 
   return (
     <Show when={calendarView.sources().length > 1}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Calendars</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
+      <CollapsibleSection.Root
+        sectionId="calendars"
+        sectionLabel="Calendars"
+        open={open()}
+        onOpenChange={setOpen}
+      >
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Calendars</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <SourceControls
             ref={tourTarget(CALENDAR_TOUR.sources)}
@@ -278,7 +290,12 @@ function CalendarTeamOooSection() {
 
   return (
     <Show when={hasTeammates()}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
+      <CollapsibleSection.Root
+        sectionId="team-ooo"
+        sectionLabel="Team out of office"
+        open={open()}
+        onOpenChange={setOpen}
+      >
         <CollapsibleSection.Header>
           <Checkbox
             size="sm"
@@ -316,7 +333,7 @@ export function CalendarSidebar() {
   };
 
   return (
-    <ViewSidebar.Root aria-label="Calendar navigation">
+    <ViewSidebar.Root reorderId="calendar" aria-label="Calendar navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton />
@@ -351,7 +368,13 @@ export function CalendarSidebar() {
         >
           <TutorialSidebarItem tutorial="calendar" />
         </ViewSidebar.Nav>
-        <CalendarMiniCalendar />
+        <ViewSidebar.Section
+          id="month"
+          label={t('viewMenus.monthCalendar')}
+          headerless
+        >
+          <CalendarMiniCalendar />
+        </ViewSidebar.Section>
         <Show when={shell.breakpoints.narrow?.()}>
           <CalendarSchedulingActions sidebar />
         </Show>

@@ -14,6 +14,8 @@ the gateway `/email` prefix.
   It composes optional activity correlation and the saved-invitation service;
   `ApiContext` holds services, authentication/router states and configuration;
   raw database/provider clients belong to the composed adapters.
+  Inject CRM rule discovery into the API EmailPgRepo for selected Team reads;
+  the adapter uses the reader's transaction and owns no additional pool.
 - `src/composition/workers.rs`: shared worker service aliases and invitation
   extraction composition. Per-worker constructors stay in `worker::context`.
 - `src/outbound/message_reads.rs`: query adapter for the email domain's synced
@@ -181,6 +183,14 @@ the gateway `/email` prefix.
   claiming pages once per cycle would leave a folder with new mail behind
   every worker's whole cycle of queued messages. A cycle ends when no message
   is due, so folder catalogs are checked again before more pages are read.
+- `pubsub_workers` reads the PostHog flag `enable-outlook-import-live-pass`
+  for the service context `outlook-mailbox-sync` about once a minute
+  (`mailbox_sync_worker::run_live_import_pass`, one
+  `outlook.live_import_pass.refresh` span per read) and sets the sync's
+  `LiveImportPass` from it: newest-first imports and the live pass beside
+  each folder's import round. Without a `POSTHOG_API_KEY`, or while a read
+  fails, it is off and warns once; a local stack's placeholder key reads off.
+  ([runbook](../../docs/runbooks/outlook-sync.md#new-mail-during-an-import))
 - `OUTLOOK_IMPORTS_PAUSED` (read at startup) makes the Outlook sync loop claim
   only live message work; import rows wait and live changes keep importing.
   `src/bin/reimport_outlook_folders` re-imports folders whose delta round

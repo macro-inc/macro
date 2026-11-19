@@ -6,6 +6,7 @@ import {
 export type SavedViewMenuItem =
   | 'copy-link'
   | 'edit'
+  | 'appearance'
   | 'duplicate'
   | 'move-up'
   | 'move-down'
@@ -15,12 +16,14 @@ export type SavedViewMenuItem =
 export function savedViewMenuGroups(options: {
   owned: boolean;
   copyLink: boolean;
+  appearance: boolean;
   moveUp: boolean;
   moveDown: boolean;
 }): SavedViewMenuItem[][] {
   const items: SavedViewMenuItem[] = [
     ...(options.copyLink ? (['copy-link'] as const) : []),
     ...(options.owned ? (['edit'] as const) : []),
+    ...(options.appearance ? (['appearance'] as const) : []),
     'duplicate',
     ...(options.moveUp ? (['move-up'] as const) : []),
     ...(options.moveDown ? (['move-down'] as const) : []),
