@@ -377,9 +377,18 @@ Address: 你.
 | notifications | 通知 |
 | done | 已完成 |
 | mark as read | 标记为已读 |
-| snooze | 暂停通知… |
+| snooze | 暂停通知 |
 | archive | 归档 |
 | settings | 设置 |
+| computer (Macro computer) | 获取 Macro 电脑 |
+| machine (runs agents) | 我的机器 |
+| session (agent) | 此会话已归档 |
+| routine | 所有例行任务 |
+| saved view | 新建已保存视图 |
+| call | 加入通话 |
+| contact (CRM) | 未找到客户或联系人 |
+| company (CRM) | 添加公司 |
+| thread (email) | 已排除的邮件串 |
 
 ## Traditional Chinese (Taiwan) (`zh-Hant`)
 
