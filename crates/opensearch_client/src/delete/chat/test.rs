@@ -39,9 +39,10 @@ async fn chat_documents(
     .await
 }
 
-/// Three chats of two messages each, one of another user. One chat is
-/// deleted, one message of another, and every chat of the other user. Nothing
-/// of what was deleted is left.
+/// Three chats of two messages each, one of another user, and a message of
+/// each deleted chat written just before the deletes. One chat is deleted, one
+/// message of another, and every chat of the other user. Nothing of what was
+/// deleted is left.
 #[tokio::test]
 #[ignore = "requires local OpenSearch at http://localhost:9200 with the search indices created"]
 async fn a_deleted_chat_message_or_user_leaves_no_documents_behind() {
@@ -66,6 +67,13 @@ async fn a_deleted_chat_message_or_user_leaves_no_documents_behind() {
         }
         refresh(os, &index).await?;
         let indexed = chat_documents(os, &index, "chat-1").await?;
+        // Written after the refresh: no search sees these until the next one.
+        client
+            .upsert_chat_message(&message(USER, "chat-1", "message-7"), Some(&index))
+            .await?;
+        client
+            .upsert_chat_message(&message(DELETED_USER, "chat-3", "message-8"), Some(&index))
+            .await?;
 
         let chat_delete = client.delete_chat("chat-1", Some(&index)).await;
         let message_delete = client

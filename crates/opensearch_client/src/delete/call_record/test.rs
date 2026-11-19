@@ -41,8 +41,9 @@ async fn call_documents(
     .await
 }
 
-/// Three calls of two segments each, two in one channel; one call is deleted
-/// by id and the other channel's calls by channel. Nothing of the deleted
+/// Three calls of two segments each, two in one channel, and a segment of each
+/// deleted call written just before the deletes; one call is deleted by id
+/// and the other channel's calls by channel. Nothing of the deleted
 /// calls is left.
 #[tokio::test]
 #[ignore = "requires local OpenSearch at http://localhost:9200 with the search indices created"]
@@ -68,6 +69,16 @@ async fn a_deleted_call_or_channel_leaves_no_documents_behind() {
             .await?;
         refresh(os, &index).await?;
         let indexed = call_documents(os, &index, "call-1").await?;
+        // Written after the refresh: no search sees these until the next one.
+        client
+            .bulk_upsert_call_record_segments(
+                &[
+                    segment("call-1", "channel-a", "segment-7"),
+                    segment("call-3", "channel-b", "segment-8"),
+                ],
+                Some(&index),
+            )
+            .await?;
 
         let call_delete = client.delete_call_record("call-1", Some(&index)).await;
         let channel_delete = client
