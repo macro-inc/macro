@@ -7,7 +7,9 @@ on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
 `VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`.
+Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
+Notifications tab instead and the rail's bell gives way to New Home; see
+[New Home](home.md#new-home).
 
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates

@@ -299,6 +299,44 @@ not retracted automatically yet: answering the question or starting the next tur
 the earlier notification until you mark it done. The chip announcement post itself no
 longer notifies the thread. Settings → notifications lists them under `AI`.
 
+## New Home
+
+Desktop only, behind two PostHog flags read together (`features/new-home`).
+New Home's Recent tab is `/app/home` on the Recent tab; its Notifications tab
+is `/app/notifications`.
+
+| `enable-new-home` | `disable-old-home` | Rail | `/home` | `/notifications` | `g h` |
+| --- | --- | --- | --- | --- | --- |
+| off | any | Home, and Notifications with unified notifications | old Home | today's view | old Home |
+| on | off | Home, then **New Home** (house with a sparkle) in Notifications' place | old Home; on the Recent tab (`?s0.home.tab=recent` in the first split) New Home | New Home's Notifications tab | New Home |
+| on | on | **New Home** as Home | New Home | New Home's Notifications tab | New Home |
+
+`g i` goes away with New Home on: Notifications is a New Home tab. The rail
+item and `g h` go through `/new-home`, which opens the tab New Home was last
+left on (kept per user); once old Home is off a bare `/home` does the same.
+New Home is called **New Home** (rail tooltip and split title) while old
+Home is beside it, and **Home** once it replaces it. Touch devices keep
+today's Home and Notifications in every state. `VITE_ENABLE_NEW_HOME` and
+`VITE_DISABLE_OLD_HOME` override the flags locally; New Home is on in dev,
+with old Home beside it.
+
+Under its header (New Chat, then the tab's tools) New Home has Recent and
+Notifications tabs, icon-only when the list is narrower than 280px; the
+Notifications tab carries the rail's unread dot. Switching tabs is a history
+entry. `1` is Recent, `2` and `3` are Notifications at All and Unread, and
+Tab/Shift+Tab step through the three. Both tabs show Home's chat composer
+while nothing is open; a chat started from Notifications opens on Recent.
+
+- **Recent** is Home's list, rows and tools (Filter, Search, collapse) fed only
+  by the viewer's `touched_by_me` activity, bucketed by the time of their own
+  last touch. Its filters are old Home's.
+- **Notifications** is the Notifications view with All/Unread beneath the
+  tabs and Display options (sliders) in place of the settings button:
+  **Condensed** (kept per user) and **Notification settings…**. Condensed
+  rows are Home's rows for the same entity (icon and name; "who in #channel"
+  for a reply; "who commented on" for a comment); on hover the time shows
+  and Mark done takes the unread dot's place. A condensed stack stays one row.
+
 ## Home — `/app/component/home`
 
 Greeting, example prompt buttons (`Draft a document`, `Draft an email`,
