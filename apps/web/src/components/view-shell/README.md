@@ -67,10 +67,6 @@ in their default slots. Temporarily hidden sections retain their saved positions
 Pinned controls and footer controls do not move. Sections move
 as existing DOM nodes, not CSS `order`, preserving input state and reading order.
 
-The backend-free `browser-test/sidebar-reorder.browser.e2e.ts` regression covers
-mouse and keyboard moves, reload/view isolation, header actions, and touch at
-390×844. Run it with this directory's Playwright configuration.
-
 ## Navigation layout
 
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
