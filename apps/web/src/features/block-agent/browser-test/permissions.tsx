@@ -9,6 +9,8 @@
 
 import { AgentPermissionsPage } from '@app/features/agent-permissions';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
+import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
+import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { queryClient } from '@queries/client';
 import type {
@@ -462,9 +464,18 @@ if (!root) throw new Error('Fixture root missing');
 render(
   () => (
     <QueryClientProvider client={queryClient}>
-      <Show when={params.get('view') === 'page'} fallback={<SessionFixture />}>
-        <PageFixture />
-      </Show>
+      {/* The dev server turns enable-agent-permissions on (LOCAL_ONLY);
+          VITE_ENABLE_AGENT_PERMISSIONS=false turns it off. */}
+      <AnalyticsContextProvider>
+        <PosthogProvider>
+          <Show
+            when={params.get('view') === 'page'}
+            fallback={<SessionFixture />}
+          >
+            <PageFixture />
+          </Show>
+        </PosthogProvider>
+      </AnalyticsContextProvider>
     </QueryClientProvider>
   ),
   root
