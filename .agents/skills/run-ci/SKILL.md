@@ -67,7 +67,9 @@ releases fail on a Projects (classic) error before adding the label.
 
 Use the `babysit-pr` skill's watcher: `pr-wait <pr> --until green`. It exits 1
 with the command to run when CI has not run on the head, and exits 1 when
-`CI gate` fails. Never poll with your own loop.
+`CI gate` fails. If that watcher is not installed, use
+`gh run watch <run-id> --exit-status --interval 30` and verify the latest-head
+`CI gate` afterward. Never poll with your own loop.
 
 To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 
@@ -88,12 +90,19 @@ and says why in `CI gate`.
 
 ## Fix a failure
 
-- A flaky job: re-run the failed jobs of the `PR CI` run
-  (`gh run rerun <run-id> --failed`). `CI gate` re-runs with them and updates
-  the status; no new label is needed.
-- A real failure: fix it, push, and add the label again.
-- The checks inside the run are named `<workflow> / <job>`, such as
-  `Web App / Typecheck` or `Cloud Storage / test`.
+- Review every run yourself with `gh pr checks <pr>` and
+  `gh run view <run-id> --log-failed`; inspect each failed job with
+  `gh run view <run-id> --job <job-id> --log-failed`, not just a delegated summary.
+- Fix every real branch failure, run the local checks and review, commit, and push.
+- After confirming the pushed head, re-add `run-ci`; remove the label first if it
+  is still present so a new label event starts CI.
+- Record unrelated failures, broken-main failures, and suspected flakes in the
+  PR body and `PROGRESS.md` with the job and error; rerun once to test for a flake.
+- Investigate a repeated failure instead of calling it flaky or blindly retrying.
+- Continue reviewing and fixing later failures without waiting for another
+  request; finish only when `CI gate` passes on the latest commit.
+- Read checks named `<workflow> / <job>`, such as `Web App / Typecheck` or
+  `Cloud Storage / test`, to identify the failed workflow and job.
 
 ## Fork PRs
 
