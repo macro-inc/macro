@@ -230,3 +230,19 @@ fn reports_are_diagnosed_through_their_contexts() {
         Failure::Error
     );
 }
+
+#[tokio::test(start_paused = true)]
+async fn a_source_gone_for_good_ends_without_retrying() {
+    let runs = Arc::new(AtomicU32::new(0));
+    let counted = Arc::clone(&runs);
+
+    let attempted = retrying()
+        .run_handled(|_| {
+            counted.fetch_add(1, Ordering::SeqCst);
+            std::future::ready(Ok::<_, anyhow::Error>(Handled::SourceMissing))
+        })
+        .await;
+
+    assert_eq!(attempted.unwrap(), (Handled::SourceMissing, 1));
+    assert_eq!(runs.load(Ordering::SeqCst), 1);
+}

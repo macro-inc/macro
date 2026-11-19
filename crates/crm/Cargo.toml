@@ -44,6 +44,8 @@ call_link = [
 ]
 default = ["ai_tools", "call_link", "inbound", "lookup", "outbound", "ports"]
 inbound = ["axum", "ports"]
+# Shared selected-rule discovery on an existing caller transaction.
+email_discovery = ["dep:sqlx", "ports"]
 # Read-only company/contact identity for other domains. Pulls only sqlx + ports.
 lookup = ["dep:messages", "dep:rootcause", "dep:sqlx", "ports"]
 outbound = [
