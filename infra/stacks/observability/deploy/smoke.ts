@@ -256,6 +256,13 @@ export function pagingCheckScript(
   const create = JSON.stringify({
     query: `mutation { createService(input: { name: "smoke-${marker}", newEscalationPolicy: { name: "smoke-${marker}", repeat: 0, steps: [{ delayMinutes: 1, targets: [{ type: chanWebhook, id: "${RELAY_URL}" }] }] }, newIntegrationKeys: [{ type: generic, name: "datadog" }, { type: grafana, name: "grafana" }], newHeartbeatMonitors: [{ name: "watchdog", timeoutMinutes: 60 }] }) { integrationKeys { href } heartbeatMonitors { href } } }`,
   });
+  // The body infra/stacks/monitoring/goalert.ts has Datadog send.
+  const datadogAlert = JSON.stringify({
+    summary: `${marker}-datadog`,
+    details: `https://app.datadoghq.com/monitors/0\n\nsmoke ${marker}`,
+    // Not the marker: the Grafana page dedups on its fingerprint, which is.
+    dedup: `${marker}-datadog`,
+  });
   const grafanaAlert = JSON.stringify({
     version: '1',
     alerts: [
@@ -294,7 +301,7 @@ generic=$(printf '%s' "$created" | grep -o 'generic/incoming?token=[0-9a-f-]*' |
 grafana=$(printf '%s' "$created" | grep -o 'grafana/incoming?token=[0-9a-f-]*' | cut -d= -f2)
 heartbeat=$(printf '%s' "$created" | grep -o 'heartbeat/[0-9a-f-]*' | cut -d/ -f2)
 [ -n "$generic" ] && [ -n "$grafana" ] && [ -n "$heartbeat" ] || failed "GoAlert did not make the smoke service: $created"
-expect 204 "a generic page (Datadog)" -X POST -H "$oncall" --data-urlencode 'summary=${marker}' "${base}/api/v2/generic/incoming?token=$generic"
+expect 204 "a generic page (Datadog)" -X POST -H "$oncall" -H 'Content-Type: application/json' -d '${datadogAlert}' "${base}/api/v2/generic/incoming?token=$generic"
 expect 200 "a Grafana page (the cluster)" -X POST -H "$oncall" -H 'Content-Type: application/json' -d '${grafanaAlert}' "${base}/api/v2/grafana/incoming?token=$grafana"
 expect 200 "a heartbeat" -X POST -H "$oncall" "${base}/api/v2/heartbeat/$heartbeat"
 stored=$(graphql '${search}' | grep -o '"summary":"${marker}[^"]*"' | wc -l)
