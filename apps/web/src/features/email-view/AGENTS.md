@@ -55,6 +55,7 @@ credential form directly; desktop and phone use the same field validation.
 
 ## Gotchas
 
+- Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
   sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions

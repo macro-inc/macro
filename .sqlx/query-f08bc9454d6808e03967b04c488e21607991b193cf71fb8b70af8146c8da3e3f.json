@@ -19,7 +19,8 @@
                 "past_due_grace",
                 "retention_expired",
                 "agent_start_due",
-                "charge_unsettled"
+                "charge_unsettled",
+                "agent_redeliver"
               ]
             }
           }

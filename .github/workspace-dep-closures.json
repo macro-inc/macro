@@ -14242,7 +14242,9 @@
       "crates/workspace-hack"
     ],
     "saved_views": [
+      "crates/cowlike",
       "crates/macro_uuid",
+      "crates/model-entity",
       "crates/saved_views",
       "crates/workspace-hack"
     ],

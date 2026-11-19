@@ -377,6 +377,9 @@ tools — hexagonal, heavily feature-gated.
   yielding without a claim after 32 contended candidates until the next worker round.
   Keep separate normal/recovery index predicates and correlated command-lease probes
   so paused writes and mixed-provider backlogs do not scan unrelated drafts.
+- Include a reader’s cross-inbox reply draft on a shared thread at Edit only
+  when it belongs to an inbox in the reader’s Drafts scope. Apply the same
+  rule to full and parsed thread reads.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim

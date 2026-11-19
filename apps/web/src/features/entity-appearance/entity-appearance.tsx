@@ -10,8 +10,8 @@ import { lazyNamed } from '@core/util/lazyNamed';
 import { Button } from '@ui/components/Button';
 import { openDialog } from '@ui/components/ImperativeDialog';
 import { Show } from 'solid-js';
-import type { EntityData } from '../entity/types/entity';
 import { supportsEntityAppearance } from './core/appearance';
+import type { AppearanceEntity } from './types';
 
 const AppearanceDialog = lazyNamed(
   () => import('./appearance-dialog'),
@@ -21,7 +21,7 @@ const AppearanceDialog = lazyNamed(
 /** Capture account context outside handlers; the editor survives its launching menu. */
 export function useChangeEntityIcon() {
   const userId = useUserId();
-  return (entity: EntityData, element?: HTMLElement) => {
+  return (entity: AppearanceEntity, element?: HTMLElement) => {
     const actor = userId();
     if (
       !isFeatureEnabled(enableEntityAppearance) ||
@@ -47,7 +47,7 @@ export function useChangeEntityIcon() {
 
 /** Identity editing belongs in headers only. Row icons remain navigation targets. */
 export function EntityAppearanceTrigger(props: {
-  entity: EntityData;
+  entity: AppearanceEntity;
   editable: boolean;
 }) {
   const icon = () => (
@@ -67,7 +67,7 @@ export function EntityAppearanceTrigger(props: {
   );
 }
 
-function EditableAppearanceTrigger(props: { entity: EntityData }) {
+function EditableAppearanceTrigger(props: { entity: AppearanceEntity }) {
   const changeIcon = useChangeEntityIcon();
   const flag = useFeatureFlag(enableEntityAppearance);
   const icon = (

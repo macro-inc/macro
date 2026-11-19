@@ -1,9 +1,27 @@
 use crate::process::{self, context::SearchProcessingContext};
 use futures::StreamExt;
+use tracing::Instrument as _;
 
 /// How long a worker processes one message before giving up on it.
 pub(crate) const MESSAGE_PROCESSING_TIMEOUT: std::time::Duration =
     std::time::Duration::from_secs(300);
+
+/// How long a worker holding backfill units waits for its first message.
+const ADMITTED_RECEIVE_WAIT_SECONDS: i32 = 2;
+/// How long a worker holding backfill units waits for its receive to answer,
+/// past the long-poll wait, before giving the units back. Messages a late
+/// answer carried come back after the visibility timeout, one receive closer
+/// to the dead-letter queue.
+const ADMITTED_RECEIVE_DEADLINE: std::time::Duration =
+    std::time::Duration::from_secs(ADMITTED_RECEIVE_WAIT_SECONDS as u64 + 10);
+
+/// How long a worker that found the queue empty waits, holding no units,
+/// before it asks again: the rest of the queue's long-poll wait, so an idle
+/// worker asks no more often than a long-polling one would.
+fn idle_backoff(ctx: &SearchProcessingContext) -> std::time::Duration {
+    let rest = ctx.worker.wait_time_seconds() - ADMITTED_RECEIVE_WAIT_SECONDS;
+    std::time::Duration::from_secs(u64::try_from(rest).unwrap_or(0))
+}
 
 /// Spawns multiple search processing workers.
 pub fn run_search_processing_workers(ctx: SearchProcessingContext, worker_count: u8) {
@@ -15,6 +33,17 @@ pub fn run_search_processing_workers(ctx: SearchProcessingContext, worker_count:
         });
     }
 }
+
+/// How one receive-and-process round of a worker ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Round {
+    Processed,
+    Empty,
+    ReceiveFailed,
+}
+
+/// Delay before receiving again after a receive error.
+const RECEIVE_ERROR_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(1);
 
 #[tracing::instrument(skip(ctx))]
 pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, worker_id: u8) {
@@ -30,50 +59,19 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
                         last_heartbeat = std::time::Instant::now();
                     }
 
-                    match ctx.worker.receive_messages().await {
-                        Ok(messages) => {
-                            if messages.is_empty() {
-                                continue;
-                            }
-                            let result = futures::stream::iter(messages.into_iter())
-                                .map(|message| {
-                                    let ctx = ctx.clone();
-                                    async move {
-                                        let result = tokio::time::timeout(
-                                            MESSAGE_PROCESSING_TIMEOUT,
-                                            process::process_message(&ctx, &message)
-                                        ).await;
-
-                                        match result {
-                                            Ok(Ok(_)) => Ok(()),
-                                            Ok(Err(e)) => Err((message.message_id.clone().unwrap_or_default(), e)),
-                                            Err(_) => {
-                                                tracing::error!(
-                                                    message_id = message.message_id.as_deref().unwrap_or("unknown"),
-                                                    "Message processing timed out after 5 minutes"
-                                                );
-                                                Err((message.message_id.clone().unwrap_or_default(), anyhow::anyhow!("Processing timeout")))
-                                            }
-                                        }
-                                    }
-                                })
-                                .buffer_unordered(10)
-                                .collect::<Vec<Result<(), (String, anyhow::Error)>>>()
-                                .await;
-
-                            let errors = result
-                                .into_iter()
-                                .filter_map(|result| result.err())
-                                .collect::<Vec<(String, anyhow::Error)>>();
-
-                            if !errors.is_empty() {
-                                for (message_id, error) in errors {
-                                    tracing::error!(message_id, error=?error, "error processing message");
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(error=?e, "error receiving messages");
+                    // Each round is its own trace: the worker's span never
+                    // closes, so a round under it would never finish one.
+                    let round = tracing::info_span!(
+                        parent: None,
+                        "search.queue_worker.round",
+                        worker_id,
+                        messages = tracing::field::Empty,
+                    );
+                    match receive_and_process(&ctx).instrument(round).await {
+                        Round::Processed => {}
+                        Round::Empty => tokio::time::sleep(idle_backoff(&ctx)).await,
+                        Round::ReceiveFailed => {
+                            tokio::time::sleep(RECEIVE_ERROR_RETRY_DELAY).await;
                         }
                     }
                 }
@@ -95,4 +93,77 @@ pub async fn run_search_processing_worker_with_id(ctx: SearchProcessingContext, 
         tracing::info!("WORKER RESTARTING...");
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
+}
+
+/// Take backfill units, receive at most that many messages, and process them.
+async fn receive_and_process(ctx: &SearchProcessingContext) -> Round {
+    // Units are taken before the receive, so a paused or capped worker leaves
+    // messages on the queue instead of holding them; the short wait keeps an
+    // idle worker from holding units another backfill could use.
+    let mut batch = ctx
+        .backfill_gate
+        .admit_up_to(ctx.messages_per_receive)
+        .await;
+    let wanted = i32::try_from(batch.units()).unwrap_or(1);
+    let receive = ctx
+        .worker
+        .receive_messages_up_to(wanted, ADMITTED_RECEIVE_WAIT_SECONDS);
+    let messages = match tokio::time::timeout(ADMITTED_RECEIVE_DEADLINE, receive).await {
+        Ok(Ok(messages)) => messages,
+        Ok(Err(e)) => {
+            tracing::error!(error=?e, "error receiving messages");
+            return Round::ReceiveFailed;
+        }
+        Err(_) => {
+            tracing::error!(
+                deadline_seconds = ADMITTED_RECEIVE_DEADLINE.as_secs(),
+                "receiving messages timed out"
+            );
+            return Round::ReceiveFailed;
+        }
+    };
+    tracing::Span::current().record("messages", messages.len());
+    if messages.is_empty() {
+        return Round::Empty;
+    }
+    let admitted: Vec<_> = messages
+        .into_iter()
+        .map(|message| (message, batch.take_one()))
+        .collect();
+    drop(batch);
+    let result = futures::stream::iter(admitted)
+        .map(|(message, permit)| {
+            let ctx = ctx.clone();
+            async move {
+                let result = tokio::time::timeout(
+                    MESSAGE_PROCESSING_TIMEOUT,
+                    process::process_message(&ctx, &message),
+                )
+                .await;
+                drop(permit);
+
+                match result {
+                    Ok(Ok(_)) => Ok(()),
+                    Ok(Err(e)) => Err((message.message_id.clone().unwrap_or_default(), e)),
+                    Err(_) => {
+                        tracing::error!(
+                            message_id = message.message_id.as_deref().unwrap_or("unknown"),
+                            "Message processing timed out after 5 minutes"
+                        );
+                        Err((
+                            message.message_id.clone().unwrap_or_default(),
+                            anyhow::anyhow!("Processing timeout"),
+                        ))
+                    }
+                }
+            }
+        })
+        .buffer_unordered(10)
+        .collect::<Vec<Result<(), (String, anyhow::Error)>>>()
+        .await;
+
+    for (message_id, error) in result.into_iter().filter_map(Result::err) {
+        tracing::error!(message_id, error=?error, "error processing message");
+    }
+    Round::Processed
 }
