@@ -76,7 +76,9 @@ gateway `/calendar` prefix.
   (these rounds included) can cause; moving code to `spawn_blocking` would not
   help there.
 - The Outlook sync runs `OUTLOOK_SYNC_LOOPS` (eight) claim loops per task,
-  plus a one-minute queue-depth tick (`calendar.outlook_queue_depth`). The
+  plus a one-minute queue-depth tick (`calendar.outlook_queue_depth`) and a
+  10-second maintenance tick (`calendar.outlook_maintenance`,
+  `OUTLOOK_MAINTENANCE_INTERVAL`) that one task at a time runs. The
   loop count is a code constant, not configuration: one item per account at a
   time keeps it safe at any count, and autoscaling to three tasks runs 24.
   Google's calendar sync runs its 25 backfill workers in the same process.

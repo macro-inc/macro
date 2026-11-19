@@ -518,7 +518,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   so nothing syncs such an account. The sync scheduler's hourly round
   (`services/calendar_service/src/calendar_outbox.rs`) turns it off as a grant
   that loses calendar does (`disable_calendar_capability_tx`: account
-  `disabled`, local copy removed), the maintenance Outlook runs on each claim.
+  `disabled`, local copy removed), Outlook's maintenance on its own tick.
   The calendar view names the inbox with a Reconnect prompt even while another
   inbox works, and a new grant re-imports it.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
@@ -527,16 +527,24 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `event_type`. Filtering on the payload's `eventType` alone makes Postgres
   unpack every source on every primary calendar in the tenant (about 1.8 s per
   call in production before October 2026).
-- `claim_outlook_calendar` runs its maintenance on every poll, so each statement
-  must cost index probes when nothing needs it. Work of unclaimable accounts and
-  deleted calendars stays due, so find candidates per claimable account through
-  `calendar_outlook_work_account_due`, never by walking the global due order.
-  Find replaced generations and expired windows as ranges of
-  `calendar_outlook_work_account_generation`. An `ON CONFLICT DO UPDATE ... WHERE`
-  locks every conflicting row even when the `WHERE` is false: pre-filter rows
-  it would not change, or concurrent claims serialize on those locks.
-  calendar-service runs eight claim loops (`OUTLOOK_SYNC_LOOPS`), so the
-  maintenance runs at eight loops' claim rate. A claim skips an account
+- `maintain_outlook_calendars` (`OutlookCalendarSync::maintain`) creates
+  accounts and discovery rows, resets replaced generations and expired windows,
+  ends reauthorization after a replacement grant and disables accounts that lost
+  the capability. calendar-service runs it every `OUTLOOK_MAINTENANCE_INTERVAL`
+  (10 s) per task behind `pg_try_advisory_xact_lock`, so a new link waits up to
+  that long for its first claim. Keep it out of `claim_outlook_calendar`: under a
+  pinned xmin horizon the cost of its statements grows with dead rows, and claims run
+  many times a second. The claim instead skips rows whose generations or window
+  maintenance has yet to reset, so it never hands out stale work. An
+  `ON CONFLICT DO UPDATE ... WHERE` locks every conflicting row even when the
+  `WHERE` is false: pre-filter rows it would not change.
+- `claim_outlook_calendar` finds candidates per claimable account through
+  `calendar_outlook_work_account_generation`, never by walking the global due
+  order: work of unclaimable accounts and deleted calendars stays due. Lease
+  and release writes change no indexed column, and the table's fillfactor is
+  10, so they stay HOT and the claim reads about one index entry per row even
+  while vacuum is held back; don't index `next_run_at`, `lease_until` or
+  `lease_id`. A claim skips an account
   that holds a live lease, so each mailbox has at most one item in flight
   and uses at most one of its three Graph slots, as Google's one job per
   account does. Two claims racing for an account both pick its first due row,
