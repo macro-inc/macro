@@ -472,6 +472,15 @@ check. It does not rescan a thread or freeze all mailbox history: messages added
 or changed outside these witnesses retain the existing asynchronous population
 and cleanup behavior.
 
+A deferred job goes back to the queue as a new message, after a jittered delay
+that doubles from one second up to a minute, and keeps its delivery budget. A
+policy history page (up to 100 contacts) is deferred whole: its cursor has not
+moved, so the retry scans every contact of the page again, and its writes are
+idempotent. Lock-wait contention already takes this path. Changed evidence adds
+to it only when one of a contact's two witness messages changes between that
+contact's scan and its guards, so a page is not expected to repeat for the same
+contact.
+
 Thread-exclusion controls and API writes are gated by the remote
 `enable-crm-thread-exclusions` flag, off by default in every environment. The
 web registry has no dev default or local override; the CRM domain independently
