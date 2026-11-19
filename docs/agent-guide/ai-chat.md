@@ -1349,6 +1349,19 @@ its execution record carries `language: "ocaml"` and the bundle's
 `CODE_MODE_OCAML_DIR=$(nix build --no-link --print-out-paths .#code-mode-ocaml)`
 and answer the flag on from a PostHog stand-in (`POSTHOG_HOST` in `--env-file`).
 
+When the session owner has `enable-agent-permissions` (no other flag; every
+build with Deno can run them), `ExecuteCode` takes `language: "js_tools"`: a
+JavaScript tools script (opencode's dialect) that calls SDK operations as
+`await tools.<service>.<operation>({path, query, body})` and returns its data,
+which the agent's permissions check before it runs (below). Its description
+then carries the JS tools contract, an example (create a task, read its
+markdown) and the permissions paragraph instead of the OCaml section; an
+OCaml call still runs for an owner who also has `enable-ocaml-code-mode`.
+With the flag off, `ExecuteCode`'s schema and description are exactly as
+above and a `js_tools` call is refused unrun. A JS tools run renders like a
+JavaScript one, and its record carries `language: "js_tools"` and the
+interpreter and catalog's `sdkFingerprint`.
+
 Sessions without a user owner can't run in-process turns at all.
 Summary/compaction calls advertise no tools. The mode
 controls presentation, not authorization; SDK requests retain normal user
@@ -1721,9 +1734,10 @@ agent is instructed not to disclose another person’s earlier private results.
 
 ## Agent permissions in a session
 
-Behind `enable-agent-permissions` and `enable-ocaml-code-mode`, an OCaml
-`ExecuteCode` program is checked against the agent's permissions (Settings →
-Agents → Permissions) before it runs:
+Behind `enable-agent-permissions`, a JS tools (`language: "js_tools"`)
+`ExecuteCode` program, and with `enable-ocaml-code-mode` too an OCaml one, is
+checked against the agent's permissions (Settings → Agents → Permissions)
+before it runs:
 
 - **Ask**: a permission hold (`tool_approval` with `serverSlug: "macro-sdk"`)
   appears above the composer as **Approval needed**: `<Agent> wants to run a
