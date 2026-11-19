@@ -96,16 +96,28 @@ stacks. Process isolation belongs to
   bundle's `sdkFingerprint`, all in the `agent_code_execution.record` JSON,
   so no migration. The flag must be created in PostHog at 0% before anyone
   can be targeted. The public MCP's `UserExecuteCode` stays JavaScript only.
-  JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`) exist
-  for the permissions gate but are not offered yet: no tool takes them
-  (`ExecuteCodeWithOcaml` takes `OcamlToolLanguage`) and `execute` refuses
-  one before minting a credential.
+- JavaScript tools programs (`ProgramLanguage::JsTools`, `js_tools`): a
+  session whose owner has `enable-agent-permissions` (the only flag on them;
+  the harness's `JsToolsRollout`) and whose harness gates them
+  (`CodeModeService::with_js_tools`, wired wherever Deno runs programs) may
+  run `ExecuteCode` with `language: "js_tools"`
+  (`SessionCodeMode::js_tools_enabled`); `permissions_enabled` is then on
+  too. `execute` refuses one without the rollout before minting a
+  credential. Records keep `language` and the interpreter and catalog's
+  `sdkFingerprint` (`code_mode_assets::JS_TOOLS_FINGERPRINT`).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `toolset_with_ocaml()`
   for a session that may run OCaml (`session_toolset` picks; its description
   adds `toolset/session/ocaml.md`, the `Code_mode.run` contract and one
   example), `toolset_with_ocaml_permissions()` when agent permissions gate
   its OCaml programs (`SessionCodeMode::permissions_enabled`; adds
-  `toolset/session/ocaml_permissions.md`), `user_toolset()` for the public MCP.
+  `toolset/session/ocaml_permissions.md`), `toolset_with_js_tools()` for a
+  session that may run JS tools programs (`ExecuteCodeWithJsTools`: adds
+  `toolset/session/js_tools.md` and `js_tools_permissions.md`; it wins over
+  OCaml, whose language it accepts without advertising it),
+  `user_toolset()` for the public MCP. With JS tools off, the session tools
+  are pinned byte for byte by `toolset/test/without_js_tools.json`
+  (`UPDATE_TOOLSET_SNAPSHOT=1` rewrites it; only for a change meant for
+  everyone).
   Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared
   guidance once, there.
@@ -149,6 +161,10 @@ longer delivery state.
   database configuration and `SQLX_OFFLINE` unset.
 - Keep `toolset/session/ocaml.md`'s example compiling: it is the program
   `code_execution`'s OCaml suite runs (`ocaml_tool_example_creates_and_reads_a_task`).
+  `toolset/session/js_tools.md`'s example runs the same way
+  (`toolset/test/js_tools.rs`, `-- --include-ignored` with Deno 2.9.6 on
+  `PATH`), and its operations must be in the JS tools catalog
+  (`the_js_tools_texts_call_catalog_operations`).
 - The review toolset test builds every review tool through shared provider schema
   validation.
 - The SDK catalog and operation labels come from `crates/code_mode_assets`,

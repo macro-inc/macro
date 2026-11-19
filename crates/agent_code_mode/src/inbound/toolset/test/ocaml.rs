@@ -18,7 +18,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 #[derive(Default)]
-struct Store(Mutex<Vec<ExecutionRecord>>);
+pub(super) struct Store(pub(super) Mutex<Vec<ExecutionRecord>>);
 
 #[async_trait]
 impl ExecutionStore for Store {
@@ -51,7 +51,7 @@ impl ExecutionStore for Store {
     }
 }
 
-struct Turn;
+pub(super) struct Turn;
 #[async_trait]
 impl ExecutionTurns for Turn {
     async fn active(&self, _: AgentSessionId) -> Result<Option<macro_uuid::Uuid>, CodeModeError> {
@@ -90,7 +90,7 @@ impl OwnerRollout for On {
     }
 }
 
-async fn read_request(stream: &mut TcpStream) -> String {
+pub(super) async fn read_request(stream: &mut TcpStream) -> String {
     let mut bytes = Vec::new();
     loop {
         let mut buffer = [0; 4096];

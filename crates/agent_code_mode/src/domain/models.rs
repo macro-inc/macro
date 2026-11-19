@@ -57,8 +57,9 @@ pub struct ExecutionIdentity {
 }
 
 /// The language of a session program. OCaml is offered only to sessions
-/// whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout));
-/// JavaScript tools programs are not offered yet.
+/// whose owner has the OCaml rollout ([`OwnerRollout`](super::OwnerRollout)),
+/// JavaScript tools programs only to sessions whose owner has agent
+/// permissions, which gate them.
 #[derive(
     Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema,
 )]
@@ -167,7 +168,8 @@ pub struct ExecutionRecord {
     /// Original turn, preventing another requester from replaying a saved result.
     #[serde(default)]
     pub turn_id: Option<Uuid>,
-    /// The submitted program: a JavaScript module or an OCaml `main.ml`.
+    /// The submitted program: a JavaScript module, an OCaml `main.ml` or a
+    /// JavaScript tools script.
     pub source: String,
     /// The language `source` is written in; historical records are JavaScript.
     /// JavaScript, the default, is left out, so records of sessions without
@@ -175,7 +177,8 @@ pub struct ExecutionRecord {
     #[serde(default, skip_serializing_if = "ProgramLanguage::is_javascript")]
     pub language: ProgramLanguage,
     /// For an OCaml program, the fingerprint of the OCaml SDK bundle it ran
-    /// against (SDK version plus a hash of its interfaces).
+    /// against (SDK version plus a hash of its interfaces); for a JavaScript
+    /// tools program, of the interpreter and catalog it ran with.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sdk_fingerprint: Option<String>,
     /// Overall execution state.
