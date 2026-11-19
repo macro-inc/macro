@@ -155,10 +155,12 @@ pub(super) async fn inboxes_for_macro_id(
         .collect()
 }
 
-/// Which of `ids` `macro_id` owns or has delegated to it. Delegations are read
-/// by the asked links (`macro_user_links_link_idx`), never by the account,
-/// whose delegations can be many: the fence keeps the planner, which guesses
-/// an account has about one, from scanning them by primary key instead.
+/// Which of `ids` `macro_id` owns or has delegated to it, reading one row per
+/// asked id and never the account's links or a link's other delegates, either
+/// of which can be many. The fence keeps the owned check on the primary key;
+/// the lateral probe keeps the delegated check on
+/// `macro_user_links_link_primary_idx`, where a planner that guesses an account
+/// has about one delegation would otherwise scan them all by primary key.
 #[tracing::instrument(err, skip(pool, macro_id, ids), fields(ids = ids.len()))]
 pub(super) async fn inbox_ids_among(
     pool: &PgPool,
@@ -169,25 +171,30 @@ pub(super) async fn inbox_ids_among(
         return Ok(Vec::new());
     }
     let mut tx = pool.begin().await?;
-    // Each picked link's delegations are read whole, and a shared inbox can
-    // have many: a check that saves a routine must not hold a connection long.
+    // A check that saves a routine must not hold a connection long if a plan
+    // ever goes wrong.
     sqlx::query!("SET LOCAL statement_timeout = '5s'")
         .execute(&mut *tx)
         .await?;
     let theirs = sqlx::query_scalar!(
         r#"
-        SELECT el.id AS "id!"
-        FROM email_links el
-        WHERE el.id = ANY($2::uuid[]) AND el.macro_id = $1
-        UNION
-        SELECT delegated.link_id
+        SELECT picked.id AS "id!"
         FROM (
-            SELECT mul.link_id, mul.primary_macro_id
-            FROM macro_user_links mul
-            WHERE mul.link_id = ANY($2::uuid[])
+            SELECT el.id, el.macro_id
+            FROM email_links el
+            WHERE el.id = ANY($2::uuid[])
             OFFSET 0
+        ) picked
+        WHERE picked.macro_id = $1
+        UNION
+        SELECT asked.id
+        FROM unnest($2::uuid[]) AS asked(id)
+        CROSS JOIN LATERAL (
+            SELECT 1
+            FROM macro_user_links mul
+            WHERE mul.link_id = asked.id AND mul.primary_macro_id = $1
+            LIMIT 1
         ) delegated
-        WHERE delegated.primary_macro_id = $1
         "#,
         macro_id.as_ref(),
         ids
