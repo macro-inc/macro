@@ -229,9 +229,22 @@ impl<
             routine.parent_id = link.map(|link| tracing::field::display(link.parent_id)),
             routine.created_by_run_id =
                 link.map(|link| tracing::field::display(link.created_by_run_id)),
+            outcome = tracing::field::Empty,
         );
-        let execution =
-            tracing::Instrument::instrument(self.executor.execute(&run, cancellation), span).await;
+        let execution = tracing::Instrument::instrument(
+            self.executor.execute(&run, cancellation),
+            span.clone(),
+        )
+        .await;
+        span.record(
+            "outcome",
+            match execution.outcome {
+                EventRunOutcome::Succeeded => "succeeded",
+                EventRunOutcome::Failed => "failed",
+                EventRunOutcome::Cancelled { .. } => "cancelled",
+                EventRunOutcome::Interrupted => "interrupted",
+            },
+        );
         let finalized = self
             .repository
             .finalize(FinalizeEventRun {
