@@ -362,9 +362,18 @@ Address: informal, Ty capitalized.
 | notifications | Powiadomienia |
 | done | Ukończone |
 | mark as read | Oznacz jako przeczytane |
-| snooze | Wstrzymaj powiadomienia… |
+| snooze | Wstrzymaj powiadomienia |
 | archive | Archiwizuj |
 | settings | Ustawienia |
+| computer (Macro computer) | Nowy komputer Macro |
+| machine (runs agents) | Twoje maszyny |
+| session (agent) | Rozpocznij sesję |
+| routine | Wszystkie rutyny |
+| saved view | Nowy zapisany widok |
+| call | Rozpocznij rozmowę |
+| contact (CRM) | Zmień firmę kontaktu |
+| company (CRM) | Dodaj firmę |
+| thread (email) | Wyklucz wątek z CRM |
 
 ## Russian (`ru`)
 
