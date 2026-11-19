@@ -386,7 +386,7 @@ function SessionContent(props: {
                     <SessionClearance
                       enabled={persistentFloating()}
                       holdsPrompts={!isTouchDevice()}
-                      class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0 @min-[900px]/agent-session:pr-(--details-clearance)"
+                      class="flex w-full justify-center shrink-0 px-4 pb-2.5 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0 @min-[900px]/agent-session:pr-[max(16px,var(--details-clearance,0px))]"
                     >
                       <div class="composer-anchor mx-auto flex w-full max-w-[896px] flex-col gap-2">
                         <Show
