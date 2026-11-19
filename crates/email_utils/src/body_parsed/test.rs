@@ -123,3 +123,14 @@ fn undecorated_text_has_no_emphasis_marks() {
         Some("Thanks, see you Monday".to_string())
     );
 }
+
+// 600 quote levels indent past the width; the conversion must still return
+// the text rather than html2text's "too narrow" error.
+#[test]
+fn deeply_nested_quotes_overflow_the_width_instead_of_failing() {
+    let html = format!("{}deep text", "<blockquote>".repeat(600));
+
+    let text = html_to_plaintext(&html);
+
+    assert!(text.is_some_and(|text| text.ends_with('t')));
+}

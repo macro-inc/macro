@@ -1,6 +1,14 @@
 use html2text::config::Config;
 use html2text::render::PlainDecorator;
 
+/// The line width html2text lays a body out at. html2text pads every table
+/// row to the width of its columns, and without a limit a column is as wide
+/// as its longest cell, so one long cell over many rows turned kilobytes of
+/// HTML into gigabytes of padding. Longer paragraphs wrap onto new lines;
+/// content that cannot fit, such as deeply nested quotes, overflows the width
+/// instead of failing the conversion.
+const TEXT_WIDTH: usize = 1_000;
+
 /// Convert `body_replyless` into plaintext with link footnotes.
 ///
 /// If the original message had no HTML body, `body_replyless` is already plaintext.
@@ -79,7 +87,9 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
     // takes down the whole message-processing worker, so contain it and treat
     // the body as unparseable instead.
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        config.string_from_read(html.as_bytes(), usize::MAX)
+        config
+            .allow_width_overflow()
+            .string_from_read(html.as_bytes(), TEXT_WIDTH)
     }))
     .inspect_err(|_| {
         tracing::warn!(

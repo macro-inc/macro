@@ -25,7 +25,7 @@ sender/generic-address checks.
 
 ## Boundaries
 
-- Depends on: `ammonia`, `scraper` (no Macro crates).
+- Depends on: `ammonia`, `scraper`, `html2text` (no Macro crates).
 - Used by: `crates/email`, `crates/email_db_client`, `crates/email_api_client`,
   `crates/graphql_email`, `crates/google_token`, `crates/models_email`,
   `services/calendar_service`, `services/email_service`.
@@ -64,6 +64,11 @@ sender/generic-address checks.
   result: `scraper` leaves `<` and `>` unescaped inside attribute values. The
   same goes for removing text from a `<style>` element: what is left must not
   be able to form `</style>`.
+- HTML-to-text conversion (`body_parsed.rs`) renders at `TEXT_WIDTH` and lets
+  content that cannot fit overflow it. Never pass html2text an unbounded width:
+  it pads every table row to its columns' width, so one long cell over many
+  rows costs gigabytes and ran the email workers out of memory.
+  `tests/text_conversion_memory.rs` measures the peak.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack.
 
