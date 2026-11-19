@@ -1,3 +1,4 @@
+import { parseAgentFace, renderFace } from '@macro-inc/agent-faces';
 import { expect, type Page, type TestInfo, test } from '@playwright/test';
 
 type Agent = {
@@ -132,6 +133,8 @@ async function scriptAuthService(
     viewerOwnsRuntimes?: boolean;
   } = {}
 ) {
+  const pictures: Record<string, { url: string | null; avatar_face: unknown }> =
+    {};
   const backend = {
     agents: [...(options.agents ?? [])],
     created: [] as unknown[],
@@ -217,6 +220,15 @@ async function scriptAuthService(
         body: JSON.stringify(body),
       });
 
+    if (path.endsWith('/user/profile_pictures')) {
+      const body: { user_id_list: string[] } = request.postDataJSON();
+      return json(200, {
+        pictures: body.user_id_list.flatMap((id) =>
+          pictures[id] ? [{ id, ...pictures[id] }] : []
+        ),
+      });
+    }
+
     if (path.endsWith('/team_agents') && request.method() === 'GET') {
       backend.reads += 1;
       // The computer comes up, then the agent reports itself online two
@@ -259,6 +271,12 @@ async function scriptAuthService(
         computerId: `computer-${body.name.toLowerCase()}`,
         status: 'provisioning',
         createdAt: '2026-11-11T09:00:00Z',
+      };
+      const avatarUrl: unknown = body.avatarUrl;
+      const avatarFace: unknown = body.avatarFace;
+      pictures[agent.userId] = {
+        url: typeof avatarUrl === 'string' ? avatarUrl : null,
+        avatar_face: avatarFace ?? null,
       };
       backend.agents.push(agent);
       return json(201, agent);
@@ -527,6 +545,15 @@ test('adding an agent waits in the dialog until it is online, then closes into i
   const agentRow = page.locator('[data-member-kind="agent"]');
   await expect(agentRow).toHaveCount(1);
   await expect(agentRow.getByRole('status')).toHaveText('Running');
+  const created = backend.created[0];
+  if (!created || typeof created !== 'object' || !('avatarFace' in created))
+    throw new Error('The invite did not save its face');
+  const savedFace = parseAgentFace(created.avatarFace);
+  if (!savedFace) throw new Error('The invite saved an invalid face');
+  await expect(agentRow.locator('img')).toHaveAttribute(
+    'src',
+    `data:image/svg+xml;charset=utf-8,${encodeURIComponent(renderFace(savedFace, { size: 40 }))}`
+  );
   await expect(agentRow.locator('[data-agent-setup-step]')).toHaveCount(0);
   await screenshot(page, testInfo, 'members-online');
 
