@@ -1,0 +1,56 @@
+services/agent_harness_service/src/code_mode.rs
+  s_e47bee9837a594::t_16dbf760125e6c 21-23,272-276,282,286-299,303-306,309-311,314-333,348-349,354-371,373,377
+services/agent_harness_service/src/main.rs
+  s_e47bee9837a594::t_16dbf760125e6c 681-683,706,958-960,962,995
+crates/agent_code_mode/src/domain/service.rs
+  s_e47bee9837a594::t_be3e87f5eb0ece 102,525-532,721
+  s_e47bee9837a594::t_96c8063b5eaae6 49,52
+crates/agent_code_mode/src/domain/ports.rs
+  s_e47bee9837a594::t_be3e87f5eb0ece 56-58
+  s_e47bee9837a594::t_7bfaf01085722e 60
+crates/agent_code_mode/src/domain/models.rs
+  s_e47bee9837a594::t_010deb4799d821 60-61,72-74,89,99
+crates/agent_code_mode/src/inbound/toolset/test/ocaml.rs
+  s_e47bee9837a594::t_16dbf760125e6c 10,87
+crates/agent_code_mode/src/inbound/toolset/test.rs
+  s_e47bee9837a594::t_b46f5fec79e571 278,285
+  s_e47bee9837a594::t_16dbf760125e6c 401-438
+services/agent_harness_service/src/code_mode/permissions/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 618-826
+  s_e47bee9837a594::t_45d74b2cdd6eee 158,162-163,206,208-211,382,385
+services/agent_harness_service/src/internal_mcp/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 415,422,471,660
+crates/agent_code_mode/src/inbound/toolset.rs
+  s_e47bee9837a594::t_16dbf760125e6c 281
+  s_e47bee9837a594::t_b46f5fec79e571 236,272,279-280,282-296,298
+  s_e47bee9837a594::t_5ce588baf31075 297,299
+crates/agent_code_mode/src/domain/service/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 694,766-786
+  s_e47bee9837a594::t_824a1d2ded9c55 787-788
+services/agent_harness_service/src/code_mode/permissions.rs
+  s_e47bee9837a594::t_9dfb9789e3912d 395-396
+  s_e47bee9837a594::t_16dbf760125e6c 65,75,81,91-92,318-350,352-357,362,369-371,377,393
+  s_e47bee9837a594::t_4ded299a7db0c7 1-4,6-8,15,57-64,66-74,76-80,82-90,93-94,96-97,102-103,111-112,121-124,131-134,137,140,152-155,184,190-194,215-217,236
+crates/agent_code_mode/AGENTS.md
+  s_e47bee9837a594::t_16dbf760125e6c 88,99-102
+services/agent_harness_service/src/code_mode/test.rs
+  s_e47bee9837a594::t_16dbf760125e6c 911-972,981-1004,1006-1008
+  s_e47bee9837a594::t_2fd28a8d2dc0c5 973-980,1005
+  s_e47bee9837a594::t_10f2f38b1ce6f3 842
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "3b3f8aab07ece352cba340af8784a3f5d20a111d",
+  "prompts": {},
+  "sessions": {
+    "s_e47bee9837a594": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5703ce97-1923-419e-b892-abdf036675c3",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
