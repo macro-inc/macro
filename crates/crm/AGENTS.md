@@ -92,6 +92,21 @@ tools/HTTP/GraphQL surfaces over them.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
+- `domain/email_rule_discovery` owns bounded live-source discovery and work
+  accounting; `outbound/email_rule_discovery.rs` supplies factual PostgreSQL
+  reads on the caller's transaction. Reuse the same core for policy validation,
+  replacement admission and Team reads. Resolve each shared source once,
+  retain member visibility, and return a complete result or a named limit error.
+  Keep small/folded strategies within the same ceilings; a direct-pair threshold
+  switches strategy rather than rejecting an otherwise bounded policy.
+  Composition roots inject this adapter through `EmailRuleDiscoveryService`;
+  the lightweight `email_discovery` feature exposes it without the full CRM
+  service. Admission must precede grants and preserve withdrawal after overflow.
+  Batch first pages for more than eight distinct live sources; charge every
+  prefetched raw row before continuing a full source. Keep the total batch within
+  the remaining allowance plus one sentinel, including duplicate and foreign-team
+  values.
+
 - Private policy storage lives in `domain/email_policy.rs` and
   `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
   policy mutation compares the legacy observation under locks, initializes
@@ -214,9 +229,18 @@ tools/HTTP/GraphQL surfaces over them.
 - Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
-  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
-  then the domain advisory lock and entity rows. Never run the mailbox scan
-  under a domain lock: a team backfill queues every population of the domain
+  takes before its domain lock), parent team `KEY SHARE`, an unlocked admission
+  probe and mailbox scan, then fresh mailbox/member/consent guards before the
+  domain advisory lock and entity rows. Never hold the mailbox row lock through
+  the history scan: overlapping populations can starve an exclusive sync writer.
+  Recheck live mailbox, membership and captured consent generation after the scan
+  in `READ COMMITTED`; keep the privacy/contact guards across both phases so
+  exclusions and teardown cannot invalidate its results. Check the two message
+  witnesses and matched contacts by primary key after authority: changed evidence
+  returns `Contended` for an unlocked retry, never a history scan under the row
+  guard. This neither re-evaluates a witness thread's privacy rules nor freezes
+  other mailbox history. Never run the mailbox
+  scan under a domain lock: a team backfill queues every population of the domain
   behind it. Population transactions set a five-second `lock_timeout` and
   return `CrmError::Contended` so their job is deferred, not held. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through

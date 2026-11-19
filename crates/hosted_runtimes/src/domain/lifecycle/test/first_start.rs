@@ -290,3 +290,83 @@ fn a_state_row_written_before_first_start_tracking_still_decodes() {
     assert_eq!(state.first_start_failures, 0);
     assert_eq!(state.refund, None);
 }
+
+/// The hand-off carries no acknowledgement, so it is sent again on a timer
+/// until the agent reports online; a lost one can't fail the agent's start.
+#[test]
+fn an_agent_is_handed_over_again_until_it_reports_online() {
+    let (connected, effects) = apply(&agent_setting_up(), Event::MacrodConnected);
+    assert!(effects.contains(&Effect::ScheduleTimer {
+        kind: TimerKind::AgentRedeliver,
+        at: now() + AGENT_REDELIVERY,
+    }));
+
+    let (again, effects) = apply(&connected, Event::AgentRedeliver);
+    assert_eq!(
+        effects,
+        vec![
+            Effect::DeliverAgent,
+            Effect::ScheduleTimer {
+                kind: TimerKind::AgentRedeliver,
+                at: now() + AGENT_REDELIVERY,
+            },
+        ]
+    );
+
+    let (online, _) = apply(&again, Event::AgentOnline);
+    let (_, effects) = apply(&online, Event::AgentRedeliver);
+    assert_eq!(effects, vec![]);
+}
+
+#[test]
+fn an_agent_computer_whose_macrod_cannot_take_an_agent_fails_at_once() {
+    let (failed, effects) = apply(
+        &agent_setting_up(),
+        Event::MacrodConnectedWithoutAgentHandOff,
+    );
+
+    assert!(matches!(failed.phase, Phase::Crashed { retry: None, .. }));
+    assert_eq!(failed.failure, Some(Failure::AgentUnsupported));
+    assert_eq!(failed.first_start_failures, 1);
+    assert!(!effects.contains(&Effect::DeliverAgent));
+    assert!(
+        effects.contains(&Effect::PageOperator {
+            reason: "macrod on this computer declared no apply-agent capability: its image \
+                 predates agent hand-off"
+                .to_owned(),
+        })
+    );
+    assert!(effects.contains(&Effect::NotifySetup {
+        outcome: SetupOutcome::Failed {
+            failure: Failure::AgentUnsupported,
+            failed_at: now(),
+        },
+    }));
+}
+
+#[test]
+fn a_person_computer_runs_on_a_macrod_that_cannot_take_an_agent() {
+    let without = apply(&setting_up(), Event::MacrodConnectedWithoutAgentHandOff);
+
+    assert_eq!(without, apply(&setting_up(), Event::MacrodConnected));
+    assert_eq!(without.0.phase, Phase::Running);
+}
+
+/// A computer that gave up waits for a retry: macrod reconnecting to it hands
+/// no agent over and starts no new deadline.
+#[test]
+fn macrod_reconnecting_to_a_computer_that_gave_up_hands_no_agent_over() {
+    let (connected, _) = apply(&agent_setting_up(), Event::MacrodConnected);
+    let (failed, _) = apply(&connected, Event::AgentStartDue);
+
+    let (_, effects) = apply(&failed, Event::MacrodConnected);
+
+    assert!(!effects.contains(&Effect::DeliverAgent));
+    assert!(!effects.iter().any(|effect| matches!(
+        effect,
+        Effect::ScheduleTimer {
+            kind: TimerKind::AgentStartDue | TimerKind::AgentRedeliver,
+            ..
+        }
+    )));
+}

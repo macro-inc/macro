@@ -19,7 +19,11 @@ pub async fn process_call_record(
     let Some(payload) =
         macro_db_client::call_record::get::get_call_record_search_payload(db, &call_id).await?
     else {
-        tracing::debug!(call_id = %call_id, "call record no longer exists; skipping");
+        tracing::info!(call_id = %call_id, "call record no longer exists; removing it from search");
+        opensearch_client
+            .delete_call_record(&call_id.to_string(), index_override)
+            .await
+            .context("failed to remove a call record that no longer exists from search")?;
         return Ok(());
     };
 
@@ -100,3 +104,6 @@ pub async fn process_remove_call_record(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod test;

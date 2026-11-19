@@ -353,3 +353,33 @@ async fn callers_waiting_on_a_failed_login_share_its_failure() {
             .cache_hit
     );
 }
+
+#[tokio::test]
+async fn callers_waiting_on_an_unprovisioned_login_share_its_error() {
+    let cache = TokenCache::new(CAPACITY);
+    let logins = AtomicUsize::new(0);
+    let team = team();
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let released = tokio::sync::Mutex::new(Some(released));
+    let callers = (0..2).map(|_| {
+        cache.session(team, || async {
+            logins.fetch_add(1, Ordering::SeqCst);
+            if let Some(released) = released.lock().await.take() {
+                released.await.expect("release");
+            }
+            Err(crate::domain::models::Error::NotProvisioned)
+        })
+    });
+    let all = futures::future::join_all(callers);
+    tokio::pin!(all);
+    assert!(futures::poll!(&mut all).is_pending());
+    release.send(()).expect("release");
+    let results = all.await;
+    assert_eq!(logins.load(Ordering::SeqCst), 1);
+    assert!(
+        results
+            .iter()
+            .all(|result| matches!(result, Err(crate::domain::models::Error::NotProvisioned))),
+        "a waiter must get the leader's typed error, not a generic outage"
+    );
+}

@@ -104,7 +104,6 @@ export default {
     close: 'Luk',
     delete: 'Slet',
     rename: 'Omdøb',
-    more: 'Mere',
     search: 'Søg',
     settings: 'Indstillinger',
   },

@@ -375,6 +375,7 @@ dependencies = [
  "specta-typescript",
  "sqlx",
  "system_skills",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -784,6 +785,7 @@ dependencies = [
  "opentelemetry_sdk",
  "pipedream_mcp",
  "png",
+ "projects",
  "prompt",
  "properties",
  "rate_limit",
@@ -969,6 +971,7 @@ dependencies = [
  "tokio-tungstenite 0.28.0",
  "tracing",
  "utoipa",
+ "zeroize",
 ]
 
 [[package]]
@@ -4017,6 +4020,7 @@ dependencies = [
  "call",
  "chrono",
  "chrono-tz",
+ "connection_gateway_client",
  "email_utils",
  "email_validator",
  "futures",
@@ -4032,6 +4036,8 @@ dependencies = [
  "model_user",
  "models_pagination",
  "notification",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "reqwest 0.13.4",
  "rootcause",
  "schemars 1.2.1",
@@ -4044,6 +4050,8 @@ dependencies = [
  "tokio-util",
  "tower 0.5.3",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "urlencoding",
  "utoipa",
  "uuid",
@@ -4421,6 +4429,8 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model-error-response",
+ "notification",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -4738,6 +4748,7 @@ dependencies = [
  "rustix 1.1.6",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -6911,7 +6922,6 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
- "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -14623,6 +14633,7 @@ dependencies = [
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
+ "channel_labels",
  "chrono",
  "database_env_vars",
  "doppler-config",
@@ -15699,6 +15710,7 @@ dependencies = [
  "opentelemetry_sdk",
  "password_import",
  "rootcause",
+ "rsa",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -18332,6 +18344,7 @@ dependencies = [
  "chrono",
  "macro_db_migrator",
  "macro_uuid",
+ "model-entity",
  "rootcause",
  "serde",
  "serde_json",
@@ -18530,6 +18543,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "search_freshness_probe"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "doppler-config",
+ "futures",
+ "item_filters",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "messages",
+ "model",
+ "models_permissions",
+ "models_properties",
+ "models_search",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
@@ -18537,6 +18588,7 @@ dependencies = [
  "agent_session",
  "ai_engine",
  "anyhow",
+ "aws-sdk-cloudwatch",
  "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-sqs",
@@ -18577,7 +18629,6 @@ dependencies = [
  "macro_queues",
  "macro_service_urls",
  "macro_user_id",
- "macro_uuid",
  "mention_utils",
  "messages",
  "model",
@@ -20976,8 +21027,10 @@ dependencies = [
 name = "system_skills"
 version = "0.1.0"
 dependencies = [
+ "model-entity",
  "prompt",
  "routine_program",
+ "serde_json",
  "uuid",
  "workspace-hack",
 ]
@@ -24511,6 +24564,7 @@ dependencies = [
  "sha2 0.10.9",
  "tempfile",
  "tokio",
+ "uuid",
  "xtask_local_telemetry",
  "xtask_paths",
  "xtask_ports",

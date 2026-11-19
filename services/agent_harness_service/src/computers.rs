@@ -12,7 +12,9 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
 
-use agent_harness::domain::ports::{ConnectionRecorded, HarnessPresence, RuntimeConnectionId};
+use agent_harness::domain::ports::{
+    ConnectionRecorded, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+};
 use anyhow::Context;
 use harness_id::HarnessId;
 use harnesses::domain::models::CreateHostedPairing;
@@ -638,6 +640,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>> {
         Box::pin(async move {
             let mut guard = match PresenceGuard::lock(&self.presence_pool, harness).await {
@@ -647,7 +650,9 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
                     return ConnectionRecorded::AgentsUnchanged;
                 }
             };
-            let mut recorded = Arc::clone(&self.inner).connected(harness, connection).await;
+            let mut recorded = Arc::clone(&self.inner)
+                .connected(harness, connection, accepts)
+                .await;
             match guard.is_connected().await {
                 Ok(true) => {}
                 Ok(false) => return recorded,
@@ -658,7 +663,7 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
             }
             if let Some(operator) = &self.operator
                 && let Ok(MacrodConnected::AgentBound) = operator
-                    .macrod_connected(harness)
+                    .macrod_connected(harness, accepts.apply_agent)
                     .await
                     .inspect_err(|error| tracing::error!(%harness, error = ?error, "computer connect event failed"))
             {

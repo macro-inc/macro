@@ -45,8 +45,28 @@
 //   absent for the calendar topic, whose events carry no tag) and `outcome`
 //   (`published`, `failed`, `timed_out`, `unserializable`, `cancelled`).
 //
-// All are exported every 60 s, and percentiles are not enabled on the lag
-// histogram, so it is graphed by max and count.
+// - `search.freshness.probe_seconds`: seconds from a write the API
+//   acknowledged to the first search that showed it (histogram), recorded by
+//   services/search_freshness_probe in src/outbound/metrics.rs. The probe acts
+//   as its own user through the public gateway, one round a minute per kind
+//   of round, by `entity_type` (`document`, `message`, `project`, `property`,
+//   `agent_session`, `call`), tagged `operation` (`create`, `edit`,
+//   `rename`, `delete`, and `crowded_prefix`: a document found by a crowded
+//   prefix alone, which only a search expanding every match finds). Searches
+//   come every second for the first minute,
+//   then every 5 s; a round gives up at 300 s, or after 30 s of failed
+//   searches. Search hides a deleted entity through its database check, so a
+//   delete round measures that, not the index.
+// - `search.freshness.probe_rounds`: finished probe rounds (counter), tagged
+//   `entity_type`, `operation` and `outcome` (`seen` within 60 s, `late`
+//   after it, `unseen` at 300 s, the probe's own failures `write_failed`
+//   and `search_failed`, and `fixture_missing` for a type whose fixture is
+//   not seeded yet, which probed nothing and no monitor counts).
+//
+// All are exported every 60 s, and percentiles are not enabled on the
+// histograms, so they are graphed by max and count. The probe records one
+// round a minute per entity type and operation, so its max over a minute is
+// that round.
 //
 // The monitors judge the backlog, not the lag of processed events, so a stall
 // fires them. The email topic carries mailbox imports beside live mail, on the
@@ -61,6 +81,9 @@ import * as datadog from '@pulumi/datadog';
 import { graphGroup, prodMonitor, thresholdGraph } from '../prod-monitor';
 
 const SERVICE = 'search-processing-service';
+const PROBE_SERVICE = 'search-freshness-probe';
+const PROBE = `env:$env.value,service:${PROBE_SERVICE}`;
+const PROD_PROBE = `env:prod,service:${PROBE_SERVICE}`;
 const INDEXER = `env:$env.value,service:${SERVICE}`;
 const PROD = `env:prod,service:${SERVICE}`;
 const PUBLISHERS = 'env:$env.value';
@@ -86,6 +109,30 @@ const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
 const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
+// Late and unseen are counted, not timed: a slow round records its seconds
+// only when it ends, so slow rounds leave the minutes between them empty.
+// They judge each entity type's rotation rounds together, one a minute,
+// since a type's operations take turns and alone would be too few rounds to
+// judge. The crowded-prefix round is a recall check, not a freshness one, so
+// it is judged apart.
+const ROTATION = '!operation:crowded_prefix';
+const CROWDED_PREFIX = 'operation:crowded_prefix';
+const PROBE_LATE = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:late} by {entity_type}.as_count()`;
+const PROBE_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${ROTATION},outcome:unseen} by {entity_type}.as_count()`;
+const PROBE_PREFIX_UNSEEN = `sum:search.freshness.probe_rounds{${PROD_PROBE},${CROWDED_PREFIX},outcome:unseen} by {entity_type}.as_count()`;
+// The failing share is per operation: documents have two kinds of round, and
+// a failure of one would sit at half the share and never pass it.
+// A round skipped because its fixture is not seeded yet (`fixture_missing`)
+// probed nothing, so it counts neither as a failure nor in the share.
+const PROBE_FAILING = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:seen,!outcome:late,!outcome:unseen,!outcome:fixture_missing} by {entity_type,operation}.as_count()`;
+const PROBE_PROBED = `sum:search.freshness.probe_rounds{${PROD_PROBE},!outcome:fixture_missing} by {entity_type,operation}.as_count()`;
+const PROBE_ROUNDS = `sum:search.freshness.probe_rounds{${PROD_PROBE}} by {entity_type}.as_count()`;
+
+// The probe runs in prod only once RUNS_IN_PROD is set in
+// infra/stacks/search-freshness-probe/service.ts. Until then a heartbeat
+// would report it silent every hour, so it is declared only from then; the
+// other probe monitors stay quiet without data.
+const PROBE_RUNS_IN_PROD = false;
 
 const TITLES = {
   liveBacklog: 'Search indexing behind on live changes',
@@ -95,6 +142,11 @@ const TITLES = {
   dropped: 'Search events committed without reaching the index',
   offsetReset: 'Search indexer reset a Kafka position after an error',
   silent: 'Search indexer reports no backlog readings',
+  probeLate: 'Search shows changes late end to end',
+  probeUnseen: 'Search never showed probe changes',
+  probePrefixUnseen: 'Search content prefix search drops matches',
+  probeFailing: 'Search freshness probe cannot write or search',
+  probeSilent: 'Search freshness probe reports no rounds',
 };
 
 const TARGETS: datadog.types.input.DashboardWidgetTimeseriesDefinitionMarker[] =
@@ -184,6 +236,49 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           query: READINGS,
           critical: '0',
         }),
+      ]),
+      graphGroup('Probe monitors (prod)', [
+        thresholdGraph({
+          title: TITLES.probeLate,
+          query: `${PROBE_LATE}.rollup(sum, 900)`,
+          critical: '3',
+        }),
+        thresholdGraph({
+          title: TITLES.probeUnseen,
+          query: `${PROBE_UNSEEN}.rollup(sum, 1800)`,
+          critical: '2',
+        }),
+        thresholdGraph({
+          title: TITLES.probePrefixUnseen,
+          query: `${PROBE_PREFIX_UNSEEN}.rollup(sum, 1800)`,
+          critical: '2',
+        }),
+        thresholdGraph({
+          title: TITLES.probeFailing,
+          query: `${PROBE_FAILING}.rollup(sum, 900) / ${PROBE_PROBED}.rollup(sum, 900)`,
+          critical: '0.5',
+        }),
+        thresholdGraph({
+          title: TITLES.probeSilent,
+          query: `${PROBE_ROUNDS}.rollup(sum, 600)`,
+          critical: '1',
+        }),
+      ]),
+      graphGroup('End to end', [
+        lines(
+          'Seconds until search showed a probe change, by entity type',
+          `max:search.freshness.probe_seconds{${PROBE}} by {entity_type}.fill(null)`,
+          TARGETS
+        ),
+        lines(
+          'Seconds until search showed a probe change, by operation',
+          `max:search.freshness.probe_seconds{${PROBE}} by {entity_type,operation}.fill(null)`,
+          TARGETS
+        ),
+        bars(
+          'Probe rounds by outcome',
+          `sum:search.freshness.probe_rounds{${PROBE}} by {entity_type,outcome}.as_count()`
+        ),
       ]),
       graphGroup('Behind', [
         lines(
@@ -328,3 +423,74 @@ prodMonitor('search-indexer-silent', {
   runbook: `${RUNBOOK}#no-readings`,
   noDataTimeframe: 10,
 });
+
+prodMonitor('search-probe-late', {
+  title: TITLES.probeLate,
+  service: PROBE_SERVICE,
+  query: `sum(last_15m):${PROBE_LATE} >= 3`,
+  monitorThresholds: { critical: '3' },
+  pages: false,
+  description:
+    "In the last 15 minutes, search showed at least the threshold's number of the probe's {{entity_type.name}} changes only after 60 s, measured from the API acknowledging the write. Users see their {{entity_type.name}} changes in search that late.",
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
+  dashboard,
+  runbook: `${RUNBOOK}#probe-late`,
+});
+
+prodMonitor('search-probe-unseen', {
+  title: TITLES.probeUnseen,
+  service: PROBE_SERVICE,
+  query: `sum(last_30m):${PROBE_UNSEEN} >= 2`,
+  monitorThresholds: { critical: '2' },
+  pages: false,
+  description:
+    "In the last 30 minutes, search still did not show the probe's {{entity_type.name}} change five minutes after the write, more than once. A change that never shows is a freshness miss. An unseen round lasts five minutes, so a type has at most six in the window.",
+  dashboard,
+  runbook: `${RUNBOOK}#probe-unseen`,
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
+});
+
+prodMonitor('search-probe-prefix-unseen', {
+  title: TITLES.probePrefixUnseen,
+  service: PROBE_SERVICE,
+  query: `sum(last_30m):${PROBE_PREFIX_UNSEEN} >= 2`,
+  monitorThresholds: { critical: '2' },
+  pages: false,
+  description:
+    "In the last 30 minutes, the probe's crowded_prefix round missed its {{entity_type.name}} more than once: a partial search for con alone did not find the probe's new document, one word that sorts late under con. If the other document rounds pass, content prefix search is dropping matches, likely through a prefix expansion capped per shard, and users miss results for short prefixes; if they miss too, documents are not reaching the index. An unseen round lasts five minutes, so there are at most six in the window.",
+  dashboard,
+  runbook: `${RUNBOOK}#probe-prefix-unseen`,
+  alertDetail: '{{value}} rounds',
+  recoveryDetail: '{{value}} rounds',
+});
+
+prodMonitor('search-probe-failing', {
+  title: TITLES.probeFailing,
+  service: PROBE_SERVICE,
+  query: `sum(last_15m):${PROBE_FAILING} / ${PROBE_PROBED} > 0.5`,
+  monitorThresholds: { critical: '0.5' },
+  pages: false,
+  description:
+    "More than half of the probe's {{entity_type.name}} {{operation.name}} rounds in 15 minutes failed to write or to search; a round ends as a search failure after 30 s of failed searches, so a search outage fails one a minute. Freshness of {{entity_type.name}} is not measured while it lasts.",
+  dashboard,
+  runbook: `${RUNBOOK}#probe-failing`,
+  alertDetail: '{{value}} of rounds',
+  recoveryDetail: '{{value}} of rounds',
+});
+
+if (PROBE_RUNS_IN_PROD) {
+  prodMonitor('search-probe-silent', {
+    title: TITLES.probeSilent,
+    service: PROBE_SERVICE,
+    query: `sum(last_10m):${PROBE_ROUNDS} < 1`,
+    monitorThresholds: { critical: '1' },
+    pages: false,
+    description:
+      'The probe has finished no {{entity_type.name}} round for 10 minutes: it is down, stuck, or not exporting metrics. End-to-end freshness is unknown, not good.',
+    dashboard,
+    runbook: `${RUNBOOK}#probe-silent`,
+    noDataTimeframe: 10,
+  });
+}

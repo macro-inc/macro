@@ -2295,6 +2295,10 @@ export type ChangeBookingErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    /**
+     * The host's calendar refused the reschedule; the booking keeps its original time
+     */
+    422: unknown;
 };
 
 export type ChangeBookingResponses = {

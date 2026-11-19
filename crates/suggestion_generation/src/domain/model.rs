@@ -86,17 +86,12 @@ impl SessionLayout {
 }
 
 impl Default for SessionLayout {
-    /// Three sessions by surface group, the layout the suggestion benchmark
-    /// chose: each hands back its catalog picks in about 20 to 35 seconds,
-    /// then drafts.
+    /// One session for every surface, the layout the suggestion benchmark
+    /// chose: a session that sees all of them picks the few routines the
+    /// person's mail calls for, where split sessions each fill their own
+    /// surfaces, and it reads the mail once instead of once per group.
     fn default() -> Self {
-        Self {
-            sessions: vec![
-                vec![Surface::Email, Surface::Calendar, Surface::Tasks],
-                vec![Surface::Crm, Surface::Calls, Surface::Chat],
-                vec![Surface::Files, Surface::Reviews, Surface::Agents],
-            ],
-        }
+        Self::single()
     }
 }
 

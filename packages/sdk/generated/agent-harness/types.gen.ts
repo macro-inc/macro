@@ -1968,7 +1968,7 @@ export type ExecutionRecord = {
      */
     result?: unknown;
     /**
-     * The submitted JavaScript module.
+     * The submitted TypeScript module.
      */
     source: string;
     /**

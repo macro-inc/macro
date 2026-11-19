@@ -16,6 +16,19 @@ mod test;
 /// computer restored as an agent's, and empties the inbox.
 pub const AGENT_ENV_INBOX: &str = "/run/macro-agent-inbox/agent.env";
 
+/// Where the guest installs the staged environment; the agent reads it.
+pub const AGENT_ENV_INSTALLED: &str = "/var/lib/macrod/agent.env";
+
+/// What staging an environment did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Staged {
+    /// Written to the inbox for the guest to install.
+    Written,
+    /// The agent already runs with exactly this environment (a hand-off sent
+    /// again): nothing was written, so the guest doesn't restart the agent.
+    Unchanged,
+}
+
 /// Where macrod stages the computer's setup trace for the agent's start
 /// (`start-agent` reads it). Beside the environment, never in it: each
 /// redelivery carries a fresh trace context, and a changed environment
@@ -29,8 +42,9 @@ pub const SETUP_TRACEPARENT_INBOX: &str = "/run/macro-agent-inbox/setup-tracepar
 /// inbox directory is absent: only an agent computer's guest has one.
 pub fn stage_agent_env(
     path: &Path,
+    installed: &Path,
     environment: &BTreeMap<String, String>,
-) -> rootcause::Result<()> {
+) -> rootcause::Result<Staged> {
     use hosted_runtimes::domain::agent::{AgentEnv, AgentEnvKey, InvalidAgentEnvKey};
 
     let inbox = path
@@ -43,12 +57,19 @@ pub fn stage_agent_env(
         .iter()
         .map(|(key, value)| Ok((AgentEnvKey::new(key.clone())?, value.clone())))
         .collect::<Result<BTreeMap<_, _>, InvalidAgentEnvKey>>()
-        .map_err(|error| rootcause::report!("{error}"))?;
-    let env = AgentEnv::new(values).map_err(|error| rootcause::report!("{error}"))?;
+        .context("the agent environment names an invalid variable")?;
+    let env = AgentEnv::new(values).context("the agent environment has an invalid value")?;
+    let contents = env_file(&env);
+    let current = std::fs::read_to_string(installed)
+        .ok()
+        .map(zeroize::Zeroizing::new);
+    if current.as_deref().map(String::as_str) == Some(contents.as_str()) {
+        return Ok(Staged::Unchanged);
+    }
     let staging = path.with_extension("partial");
-    write_private(&staging, &env_file(&env))?;
+    write_private(&staging, &contents)?;
     std::fs::rename(&staging, path).context(format!("could not stage {}", path.display()))?;
-    Ok(())
+    Ok(Staged::Written)
 }
 
 /// Stage the first valid setup `traceparent` at `path` for the agent's start;
@@ -74,8 +95,8 @@ pub fn stage_setup_traceparent(path: &Path, traceparent: Option<&str>) -> rootca
 /// and single-line values are validated by [`AgentEnv`].
 ///
 /// [`AgentEnv`]: hosted_runtimes::domain::agent::AgentEnv
-fn env_file(env: &hosted_runtimes::domain::agent::AgentEnv) -> String {
-    let mut contents = String::new();
+fn env_file(env: &hosted_runtimes::domain::agent::AgentEnv) -> zeroize::Zeroizing<String> {
+    let mut contents = zeroize::Zeroizing::new(String::new());
     for (key, value) in env.expose() {
         let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
         contents.push_str(&format!("{}=\"{escaped}\"\n", key.as_str()));

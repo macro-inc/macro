@@ -15,6 +15,8 @@ changing what it does.
    it before changing anything under `behavior/`.
 3. `ENGINEERING.md` is how a change or a fix is made.
 4. Its memory is `state/memory/`: `shared/notes.md` first.
+5. Chat's `DESIGN.md` describes the outgoing internal-wording advisory and its
+   limits; keep the charter and reply prompt aligned when changing how it talks.
 
 ## Capabilities
 
