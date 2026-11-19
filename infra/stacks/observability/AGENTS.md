@@ -2,18 +2,24 @@
 
 ## What it is
 
-The Ohio (us-east-2) Grafana host: Grafana, Loki, Tempo, Prometheus, Alloy and
-the GoAlert on-call pager on one NixOS EC2 instance, separate from production in
-us-east-1. `README.md` is the full operations guide.
+The Ohio (us-east-2) GoAlert host: GoAlert with its Postgres, nginx for
+`oncall.macro-internal.com`, the Macro Alerts relay, and Alloy and the
+CloudWatch agent for its own health, on one NixOS EC2 instance separate from
+production in us-east-1. It also owns the ALB, certificate, DNS and the two
+buckets the observability cluster (`infra/k8s/observability`) runs Grafana,
+Loki, Tempo, Mimir and OTLP ingest behind. `README.md` is the full operations
+guide.
 
 ## Start here
 
 - `nixos/host.nix`: boot order, retained volume, stable uids, service hardening.
-- `nixos/services.nix`, `nixos/goalert.nix`: the systemd services and credentials.
+- `nixos/goalert.nix`, `nixos/proxy.nix`, `nixos/host-telemetry.nix`: the
+  systemd services and their credentials.
 - `nixos/grafana-provisioning/`: every dashboard, alert rule, contact point and
-  datasource as plain Nix data (`default.nix`), imported by the host and, once
-  it exists, the cluster Grafana in `infra/k8s/observability/cluster/`.
-- `index.ts`: VPC, ALB, certificate, DNS, alarms and EC2 user data.
+  datasource as plain Nix data (`default.nix`). Only the cluster's Grafana
+  imports it, with `nixos/grafana.nix`, `nixos/backend-config.nix` and
+  `nixos/ingest.alloy`; the host's image reads none of them.
+- `index.ts`: VPC, ALB, certificate, DNS, alarms, the host role and EC2 user data.
 - `deploy/`: the Deploy Observability workflow's steps (`release.ts`), the image
   source key, AMI publishing, the smoke boot and the plan check. README
   "Deploying" describes them.
@@ -42,24 +48,26 @@ Paths below `grafana-provisioning/` are under `nixos/`.
   `grafana-provisioning/loki-report-panels.nix`.
 - Add a dashboard: a file in `grafana-provisioning/` taking `{ lib }` and
   returning the dashboard JSON, listed in `dashboards` in its `default.nix`.
-  A new provider also needs its store name in `dashboardFolderNames`
-  (`nixos/services.nix`).
-- Anything Grafana provisions that differs between the host and the cluster
-  (an address, a URL) is a parameter of `grafana-provisioning/default.nix`,
-  passed by `nixos/services.nix` and the cluster's Grafana module; never a host
-  value written into the data.
-- Refactor Grafana provisioning without changing the host: compare
-  `nix eval --raw .#nixosConfigurations.observability.config.system.build.toplevel.outPath`
-  before and after. The same path means Deploy Observability only retags the AMI.
+- Anything Grafana provisions that depends on where Grafana runs (an address, a
+  URL) is a parameter of `grafana-provisioning/default.nix`, passed by the
+  cluster's Grafana module; never a value written into the data.
+- A Grafana change ships with the cluster, not the host: it needs no AMI and no
+  Deploy Observability run (`NOT_IMAGE_INPUTS` in `deploy/image-key.ts`).
 - Add a runtime setting: `settings.ts` → `render.ts` (bump the schema version) →
   `nixos/read-user-data.py` (keys, pattern, version) → the consuming `.nix` file.
-- Add a secret: `assets/refresh-secrets.py` (validation) → `LoadCredential` in
-  the unit → README secret list. Add the unit to `secretConsumers` in `host.nix`.
+- Add a host secret: `assets/refresh-secrets.py` (validation) → `LoadCredential`
+  in the unit → README secret list, and `smokeSecret` in `deploy/smoke.ts`. Add
+  the unit to `secretConsumers` in `host.nix`. Keys only the cluster reads stay
+  in the secret but out of `refresh-secrets.py`.
 - Upgrade GoAlert: bump `version` and the hashes in `nixos/goalert/package.nix`.
 - Ship a host change: merge it, then run **Deploy Observability** from `main`, a
   dry run first. Pulumi picks the AMI by the source-hash tag; there is no `amiId`.
 - A new file the image reads must sit under `flake.nix`, `flake.lock`, `nixos/`
-  or `assets/` (`deploy/image-key.ts`); the key test fails otherwise.
+  or `assets/`, outside `NOT_IMAGE_INPUTS` (`deploy/image-key.ts`); the key test
+  fails otherwise.
+- A new host unit goes in `UNITS` (`deploy/smoke.ts`) and the README's
+  `systemctl status` line; `deploy/deploy.test.ts` checks both against
+  `host.nix` `services`.
 - A new kind of smoke resource needs its delete in `cleanupSmoke` (`deploy/smoke.ts`);
   `deploy/deploy.test.ts` fails on a create without one.
 
@@ -77,27 +85,30 @@ then Biome on changed `.ts`.
 ## Gotchas
 
 - Changes ship only through the Deploy Observability workflow, which replaces the
-  host and takes Grafana, Loki, Tempo and GoAlert down for several minutes. Never
-  run it, `pulumi up` or publish an image without explicit permission.
+  host and takes GoAlert down for several minutes. Never run it, `pulumi up` or
+  publish an image without explicit permission.
 - A plan that changes anything besides the instance, its attachments and its
-  alarms is refused by the workflow and needs a reviewed manual `pulumi up`.
+  alarms, such as the host role's policy, is refused by the workflow and needs a
+  reviewed, targeted manual `pulumi up` (README, "Deploying").
 - `pulumi preview` fails until an AMI is tagged for this checkout's image source;
   a dry run of the workflow builds and tags one.
 - The host reads secrets from the stack's own Secrets Manager secret in
   us-east-2, so it never depends on production to boot. Doppler
-  `observability/prd` holds the values; copy changes into the secret.
+  `observability/prd` holds the values; copy changes into the secret. The
+  cluster reads the same secret for its own keys.
 - A service listed in `host.nix` `services` gets `ProtectSystem=strict`, metadata
   blocking and the bootstrap dependency; one that needs the instance role must be
   in the `IPAddressDeny` exception list or run as its own unit.
+- `host.nix` `dataUsers` uids own data on the retained volume; never reuse a
+  removed service's uid.
 - GoAlert's application config lives in its database; `goalert/apply-config.py`
   overwrites it on every start from `goalert.nix`. `set-config` accepts invalid
   values silently, so check the journal for `validate config`.
 - Grafana keeps a provisioned contact point removed from
   `grafana-provisioning/alerting.nix`; list its uid in `deleteContactPoints` to
   delete it.
-- `oncall.macro-internal.com` answers 404 on `/api/v2/grafana/` (`proxy.nix`):
-  the host's Grafana pages GoAlert over loopback, so a Grafana elsewhere
-  passing that `goalertUrl` cannot page until the vhost allows it.
 - Grafana provisioning expands `$VAR` in contact point settings, but not in rule
   queries or annotations, so `$B` and `$values` work there and secrets must come
-  in through the Grafana unit's environment.
+  in through Grafana's environment.
+- Host Alloy's metrics carry `job="integrations/unix"` and `integrations/self`,
+  not the scrapes' `job_name`: Alloy's exporters set `job` on their targets.
