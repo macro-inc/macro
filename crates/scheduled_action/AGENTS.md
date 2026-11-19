@@ -148,7 +148,11 @@ each run.
   `session`), names found, left and not looked up, the session id,
   checks, items created, the session's tool calls and turns, status
   reads, whether a single
-  agent task became steps (`routine.draft.agent_task`) and outcome
+  agent task became steps (`routine.draft.agent_task`), whether its owner
+  may define sub-routines (`routine.draft.sub_routines_available`), how many
+  steps and definitions the draft handed back (`routine.draft.steps`,
+  `routine.draft.sub_routines`), whether hand-back refused its definitions
+  (`routine.draft.sub_routines_refused`) and outcome
   (`timeout` included), never the words or the names; `routine.draft.find` records
   the answer's size and `routine.draft.lookup` what it found;
   `routine.check` records whether a check passed and kept a draft's
