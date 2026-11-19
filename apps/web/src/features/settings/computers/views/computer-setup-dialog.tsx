@@ -6,6 +6,7 @@ import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { thrownResultErrorHasCode } from '@core/util/result';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import MinusIcon from '@icon/system/regular/minus.svg';
@@ -293,10 +294,14 @@ export function ComputerSetupSteps(props: {
   // With the user's own account, the sign-in step completes it instead. Each
   // step has a deadline; one that fails or runs out stops here with Try
   // again, instead of leaving the dialog waiting.
-  // Why the last attempt stopped, while it is the latest; and whether one
-  // is running, so Retry shows it tried.
+  // Why the last attempt stopped, while it is the latest (boxed, so even a
+  // falsy thrown value counts as a failure); and whether one is running, so
+  // Retry shows it tried.
   const [finishError, setFinishError] = createSignal<{ error: unknown }>();
   const finishFailed = () => !!finishError();
+  // A caller without manage rights stays without them: Retry can't help.
+  const finishRetryable = () =>
+    !thrownResultErrorHasCode(finishError()?.error, 'FORBIDDEN');
   const [finishing, setFinishing] = createSignal(false);
   // A deadline stops the wait, not the request: Retry can send a step again
   // while the first is still in flight. Each step is idempotent (the same
@@ -652,7 +657,7 @@ export function ComputerSetupSteps(props: {
             <Match when={props.teamAgentComputer || setupStopped()}>
               {null}
             </Match>
-            <Match when={finishFailed() && !done()}>
+            <Match when={finishFailed() && !done() && finishRetryable()}>
               <Button
                 type="button"
                 variant="primary"
@@ -666,6 +671,7 @@ export function ComputerSetupSteps(props: {
                 </Show>
               </Button>
             </Match>
+            <Match when={finishFailed() && !done()}>{null}</Match>
             <Match when={!done()}>
               <Button type="button" variant="primary" disabled aria-busy>
                 <Spinner size="sm" decorative />

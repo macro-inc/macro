@@ -23,11 +23,12 @@ export const [settingsOpened, setSettingsOpened] = createSignal<string>();
 export const [agentDmOpened, setAgentDmOpened] = createSignal<string>();
 
 /**
- * How the computer's runtime answers Claude sign-out: `ok`, or `forbidden`,
- * as the harness does for an account outside the computers rollout.
+ * How the computer's runtime answers Claude sign-out: `ok`, `rollout_disabled`
+ * as the harness does for an account outside the computers rollout, or
+ * `forbidden` for a caller without manage rights.
  */
 export const claudeAnswers = {
-  signOut: 'ok' as 'ok' | 'forbidden',
+  signOut: 'ok' as 'ok' | 'rollout_disabled' | 'forbidden',
   signOutCalls: 0,
 };
 

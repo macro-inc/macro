@@ -237,7 +237,7 @@ export default {
   noPaidPlan:
     'Computers need a paid Macro plan. Your team does not have one yet.',
   rolloutDisabled: "Computers aren't available for this account yet.",
-  errorForbidden: "You don't have access to computers on this team yet.",
+  errorForbidden: "You can't change this computer. Ask a team owner or admin.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',

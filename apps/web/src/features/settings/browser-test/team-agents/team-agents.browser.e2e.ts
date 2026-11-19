@@ -894,27 +894,49 @@ test('a code that finishes after the dialog closed toasts, and leaves a reopened
   await expect(reopened).toBeVisible();
 });
 
-test('a runtime that refuses the account says the team has no access yet', async ({
+test('a runtime outside the rollout says so, and Try again starts the sign-in', async ({
   page,
 }, testInfo) => {
   await scriptAuthService(page, 0, {
     agents: [ada('running')],
     computerConnected: true,
   });
-  // The harness answers 403 for an account outside the computers rollout.
   await failClaudeOnce(page, 'claude-sign-in', 403, {
     message: 'Macro computers are not enabled for this user',
+    code: 'rollout_disabled',
   });
   const dialog = await openConnectClaude(page);
   const alert = dialog.getByRole('alert');
   await expect(alert).toHaveText(
-    /You don't have access to computers on this team yet\./
+    /Computers aren't available for this account yet\./
   );
-  await screenshot(page, testInfo, 'connect-claude-forbidden');
+  await screenshot(page, testInfo, 'connect-claude-rollout-disabled');
   await alert.getByRole('button', { name: 'Try again' }).click();
   await expect(
     dialog.getByRole('link', { name: 'Open claude.ai' })
   ).toHaveAttribute('href', /claude\.com/);
+});
+
+test('a caller without rights to the computer is told so, with no way to retry', async ({
+  page,
+}, testInfo) => {
+  await scriptAuthService(page, 0, {
+    agents: [ada('running')],
+    computerConnected: true,
+  });
+  await failClaudeOnce(page, 'claude-sign-in', 403, {
+    message: 'you cannot do that on this computer',
+  });
+  const dialog = await openConnectClaude(page);
+  const alert = dialog.getByRole('alert');
+  await expect(alert).toHaveText(
+    /You can't change this computer\. Ask a team owner or admin\./
+  );
+  await screenshot(page, testInfo, 'connect-claude-forbidden');
+  await expect(alert.getByRole('button')).toHaveCount(0);
+  await expect(
+    dialog.getByRole('textbox', { name: 'Paste the code Claude showed you' })
+  ).toBeDisabled();
 });
 
 test('an unreachable computer says so, and Try again starts the sign-in', async ({

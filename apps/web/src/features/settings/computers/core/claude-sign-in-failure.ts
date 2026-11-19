@@ -15,7 +15,9 @@ export type ClaudeSignInFailure =
   | 'busy'
   /** The computer took too long. */
   | 'timeout'
-  /** The computer's runtime refused this account (403). */
+  /** Computers are not enabled for this account yet. */
+  | 'rollout_disabled'
+  /** The caller may not change this computer's Claude sign-in. */
   | 'forbidden'
   | 'failed';
 
@@ -26,7 +28,9 @@ export type ClaudeSignInRecovery =
   /** Send the same request again. */
   | 'retry'
   /** Paste the code again; the sign-in is still waiting. */
-  | 'repaste';
+  | 'repaste'
+  /** Nothing here gets past it: only a team owner or admin can. */
+  | 'none';
 
 export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
   if (thrownResultErrorHasCode(error, 'CLAUDE_SIGN_IN_EXPIRED'))
@@ -39,6 +43,8 @@ export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
     return 'unreachable';
   if (thrownResultErrorHasCode(error, 'CLAUDE_COMPUTER_BUSY')) return 'busy';
   if (thrownResultErrorHasCode(error, 'CLAUDE_TIMEOUT')) return 'timeout';
+  if (thrownResultErrorHasCode(error, 'ROLLOUT_DISABLED'))
+    return 'rollout_disabled';
   if (thrownResultErrorHasCode(error, 'FORBIDDEN')) return 'forbidden';
   return 'failed';
 }
@@ -46,22 +52,24 @@ export function claudeSignInFailure(error: unknown): ClaudeSignInFailure {
 /**
  * How to recover. Starting a sign-in is safe to repeat, so any failure to
  * start retries; once a code was sent, only a failure that leaves the
- * computer's sign-in waiting lets the user paste again.
+ * computer's sign-in waiting lets the user paste again. A caller without
+ * the right to change the computer gets no way out at all.
  */
 export function claudeSignInRecovery(
   phase: 'start' | 'complete',
   failure: ClaudeSignInFailure
 ): ClaudeSignInRecovery {
+  if (failure === 'forbidden') return 'none';
   if (phase === 'start') return 'retry';
   return (
     match(failure)
       .returnType<ClaudeSignInRecovery>()
-      // Refused: the sign-in still waits, for when access arrives.
+      // Outside the rollout: the sign-in still waits, for when access arrives.
       .with(
         'malformed_code',
         'busy',
         'unreachable',
-        'forbidden',
+        'rollout_disabled',
         () => 'repaste'
       )
       .with('expired', 'invalid_code', 'timeout', 'failed', () => 'new_link')

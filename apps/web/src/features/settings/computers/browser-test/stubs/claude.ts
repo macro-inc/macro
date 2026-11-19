@@ -14,6 +14,10 @@ export function useClaudeSignOutMutation() {
       claudeAnswers.signOutCalls += 1;
       // Long enough for a test to see the attempt on screen.
       await new Promise((resolve) => setTimeout(resolve, 400));
+      if (claudeAnswers.signOut === 'rollout_disabled')
+        throw new ThrownResultError([
+          { code: 'ROLLOUT_DISABLED', message: 'Not enabled' },
+        ]);
       if (claudeAnswers.signOut === 'forbidden')
         throw new ThrownResultError([
           { code: 'FORBIDDEN', message: 'Forbidden' },

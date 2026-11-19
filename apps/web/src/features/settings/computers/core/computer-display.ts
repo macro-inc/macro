@@ -217,8 +217,7 @@ export function computerFailureMessage(
       .with('NAME_MISMATCH', () => t('computers.errorNameMismatch'))
       .with('NO_PAID_PLAN', () => t('computers.noPaidPlan'))
       .with('ROLLOUT_DISABLED', () => t('computers.rolloutDisabled'))
-      // The computer's runtime refused this account, e.g. before the team's
-      // access to computers reaches it.
+      // A 403 without ROLLOUT_DISABLED's code: the caller lacks the right.
       .with('FORBIDDEN', () => t('computers.errorForbidden'))
       .with('BILLING_PROVIDER_FAILED', () =>
         t('computers.errorBillingProvider')
