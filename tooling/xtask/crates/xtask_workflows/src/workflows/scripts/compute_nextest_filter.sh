@@ -75,18 +75,18 @@ emit() {
   exit 0
 }
 
-if [ ! -s /tmp/changed-files ]; then
+if [ ! -s "$RUNNER_TEMP/changed-files" ]; then
   echo "Unknown or empty change set; running all tests"
   emit all false
 fi
 
-if grep -qE '^(rust-toolchain\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
+if grep -qE '^(rust-toolchain\.toml|\.cargo/.*|\.config/.*)$' "$RUNNER_TEMP/changed-files"; then
   echo "Toolchain or cargo config change detected; running all tests"
   emit all false
 fi
 
 clippy_config_changed=false
-if grep -qx 'clippy\.toml' /tmp/changed-files; then
+if grep -qx 'clippy\.toml' "$RUNNER_TEMP/changed-files"; then
   clippy_config_changed=true
 fi
 
@@ -94,7 +94,7 @@ fi
 # there), so `.sqlx` contents cannot change test outcomes. Clippy is the
 # offline SQLx check (`SQLX_OFFLINE=true`), so a snapshot-only diff must
 # still compile against the cache rather than skip the check job.
-if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
+if ! grep -qvE '^\.sqlx/' "$RUNNER_TEMP/changed-files"; then
   echo "Only .sqlx changes detected; clippy all, skip live-Postgres tests"
   emit all true
 fi
@@ -118,7 +118,7 @@ if [ -n "${SCCACHE_WEBDAV_ENDPOINT:-}" ]; then
   fi
 fi
 
-packages="$("$filter_bin" /tmp/changed-files "$(< /tmp/base-revision)" "$metadata_file")"
+packages="$("$filter_bin" "$RUNNER_TEMP/changed-files" "$(< "$RUNNER_TEMP/base-revision")" "$metadata_file")"
 
 # Losing the upload costs the next job about 15 s, not a failure.
 if [ -n "$metadata_url" ] && [ "$metadata_restored" = false ] && [ -f "$metadata_file" ]; then

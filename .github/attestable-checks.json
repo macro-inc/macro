@@ -4,7 +4,7 @@
   "checks": [
     {
       "call": "cloud-storage",
-      "fingerprint": "62c7d5e512ea7faf",
+      "fingerprint": "b38d7c37ad118118",
       "id": "cloud-storage/check",
       "if": "needs.path-check.outputs.should_run == 'true'",
       "inputs": [
@@ -24,7 +24,7 @@
     },
     {
       "call": "cloud-storage",
-      "fingerprint": "d6b368d70b838d68",
+      "fingerprint": "55edf8296919c3e7",
       "id": "cloud-storage/build-service-bins",
       "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.skip_tests != 'true' && (needs.path-check.outputs.rust_packages == 'all' || contains(needs.path-check.outputs.rust_packages, 'document_storage_service') || contains(needs.path-check.outputs.rust_packages, 'email_service') || contains(needs.path-check.outputs.rust_packages, 'authentication_service'))",
       "inputs": [
@@ -43,7 +43,7 @@
     },
     {
       "call": "cloud-storage",
-      "fingerprint": "278c79e5900b660e",
+      "fingerprint": "8f1e4eb74c38a703",
       "id": "cloud-storage/graphql-schema-compat",
       "if": "needs.path-check.outputs.should_run == 'true' && needs.path-check.outputs.graphql_schema == 'true'",
       "inputs": [

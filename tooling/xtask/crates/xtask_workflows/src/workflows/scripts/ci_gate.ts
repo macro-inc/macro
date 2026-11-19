@@ -18,9 +18,12 @@
 // An attested check is a job its author ran on their own machine with
 // `cargo x attest`, which posts an `attested/<check>` status on the head. Only
 // someone who can push to the repository can post a status. Start accepts one
-// for the job as this run defines it (its fingerprint), and one request in
-// `AUDIT_ONE_IN` accepts none, so every job runs and `finish` can name an
-// attested check that fails on a runner.
+// for the job as this run defines it (its fingerprint) on the merge this run
+// tests (its base), and one request in `AUDIT_ONE_IN` accepts none, so every
+// selected job runs and `finish` can name an attested check that fails on a
+// runner. An audit marks the commit, so every later run on it is an audit too:
+// a failed one can't be drawn again into a pass. `finish` reads the statuses
+// again, because a re-run of failed jobs keeps what Start decided.
 //
 // A fork PR's run uses the workflow files of its merge commit, so a fork that
 // edits them decides its own verdict. Both fork steps fail closed instead: the
@@ -31,6 +34,9 @@ import { appendFileSync, readFileSync } from 'node:fs';
 
 const API = 'https://api.github.com';
 const DESCRIPTION_LIMIT = 140;
+const READ_ATTEMPTS = 3;
+// How many attested checks a failing verdict names; the log has them all.
+const NAMED_CHECKS = 2;
 // An open request. Only trusted runs set statuses: a fork's token can't.
 const RUNNING = 'Running on';
 // Job names in `PR CI`; the fork step reads them back from the finished run.
@@ -88,16 +94,34 @@ async function exists(path: string, ref: string): Promise<boolean> {
   return true;
 }
 
+/// One request. A read is tried again when GitHub or the network fails it.
+async function request(method: string, path: string, body?: unknown): Promise<Response> {
+  for (let attempt = 1; ; attempt++) {
+    const last = method !== 'GET' || attempt === READ_ATTEMPTS;
+    try {
+      const response = await fetch(`${API}${path}`, {
+        method,
+        headers: {
+          accept: 'application/vnd.github+json',
+          authorization: `Bearer ${env('GH_TOKEN')}`,
+          'x-github-api-version': '2022-11-28',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (response.status < 500 || last) {
+        return response;
+      }
+    } catch (error) {
+      if (last) {
+        throw error;
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, attempt * 2_000));
+  }
+}
+
 async function github(method: string, path: string, body?: unknown): Promise<any> {
-  const response = await fetch(`${API}${path}`, {
-    method,
-    headers: {
-      accept: 'application/vnd.github+json',
-      authorization: `Bearer ${env('GH_TOKEN')}`,
-      'x-github-api-version': '2022-11-28',
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const response = await request(method, path, body);
   // Removing a label that is already gone is the outcome we wanted.
   if (method === 'DELETE' && response.status === 404) {
     return null;
@@ -136,29 +160,41 @@ export function gateOutcome(needs: Needs, head: string): Outcome {
   return { state: 'success', description: `Passed on ${head.slice(0, 7)}` };
 }
 
+/// GitHub treats status contexts that differ only in case as one.
+const sameContext = (left: string, right: string) => left.toLowerCase() === right.toLowerCase();
+
 /// The attested checks a run may skip, as `<check>@<digest>` entries. A check
 /// counts when its newest status (GitHub lists newest first) is a success for
-/// the job's current fingerprint. The digest is of the `path-check` outputs the
-/// job reads, which the called workflow compares; `-` for a job that reads none.
+/// the job's current fingerprint, on the merge of the head with `base`: the
+/// commit of the base branch this run's merge commit holds. The digest is of
+/// the `path-check` outputs the job reads, which the called workflow compares;
+/// `-` for a job that reads none.
 export function acceptedAttestations(
   statuses: CommitStatus[],
   checks: AttestableCheck[],
   prefix: string,
+  base: string,
 ): string[] {
   const entries: string[] = [];
   for (const check of checks) {
-    const status = statuses.find((each) => each.context === `${prefix}${check.id}`);
+    const status = statuses.find((each) => sameContext(each.context, `${prefix}${check.id}`));
     if (status?.state !== 'success') {
       continue;
     }
 
-    const stated = /^fp=([0-9a-f]+) in=([0-9a-f]+|-)(?: |$)/.exec(status.description ?? '');
+    const stated = /^fp=([0-9a-f]+) in=([0-9a-f]+|-) base=([0-9a-f]{40})$/.exec(
+      status.description ?? '',
+    );
     if (!stated) {
       console.log(`${check.id}: its attestation is not one cargo x attest wrote`);
       continue;
     }
 
-    const [, fingerprint, digest] = stated;
+    const [, fingerprint, digest, attestedBase] = stated;
+    if (attestedBase !== base) {
+      console.log(`${check.id}: attested on another merge with the base branch; it runs here`);
+      continue;
+    }
     if (fingerprint !== check.fingerprint) {
       console.log(`${check.id}: attested for another definition of the job; it runs here`);
       continue;
@@ -193,12 +229,39 @@ export function skippedAttested(entries: string[], checks: GateCheck[], jobs: Ru
     .map((check) => check.id);
 }
 
-/// The attested checks an audit ran here and saw fail.
+/// The attested checks an audit ran here and did not see pass: a job that
+/// failed, timed out or was cancelled. A skipped job is one the change does
+/// not select.
 export function auditFailures(audited: string[], checks: GateCheck[], jobs: RunJob[]): string[] {
+  const passed = (job: RunJob) => job.conclusion === 'success' || job.conclusion === 'skipped';
   return checks
     .filter((check) => audited.includes(check.id))
-    .filter((check) => jobsOf(check, jobs).some((job) => job.conclusion === 'failure'))
+    .filter((check) => jobsOf(check, jobs).some((job) => !passed(job)))
     .map((check) => check.id);
+}
+
+/// Whether an earlier run on this commit was an audit. Later runs are too.
+export function alreadyAudited(statuses: CommitStatus[], auditContext: string): boolean {
+  return statuses.some((each) => sameContext(each.context, auditContext));
+}
+
+/// The checks a run skipped on an attestation that no longer holds: withdrawn
+/// or replaced since Start read it. `current` is what Start would accept now.
+export function withdrawnAttestations(
+  entries: string[],
+  skipped: string[],
+  current: string[],
+): string[] {
+  return entries
+    .filter((entry) => skipped.includes(entryCheck(entry)) && !current.includes(entry))
+    .map(entryCheck);
+}
+
+/// The first few of a list by name, and how many more there are: a status
+/// description is cut at `DESCRIPTION_LIMIT`.
+function named(ids: string[]): string {
+  const rest = ids.length - NAMED_CHECKS;
+  return rest > 0 ? `${ids.slice(0, NAMED_CHECKS).join(', ')} and ${rest} more` : ids.join(', ');
 }
 
 /// The verdict with what attestation did to it: the checks a passing run took
@@ -217,7 +280,7 @@ export function withAttestations(
   if (outcome.state !== 'success' && failures.length > 0) {
     return {
       state: outcome.state,
-      description: `Attested but failed here: ${failures.join(', ')}. ${outcome.description}`,
+      description: `Attested but failed here: ${named(failures)}. ${outcome.description}`,
     };
   }
   return outcome;
@@ -283,15 +346,24 @@ export function labelBlocker(mergeable: boolean | null, mergeHasPrCi: boolean): 
   return null;
 }
 
-async function setStatus(sha: string, state: State, description: string, targetUrl: string) {
+async function postStatus(
+  sha: string,
+  statusContext: string,
+  state: State,
+  description: string,
+  targetUrl: string,
+) {
   await github('POST', `/repos/${repo()}/statuses/${sha}`, {
     state,
-    context: context(),
+    context: statusContext,
     description: description.slice(0, DESCRIPTION_LIMIT),
     target_url: targetUrl,
   });
-  console.log(`${context()} on ${sha.slice(0, 10)}: ${state}: ${description}`);
+  console.log(`${statusContext} on ${sha.slice(0, 10)}: ${state}: ${description}`);
 }
+
+const setStatus = (sha: string, state: State, description: string, targetUrl: string) =>
+  postStatus(sha, context(), state, description, targetUrl);
 
 /// Every status on a commit, newest first.
 async function commitStatuses(sha: string): Promise<CommitStatus[]> {
@@ -461,27 +533,59 @@ async function start() {
 }
 
 /// Which attested checks the run skips. A fork's statuses are not read: its
-/// run is trusted only through the fork steps.
+/// run is trusted only through the fork steps. A lookup GitHub fails leaves
+/// nothing attested, so every job runs as it would without attestation.
 async function attestations() {
   const head = env('HEAD_SHA');
   const checks: AttestableCheck[] = JSON.parse(env('ATTESTABLE_CHECKS'));
+  const auditContext = env('AUDIT_CONTEXT');
 
-  const entries =
-    env('SAME_REPO') === 'true'
-      ? acceptedAttestations(await commitStatuses(head), checks, env('ATTESTED_PREFIX'))
-      : [];
-  const audit = entries.length > 0 && randomInt(Number(env('AUDIT_ONE_IN'))) === 0;
+  let statuses: CommitStatus[] = [];
+  let base = '';
+  if (env('SAME_REPO') === 'true') {
+    try {
+      const merge = await github('GET', `/repos/${repo()}/commits/${env('MERGE_SHA')}`);
+      base = merge.parents.map((parent: { sha: string }) => parent.sha).find((sha: string) => sha !== head) ?? '';
+      statuses = await commitStatuses(head);
+    } catch (error) {
+      console.log(`::warning::Could not read this commit's attestations, so every job runs: ${error}`);
+      statuses = [];
+    }
+  }
+
+  const entries = base ? acceptedAttestations(statuses, checks, env('ATTESTED_PREFIX'), base) : [];
+  const marked = alreadyAudited(statuses, auditContext);
+  const audit = entries.length > 0 && (marked || randomInt(Number(env('AUDIT_ONE_IN'))) === 0);
 
   if (audit) {
-    console.log(`Audit: running every job, including the attested ${entries.map(entryCheck).join(', ')}`);
+    console.log(`Audit: running the attested ${entries.map(entryCheck).join(', ')} here too`);
+    if (!marked) {
+      await postStatus(head, auditContext, 'success', 'Runs on this commit check its attestations on runners', env('RUN_URL'));
+    }
   } else {
     console.log(`Attested: ${entries.map(entryCheck).join(', ') || 'none'}`);
   }
 
   appendFileSync(
     env('GITHUB_OUTPUT'),
-    `attested=${JSON.stringify(audit ? [] : entries)}\naudited=${JSON.stringify(audit ? entries.map(entryCheck) : [])}\n`,
+    `attested=${JSON.stringify(audit ? [] : entries)}\naudited=${JSON.stringify(audit ? entries.map(entryCheck) : [])}\nbase=${base}\n`,
   );
+}
+
+/// What Start would accept now. Nothing when GitHub can't say: a skipped job
+/// is then not vouched for.
+async function currentAttestations(head: string): Promise<string[]> {
+  try {
+    return acceptedAttestations(
+      await commitStatuses(head),
+      JSON.parse(env('ATTESTABLE_CHECKS')),
+      env('ATTESTED_PREFIX'),
+      env('BASE_SHA'),
+    );
+  } catch (error) {
+    console.log(`::warning::Could not read this commit's attestations again: ${error}`);
+    return [];
+  }
 }
 
 async function finish() {
@@ -501,11 +605,25 @@ async function finish() {
   if (entries.length + audited.length > 0) {
     const checks: GateCheck[] = JSON.parse(env('GATE_CHECKS'));
     const jobs = await runJobs(env('RUN_ID'), env('RUN_ATTEMPT'));
-    outcome = withAttestations(
-      verdict,
-      skippedAttested(entries, checks, jobs),
-      auditFailures(audited, checks, jobs),
-    );
+    const skipped = skippedAttested(entries, checks, jobs);
+    const failures = auditFailures(audited, checks, jobs);
+    if (failures.length > 0) {
+      console.log(`Attested but failed here: ${failures.join(', ')}`);
+    }
+    outcome = withAttestations(verdict, skipped, failures);
+
+    // A re-run of failed jobs keeps the jobs Start let this run skip.
+    const withdrawn =
+      skipped.length > 0
+        ? withdrawnAttestations(entries, skipped, await currentAttestations(head))
+        : [];
+    if (withdrawn.length > 0) {
+      console.log(`No longer attested: ${withdrawn.join(', ')}`);
+      outcome = {
+        state: 'failure',
+        description: `No longer attested: ${named(withdrawn)}. Add the ${label()} label again.`,
+      };
+    }
   }
 
   if (env('SAME_REPO') === 'true') {

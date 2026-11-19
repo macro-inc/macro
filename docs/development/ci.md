@@ -32,9 +32,11 @@ cargo x attest run web-app/test cloud-storage/check  # run them; nothing leaves 
 cargo x attest run all --post                        # run every check PR CI would, post the passes
 ```
 
-Push the commit before `--post`, then add `run-ci` as usual. A check that fails
-posts nothing, so its job runs in `PR CI`. `all` leaves out the checks `PR CI`
-would not run for the change. A check your machine can't run as a runner does
+`--post` needs the commit pushed and its pull request open: it runs on the
+merge commit GitHub built for the pull request, the tree `PR CI` tests. Then add
+`run-ci` as usual. A check that fails posts no pass, so its job runs in `PR CI`,
+and a pass posted for the same commit earlier is withdrawn. `all` leaves out the
+checks `PR CI` would not run for the change. A check your machine can't run as a runner does
 is skipped with the reason: a job that reads the full history needs a clone
 that is not shallow, and the observability image needs KVM.
 
@@ -43,8 +45,10 @@ a timeout. That costs nothing but the attestation: the job runs in `PR CI`.
 
 How a check runs:
 
-- On the commit, never the working tree: `HEAD` merged with `origin/main`, in
-  a checkout of its own under `~/.cache/macro-attest/`. That checkout keeps its
+- On the commit, never the working tree: `HEAD` merged with `main`, in a
+  checkout of its own under `~/.cache/macro-attest/`. With `--post` the merge
+  is GitHub's for the pull request, and the tool stops when its own merge of
+  the two commits is a different tree; without, it is with `origin/main` now. That checkout keeps its
   own `target` and `node_modules`, so the first run of a check is a cold build.
 - With the job's own steps, read from the generated workflow in that merge,
   inside the repository's Nix dev shell. Steps that only keep a runner's caches
@@ -60,12 +64,19 @@ What `PR CI` accepts:
 - For a job `path-check` selects (Rust packages, conditional web steps), the
   status carries a digest of the outputs it ran on. `path-check` skips the job
   only when this run selects the same.
+- The status names the commit of `main` it was merged with. A run whose merge
+  commit holds another one runs the job: what `main` gained was not tested.
 - Statuses sit on a commit: every push needs new attestations.
-- One request in ten is an audit: it ignores every attestation and runs all
-  jobs. An attested check that fails there fails the run, and `CI gate` reads
-  `Attested but failed here: <checks>`. Nothing else runs these jobs for a pull
-  request, so treat that as a defect: find why the machine and the runner
-  disagree before attesting the check again.
+- One request in ten is an audit: it ignores every attestation and runs every
+  job the change selects. An attested check that fails there fails the run, and
+  `CI gate` reads `Attested but failed here: <checks>`. Nothing else runs these
+  jobs for a pull request, so treat that as a defect: find why the machine and
+  the runner disagree before attesting the check again. An audit leaves an
+  `attestation audit` status on the commit, and every later run on that commit
+  is an audit too: asking again does not get a failed audit past the runner.
+- `CI gate` reads the statuses again when the run ends. A job skipped on an
+  attestation that was withdrawn meanwhile fails the gate with `No longer
+  attested: <checks>`, so re-running failed jobs can't keep it skipped.
 
 To withdraw an attestation, post a `failure` status with the same context:
 `gh api repos/macro-inc/macro/statuses/<sha> -f state=failure -f context=attested/<check>`.

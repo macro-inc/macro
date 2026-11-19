@@ -71,13 +71,13 @@ makes expensive, at the same moments you would run CI:
 
 ```sh
 cargo x attest list                          # what can be attested
-cargo x attest run <check>... --post         # after the push, before the label
+cargo x attest run <check>... --post         # after the push, with the PR open, before the label
 ```
 
-It runs the commit merged with `main` in a checkout of its own, not your
+It runs the pull request's merge commit in a checkout of its own, not your
 working tree, and takes as long as the job does on a cold cache the first time.
 Never post an `attested/*` status any other way: the status says the tool ran
-the job on that commit, and one request in ten runs every job to check.
+the job on that commit, and one request in ten runs it on a runner too.
 [CI on pull requests](../../../docs/development/ci.md#attesting-checks-from-your-machine)
 has what `PR CI` accepts and which jobs can't be attested.
 
@@ -95,7 +95,8 @@ To read the state once, look at the `CI gate` row of `gh pr checks <pr>`:
 | pending, `Running on <sha>` | A run is going | Wait |
 | pass, `Passed on <sha>` | Every check passed or was path-skipped | Done |
 | pass, `Passed on <sha>, <n> attested: <checks>` | The same, with those checks taken from attestations | Done |
-| fail, `Attested but failed here: <checks>. Failed: <jobs>` | An audit ran every job, and an attested check failed on a runner | Fix the failure; find why your machine passed it before attesting that check again |
+| fail, `Attested but failed here: <checks>. Failed: <jobs>` | An audit ran the attested checks on runners, and one failed | Fix the failure; find why your machine passed it before attesting that check again. Every later run on this commit is an audit too |
+| fail, `No longer attested: <checks>` | A job was skipped on an attestation that was withdrawn or replaced during the run | Add the label again |
 | fail, `Failed: <jobs>` | Those called workflows failed | Open the linked run, fix, push, run again |
 | fail, `The PR moved on ...` or `The merge commit did not include ...` | Labelled too soon after a push | Add the label again |
 | fail, `PR CI can't start: ...` | The PR conflicts with `main`, or was last pushed before `PR CI` existed | Merge `main` in, push, add the label again |

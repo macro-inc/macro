@@ -8,18 +8,22 @@
 //! it calls, where each attested job is skipped. A job with no attestation
 //! runs as before.
 //!
-//! An attestation is accepted only for the job it ran:
+//! An attestation is accepted only for the job it ran, on the tree it ran on:
 //!
+//! - its `base` is the commit of `main` in the merge commit this run tests.
+//!   With the head the status sits on, that fixes the tree;
 //! - its `fp` is the [`fingerprint`] of the job as this tree defines it, so a
 //!   job that changed since (here or on `main`) runs on a runner;
 //! - its `in` is a digest of the `path-check` outputs the job reads, compared
 //!   by `path-check` itself ([`ACCEPT_STEP`]), so tests attested for one set of
 //!   packages are never skipped for another.
 //!
-//! One request in [`AUDIT_ONE_IN`] ignores every attestation and runs all
-//! jobs, and the gate names an attested check that failed there. Nothing else
-//! runs these jobs for a pull request, so that is the only independent check
-//! of what a machine attested.
+//! One request in [`AUDIT_ONE_IN`] ignores every attestation and runs every
+//! job the change selects, and the gate names an attested check that failed
+//! there. Nothing else runs these jobs for a pull request, so that is the only
+//! independent check of what a machine attested. An audit marks the commit
+//! with the [`AUDIT_CONTEXT`] status and every later run on it is an audit
+//! too, so a failed one can't be requested again into a pass.
 //!
 //! A check is a job listed in [`CHECKS`] with the steps that are the check.
 //! Every other step of the job must be runner upkeep ([`RUNNER_STEPS`],
@@ -39,8 +43,12 @@ mod test;
 /// The commit status of an attested check is this plus the check's id.
 pub const STATUS_PREFIX: &str = "attested/";
 
-/// One requested run in this many runs every job, attested or not.
+/// One requested run in this many runs the attested jobs on runners too.
 pub const AUDIT_ONE_IN: u32 = 10;
+
+/// The commit status an audit leaves on the head: later runs on that commit
+/// are audits too.
+pub const AUDIT_CONTEXT: &str = "attestation audit";
 
 /// Written next to the workflows; read by `cargo x attest`.
 pub const MANIFEST_FILE: &str = "attestable-checks.json";

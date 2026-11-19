@@ -353,7 +353,7 @@ fn paths_filter() -> Step<gh_workflow::Use> {
         ))
 }
 
-/// Compute the changed-file set and write it to `/tmp/changed-files`. Stacked
+/// Compute the changed-file set and write it to `$RUNNER_TEMP/changed-files`. Stacked
 /// PRs whose merge commit sits on another branch get their history deepened
 /// until it reaches the base branch. If no merge-base turns up, we leave the
 /// list empty, which makes downstream steps fall back to "everything": run all

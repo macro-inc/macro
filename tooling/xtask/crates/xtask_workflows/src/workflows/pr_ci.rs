@@ -238,13 +238,16 @@ fn start() -> Result<Job> {
         .add_step(
             with_pull_request(gate_step("Read the head's attestations", "attestations"))
                 .id("attestations")
+                .add_env(("MERGE_SHA", "${{ github.sha }}"))
                 .add_env(("ATTESTABLE_CHECKS", attestation::start_checks()?))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
+                .add_env(("AUDIT_CONTEXT", attestation::AUDIT_CONTEXT))
                 .add_env(("AUDIT_ONE_IN", attestation::AUDIT_ONE_IN.to_string())),
         )
         .add_step(paths_filter())
         .add_output("attested", "${{ steps.attestations.outputs.attested }}")
-        .add_output("audited", "${{ steps.attestations.outputs.audited }}");
+        .add_output("audited", "${{ steps.attestations.outputs.audited }}")
+        .add_output("base", "${{ steps.attestations.outputs.base }}");
 
     Ok(CALLS
         .iter()
@@ -317,6 +320,7 @@ fn gate() -> Job {
         .permissions(Permissions {
             // To find the attested checks' jobs in this run.
             actions: Some(Level::Read),
+            // To set the gate, and to read the head's attestations again.
             statuses: Some(Level::Write),
             ..Default::default()
         })
@@ -325,6 +329,12 @@ fn gate() -> Job {
                 .add_env(("NEEDS", "${{ toJSON(needs) }}"))
                 .add_env(("ATTESTED", "${{ needs.start.outputs.attested }}"))
                 .add_env(("AUDITED", "${{ needs.start.outputs.audited }}"))
+                .add_env(("BASE_SHA", "${{ needs.start.outputs.base }}"))
+                .add_env((
+                    "ATTESTABLE_CHECKS",
+                    attestation::start_checks().expect("the attested checks render"),
+                ))
+                .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
                 .add_env((
                     "GATE_CHECKS",
                     attestation::gate_checks().expect("the attested checks render"),
