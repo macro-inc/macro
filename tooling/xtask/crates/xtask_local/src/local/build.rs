@@ -10,6 +10,9 @@ mod cargo_build;
 mod dep_cache;
 mod runtime_image;
 
+#[cfg(test)]
+mod test;
+
 pub use binaries_dir::{Adoption, BinariesDir};
 pub use runtime_image::{ensure_runtime_image, runtime_image_tag};
 
@@ -46,8 +49,12 @@ pub fn resolve_services(
     binaries_dir: Option<std::path::PathBuf>,
     services: Vec<&'static RustService>,
 ) -> Result<BinariesDir> {
-    if services.is_empty() && binaries_dir.is_none() {
-        // Nothing runs from `/app/out`, which compose still mounts.
+    if binaries_dir.is_none() && (services.is_empty() || stage.is_dry_run()) {
+        if stage.is_dry_run() && !no_build && !services.is_empty() {
+            cargo_build::run(stage, target, Some(&services))?;
+        }
+        // Compose still mounts `/app/out` when nothing runs there. A preview
+        // also needs only its path, since it skipped creating the binaries.
         return Ok(BinariesDir::TargetDir(
             super::workspace_root().join(target.debug_dir()),
         ));

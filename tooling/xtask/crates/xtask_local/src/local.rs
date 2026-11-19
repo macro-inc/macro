@@ -932,9 +932,9 @@ fn interact(
 /// networks/volumes — that's done after the background teardown joins, since
 /// teardown removes them. `static_frontend` wires the proxy to serve the staged
 /// app bundle (`stack up`, `run_local --static-frontend`, and
-/// `run_local --with-cf-tunnel`'s shared app). `infra_only` skips the service build: bake never
-/// starts Rust services and runs in parallel with the cargo lane. Returns the
-/// resolved env + build target.
+/// `run_local --with-cf-tunnel`'s shared app). `infra_only` builds or validates only
+/// the Outlook emulator when FusionAuth needs it for Microsoft discovery; app
+/// service binaries are skipped. Returns the resolved env + build target.
 ///
 /// One argument per independent knob; bundling some into a struct would only
 /// move the same list one level down.
