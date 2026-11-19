@@ -50,9 +50,10 @@
     # Until the switch Grafana is tested at http://localhost:3000 through
     # `kubectl port-forward` (README "Testing before the switch").
     localTesting = true;
-    # Through the ALB: GoAlert stays on the host. Its nginx must let
-    # /api/v2/grafana/ through before the switch (README "Before Grafana
-    # runs"); the heartbeat path is open already.
+    # Through the ALB: GoAlert stays on the host. Only the GoAlert-only host's
+    # nginx lets /api/v2/grafana/ through, so the GoAlert contact points page
+    # from the switch's step 8 on (README "Before Grafana runs"); the
+    # heartbeat path is open on both.
     goalertUrl = "https://oncall.macro-internal.com";
     # Only the host's Grafana notifies until the switch.
     notify = false;

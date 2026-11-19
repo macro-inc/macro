@@ -5,7 +5,7 @@ us-east-2), written as [nixidy](https://github.com/arnarg/nixidy) modules and
 rendered to plain YAML under `manifests/prod/`. Argo CD on the cluster reads
 `manifests/prod/` from `main` and applies it, so merging a change here deploys
 it. The cluster itself, its IAM and the Pod Identity associations are
-OpenTofu under `../aws/` (added in its own pull request).
+OpenTofu under `../aws/`.
 
 ```
 modules/*.nix ──nix run .#render──▶ manifests/prod/ (committed) ──main──▶ Argo CD ──▶ cluster
@@ -321,7 +321,7 @@ runs the host from before it. Three changes are pending there:
   only these, by hand, with `--target`.
 - *Host role*: narrowed to GoAlert's bucket prefix. Step 8 applies it by hand.
 - *Host image*: GoAlert only; the host stops running Grafana, Loki, Tempo,
-  Prometheus and Alloy, and its nginx lets Grafana's GoAlert path through.
+  Prometheus and OTLP ingest (its own telemetry Alloy stays), and its nginx lets Grafana's GoAlert path through.
   Step 8 deploys it.
 
 Deploy Observability refuses a plan with deletes or a role change, so it
@@ -351,6 +351,11 @@ release() {
   sudo systemctl start "$@"
 }
 ```
+
+**Before step 3**, while nothing has stopped yet: run Deploy Observability
+on main as a dry run, which tags main's AMI (it then stops at its plan check,
+as expected), and run step 5's `pulumi preview`. It must list exactly the four
+deletes; anything else, stop here.
 
 **Steps:**
 
@@ -441,8 +446,11 @@ release() {
    before. Merge *Cluster, notify* and sync `grafana`. Between step 5 and here
    no Grafana notifies; CloudWatch alarms still do. Until step 8 its GoAlert
    contact points still fail (the old host's nginx answers 404 on their path),
-   so only its SNS contact points and the watchdog reach anyone: keep steps 7
-   and 8 close together.
+   so a prod Grafana alert pages nobody: only CloudWatch alarms and the
+   watchdog reach GoAlert (the SNS route is for dev alerts). From step 5 until
+   step 8's contact point check passes, someone watches the cluster Grafana's
+   firing alerts (Alerting, Alert rules) and pages by hand; run steps 7 and 8
+   back to back.
 7. **Copy the metrics history into Mimir.** On the host, start `sudo bash -euo
    pipefail` (any failing command then ends it before the next runs), paste
    `hold`, and take a snapshot with Prometheus' own binary (the service has no
@@ -503,8 +511,14 @@ again, every time:
    revision is left, not even terminating: `kubectl --context observability
    -n observability get pods -l 'app.kubernetes.io/name in (loki,tempo)'`
    shows only pods younger than the sync.
-2. **If step 8 ran**, put the full host back on main (the *host image* and
-   *host role* parts of `infra/stacks/observability` as they were before the
+2. **If step 8 narrowed the host role but didn't replace the host**, widen
+   the role again first: the targeted `pulumi up` of `observability-storage`
+   (`infra/stacks/observability/README.md`, "Deploying") from a checkout with
+   the full host's role and a tagged AMI, such as the commit the running host
+   was built from, so the held services have their permissions when released.
+   Then go on as "Otherwise" below.
+   **If step 8 replaced the host**, put the full host back on main (the *host
+   image* and *host role* parts of `infra/stacks/observability` as they were before the
    switch) and deploy it as "Going back to the full host" in
    `infra/stacks/observability/README.md` says: widen the role with the
    targeted `pulumi up`, then Deploy Observability, dry run first. The new

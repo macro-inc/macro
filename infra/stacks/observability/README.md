@@ -631,9 +631,12 @@ Nothing needs setting up first.
 **If the new host fails after the rollout.** The old instance is already gone:
 the stack deletes it before creating the replacement, since one host owns the
 data volume. The run fails loudly; follow [Runtime](#runtime) to debug over SSM.
-To roll back, revert the commit on `main` and run the workflow again: the
-previous source's AMI still carries its tag, so nothing is rebuilt. A revert
-that also changes what the plan check refuses goes in by hand first, as above.
+To roll back, put the previous host source back on `main` (only the files
+under this stack that changed; a plain revert of a commit that also changed
+the cluster would take that with it) and run the workflow again: the
+previous source's AMI still carries its tag, so nothing is rebuilt. A change
+the plan check refuses goes in by hand first, as above. For the GoAlert-only
+rollout itself, go back as below instead.
 
 **Going back to the full host** (an image from before the GoAlert-only
 change) is the cluster README's "Going back", not a plain revert. That image

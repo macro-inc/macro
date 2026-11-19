@@ -4,8 +4,7 @@ The AWS resources for the observability EKS cluster in Ohio (us-east-2), in
 OpenTofu written in Nix with [terranix](https://terranix.org). It is the first
 of the two layers that move Grafana, Loki, Tempo, Mimir and Alloy ingest off
 the single NixOS host in [`infra/stacks/observability`](../../../stacks/observability/README.md);
-what runs inside the cluster is `../cluster` (nixidy, applied by Argo CD; added
-by its own pull request).
+what runs inside the cluster is `../cluster` (nixidy, applied by Argo CD).
 
 Nothing here is applied by CI. Every `tofu apply` is run by hand, after
 approval, with the steps under [First apply](#first-apply).
@@ -192,10 +191,13 @@ cluster steps, is in `infra/k8s/observability/cluster/README.md`. This layer's p
      aws elbv2 describe-target-health --region us-east-2 --target-group-arn "$arn" --query 'TargetHealthDescriptions[].TargetHealth.State' --output text
    done
    ```
-3. The Pulumi stack drops its priority-1 rule for `grafana.` and `otlp.` (a
-   reviewed manual `pulumi up`); from then on the ALB sends them here. The
-   same change removes the host's target group behind that rule and its
-   `observability-ui` alarm, which would otherwise breach on missing data.
+3. The Pulumi stack drops its priority-1 rule for `grafana.` and `otlp.`; from
+   then on the ALB sends them here. The same change removes the host's target
+   group behind that rule and its `observability-ui` alarm, which would
+   otherwise breach on missing data. Apply it only with the four `--target`s of
+   the cluster runbook's step 5: main's stack also narrows the host role and
+   replaces the host with the GoAlert-only image, and a plain `pulumi up` would
+   do both before the host's Loki, Tempo and Prometheus are drained.
 
 Going back is more than restoring the Pulumi rule once Loki and Tempo use the
 host's buckets: the cluster runbook's "Going back" stops the cluster's Loki
