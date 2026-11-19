@@ -233,8 +233,12 @@ function install() {
       const hint = response.headers.get('x-macro-crm-access');
       const policy = crmAccessAuthority.snapshot()?.policy;
       if (hint === policy) {
-        lastMismatchedHint = undefined;
-        hintFailures = 0;
+        // A response without a hint agrees with nothing. While no policy is
+        // recorded it must not end the wait a mismatched hint started.
+        if (hint !== null) {
+          lastMismatchedHint = undefined;
+          hintFailures = 0;
+        }
       } else if (isCrmPolicy(hint)) refreshHint(hint);
       else if (
         isStorage &&

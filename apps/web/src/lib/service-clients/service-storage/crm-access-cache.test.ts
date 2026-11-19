@@ -382,6 +382,8 @@ it('backs off hint-triggered proofs while they keep failing and resets once the 
     // The second failure doubled the wait, so the next second stays quiet.
     now += 1_100;
     hint(`${TEAM}:denied`);
+    // A dispatched proof would reach the endpoint within a few microtasks.
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(mocks.proof).toHaveBeenCalledTimes(2);
     now += 1_000;
     await failing();
@@ -391,6 +393,44 @@ it('backs off hint-triggered proofs while they keep failing and resets once the 
     now += 1_100;
     await failing();
     expect(mocks.proof).toHaveBeenCalledTimes(4);
+  } finally {
+    vi.mocked(Date.now).mockRestore();
+  }
+});
+
+it('keeps backing off while no policy was ever recorded and other responses carry no hint', async () => {
+  owner();
+  mocks.proof.mockResolvedValue(err([{ code: 'SERVER_ERROR' }]));
+  setCrmAccessSession('viewer');
+  await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+  let now = Date.now();
+  vi.spyOn(Date, 'now').mockImplementation(() => now);
+  const respond = (url: string, headers?: Record<string, string>) =>
+    prepareResponseObservers(url)(new Response(null, { headers }));
+  const hinted = () =>
+    respond('http://localhost/dss/documents', {
+      'x-macro-crm-access': `${TEAM}:allowed`,
+    });
+  try {
+    mocks.proof.mockClear();
+    const failed = Promise.withResolvers<void>();
+    mocks.proof.mockImplementationOnce(async () => {
+      failed.resolve();
+      return err([{ code: 'SERVER_ERROR' }]);
+    });
+    hinted();
+    await failed.promise;
+    // Await only the proof the hint dispatched, never initiate one.
+    await expect(crmAccessAuthority.refresh()).rejects.toThrow();
+    expect(mocks.proof).toHaveBeenCalledOnce();
+    // Mail and unhinted storage responses say nothing about CRM access.
+    respond('http://localhost/email/threads');
+    respond('http://localhost/dss/documents');
+    now += 100;
+    hinted();
+    // A dispatched proof would reach the endpoint within a few microtasks.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(mocks.proof).toHaveBeenCalledOnce();
   } finally {
     vi.mocked(Date.now).mockRestore();
   }
