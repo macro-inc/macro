@@ -507,12 +507,15 @@ async fn renewal_extends_leases_while_the_shared_pool_is_exhausted(pool: PgPool)
 
     // Everything else in the service holds the shared pool's connections.
     let _busy = shared.acquire().await.unwrap();
-    tokio::time::timeout(
+    let restored = tokio::time::timeout(
         Duration::from_secs(10),
         Arc::clone(&replica).renew(vec![(harness, connection)]),
     )
     .await
     .expect("the renewal does not wait for the shared pool");
+
+    // The row was there to extend, not restored.
+    assert_eq!(restored, []);
 
     let lease_left = sqlx::query_scalar!(
         r#"

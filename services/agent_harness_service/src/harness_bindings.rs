@@ -37,9 +37,9 @@ const RUNTIME_CONNECTION_LEASE: Duration = Duration::from_secs(30);
 /// How often a replica renews the leases of the connections it holds.
 pub const RUNTIME_CONNECTION_RENEW_EVERY: Duration = Duration::from_secs(10);
 
-/// How long a renewal waits for its connection, and then for its statement.
-/// Both well inside the lease, so a stalled renewal fails while the next one
-/// can still land in time.
+/// How long a renewal may take in all, waiting for its connection included.
+/// Half the renewal period, so a stalled renewal ends before the next tick
+/// and that one still lands well inside the lease.
 const RENEWAL_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// [`HarnessBindings`] over the `agent_configs` table.
@@ -323,6 +323,7 @@ impl HarnessPresence for PgHarnessPresence {
             connections = live.len(),
             restored = tracing::field::Empty,
             error = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
         );
         Box::pin(async move {
             let (harnesses, connections): (Vec<_>, Vec<_>) = live
@@ -347,13 +348,26 @@ impl HarnessPresence for PgHarnessPresence {
                 self.replica.as_uuid(),
                 RUNTIME_CONNECTION_LEASE.as_secs_f64(),
             )
-            .fetch_all(&self.renewal_pool)
-            .await;
-            let renewed = match renewed {
-                Ok(renewed) => renewed,
-                Err(error) => {
-                    tracing::Span::current().record("error", tracing::field::display(&error));
+            .fetch_all(&self.renewal_pool);
+            // The pool's own timeouts can't bound a socket that went silent.
+            let renewed = match tokio::time::timeout(RENEWAL_TIMEOUT, renewed).await {
+                Ok(Ok(renewed)) => renewed,
+                Ok(Err(error)) => {
+                    let span = tracing::Span::current();
+                    span.record("error", tracing::field::display(&error));
+                    span.record("otel.status_code", "ERROR");
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
+                    return Vec::new();
+                }
+                Err(_) => {
+                    let span = tracing::Span::current();
+                    span.record("error", "timed out");
+                    span.record("otel.status_code", "ERROR");
+                    tracing::warn!(
+                        timeout_ms = RENEWAL_TIMEOUT.as_millis(),
+                        replica = %self.replica,
+                        "harness runtime lease renewal timed out"
+                    );
                     return Vec::new();
                 }
             };
