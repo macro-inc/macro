@@ -165,10 +165,57 @@ fn deep_nesting_is_refused_cheaply() {
         let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
 
         assert_eq!(text, None);
-        // Laid out, each of these peaked above 200 MB.
+        // Laid out, each of these peaked above 200 MB. Refused, the peak is
+        // the bounded parse's tree, checked first: about 36 MB here.
+        assert!(
+            peak < 64 << 20,
+            "{peak} bytes to refuse {} bytes of HTML",
+            html.len()
+        );
+    }
+}
+
+#[test]
+fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
+    let distinct_bold: String = (0..1_000).map(|i| format!("<b id={i}>")).collect();
+    let formatting = [
+        "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong", "tt", "u",
+    ]
+    .map(|name| format!("<{name}>").repeat(3))
+    .concat();
+    let quoted_titles: String = (0..5)
+        .map(|i| format!("<b id={i} title='{}'>", "\"".repeat(4_000)))
+        .collect();
+    let bodies = [
+        // Each `<p>` closes the paragraph holding the bold tags, and html5ever
+        // rebuilds them all inside the next: 13 KB that built a million nodes
+        // and took 2.5 GB to convert.
+        format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)),
+        format!("<p>{formatting}{}", "<p>x".repeat(60_000)),
+        format!("<p>{quoted_titles}{}", "<p>x".repeat(50_000)),
+        // Each `</p>` scans the open elements for a paragraph: 28 s to parse.
+        format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+    ];
+
+    for html in bodies {
+        let body = Some(html.clone());
+        let mut texts = (Some(String::new()), Some(String::new()));
+        let started = std::time::Instant::now();
+
+        let peak = peak_bytes_during(|| {
+            texts = (html_to_plaintext(&html), compute_body_parsed(true, &body));
+        });
+
+        assert_eq!(texts, (None, None));
         assert!(
             peak < 32 << 20,
             "{peak} bytes to refuse {} bytes of HTML",
+            html.len()
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?} to refuse {} bytes of HTML",
+            started.elapsed(),
             html.len()
         );
     }

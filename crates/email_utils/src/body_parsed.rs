@@ -31,8 +31,9 @@ const MAX_HTML_BYTES: usize = 512 * 1024;
 ///
 /// If the original message had no HTML body, `body_replyless` is already plaintext.
 /// Otherwise it's HTML and is parsed to plaintext using `html2text`: only its
-/// first `MAX_HTML_BYTES`, and `None` when it cannot be converted or its tables
-/// or nesting are too large to.
+/// first `MAX_HTML_BYTES`, and `None` when it cannot be converted, its tables
+/// or nesting are too large to, or it builds past a limit of
+/// [`crate::bounded_html`].
 pub fn compute_body_parsed(has_html: bool, body_replyless: &Option<String>) -> Option<String> {
     let text = body_replyless.as_ref()?;
 
@@ -74,8 +75,9 @@ pub fn compute_body_parsed_linkless(
 
 /// Convert an HTML fragment to block-aware plaintext: block elements and table
 /// cells are separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`,
-/// …) stay on one line. Returns `None` if conversion fails or the fragment's
-/// tables or nesting are too large to convert. Suitable for building a
+/// …) stay on one line. Returns `None` if conversion fails, the fragment's
+/// tables or nesting are too large to convert, or it builds past a limit of
+/// [`crate::bounded_html`]. Suitable for building a
 /// `text/plain` MIME alternative from a small HTML snippet (e.g. a signature).
 pub fn html_to_plaintext(html: &str) -> Option<String> {
     let config = html2text::config::plain()
@@ -115,6 +117,17 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
         );
     }
     let html = &html[..html.floor_char_boundary(MAX_HTML_BYTES)];
+    // html2text builds its own tree with html5ever, which rebuilds every
+    // still-active formatting element inside each new paragraph: 13 KB can
+    // build a million nodes. The bounded parse finds such a body before
+    // html2text builds anything, and a body past its limits gets no text.
+    if crate::bounded_html::parse_document(html).clipped {
+        tracing::warn!(
+            html_len = html.len(),
+            "email body builds too much to convert to text"
+        );
+        return None;
+    }
     // html2text panics on some malformed-but-real email HTML (e.g. a table
     // rowspan overhanging past the last row). A panic here takes down the
     // whole message-processing worker, so contain it and treat the body as
