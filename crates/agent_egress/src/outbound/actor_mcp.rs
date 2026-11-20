@@ -117,7 +117,7 @@ impl HttpActorMcpTransport {
                 )
                 .await
                 .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
+                .map_err(handshake_error)?;
                 Ok(Arc::new(client))
             }
             // A new upstream session's handshake, apart from the call it serves.
@@ -175,21 +175,56 @@ impl ActorMcpTransport for HttpActorMcpTransport {
     }
 }
 
+/// A failed handshake: a 409 the upstream answered means the account's
+/// grant needs reconnecting; anything else broke the exchange.
+fn handshake_error(error: rmcp::service::ClientInitializeError) -> EgressError {
+    use rmcp::service::ClientInitializeError;
+    // A discover-first startup that fell back to `initialize` failed twice;
+    // the upstream answers both the same way.
+    let transport = match &error {
+        ClientInitializeError::TransportError { error, .. } => Some(error),
+        ClientInitializeError::LegacyFallbackFailed { fallback, .. } => match fallback.as_ref() {
+            ClientInitializeError::TransportError { error, .. } => Some(error),
+            _ => None,
+        },
+        _ => None,
+    };
+    if transport.and_then(http_status) == Some(http::StatusCode::CONFLICT.as_u16()) {
+        return EgressError::NeedsReconnect;
+    }
+    EgressError::Upstream(rootcause::report!(error).into())
+}
+
 /// A failed call: a 429 the upstream answered is a typed rate limit, since
-/// the request did not run and may be sent again; anything else broke the
-/// exchange.
+/// the request did not run and may be sent again, and a 409 means the
+/// account's grant needs reconnecting; anything else broke the exchange.
 fn call_error(error: rmcp::ServiceError) -> EgressError {
     if let rmcp::ServiceError::TransportSend(transport) = &error
         && let Some(StreamableHttpError::HttpStatus(status)) = transport
             .error
             .downcast_ref::<StreamableHttpError<reqwest::Error>>()
-        && status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16()
     {
-        return EgressError::RateLimited {
-            retry_after: status.retry_after.as_deref().and_then(retry_after),
-        };
+        if status.status == http::StatusCode::TOO_MANY_REQUESTS.as_u16() {
+            return EgressError::RateLimited {
+                retry_after: status.retry_after.as_deref().and_then(retry_after),
+            };
+        }
+        if status.status == http::StatusCode::CONFLICT.as_u16() {
+            return EgressError::NeedsReconnect;
+        }
     }
     EgressError::Upstream(rootcause::report!(error).into())
+}
+
+/// The HTTP status a transport failure carries, when it carries one.
+fn http_status(transport: &rmcp::transport::DynamicTransportError) -> Option<u16> {
+    match transport
+        .error
+        .downcast_ref::<StreamableHttpError<reqwest::Error>>()?
+    {
+        StreamableHttpError::HttpStatus(status) => Some(status.status),
+        _ => None,
+    }
 }
 
 /// A `Retry-After` value as a wait: delay-seconds, or an HTTP date, which

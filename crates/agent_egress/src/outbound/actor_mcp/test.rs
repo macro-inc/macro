@@ -153,6 +153,103 @@ async fn an_upstream_429_is_a_typed_rate_limit_carrying_retry_after() {
     server.abort();
 }
 
+/// Macro Connect's answer to every request on a connection whose grant
+/// needs reauthorization.
+fn needs_reauth() -> axum::response::Response {
+    use axum::response::IntoResponse;
+    (
+        http::StatusCode::CONFLICT,
+        axum::Json(json!({"error": "needs_reauth", "app_id": "stripe"})),
+    )
+        .into_response()
+}
+
+/// An MCP endpoint that refuses the handshake the way Macro Connect does
+/// for an expired grant.
+async fn refused_handshake(axum::Json(_): axum::Json<Value>) -> axum::response::Response {
+    needs_reauth()
+}
+
+/// An MCP endpoint whose grant expired after the handshake: it initializes
+/// and refuses each `tools/call`.
+async fn refused_tool_call(axum::Json(message): axum::Json<Value>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    match message["method"].as_str() {
+        Some("initialize") => (
+            [("mcp-session-id", "expired-session")],
+            axum::Json(json!({
+                "jsonrpc": "2.0",
+                "id": message["id"],
+                "result": {
+                    "protocolVersion": message["params"]["protocolVersion"],
+                    "capabilities": {"tools": {}},
+                    "serverInfo": {"name": "expired", "version": "1"},
+                },
+            })),
+        )
+            .into_response(),
+        Some("tools/call") => needs_reauth(),
+        _ => http::StatusCode::ACCEPTED.into_response(),
+    }
+}
+
+async fn needs_reconnect_answer(
+    handler: axum::routing::MethodRouter,
+    request: Value,
+) -> Result<Value, EgressError> {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = axum::Router::new().route("/mcp", handler);
+    let server = tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let transport = HttpActorMcpTransport::new(AddressPolicy::AnyAddress).unwrap();
+
+    let result = transport
+        .exchange(
+            AgentSessionId::new(),
+            MacroUserIdStr::try_from_email("owner@example.com").unwrap(),
+            UpstreamCall::bearer_over_local_cleartext(
+                url::Url::parse(&format!("http://{address}/mcp")).unwrap(),
+                crate::domain::model::BearerToken::new("test-credential"),
+            ),
+            request,
+        )
+        .await;
+    server.abort();
+    result
+}
+
+#[tokio::test]
+async fn an_upstream_409_on_the_handshake_needs_reconnecting() {
+    for request in [
+        json!({"method":"tools/list"}),
+        json!({"method":"tools/call","params":{"name":"list_customers","arguments":{}}}),
+    ] {
+        let result =
+            needs_reconnect_answer(axum::routing::post(refused_handshake), request.clone()).await;
+
+        assert!(
+            matches!(result, Err(EgressError::NeedsReconnect)),
+            "{request}: {result:?}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn an_upstream_409_on_a_tool_call_needs_reconnecting() {
+    let result = needs_reconnect_answer(
+        axum::routing::post(refused_tool_call),
+        json!({"method":"tools/call","params":{"name":"list_customers","arguments":{}}}),
+    )
+    .await;
+
+    assert!(
+        matches!(result, Err(EgressError::NeedsReconnect)),
+        "{result:?}"
+    );
+}
+
 #[test]
 fn retry_after_reads_seconds_and_http_dates() {
     assert_eq!(retry_after(" 2 "), Some(std::time::Duration::from_secs(2)));

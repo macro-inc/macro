@@ -4,7 +4,8 @@ use futures::stream::BoxStream;
 use http::{HeaderName, HeaderValue};
 use rmcp::model::ClientJsonRpcMessage;
 use rmcp::transport::streamable_http_client::{
-    SseError, StreamableHttpClient, StreamableHttpError, StreamableHttpPostResponse,
+    HttpStatusError, SseError, StreamableHttpClient, StreamableHttpError,
+    StreamableHttpPostResponse,
 };
 use sse_stream::Sse;
 use std::{collections::HashMap, sync::Arc};
@@ -39,6 +40,7 @@ impl StreamableHttpClient for TracedClient {
         self.0
             .post_message(uri, message, session_id, auth_header, headers)
             .await
+            .map_err(typed_conflict)
     }
 
     async fn delete_session(
@@ -65,4 +67,19 @@ impl StreamableHttpClient for TracedClient {
             .get_stream(uri, session_id, last_event_id, auth_header, headers)
             .await
     }
+}
+
+/// rmcp types a failure status only for 429 and 5xx; any other arrives as
+/// `UnexpectedServerResponse("HTTP 409 Conflict: <body>")`. A 409 is how
+/// Macro Connect's gateway says the account's grant needs reconnecting, so
+/// it gets its typed status back for the transport to tell apart.
+fn typed_conflict(
+    error: StreamableHttpError<reqwest::Error>,
+) -> StreamableHttpError<reqwest::Error> {
+    if let StreamableHttpError::UnexpectedServerResponse(message) = &error
+        && message.starts_with(&format!("HTTP {}:", http::StatusCode::CONFLICT))
+    {
+        return HttpStatusError::new(http::StatusCode::CONFLICT.as_u16(), None).into();
+    }
+    error
 }

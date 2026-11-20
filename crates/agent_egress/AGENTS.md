@@ -41,6 +41,17 @@ MCP app, a custom server, or a GitHub installation token) on each request.
   `tools/call` is `EgressError::RateLimited` (with its `Retry-After`), which
   `exchange_as` returns as an error, never as an `isError` result (the
   sandbox proxy answers a tool result saying the call did not run).
+- An upstream HTTP 409, on the handshake or a call, is
+  `EgressError::NeedsReconnect`: Macro Connect's gateway answers it for every
+  request on a connection whose grant needs reauthorization, before calling
+  the vendor. rmcp types only 429 and 5xx statuses, so `TracedClient` gives a
+  409 its typed status back. For a connected app, a `tools/call` (sandbox or
+  `exchange_as`) answers `reconnect_text` as an `isError` result, with an
+  `m-connect-app` chip marked `"reconnect": true`; a listing returns the
+  error (the sandbox proxy answers HTTP 409, and code mode's `tools()` turns
+  it into the same text). A custom server's 409 keeps the unknown-outcome
+  answer. A sandbox's owner call is forwarded raw, so its 409 still passes
+  through untouched.
 
 ## Scope
 
@@ -100,7 +111,7 @@ scope, `dry_run` for a routine's dry run).
   `domain/service/actor.rs`): `server.address`, `app.kind` / `app.key` (the
   connected-app slug or custom-server key), `mcp.method`,
   `mcp.request_bytes` / `mcp.response_bytes` (JSON lengths) and `mcp.outcome`
-  (`ok`, `tool_error`, `rate_limited`, `upstream_error`). Never arguments or
+  (`ok`, `tool_error`, `rate_limited`, `needs_reconnect`, `upstream_error`). Never arguments or
   results. A new upstream session's handshake is its own
   `connected_app.mcp_connect` child, and a `tools/call`'s pacing is its
   `mcp.call_budget` child (`wait_ms`, `attempts`, `rate_limited`).
