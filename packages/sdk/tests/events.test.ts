@@ -88,7 +88,7 @@ describe('MacroEvents', () => {
     const errors: unknown[] = [];
     const onError = (error: unknown) => errors.push(error);
     process.on('unhandledRejection', onError);
-    globalThis.fetch = (async () =>
+    globalThis.fetch = (async (_input) =>
       new Response(
         `event: heartbeat\ndata: {}\n\n${sseBody(created)}`,
         { status: 200, headers: { 'content-type': 'text/event-stream' } },
