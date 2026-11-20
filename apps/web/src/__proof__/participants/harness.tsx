@@ -5,7 +5,9 @@
 //   old: main's REST reader and hand-patched mutations, copied verbatim in main/;
 //   new: the head's GraphQL reader, overlay mutations and REST fallback.
 // Never shipped: nothing imports this module; the driver loads it by URL.
+
 import { createInvitedSource as newInvitedSource } from '@app/features/block-form/queries/form-sources';
+import { UserContextProvider } from '@core/context/user';
 import { useChannelParticipantsQuery as useNewReader } from '@queries/channel/channel-participants';
 import { channelKeys } from '@queries/channel/keys';
 import {
@@ -419,21 +421,24 @@ async function invited(formId: string, ownerId: string, timeoutMs: number) {
   const dispose = render(
     () => (
       <QueryClientContext.Provider value={() => queryClient}>
-        {(() => {
-          sources = {
-            old: oldInvitedSource(
-              () => formId,
-              () => ownerId,
-              () => true
-            ),
-            neu: newInvitedSource(
-              () => formId,
-              () => ownerId,
-              () => true
-            ),
-          };
-          return null;
-        })()}
+        {/* The app's Root provides the viewer; the head's channel batch reads it. */}
+        <UserContextProvider>
+          {(() => {
+            sources = {
+              old: oldInvitedSource(
+                () => formId,
+                () => ownerId,
+                () => true
+              ),
+              neu: newInvitedSource(
+                () => formId,
+                () => ownerId,
+                () => true
+              ),
+            };
+            return null;
+          })()}
+        </UserContextProvider>
       </QueryClientContext.Provider>
     ),
     host
