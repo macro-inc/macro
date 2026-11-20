@@ -97,6 +97,12 @@ export function InviteAgentForm(props: {
   hostNotice?: (host: AgentHost) => JSX.Element;
   /** Add with one of the inviter's computers picked: nothing is bought. */
   onSubmitHost?: (invite: HostInvite) => void;
+  /**
+   * More choices for the new agent, under the computer list (an email
+   * address of its own). The caller owns their state and adds them to the
+   * request it sends.
+   */
+  options?: JSX.Element;
 }) {
   const [name, setName] = createSignal('');
   const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
@@ -363,6 +369,11 @@ export function InviteAgentForm(props: {
                 })}
               </>
             )}
+          </Show>
+          <Show when={props.options}>
+            <fieldset disabled={adding()} class="contents">
+              <div class="flex flex-col gap-2 pt-2">{props.options}</div>
+            </fieldset>
           </Show>
         </div>
       }

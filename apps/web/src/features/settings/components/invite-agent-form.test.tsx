@@ -1,6 +1,8 @@
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { AddAgentState } from '../core/team-agent-add';
 import { AGENT_COMPUTER_CHOICE, InviteAgentForm } from './invite-agent-form';
 
 beforeEach(() => {
@@ -199,4 +201,35 @@ it('offers your computers in the same choice as the sizes, and adds on one witho
     screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
   );
   expect(onSubmit).toHaveBeenCalledTimes(1);
+});
+
+it('shows more options under the computer list, held while adding', () => {
+  const noop = () => {};
+  const [state, setState] = createSignal<AddAgentState>({ kind: 'editing' });
+  render(() => (
+    <InviteAgentForm
+      offers={[]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={state()}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={noop}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+      options={
+        <label>
+          <input type="checkbox" />
+          Give it an email address
+        </label>
+      }
+    />
+  ));
+  const option = screen.getByRole('checkbox', {
+    name: 'Give it an email address',
+  });
+  expect(option.matches(':disabled')).toBe(false);
+  setState({ kind: 'adding' });
+  expect(option.matches(':disabled')).toBe(true);
 });
