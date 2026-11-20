@@ -718,11 +718,13 @@ async function readAfterWrite(s, name, vars, result) {
 
 // A seeded operation over what the account can see.
 async function step(pair, g, gen) {
-  const actor = pair.inTeam && g.chance(0.3) ? 'B' : 'A';
+  // B also acts after it was removed from the team: its team-scope writes must
+  // be refused the same way on both sides.
+  const actor = g.chance(0.3) ? 'B' : 'A';
   const acct = pair[actor];
   const cat = await catalog(acct.neu);
   cover('catalog size', sizeBucket(cat.defs.length));
-  const teamScope = () => (pair.inTeam && g.chance(0.5) ? 'team' : 'user');
+  const teamScope = () => (pair.teamCreated && g.chance(0.5) ? 'team' : 'user');
   // Mostly the account's own selects; now and then a system one, whose writes the server refuses.
   const writable = g.chance(0.1) ? cat.selects : cat.ownSelects;
   const withOpts = writable.filter((d) => d.property_options?.length);
@@ -735,7 +737,7 @@ async function step(pair, g, gen) {
   stepContext.op = op;
   stepContext.actor = actor;
   cover('op', op);
-  cover('actor', actor === 'A' ? (pair.teamCreated ? 'team owner' : 'owner, no team') : pair.inTeam ? 'team member' : 'revoked member');
+  cover('actor', actor === 'A' ? (pair.teamCreated ? 'team owner' : 'owner, no team') : pair.inTeam ? 'team member' : pair.teamCreated ? 'revoked member' : 'second user, no team');
   switch (op) {
     case 'createDef':
     case 'crmStage': {
@@ -862,6 +864,7 @@ function sql(statement, vars) {
 
 // Every listing key, every option id the account can name, and the tags.
 async function sweep(pair, label) {
+  const outer = stepContext;
   for (const acct of [pair.A, pair.B]) {
     stepContext = { lane: pair.lane, generation: pair.generation, level: `sweep:${label}`, account: acct.name };
     for (const lk of LIST_KEYS) await rawCase(acct.neu, { k: 'defs', ...lk });
@@ -873,6 +876,7 @@ async function sweep(pair, label) {
     for (const id of pair.foreign) await rawCase(acct.neu, { k: 'opts', id, why: acct.name === 'B' ? 'own private definition' : "another user's private definition" });
     await rawCase(acct.neu, { k: 'opts', id: crypto.randomUUID(), why: 'random id' });
   }
+  stepContext = outer;
 }
 
 async function runLane(lane, seqCount) {
