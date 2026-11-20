@@ -5,14 +5,16 @@
 #[path = "service_test.rs"]
 mod test;
 
+use super::filter::McpEventFilter;
 use super::models::{
-    MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome, McpEventOccurrence, McpEventQueueMessage,
-    McpSubscribeRequest, McpSubscribeResult, McpSubscriptionKey,
+    MAX_ARGUMENTS_BYTES, MAX_FILTER_BYTES, MAX_SUBSCRIPTIONS_PER_USER, McpDeliveryOutcome,
+    McpEventOccurrence, McpEventQueueMessage, McpSubscribeRequest, McpSubscribeResult,
+    McpSubscriptionKey,
 };
 use super::ports::{
     McpEndpointClient, McpEndpointVerifyError, McpEventDeliveryService, McpEventEnqueuer,
-    McpEventFanout, McpEventSubscriptionService, McpSecretCipher, McpSubscriptionError,
-    McpSubscriptionRepo, McpSubscriptionUpsert,
+    McpEventFanout, McpEventSubscriptionService, McpSecretCipher, McpStoreOutcome,
+    McpSubscriptionError, McpSubscriptionRepo, McpSubscriptionUpsert,
 };
 use crate::domain::delivery::{MAX_HTTP_ATTEMPTS, retry_delay};
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
@@ -24,6 +26,35 @@ use uuid::Uuid;
 
 /// Redelivery delay after a failure that is ours, not the endpoint's.
 const INTERNAL_RETRY_DELAY: Duration = Duration::from_secs(30);
+/// Most audience users one match query names; a wider audience is matched
+/// in several, so each query's work stays bounded.
+pub const AUDIENCE_CHUNK: usize = 1_000;
+/// Expired subscriptions one sweep statement deletes.
+pub const SWEEP_BATCH: u32 = 500;
+/// Most sweep statements in one round; the next round continues.
+pub const SWEEP_MAX_BATCHES: u32 = 20;
+
+/// Refuse arguments and filters large enough to weigh on matching, which
+/// reads every candidate's filter.
+fn check_sizes(
+    arguments: &serde_json::Value,
+    filter: &McpEventFilter,
+) -> Result<(), McpSubscriptionError> {
+    let too_large = |value: Result<Vec<u8>, serde_json::Error>, max: usize| {
+        value.map_or(true, |bytes| bytes.len() > max)
+    };
+    if too_large(serde_json::to_vec(arguments), MAX_ARGUMENTS_BYTES) {
+        return Err(McpSubscriptionError::InvalidParams(format!(
+            "arguments must be at most {MAX_ARGUMENTS_BYTES} bytes of JSON"
+        )));
+    }
+    if too_large(serde_json::to_vec(filter), MAX_FILTER_BYTES) {
+        return Err(McpSubscriptionError::InvalidParams(format!(
+            "the filter must be at most {MAX_FILTER_BYTES} bytes of JSON"
+        )));
+    }
+    Ok(())
+}
 
 /// Subscribe and unsubscribe.
 #[derive(Clone)]
@@ -89,23 +120,7 @@ where
         filter
             .validate()
             .map_err(|error| McpSubscriptionError::InvalidParams(error.to_string()))?;
-
-        self.repo
-            .delete_expired(&key.user_id)
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        if !refreshed {
-            let live = self
-                .repo
-                .count_live(&key.user_id)
-                .await
-                .map_err(McpSubscriptionError::internal)?;
-            if live >= MAX_SUBSCRIPTIONS_PER_USER {
-                return Err(McpSubscriptionError::ResourceExhausted {
-                    max: MAX_SUBSCRIPTIONS_PER_USER,
-                });
-            }
-        }
+        check_sizes(&key.arguments, &filter)?;
 
         // A live subscription of this user to this URL means the endpoint
         // already proved it wants their deliveries.
@@ -129,18 +144,31 @@ where
                 })?;
         }
 
-        let row = self
+        // The quota is checked again where the row is written, under a
+        // per-user lock, so concurrent subscribes cannot pass it together.
+        let stored = self
             .repo
-            .upsert(McpSubscriptionUpsert {
-                id: Uuid::now_v7(),
-                key,
-                subscription_id,
-                filter,
-                secret: request.secret_ciphertext,
-                expires_at: request.ttl.grant(now),
-            })
+            .store_within_quota(
+                McpSubscriptionUpsert {
+                    id: Uuid::now_v7(),
+                    key,
+                    subscription_id,
+                    filter,
+                    secret: request.secret_ciphertext,
+                    expires_at: request.ttl.grant(now),
+                },
+                MAX_SUBSCRIPTIONS_PER_USER,
+            )
             .await
             .map_err(McpSubscriptionError::internal)?;
+        let row = match stored {
+            McpStoreOutcome::Stored(row) => *row,
+            McpStoreOutcome::QuotaExceeded => {
+                return Err(McpSubscriptionError::ResourceExhausted {
+                    max: MAX_SUBSCRIPTIONS_PER_USER,
+                });
+            }
+        };
         Ok(McpSubscribeResult {
             id: row.subscription_id,
             refresh_before: row.expires_at,
@@ -209,32 +237,80 @@ where
         if audience.is_empty() {
             return Ok(0);
         }
-        let candidates = self
-            .repo
-            .list_live_matching(audience.to_vec(), &event.event_name)
-            .await
-            .map_err(McpSubscriptionError::internal)?;
-        let span = tracing::Span::current();
-        span.record("candidate_count", candidates.len());
-        let matched: Vec<_> = candidates
-            .into_iter()
-            .filter(|subscription| {
-                subscription.filter.matches(
+        let mut candidate_count = 0;
+        let mut matched = Vec::new();
+        // Each chunk is one bounded query; most events have a small audience
+        // and run one.
+        for chunk in audience.chunks(AUDIENCE_CHUNK) {
+            let candidates = self
+                .repo
+                .list_match_candidates(chunk, &event.event_name)
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            candidate_count += candidates.len();
+            matched.extend(candidates.into_iter().filter(|candidate| {
+                candidate.filter.matches(
                     &event.event_name,
                     &event.entity_id,
                     &event.broker_envelope,
-                    subscription.user_id.as_ref(),
+                    candidate.user_id.as_ref(),
                 )
-            })
-            .collect();
+            }));
+        }
+        let span = tracing::Span::current();
+        span.record("candidate_count", candidate_count);
         span.record("match_count", matched.len());
-        try_join_all(matched.iter().map(|subscription| {
+        try_join_all(matched.iter().map(|candidate| {
             self.queue
-                .enqueue_mcp(McpEventQueueMessage::new(subscription.id, event.clone()))
+                .enqueue_mcp(McpEventQueueMessage::new(candidate.id, event.clone()))
         }))
         .await
         .map_err(McpSubscriptionError::internal)?;
         Ok(matched.len())
+    }
+}
+
+/// Deletes expired subscriptions, so users who never subscribe again do not
+/// keep their expired rows.
+#[derive(Clone)]
+pub struct McpSubscriptionSweeper<R> {
+    repo: R,
+}
+
+impl<R: McpSubscriptionRepo> McpSubscriptionSweeper<R> {
+    /// Create the sweeper.
+    pub fn new(repo: R) -> Self {
+        Self { repo }
+    }
+
+    /// Delete expired subscriptions in bounded batches, at most
+    /// [`SWEEP_MAX_BATCHES`] of them; a larger backlog is left to the next
+    /// round. Returns how many were deleted.
+    #[tracing::instrument(
+        name = "mcp_events.sweep_expired",
+        skip_all,
+        fields(deleted_count = tracing::field::Empty, batch_count = tracing::field::Empty),
+        err
+    )]
+    pub async fn sweep_expired(&self) -> Result<u64, McpSubscriptionError> {
+        let mut deleted = 0;
+        let mut batches = 0;
+        while batches < SWEEP_MAX_BATCHES {
+            batches += 1;
+            let removed = self
+                .repo
+                .delete_expired_batch(SWEEP_BATCH)
+                .await
+                .map_err(McpSubscriptionError::internal)?;
+            deleted += removed;
+            if removed < u64::from(SWEEP_BATCH) {
+                break;
+            }
+        }
+        let span = tracing::Span::current();
+        span.record("deleted_count", deleted);
+        span.record("batch_count", batches);
+        Ok(deleted)
     }
 }
 

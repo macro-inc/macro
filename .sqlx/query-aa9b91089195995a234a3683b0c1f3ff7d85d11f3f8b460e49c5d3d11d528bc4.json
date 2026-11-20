@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT count(*) AS \"count!\"\n            FROM mcp_event_subscription\n            WHERE user_id = $1 AND expires_at > now()\n            ",
+  "query": "\n            SELECT count(*) AS \"count!\"\n            FROM mcp_event_subscription\n            WHERE user_id = $1 AND subscription_id <> $2\n            ",
   "describe": {
     "columns": [
       {
@@ -11,6 +11,7 @@
     ],
     "parameters": {
       "Left": [
+        "Text",
         "Text"
       ]
     },
@@ -18,5 +19,5 @@
       null
     ]
   },
-  "hash": "5fafa29043e12a48a97762465e577bfd460ef26cb797ffc508c51790eea6ce0c"
+  "hash": "aa9b91089195995a234a3683b0c1f3ff7d85d11f3f8b460e49c5d3d11d528bc4"
 }

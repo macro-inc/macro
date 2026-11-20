@@ -27,7 +27,11 @@ before changing ingestion or delivery behavior.
 - `src/outbound/http_delivery.rs`: signed HTTPS POST to the webhook endpoint.
 - `src/domain/mcp/`: MCP Events subscriptions (README's "MCP Events
   subscriptions"): `filter.rs` the compiled filter language, `service.rs`
-  subscribe, fan-out and delivery. `src/inbound/mcp_router.rs` is the internal
+  subscribe, fan-out, delivery and the expiry sweep (run by
+  `document_storage_service`'s `src/mcp_subscription_sweep.rs`). Matching reads
+  the `mcp_event_subscription_event` index table, which the repository rewrites
+  with each stored filter; never match by scanning subscription rows.
+  `src/inbound/mcp_router.rs` is the internal
   surface the MCP server calls; `src/outbound/pg_mcp_subscription_repository.rs`,
   `http_mcp_endpoint.rs` (verify and deliver) and `kms_mcp_secret_cipher.rs`
   are its adapters.

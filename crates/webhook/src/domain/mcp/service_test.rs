@@ -3,7 +3,8 @@ use crate::domain::mcp::filter::{
     McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
 };
 use crate::domain::mcp::models::{
-    McpEndpointFailure, McpEventSubscription, McpSecretCiphertext, McpSubscriptionId, McpTtlRequest,
+    McpEndpointFailure, McpEventSubscription, McpMatchCandidate, McpSecretCiphertext,
+    McpSubscriptionId, McpTtlRequest,
 };
 use chrono::{DateTime, Utc};
 use std::sync::{Arc, Mutex};
@@ -21,6 +22,8 @@ struct FakeError;
 #[derive(Clone, Default)]
 struct FakeRepo {
     rows: Arc<Mutex<Vec<McpEventSubscription>>>,
+    /// The audience size of each match query.
+    match_calls: Arc<Mutex<Vec<usize>>>,
 }
 
 impl FakeRepo {
@@ -56,18 +59,30 @@ impl McpSubscriptionRepo for FakeRepo {
             .find(|row| row.id == id && row.is_live(Utc::now())))
     }
 
-    async fn upsert(
+    async fn store_within_quota(
         &self,
         upsert: McpSubscriptionUpsert,
-    ) -> Result<McpEventSubscription, FakeError> {
+        max: u32,
+    ) -> Result<McpStoreOutcome, FakeError> {
         let mut rows = self.rows.lock().expect("lock");
+        let now = Utc::now();
+        rows.retain(|row| row.user_id != upsert.key.user_id || row.is_live(now));
+        let others = rows
+            .iter()
+            .filter(|row| {
+                row.user_id == upsert.key.user_id && row.subscription_id != upsert.subscription_id
+            })
+            .count();
+        if others >= max as usize {
+            return Ok(McpStoreOutcome::QuotaExceeded);
+        }
         if let Some(row) = rows.iter_mut().find(|row| {
             row.user_id == upsert.key.user_id && row.subscription_id == upsert.subscription_id
         }) {
             row.filter = upsert.filter;
             row.secret = upsert.secret;
             row.expires_at = upsert.expires_at;
-            return Ok(row.clone());
+            return Ok(McpStoreOutcome::Stored(Box::new(row.clone())));
         }
         let row = McpEventSubscription {
             id: upsert.id,
@@ -81,7 +96,7 @@ impl McpSubscriptionRepo for FakeRepo {
             expires_at: upsert.expires_at,
         };
         rows.push(row.clone());
-        Ok(row)
+        Ok(McpStoreOutcome::Stored(Box::new(row)))
     }
 
     async fn delete(
@@ -95,21 +110,19 @@ impl McpSubscriptionRepo for FakeRepo {
         Ok(rows.len() != before)
     }
 
-    async fn delete_expired(&self, user_id: &MacroUserIdStr<'static>) -> Result<u64, FakeError> {
+    async fn delete_expired_batch(&self, limit: u32) -> Result<u64, FakeError> {
         let mut rows = self.rows.lock().expect("lock");
-        let before = rows.len();
         let now = Utc::now();
-        rows.retain(|row| &row.user_id != user_id || row.is_live(now));
-        Ok((before - rows.len()) as u64)
-    }
-
-    async fn count_live(&self, user_id: &MacroUserIdStr<'static>) -> Result<u32, FakeError> {
-        let now = Utc::now();
-        Ok(self
-            .rows()
-            .iter()
-            .filter(|row| &row.user_id == user_id && row.is_live(now))
-            .count() as u32)
+        let mut deleted = 0;
+        rows.retain(|row| {
+            if !row.is_live(now) && deleted < u64::from(limit) {
+                deleted += 1;
+                false
+            } else {
+                true
+            }
+        });
+        Ok(deleted)
     }
 
     async fn has_live_endpoint(
@@ -123,11 +136,12 @@ impl McpSubscriptionRepo for FakeRepo {
         }))
     }
 
-    async fn list_live_matching(
+    async fn list_match_candidates(
         &self,
-        user_ids: Vec<String>,
+        user_ids: &[String],
         event_name: &str,
-    ) -> Result<Vec<McpEventSubscription>, FakeError> {
+    ) -> Result<Vec<McpMatchCandidate>, FakeError> {
+        self.match_calls.lock().expect("lock").push(user_ids.len());
         let now = Utc::now();
         Ok(self
             .rows()
@@ -140,6 +154,11 @@ impl McpSubscriptionRepo for FakeRepo {
                         .iter()
                         .any(|name| name == event_name)
                     && row.is_live(now)
+            })
+            .map(|row| McpMatchCandidate {
+                id: row.id,
+                user_id: row.user_id,
+                filter: row.filter,
             })
             .collect())
     }
@@ -534,6 +553,123 @@ async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
         .find(|row| row.user_id.as_ref() == ME)
         .expect("row");
     assert_eq!(messages[0].mcp_subscription_id, me_row.id);
+}
+
+#[tokio::test]
+async fn oversized_arguments_and_filters_are_refused() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let service = service(&repo, &endpoint);
+
+    let long_query = "x".repeat(MAX_ARGUMENTS_BYTES);
+    let refused = service
+        .subscribe(
+            user(ME),
+            request(&long_query, Some(mentions_of_me_in_channels())),
+        )
+        .await;
+    assert!(matches!(
+        refused,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
+
+    // Within every per-part limit, but large in total.
+    let clause = |index: usize| McpFilterClause {
+        events: vec!["message.posted".to_owned()],
+        ids: Some(
+            (0..16)
+                .map(|id| format!("{index}-{id}-{}", "x".repeat(96)))
+                .collect(),
+        ),
+        all_of: Vec::new(),
+    };
+    let large = McpEventFilter {
+        any_of: (0..8).map(clause).collect(),
+    };
+    assert_eq!(large.validate(), Ok(()));
+    let refused = service
+        .subscribe(user(ME), request("ids", Some(large)))
+        .await;
+    assert!(matches!(
+        refused,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
+    assert_eq!(
+        endpoint.verify_count(),
+        0,
+        "refused before the endpoint is called"
+    );
+    assert!(repo.rows().is_empty());
+}
+
+#[tokio::test]
+async fn a_large_audience_is_matched_in_bounded_chunks() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    service(&repo, &endpoint)
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
+        .await
+        .expect("subscribed");
+    let queue = FakeQueue::default();
+    let fanout = McpEventFanoutImpl::new(repo.clone(), queue.clone());
+
+    let mut audience: Vec<String> = (0..AUDIENCE_CHUNK * 2)
+        .map(|index| format!("user-{index}"))
+        .collect();
+    audience.push(ME.to_owned());
+    let queued = fanout
+        .fan_out(&mentioned_event("channel", ME), &audience)
+        .await
+        .expect("fanned out");
+    assert_eq!(queued, 1, "the subscriber in the last chunk is reached");
+    assert_eq!(
+        *repo.match_calls.lock().expect("lock"),
+        vec![AUDIENCE_CHUNK, AUDIENCE_CHUNK, 1]
+    );
+}
+
+#[tokio::test]
+async fn the_sweeper_deletes_expired_rows_in_bounded_rounds() {
+    let repo = FakeRepo::default();
+    let endpoint = FakeEndpoint::accepting();
+    let subscriptions = service(&repo, &endpoint);
+    let total = SWEEP_BATCH * SWEEP_MAX_BATCHES + 3;
+    {
+        let mut rows = repo.rows.lock().expect("lock");
+        for index in 0..total {
+            rows.push(McpEventSubscription {
+                id: Uuid::now_v7(),
+                user_id: user(OTHER),
+                subscription_id: McpSubscriptionId::from_stored(format!("sub_{index}")),
+                event_type: "macro.events".to_owned(),
+                arguments: serde_json::json!({}),
+                filter: mentions_of_me_in_channels(),
+                endpoint_url: URL.to_owned(),
+                secret: ciphertext(),
+                expires_at: Utc::now() - chrono::Duration::minutes(1),
+            });
+        }
+    }
+    subscriptions
+        .subscribe(
+            user(ME),
+            request("live", Some(mentions_of_me_in_channels())),
+        )
+        .await
+        .expect("subscribed");
+
+    let sweeper = McpSubscriptionSweeper::new(repo.clone());
+    assert_eq!(
+        sweeper.sweep_expired().await.expect("swept"),
+        u64::from(SWEEP_BATCH * SWEEP_MAX_BATCHES),
+        "one round stops at its batch limit"
+    );
+    assert_eq!(sweeper.sweep_expired().await.expect("swept"), 3);
+    assert_eq!(sweeper.sweep_expired().await.expect("swept"), 0);
+    assert_eq!(repo.rows().len(), 1, "the live row stays");
 }
 
 async fn subscribed(repo: &FakeRepo) -> McpEventSubscription {

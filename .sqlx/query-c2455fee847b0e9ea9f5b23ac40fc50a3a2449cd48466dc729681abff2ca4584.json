@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id, s.user_id, s.filter\n            FROM mcp_event_subscription_event e\n            JOIN mcp_event_subscription s ON s.id = e.subscription_row_id\n            WHERE e.user_id = ANY($1) AND e.event_name = $2 AND s.expires_at > now()\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "filter",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c2455fee847b0e9ea9f5b23ac40fc50a3a2449cd48466dc729681abff2ca4584"
+}

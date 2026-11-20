@@ -25,6 +25,11 @@ pub const MAX_TTL: Duration = Duration::hours(24);
 pub const MIN_TTL: Duration = Duration::minutes(1);
 /// Most live subscriptions one user may hold.
 pub const MAX_SUBSCRIPTIONS_PER_USER: u32 = 50;
+/// Largest subscription arguments, in bytes of JSON.
+pub const MAX_ARGUMENTS_BYTES: usize = 4 * 1024;
+/// Largest compiled filter, in bytes of JSON. Matching reads every
+/// candidate's filter, so this bounds the work per event.
+pub const MAX_FILTER_BYTES: usize = 8 * 1024;
 /// Queue contract version of [`McpEventQueueMessage`].
 pub const MCP_EVENT_QUEUE_MESSAGE_VERSION: u8 = 1;
 /// Prefix of a delivery's `webhook-id`.
@@ -463,4 +468,15 @@ pub enum McpDeliveryOutcome {
     Retryable(McpEndpointFailure),
     /// Never worth retrying (410, 413, or an endpoint that is not allowed).
     Permanent,
+}
+
+/// What matching an event reads of one subscription.
+#[derive(Debug, Clone, PartialEq)]
+pub struct McpMatchCandidate {
+    /// Row id, which a queued delivery names.
+    pub id: Uuid,
+    /// The subscriber.
+    pub user_id: MacroUserIdStr<'static>,
+    /// The compiled filter.
+    pub filter: McpEventFilter,
 }

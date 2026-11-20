@@ -3,8 +3,8 @@
 use super::filter::McpEventFilter;
 use super::models::{
     McpDeliveryOutcome, McpEndpointFailure, McpEventQueueMessage, McpEventSubscription,
-    McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult, McpSubscriptionId,
-    McpSubscriptionKey,
+    McpMatchCandidate, McpSecretCiphertext, McpSubscribeRequest, McpSubscribeResult,
+    McpSubscriptionId, McpSubscriptionKey,
 };
 use crate::domain::models::{NormalizedWebhookEvent, WebhookWorkerDisposition};
 use chrono::{DateTime, Utc};
@@ -31,6 +31,15 @@ pub struct McpSubscriptionUpsert {
     pub expires_at: DateTime<Utc>,
 }
 
+/// What storing a subscription did.
+#[derive(Debug, Clone, PartialEq)]
+pub enum McpStoreOutcome {
+    /// Stored or refreshed.
+    Stored(Box<McpEventSubscription>),
+    /// The user already holds the most subscriptions allowed.
+    QuotaExceeded,
+}
+
 /// Storage of MCP webhook subscriptions.
 pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
     /// Repository error.
@@ -49,11 +58,15 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         id: Uuid,
     ) -> impl Future<Output = Result<Option<McpEventSubscription>, Self::Err>> + Send;
 
-    /// Insert, or refresh the secret, filter and expiry of the existing row.
-    fn upsert(
+    /// Insert, or refresh the secret, filter and expiry of the existing row,
+    /// unless the user would then hold more than `max` live subscriptions.
+    /// Expired rows of the user are removed first. Serialized per user, so
+    /// concurrent subscribes cannot pass the limit together.
+    fn store_within_quota(
         &self,
         upsert: McpSubscriptionUpsert,
-    ) -> impl Future<Output = Result<McpEventSubscription, Self::Err>> + Send;
+        max: u32,
+    ) -> impl Future<Output = Result<McpStoreOutcome, Self::Err>> + Send;
 
     /// Delete one user's subscription; whether a row was deleted.
     fn delete(
@@ -62,17 +75,12 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         subscription_id: &McpSubscriptionId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Delete one user's expired subscriptions.
-    fn delete_expired(
+    /// Delete up to `limit` expired subscriptions of any user, oldest
+    /// first; how many were deleted.
+    fn delete_expired_batch(
         &self,
-        user_id: &MacroUserIdStr<'static>,
+        limit: u32,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
-
-    /// How many live subscriptions the user holds.
-    fn count_live(
-        &self,
-        user_id: &MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<u32, Self::Err>> + Send;
 
     /// Whether the user holds a live subscription to `endpoint_url`, which
     /// means the endpoint was verified for them.
@@ -82,12 +90,13 @@ pub trait McpSubscriptionRepo: Clone + Send + Sync + 'static {
         endpoint_url: &str,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Live subscriptions of any of `user_ids` that can match `event_name`.
-    fn list_live_matching(
+    /// Live subscriptions of any of `user_ids` whose filter names
+    /// `event_name`, with only what matching reads.
+    fn list_match_candidates(
         &self,
-        user_ids: Vec<String>,
+        user_ids: &[String],
         event_name: &str,
-    ) -> impl Future<Output = Result<Vec<McpEventSubscription>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<McpMatchCandidate>, Self::Err>> + Send;
 }
 
 /// Decrypts a subscriber's signing secret.

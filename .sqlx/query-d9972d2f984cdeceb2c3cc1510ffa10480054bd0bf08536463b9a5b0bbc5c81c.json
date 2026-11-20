@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM mcp_event_subscription\n            WHERE id IN (\n                SELECT id\n                FROM mcp_event_subscription\n                WHERE expires_at <= now()\n                ORDER BY expires_at\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d9972d2f984cdeceb2c3cc1510ffa10480054bd0bf08536463b9a5b0bbc5c81c"
+}

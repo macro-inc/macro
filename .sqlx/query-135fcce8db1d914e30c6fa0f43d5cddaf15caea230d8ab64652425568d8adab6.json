@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM mcp_event_subscription_event\n            WHERE subscription_row_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "135fcce8db1d914e30c6fa0f43d5cddaf15caea230d8ab64652425568d8adab6"
+}

@@ -160,10 +160,13 @@ fn plain_event_filter_matches_like_a_webhook_filter() {
     assert!(filter.matches("document.created", "doc", &envelope, ME));
     assert!(!filter.matches("document.deleted", "doc", &envelope, ME));
     assert_eq!(
-        filter.webhook_filters(),
-        vec![WebhookFilter {
-            events: vec!["document.created".to_owned()],
-            ids: None
+        filter.stream_groups(),
+        vec![McpStreamGroup {
+            source: WebhookFilter {
+                events: vec!["document.created".to_owned()],
+                ids: None
+            },
+            filter: filter.clone(),
         }]
     );
 }
@@ -269,5 +272,56 @@ fn event_names_are_sorted_and_unique() {
     assert_eq!(
         filter.event_names(),
         vec!["document.created".to_owned(), "message.posted".to_owned()]
+    );
+}
+
+#[test]
+fn stream_groups_split_by_ids_and_leave_ids_to_the_source() {
+    let mentions = my_channel_mentions().any_of.remove(0);
+    let in_channel = McpFilterClause {
+        events: vec!["message.posted".to_owned()],
+        ids: Some(vec!["b".to_owned(), "a".to_owned()]),
+        all_of: Vec::new(),
+    };
+    let same_ids_reordered = McpFilterClause {
+        events: vec!["channel.updated".to_owned()],
+        ids: Some(vec!["a".to_owned(), "b".to_owned()]),
+        all_of: Vec::new(),
+    };
+    let filter = McpEventFilter {
+        any_of: vec![
+            mentions.clone(),
+            in_channel.clone(),
+            same_ids_reordered.clone(),
+        ],
+    };
+    assert_eq!(filter.validate(), Ok(()));
+
+    let without_ids = |clause: McpFilterClause| McpFilterClause {
+        ids: None,
+        ..clause
+    };
+    assert_eq!(
+        filter.stream_groups(),
+        vec![
+            McpStreamGroup {
+                source: WebhookFilter {
+                    events: vec!["message.mentioned".to_owned()],
+                    ids: None,
+                },
+                filter: McpEventFilter {
+                    any_of: vec![mentions],
+                },
+            },
+            McpStreamGroup {
+                source: WebhookFilter {
+                    events: vec!["channel.updated".to_owned(), "message.posted".to_owned()],
+                    ids: Some(vec!["a".to_owned(), "b".to_owned()]),
+                },
+                filter: McpEventFilter {
+                    any_of: vec![without_ids(in_channel), without_ids(same_ids_reordered)],
+                },
+            },
+        ]
     );
 }

@@ -66,8 +66,44 @@ fn upsert(
     }
 }
 
+const MAX: u32 = 50;
+
+async fn store(
+    repo: &PgMcpSubscriptionRepository,
+    upsert: McpSubscriptionUpsert,
+) -> anyhow::Result<McpEventSubscription> {
+    match repo.store_within_quota(upsert, MAX).await? {
+        McpStoreOutcome::Stored(row) => Ok(*row),
+        McpStoreOutcome::QuotaExceeded => anyhow::bail!("unexpected quota refusal"),
+    }
+}
+
+async fn candidates(
+    repo: &PgMcpSubscriptionRepository,
+    users: &[&str],
+    event_name: &str,
+) -> anyhow::Result<Vec<Uuid>> {
+    let users: Vec<String> = users.iter().map(|user| (*user).to_owned()).collect();
+    let mut ids: Vec<Uuid> = repo
+        .list_match_candidates(&users, event_name)
+        .await?
+        .into_iter()
+        .map(|candidate| candidate.id)
+        .collect();
+    ids.sort();
+    Ok(ids)
+}
+
+async fn index_rows(pool: &PgPool) -> anyhow::Result<i64> {
+    Ok(
+        sqlx::query_scalar!(r#"SELECT count(*) AS "count!" FROM mcp_event_subscription_event"#)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<()> {
+async fn store_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
     let first = upsert(
         ME,
@@ -76,7 +112,7 @@ async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<
         &["message.mentioned"],
         Duration::hours(1),
     );
-    let stored = repo.upsert(first.clone()).await?;
+    let stored = store(&repo, first.clone()).await?;
     assert_eq!(stored.id, first.id);
     assert_eq!(stored.subscription_id, first.subscription_id);
     assert_eq!(stored.arguments, serde_json::json!({ "query": "mentions" }));
@@ -91,20 +127,50 @@ async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<
     refresh.secret.ciphertext = vec![9];
     refresh.filter = McpEventFilter::for_events(vec!["message.posted".to_owned()], None);
     refresh.expires_at = Utc::now() + Duration::hours(2);
-    let refreshed = repo.upsert(refresh.clone()).await?;
+    let refreshed = store(&repo, refresh.clone()).await?;
     assert_eq!(refreshed.id, first.id, "the row keeps its id");
     assert_eq!(refreshed.secret.ciphertext, vec![9]);
     assert_eq!(refreshed.filter, refresh.filter);
     assert!(refreshed.expires_at > stored.expires_at);
 
-    let matching = repo
-        .list_live_matching(vec![ME.to_owned()], "message.posted")
-        .await?;
-    assert_eq!(matching.len(), 1, "events follow the refreshed filter");
+    assert_eq!(
+        candidates(&repo, &[ME], "message.posted").await?,
+        vec![first.id],
+        "events follow the refreshed filter"
+    );
     assert!(
-        repo.list_live_matching(vec![ME.to_owned()], "message.mentioned")
+        candidates(&repo, &[ME], "message.mentioned")
             .await?
             .is_empty()
+    );
+    assert_eq!(index_rows(&pool).await?, 1);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn candidates_carry_the_owner_and_filter(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let stored = store(
+        &repo,
+        upsert(
+            ME,
+            URL,
+            "mentions",
+            &["message.mentioned", "message.posted"],
+            Duration::hours(1),
+        ),
+    )
+    .await?;
+    let found = repo
+        .list_match_candidates(&[ME.to_owned()], "message.posted")
+        .await?;
+    assert_eq!(
+        found,
+        vec![McpMatchCandidate {
+            id: stored.id,
+            user_id: user(ME),
+            filter: stored.filter,
+        }]
     );
     Ok(())
 }
@@ -112,24 +178,16 @@ async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn expired_rows_are_not_live(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let expired = repo
-        .upsert(upsert(
-            ME,
-            URL,
-            "old",
-            &["message.posted"],
-            -Duration::minutes(1),
-        ))
-        .await?;
-    let live = repo
-        .upsert(upsert(
-            ME,
-            URL,
-            "new",
-            &["message.posted"],
-            Duration::hours(1),
-        ))
-        .await?;
+    let live = store(
+        &repo,
+        upsert(ME, URL, "new", &["message.posted"], Duration::hours(1)),
+    )
+    .await?;
+    let expired = store(
+        &repo,
+        upsert(ME, URL, "old", &["message.posted"], -Duration::minutes(1)),
+    )
+    .await?;
 
     assert!(
         repo.get(&user(ME), &expired.subscription_id)
@@ -138,58 +196,173 @@ async fn expired_rows_are_not_live(pool: PgPool) -> anyhow::Result<()> {
     );
     assert_eq!(repo.get_live(expired.id).await?, None);
     assert_eq!(repo.get_live(live.id).await?, Some(live.clone()));
-    assert_eq!(repo.count_live(&user(ME)).await?, 1);
-    let matching = repo
-        .list_live_matching(vec![ME.to_owned()], "message.posted")
-        .await?;
-    assert_eq!(matching, vec![live.clone()]);
-
-    assert_eq!(repo.delete_expired(&user(ME)).await?, 1);
-    assert!(
-        repo.get(&user(ME), &expired.subscription_id)
-            .await?
-            .is_none()
+    assert_eq!(
+        candidates(&repo, &[ME], "message.posted").await?,
+        vec![live.id]
     );
-    assert_eq!(repo.delete_expired(&user(ME)).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn sweeping_deletes_expired_rows_in_batches(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let live = store(
+        &repo,
+        upsert(ME, URL, "live", &["message.posted"], Duration::hours(1)),
+    )
+    .await?;
+    for (owner, query) in [(ME, "a"), (ME, "b"), (OTHER, "c")] {
+        store(
+            &repo,
+            upsert(
+                owner,
+                URL,
+                query,
+                &["message.posted"],
+                -Duration::minutes(1),
+            ),
+        )
+        .await?;
+    }
+    // Storing "b" removed the user's expired "a"; "b" and "c" remain.
+    assert_eq!(index_rows(&pool).await?, 3);
+
+    assert_eq!(repo.delete_expired_batch(1).await?, 1);
+    assert_eq!(repo.delete_expired_batch(1).await?, 1);
+    assert_eq!(repo.delete_expired_batch(1).await?, 0);
+    assert_eq!(repo.get_live(live.id).await?, Some(live));
+    assert_eq!(index_rows(&pool).await?, 1, "index rows go with their row");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_quota_counts_live_rows_but_not_a_refresh(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let first = upsert(ME, URL, "a", &["message.posted"], Duration::hours(1));
+    for subscription in [
+        first.clone(),
+        upsert(ME, URL, "b", &["message.posted"], Duration::hours(1)),
+    ] {
+        assert!(matches!(
+            repo.store_within_quota(subscription, 2).await?,
+            McpStoreOutcome::Stored(_)
+        ));
+    }
+    assert_eq!(
+        repo.store_within_quota(
+            upsert(ME, URL, "c", &["message.posted"], Duration::hours(1)),
+            2
+        )
+        .await?,
+        McpStoreOutcome::QuotaExceeded
+    );
+    assert!(matches!(
+        repo.store_within_quota(first, 2).await?,
+        McpStoreOutcome::Stored(_)
+    ));
+    assert!(
+        matches!(
+            repo.store_within_quota(
+                upsert(OTHER, URL, "c", &["message.posted"], Duration::hours(1)),
+                2
+            )
+            .await?,
+            McpStoreOutcome::Stored(_)
+        ),
+        "the quota is per user"
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn expired_rows_free_their_quota(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    store(
+        &repo,
+        upsert(ME, URL, "old", &["message.posted"], -Duration::minutes(1)),
+    )
+    .await?;
+    assert!(matches!(
+        repo.store_within_quota(
+            upsert(ME, URL, "new", &["message.posted"], Duration::hours(1)),
+            1
+        )
+        .await?,
+        McpStoreOutcome::Stored(_)
+    ));
+    assert_eq!(index_rows(&pool).await?, 1, "the expired row was removed");
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn concurrent_stores_cannot_pass_the_quota_together(pool: PgPool) -> anyhow::Result<()> {
+    let repo = setup(&pool).await?;
+    let attempts = (0..8).map(|index| {
+        let repo = repo.clone();
+        let subscription = upsert(
+            ME,
+            URL,
+            &format!("query {index}"),
+            &["message.posted"],
+            Duration::hours(1),
+        );
+        tokio::spawn(async move { repo.store_within_quota(subscription, 1).await })
+    });
+    let mut stored = 0;
+    for attempt in futures::future::join_all(attempts).await {
+        if matches!(attempt??, McpStoreOutcome::Stored(_)) {
+            stored += 1;
+        }
+    }
+    assert_eq!(stored, 1);
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_is_scoped_to_the_user(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let mine = repo
-        .upsert(upsert(
+    let mine = store(
+        &repo,
+        upsert(
             ME,
             URL,
             "mentions",
             &["message.mentioned"],
             Duration::hours(1),
-        ))
-        .await?;
+        ),
+    )
+    .await?;
     assert!(!repo.delete(&user(OTHER), &mine.subscription_id).await?);
     assert!(repo.delete(&user(ME), &mine.subscription_id).await?);
     assert!(!repo.delete(&user(ME), &mine.subscription_id).await?);
+    assert_eq!(index_rows(&pool).await?, 0);
     Ok(())
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    repo.upsert(upsert(
-        ME,
-        URL,
-        "mentions",
-        &["message.mentioned"],
-        Duration::hours(1),
-    ))
+    store(
+        &repo,
+        upsert(
+            ME,
+            URL,
+            "mentions",
+            &["message.mentioned"],
+            Duration::hours(1),
+        ),
+    )
     .await?;
-    repo.upsert(upsert(
-        ME,
-        "https://hooks.example.com/expired",
-        "mentions",
-        &["message.mentioned"],
-        -Duration::minutes(1),
-    ))
+    store(
+        &repo,
+        upsert(
+            ME,
+            "https://hooks.example.com/expired",
+            "mentions",
+            &["message.mentioned"],
+            -Duration::minutes(1),
+        ),
+    )
     .await?;
     assert!(repo.has_live_endpoint(&user(ME), URL).await?);
     assert!(!repo.has_live_endpoint(&user(OTHER), URL).await?);
@@ -209,46 +382,46 @@ async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn matching_reads_only_the_audience(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let mine = repo
-        .upsert(upsert(
+    let mine = store(
+        &repo,
+        upsert(
             ME,
             URL,
             "mentions",
             &["message.mentioned"],
             Duration::hours(1),
-        ))
-        .await?;
-    let theirs = repo
-        .upsert(upsert(
+        ),
+    )
+    .await?;
+    let theirs = store(
+        &repo,
+        upsert(
             OTHER,
             URL,
             "mentions",
             &["message.mentioned"],
             Duration::hours(1),
-        ))
-        .await?;
+        ),
+    )
+    .await?;
 
-    let only_me = repo
-        .list_live_matching(
-            vec![
-                ME.to_owned(),
-                "11111111-1111-1111-1111-111111111111".to_owned(),
-            ],
-            "message.mentioned",
+    assert_eq!(
+        candidates(
+            &repo,
+            &[ME, "11111111-1111-1111-1111-111111111111"],
+            "message.mentioned"
         )
-        .await?;
-    assert_eq!(only_me, vec![mine.clone()]);
-
-    let mut both = repo
-        .list_live_matching(vec![ME.to_owned(), OTHER.to_owned()], "message.mentioned")
-        .await?;
-    both.sort_by_key(|subscription| subscription.id);
-    let mut expected = vec![mine, theirs];
-    expected.sort_by_key(|subscription| subscription.id);
-    assert_eq!(both, expected);
-
+        .await?,
+        vec![mine.id]
+    );
+    let mut both = vec![mine.id, theirs.id];
+    both.sort();
+    assert_eq!(
+        candidates(&repo, &[ME, OTHER], "message.mentioned").await?,
+        both
+    );
     assert!(
-        repo.list_live_matching(vec![ME.to_owned()], "document.created")
+        candidates(&repo, &[ME], "document.created")
             .await?
             .is_empty()
     );

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, expires_at\n            FROM mcp_event_subscription\n            WHERE user_id = ANY($1) AND $2 = ANY(events) AND expires_at > now()\n            ",
+  "query": "\n            INSERT INTO mcp_event_subscription (\n                id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, expires_at\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)\n            ON CONFLICT (user_id, subscription_id) DO UPDATE SET\n                filter = EXCLUDED.filter,\n                secret_ciphertext = EXCLUDED.secret_ciphertext,\n                secret_kms_key_id = EXCLUDED.secret_kms_key_id,\n                secret_encryption_version = EXCLUDED.secret_encryption_version,\n                expires_at = EXCLUDED.expires_at,\n                updated_at = now()\n            RETURNING id, user_id, subscription_id, event_type, arguments, filter,\n                endpoint_url, secret_ciphertext, secret_kms_key_id,\n                secret_encryption_version, expires_at\n            ",
   "describe": {
     "columns": [
       {
@@ -61,8 +61,17 @@
     ],
     "parameters": {
       "Left": [
-        "TextArray",
-        "Text"
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Jsonb",
+        "Text",
+        "Bytea",
+        "Text",
+        "Int2",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -79,5 +88,5 @@
       false
     ]
   },
-  "hash": "78638bafcefade8fa71d79a27be38f16c77cbee0ceba8d5bd2cf3d9da86bf112"
+  "hash": "d55e9e3dbea81da8b99bd771b5149bf9e66c32ec563fa94147010887364b9bf3"
 }

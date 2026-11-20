@@ -198,16 +198,43 @@ impl McpEventFilter {
             .collect()
     }
 
-    /// The webhook filters selecting the same events and ids, without the
-    /// payload conditions; for sources that can only narrow by those (the
-    /// live event stream). [`Self::matches`] still decides.
+    /// The filter split for a source that narrows by event name and parent
+    /// id but does not report the parent id of what it sends (the live event
+    /// stream): one group per distinct `ids` among the clauses. Open one
+    /// source per group with its [`McpStreamGroup::source`], match what it
+    /// sends with the group's [`McpStreamGroup::filter`] (ids already
+    /// applied), and drop events another group already delivered.
     #[must_use]
-    pub fn webhook_filters(&self) -> Vec<WebhookFilter> {
-        self.any_of
-            .iter()
-            .map(|clause| WebhookFilter {
-                events: clause.events.clone(),
-                ids: clause.ids.clone(),
+    pub fn stream_groups(&self) -> Vec<McpStreamGroup> {
+        let mut groups: Vec<(Option<Vec<String>>, Vec<McpFilterClause>)> = Vec::new();
+        for clause in &self.any_of {
+            let ids = clause.ids.as_ref().map(|ids| {
+                ids.iter()
+                    .cloned()
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect::<Vec<_>>()
+            });
+            let without_ids = McpFilterClause {
+                ids: None,
+                ..clause.clone()
+            };
+            match groups.iter_mut().find(|(group_ids, _)| *group_ids == ids) {
+                Some((_, clauses)) => clauses.push(without_ids),
+                None => groups.push((ids, vec![without_ids])),
+            }
+        }
+        groups
+            .into_iter()
+            .map(|(ids, clauses)| {
+                let filter = Self { any_of: clauses };
+                McpStreamGroup {
+                    source: WebhookFilter {
+                        events: filter.event_names(),
+                        ids,
+                    },
+                    filter,
+                }
             })
             .collect()
     }
@@ -305,4 +332,15 @@ fn check_values<'a>(
         return Err(McpFilterError::ValueLength);
     }
     Ok(())
+}
+
+/// One source of a streamed subscription; see
+/// [`McpEventFilter::stream_groups`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpStreamGroup {
+    /// What to ask the source for: these events, for these parent ids.
+    pub source: WebhookFilter,
+    /// What the source's events must also match; it names no ids, since the
+    /// source applied them.
+    pub filter: McpEventFilter,
 }

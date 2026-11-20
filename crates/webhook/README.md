@@ -371,16 +371,26 @@ encrypts the secret before calling it.
   event type, canonical arguments). The MCP subscription id (`sub_…`) is a
   digest of that key, so subscribing again refreshes the row in place: a new
   expiry and secret, the same filter. Rows expire (`expires_at`; default 1 h,
-  1 min to 24 h) and are deleted outright on unsubscribe; expired rows are
-  swept on the user's next subscribe. A user holds at most 50 live rows.
+  1 min to 24 h) and are deleted outright on unsubscribe. Expired rows are
+  removed on the user's next subscribe and by `McpSubscriptionSweeper`, which
+  `document_storage_service` runs every minute (batches of 500, at most 20 per
+  round, `FOR UPDATE SKIP LOCKED` so replicas share it). A user holds at most
+  50 live rows: subscribe takes a per-user advisory lock, then counts and
+  writes in one transaction, so concurrent subscribes cannot pass the quota
+  together. Arguments are capped at 4 KiB of JSON and filters at 8 KiB.
+- **Match index.** `mcp_event_subscription_event` holds one row per (user,
+  event name, subscription), rewritten with the filter. Fan-out reads it for
+  the event's audience and name, in chunks of 1,000 users, fetching only each
+  candidate's id, owner and filter, under a 5 s statement timeout.
 - **Filter.** `domain/mcp/filter.rs`: an OR of clauses, each exact event
   names, optional parent ids (the webhook `ids` semantics) and an AND of
   conditions on whitelisted message fields (`parent_type`, `parent_id`,
   `actor`, `mentioned_type`, `mentioned_id`), where a value is literal text or
   `me` (the subscriber). It is compiled once, at subscribe time, and evaluated
   deterministically at delivery; a request that does not fit is refused,
-  never approximated. `events` holds every event name a filter can match, for
-  the match probe.
+  never approximated. `stream_groups` splits it for the live stream, which
+  applies `ids` itself but does not report an event's parent id: one stream per
+  distinct `ids`, matched without them.
 - **Access.** Fan-out receives the audience ingestion already computed for
   the event (the users who can see it, as webhook workspaces) and only rows of
   those users can match, so a subscription never sees more than its user's
