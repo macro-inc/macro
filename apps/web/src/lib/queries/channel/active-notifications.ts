@@ -70,6 +70,8 @@ export function createChannelActiveNotificationsQuery(
       () => query.isFetching,
       (fetching) => {
         if (fetching) return;
+        // Disabling the query mid-request abandons it.
+        if (!enabled()) return read.finish({ cancelled: true });
         read.finish({
           count: query.isSuccess ? (query.data ?? []).length : undefined,
           error: query.error,
