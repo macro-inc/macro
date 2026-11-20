@@ -391,8 +391,7 @@ the skill doesn't cover:
   routing sentence.
 - Web: a renderer in `apps/web/src/lib/core/component/AI/component/tool/` with
   `handler.tsx`, and wording in `apps/web/src/features/block-agent/state/tool-approval-wording.ts`.
-- Regenerate: `cd apps/web && bun run gen-tools` and
-  `cd apps/docs && bun run generate:tools` (never hand-edit the MCP tool pages).
+- Regenerate: `cd apps/web && bun run gen-tools`.
 - Gemini drops records (`additionalProperties`): use key/value pair lists. It
   rejects a `$ref` loop of required fields, and so does schema generation:
   recurse through an optional field or a list that may be empty. It also
