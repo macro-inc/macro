@@ -626,3 +626,43 @@ async fn a_mailbox_with_its_live_reads_ahead_queues_no_more_while_another_mailbo
     );
     assert!(queued(&db, quiet, "new-mail").await);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_folder_page_listing_a_notified_message_reads_it_as_its_own(db: PgPool) {
+    let (repo, link, _, id) = setup(&db).await;
+    finish_import(&db, link).await;
+    MailboxWatchNotifications::new(repo.clone())
+        .with_message_reads(reads_on())
+        .receive(id, vec![notified("moved")])
+        .await
+        .unwrap();
+    let stream = repo
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: Vec::new(),
+            removed: vec![ProviderId::new("moved").unwrap()],
+            position: StreamPosition::Checkpoint(StreamToken::new("checkpoint-2".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    let from_notification = sqlx::query_scalar!(
+        "SELECT from_notification FROM email_message_reconciliation WHERE link_id = $1 AND provider_id = 'moved'",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(
+        !from_notification,
+        "a message a folder page lists follows the folder page's rules, wherever it moved"
+    );
+}

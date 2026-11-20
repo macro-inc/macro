@@ -521,7 +521,8 @@ tools — hexagonal, heavily feature-gated.
   and every import behind its own. A notified read of a message in a folder
   the catalog does not list (hidden, or made since the last discovery) that
   is not stored settles as `unsynced` without storing it, since no folder
-  page would list it; a stored one is read as its folder's page would. The
+  page would list it; a stored one is read as its folder's page would, and a
+  folder page that lists the message clears `from_notification`. The
   reconcile span records `outlook.from_notification`, and with
   `outlook.notification_lag_ms` it times notification to stored; the notify
   span counts `outlook.messages_queued`. Off, a notification only wakes the

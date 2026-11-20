@@ -319,6 +319,9 @@ impl MailboxSyncRepository for PgMailboxSync {
             ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET
                 revision = email_message_reconciliation.revision + 1,
                 is_import = email_message_reconciliation.is_import AND EXCLUDED.is_import,
+                -- A folder page lists the message, so it is read as a folder
+                -- page's message, wherever it has moved since.
+                from_notification = false,
                 notified_at = COALESCE(EXCLUDED.notified_at, email_message_reconciliation.notified_at),
                 notified_traceparent = CASE WHEN EXCLUDED.notified_at IS NULL
                     THEN email_message_reconciliation.notified_traceparent ELSE EXCLUDED.notified_traceparent END,
