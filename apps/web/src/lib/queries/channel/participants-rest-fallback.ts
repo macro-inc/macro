@@ -1,14 +1,19 @@
 import { throwOnErr } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import { Telemetry } from '@macro-inc/observability';
 import { storageServiceClient } from '@service-storage/client';
 import { queryOptions } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 import type { ChannelParticipant } from './types';
 
-/** Why a reader asks REST: its by-id read left the channel out, or failed. */
+/**
+ * Why a reader asks REST: its by-id read left the channel out, failed, or has
+ * not answered for a while.
+ */
 export type ParticipantsFallbackReason =
   | 'channel not in soup'
-  | 'channel read failed';
+  | 'channel read failed'
+  | 'channel read slow';
 
 /**
  * Counted as the Soup list reads that fall back to REST count theirs: a
@@ -36,10 +41,10 @@ export function channelParticipantsRestFallbackOptions(
   return queryOptions({
     ...channelKeys.participantsFallback(channelId),
     enabled,
-    // A failed channel read asks REST after the soup record may have moved on
-    // without it; rows cached before then are no answer.
+    // A failed or slow channel read asks REST after the soup record may have
+    // moved on without it; rows cached before then are no answer.
     // (Spread: an undefined staleTime would override the client's default.)
-    ...(reason === 'channel read failed' ? { staleTime: 0 } : {}),
+    ...(reason === 'channel not in soup' ? {} : { staleTime: 0 }),
     queryFn: () => readParticipantsFromRest(channelId, reason),
   });
 }
@@ -71,4 +76,42 @@ async function readParticipantsFromRest(
       }
     }
   );
+}
+
+/** How long the server gets to say who is in a channel before a reader stops waiting. */
+const SERVER_CHECK_TIMEOUT_MS = 10_000;
+
+/**
+ * Who the server says is in a channel now, read past every cache: a reader
+ * asks before it stops showing a succeeded add or remove whose soup update has
+ * not arrived. Undefined when the read fails or takes too long.
+ */
+export async function readParticipantsOnServer(
+  channelId: string
+): Promise<string[] | undefined> {
+  return await Telemetry.span(
+    'channel.participants.server_check',
+    { kind: 'client', attributes: { 'channel.id': channelId } },
+    async (span) => {
+      const result = await Promise.race([
+        storageServiceClient.getChannelParticipants({ channel_id: channelId }),
+        timedOut(SERVER_CHECK_TIMEOUT_MS),
+      ]);
+      if (result === 'timeout') {
+        span.setAttr('channel.participants.check_outcome', 'timeout');
+        return undefined;
+      }
+      if (result.isErr()) {
+        span.setAttr('channel.participants.check_outcome', 'failed');
+        return undefined;
+      }
+      span.setAttr('channel.participants.check_outcome', 'answered');
+      return result.value.map((participant) => participant.user_id);
+    }
+  );
+}
+
+async function timedOut(ms: number) {
+  await sleep(ms);
+  return 'timeout' as const;
 }

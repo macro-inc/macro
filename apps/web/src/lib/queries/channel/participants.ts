@@ -28,11 +28,19 @@ const REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
 ] as const;
 
 /**
- * How long a finished add or remove keeps showing after its last observer
- * leaves, so a reader opened meanwhile does not show the old roster before
- * the channel's soup update arrives.
+ * How long a succeeded add or remove shows over a record that does not have
+ * it, so a reader opened meanwhile does not show the old roster before the
+ * channel's soup update arrives. A reader that showed it all that time then
+ * asks the server whether it still holds.
  */
 export const CHANNEL_PARTICIPANTS_MUTATION_GC_MS = 30_000;
+
+/**
+ * How long a finished add or remove stays in the mutation cache after its last
+ * observer leaves: past its showing time, so one the server has confirmed
+ * keeps showing over a record whose soup update is late.
+ */
+const CHANNEL_PARTICIPANTS_MUTATION_RETAIN_MS = 5 * 60_000;
 
 /** How long a write waits for the open readers to read the channel again. */
 const READER_REFRESH_WAIT_MS = 3_000;
@@ -131,7 +139,7 @@ export function useAddParticipantsMutation(
 ) {
   return useMutation(() => ({
     mutationKey: ADD_CHANNEL_PARTICIPANTS_MUTATION_KEY,
-    gcTime: CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
+    gcTime: CHANNEL_PARTICIPANTS_MUTATION_RETAIN_MS,
     mutationFn: async (vars: ChannelParticipantsMutationVariables) => {
       return await throwOnErr(
         async () =>
@@ -172,7 +180,7 @@ export function useRemoveParticipantsMutation(
 ) {
   return useMutation(() => ({
     mutationKey: REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY,
-    gcTime: CHANNEL_PARTICIPANTS_MUTATION_GC_MS,
+    gcTime: CHANNEL_PARTICIPANTS_MUTATION_RETAIN_MS,
     mutationFn: async (vars: ChannelParticipantsMutationVariables) => {
       return await throwOnErr(
         async () =>
