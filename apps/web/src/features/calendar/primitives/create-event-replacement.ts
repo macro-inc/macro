@@ -1,36 +1,34 @@
-import { type Accessor, createSignal } from 'solid-js';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { createSignal } from 'solid-js';
 import type { EventReplacementSource } from '../context/event-replacement-source';
 import type {
   EventReplacementPreview,
-  EventReplacementTarget,
+  EventReplacementRequest,
 } from '../core/event-replacement';
 
-export function createEventReplacement(
-  source: EventReplacementSource,
-  target: Accessor<EventReplacementTarget>,
-  hasConference = true
-) {
+export function createEventReplacement(source: EventReplacementSource) {
   const [open, setOpen] = createSignal(false);
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal<string>();
   const [preview, setPreview] = createSignal<EventReplacementPreview>();
   const [confirmationAttempted, setConfirmationAttempted] = createSignal(false);
-  const [removeConference, setRemoveConference] = createSignal(hasConference);
-  const [onlyOccurrence, setOnlyOccurrence] = createSignal(false);
+  let request: EventReplacementRequest | undefined;
+
+  /** A confirmed operation is only ever checked or continued, never prepared again. */
+  const resumes = () => {
+    const current = preview();
+    return (
+      current !== undefined &&
+      (confirmationAttempted() || current.status !== 'needs_confirmation')
+    );
+  };
 
   async function prepare() {
-    if (pending()) return;
+    if (pending() || !request) return;
     setPending(true);
     setError(undefined);
     try {
-      const current = target();
-      const next = await source.prepare(
-        {
-          ...current,
-          recurrenceId: onlyOccurrence() ? current.recurrenceId : undefined,
-        },
-        removeConference()
-      );
+      const next = await source.prepare(request);
       setPreview(next);
       setConfirmationAttempted(next.status !== 'needs_confirmation');
     } catch (cause) {
@@ -42,6 +40,17 @@ export function createEventReplacement(
     } finally {
       setPending(false);
     }
+  }
+  /**
+   * Opens the replacement of `next`'s event with its unsaved edits. A preview
+   * nobody confirmed is prepared again, so it shows the edits as they are now.
+   */
+  async function start(next: EventReplacementRequest) {
+    setOpen(true);
+    if (resumes()) return;
+    request = next;
+    setPreview(undefined);
+    await prepare();
   }
   async function confirm() {
     const current = preview();
@@ -78,38 +87,25 @@ export function createEventReplacement(
       setPending(false);
     }
   }
-  async function changeOptions() {
-    const current = preview();
-    if (!current || pending() || confirmationAttempted()) return;
-    setPending(true);
+  /** Closing returns to the editor; a preview nobody confirmed is discarded. */
+  function close() {
+    setOpen(false);
     setError(undefined);
-    try {
-      await source.discard(current.operationId);
-      setPreview(undefined);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : 'Could not discard the preview.'
-      );
-    } finally {
-      setPending(false);
-    }
+    const current = preview();
+    if (!current || resumes()) return;
+    setPreview(undefined);
+    fireAndForget(source.discard(current.operationId), 'calendar-replacement');
   }
   return {
     open,
-    setOpen,
+    close,
     pending,
     error,
     preview,
     confirmationAttempted,
-    removeConference,
-    setRemoveConference,
-    onlyOccurrence,
-    setOnlyOccurrence,
+    start,
     prepare,
     confirm,
     check,
-    changeOptions,
   };
 }
