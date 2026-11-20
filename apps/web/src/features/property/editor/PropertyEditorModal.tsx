@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -288,11 +289,21 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
+  let searchInput: HTMLInputElement | undefined;
+  /**
+   * The create dialog takes focus with it when it closes, and the next keys
+   * would reach the app's shortcuts. Hand focus back to the search field.
+   */
+  const closeCreateProperty = () => {
+    setCreatePropertyInitialName(null);
+    if (!isTouchDevice()) searchInput?.focus();
+  };
+
   const handlePropertyCreated = async (
     _propertyDefinitionId?: string,
     propertyDefinition?: PropertyDefinition
   ) => {
-    setCreatePropertyInitialName(null);
+    closeCreateProperty();
     if (!propertyDefinition) return;
 
     const revision = editorRevision;
@@ -362,7 +373,7 @@ export function PropertyEditorDialog(props: {
       return;
     }
 
-    setCreatePropertyInitialName(null);
+    closeCreateProperty();
     await selectProperty(
       'definition' in builtIn
         ? toPropertyDefinitionDomain(
@@ -410,6 +421,9 @@ export function PropertyEditorDialog(props: {
             <PropertiesIcon class="size-3" />
           </span>
           <SearchInput
+            inputRef={(element) => {
+              searchInput = element;
+            }}
             placeHolder={placeholder() || defaultPlaceholder}
             value={searchValue}
             setValue={setSearchValue}
@@ -487,7 +501,7 @@ export function PropertyEditorDialog(props: {
             isOpen
             initialName={initialName()}
             autoPinOnCreate={false}
-            onClose={() => setCreatePropertyInitialName(null)}
+            onClose={closeCreateProperty}
             onPropertyCreated={handlePropertyCreated}
             onUseBuiltIn={selectBuiltInProperty}
           />
@@ -498,6 +512,7 @@ export function PropertyEditorDialog(props: {
 }
 
 function SearchInput(props: {
+  inputRef?: (element: HTMLInputElement) => void;
   placeHolder: string;
   setValue: Setter<string>;
   value: Accessor<string>;
@@ -514,7 +529,10 @@ function SearchInput(props: {
 
   return (
     <CommandMenuSearchInput
-      ref={inputRef}
+      ref={(element: HTMLInputElement) => {
+        inputRef = element;
+        props.inputRef?.(element);
+      }}
       type={props.inputType ?? 'text'}
       class="text-base"
       placeholder={props.placeHolder}

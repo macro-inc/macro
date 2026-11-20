@@ -103,7 +103,9 @@ Companies and Contacts through its Customer / Contact pill) still receives the
 value through `onSave`. Such a host passes the property with its current value
 in `properties` (the composer's `draftProperties`): the picker starts from that
 value and adds to it, and without it a pick would replace what the draft
-already links. The note never disables **Create**. Add a name there
+already links. Whichever way the create dialog closes, the editor's search
+field takes focus back on desktop: left on the page, the next keys would reach
+the app's shortcuts. The note never disables **Create**. Add a name there
 only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
 

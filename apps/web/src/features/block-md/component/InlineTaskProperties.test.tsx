@@ -767,3 +767,54 @@ it('opens the suggested built-in property on the value the draft holds', async (
   // the value the editor starts from is the one the host passed in.
   expect(await screen.findByDisplayValue('Grace')).toBeTruthy();
 });
+
+it('hands focus back to the search field when the create dialog closes', async () => {
+  mocks.fetchDefinition.mockResolvedValueOnce({
+    definition: {
+      id: 'built-in-contacts',
+      display_name: 'Built-in contacts',
+      data_type: 'STRING',
+      is_multi_select: false,
+      is_metadata: false,
+      is_system: true,
+      owner: { scope: 'system' },
+      specific_entity_type: null,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    },
+    property_options: [],
+  });
+  render(() => (
+    <PropertiesProvider
+      entityType="TASK"
+      canEdit
+      properties={() => []}
+      onRefresh={() => {}}
+      onPropertyAdded={() => {}}
+      onPropertyDeleted={() => {}}
+      saveHandler={{ saveProperty: async () => {}, saveDate: async () => {} }}
+    >
+      <TaskComposerPropertyEditor
+        name="New task"
+        definitions={[]}
+        properties={[]}
+        onAdd={async () => {}}
+        onSave={() => {}}
+      />
+    </PropertiesProvider>
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Add property' }));
+  await fireEvent.input(screen.getByPlaceholderText('Choose a property...'), {
+    target: { value: 'Contact' },
+  });
+  await fireEvent.click(screen.getByText('Create property "Contact"'));
+  // A press focuses the button, and the dialog takes that focus with it when
+  // it unmounts. Left on the page, the next keys would reach app shortcuts.
+  const useBuiltIn = screen.getByRole('button', { name: 'Use built-in' });
+  useBuiltIn.focus();
+  await fireEvent.click(useBuiltIn);
+
+  const value = await screen.findByPlaceholderText('Enter Built-in contacts');
+  expect(document.activeElement).toBe(value);
+});
