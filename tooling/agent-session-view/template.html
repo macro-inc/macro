@@ -282,7 +282,9 @@ function buildTurns(frames) {
     if (kind === 'agent_thought_chunk' || kind === 'agent_message_chunk') {
       const k = kind === 'agent_thought_chunk' ? 'thought' : 'message';
       const text = update.content?.text || '';
-      if (previous && previous.kind === k) { previous.text += text; previous.end = t; }
+      // Chunks of one step merge; a new model call (the opener, then the turn's model) starts a new one.
+      const sameRound = previous?.round == null || round == null || previous.round === round;
+      if (previous && previous.kind === k && sameRound) { previous.text += text; previous.end = t; }
       else turn.items.push({ kind: k, text, start: t, end: t, round });
     } else if (kind === 'tool_call') {
       const item = { kind: 'tool', id: update.toolCallId, title: update.title, name: (update._meta?.macro?.toolName || update.title || '?').replace(/^mcp__macro_internal__/, ''), input: {}, source: undefined, start: t, end: null, status: update.status || 'pending', output: undefined, content: null, round };

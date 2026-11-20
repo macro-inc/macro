@@ -204,28 +204,43 @@ def reconcile(export):
 
     billed = [row for row in usage or [] if row.get("feature") == "agent_session"]
     side = [row for row in usage or [] if row.get("feature") != "agent_session"]
-    rows = []
-    for row in sorted(billed, key=lambda row: timestamp_ms(row["created_at"])):
+    ordered = sorted(billed, key=lambda row: timestamp_ms(row["created_at"]))
+    claims = {}
+
+    def unclaimed(row):
         created_ms = timestamp_ms(row["created_at"])
-        model = bare_model(row["model"])
         turn = turn_of(turns, created_ms / 1000, ROW_AFTER_TURN_S)
-        unclaimed = sorted((
+        return turn, sorted((
             call for call in calls
-            if call["row"] is None and call["tokens"] is not None and call["model"] == model
+            if call["row"] is None and call["tokens"] is not None and call["model"] == bare_model(row["model"])
             and call["turn"] == turn and call["end_ms"] <= created_ms + ROW_AFTER_SPAN_MS
         ), key=lambda call: call["end_ms"])
-        expected = row_counters(row)
-        run = matching_run(unclaimed, expected, created_ms)
+
+    # Exact matches claim their spans first, so a row whose span is lost
+    # cannot take a later row's own span; the rest take what is left.
+    for row in ordered:
+        turn, spans_left = unclaimed(row)
+        run = matching_run(spans_left, row_counters(row), timestamp_ms(row["created_at"]))
         if run:
-            claimed, status = run, "matched"
-            reasoning = expected["output"] - total(call["tokens"] for call in run)["output"]
-        else:
-            claimed, status, reasoning = unclaimed, "partial" if unclaimed else "billed, no span", 0
+            claims[row["id"]] = (turn, run, "matched")
+            for call in run:
+                call["row"] = row["id"]
+    for row in ordered:
+        if row["id"] not in claims:
+            turn, spans_left = unclaimed(row)
+            claims[row["id"]] = (turn, spans_left, "partial" if spans_left else "billed, no span")
+            for call in spans_left:
+                call["row"] = row["id"]
+
+    rows = []
+    for row in ordered:
+        turn, claimed, status = claims[row["id"]]
+        model, expected = bare_model(row["model"]), row_counters(row)
         for call in claimed:
-            call["row"] = row["id"]
             call["status"] = status
         if status == "matched" and len(claimed) == 1:
             claimed[0]["cost"] = row.get("total")
+        reasoning = expected["output"] - total(call["tokens"] for call in claimed)["output"] if status == "matched" else 0
         rows.append({
             "id": row["id"], "model": model, "price_key": row["model"], "turn": turn, "tokens": expected,
             "total": row.get("total"), "status": status, "calls": [call["index"] for call in claimed],
@@ -260,7 +275,8 @@ def models(calls, rows, billed, source):
         model_rows = [row for row in rows if row["model"] == model]
         model_billed = [row for row in billed if bare_model(row["model"]) == model]
         contexts = [call["context"] for call in model_calls if call["context"] is not None]
-        opener = (bool(model_calls) and all(call["opener"] for call in model_calls if call["tokens"])) or (
+        reported = [call for call in model_calls if call["tokens"]]
+        opener = (bool(reported) and all(call["opener"] for call in reported)) or (
             bool(model_rows) and all(row["opener"] for row in model_rows))
         tokens = total(row["tokens"] for row in model_rows) if source == "ai_usage" else total(
             call["tokens"] for call in model_calls if call["tokens"])
