@@ -166,6 +166,16 @@ in
           harnessd = self'.packages.macro-box-harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
+        # The agent screen encoder against Xvfb: config line, fMP4 shape.
+        macro-box-screen-encoder = pkgs.runCommand "macro-box-screen-encoder" {
+          nativeBuildInputs = [
+            agentContainer.config.macro.box.agent.screenEncoder
+            pkgs.xorg.xorgserver
+            pkgs.ffmpeg-headless
+            pkgs.python3
+            pkgs.coreutils
+          ];
+        } "bash ${./files}/test-agent-screen-encoder.sh && touch $out";
         # start-agent's boot (lock adoption, rollback) and agent-stopped's
         # failure count, against local git repositories.
         macro-box-boot = pkgs.runCommand "macro-box-boot" {

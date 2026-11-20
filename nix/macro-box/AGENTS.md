@@ -179,6 +179,16 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `GSETTINGS_SCHEMA_DIR` with GNOME's `toolkit-accessibility` on by default
   (there is no dconf), which computer-use-linux needs before it reads a tree.
   `xclip` is on the unit's PATH for the clipboard.
+- Agent computers (Docker and Firecracker images) also have `macro-agent-screen-encoder.socket`
+  (`_agent-screen-encoder.nix`, `files/agent-screen-encoder`) on
+  127.0.0.1:5902 for watching the agent in Macro: `Accept=yes`, one
+  instance per connection in the desktop's sandbox and `/tmp`, at most 4.
+  A connection sends `<fps> <width> <height> <keyint>\n` (fps 1-60, even
+  width 160-3840 and height 120-2160, keyint 1-600; anything else closes
+  it) and gets fragmented MP4 of `:1` until it closes: `ftyp` + `moov`, then
+  one `moof` + `mdat` per frame, Constrained Baseline H.264, no B-frames,
+  starting on a keyframe. The harness reaches it only through the fleet's
+  exec tunnel.
 - `harnessd.service` runs `harnessd serve` as `macro` (socket
   `/run/harnessd/harnessd.sock`, RuntimeDirectory 0700; restarts always) with
   the unwrapped pinned Claude Code. The control plane execs `harnessd` (the
@@ -395,6 +405,11 @@ existing credentials: no new pairing and no Claude login.
 - `nix build .#checks.x86_64-linux.macro-box-claude-wrapper` runs
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
+- `nix build .#checks.x86_64-linux.macro-box-screen-encoder` runs the
+  agent screen encoder against Xvfb (`files/test-agent-screen-encoder.sh`):
+  bad config lines are refused with no output; a good one gives
+  Constrained Baseline H.264 as `ftyp`, `moov`, then one `moof` + `mdat` per
+  frame.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
   `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
   muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
