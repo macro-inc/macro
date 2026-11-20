@@ -60,7 +60,8 @@ use models_email::gmail::inbox_sync::{
 };
 use models_email::gmail::labels::GmailLabel;
 use models_email::gmail::{
-    GmailUserProfile, HistoryListResponse, ListThreadsResponse, MessageResource, ThreadResource,
+    GmailUserProfile, HistoryListResponse, ListMessagesResponse, ListThreadsResponse,
+    MessageResource, ThreadResource,
 };
 
 #[derive(Clone, Debug)]
@@ -165,18 +166,28 @@ impl GmailClient {
         list_messages(self, access_token, num_messages, label_ids).await
     }
 
-    /// Lists up to `limit` ids of the messages Gmail received at or after
-    /// `since_seconds` (Unix time), newest first, carrying all of
-    /// `label_ids`, across as many list pages as that takes.
-    #[tracing::instrument(skip(self, access_token), err)]
+    /// Lists one page of up to `max_results` ids of the messages Gmail
+    /// received at or after `since_seconds` (Unix time), newest first,
+    /// carrying all of `label_ids`. Pass the previous page's
+    /// `next_page_token` to continue.
+    #[tracing::instrument(skip(self, access_token, page_token), err)]
     pub async fn list_messages_since(
         &self,
         access_token: &str,
-        limit: u32,
+        max_results: u32,
         label_ids: &[&str],
         since_seconds: i64,
-    ) -> Result<Vec<String>, GmailApiHttpError> {
-        list_messages_since(self, access_token, limit, label_ids, since_seconds).await
+        page_token: Option<&str>,
+    ) -> Result<ListMessagesResponse, GmailApiHttpError> {
+        list_messages_since(
+            self,
+            access_token,
+            max_results,
+            label_ids,
+            since_seconds,
+            page_token,
+        )
+        .await
     }
 
     // Returns a list containing the message ids belonging to the thread.

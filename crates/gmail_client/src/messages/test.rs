@@ -346,26 +346,14 @@ async fn get_raw_message_maps_not_found_to_none() {
 }
 
 #[tokio::test]
-async fn list_messages_since_filters_by_time_and_follows_short_pages() {
+async fn list_messages_since_asks_for_one_dated_page() {
     let server = MockServer::start().await;
-    // A first page short of the limit that says more follow.
     Mock::given(method("GET"))
         .and(path("/users/me/messages"))
         .and(query_param("q", "after:1699999999"))
         .and(query_param("labelIds", "INBOX"))
         .and(query_param("maxResults", "3"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "messages": [{ "id": "message-1" }],
-            "nextPageToken": "page-2"
-        })))
-        .expect(1)
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/users/me/messages"))
-        .and(query_param("q", "after:1699999999"))
         .and(query_param("pageToken", "page-2"))
-        .and(query_param("maxResults", "2"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "messages": [{ "id": "message-2" }, { "id": "message-3" }],
             "nextPageToken": "page-3"
@@ -374,19 +362,33 @@ async fn list_messages_since_filters_by_time_and_follows_short_pages() {
         .mount(&server)
         .await;
 
-    let ids = list_messages_since(&client(&server), "token", 3, &["INBOX"], 1_700_000_000)
-        .await
-        .unwrap();
+    let page = list_messages_since(
+        &client(&server),
+        "token",
+        3,
+        &["INBOX"],
+        1_700_000_000,
+        Some("page-2"),
+    )
+    .await
+    .unwrap();
 
-    // The limit reached, the third page is never asked for.
-    assert_eq!(ids, vec!["message-1", "message-2", "message-3"]);
+    let ids: Vec<String> = page
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
+    assert_eq!(ids, vec!["message-2", "message-3"]);
+    assert_eq!(page.next_page_token.as_deref(), Some("page-3"));
 }
 
 #[tokio::test]
-async fn list_messages_since_stops_at_the_last_page() {
+async fn list_messages_since_reads_an_empty_last_page() {
     let server = MockServer::start().await;
     Mock::given(method("GET"))
         .and(path("/users/me/messages"))
+        .and(query_param("maxResults", "500"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "resultSizeEstimate": 0
         })))
@@ -394,9 +396,17 @@ async fn list_messages_since_stops_at_the_last_page() {
         .mount(&server)
         .await;
 
-    let ids = list_messages_since(&client(&server), "token", 500, &["INBOX"], 1_700_000_000)
-        .await
-        .unwrap();
+    let page = list_messages_since(
+        &client(&server),
+        "token",
+        900,
+        &["INBOX"],
+        1_700_000_000,
+        None,
+    )
+    .await
+    .unwrap();
 
-    assert!(ids.is_empty());
+    assert!(page.messages.is_none());
+    assert!(page.next_page_token.is_none());
 }

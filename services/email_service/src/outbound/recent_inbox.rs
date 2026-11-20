@@ -9,7 +9,7 @@ use email::domain::recent_inbox::{
     RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentRead,
 };
 use email_api_client::domain::{
-    models::{EmailApiError, MailboxAccess, MessageWithCalendarParts},
+    models::{EmailApiError, MailboxAccess, RateLimitOrigin},
     ports::{
         MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,
     },
@@ -28,13 +28,13 @@ use super::email_api::GmailApi;
 mod test;
 
 /// Gmail message reads in flight per inbox. Stays under the Gmail gate's five
-/// live requests per mailbox, leaving room for sync.
+/// requests per mailbox, leaving room for sync.
 const GMAIL_READS_PER_INBOX: usize = 3;
-/// How long a window read waits out the Gmail gate's refusals. Its list and
-/// up to 500 reads cost about 2,500 quota units, more than one 10-second
-/// window of a mailbox's live allowance (2,300, shared with a backfill that
-/// may use 1,800 of it), so the reads that don't fit wait for the next
-/// window. What is still unread by then is left out.
+/// How long a window read may take, from its list to its last read. Its list
+/// and up to 500 reads cost about 2,500 quota units, more than one 10-second
+/// window of the backfill share of a mailbox's allowance (1,800), so the
+/// reads that don't fit wait out the gate's refusals for the next window. A
+/// read not started by then is left out.
 const GMAIL_WINDOW_WAIT: Duration = Duration::from_secs(45);
 /// The wait after a refusal that names none.
 const GMAIL_REFUSED_RETRY: Duration = Duration::from_secs(1);
@@ -69,7 +69,12 @@ impl RecentInboxMailboxes for PgRecentInboxes {
 /// through the Outlook transport's mailbox gate.
 #[derive(Clone)]
 pub struct ProviderRecentInbox<R, T, L> {
+    /// For the newest few, read at once within the live share.
     pub gmail: GmailApi,
+    /// For a window of days, bulk work that takes the backfill share of the
+    /// mailbox's allowance, so sync and user writes keep the slots and units
+    /// held for them.
+    pub gmail_window: GmailApi,
     pub outlook: MailboxApiService<R, T, L>,
 }
 
@@ -115,29 +120,34 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
     /// Lists the newest inbox ids, received since `read.since` when it is
     /// given, then reads each message, newest first. A message that fails to
     /// read is left out and counted, so one bad read keeps the rest. A window
-    /// read (`read.since`) waits out the gate's refusals for up to
-    /// [`GMAIL_WINDOW_WAIT`]; the newest few read as before, refused at once.
+    /// read (`read.since`) goes through [`Self::gmail_window`] and waits out
+    /// the gate's refusals for [`GMAIL_WINDOW_WAIT`] from its list; the
+    /// newest few read as before, refused at once.
     async fn gmail_inbox(
         &self,
         link_id: Uuid,
         read: RecentRead,
     ) -> Result<Vec<Message>, EmailApiError> {
         let limit = u32::from(read.limit);
-        let (ids, deadline) = match read.since {
-            Some(since) => (
-                self.gmail
-                    .list_messages_since(link_id, limit, &["INBOX"], since)
-                    .await?,
-                Some(Instant::now() + GMAIL_WINDOW_WAIT),
-            ),
+        let (gmail, ids, deadline) = match read.since {
+            Some(since) => {
+                let deadline = Instant::now() + GMAIL_WINDOW_WAIT;
+                let gmail = &self.gmail_window;
+                let ids = wait_out_refusals(Some(deadline), || {
+                    gmail.list_messages_since(link_id, limit, &["INBOX"], since)
+                })
+                .await?;
+                (gmail, ids, Some(deadline))
+            }
             None => (
+                &self.gmail,
                 self.gmail.list_messages(link_id, limit, &["INBOX"]).await?,
                 None,
             ),
         };
         let reads: Vec<_> = futures::stream::iter(ids)
             .map(|id| async move {
-                wait_out_refusals(deadline, || self.gmail.get_message(link_id, &id)).await
+                wait_out_refusals(deadline, || gmail.get_message(link_id, &id)).await
             })
             .buffered(GMAIL_READS_PER_INBOX)
             .collect()
@@ -167,15 +177,22 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
 /// Runs `read` until it is not refused. Until `deadline`, a refusal by the
 /// gate or by Gmail's rate limit waits as long as it asks (or
 /// [`GMAIL_REFUSED_RETRY`]) and tries again; a refusal whose wait would pass
-/// the deadline, or any refusal without one, is the answer.
-async fn wait_out_refusals<F, Fut>(
+/// the deadline, or any refusal without one, is the answer. A read whose
+/// deadline has passed before it starts is refused without a try.
+async fn wait_out_refusals<O, F, Fut>(
     deadline: Option<Instant>,
     mut read: F,
-) -> Result<Option<MessageWithCalendarParts>, EmailApiError>
+) -> Result<O, EmailApiError>
 where
     F: FnMut() -> Fut,
-    Fut: Future<Output = Result<Option<MessageWithCalendarParts>, EmailApiError>>,
+    Fut: Future<Output = Result<O, EmailApiError>>,
 {
+    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+        return Err(EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Local,
+        });
+    }
     loop {
         match read().await {
             Err(EmailApiError::RateLimited {
@@ -183,10 +200,11 @@ where
                 origin,
             }) => {
                 let wait = retry_after.unwrap_or(GMAIL_REFUSED_RETRY);
-                match deadline {
-                    Some(deadline) if Instant::now() + wait <= deadline => {
-                        tokio::time::sleep(wait).await;
-                    }
+                // Compared with what is left, so no Retry-After overflows the clock.
+                let left =
+                    deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
+                match left {
+                    Some(left) if wait <= left => tokio::time::sleep(wait).await,
                     _ => {
                         return Err(EmailApiError::RateLimited {
                             retry_after,

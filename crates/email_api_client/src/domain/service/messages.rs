@@ -1,10 +1,16 @@
 use uuid::Uuid;
 
-use super::super::models::{CalendarPart, EmailApiError, MessageWithCalendarParts, ThreadListPage};
+use super::super::models::{
+    CalendarPart, EmailApiError, MessageIdPage, MessageWithCalendarParts, ThreadListPage,
+};
 use super::super::ports::{
     MailboxCalendarClient, MailboxMessageClient, ProviderRequestGate, ProviderTokenSource,
 };
 use super::{ApiOperationKind, EmailApiClientServiceImpl, log_operation_error};
+
+/// Most pages one dated list follows. A page holds up to 500 ids, so a list
+/// of 500 takes one page unless the provider answers short.
+const MAX_LIST_PAGES: u32 = 5;
 
 impl<R, T, L> EmailApiClientServiceImpl<R, T, L>
 where
@@ -64,8 +70,11 @@ where
     }
 
     /// Lists up to `limit` identifiers of messages received at or after
-    /// `since`, newest first, carrying all requested provider labels.
-    #[tracing::instrument(skip(self), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    /// `since`, newest first, carrying all requested provider labels. The
+    /// provider may answer a page short with more to come, so this follows
+    /// up to [`MAX_LIST_PAGES`] pages, each its own admitted provider call,
+    /// and stops at an empty page or a page token it has seen.
+    #[tracing::instrument(skip(self), fields(page_count = tracing::field::Empty))]
     pub async fn list_messages_since(
         &self,
         link_id: Uuid,
@@ -73,12 +82,47 @@ where
         label_ids: &[&str],
         since: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<String>, EmailApiError> {
+        let mut ids: Vec<String> = Vec::new();
+        let mut page_token: Option<String> = None;
+        let mut seen = std::collections::HashSet::new();
+        let mut pages = 0u32;
+        while pages < MAX_LIST_PAGES {
+            let wanted = limit.saturating_sub(u32::try_from(ids.len()).unwrap_or(u32::MAX));
+            if wanted == 0 {
+                break;
+            }
+            let page = self
+                .list_messages_since_page(link_id, wanted, label_ids, since, page_token.as_deref())
+                .await?;
+            pages += 1;
+            let empty = page.ids.is_empty();
+            ids.extend(page.ids);
+            match page.next_page_token {
+                Some(token) if !empty && seen.insert(token.clone()) => page_token = Some(token),
+                _ => break,
+            }
+        }
+        ids.truncate(usize::try_from(limit).unwrap_or(usize::MAX));
+        tracing::Span::current().record("page_count", pages);
+        Ok(ids)
+    }
+
+    /// One page of [`Self::list_messages_since`].
+    #[tracing::instrument(skip(self, page_token), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    async fn list_messages_since_page(
+        &self,
+        link_id: Uuid,
+        max_results: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+        page_token: Option<&str>,
+    ) -> Result<MessageIdPage, EmailApiError> {
         self.read_with_token(
             link_id,
             ApiOperationKind::ListMessages,
             |token| async move {
                 self.repository
-                    .list_messages_since(&token, limit, label_ids, since)
+                    .list_messages_since(&token, max_results, label_ids, since, page_token)
                     .await
             },
         )

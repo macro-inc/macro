@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use email_api_client::domain::models::RateLimitOrigin;
+use email_api_client::domain::models::{MessageWithCalendarParts, RateLimitOrigin};
 
 use super::*;
 
@@ -67,6 +67,39 @@ async fn a_wait_past_the_deadline_is_the_answer() {
     ));
     assert_eq!(tries.get(), 5);
     assert_eq!(started.elapsed(), Duration::from_secs(40));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_read_not_started_by_its_deadline_is_left_out_untried() {
+    let tries = Cell::new(0);
+    let started = Instant::now();
+
+    let answer = wait_out_refusals(Some(started), read(&tries, 0, None)).await;
+
+    assert!(matches!(
+        answer,
+        Err(EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Local
+        })
+    ));
+    assert_eq!(tries.get(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_oversized_wait_is_the_answer() {
+    let tries = Cell::new(0);
+    let started = Instant::now();
+
+    let answer = wait_out_refusals(
+        Some(started + GMAIL_WINDOW_WAIT),
+        read(&tries, 1, Some(u64::MAX)),
+    )
+    .await;
+
+    assert!(matches!(answer, Err(EmailApiError::RateLimited { .. })));
+    assert_eq!(tries.get(), 1);
+    assert_eq!(started.elapsed(), Duration::ZERO);
 }
 
 #[tokio::test(start_paused = true)]

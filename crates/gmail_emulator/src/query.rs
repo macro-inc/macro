@@ -121,21 +121,25 @@ impl Query {
     }
 
     pub(crate) fn matches(&self, message: &StoredMessage, labels: &[Label]) -> bool {
-        self.terms.iter().all(|term| {
-            let matched = match term.predicate {
-                Predicate::After(seconds) => {
-                    message.internal_date_ms > seconds.saturating_mul(1000)
-                }
-                _ => predicate_matches(&term.predicate, &message.parsed, &message.labels, labels),
-            };
-            matched != term.negated
-        })
+        self.matches_parsed(
+            &message.parsed,
+            &message.labels,
+            labels,
+            message.internal_date_ms,
+        )
     }
 
-    fn matches_parsed(&self, parsed: &Parsed, held: &BTreeSet<String>, labels: &[Label]) -> bool {
-        self.terms
-            .iter()
-            .all(|term| predicate_matches(&term.predicate, parsed, held, labels) != term.negated)
+    /// Whether a message received at `received_ms` holding `held` meets the query.
+    fn matches_parsed(
+        &self,
+        parsed: &Parsed,
+        held: &BTreeSet<String>,
+        labels: &[Label],
+        received_ms: i64,
+    ) -> bool {
+        self.terms.iter().all(|term| {
+            predicate_matches(&term.predicate, parsed, held, labels, received_ms) != term.negated
+        })
     }
 }
 
@@ -151,6 +155,7 @@ fn predicate_matches(
     parsed: &Parsed,
     held: &BTreeSet<String>,
     labels: &[Label],
+    received_ms: i64,
 ) -> bool {
     match predicate {
         Predicate::MessageId(id) => parsed.message_id.as_deref() == Some(id.as_str()),
@@ -174,14 +179,13 @@ fn predicate_matches(
             other => held.contains(&other.to_uppercase()),
         },
         Predicate::HasAttachment => parsed.has_attachment,
-        // A filter reads a message before Gmail stores it, so it has no date yet.
-        Predicate::After(_) => true,
+        Predicate::After(seconds) => received_ms > seconds.saturating_mul(1000),
         Predicate::Text(needle) => parsed.search_text.contains(needle),
     }
 }
 
-/// Whether an arriving message meets a Gmail filter's `criteria`.
-pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed) -> bool {
+/// Whether a message arriving at `now_ms` meets a Gmail filter's `criteria`.
+pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed, now_ms: i64) -> bool {
     let text = |key: &str| criteria[key].as_str().map(str::to_lowercase);
     let no_labels = BTreeSet::new();
 
@@ -194,10 +198,10 @@ pub(crate) fn filter_matches(criteria: &Value, parsed: &Parsed) -> bool {
         .is_none_or(|wanted| !wanted || parsed.has_attachment);
     let query = criteria["query"]
         .as_str()
-        .is_none_or(|query| Query::parse(query).matches_parsed(parsed, &no_labels, &[]));
+        .is_none_or(|query| Query::parse(query).matches_parsed(parsed, &no_labels, &[], now_ms));
     let negated_query = criteria["negatedQuery"]
         .as_str()
-        .is_none_or(|query| !Query::parse(query).matches_parsed(parsed, &no_labels, &[]));
+        .is_none_or(|query| !Query::parse(query).matches_parsed(parsed, &no_labels, &[], now_ms));
 
     from && to && subject && attachment && query && negated_query
 }

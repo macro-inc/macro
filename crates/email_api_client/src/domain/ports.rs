@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 use super::models::{
     AccessToken, ApiOperationKind, CalendarPart, ChangePage, ContactPage, EmailApiError,
-    MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, RequestPermit, SendRequest,
-    SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
+    MessageIdPage, MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, RequestPermit,
+    SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
 
 #[cfg(test)]
@@ -78,15 +78,17 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         label_ids: &[&str],
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 
-    /// Lists up to `limit` identifiers of messages received at or after
-    /// `since`, newest first, carrying all requested provider labels.
+    /// Lists one page of up to `max_results` identifiers of messages
+    /// received at or after `since`, newest first, carrying all requested
+    /// provider labels; `page_token` continues a previous page.
     fn list_messages_since(
         &self,
         access_token: &AccessToken,
-        limit: u32,
+        max_results: u32,
         label_ids: &[&str],
         since: chrono::DateTime<chrono::Utc>,
-    ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
+        page_token: Option<&str>,
+    ) -> impl Future<Output = Result<MessageIdPage, EmailApiError>> + Send;
 
     /// Lists the message identifiers belonging to a provider thread.
     fn get_message_ids_for_thread(
@@ -448,7 +450,8 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: u32,
         _: &[&str],
         _: chrono::DateTime<chrono::Utc>,
-    ) -> Result<Vec<String>, EmailApiError> {
+        _: Option<&str>,
+    ) -> Result<MessageIdPage, EmailApiError> {
         Err(unavailable())
     }
 

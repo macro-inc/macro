@@ -417,10 +417,22 @@ async fn a_list_after_a_second_keeps_what_arrived_since() {
         .unwrap();
     let ada = token(&emulator, ADA);
 
-    let ids = client
-        .list_messages_since(ada.expose_secret(), 500, &["INBOX"], since.timestamp())
+    let page = client
+        .list_messages_since(
+            ada.expose_secret(),
+            500,
+            &["INBOX"],
+            since.timestamp(),
+            None,
+        )
         .await
         .unwrap();
+    let ids: Vec<String> = page
+        .messages
+        .unwrap_or_default()
+        .into_iter()
+        .map(|message| message.id)
+        .collect();
     assert_eq!(ids, vec![new.id]);
     assert_eq!(
         client

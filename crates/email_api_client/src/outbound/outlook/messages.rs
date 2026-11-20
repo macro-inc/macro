@@ -21,6 +21,10 @@ const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,interne
 /// Enough to read who wrote and what about, without bodies or headers.
 const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
 
+/// Most pages one recent read follows. Graph answers up to `$top` messages
+/// a page, so a read takes one page unless Graph answers short.
+const MAX_RECENT_PAGES: u32 = 10;
+
 const ARCHIVE_ROLE_PROPERTY: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroFolderRole";
 
@@ -299,16 +303,30 @@ impl MailboxContentReader for OutlookApiClientRepository {
             );
         }
         // Graph may answer a page short of `$top` with more to come: follow
-        // its pages until the limit. A message that can't be read is left
-        // out and counted, so one bad message keeps the rest.
+        // its pages until the limit, an empty page, a link already followed,
+        // or [`MAX_RECENT_PAGES`]. A message that can't be read is left out
+        // and counted, so one bad message keeps the rest, and a later page
+        // that fails keeps what the earlier ones read.
         let limit = usize::from(limit);
         let mut messages = Vec::new();
         let mut failed = 0usize;
+        let mut followed = std::collections::HashSet::new();
+        let mut pages = 0u32;
         loop {
+            let page: wire::Page<serde_json::Value> = match self.get(token, url).await {
+                Ok(page) => page,
+                Err(error) if pages > 0 => {
+                    tracing::warn!(%link_id, error = %error, "stopped reading recent Outlook messages at a page that failed");
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
+            pages += 1;
+            let empty = page.value.is_empty();
             // Each message decodes on its own, so one Graph can't describe
-            // leaves the rest of its page.
-            let page: wire::Page<serde_json::Value> = self.get(token, url).await?;
-            for message in page.value {
+            // leaves the rest of its page; rows past the limit are never read.
+            let wanted = limit.saturating_sub(messages.len());
+            for message in page.value.into_iter().take(wanted) {
                 let read = serde_json::from_value::<wire::Message>(message)
                     .map_err(|_| invalid_response("a message that does not decode"))
                     .and_then(|message| normalize(message, Vec::new(), link_id, folders));
@@ -321,7 +339,12 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 }
             }
             match page.next {
-                Some(next) if messages.len() + failed < limit => {
+                Some(next)
+                    if messages.len() < limit
+                        && !empty
+                        && pages < MAX_RECENT_PAGES
+                        && followed.insert(next.clone()) =>
+                {
                     url = self.continuation(&StreamToken::new(next))?;
                 }
                 _ => break,
