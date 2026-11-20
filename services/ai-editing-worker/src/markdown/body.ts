@@ -8,6 +8,10 @@ import {
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
 import {
+  E_TABLE_NODE,
+  isolatePipeTables,
+} from '@macro-inc/lexical-core/transformers/tables';
+import {
   $createParagraphNode,
   $getRoot,
   $parseSerializedNode,
@@ -32,6 +36,18 @@ export type MarkdownRequest =
 export type MarkdownResponse =
   | { action: 'read'; markdown: string; revision: string }
   | { action: 'write'; revision: string; changed: boolean };
+
+/**
+ * What a written body is parsed with: the internal format `readMarkdownBody`
+ * returns, plus GitHub pipe tables, which agents write as they would anywhere
+ * else and documents created from markdown already accept. Nothing else from
+ * the external set: its entity and mention importers would read an unchanged
+ * internal block differently and replace it, dropping its ids and comments.
+ * `isolatePipeTables` keeps other pipe-delimited lines, and table-shaped text
+ * already in a paragraph, text for the same reason, since the internal format
+ * writes them unescaped.
+ */
+const BODY_IMPORT_TRANSFORMERS = [...INTERNAL_TRANSFORMERS, E_TABLE_NODE];
 
 /** One step turning the current top-level blocks into the requested ones. */
 type BlockStep =
@@ -202,15 +218,23 @@ export async function prepareMarkdownBody(
   const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
   try {
     const live = await sessionFromSnapshot(manager, snapshot);
-    const requested = createEditingSession();
-    loadMarkdown(requested, markdown);
-
     const currentBlocks = toSnapshot(live).root.children;
-    const requestedBlocks = toSnapshot(requested).root.children;
-    const steps = blockSteps(
-      blockMarkdown(currentBlocks),
-      blockMarkdown(requestedBlocks)
+    const currentMarkdown = blockMarkdown(currentBlocks);
+
+    // Table-shaped text already in a paragraph stays text, so writing a block
+    // back unchanged never turns it into a table.
+    const paragraphMarkdown = currentMarkdown.filter(
+      (_, index) => currentBlocks[index].type === 'paragraph'
     );
+    const requested = createEditingSession();
+    loadMarkdown(
+      requested,
+      isolatePipeTables(markdown, paragraphMarkdown),
+      BODY_IMPORT_TRANSFORMERS
+    );
+
+    const requestedBlocks = toSnapshot(requested).root.children;
+    const steps = blockSteps(currentMarkdown, blockMarkdown(requestedBlocks));
     if (steps.every((step) => step.kind === 'keep')) return undefined;
 
     live.editor.update(

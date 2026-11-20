@@ -1,9 +1,11 @@
+# DO NOT EDIT — regenerate with `cargo x workflows` (from the repository root).
+# Source: tooling/xtask/crates/xtask_workflows/src/workflows/migrate_macro_db.rs
 name: Migrate Macro Database
 on:
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to run migrations for'
+        description: Environment to run migrations for
         required: true
         type: choice
         options:
@@ -14,10 +16,13 @@ jobs:
     name: Run Database Migrations (${{ inputs.environment }})
     runs-on: db-migrator
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # zizmor: ignore[artipacked] the migration action that runs next may use the persisted token
         with:
           sparse-checkout: |
             .github/
+        env:
+          GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+          GIT_HTTP_LOW_SPEED_TIME: '60'
       - name: Run migrations
         uses: ./.github/actions/migrate-cloud-storage-db
         with:

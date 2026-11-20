@@ -1,0 +1,9 @@
+name: GitHub Actions OpenTelemetry Exporter
+description: Export GitHub Actions workflow runs as OpenTelemetry traces
+inputs:
+  github-token:
+    description: GitHub token for API access
+    required: true
+  trace-artifacts-glob:
+    description: Glob pattern to match GitHub artifact(s) containing trace files in JSONL format (output of OTEL logging provider)
+    required: false

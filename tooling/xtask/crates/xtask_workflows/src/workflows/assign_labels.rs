@@ -2,7 +2,8 @@
 
 use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Step, Workflow};
 
-use crate::workflows::runners;
+use crate::workflows::actions::ActionsGithubScript;
+use crate::workflows::{runners, vars};
 
 /// Build the workflow.
 pub fn assign_labels() -> Workflow {
@@ -28,16 +29,9 @@ fn label_job() -> Job {
 }
 
 fn label_by_paths() -> Step<gh_workflow::Use> {
-    Step::new("Label based on paths")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_with((
-            "script",
-            indoc::indoc! {r#"
+    ActionsGithubScript::new(
+        "Label based on paths",
+        indoc::indoc! {r#"
                 // The PR's files from the API, without the files it deletes: the
                 // same set a full-history checkout and diff gave, in about 4 s
                 // instead of 38 s (once 705 s). The API lists at most 3,000 files.
@@ -87,5 +81,7 @@ fn label_by_paths() -> Step<gh_workflow::Use> {
                   console.log('No matching labels found for changed files');
                 }
             "#},
-        ))
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
 }

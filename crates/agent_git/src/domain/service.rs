@@ -6,9 +6,10 @@ use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+use crate::domain::git_slots::GitSlots;
 use crate::domain::models::{
     AgentGitError, AuthorizedRepo, CreatedRepo, GitAccess, GitBody, GitCredential, GitEndpoint,
-    GitRequest, GitResponse, GitService, RepoLimits, RepoToken,
+    GitHold, GitRequest, GitResponse, GitService, RepoLimits, RepoToken,
 };
 use crate::domain::ports::{
     AgentGitService, GitBackend, PushRateLimiter, RepoRepository, RepoStore, TeamAdmins,
@@ -40,6 +41,7 @@ pub struct AgentGitServiceImpl<Repos, Store, Admins, Limiter, Backend, Creators,
     adapters: AgentGitAdapters<Repos, Store, Admins, Limiter, Backend, Creators, Flags>,
     limits: RepoLimits,
     template: WorkspaceTemplate,
+    slots: GitSlots,
 }
 
 impl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
@@ -53,6 +55,7 @@ impl<Repos, Store, Admins, Limiter, Backend, Creators, Flags>
     ) -> Self {
         Self {
             adapters,
+            slots: GitSlots::new(limits.git),
             limits,
             template,
         }
@@ -100,9 +103,9 @@ fn render_error(error: RenderError) -> AgentGitError {
     }
 }
 
-/// Fail the body once it carries more than `limit` bytes, so a single push
-/// cannot overshoot the size cap.
-fn limit_body(body: GitBody, limit: u64) -> GitBody {
+/// Fail the body once it carries more than `limit` bytes: a push may not
+/// overshoot the size cap, nor a fetch's negotiation its own.
+fn limit_body(body: GitBody, limit: u64, message: &'static str) -> GitBody {
     let mut received: u64 = 0;
 
     Box::pin(body.map(move |chunk| {
@@ -110,7 +113,7 @@ fn limit_body(body: GitBody, limit: u64) -> GitBody {
         received = received.saturating_add(chunk.len() as u64);
 
         if received > limit {
-            return Err(std::io::Error::other("push exceeds the repo size limit"));
+            return Err(std::io::Error::other(message));
         }
 
         Ok(chunk)
@@ -167,7 +170,8 @@ where
             return Err(AgentGitError::TeamMismatch);
         }
 
-        self.adapters
+        let created = self
+            .adapters
             .store
             .create_repo(
                 &agent_user_id,
@@ -180,12 +184,26 @@ where
             .map_err(internal)?;
 
         let token = RepoToken::generate();
-        let stored = self
+        let stored = match self
             .adapters
             .repos
             .upsert_repo(&agent_user_id, team_id, &token.hash())
             .await
-            .map_err(internal)?;
+        {
+            Ok(stored) => stored,
+            Err(error) => {
+                // Still under the lock: a directory this call made has no
+                // row and nothing else refers to it, so it goes.
+                if created {
+                    self.adapters
+                        .store
+                        .delete_repo(&agent_user_id)
+                        .await
+                        .map_err(internal)?;
+                }
+                return Err(internal(error));
+            }
+        };
 
         if !stored {
             return Err(AgentGitError::TeamMismatch);
@@ -332,14 +350,9 @@ where
             .map_err(internal)?
             .ok_or(AgentGitError::InvalidToken)?;
 
-        // The kill switch: with the rollout off for the agent's creator (as
-        // its brain checks it), its repo looks absent to every credential.
-        if !self.rollout_on(agent_user_id).await {
-            return Err(AgentGitError::NotFound);
-        }
-
         let access = request.endpoint.access();
 
+        let is_repo_token = matches!(credential, GitCredential::RepoToken(_));
         match credential {
             GitCredential::RepoToken(token) => {
                 if !repo.token_hash.matches(&token.hash()) {
@@ -347,11 +360,6 @@ where
                 }
             }
             GitCredential::User(user_id) => {
-                // Admins read; only the agent's token pushes.
-                if access == GitAccess::Push {
-                    return Err(AgentGitError::Forbidden(access));
-                }
-
                 let is_admin = self
                     .adapters
                     .admins
@@ -359,16 +367,43 @@ where
                     .await
                     .map_err(internal)?;
 
+                // To anyone but an admin, the repo answers as a missing one.
                 if !is_admin {
-                    return Err(AgentGitError::Forbidden(access));
+                    return Err(AgentGitError::InvalidToken);
                 }
             }
+        }
+
+        // The kill switch: with the rollout off for the agent's creator (as
+        // its brain checks it), its repo looks absent to every credential.
+        // Checked after the credential, so an unauthenticated caller never
+        // triggers a flag evaluation whose latency would tell it apart.
+        if !self.rollout_on(agent_user_id).await {
+            return Err(AgentGitError::InvalidToken);
+        }
+
+        // Admins read; only the agent's token pushes.
+        if access == GitAccess::Push && !is_repo_token {
+            return Err(AgentGitError::Forbidden(access));
         }
 
         if request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack)
             && request.content_encoding.is_some()
         {
             return Err(AgentGitError::EncodedPush);
+        }
+
+        // Taken before the push budget, so a refused request spends none of it.
+        let slot = self
+            .slots
+            .try_acquire(agent_user_id.as_ref())
+            .ok_or(AgentGitError::ServerBusy)?;
+        if request.endpoint == GitEndpoint::Rpc(GitService::UploadPack) {
+            request.body = limit_body(
+                request.body,
+                self.limits.git.max_fetch_request_bytes,
+                "fetch request exceeds its size limit",
+            );
         }
 
         let receive_pack = request.endpoint == GitEndpoint::Rpc(GitService::ReceivePack);
@@ -421,26 +456,23 @@ where
                     .map_err(internal)?;
 
                 max_input_size = Some(limit_bytes - size_bytes);
-                request.body = limit_body(request.body, limit_bytes - size_bytes);
+                request.body = limit_body(
+                    request.body,
+                    limit_bytes - size_bytes,
+                    "push exceeds the repo size limit",
+                );
             }
         }
 
-        let mut response = self
-            .adapters
+        self.adapters
             .backend
             .serve(
                 &AuthorizedRepo::new(repo.agent_user_id, access, max_input_size),
                 request,
+                GitHold::new((slot, lock)),
             )
             .await
-            .map_err(internal)?;
-        if let Some(lock) = lock {
-            response.body = Box::pin(response.body.map(move |chunk| {
-                let _held = &lock;
-                chunk
-            }));
-        }
-        Ok(response)
+            .map_err(internal)
     }
 }
 

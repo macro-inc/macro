@@ -87,7 +87,7 @@ function noiseClause(): FacetClause {
 }
 
 function tabClause(
-  tab: HomeTab,
+  tab: Exclude<HomeTab, 'recent'>,
   capabilities: HomeQueryCapabilities,
   now: Date,
   userId: string | undefined
@@ -131,6 +131,20 @@ export function buildHomeQuery(
   context: HomeViewContext,
   options: { now?: Date } = {}
 ): SoupAstItemsQueryArgs {
+  // Recent is the viewer's own activity, newest touch first. Its endpoint
+  // rejects filter trees, so the facets apply on the client instead.
+  if (context.tab === 'recent') {
+    return {
+      params: {
+        expand: true,
+        limit: 100,
+        sort_method: 'touched_by_me',
+        sort_direction: 'desc',
+      },
+      body: {},
+    };
+  }
+
   const base = compileClause(
     tabClause(
       context.tab,

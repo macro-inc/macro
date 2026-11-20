@@ -27,6 +27,7 @@ import type { SoupProperty } from '../../service-clients/service-storage/generat
 import type { SoupPropertyValue } from '../../service-clients/service-storage/generated/schemas/soupPropertyValue';
 import { queryClient } from '../client';
 import {
+  bumpSoupEntityTouchedAt,
   getSoupEntityById,
   invalidateSoupEntity,
   optimisticUpdateSoupEntity,
@@ -665,6 +666,9 @@ function handleCommittedPropertySave(
 ): void {
   if (disposition.kind !== 'committed') return;
 
+  // A saved property is the viewer's own touch (a PropertyChanged activity),
+  // so Recent moves the item now rather than after a later refetch.
+  bumpSoupEntityTouchedAt(item.entityId);
   trackTaskPropertySave(
     item.entityId,
     getPropertyDefinitionId(item.property),

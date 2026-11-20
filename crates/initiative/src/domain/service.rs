@@ -77,7 +77,8 @@ where
 
     /// Create a project for a reviewed import using a stable ledger-derived
     /// identity. A replay may reuse only an existing project with this owner;
-    /// attribution is checked before either creation or reuse.
+    /// attribution is checked before either creation or reuse. An exact
+    /// `initial_link_share` overrides entity/team defaults only on creation.
     #[tracing::instrument(skip_all, fields(%id), err)]
     pub async fn create_imported(
         &self,
@@ -85,8 +86,9 @@ where
         request: CreateInitiativeRequest,
         attribution: activity::Attribution,
         id: InitiativeId,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
-        self.create_with_id(user_id, request, attribution, id, true)
+        self.create_with_id(user_id, request, attribution, id, true, initial_link_share)
             .await
     }
 
@@ -113,6 +115,7 @@ where
         attribution: activity::Attribution,
         id: InitiativeId,
         reuse: bool,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let authorized = match &attribution {
             activity::Attribution::Direct { actor } => {
@@ -146,7 +149,14 @@ where
             .get_team_default_link_share(&owner_id)
             .await
             .map_err(Into::into)?;
-        let share_permission = SharePermissionV2::new_initiative_share_permission(team_default);
+        let share_permission = match initial_link_share {
+            models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+                SharePermissionV2::from_link_share_state(state)
+            }
+            models_permissions::share_permission::InitialLinkShare::EntityDefault => {
+                SharePermissionV2::new_initiative_share_permission(team_default)
+            }
+        };
         let team_share = if request.share_with_team.unwrap_or(true) {
             TeamShareCreation::Initiative
         } else {
@@ -380,6 +390,7 @@ where
             attribution,
             InitiativeId::generate(),
             false,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
         )
         .await
     }
