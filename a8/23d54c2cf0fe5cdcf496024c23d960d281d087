@@ -1,0 +1,28 @@
+crates/agent_egress/src/domain/service.rs
+  s_778a35fb352331::t_33e760517dc1d3 474
+  s_778a35fb352331::t_9648739e702307 16-17,200-203,230-238,429,451,527-547,549
+  s_778a35fb352331::t_2a44e30e19f1b3 548,550
+crates/agent_egress/src/domain/service/test/reconnect.rs
+  s_778a35fb352331::t_8246e0b5e2270e 7
+  s_778a35fb352331::t_8718c7e91a0db1 1-6,8-139
+crates/agent_egress/src/domain/service/test.rs
+  s_778a35fb352331::t_8718c7e91a0db1 279,287-295,320,1647
+crates/agent_egress/AGENTS.md
+  s_778a35fb352331::t_90ca19c2694bb0 48-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "a823d54c2cf0fe5cdcf496024c23d960d281d087",
+  "prompts": {},
+  "sessions": {
+    "s_778a35fb352331": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6765a9-10bd-46c9-8814-4b0c87b4e29a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
