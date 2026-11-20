@@ -1,3 +1,4 @@
+import { UNKNOWN_CACHE_GENERATION } from '@graphql-cache/generation-mirror';
 import {
   type CalendarRangeCacheArgs,
   validateRecordSelectionKeys,
@@ -44,7 +45,7 @@ function fakeHost(
   occurrences: CalendarOccurrenceItemFieldsFragment[]
 ) {
   const records = new Map<string, unknown>([
-    ...(event ? [[`GraphqlCalendarEvent:${event.id}`, event] as const] : []),
+    ...(event ? [[`GraphqlCalendarEvent:${event?.id}`, event] as const] : []),
     ...occurrences.map(
       (occurrence) =>
         [`GraphqlCalendarOccurrence:${occurrence.id}`, occurrence] as const
@@ -85,7 +86,8 @@ function fakeHost(
 function fakeClient(
   disposition: Disposition,
   payload?: Partial<CalendarMutationPayloadFieldsFragment>,
-  beforeResult?: () => void
+  beforeResult?: () => void,
+  generation?: string
 ) {
   const calls: Array<{
     variables: { input: Record<string, unknown> };
@@ -106,7 +108,12 @@ function fakeClient(
       )[0] as string;
       return {
         toPromise: async () => ({
-          operation: { context },
+          operation: {
+            context: {
+              ...context,
+              ...(generation ? { cacheSessionGeneration: generation } : {}),
+            },
+          },
           data:
             disposition === 'failed'
               ? undefined
@@ -458,31 +465,42 @@ describe('executeGraphqlUpdate', () => {
     ]);
   });
 
-  it('replaces the event’s occurrences with the committed answer', async () => {
-    const host = fakeHost(graphqlEvent(), [instance(6)]);
-    const moved = instance(7);
-    const removed = { ...instance(6), isCancelled: true };
-    const { client } = fakeClient('committed', {
-      event: graphqlEvent({ title: 'Moved' }),
-      occurrences: [moved, removed],
-    });
-
-    const outcome = await executeGraphqlUpdate(
-      host,
-      { eventId: 'event-1', patch: { title: 'Moved' } },
-      client
-    );
-
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      replacedEvents: [
+  it.each([undefined, '00000000-0000-4000-8000-000000000123'])(
+    'replaces the event’s occurrences with the committed answer stamped %s',
+    async (generation) => {
+      const host = fakeHost(graphqlEvent(), [instance(6)]);
+      const moved = instance(7);
+      const removed = { ...instance(6), isCancelled: true };
+      const { client } = fakeClient(
+        'committed',
         {
-          eventKey: 'GraphqlCalendarEvent:event-1',
-          occurrenceKeys: [`GraphqlCalendarOccurrence:${moved.id}`],
+          event: graphqlEvent({ title: 'Moved' }),
+          occurrences: [moved, removed],
         },
-      ],
-    });
-    expect(committedEvent(outcome)?.title).toBe('Moved');
-  });
+        undefined,
+        generation
+      );
+
+      const outcome = await executeGraphqlUpdate(
+        host,
+        { eventId: 'event-1', patch: { title: 'Moved' } },
+        client
+      );
+
+      expect(host.calendarCommit).toHaveBeenCalledWith(
+        {
+          replacedEvents: [
+            {
+              eventKey: 'GraphqlCalendarEvent:event-1',
+              occurrenceKeys: [`GraphqlCalendarOccurrence:${moved.id}`],
+            },
+          ],
+        },
+        generation ?? UNKNOWN_CACHE_GENERATION
+      );
+      expect(committedEvent(outcome)?.title).toBe('Moved');
+    }
+  );
 
   it('surfaces a rejection with its code', async () => {
     const host = fakeHost(graphqlEvent(), []);
@@ -593,9 +611,12 @@ describe('executeGraphqlDelete', () => {
       response(calls[0]!).occurrences.every((o) => o.isCancelled === true)
     ).toBe(true);
     expect(response(calls[0]!).occurrences).toHaveLength(2);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      deletedEventKeys: ['GraphqlCalendarEvent:event-1'],
-    });
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        deletedEventKeys: ['GraphqlCalendarEvent:event-1'],
+      },
+      UNKNOWN_CACHE_GENERATION
+    );
   });
 });
 
@@ -650,7 +671,7 @@ describe('executeGraphqlCreate', () => {
           referenceFields: ['GraphqlCalendarOccurrence.eventId'],
         },
       ]);
-      expect(event.id).toBe('server-1');
+      expect(event?.id).toBe('server-1');
     }
   );
 
@@ -718,22 +739,23 @@ describe('executeGraphqlCreate', () => {
       },
       client
     );
+    if (!event) throw new Error('queued create did not return an event');
     const host = fakeHost(undefined, []);
 
     expect(outcome).toEqual({ kind: 'queued' });
     await expect(
       executeGraphqlUpdate(
         host,
-        { eventId: event.id, patch: { title: 'Renamed' } },
+        { eventId: event?.id, patch: { title: 'Renamed' } },
         fakeClient('committed').client
       )
     ).rejects.toMatchObject({ code: 'not_found' });
 
-    settle?.({ mutationUuid: event.id });
+    settle?.({ mutationUuid: event?.id });
     await expect(
       executeGraphqlUpdate(
         host,
-        { eventId: event.id, patch: { title: 'Renamed' } },
+        { eventId: event?.id, patch: { title: 'Renamed' } },
         fakeClient('committed').client
       )
     ).resolves.toMatchObject({ kind: 'committed' });
@@ -766,11 +788,12 @@ describe('executeGraphqlCreate', () => {
       client
     );
 
+    if (!event) throw new Error('queued create did not return an event');
     expect(event.id).toBe(clientId);
     await expect(
       executeGraphqlUpdate(
         fakeHost(undefined, []),
-        { eventId: event.id, patch: { title: 'Renamed' } },
+        { eventId: event?.id, patch: { title: 'Renamed' } },
         fakeClient('committed').client
       )
     ).resolves.toMatchObject({ kind: 'committed' });

@@ -226,6 +226,9 @@ tools/HTTP/GraphQL surfaces over them.
   opt-in response hint lets an open client retire stale snapshots. Only that
   hint has a three-second per-instance cache; receipts and the authority endpoint
   stay fresh. See `docs/CRM_EMAIL_PRIVACY.md` for the request header and latency.
+  Client retirement is shared by the browser/native cache owners in
+  `soup_filter_cache_adapter::permissions`; preserve authored queue state while
+  removing copied response content, including derived mail and property records.
 - Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also

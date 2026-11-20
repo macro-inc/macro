@@ -503,6 +503,34 @@ describe('scheduling a Macro call', () => {
     }
   });
 
+  it('closes a confirmed create without navigating when its identity is unavailable', async () => {
+    mocks.createEvent.mockResolvedValue(undefined);
+    const created = vi.fn();
+    const saved = vi.fn();
+    const [editor, dispose] = createRoot(
+      (dispose) =>
+        [
+          useEventEditor({
+            macroCallsEnabled: () => false,
+            event: () => undefined,
+            onCreated: created,
+            onSaved: saved,
+          }),
+          dispose,
+        ] as const
+    );
+    try {
+      await editor.save(values);
+      expect(mocks.createEvent).toHaveBeenCalledOnce();
+      expect(created).not.toHaveBeenCalled();
+      expect(saved).toHaveBeenCalledOnce();
+      expect(mocks.failure).not.toHaveBeenCalled();
+      expect(editor.saveError()).toBeUndefined();
+    } finally {
+      dispose();
+    }
+  });
+
   it('reports the created event before it closes', async () => {
     const order: string[] = [];
     const created = vi.fn(() => order.push('created'));

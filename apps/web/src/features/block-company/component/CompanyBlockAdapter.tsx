@@ -19,7 +19,8 @@ import {
 } from '@core/component/ParamsProvider';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
-import { createSignal } from 'solid-js';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
+import { createSignal, Show } from 'solid-js';
 
 /**
  * Legacy adapter: bridges the block/split-layout system to the standalone
@@ -35,37 +36,39 @@ export function CompanyBlockAdapter() {
   });
   return (
     <>
-      <SplitHeaderLeft>
-        <CollapsibleHeaderItem
-          id="company-tabs"
-          priority={1}
-          containerClass="ph-no-capture min-w-0 h-full mx-2 touch:mx-0"
-        >
-          {(isCollapsed) => (
-            <div
-              class={
-                isCollapsed()
-                  ? 'min-w-0 not-touch:overflow-x-auto not-touch:scrollbar-hidden'
-                  : 'shrink-0'
-              }
-            >
-              <CompanyTabs
-                value={section()}
-                onChange={setSection}
-                compact={isCollapsed()}
-              />
-            </div>
-          )}
-        </CollapsibleHeaderItem>
-      </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <HeaderIsland class="p-0">
-          <HeaderActionGroup label="Company actions">
-            <CrmCopyLinkButton grouped type="company" id={companyId} />
-            <CompanyVisibilityButton grouped companyId={companyId} />
-          </HeaderActionGroup>
-        </HeaderIsland>
-      </SplitHeaderRight>
+      <Show when={crmAccessAllowed()}>
+        <SplitHeaderLeft>
+          <CollapsibleHeaderItem
+            id="company-tabs"
+            priority={1}
+            containerClass="ph-no-capture min-w-0 h-full mx-2 touch:mx-0"
+          >
+            {(isCollapsed) => (
+              <div
+                class={
+                  isCollapsed()
+                    ? 'min-w-0 not-touch:overflow-x-auto not-touch:scrollbar-hidden'
+                    : 'shrink-0'
+                }
+              >
+                <CompanyTabs
+                  value={section()}
+                  onChange={setSection}
+                  compact={isCollapsed()}
+                />
+              </div>
+            )}
+          </CollapsibleHeaderItem>
+        </SplitHeaderLeft>
+        <SplitHeaderRight>
+          <HeaderIsland class="p-0">
+            <HeaderActionGroup label="Company actions">
+              <CrmCopyLinkButton grouped type="company" id={companyId} />
+              <CompanyVisibilityButton grouped companyId={companyId} />
+            </HeaderActionGroup>
+          </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
       <ParamsProvider state={params}>
         <Company companyId={companyId} section={section()} />
       </ParamsProvider>

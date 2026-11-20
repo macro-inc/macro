@@ -20,7 +20,7 @@ the worker is not publishing. A local worker only logs them. Calls cut off
 because the worker is stopping are not counted as failures. Each publish also logs
 "focus usage this minute" with that minute's tokens and dollars. The metric
 names, units and meanings are in `services/email_focus_worker/src/metrics.rs`;
-the thresholds are in `infra/stacks/observability/nixos/email-focus.nix`.
+the thresholds are in `infra/stacks/observability/nixos/grafana-provisioning/email-focus.nix`.
 
 Cost uses the prices in `ai_effective_pricing`, read once per model in the
 background; a changed price is picked up when the worker restarts. Calls made

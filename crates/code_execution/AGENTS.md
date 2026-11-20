@@ -20,6 +20,12 @@ composition root.
 - `src/outbound/deno/bootstrap.mjs`: program loading, unattended dry runs
   (a routine's entity knobs, marked `$entity`, reach `main` as SDK handles),
   removing every way to the network but `fetch`, and final JSON protocol.
+  Before building the program's client it installs the process's SDK
+  policies: the per-operation call budget, diagnostics, and a search limit
+  (`limitSearches`, `SEARCHES_IN_FLIGHT` = 2), so every client the program
+  builds sends at most two searches at once and the rest wait in call order:
+  the search cluster's few threads queue every user's search behind a
+  program's burst.
 - `src/outbound/deno/check.rs`: type-checking TypeScript against the SDK.
 - `src/domain/operations.rs`: the generated operation catalog (labels, routes,
   read or write) and the SDK fingerprint.

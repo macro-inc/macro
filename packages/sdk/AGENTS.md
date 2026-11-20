@@ -37,6 +37,11 @@ enforced by the ordinary backend APIs.
 - `src/entities/search/namespace.ts`: `macro.search`, one unified search across
   every kind of item with the direct search tools' filters (types, exact match,
   tags, inbox, agent session transcripts), returning typed handles.
+  `MacroClient` wraps its search service client in the process's search
+  limit when one is set (`setDefaultSearchLimit` in `utils/concurrency.ts`,
+  `limitSearches` in code mode, whose bootstrap installs 2): every client's
+  searches, every entity's search included, share it and wait in call order.
+  Other processes (agent teammates, workers, npm users) set none.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
   (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the

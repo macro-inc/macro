@@ -1,6 +1,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { CONTACT_SYNC_UNSUPPORTED } from '@graphql-cache/people/sync-protocol';
 import type { HydrationScope } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchContactDirectoryByIds } from '@service-storage/graphql-contacts';
 import { ContactDirectoryScopeError } from './cache-scope';
@@ -16,6 +17,7 @@ export async function reconcileContactPage(
   signal: AbortSignal,
   fetchIds = fetchContactDirectoryByIds
 ) {
+  const generation = cacheSessionGeneration.capture();
   return Telemetry.span('contacts.reconcile_page', async (span) => {
     try {
       signal.throwIfAborted();
@@ -49,13 +51,16 @@ export async function reconcileContactPage(
           (requested.has(scope.identity) && !present.includes(scope.identity))
         )
           throw new Error('Invalid membership verification');
-        await host.people.reconcile({
-          scope,
-          fence: snapshot.fence,
-          viewer: response.user.id,
-          requested: snapshot.ids,
-          present,
-        });
+        await host.people.reconcile(
+          {
+            scope,
+            fence: snapshot.fence,
+            viewer: response.user.id,
+            requested: snapshot.ids,
+            present,
+          },
+          generation
+        );
         signal.throwIfAborted();
         span.setAttr(
           'contacts.removed_count',

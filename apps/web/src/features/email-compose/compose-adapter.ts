@@ -140,15 +140,13 @@ export function createEmailComposeContext(): EmailComposeContext {
   const paywall = usePaywallState();
   const viewerEmail = useEmail();
   const viewerId = useUserId();
-  const primaryId = () =>
-    accounts.isSuccess
-      ? findPrimaryEmailLinkId(accounts.data?.links ?? [], viewerId())
-      : undefined;
-  const headerId = (id: string | null | undefined) =>
-    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const inboxSource = createEmailInboxSource(viewerEmail, accounts, (email) =>
     getDisplayName(tryMacroId(`macro|${email}`))
   );
+  const primaryId = () =>
+    findPrimaryEmailLinkId(inboxSource.inboxes(), viewerId());
+  const headerId = (id: string | null | undefined) =>
+    nonPrimaryEmailLinkIdHeader(id, primaryId());
   const calendarEvents = useCreateEmailEvent();
   const remove = useDeleteDraftMutation();
   const upload = useUploadDraftAttachmentsMutation();
@@ -373,6 +371,9 @@ export function createEmailComposeContext(): EmailComposeContext {
             });
           const local = await readLocalDraft(handles.draftId);
           const senderLinkId = local?.inboxId ?? inboxId ?? primaryId() ?? '';
+          const inbox = inboxSource
+            .inboxes()
+            .find((inbox) => inbox.id === senderLinkId);
           const outcome = await saveEmailDraftQueued({
             args: {
               ...queuedDraftSaveArgs({
@@ -384,18 +385,8 @@ export function createEmailComposeContext(): EmailComposeContext {
                     }
                   : handles,
                 senderLinkId,
-                senderAccount: accounts.isSuccess
-                  ? accounts.data?.links.find(
-                      (link) => link.id === senderLinkId
-                    )
-                  : undefined,
-                senderEmail:
-                  inboxSource
-                    .inboxes()
-                    .find((inbox) => inbox.id === senderLinkId)
-                    ?.email_address ??
-                  viewerEmail() ??
-                  '',
+                senderAccount: inbox,
+                senderEmail: inbox?.email_address ?? viewerEmail() ?? '',
               }),
               localRevision: local?.revision,
             },
@@ -582,14 +573,8 @@ export function createEmailComposeContext(): EmailComposeContext {
               draft: input.message,
               handles: { draftId, threadId },
               senderLinkId,
-              senderAccount: accounts.isSuccess
-                ? accounts.data?.links.find((link) => link.id === senderLinkId)
-                : undefined,
-              senderEmail:
-                inboxSource.inboxes().find((inbox) => inbox.id === senderLinkId)
-                  ?.email_address ??
-                viewerEmail() ??
-                '',
+              senderAccount: inbox,
+              senderEmail: inbox.email_address,
             }),
             sendTime: input.sendTime,
           },

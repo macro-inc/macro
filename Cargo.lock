@@ -3934,7 +3934,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.54"
+version = "0.6.55"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -18676,6 +18676,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "calendar_events",
  "channels",
  "chrono",
@@ -18687,6 +18688,7 @@ dependencies = [
  "feature_flags",
  "indexmap 2.14.0",
  "item_filters",
+ "macro_auth",
  "macro_authorization",
  "macro_db_client",
  "macro_user_id",
@@ -19868,7 +19870,9 @@ dependencies = [
  "serde",
  "serde_json",
  "soup-filter-projection",
+ "tempfile",
  "thiserror 2.0.18",
+ "tracing",
  "uuid",
 ]
 
