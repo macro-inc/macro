@@ -171,6 +171,10 @@ pub enum ToRuntimeMessage {
     ApplyAgent {
         /// The agent's environment.
         environment: AgentEnvironment,
+        /// W3C context of the computer's setup, so the agent's start joins
+        /// its trace. Absent from older services.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        traceparent: Option<String>,
     },
     /// Run this agent teammate in the teammate runtime container on this
     /// machine, replacing the install's earlier generation if one runs. Sent

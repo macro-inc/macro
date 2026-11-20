@@ -10,7 +10,7 @@ use macro_service_urls::macro_env::Environment;
 use macro_service_urls::{
     AgentHarnessEgressUrl, AgentHarnessServiceUrl, ApiGatewayUrl, AuthServiceUrl,
     ConnectionGatewayWebsocketUrl, DocumentCognitionServiceUrl, DocumentStorageServiceUrl,
-    McpServiceUrl, ScheduledActionServiceUrl,
+    McpServiceUrl, ScheduledActionServiceUrl, TelemetryIntakeUrl,
 };
 use team_agents::domain::{models::TeamAgentError, ports::EnrollmentEnvironment};
 
@@ -25,6 +25,9 @@ pub const ANTHROPIC_BASE_URL_KEY: &str = "ANTHROPIC_BASE_URL";
 /// runtime opens `ws(s)://…/stt` and `…/tts` under it.
 pub const SPEECH_URL_KEY: &str = "MACRO_SPEECH_URL";
 
+/// Where the agent's spans go (OTLP/HTTP), the standard OTel variable.
+pub const TELEMETRY_KEY: &str = "OTEL_EXPORTER_OTLP_ENDPOINT";
+
 /// Resolves [`EnrollmentEnvironment`] from the service URL types.
 pub struct AgentAddresses;
 
@@ -34,7 +37,17 @@ struct UnreachableAddress {
     name: &'static str,
 }
 
-#[cfg(test)]
+fn is_loopback(url: &macro_service_urls::Url) -> bool {
+    url.host_str().is_some_and(|host| {
+        host.eq_ignore_ascii_case("localhost")
+            || host.ends_with(".localhost")
+            || host
+                .trim_matches(['[', ']'])
+                .parse::<std::net::IpAddr>()
+                .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified())
+    })
+}
+
 fn checked(name: &'static str, raw: &str, websocket: bool) -> Result<String, TeamAgentError> {
     checked_allowing(name, raw, websocket, false)
 }
@@ -55,15 +68,9 @@ fn checked_allowing(
     } else {
         matches!(url.scheme(), "http" | "https")
     };
-    let host = url.host_str().ok_or_else(invalid)?;
-    let loopback = host.eq_ignore_ascii_case("localhost")
-        || host.ends_with(".localhost")
-        || host
-            .trim_matches(['[', ']'])
-            .parse::<std::net::IpAddr>()
-            .is_ok_and(|ip| ip.is_loopback() || ip.is_unspecified());
+    url.host_str().ok_or_else(invalid)?;
     if !scheme_ok
-        || (loopback && !loopback_ok)
+        || (is_loopback(&url) && !loopback_ok)
         || !url.username().is_empty()
         || url.password().is_some()
         || url.query().is_some()
@@ -85,6 +92,7 @@ struct ServiceUrls {
     mcp: String,
     gateway: String,
     egress: String,
+    intake: String,
 }
 
 /// As a Macro computer reaches them: the process's URLs, overrides included.
@@ -117,6 +125,9 @@ fn computer_facing() -> Result<ServiceUrls, TeamAgentError> {
         egress: AgentHarnessEgressUrl::new()
             .map_err(TeamAgentError::internal)?
             .to_string(),
+        intake: TelemetryIntakeUrl::new()
+            .map_err(TeamAgentError::internal)?
+            .to_string(),
     })
 }
 
@@ -132,7 +143,22 @@ fn public(environment: Environment) -> ServiceUrls {
         mcp: McpServiceUrl::default_for_environment(environment).to_string(),
         gateway: ApiGatewayUrl::default_for_environment(environment).to_string(),
         egress: AgentHarnessEgressUrl::default_for_environment(environment).to_string(),
+        intake: TelemetryIntakeUrl::default_for_environment(environment).to_string(),
     }
+}
+
+/// The agent's telemetry intake, or none when it is this machine's loopback,
+/// which a computer can't reach (a local stack without a wired collector).
+fn telemetry(raw: &str) -> Result<Option<(&'static str, String)>, TeamAgentError> {
+    let url = macro_service_urls::Url::parse(raw).map_err(|_| {
+        TeamAgentError::internal(UnreachableAddress {
+            name: TELEMETRY_KEY,
+        })
+    })?;
+    if is_loopback(&url) {
+        return Ok(None);
+    }
+    Ok(Some((TELEMETRY_KEY, checked(TELEMETRY_KEY, raw, false)?)))
 }
 
 fn resolve() -> Result<Vec<(&'static str, String)>, TeamAgentError> {
@@ -155,8 +181,10 @@ fn environment(
         mcp,
         gateway,
         egress,
+        intake,
     } = urls;
     let egress = checked(AgentHarnessEgressUrl::OVERRIDE_ENV_VAR_NAME, &egress, false)?;
+    let telemetry = telemetry(&intake)?;
     Ok(vec![
         (
             DocumentStorageServiceUrl::OVERRIDE_ENV_VAR_NAME,
@@ -209,7 +237,10 @@ fn environment(
         (GATEWAY_KEY, checked(GATEWAY_KEY, &gateway, false)?),
         (ANTHROPIC_BASE_URL_KEY, format!("{egress}/brain/anthropic")),
         (SPEECH_URL_KEY, format!("{egress}/brain/inference")),
-    ])
+    ]
+    .into_iter()
+    .chain(telemetry)
+    .collect())
 }
 
 impl EnrollmentEnvironment for AgentAddresses {

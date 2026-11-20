@@ -524,7 +524,8 @@ the operator publishes `{harness, computer, generation}` (plus trace context)
 on the runtime bus via `Harnesses::deliver_agent`, and only the replica
 holding macrod's socket issues the agent's environment through its
 `AgentEnrollmentSource` (team_agents' `issue_enrollment`, which rotates the
-agent's key) and sends it down that socket as `ToRuntimeMessage::ApplyAgent`.
+agent's key) and sends it down that socket as `ToRuntimeMessage::ApplyAgent`,
+with the setup `traceparent` the agent's start joins.
 Each macrod connection hands it over again until the agent reports online.
 team_agents reads an agent computer's roster state with
 `ComputerService::status_for_roster` (answered on a detached fleet too) and
@@ -605,7 +606,10 @@ One computer's first setup is one trace, rooted at the purchase (Buy computer). 
   tracer: `computer.setup.payment` (reservation → charge settled or comp;
   it overlaps the next waits), `computer.setup.create` (conversion → guest
   booting, including outbox and capacity waits), `computer.setup.boot` (→ first macrod connection) and the total
-  `computer.setup`. They carry `computer_id`, `team_id`, `size`, `host_id`,
+  `computer.setup`; for an agent teammate also `computer.setup.agent_handoff`
+  (→ macrod took the agent, `Event::AgentDelivered` from the finished hand-off) and `computer.setup.agent_start` (→ the agent
+  online). Work parents under the purchase for the whole first start
+  (`ComputerState::first_start`), so the hand-off joins the setup trace. They carry `computer_id`, `team_id`, `size`, `host_id`,
   `generation`, `billing_kind` and `capacity_waited`. A rolled-back
   transaction can export a wait that a retry exports again.
 - `Enrollment.traceparent` carries the setup context to macrod; see

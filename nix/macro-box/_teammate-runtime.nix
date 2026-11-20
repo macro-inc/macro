@@ -84,6 +84,12 @@ let
     runtime=${runtime}
     helper=${lib.getExe credentialHelper}
     helper_credentials=${paths.helperCredentials}
+  ''
+  # The computer's setup trace macrod staged (start-agent joins it once);
+  # only a hosted computer has one.
+  + lib.optionalString (paths ? setupTraceparent) ''
+    setup_traceparent=${paths.setupTraceparent}
+    setup_traceparent_used=${paths.setupTraceparentUsed}
   '';
   credentialHelper = pkgs.writeShellApplication {
     name = "git-credential-agent";

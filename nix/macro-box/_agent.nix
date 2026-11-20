@@ -48,6 +48,8 @@ let
         displayNumber
         ;
       helperCredentials = "/run/credentials/macro-agent.service/agent.env";
+      setupTraceparent = "/run/macrod/agent-traceparent";
+      setupTraceparentUsed = "${state}/setup-traceparent";
       # Unused here: `claude` is the system profile's, over the same file.
       claudeCredential = "${claudeSignIn}/credential.json";
     };

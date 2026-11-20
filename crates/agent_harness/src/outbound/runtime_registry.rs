@@ -225,12 +225,14 @@ where
             .is_ok()
     }
 
-    /// Hand `harness`'s live runtime an agent teammate's environment.
-    /// Returns whether this process holds a connection for it.
+    /// Hand `harness`'s live runtime an agent teammate's environment, with
+    /// the setup trace its start joins. Returns whether this process holds a
+    /// connection for it.
     pub async fn apply_agent(
         &self,
         harness: HarnessId,
         environment: agent_runtime_protocol::domain::schema::v0::AgentEnvironment,
+        traceparent: Option<String>,
     ) -> bool {
         let Some(connection) = self
             .connections
@@ -239,7 +241,7 @@ where
         else {
             return false;
         };
-        match connection.apply_agent(environment).await {
+        match connection.apply_agent(environment, traceparent).await {
             Ok(()) => {
                 tracing::info!(%harness, "handed this harness's runtime its agent");
                 true

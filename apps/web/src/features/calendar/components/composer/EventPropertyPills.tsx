@@ -9,6 +9,7 @@ import RepeatIcon from '@icon/system/regular/repeat.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import VideoCameraSlashIcon from '@icon/system/regular/video-camera-slash.svg';
 import { Popover } from '@kobalte/core/popover';
 import { useProperty } from '@property/core/context';
 import { Root as PropertyRoot } from '@property/core/Root';
@@ -468,6 +469,11 @@ export interface EventComposerConferencePillProps {
   macroCallsEnabled: boolean;
   onChange: (value: EventEditorConferenceChoice) => void;
   disabled?: boolean;
+  /**
+   * The provider keeps the event's meeting, so the only choices are keeping
+   * it or turning it off.
+   */
+  keepOrRemoveOnly?: boolean;
 }
 
 /** Compact selector for adding, replacing, or removing video conferencing. */
@@ -484,7 +490,8 @@ export function EventComposerConferencePill(
   // that read the whole event, so each one is read through its own memo.
   const provider = createMemo(() => props.provider);
   const canKeepExisting = createMemo(() => props.canKeepExisting);
-  const options = createMemo(() => [
+  const keepOrRemoveOnly = createMemo(() => props.keepOrRemoveOnly === true);
+  const anyConferenceOptions = () => [
     ...(includesMacroCall() ? [MACRO_CALL_OPTION] : []),
     ...(provider() === 'microsoft_teams'
       ? [MICROSOFT_TEAMS_OPTION]
@@ -493,7 +500,18 @@ export function EventComposerConferencePill(
         : [GOOGLE_MEET_OPTION]),
     ...(canKeepExisting() ? [EXISTING_CONFERENCING_OPTION] : []),
     NO_CONFERENCING_OPTION,
-  ]);
+  ];
+  const options = createMemo(() =>
+    keepOrRemoveOnly()
+      ? [
+          canKeepExisting()
+            ? EXISTING_CONFERENCING_OPTION
+            : MICROSOFT_TEAMS_OPTION,
+          NO_CONFERENCING_OPTION,
+        ]
+      : anyConferenceOptions()
+  );
+  const removed = () => keepOrRemoveOnly() && props.value === 'none';
   const selectedOption = () =>
     options().find((option) => option.value === props.value) ?? options()[0];
 
@@ -510,17 +528,24 @@ export function EventComposerConferencePill(
         aria-label="Video conferencing"
         class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
       >
-        <VideoCameraIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Show
+          when={removed()}
+          fallback={
+            <VideoCameraIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+          }
+        >
+          <VideoCameraSlashIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
         <Select.Value<EventComposerConferenceOption>>
           {(selectState) => (
             <span
               class={cn(
                 'truncate',
                 PROPERTY_VALUE_CLASS,
-                props.value === 'none' && 'text-ink-extra-muted'
+                props.value === 'none' && !removed() && 'text-ink-extra-muted'
               )}
             >
-              {props.value === 'none'
+              {props.value === 'none' && !removed()
                 ? 'Add meeting link'
                 : selectState.selectedOption().label}
             </span>
