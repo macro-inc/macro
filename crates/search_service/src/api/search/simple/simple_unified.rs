@@ -553,9 +553,12 @@ async fn search_unified_sources(
         .collect::<Result<Vec<_>, _>>()?;
     reject_unsupported_email_filters(&search_filters.email_filters)?;
 
-    // Checks that read nothing have passed, so the search waits for its
-    // caller's turn only now: a malformed request fails at once instead of
-    // waiting behind the caller's other searches.
+    // The request's own checks (query, paging, cursor, terms, sessions, email
+    // filters) have passed, so a malformed request fails at once instead of
+    // waiting behind the caller's other searches. Ids a source parses only
+    // when it runs (channel and CRM company ids) are checked in its turn, as
+    // they were before lanes: a caller the source doesn't apply to never
+    // fails on them.
     let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
 
     // CRM is opt-in: only when the caller asks for it does this resolve a
