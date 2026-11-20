@@ -930,4 +930,75 @@ describe('second review', () => {
     expect(after.blocks[0].markdown).toBe('Say word**new** here.');
     expect(marks).toEqual(['word']);
   });
+
+  it('bolding part of a commented phrase keeps the whole phrase commented', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('Note: big cat.', [{ text: 'big cat', id: 'cm-1' }])
+    );
+    const { after } = await run(
+      { edits: [{ old: 'big cat', new: '**big** cat' }] },
+      synced
+    );
+    const textOf = (node: { text?: string; children?: unknown[] }): string =>
+      (node.text ?? '') +
+      (node.children ?? []).map((child) => textOf(child as never)).join('');
+    const marks: string[] = [];
+    const walkMarks = (node: { type: string; children?: unknown[] }) => {
+      if (node.type === 'comment-mark') marks.push(textOf(node));
+      for (const child of node.children ?? []) walkMarks(child as never);
+    };
+    for (const node of after.nodes) walkMarks(node);
+    expect(after.blocks[0].markdown).toBe('Note: **big** cat.');
+    expect(marks).toEqual(['big cat']);
+  });
+
+  it('linking part of a commented phrase is refused rather than shrinking the comment', async () => {
+    const error = await runDirectEdit(
+      DOC,
+      { edits: [{ old: 'see docs', new: 'see [docs](https://example.com)' }] },
+      new SyncedDocument(
+        await buildSnapshot('Note: see docs.', [
+          { text: 'see docs', id: 'cm-1' },
+        ])
+      ),
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+    expect((error as EditRefusal).code).toBe('comment_loss');
+  });
+
+  it('a run of semicolons in a data: URI does not stall redaction', async () => {
+    const started = Date.now();
+    const synced = new SyncedDocument(
+      await buildSnapshot(`data:image/png${';'.repeat(60)} tail`)
+    );
+    await readMarkdownBlocks(DOC, synced, signal());
+    expect(Date.now() - started).toBeLessThan(5_000);
+  });
+
+  it('a replacement that puts back the separator before it leaves the opaque block alone', async () => {
+    const snapshot = await buildSnapshot('A private bit.\n\nTail', [
+      { text: 'private', id: 'hl-1', plain: true },
+    ]);
+    const opaque = (await readDocument(DOC, snapshot)).blocks[0];
+    const { response, after } = await run(
+      { edits: [{ old: '\n\nTail', new: '\n\nDone' }] },
+      new SyncedDocument(snapshot)
+    );
+    expect(opaque.opaque).toBe(true);
+    expect(response.outcome).toBe('committed');
+    expect(after.blocks.map((b) => b.id)).toContain(opaque.id);
+    expect(after.blocks[1].markdown).toBe('Done');
+  });
+
+  it('literal markup already in the document does not block an unrelated edit', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('Code: `</td>` here.\n\nOther.')
+    );
+    const { response } = await run(
+      { edits: [{ old: 'Other.', new: 'Changed.' }] },
+      synced
+    );
+    expect(response.outcome).toBe('committed');
+  });
 });

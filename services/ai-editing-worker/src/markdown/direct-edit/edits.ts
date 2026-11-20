@@ -240,6 +240,17 @@ function crossBlockMatch(
   while (last > 0 && offsets[last] > end) last--;
   if (last > first && offsets[last] === end && replacement.endsWith('\n\n'))
     last--;
+  // The mirror: a match starting exactly at the separator after `first`,
+  // whose replacement puts it back, leaves `first` alone.
+  let lead = 0;
+  if (
+    last > first &&
+    offsets[first] + list[first].markdown.length === at &&
+    replacement.startsWith('\n\n')
+  ) {
+    first++;
+    lead = 2;
+  }
   const merged = joined.slice(
     offsets[first],
     offsets[last] + list[last].markdown.length
@@ -248,8 +259,9 @@ function crossBlockMatch(
     first,
     last,
     merged,
-    start: at - offsets[first],
+    start: at + lead - offsets[first],
     end: end - offsets[first],
+    replacement: replacement.slice(lead),
   };
 }
 
@@ -291,6 +303,13 @@ function applyReplace(
   if (total === 0 && !edit.block_id) {
     const span = crossBlockMatch(list, edit.old, edit.new, n);
     if (span) {
+      const growth = edit.new.length - edit.old.length;
+      if (growth > 0 && joinedMarkdown(list).length + growth > MAX_EDITED_CHARS)
+        throw new EditRefusal(
+          'too_large',
+          `edit ${n}: the edited document would exceed ${MAX_EDITED_CHARS} characters`,
+          n
+        );
       for (let i = span.first; i <= span.last; i++)
         if (list[i].opaque)
           throw new EditRefusal(
@@ -304,7 +323,7 @@ function applyReplace(
       list.splice(span.first, span.last - span.first + 1, {
         markdown:
           span.merged.slice(0, span.start) +
-          edit.new +
+          span.replacement +
           span.merged.slice(span.end),
         opaque: false,
         hints,
