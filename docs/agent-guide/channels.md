@@ -1366,6 +1366,8 @@ an existing section's name and name-matching rule. Failed saves retain the draft
 A manual section's header **+** and empty **Add channels** action open an anchored searchable
 checkbox picker. The desktop picker has a full-width top search, no visible title or
 description, and a height-bounded scrollable channel list above its fixed actions.
+On a cold cache it lists the channels the directory has read so far, with
+**Loading channels…** under them, and can add any of them before the rest arrive.
 Additions retain successful writes when part of a batch fails.
 In **Edit section**, enable **Match by name** to show **Name contains** and a live
 match count with a preview list. Existing rule sections show the current pattern
@@ -1406,6 +1408,8 @@ snooze picker, rather than a separate calendar implementation. Muted sections
 offer **Unmute all channels**. These actions affect only the viewer's current
 complete membership, including unloaded and filtered rows, never later additions.
 Built-in lists include joined channels only; Favorites targets channel favorites.
+While a cold cache is still filling the directory, a built-in section's mute
+control is disabled, since whether its channels are muted is not known yet.
 Bulk writes retain successful chunks on partial failures. Channel row menus use
 the same durations under **Mute notifications**, with a muted bell for Mute and
 an ordinary bell for Unmute. Preset end dates and times align with the menu's right
@@ -1562,8 +1566,9 @@ conversation or explicitly navigating to a message must still work.
 The sidebar search action expands a field under the title. Search results replace
 the section list with compact conversation rows and preserve the selected
 channel. Closing search restores the section list and scrolls to that selection
-when available. Search merges the complete joined-channel list with authorized
-service results, deduplicates by channel ID, and retains loaded unread metadata.
+when available. Search merges the channel directory's joined channels (on a cold
+cache, those it has read so far) with authorized service results, deduplicates
+by channel ID, and retains loaded unread metadata.
 Clearing the query restores ordinary pagination.
 
 Each primary channel list and the DM panel keeps its own persisted sort:
@@ -1659,8 +1664,8 @@ mention clears when it is marked seen: opening the channel clears top-level
 mentions, and a thread mention stays counted until its thread is read. On desktop
 the count replaces the row's unread dot, including Favorites; on phones the list
 row keeps its leading dot and puts the count under the timestamp, and pinned
-favorites show the count in place of the dot. Rows from other projections, and
-the REST list, show no count. To check, have another account mention you in a
+favorites show the count in place of the dot. Rows from other projections,
+including the channel directory's, show no count. To check, have another account mention you in a
 channel you are not viewing: the row shows **1** without a reload, and opening the
 channel clears it. Then mention yourself in a thread reply, open the channel
 without the thread, and the count should stay.

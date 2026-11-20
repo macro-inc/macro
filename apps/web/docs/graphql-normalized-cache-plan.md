@@ -1350,22 +1350,35 @@ channels: `ChannelDirectoryProvider` in `Root` supplies it, and
 `core/context/channels.ts` reads it (`useChannelDirectory`, `useChannel`,
 `useChannelLookup`, `useChannelName`). With the cache and its backfill on, it
 reads the lane's records from the cache's channel search buckets, again on
-visible cache changes and when the lane's checkpoint completes, and is
-`complete` once a pass of the lane finished in the cache's current storage
-generation; another viewer's cache reads as empty. Without the cache it pages
-the lane's own query (`ChannelDirectoryPage`) into memory, never the REST
-channel list.
+visible cache changes and when the lane's checkpoint completes or fails, and
+is `complete` once a pass of the lane finished in the cache's current storage
+generation; another viewer's cache reads as empty. Only a scan that read the
+checkpoint as complete before it started may make the directory complete, and
+a scan is dropped when the viewer or storage generation changed while it ran;
+a storage reset (`onCacheGenerationChanged`) retires what it read at once.
+Without the cache it pages the lane's own query (`ChannelDirectoryPage`) into
+memory, never the REST channel list.
 
 A cold cache takes about a minute to fill on a large account, so a lookup of
 one channel answers `loaded`, `pending` or `missing`. A channel a filling
 directory lacks is pending, and the lookup reads it by id (batched, 100 ids
-or 25 ms); it is missing once that read returns nothing for it or the
-directory completes without it. Readers that decide from absence (section
-membership, notification bulk actions, scope checks) wait for `complete()` or
+or 25 ms, two batches at a time), then rereads only the records that read
+wrote; it is missing once that read returns nothing for it or the directory
+completes without it. A returned id whose record cannot be read yet is read
+again; an id that failed twice stays pending and is tried again after 30
+seconds. Readers that decide from absence (section membership, notification
+bulk actions, scope checks, built-in section mute) wait for `complete()` or
 call `readComplete()`, which pages the network while the cache is still
-filling. Channel writes outside the cache's soup updates (join links,
-renames, new DMs) call `refreshChannelDirectory`, which rereads only the
-in-memory directory.
+filling. When the lane gives up in a generation, the backfill marks it
+(`markSoupBackfillLaneFailed`, cleared by its next saved page) and the
+directory completes from the network instead; `failed()` and `retry()` report
+and retry that read. Channel writes outside the cache's soup updates (join
+links, renames, new DMs) call `refreshChannelDirectory`, which rereads the
+in-memory directory, reading again after a first read that was already in
+flight. The viewer's own views reach no soup update, so a recorded view stamps
+the channel's `viewedAt` on its cached record and the in-memory directory
+(`queries/channel/viewed-at.ts`), never moving it back. A channel mention in
+rendered Markdown waits up to five seconds for a pending lookup.
 
 ## Authoritative Mail membership repair
 
