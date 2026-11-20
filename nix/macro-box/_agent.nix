@@ -331,7 +331,13 @@ in
 
   # Only an agent teammate's computer runs it.
   config = lib.mkIf config.macro.box.agentMode {
-    environment.systemPackages = [ cfg.computerUse.package ];
+    environment.systemPackages = [
+      cfg.computerUse.package
+      # The harness reaches the agent's screen (Xvnc on 5901) with
+      # `socat STDIO TCP:127.0.0.1:5901` over the fleet's exec, whose PATH is
+      # the system profile.
+      pkgs.socat
+    ];
     users.groups.${agentGroup} = { };
     # macro's own desktop and browser are for macro's sessions, not the
     # agent (its group), whose sandbox they would let it out of.
