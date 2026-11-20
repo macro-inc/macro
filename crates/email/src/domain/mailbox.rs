@@ -906,11 +906,12 @@ const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
 /// its own is abandoned. With the backoff below that is about a day.
 const MESSAGE_FAILURE_ATTEMPTS: i32 = 50;
 
-/// Claims in a row that may end without an outcome before a message is
-/// abandoned unread. Its next claim comes when the 3-minute lease expires, so
-/// a read that kills its worker kills five, over about 15 minutes, instead of
-/// one every few minutes forever. A deploy, or a worker stopped for another
-/// reason, leaves one such claim on whatever it was reading.
+/// Claims in a row that may end without an outcome before a message, or a
+/// projection event, is abandoned unread. Its next claim comes when the
+/// 3-minute lease expires, so a read that kills its worker kills five, over
+/// about 15 minutes, instead of one every few minutes forever. A deploy, or a
+/// worker stopped for another reason, leaves one such claim on whatever it
+/// was reading.
 const UNFINISHED_CLAIM_LIMIT: i32 = 5;
 
 /// The longest backoff. The `outlook-message-parked-too-long` monitor alerts
@@ -921,7 +922,8 @@ const MAX_BACKOFF_SECONDS: u32 = 1800;
 /// without calendar parts.
 const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 
-/// How a failed reconciliation is retried. `attempts` counts this claim.
+/// How a failed reconciliation, or projection event, is retried. `attempts`
+/// counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
