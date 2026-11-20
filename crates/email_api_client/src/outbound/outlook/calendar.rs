@@ -582,11 +582,27 @@ fn preserve_meeting_details(
             "Outlook has not finished preparing this online meeting. Try the description edit again shortly.",
         ));
     };
-    if description.contains(join) {
-        return Ok(description.into());
+    if !html_escape::decode_html_entities(description).contains(join) {
+        let (_, meeting) = conference_body::split(existing, join)?;
+        return Ok(format!("{description}{meeting}"));
     }
-    let (_, meeting) = conference_body::split(existing, join)?;
-    Ok(format!("{description}{meeting}"))
+    // Macro's editor shows the block and hands it back as plain paragraphs,
+    // without the markers that let a later edit or a replacement separate it:
+    // Outlook's own block from the current body takes their place. A
+    // description the block cannot be separated from (one an earlier save
+    // already rewrote, or one quoting the link in the person's own text) is
+    // written as given, as before.
+    let rewritten = conference_body::split(existing, join).and_then(|(_, meeting)| {
+        conference_body::without_meeting(description, existing, join)
+            .map(|own| format!("{own}{meeting}"))
+    });
+    Ok(rewritten.unwrap_or_else(|_| {
+        tracing::warn!(
+            body_bytes = description.len(),
+            "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
+        );
+        description.into()
+    }))
 }
 
 fn patch_body(
