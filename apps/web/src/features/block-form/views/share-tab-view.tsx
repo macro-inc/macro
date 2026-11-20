@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import UsersThree from '@icon/system/regular/users-three.svg';
 import { Button, Input, ToggleSwitch, Tooltip } from '@ui';
@@ -90,7 +91,10 @@ export function ShareTabView(props: {
   });
 
   return (
-    <div class="h-full min-h-0 overflow-y-auto bg-canvas-base touch:pb-(--mobile-content-inset-bottom)">
+    <div
+      ref={followContentInsetBottom}
+      class="h-full min-h-0 overflow-y-auto bg-canvas-base touch:pb-(--mobile-content-inset-bottom)"
+    >
       <div class="mx-auto flex w-full max-w-[680px] flex-col gap-4 px-4 py-6">
         <div class="rounded-xl border border-edge bg-surface p-4">
           <AudiencePanel

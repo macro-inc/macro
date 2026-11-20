@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { ENABLE_AGENT_DMS } from '@core/constant/featureFlags';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import {
@@ -205,7 +206,10 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
         {/* Mobile chrome insets live inside the scroll content so the page is
             full-frame, matching SettingsPage (this detail view only renders
             inside the settings panel). */}
-        <main class="mx-auto w-full max-w-[560px] px-8 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+        <main
+          ref={followContentInsetBottom}
+          class="mx-auto w-full max-w-[560px] px-8 pt-4 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]"
+        >
           <Button
             type="button"
             variant="ghost"

@@ -2,6 +2,7 @@ import { createCloseOnNavigation } from '@components/app/mobile/close-on-navigat
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { Dialog as KobalteDialog } from '@kobalte/core/dialog';
 import type { Accessor, JSX, Ref, Setter, ValidComponent } from 'solid-js';
 import {
@@ -165,6 +166,7 @@ function DesktopDialog(props: DialogProps) {
           )}
         />
         <div
+          ref={followKeyboardViewport}
           class={cn(
             'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal flex',
             !props.fullscreen &&

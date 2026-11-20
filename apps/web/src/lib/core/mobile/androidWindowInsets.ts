@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { isPlatform } from '@core/util/platform';
 import { addPluginListener, invoke } from '@tauri-apps/api/core';
 import { onCleanup, onMount } from 'solid-js';
+import { publishKeyboardViewport } from './viewport-insets';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
@@ -50,13 +51,12 @@ export function applyAndroidWindowInsets(
   // The WebView keeps its full height under the keyboard, as on iOS: the
   // layout root shrinks through --dvh and fixed sheets lift by the keyboard
   // height, so nothing subtracts the keyboard twice.
-  setRootPropertyIfChanged(
-    '--dvh',
-    insets.imeVisible
+  publishKeyboardViewport({
+    dvh: insets.imeVisible
       ? `${(insets.viewportHeight * scale - keyboardHeight) * 0.01}px`
-      : '1dvh'
-  );
-  setRootPropertyIfChanged('--virtual-keyboard-height', `${keyboardHeight}px`);
+      : '1dvh',
+    keyboardHeight,
+  });
   setVirtualKeyboardHeight(keyboardHeight);
   setVirtualKeyboardVisible(insets.imeVisible);
 }

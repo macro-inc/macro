@@ -1,5 +1,6 @@
 import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { type ParentProps, Show } from 'solid-js';
 
@@ -47,7 +48,10 @@ export function MobileCanvasChrome(
       }
     >
       <div
-        ref={frame}
+        ref={(element) => {
+          frame(element);
+          followContentInsetBottom(element);
+        }}
         aria-hidden="true"
         class="pointer-events-none absolute top-[var(--mobile-content-inset-top,0px)] bottom-[var(--mobile-content-inset-bottom,0px)] left-0"
         style={{ right: props.clearRight ?? '0px' }}

@@ -5,6 +5,7 @@ import {
 } from '@app/components/view-shell';
 import { createFolderDropTargets } from '@app/features/next-soup/actions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
@@ -131,7 +132,10 @@ export function DriveFolderHierarchy() {
   return (
     <div class="flex size-full min-h-0 min-w-0 flex-col">
       <div
-        ref={setViewport}
+        ref={(element) => {
+          setViewport(element);
+          followContentInsetBottom(element);
+        }}
         class="min-h-0 flex-1 overflow-auto overscroll-none px-2 pb-[calc(var(--mobile-content-inset-bottom,0px)+0.75rem)]"
       >
         <div aria-hidden class="h-(--mobile-content-inset-top)" />

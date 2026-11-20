@@ -5,6 +5,7 @@ import {
   type MobileCreateMenuItem,
 } from '@components/app/mobile/MobileCreateMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
@@ -619,6 +620,7 @@ function BuilderCanvas(
         viewport = element;
         setOutlineViewport(element);
         setViewportHeight(element.clientHeight);
+        followContentInsetBottom(element);
       }}
       data-form-builder-background
       class="@container/builder relative h-full min-h-0 overflow-y-auto bg-canvas-base touch:pb-(--mobile-content-inset-bottom)"

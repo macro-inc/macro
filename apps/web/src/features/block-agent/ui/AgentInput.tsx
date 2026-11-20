@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { IMAGE_INPUT_WARNING } from '../state/image-input';
 /**
@@ -356,6 +357,7 @@ export function AgentInput(props: AgentInputProps) {
                 onMouseDown={focusEditor}
               >
                 <div
+                  ref={followKeyboardViewport}
                   id={AGENT_INPUT_TEXT_AREA_ID}
                   data-composer-scroll
                   class="min-w-0 flex-1 text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"

@@ -1,0 +1,33 @@
+id: tsx-content-inset-reader-follows
+language: tsx
+severity: error
+message: An element that reads `--mobile-content-inset-bottom` registers with `ref={followContentInsetBottom}`.
+note: |-
+  Rule in .agents/rules/web/mobile.md (Layout and chrome). The bottom chrome's
+  height is written only on the elements that follow it, and the property is
+  registered non-inheriting (index.css): on <html>, every element inherited it
+  and each keyboard show or composer line restyled the whole page. An element
+  that reads it without registering never gets the value. Merge the call into
+  an existing ref (`ref={(element) => { setScroller(element);
+  followContentInsetBottom(element); }}`). An element you don't render (an
+  editor's scroller) registers where you have it; list that file under
+  `ignores` with the reason.
+files:
+  - apps/web/src/**
+ignores:
+  - apps/web/src/**/browser-test/**
+  # Its class styles CodeMirror's scroller (`[&_.cm-scroller]:pb-…`), which
+  # registers after the editor view is created.
+  - apps/web/src/features/block-code/component/CodeMirror.tsx
+rule:
+  any:
+    - kind: jsx_opening_element
+    - kind: jsx_self_closing_element
+  all:
+    - has:
+        kind: jsx_attribute
+        regex: ^(class|classList|style)=[\s\S]*--mobile-content-inset-bottom
+    - not:
+        has:
+          kind: jsx_attribute
+          regex: ^ref=[\s\S]*followContentInsetBottom

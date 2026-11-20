@@ -12,6 +12,7 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Paperclip from '@icon/system/regular/paperclip.svg';
 import Trash from '@icon/system/regular/trash.svg';
@@ -667,6 +668,7 @@ function LoadedReplyInputView(
           <div
             data-composer-scroll={isMobileCompose() ? undefined : ''}
             ref={(el) => {
+              followKeyboardViewport(el);
               if (!isMobileCompose()) setScrollContainer(el);
             }}
             class={cn(

@@ -17,6 +17,7 @@ import {
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Permissions } from '@core/component/SharePermissions';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { GithubLabelPills } from '@entity/components/GithubLabelPill';
 import { PrAgentSessionsChip } from '@entity/views/PrAgentSessionsChip';
@@ -140,7 +141,10 @@ export function PrDetailBody(props: PrDetailBodyProps) {
         entity={{ type: 'foreign_entity', id: props.foreignEntityId }}
       />
       <Scroll class="flex-1 min-h-0">
-        <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+        <div
+          ref={followContentInsetBottom}
+          class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]"
+        >
           <Show
             when={props.data}
             fallback={
@@ -190,7 +194,10 @@ export function PrDetailContent(props: PrDetailBodyProps) {
       <Suspense
         fallback={
           <Scroll class="size-full min-h-0">
-            <div class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
+            <div
+              ref={followContentInsetBottom}
+              class="max-w-3xl mx-auto px-6 pt-12 pb-12 min-w-0 touch:pt-[calc(var(--mobile-content-inset-top,0px)+1.5rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]"
+            >
               <PrDetailSkeleton />
             </div>
           </Scroll>

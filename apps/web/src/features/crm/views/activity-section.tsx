@@ -6,6 +6,7 @@ import {
 import { MobileListLayout } from '@app/components/view-shell/MobileListLayout';
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Button } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
@@ -87,7 +88,10 @@ export function ActivitySection(
             />
           </ListHeader>
         </Show>
-        <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:pt-(--mobile-content-inset-top)">
+        <div
+          ref={followContentInsetBottom}
+          class="flex min-h-0 flex-1 flex-col overflow-y-auto px-2 pb-6 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1.5rem)] touch:pt-(--mobile-content-inset-top)"
+        >
           {props.children}
         </div>
       </MobileListLayout>

@@ -1,4 +1,5 @@
 import { useUserId } from '@core/context/user';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { NotificationStack } from '@ui';
 import { Show } from 'solid-js';
 import { AgentUpdateCard } from '../components/AgentUpdateCard';
@@ -22,6 +23,7 @@ export function AgentUpdatesStack(props: {
   return (
     <Show when={model.updates().length > 0}>
       <div
+        ref={followContentInsetBottom}
         class="w-full"
         classList={{
           'touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]':

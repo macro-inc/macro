@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import '@entity/composed/ListEntity.css';
 import {
   createListController,
@@ -60,7 +61,10 @@ type ChannelCallsActivationMetadata = {
 
 export function ChannelCallsTab(props: { channelId: string }) {
   return (
-    <div class="relative flex h-full min-h-0 flex-1 justify-center overflow-hidden p-2 touch:pb-(--mobile-content-inset-bottom)">
+    <div
+      ref={followContentInsetBottom}
+      class="relative flex h-full min-h-0 flex-1 justify-center overflow-hidden p-2 touch:pb-(--mobile-content-inset-bottom)"
+    >
       <div class="macro-message-width size-full min-h-0">
         <ListEntityMetadataQueryProvider>
           <ChannelCallsList channelId={props.channelId} />

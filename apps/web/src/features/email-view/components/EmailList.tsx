@@ -2,6 +2,7 @@ import { TutorialRow } from '@app/features/video-tutorials';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { usePending } from '@app/observability/flow';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { markRowNotificationsSeenOnOpen } from '@notifications/mark-row-seen';
 import { QueuedSendStatus } from '../../email-compose/queued-send-status';
 import '@entity/composed/ListEntity.css';
@@ -780,7 +781,10 @@ export function EmailList(props: EmailListProps) {
                   !isPullRefreshing()
                 }
               >
-                <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)">
+                <div
+                  ref={followContentInsetBottom}
+                  class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                >
                   <SpinnerIcon
                     aria-hidden={false}
                     aria-label="Loading email"
@@ -793,7 +797,10 @@ export function EmailList(props: EmailListProps) {
                 when={!forceEmptyState() && source.error() && !hasEmailRows()}
               >
                 <div
-                  ref={setEmptyViewport}
+                  ref={(element) => {
+                    setEmptyViewport(element);
+                    followContentInsetBottom(element);
+                  }}
                   class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto text-sm text-ink-muted touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
                 >
                   <span>Email couldn’t be loaded.</span>
@@ -812,7 +819,10 @@ export function EmailList(props: EmailListProps) {
               <Match when={forceEmptyState() || rows().length === 0}>
                 {/* EmptyStatePanel owns the top inset below the mobile chrome. */}
                 <div
-                  ref={setEmptyViewport}
+                  ref={(element) => {
+                    setEmptyViewport(element);
+                    followContentInsetBottom(element);
+                  }}
                   class="min-h-0 flex-1 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                 >
                   {/* New inboxes start empty, which is when the tutorial
@@ -1110,6 +1120,7 @@ export function EmailList(props: EmailListProps) {
                   </Suspense>
                   <Show when={isTouchDevice()}>
                     <div
+                      ref={followContentInsetBottom}
                       aria-hidden="true"
                       class="h-(--mobile-content-inset-bottom)"
                     />

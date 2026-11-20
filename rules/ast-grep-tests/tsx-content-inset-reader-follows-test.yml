@@ -1,0 +1,25 @@
+id: tsx-content-inset-reader-follows
+valid:
+  - |
+    <div ref={followContentInsetBottom} class="touch:pb-(--mobile-content-inset-bottom)" />
+  - |
+    <div
+      ref={(element) => {
+        setScroller(element);
+        followContentInsetBottom(element);
+      }}
+      class="overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
+    >
+      rows
+    </div>
+  - |
+    <div class="touch:pt-(--mobile-content-inset-top)" />
+invalid:
+  - |
+    <div class="touch:pb-(--mobile-content-inset-bottom)" />
+  - |
+    <div ref={setScroller} class="pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">rows</div>
+  - |
+    <aside style={{ 'max-height': 'calc(100% - var(--mobile-content-inset-bottom, 0px))' }} />
+  - |
+    <div classList={{ 'touch:pb-(--mobile-content-inset-bottom)': props.home }} />

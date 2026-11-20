@@ -1,3 +1,4 @@
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
@@ -12,7 +13,9 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 vi.mock('@core/util/platform', () => ({ isPlatform: () => false }));
 
 let viewport: EventTarget & { height: number };
-const dvh = () => document.documentElement.style.getPropertyValue('--dvh');
+// A composer sized against the keyboard, as the app's readers are.
+let composer: HTMLElement;
+const dvh = () => composer.style.getPropertyValue('--dvh');
 
 beforeEach(() => {
   setVirtualKeyboardVisible(false);
@@ -21,6 +24,8 @@ beforeEach(() => {
   vi.stubGlobal('visualViewport', viewport);
   render(() => {
     useAppSquishHandlers();
+    composer = document.createElement('div');
+    followKeyboardViewport(composer);
     return null;
   });
 });
@@ -56,4 +61,16 @@ it('uses the full new viewport with a hardware keyboard and restores dynamic hei
   viewport.height = 600;
   viewport.dispatchEvent(new Event('resize'));
   expect(dvh()).toBe('1dvh');
+});
+
+it('keeps the keyboard off <html>, where every element would inherit it', () => {
+  window.dispatchEvent(
+    new CustomEvent('keyboardWillShow', { detail: { height: 300 } })
+  );
+  expect(composer.style.getPropertyValue('--virtual-keyboard-height')).toBe(
+    '300px'
+  );
+  expect(document.documentElement.getAttribute('style') ?? '').not.toContain(
+    '--'
+  );
 });

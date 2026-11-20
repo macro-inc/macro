@@ -5,6 +5,7 @@ import {
   useMobileNavNavigate,
 } from '@components/app/mobile/use-mobile-nav';
 import { usePreserveFocusOnButtonTaps } from '@core/mobile/usePreserveFocusOnButtonTaps';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { lazyNamed } from '@core/util/lazyNamed';
 import XIcon from '@icon/system/regular/x.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -75,6 +76,7 @@ export function MobileSearchInput() {
               layout={(parts) => (
                 <FloatRegion region="accessory" priority={101}>
                   <div
+                    ref={followKeyboardViewport}
                     data-keep-keyboard
                     aria-label="Suggested action"
                     class="pointer-events-auto px-(--mobile-chrome-gutter)"

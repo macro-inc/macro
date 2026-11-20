@@ -2,6 +2,7 @@ import { TasksFilterDrawer } from '@app/features/tasks-view/components/TasksFilt
 import { TasksContent } from '@app/features/tasks-view/tasks-content';
 import { t } from '@app/lib/i18n';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createSignal, Show } from 'solid-js';
 import { AddProjectTasks } from '../../add-project-tasks';
@@ -52,7 +53,10 @@ export function MobileProjectWorkspace(props: ProjectWorkspaceProps) {
         }
       >
         <div
-          ref={setScroller}
+          ref={(element) => {
+            setScroller(element);
+            followContentInsetBottom(element);
+          }}
           class="h-full min-h-0 w-full overflow-y-auto overscroll-none pb-[calc(max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))+16px)]"
         >
           <div

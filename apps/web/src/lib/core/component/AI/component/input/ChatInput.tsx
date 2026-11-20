@@ -31,6 +31,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -473,7 +474,10 @@ export function ChatInput(props: ChatInputComponentProps) {
                   isCollapsed(),
               }}
               style={{ '--composer-right-inset': `${rightControlsInset()}px` }}
-              ref={mdRef}
+              ref={(element) => {
+                mdRef = element;
+                followKeyboardViewport(element);
+              }}
             >
               <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}

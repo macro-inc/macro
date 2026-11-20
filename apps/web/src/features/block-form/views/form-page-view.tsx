@@ -4,6 +4,7 @@ import {
   TraceFlow,
   usePending,
 } from '@app/observability/flow';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
 import {
@@ -249,7 +250,10 @@ export function FormPageView(props: FormPageProps) {
                 }
                 fallback={
                   <div
-                    ref={respondScroll}
+                    ref={(element) => {
+                      respondScroll = element;
+                      followContentInsetBottom(element);
+                    }}
                     class="h-full min-h-0 overflow-y-auto touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <RespondView

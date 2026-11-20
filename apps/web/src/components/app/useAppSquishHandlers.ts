@@ -1,4 +1,5 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { publishKeyboardViewport } from '@core/mobile/viewport-insets';
 import {
   setVirtualKeyboardHeight,
   setVirtualKeyboardVisible,
@@ -34,12 +35,10 @@ function getViewportHeight() {
   return window.visualViewport?.height ?? window.innerHeight;
 }
 
+const NO_KEYBOARD = { dvh: '1dvh', keyboardHeight: 0 };
+
 function resetVirtualKeyboardState() {
-  document.documentElement.style.setProperty('--dvh', '1dvh');
-  document.documentElement.style.setProperty(
-    '--virtual-keyboard-height',
-    '0px'
-  );
+  publishKeyboardViewport(NO_KEYBOARD);
   setVirtualKeyboardVisible(false);
   setVirtualKeyboardHeight(0);
 }
@@ -95,16 +94,13 @@ export function useAppSquishHandlers() {
     const syncNativeViewport = () => {
       if (!virtualKeyboardVisible()) return;
       // A fold or rotation can resize the view without another keyboard event.
-      const height = Math.max(0, getViewportHeight() - virtualKeyboardHeight());
-      document.documentElement.style.setProperty('--dvh', `${height * 0.01}px`);
+      const keyboardHeight = virtualKeyboardHeight();
+      const height = Math.max(0, getViewportHeight() - keyboardHeight);
+      publishKeyboardViewport({ dvh: `${height * 0.01}px`, keyboardHeight });
     };
 
     const handleKeyboardWillShow = (event: VirtualKeyboardEvent) => {
       activeElementPolling.start();
-      document.documentElement.style.setProperty(
-        '--virtual-keyboard-height',
-        `${event.detail?.height ?? 0}px`
-      );
       setVirtualKeyboardVisible(true);
       setVirtualKeyboardHeight(event.detail?.height ?? 0);
       syncNativeViewport();
@@ -124,11 +120,7 @@ export function useAppSquishHandlers() {
     };
 
     onMount(() => {
-      document.documentElement.style.setProperty(
-        '--virtual-keyboard-height',
-        '0px'
-      );
-      document.documentElement.style.setProperty('--dvh', '1dvh');
+      publishKeyboardViewport(NO_KEYBOARD);
       window.addEventListener('keyboardWillShow', handleKeyboardWillShow);
       window.addEventListener('keyboardWillHide', handleKeyboardWillHide);
       window.addEventListener('resize', syncNativeViewport);
@@ -148,6 +140,7 @@ export function useAppSquishHandlers() {
           'visibilitychange',
           handleVisibilityChange
         );
+        publishKeyboardViewport(undefined);
       });
     });
   } else if (isIOS) {
@@ -158,8 +151,10 @@ export function useAppSquishHandlers() {
 
     const syncViewportHeight = () => {
       const viewportHeight = getViewportHeight();
-      const vh = viewportHeight * 0.01;
-      document.documentElement.style.setProperty('--dvh', `${vh}px`);
+      publishKeyboardViewport({
+        dvh: `${viewportHeight * 0.01}px`,
+        keyboardHeight: 0,
+      });
     };
 
     const clearDeferredReset = () => {
@@ -241,11 +236,7 @@ export function useAppSquishHandlers() {
     };
 
     onMount(() => {
-      document.documentElement.style.setProperty(
-        '--virtual-keyboard-height',
-        '0px'
-      );
-      document.documentElement.style.setProperty('--dvh', '1dvh');
+      publishKeyboardViewport(NO_KEYBOARD);
       if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', handleResize);
         window.visualViewport.addEventListener('scroll', handleResize);
@@ -266,6 +257,7 @@ export function useAppSquishHandlers() {
         document.removeEventListener('focusout', handleFocusOut, {
           capture: true,
         });
+        publishKeyboardViewport(undefined);
       });
     });
   }

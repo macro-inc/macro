@@ -746,7 +746,8 @@ the keyboard twice. Native density can change before Chromium updates its CSS
 viewport, so insets are scaled by the WebView width (which the keyboard never
 changes) and re-applied on WebView resize as well as native inset events. Every
 root custom-property write recalculates style for the whole document, so only
-changed values are written.
+changed `--tauri-inset-*` values are written on the root, and the keyboard values
+go only to the elements that read them (`@core/mobile/viewport-insets`).
 System bars and cutouts remain separate safe-area values; floating keyboards with
 no bottom inset do not consume viewport height. Insets refresh after layout,
 rotation, and resume. Font scale, density, layout direction, and navigation-mode

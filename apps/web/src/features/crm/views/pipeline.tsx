@@ -2,6 +2,7 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { InlineTitleEditor } from '@core/component/InlineTitleEditor';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
@@ -110,7 +111,10 @@ export function PipelineView(props: {
     }
   };
   return (
-    <div class="flex min-h-0 min-w-0 flex-1 flex-col touch:pb-[max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))]">
+    <div
+      ref={followContentInsetBottom}
+      class="flex min-h-0 min-w-0 flex-1 flex-col touch:pb-[max(var(--safe-bottom,0px),var(--mobile-content-inset-bottom,0px))]"
+    >
       <Show when={!isTouchDevice()}>
         <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-4">
           {props.navigation}

@@ -1,3 +1,4 @@
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import Trash from '@icon/system/regular/trash.svg';
 import { Button, DatePicker, Dialog } from '@ui';
 import { Show } from 'solid-js';
@@ -31,7 +32,10 @@ export function AvailabilityExceptionDialog(props: {
   return (
     <Dialog
       open={props.open}
-      contentRef={(element) => (content = element)}
+      contentRef={(element) => {
+        content = element;
+        followKeyboardViewport(element);
+      }}
       position="center"
       class="flex h-[min(44rem,calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-16px))] w-[32rem] max-h-[calc(100dvh-var(--virtual-keyboard-height,0px)-var(--safe-top,0px)-16px)] flex-col overflow-clip rounded-2xl bg-panel p-3 sm:p-5 outline-none [container:availability-exception/size] [&>[data-drawer-scroll-body]]:overflow-clip [&>[data-drawer-scroll-body]>div]:flex [&>[data-drawer-scroll-body]>div]:min-h-0 [&>[data-drawer-scroll-body]>div]:flex-1"
       onOpenChange={(open) => {

@@ -1,3 +1,4 @@
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import '../PdfViewer/pdf_viewer.css';
 
 import type { PDFViewer } from '@block-pdf/PdfViewer';
@@ -222,6 +223,13 @@ export function Document() {
   });
 
   let mountRef: HTMLDivElement | undefined;
+  // The phone layout pads the viewer's scroll container by the bottom chrome
+  // (block.css), and that inset reaches only the elements that follow it.
+  createEffect(
+    on(getRootViewer, (viewer) => {
+      if (viewer) followContentInsetBottom(viewer.container());
+    })
+  );
   createEffect(() => {
     const blockEl = blockElement();
     if (!blockEl) return;

@@ -1,3 +1,4 @@
+import { followKeyboardViewport } from '@core/mobile/viewport-insets';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer, { type Size } from '@corvu/drawer';
@@ -74,6 +75,7 @@ function MobileDrawerContent(
 ) {
   const [local, rest] = splitProps(props, [
     'class',
+    'ref',
     'maxHeight',
     'targetHeight',
     'opaque',
@@ -95,6 +97,11 @@ function MobileDrawerContent(
   return (
     <Layer depth={0}>
       <Drawer.Content
+        ref={(element: HTMLElement) => {
+          // Sheets sit above the keyboard and size against it.
+          followKeyboardViewport(element);
+          if (typeof local.ref === 'function') local.ref(element);
+        }}
         onFocusIn={(e: FocusEvent) => {
           scrollToFocusedInput(e);
         }}
@@ -151,6 +158,7 @@ function MobileDrawerFixedContent(
 ) {
   const [local, rest] = splitProps(props, [
     'class',
+    'ref',
     'maxHeight',
     'targetHeight',
     'opaque',
@@ -169,6 +177,11 @@ function MobileDrawerFixedContent(
   return (
     <Layer depth={0}>
       <Drawer.Content
+        ref={(element: HTMLElement) => {
+          // Sheets sit above the keyboard and size against it.
+          followKeyboardViewport(element);
+          if (typeof local.ref === 'function') local.ref(element);
+        }}
         onFocusIn={(e: FocusEvent) => {
           // A pinned footer is already above the keyboard. Scrolling Content
           // for its input would move the header inside this fixed-height sheet.

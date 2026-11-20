@@ -17,6 +17,7 @@ import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -247,6 +248,7 @@ function ItemPane(props: {
         </div>
       </Show>
       <div
+        ref={followContentInsetBottom}
         data-passwords-detail-scroll
         class="min-h-0 flex-1 overflow-auto px-4 pb-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]"
       >
@@ -401,7 +403,10 @@ function NewDraftPane(props: {
             </div>
             <DraftActions vault={props.vault} draftKey={props.draftKey} />
           </header>
-          <div class="min-h-0 flex-1 overflow-auto px-4 pb-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]">
+          <div
+            ref={followContentInsetBottom}
+            class="min-h-0 flex-1 overflow-auto px-4 pb-4 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+1rem)]"
+          >
             <DraftEditor vault={props.vault} draftKey={props.draftKey} />
           </div>
         </div>
@@ -844,7 +849,10 @@ export function VaultView(props: {
             />
           </Show>
           <ViewShell.Content>
-            <div class="h-full overflow-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]">
+            <div
+              ref={followContentInsetBottom}
+              class="h-full overflow-auto touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"
+            >
               <Switch>
                 <Match when={isTouchDevice() && mobileFolders()}>
                   <div class="flex flex-col gap-(--sidebar-section-gap) px-(--sidebar-gutter) py-2">

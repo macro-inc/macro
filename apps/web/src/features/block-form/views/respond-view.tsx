@@ -4,6 +4,7 @@ import {
   startUiOperation,
   type UiOperation,
 } from '@app/observability/ui-operation';
+import { followContentInsetBottom } from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -678,6 +679,7 @@ export function RespondView(props: {
                   )}
                 </Show>
                 <div
+                  ref={followContentInsetBottom}
                   class={cn(
                     'flex items-center justify-between gap-2',
                     !props.compact &&
