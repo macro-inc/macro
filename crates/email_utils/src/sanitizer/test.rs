@@ -1,5 +1,5 @@
 use super::*;
-use crate::bounded_html::{MAX_HTML_DEPTH, MAX_HTML_NODES};
+use crate::bounded_html::{MAX_FORMATTING_DEPTH, MAX_HTML_DEPTH, MAX_HTML_NODES};
 
 /// Paragraphs of one letter: two nodes each.
 fn paragraphs(count: usize) -> String {
@@ -59,6 +59,21 @@ fn a_body_nested_past_the_depth_limit_is_clipped_with_a_notice() {
 
     let shallow = sanitize_email_html(&nested(100, "shallow"));
     let deep = sanitize_email_html(&nested(MAX_HTML_DEPTH, "deep"));
+
+    assert!(shallow.contains("shallow") && !shallow.contains(CLIPPED_NOTICE));
+    assert!(!deep.contains("deep"));
+    assert!(deep.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn formatting_nested_past_its_limit_is_clipped_with_a_notice() {
+    let nested = |depth: usize, text: &str| {
+        let open: String = (0..depth).map(|i| format!("<b id=b{i}>")).collect();
+        format!("{open}{text}")
+    };
+
+    let shallow = sanitize_email_html(&nested(MAX_FORMATTING_DEPTH, "shallow"));
+    let deep = sanitize_email_html(&nested(MAX_FORMATTING_DEPTH + 1, "deep"));
 
     assert!(shallow.contains("shallow") && !shallow.contains(CLIPPED_NOTICE));
     assert!(!deep.contains("deep"));

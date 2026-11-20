@@ -207,6 +207,20 @@ fn oversized_bodies() -> Vec<(&'static str, String)> {
             "nested divs",
             format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
         ),
+        // Each new `<b>` is compared with every open one, sorting both
+        // attribute lists, while the nesting stays put.
+        (
+            "bold pairs",
+            format!(
+                "<p>{}{}",
+                (0..100)
+                    .map(|i| format!("<b id={i}{}>", attribute_list(8)))
+                    .collect::<String>(),
+                (0..5_000)
+                    .map(|i| format!("</b><b id=p{i}{}>", attribute_list(8)))
+                    .collect::<String>()
+            ),
+        ),
         // Each rebuilt element copies its attributes.
         (
             "attributes on rebuilt bold",

@@ -31,6 +31,12 @@ pub const MAX_HTML_TEXT_BYTES: usize = 16 << 20;
 /// one; a repeated `<body>` adds its attributes to the one body element.
 pub const MAX_ELEMENT_ATTRIBUTES: usize = 1_000;
 
+/// The most formatting elements (`<b>`, `<font>`…) a parse nests inside one
+/// another. The parser compares each new formatting element with every
+/// active one of the same name, sorting both attribute lists, and ammonia's
+/// parse of the serialization does it again for each rebuilt one.
+pub const MAX_FORMATTING_DEPTH: usize = 32;
+
 /// The deepest a parse nests a node.
 pub const MAX_HTML_DEPTH: usize = 512;
 
@@ -147,11 +153,11 @@ impl BoundedSink {
         if !self.clipped {
             match child {
                 // An element was counted when it was created.
-                NodeOrText::AppendNode(_) => {
-                    let depth = self.html.tree.get(parent).map_or(0, |parent| {
-                        parent.ancestors().take(MAX_HTML_DEPTH).count() + 1
-                    });
-                    if depth >= MAX_HTML_DEPTH {
+                NodeOrText::AppendNode(child) => {
+                    let (depth, formatting_depth) = self.depth_of(parent);
+                    if depth >= MAX_HTML_DEPTH
+                        || (self.is_formatting(*child) && formatting_depth >= MAX_FORMATTING_DEPTH)
+                    {
                         self.clipped = true;
                     }
                 }
@@ -169,6 +175,48 @@ impl BoundedSink {
             }
         }
         !self.clipped
+    }
+
+    /// How many nodes, `node` among them, hold a child of `node`, and how
+    /// many of those are formatting elements, up to [`MAX_HTML_DEPTH`].
+    fn depth_of(&self, node: NodeId) -> (usize, usize) {
+        let Some(node) = self.html.tree.get(node) else {
+            return (0, 0);
+        };
+        std::iter::once(node)
+            .chain(node.ancestors())
+            .take(MAX_HTML_DEPTH)
+            .fold((0, 0), |(depth, formatting), ancestor| {
+                (
+                    depth + 1,
+                    formatting + usize::from(self.is_formatting(ancestor.id())),
+                )
+            })
+    }
+
+    /// The elements html5ever keeps in its list of active formatting
+    /// elements and rebuilds.
+    fn is_formatting(&self, node: NodeId) -> bool {
+        let Some(Node::Element(element)) = self.html.tree.get(node).map(|node| node.value()) else {
+            return false;
+        };
+        &*element.name.ns == HTML_NAMESPACE
+            && matches!(
+                &*element.name.local,
+                "a" | "b"
+                    | "big"
+                    | "code"
+                    | "em"
+                    | "font"
+                    | "i"
+                    | "nobr"
+                    | "s"
+                    | "small"
+                    | "strike"
+                    | "strong"
+                    | "tt"
+                    | "u"
+            )
     }
 
     fn parent_of(&self, node: NodeId) -> Option<NodeId> {
