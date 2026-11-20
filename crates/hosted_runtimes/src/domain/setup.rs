@@ -60,8 +60,8 @@ pub struct AgentProgress {
     /// The agent reported online: this event is its report. Giving up on a
     /// start also stops the wait, but is no report.
     pub reported_online: bool,
-    /// The agent is being handed to macrod now.
-    pub delivering: bool,
+    /// macrod took the agent: this event says the hand-off finished.
+    pub delivered: bool,
 }
 
 /// Whether the purchase's payment is confirmed yet.
@@ -141,7 +141,7 @@ impl SetupTimeline {
         let mut finished = Vec::new();
         if let Some(connected_at) = self.connected_at
             && self.agent_delivered_at.is_none()
-            && agent.delivering
+            && agent.delivered
         {
             self.agent_delivered_at = Some(now);
             finished.push(PhaseTiming {

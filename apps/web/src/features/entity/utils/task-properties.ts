@@ -152,6 +152,38 @@ export const getTaskReferencedEntityIds = (
 };
 
 /**
+ * Whether one of a task's custom entity properties, a team's or a person's
+ * own, references the entity. Built-in properties and database columns are
+ * not custom properties.
+ */
+export const taskCustomPropertyReferences = (
+  entity: TaskEntityWithProperties,
+  entityType: string,
+  entityId: string
+): boolean => {
+  return (entity.properties ?? []).some(({ definition, value }) => {
+    if (definition.data_type !== 'ENTITY') return false;
+
+    // Rows read over GraphQL carry no owner, so the built-in flag decides.
+    if (definition.is_system || definition.owner.scope === 'database') {
+      return false;
+    }
+
+    if (
+      value?.type !== 'EntityReference' ||
+      !isEntityReferenceArray(value.value)
+    ) {
+      return false;
+    }
+
+    return value.value.some(
+      (reference) =>
+        reference.entity_type === entityType && reference.entity_id === entityId
+    );
+  });
+};
+
+/**
  * Gets the status option id from task properties.
  */
 export const getTaskStatusOptionId = (

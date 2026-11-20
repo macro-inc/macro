@@ -35,7 +35,7 @@ impl PgMailboxSync {
         lease: &CatalogLease,
         folders: &[MailFolder],
     ) -> Result<Option<ImportCompleted>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
             r#"
@@ -155,9 +155,74 @@ impl PgMailboxSync {
             WHERE s.link_id = $1 AND s.generation = $2 AND s.kind IN ('mail_folder','mail_folder_live')
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
+        // A link marked as having no mailbox has one again: the work its
+        // claims skipped meanwhile is due at once.
+        let found_mailbox = sqlx::query!(
+            "UPDATE email_links SET mailbox_unavailable_at = NULL,updated_at = now() WHERE id = $1 AND mailbox_unavailable_at IS NOT NULL",
+            lease.mailbox.link_id
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .rows_affected()
+            == 1;
+        if found_mailbox {
+            sqlx::query!(
+                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND kind <> 'folder_catalog' AND next_run_at > now()",
+                lease.mailbox.link_id,
+                lease.mailbox.sync_generation
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            sqlx::query!(
+                "UPDATE email_mailbox_watch_work SET next_run_at = now(),revision = revision + 1,failures = 0 WHERE link_id = $1",
+                lease.mailbox.link_id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+            sqlx::query!(
+                "UPDATE email_mailbox_settings_work SET next_run_at = now() WHERE link_id = $1",
+                lease.mailbox.link_id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(db_error)?;
+        }
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;
         tx.commit().await.map_err(db_error)?;
         Ok(import_completed)
+    }
+
+    pub(super) async fn mark_catalog_without_mailbox(
+        &self,
+        lease: &CatalogLease,
+    ) -> Result<u32, MailboxError> {
+        let mut tx = self.begin().await.map_err(db_error)?;
+        let marked_seconds = sqlx::query_scalar!(
+            r#"
+            UPDATE email_links l SET mailbox_unavailable_at = COALESCE(l.mailbox_unavailable_at, now()),
+                updated_at = CASE WHEN l.mailbox_unavailable_at IS NULL THEN now() ELSE l.updated_at END
+            FROM email_sync_streams s
+            WHERE s.id = $4 AND s.lease_id = $5 AND s.fence = $6 AND s.lease_until > now()
+                AND l.id = s.link_id AND s.generation = l.sync_generation
+                AND l.id = $1 AND l.sync_generation = $2 AND l.grant_generation = $3 AND l.is_sync_active
+            RETURNING floor(EXTRACT(EPOCH FROM now() - l.mailbox_unavailable_at))::bigint AS "marked_seconds!"
+        "#,
+            lease.mailbox.link_id,
+            lease.mailbox.sync_generation,
+            lease.mailbox.grant_generation,
+            lease.id,
+            lease.lease_id,
+            lease.fence
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(db_error)?
+        .ok_or(MailboxError::Stale)?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(u32::try_from(marked_seconds.max(0)).unwrap_or(u32::MAX))
     }
 
     pub(super) async fn release_catalog_lease(

@@ -16,12 +16,7 @@ impl NotionPlanRepo for Recorder {
         unreachable!("recording a scan never defers objects")
     }
 
-    async fn clear_stale_link(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-        _: bool,
-    ) -> Result<bool> {
+    async fn clear_stale_link(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> Result<bool> {
         unreachable!("recording a scan never replaces links")
     }
 

@@ -396,7 +396,8 @@ existing credentials: no new pairing and no Claude login.
   `files/claude-wrapper` against a fake claude: no credential, a credential,
   an unreadable one and one without a token.
 - `nix build .#checks.x86_64-linux.macro-box-boot` runs
-  `files/test-start-agent.sh`: start-agent's lock adoption and rollback, and
+  `files/test-start-agent.sh`: start-agent's lock adoption, rollback and
+  muppet API check (the code's `muppetApi` against the image's `apiLevel`), and
   agent-stopped's failure count, against local git repositories.
 - `nix build .#checks.x86_64-linux.macro-box-claude-agent-acp` runs ACP
   `initialize` against the adapter. Evaluation fails when its version differs

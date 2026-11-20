@@ -47,6 +47,7 @@ export default defineConfig({
         '@core/context/user',
         '@core/component/Toast/Toast',
         '@service-storage/crm-email-privacy',
+        '@service-storage/crm-access-authority',
       ].map((find) => ({
         find,
         replacement: `${directory}/preview-adapters.ts`,

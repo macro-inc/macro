@@ -1008,7 +1008,7 @@ where
     }
 }
 
-/// Refuse a selected MCP app Pipedream does not list.
+/// Refuse a selected MCP app the connector catalog does not list.
 ///
 /// Slugs already stored on the agent are left alone, so editing instructions
 /// does not depend on the directory staying reachable. A newly named slug

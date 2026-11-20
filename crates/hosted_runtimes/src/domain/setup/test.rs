@@ -296,7 +296,7 @@ fn an_agent_computer_times_its_hand_off_and_the_agents_start() {
     );
     let quiet = AgentProgress {
         reported_online: false,
-        delivering: false,
+        delivered: false,
     };
 
     // Connected, but the charge hasn't settled: nothing handed over yet.
@@ -305,7 +305,7 @@ fn an_agent_computer_times_its_hand_off_and_the_agents_start() {
         timeline.advance_agent(
             AgentProgress {
                 reported_online: false,
-                delivering: true,
+                delivered: true,
             },
             at(6)
         ),
@@ -320,7 +320,7 @@ fn an_agent_computer_times_its_hand_off_and_the_agents_start() {
         timeline.advance_agent(
             AgentProgress {
                 reported_online: false,
-                delivering: true,
+                delivered: true,
             },
             at(200)
         ),
@@ -330,7 +330,7 @@ fn an_agent_computer_times_its_hand_off_and_the_agents_start() {
         timeline.advance_agent(
             AgentProgress {
                 reported_online: true,
-                delivering: false,
+                delivered: false,
             },
             at(214)
         ),
@@ -358,7 +358,7 @@ fn a_computer_without_an_agent_times_no_agent_phases() {
         timeline.advance_agent(
             AgentProgress {
                 reported_online: true,
-                delivering: false,
+                delivered: false,
             },
             at(5)
         ),
@@ -381,7 +381,7 @@ fn giving_up_on_an_agent_times_no_start() {
     timeline.advance_agent(
         AgentProgress {
             reported_online: false,
-            delivering: true,
+            delivered: true,
         },
         at(5),
     );
@@ -390,7 +390,7 @@ fn giving_up_on_an_agent_times_no_start() {
         timeline.advance_agent(
             AgentProgress {
                 reported_online: false,
-                delivering: false,
+                delivered: false,
             },
             at(400)
         ),

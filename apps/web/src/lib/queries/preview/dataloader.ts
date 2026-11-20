@@ -1,5 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
 import { fetchRestPreviewBatch, type PreviewBatch } from './fetchers';
@@ -12,13 +14,19 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
-class PreviewDataLoader {
-  // map item id to array of pending requests
-  private pendingRequests = new Map<string, PendingRequest[]>();
+type PreviewBatchEntry = {
+  item: ItemEntity;
+  generation: string;
+  requests: PendingRequest[];
+};
 
-  private batcher = new AsyncBatcher<ItemEntity>(
-    async (items) => {
-      return await fetchRestPreviewBatch(items);
+class PreviewDataLoader {
+  // Each batch owns its waiters, including after a newer generation replaces it.
+  private pendingRequests = new Map<string, PreviewBatchEntry>();
+
+  private batcher = new AsyncBatcher<PreviewBatchEntry>(
+    async (entries) => {
+      return await fetchRestPreviewBatch(entries.map((entry) => entry.item));
     },
     {
       wait: 30,
@@ -31,18 +39,21 @@ class PreviewDataLoader {
         throwOnError: 'last',
       },
       onSuccess: (results: PreviewBatch, batch) => {
-        for (const item of batch) {
+        for (const entry of batch) {
+          const { item, generation, requests } = entry;
           const key = this.getCacheKey(item);
-          const requests = this.pendingRequests.get(key);
-
-          if (requests) {
+          if (this.pendingRequests.get(key) === entry)
+            this.pendingRequests.delete(key);
+          if (!cacheSessionGeneration.isCurrent(generation)) {
+            for (const request of requests)
+              request.reject(new StaleCacheAuthorityError());
+          } else {
             // A failed request is no answer: reject, so the query retries
             // and caches nothing, rather than resolving "No Access".
             const errors = results.failed.get(item.id);
             if (errors) {
               const error = new ThrownResultError(errors);
               for (const request of requests) request.reject(error);
-              this.pendingRequests.delete(key);
               continue;
             }
             // A missing batch entry means no fetcher handled this item, not
@@ -59,25 +70,23 @@ class PreviewDataLoader {
             for (const request of requests) {
               request.resolve(preview);
             }
-
-            this.pendingRequests.delete(key);
           }
         }
       },
       onError: (error, batch) => {
-        for (const item of batch) {
+        for (const entry of batch) {
+          const { item, generation, requests } = entry;
           const key = this.getCacheKey(item);
-          const requests = this.pendingRequests.get(key);
-
-          if (requests) {
-            const err =
-              error instanceof Error
-                ? error
-                : new Error('Failed to fetch preview');
-            for (const request of requests) {
-              request.reject(err);
-            }
+          if (this.pendingRequests.get(key) === entry)
             this.pendingRequests.delete(key);
+          let reason =
+            error instanceof Error
+              ? error
+              : new Error('Failed to fetch preview');
+          if (!cacheSessionGeneration.isCurrent(generation))
+            reason = new StaleCacheAuthorityError();
+          for (const request of requests) {
+            request.reject(reason);
           }
         }
       },
@@ -90,11 +99,16 @@ class PreviewDataLoader {
 
     return new Promise((resolve, reject) => {
       const existing = this.pendingRequests.get(key);
-      if (existing) {
-        existing.push({ item, resolve, reject });
+      if (existing && cacheSessionGeneration.isCurrent(existing.generation)) {
+        existing.requests.push({ item, resolve, reject });
       } else {
-        this.pendingRequests.set(key, [{ item, resolve, reject }]);
-        fireAndForget(this.batcher.addItem(item), 'preview-loader');
+        const entry = {
+          item,
+          generation: cacheSessionGeneration.capture(),
+          requests: [{ item, resolve, reject }],
+        };
+        this.pendingRequests.set(key, entry);
+        fireAndForget(this.batcher.addItem(entry), 'preview-loader');
       }
     });
   }

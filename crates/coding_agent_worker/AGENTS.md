@@ -96,7 +96,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   header says "machine connected, service reports offline" instead of "paired,
   machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
-  sessions, config form, logs).
+  sessions, config form, logs). The theme is 24-bit RGB; every drawn frame
+  passes through `ColorSupport::fit_buffer` (`src/tui/ui/color_support.rs`),
+  which maps it to the 256 or 16-color palette when `COLORTERM`,
+  `TERM_PROGRAM` and `TERM` say the terminal has no truecolor (macOS
+  Terminal.app misreads RGB escapes). New draw calls must fit their frame too.
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
   (`hc`) by environment; both stay supported.

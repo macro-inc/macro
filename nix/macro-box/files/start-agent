@@ -145,6 +145,50 @@ if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
 fi
 finish packages
 
+begin
+# The agent's code runs against the image's muppet, which ships separately:
+# code newer than the image (a new agent seeded by a newer harness, or a
+# land) fails at import on every boot. Its package.json says which muppet
+# API it needs (`muppetApi`), the image's muppet which it has (`apiLevel`);
+# neither said is 0. Too old an image:
+# - on code whose last-good would run here (a land past it) exits 78:
+#   counted, so it rolls back to last-good;
+# - with nothing that would run here to go back to (a new agent, last-good
+#   itself, or a last-good that needs more too, as after an image rollback)
+#   exits 79, which the unit doesn't restart: retrying can't help until the
+#   computer boots a newer image.
+level_of() { # level_of <field>: the field of the package.json on stdin, as a whole number, 0 if absent
+  FIELD=$1 bun -e '
+    const value = JSON.parse(await Bun.stdin.text())[process.env.FIELD];
+    if (value === undefined) console.log(0);
+    else if (Number.isSafeInteger(value) && value >= 0) console.log(value);
+    else process.exit(3);
+  '
+}
+api_level() { # api_level <field> <file>: as level_of, from a file; 0 if there is none
+  [[ -f $2 ]] || { echo 0; return; }
+  level_of "$1" <"$2"
+}
+needs=$(api_level muppetApi "$workspace/package.json") || {
+  echo "package.json's muppetApi must be a whole number" >&2
+  exit 78
+}
+has=$(api_level apiLevel "$runtime/node_modules/@macro-inc/muppet/package.json") || {
+  echo "the image's muppet apiLevel must be a whole number" >&2
+  exit 78
+}
+if ((needs > has)); then
+  echo "this agent needs a newer image: its code needs muppet API $needs, the image has $has" >&2
+  if [[ -n $good && $good != "$head" ]]; then
+    # Last-good's own need, from its commit: a rollback helps only if it fits.
+    good_needs=$(wgit show "$good:package.json" 2>/dev/null | level_of muppetApi) ||
+      good_needs=$((has + 1))
+    ((good_needs <= has)) && exit 78
+  fi
+  exit 79
+fi
+finish compatibility
+
 # Where the runtime's spans go: agent.env's, not a credential. The intake
 # can limit each computer by the id it sends, not by the egress IP that
 # computers share, once the id is signed.

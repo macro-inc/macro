@@ -1,5 +1,13 @@
 import { parseAgentsRoute } from '@app/features/agents-view/core/route';
+import {
+  homeTabSearch,
+  homeTabSearchCodec,
+} from '@app/features/home/home-tab-search';
 import { NextMeetingBadgePill } from '@app/features/meetings/components/next-meeting-badge-pill';
+import {
+  type NewHomeMode,
+  newHomeNavActive,
+} from '@app/features/new-home/core/new-home-mode';
 import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
@@ -12,6 +20,7 @@ import {
   sidebarContent,
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { paneOf } from '@components/app/split-layout/layoutManager';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { TOKENS } from '@core/hotkey/tokens';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -32,6 +41,8 @@ export type ListNavProps = {
   activeCall?: boolean;
   /** A short status pill under the glyph, e.g. `Now` or `12m`. */
   badge?: string;
+  /** Which Homes the rail shows, which decides what Home and New Home mark. */
+  homeMode?: NewHomeMode;
   onContextMenuOpenChange?: (open: boolean) => void;
 };
 
@@ -54,14 +65,30 @@ export const ListNav = (props: ListNavProps) => {
   const layout = useSplitLayout();
   const router = useSplitRouter();
 
-  const content = () => sidebarContent(props.item.id, props.item.params);
+  const content = () =>
+    sidebarContent(props.item.viewId ?? props.item.id, props.item.params);
   const preload = () => layout.preloadContent(content());
 
   // Split content mirrors the router's current entry, including the owning
   // workspace for nested details. Never infer selection from the multi-pane URL.
   const isActive = () => {
-    const activeContent = globalSplitManager()?.activeSplit()?.content();
-    if (!activeContent) return false;
+    const split = globalSplitManager()?.activeSplit();
+    const activeContent = split?.content();
+    if (!split || !activeContent) return false;
+    // New Home shares Home's and Notifications' routes; the URL's tab says
+    // which Home a `/home` split shows.
+    const newHome = newHomeNavActive({
+      itemId: props.item.id,
+      mode: props.homeMode,
+      viewId: activeContent.type === 'component' ? activeContent.id : undefined,
+      recentTab:
+        homeTabSearchCodec.parse(
+          router.entry(paneOf(split.id))?.location.search?.[
+            homeTabSearch.namespace
+          ]
+        ).value.tab === 'recent',
+    });
+    if (newHome !== undefined) return newHome;
     const expected = content();
     if (
       props.item.id === 'agents' &&
@@ -90,8 +117,9 @@ export const ListNav = (props: ListNavProps) => {
     }
     if (!selected || event.shiftKey) {
       navigateToSidebarView({
-        viewId: props.item.id,
+        viewId: props.item.viewId ?? props.item.id,
         params: props.item.params,
+        search: props.item.search,
         shiftKey: event.shiftKey,
         openWithSplit: layout.openWithSplit,
         referredFrom: 'sidebar',
