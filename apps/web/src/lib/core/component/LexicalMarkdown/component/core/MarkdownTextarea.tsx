@@ -59,6 +59,7 @@ import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
   editorStateAsMarkdown,
+  focusEditorFromClick,
   initializeEditorEmpty,
   setEditorStateFromHtml,
   setEditorStateFromMarkdown,
@@ -389,7 +390,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           )
             return;
           e.stopPropagation();
-          editor.focus();
+          focusEditorFromClick(editor);
         }}
         on:mousedown={(e) => {
           e.stopPropagation();

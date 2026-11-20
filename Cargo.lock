@@ -537,6 +537,7 @@ dependencies = [
  "rand 0.9.4",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -6986,6 +6987,7 @@ dependencies = [
  "sync_service_hex",
  "system_properties",
  "task_dedup",
+ "task_templates",
  "teams",
  "thiserror 2.0.18",
  "tokio",
@@ -21148,6 +21150,24 @@ dependencies = [
  "system_properties",
  "thiserror 2.0.18",
  "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "task_templates"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "macro_uuid",
+ "models_properties",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
  "tracing",
  "utoipa",
  "uuid",
