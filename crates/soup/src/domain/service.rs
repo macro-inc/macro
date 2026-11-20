@@ -978,6 +978,7 @@ where
                     hydratable,
                     crm: legs.crm.is_some(),
                     only: req.only.as_deref(),
+                    assume_attention: req.assume_attention,
                 })
                 .await
                 .map_err(anyhow::Error::from)?;

@@ -49,6 +49,12 @@ pub struct SoupRealtimePatch {
     /// their access ended with the change, as when an entity is hard-deleted
     /// before its event is consumed.
     pub named_recipients: Vec<MacroUserIdStr<'static>>,
+    /// Channel whose active members are left out of `named_recipients`: the
+    /// event named them for a membership it ended, and they are members again
+    /// by the time it is consumed. Its roster is read when the patch is
+    /// delivered, past the audience cache, and also answers for the patches
+    /// whose access source is this channel.
+    pub named_unless_member_of: Option<Entity<'static>>,
 }
 
 impl SoupRealtimePatch {
@@ -58,6 +64,7 @@ impl SoupRealtimePatch {
             patch,
             access_source: Some(access_source),
             named_recipients: Vec::new(),
+            named_unless_member_of: None,
         }
     }
 
@@ -75,6 +82,24 @@ impl SoupRealtimePatch {
             patch,
             access_source: None,
             named_recipients: users,
+            named_unless_member_of: None,
+        }
+    }
+
+    /// Creates a patch of a channel for `users` whose membership of it the
+    /// source event ended, leaving out those who are members again when the
+    /// patch is delivered: they were added back before the event was consumed,
+    /// so the patches for its members reach them instead.
+    pub fn only_for_former_members(
+        patch: Patch<Entity<'static>>,
+        users: Vec<MacroUserIdStr<'static>>,
+    ) -> Self {
+        let channel = patch.value().clone();
+        Self {
+            patch,
+            access_source: None,
+            named_recipients: users,
+            named_unless_member_of: Some(channel),
         }
     }
 

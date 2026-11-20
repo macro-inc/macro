@@ -159,6 +159,10 @@ test.describe('removing Teams from an Outlook meeting', () => {
     await expect(
       dialog.getByText('Design review, moved', { exact: true })
     ).toBeVisible();
+    // The time reads as the event card writes it.
+    await expect(
+      dialog.getByText('Fri, January 4 · 10:00 AM–11:00 AM', { exact: true })
+    ).toBeVisible();
     await capture(page, 'desktop-dialog');
     expect(calendar.replacements).toEqual([
       {

@@ -673,9 +673,11 @@ and adds only missing rows. A pipeline's own **Import CSV** also takes a
 Companies export. Use preview
 and cancel for browser checks against hosted dev data.
 
-`CRM settings` shows the settings in the Customers pane, in place of the open
-list, pipeline, or record, and highlights its sidebar item. The back arrow
-(**Close CRM settings**) returns to that same list, pipeline, or record; picking
+The sidebar's **Settings** (named `CRM settings`, as Calendar's sidebar
+**Settings** is named `Calendar settings`) shows CRM settings in the Customers
+pane under a **Settings** title, in place of the open list, pipeline, or record,
+and highlights its sidebar item. The back arrow (**Close settings**) returns to
+that same list, pipeline, or record; picking
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.

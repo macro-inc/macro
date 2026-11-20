@@ -1,3 +1,4 @@
+mod channel_events;
 mod folder_events;
 mod pull_requests;
 
@@ -728,7 +729,7 @@ fn removed_participants_lose_a_private_channel_and_keep_a_team_or_public_one() {
             patches,
             vec![
                 SoupRealtimePatch::for_entity(Patch::Updated(channel.clone())),
-                SoupRealtimePatch::only_for(for_removed, removed.clone()),
+                SoupRealtimePatch::only_for_former_members(for_removed, removed.clone()),
             ],
             "{channel_type:?}"
         );

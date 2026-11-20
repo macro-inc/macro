@@ -55960,7 +55960,7 @@ export const postItemsSoupBody = zod
           .boolean()
           .nullish()
           .describe(
-            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels,\nand, when the filter admits only channels it names by id, to public\nchannels too.\nNone to ignore (participant channels only, today's default)."
+            "Filter by whether the requesting user is an active participant of the channel.\nPresence of this filter also widens the candidate set to team channels of the\nuser's teams that they have not joined, so `false` matches those channels,\nand, when the filter admits only channels it names by id, to public\nchannels too. Soup listings apply the filter and its widening; channel\nsearch (`\/search`) reads only the channels the user joined and ignores it.\nNone to ignore (participant channels only, today's default)."
           ),
         mentions: zod
           .array(zod.string())
