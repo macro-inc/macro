@@ -193,10 +193,11 @@ where
         if !snapshot.is_organizer {
             return Err(CalendarMutationError::InvalidInput("Only the meeting organizer can replace an invitation. Open Outlook to manage your own response.".into()));
         }
+        let id = Uuid::now_v7();
         let operation = self
             .repository
             .prepare_replacement(CalendarReplacement {
-                id: Uuid::now_v7(),
+                id,
                 user_id: user.into(),
                 calendar_id: target.calendar_id,
                 event_id,
@@ -210,6 +211,17 @@ where
             })
             .await
             .map_err(internal)?;
+        // A concurrent prepare stored its preview first, without this
+        // request's edits: a preview is never handed to another request.
+        if operation.id != id {
+            if operation.next_step == 0 && operation.command.is_none() {
+                return Err(CalendarMutationError::Retryable(
+                    "Another replacement of this event is being prepared. Try again.".into(),
+                ));
+            }
+            let target = self.replacement_target(user, &operation).await?;
+            return self.replacement_view(&operation, &target).await;
+        }
         Ok(operation.view(None))
     }
     async fn replacement_status(

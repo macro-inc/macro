@@ -709,3 +709,65 @@ async fn the_preview_names_a_series_by_what_the_replacement_repeats() {
     assert!(snapshot.is_series);
     assert_eq!(snapshot.write_count(), 2);
 }
+
+#[test]
+fn a_series_guest_made_optional_and_its_reminder_settings_reach_occurrences_still_like_it() {
+    let guest = |address: &str, kind: &str| json!({"emailAddress":{"address":address},"type":kind});
+    let preferences = |minutes: u32| json!([{"id":PREFERENCES_ID,"value":format!("{{\"reminders\":{{\"useDefault\":false,\"overrides\":[{{\"method\":\"popup\",\"minutes\":{minutes}}}]}}}}")}]);
+    let saved = json!({
+        "attendees":[guest("ada@example.com", "required")],
+        "singleValueExtendedProperties": preferences(10),
+    });
+    let edited = json!({
+        "attendees":[guest("ada@example.com", "optional")],
+        "singleValueExtendedProperties": preferences(30),
+    });
+    let mut like_series = saved.clone();
+    let mut own_reminder = json!({
+        "attendees":[guest("ADA@example.com", "required")],
+        "singleValueExtendedProperties": preferences(5),
+    });
+
+    inherit_changes(&mut like_series, &saved, &edited);
+    inherit_changes(&mut own_reminder, &saved, &edited);
+
+    assert_eq!(like_series, edited);
+    assert_eq!(own_reminder["attendees"][0]["type"], "optional");
+    assert_eq!(
+        own_reminder["singleValueExtendedProperties"],
+        preferences(5)
+    );
+}
+
+#[tokio::test]
+async fn a_time_that_names_the_saved_schedule_keeps_the_copied_occurrences() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .with_priority(10)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET")).and(path("/v1.0/me/calendars/calendar/events/master"))
+        .and(query_param("$select","id,exceptionOccurrences,cancelledOccurrences"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"@odata.etag":"W/\"1\"","exceptionOccurrences":[],"cancelledOccurrences":["OID.master.2026-11-05"]}))).with_priority(1).expect(1).mount(&server).await;
+    // The saved time, named in another zone.
+    let changes = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-02T17:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-02T18:00:00Z".parse().unwrap(),
+            time_zone: Some("America/New_York".into()),
+        }),
+        title: Some("Renamed".into()),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert_eq!(snapshot.occurrences.len(), 1);
+    assert_eq!(snapshot.occurrences[0]["cancelled"], true);
+}

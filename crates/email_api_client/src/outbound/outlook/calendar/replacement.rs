@@ -2,7 +2,7 @@
 use super::*;
 use calendar_events::domain::replacement::*;
 use chrono::{DateTime, Duration, NaiveDate};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const STEP_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarReplacementStep";
@@ -156,8 +156,9 @@ fn join_url(event: &Value) -> Option<&str> {
 
 /// Fields an occurrence copy takes from the edited series when it still holds
 /// the saved series' value; an occurrence changed on its own keeps its own.
-/// Guests are carried as the series' additions and removals instead.
-const INHERITED_FIELDS: [&str; 8] = [
+/// Guests are carried as the series' additions, removals and type changes
+/// instead. The extended properties hold Macro's reminder settings.
+const INHERITED_FIELDS: [&str; 9] = [
     "subject",
     "body",
     "location",
@@ -166,7 +167,42 @@ const INHERITED_FIELDS: [&str; 8] = [
     "showAs",
     "isReminderOn",
     "reminderMinutesBeforeStart",
+    "singleValueExtendedProperties",
 ];
+
+/// Whether two times are the same schedule, whatever zone names them.
+fn same_time(first: &EventTime, second: &EventTime) -> bool {
+    match (first, second) {
+        (
+            EventTime::Timed {
+                starts_at, ends_at, ..
+            },
+            EventTime::Timed {
+                starts_at: other_start,
+                ends_at: other_end,
+                ..
+            },
+        ) => starts_at == other_start && ends_at == other_end,
+        (EventTime::AllDay { .. }, EventTime::AllDay { .. }) => first == second,
+        _ => false,
+    }
+}
+
+/// Whether `changes` move the source's schedule: its time or repeat rule.
+fn moves_schedule(
+    source: &Value,
+    changes: &CalendarEventPatch,
+) -> Result<bool, CalendarProviderError> {
+    let time_moves = match &changes.time {
+        Some(time) => !same_time(time, &normalize::event_time(source)?),
+        None => false,
+    };
+    let rule_moves = match &changes.recurrence_lines {
+        Some(lines) => recurrence::from_graph(source).map_or(true, |saved| &saved != lines),
+        None => false,
+    };
+    Ok(time_moves || rule_moves)
+}
 
 /// Lay the editor's unsaved changes over a copy of `source`, built as an
 /// Outlook update of `source` builds its body, so the replacement sends no
@@ -229,27 +265,40 @@ fn guest_address(guest: &Value) -> Option<String> {
 /// still shows at the saved series' value takes the edit, and the series'
 /// added and removed guests are added to and removed from every copy.
 fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
-    let addresses = |series: &Value| -> HashSet<String> {
+    // Each guest's address and whether they are required or optional.
+    let guest_types = |series: &Value| -> HashMap<String, Value> {
         series["attendees"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(guest_address)
+            .filter_map(|guest| {
+                guest_address(guest).map(|address| (address, guest["type"].clone()))
+            })
             .collect()
     };
-    let (before, after) = (addresses(saved), addresses(edited));
+    let (before, after) = (guest_types(saved), guest_types(edited));
     if before != after
         && let Some(guests) = occurrence["attendees"].as_array_mut()
     {
         guests.retain(|guest| {
-            guest_address(guest)
-                .is_none_or(|address| after.contains(&address) || !before.contains(&address))
+            guest_address(guest).is_none_or(|address| {
+                after.contains_key(&address) || !before.contains_key(&address)
+            })
         });
+        for guest in guests.iter_mut() {
+            if let Some(address) = guest_address(guest)
+                && let (Some(was), Some(is)) = (before.get(&address), after.get(&address))
+                && was != is
+                && &guest["type"] == was
+            {
+                guest["type"] = is.clone();
+            }
+        }
         let present: HashSet<String> = guests.iter().filter_map(guest_address).collect();
         for guest in edited["attendees"].as_array().into_iter().flatten() {
-            if guest_address(guest)
-                .is_some_and(|address| !before.contains(&address) && !present.contains(&address))
-            {
+            if guest_address(guest).is_some_and(|address| {
+                !before.contains_key(&address) && !present.contains(&address)
+            }) {
                 guests.push(guest.clone());
             }
         }
@@ -431,8 +480,7 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         let is_series = recurrence_id.is_none() && source["type"].as_str() == Some("seriesMaster");
         // Outlook drops a series' changed and cancelled occurrences when its
         // schedule changes, and their dates no longer follow it.
-        let keeps_occurrences =
-            is_series && changes.time.is_none() && changes.recurrence_lines.is_none();
+        let keeps_occurrences = is_series && !moves_schedule(&source, changes)?;
         let mut body = copy_body(&source, remove_conference)?;
         if !is_series {
             body.as_object_mut()

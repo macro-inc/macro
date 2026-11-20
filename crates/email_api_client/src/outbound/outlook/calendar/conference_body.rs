@@ -2,7 +2,7 @@
 use super::*;
 use email_utils::bounded_html;
 use scraper::{ElementRef, Html};
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 /// Refuses a body whose parse stopped at a bound of [`bounded_html`]: what
 /// it left out cannot be checked for the meeting link, and writing the rest
@@ -77,21 +77,33 @@ pub(super) fn without_meeting(
     }
     let (_, meeting) = split(saved, join)?;
     let meeting = bounded_html::parse_fragment(&meeting).html;
-    let meeting_texts: HashSet<String> = meeting
+    // Each text of the block, with the most media an element holding it has,
+    // so a part that adds an image to the block's text is not the block's.
+    let mut meeting_texts: HashMap<String, usize> = HashMap::new();
+    for element in meeting
         .root_element()
         .descendants()
         .filter_map(ElementRef::wrap)
-        .map(|element| plain_text(&element))
-        .filter(|text| !text.is_empty())
-        .collect();
+    {
+        let text = plain_text(&element);
+        if text.is_empty() {
+            continue;
+        }
+        let media = media_count(&element);
+        meeting_texts
+            .entry(text)
+            .and_modify(|most| *most = (*most).max(media))
+            .or_insert(media);
+    }
+    let meeting_has_media = media_count(&meeting.root_element()) > 0;
     let part_of = |part: &ElementRef<'_>| {
         let text = plain_text(part);
-        if text.is_empty() {
-            MeetingPart::Textless
-        } else if meeting_texts.contains(&text) {
-            MeetingPart::Meeting
-        } else {
-            MeetingPart::Person
+        let media = media_count(part);
+        match meeting_texts.get(&text) {
+            _ if text.is_empty() && (media == 0 || meeting_has_media) => MeetingPart::Textless,
+            Some(&most) if media <= most => MeetingPart::Meeting,
+            Some(_) => MeetingPart::Mixed,
+            None => MeetingPart::Person,
         }
     };
 
@@ -111,7 +123,7 @@ pub(super) fn without_meeting(
         match part_of(&parts[index]) {
             MeetingPart::Meeting => first = index,
             MeetingPart::Textless => {}
-            MeetingPart::Person => break,
+            MeetingPart::Person | MeetingPart::Mixed => break,
         }
     }
     let mut last = link;
@@ -119,12 +131,17 @@ pub(super) fn without_meeting(
         match part_of(part) {
             MeetingPart::Meeting => last = index,
             MeetingPart::Textless => {}
-            MeetingPart::Person => break,
+            MeetingPart::Person | MeetingPart::Mixed => break,
         }
     }
-    let left_over = parts.iter().enumerate().any(|(index, part)| {
-        !(first..=last).contains(&index) && part_of(part) == MeetingPart::Meeting
-    });
+    let left_over = parts
+        .iter()
+        .enumerate()
+        .any(|(index, part)| match part_of(part) {
+            MeetingPart::Mixed => true,
+            MeetingPart::Meeting => !(first..=last).contains(&index),
+            MeetingPart::Person | MeetingPart::Textless => false,
+        });
     if left_over {
         return Err(not_separable());
     }
@@ -149,6 +166,21 @@ enum MeetingPart {
     Meeting,
     Person,
     Textless,
+    /// The block's text with media the block does not have.
+    Mixed,
+}
+
+/// Elements that show something besides text.
+const MEDIA_ELEMENTS: [&str; 9] = [
+    "img", "picture", "video", "audio", "iframe", "object", "embed", "svg", "canvas",
+];
+
+fn media_count(element: &ElementRef<'_>) -> usize {
+    element
+        .descendants()
+        .filter_map(ElementRef::wrap)
+        .filter(|descendant| MEDIA_ELEMENTS.contains(&descendant.value().name()))
+        .count()
 }
 
 fn not_separable() -> CalendarProviderError {

@@ -159,6 +159,17 @@ fn meeting_details_left_apart_from_the_block_are_refused() {
 }
 
 #[test]
+fn an_image_the_person_put_in_a_meeting_paragraph_is_refused_not_dropped() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = rewritten_block().replace(
+        "<p>Microsoft Teams meeting</p>",
+        "<p>Microsoft Teams meeting<img src=\"https://example.com/diagram.png\"></p>",
+    );
+
+    assert!(without_meeting(&format!("<p>Notes</p>{edited}"), &saved, JOIN).is_err());
+}
+
+#[test]
 fn only_outermost_provider_blocks_are_split_in_document_order() {
     let first = format!(
         "<div class=\"me-email-text\"><a href=\"{}\">Join</a><div class=\"me-email-inner\">PIN 1</div></div>",
