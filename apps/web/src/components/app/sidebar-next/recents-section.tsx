@@ -4,11 +4,14 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { markRowNotificationsSeenOnOpen } from '@app/features/notifications/mark-row-seen';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
-import { getEntityClickContent } from '@channel/Attachments/attachment-utils';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { enableSupportedSoupForeignEntities } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Entity, type EntityData } from '@entity';
@@ -20,7 +23,6 @@ import {
 } from '@queries/soup/items';
 import { ToggleSwitch } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
-import { useSplitLayout } from '../split-layout/layout';
 
 /** How many recent items the sidebar lists. */
 const RECENTS_LIMIT = 30;
@@ -48,18 +50,32 @@ function recentsQueryArgs(userId: string | undefined): SoupAstItemsQueryArgs {
  */
 export function RecentsSection() {
   const userId = useUserId();
-  const layout = useSplitLayout();
   const notificationSource = useGlobalNotificationSource();
+  const foreignEntities = useFeatureFlag(enableSupportedSoupForeignEntities);
   const query = useSoupAstItemsQuery(
     () => recentsQueryArgs(userId()),
     () => ({
       enabled: Boolean(userId()),
+      // Home's All tab lists pull requests when this is on; so does Recents.
+      showSupportedForeignEntities: foreignEntities().enabled,
     })
   );
   // Pending reads suspend; keep the section's rows until a page answers.
   const entities = createMemo(() =>
     query.isPending ? [] : (query.data?.entities ?? [])
   );
+  // Home's open path: hosted details, channel read state, existing splits.
+  const open = (entity: EntityData, event: MouseEvent) => {
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
+    fireAndForget(
+      openEntityInSplitFromUnifiedList(entity, {
+        openInNewSplit: event.shiftKey,
+        referredFrom: 'sidebar',
+        notificationSource,
+      }),
+      'single-sidebar-recents'
+    );
+  };
   const isUnread = (entity: EntityData) =>
     unreadFilterFn(withEntityNotifications(entity, notificationSource));
   const [unreadOnly, setUnreadOnly] = usePreference<boolean>(
@@ -85,12 +101,7 @@ export function RecentsSection() {
         {(entity) => (
           <ViewSidebar.Item
             class="cursor-default"
-            onClick={(event) =>
-              layout.openWithSplit(getEntityClickContent(entity), {
-                preferNewSplit: event.shiftKey,
-                referredFrom: 'sidebar',
-              })
-            }
+            onClick={(event) => open(entity, event)}
           >
             <ViewSidebar.Icon>
               <Entity.Icon entity={entity} suppressClick showTooltip={false} />
