@@ -337,12 +337,16 @@ async function readPass(threads: string[], homeVariables: unknown) {
   };
 }
 
-async function writePass(base: string, count: number) {
+/** Writes the ops at `indices`, then the same responses again: the second
+ * pass is what a refetch that changed nothing costs. */
+async function writePass(base: string, indices: number[]) {
   const steps: Step[] = [];
-  for (let index = 0; index < count; index++) {
-    const op = await fetchOp(`${base}/${index}`);
+  const ops: BenchOp[] = [];
+  for (const index of indices) ops.push(await fetchOp(`${base}/${index}`));
+  for (const op of ops)
     steps.push({ name: `write.${op.lane}`, ms: await apply(op) });
-  }
+  for (const op of ops)
+    steps.push({ name: `write.${op.lane}.same`, ms: await apply(op) });
   return { steps };
 }
 
