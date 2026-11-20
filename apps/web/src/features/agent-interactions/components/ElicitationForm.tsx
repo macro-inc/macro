@@ -78,7 +78,7 @@ function ChoiceBox(props: { checked: boolean; multiple: boolean }) {
         props.multiple ? 'rounded-sm' : 'rounded-full',
         props.checked
           ? 'border-accent bg-accent'
-          : 'border-edge-muted bg-transparent group-hover:border-edge'
+          : 'border-ink-extra-muted bg-transparent group-hover:border-ink-muted'
       )}
     >
       <CheckIcon class={cn('size-2.5', !props.checked && 'hidden')} />
