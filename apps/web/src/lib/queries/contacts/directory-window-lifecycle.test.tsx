@@ -410,7 +410,7 @@ it('keeps rows the server listed for a late cache until the input changes', asyn
   client.clear();
 });
 
-it('lets a budgeted read finish before a cache change re-reads it', async () => {
+it('does not restart a budgeted read for cache changes while it runs', async () => {
   vi.useFakeTimers();
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   const client = new QueryClient();
@@ -463,10 +463,13 @@ it('lets a budgeted read finish before a cache change re-reads it', async () => 
   expect(reader).toHaveBeenCalledOnce();
   expect(reader.mock.calls[0][3].aborted).toBe(false);
 
-  // Once it lands from the cache, the change it sat through is read.
+  // Its page lists as it lands, and the next change refreshes it.
   first.resolve(page);
   await vi.advanceTimersByTimeAsync(0);
-  expect(reader).toHaveBeenCalledTimes(2);
+  expect(reader).toHaveBeenCalledOnce();
   expect(window!.data()?.users).toHaveLength(1);
+  changed!(parseCacheRevision('4'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledTimes(2);
   client.clear();
 });

@@ -199,7 +199,6 @@ export function createContactDirectoryWindow(
     onCleanup(() => release?.());
   });
   const budgeted = options.localBudgetMs !== undefined;
-  let changedWhileReading = false;
   const rereadAfterCacheChange = () => {
     // Rows the server listed because the cache was late keep their order
     // until the input changes, on every page: the cache answering afterwards
@@ -220,16 +219,6 @@ export function createContactDirectoryWindow(
       });
     }
   };
-  createEffect(
-    on(
-      () => query.isFetching,
-      (fetching) => {
-        if (fetching || !changedWhileReading) return;
-        changedWhileReading = false;
-        rereadAfterCacheChange();
-      }
-    )
-  );
   createEffect(() => {
     const host = scope().host;
     if (!host) return;
@@ -241,12 +230,10 @@ export function createContactDirectoryWindow(
           if (!enabled()) return;
           // A read with a budget is not restarted while it runs: a cache busy
           // enough to be late also reports changes, and each restart would
-          // give it a new budget and never reach the server. It is re-read
-          // once it settles instead.
-          if (budgeted && untrack(() => query.isFetching)) {
-            changedWhileReading = true;
-            return;
-          }
+          // give it a new budget and never reach the server. Its page is
+          // refreshed by the next change after it lands; re-reading the
+          // moment it lands would take its rows away again as they appear.
+          if (budgeted && untrack(() => query.isFetching)) return;
           rereadAfterCacheChange();
         },
         { searchBuckets: () => ['person'] }
