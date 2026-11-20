@@ -3262,3 +3262,84 @@ async fn a_viewed_updated_walk_returns_every_channel_with_its_own_activity(pool:
         assert_eq!(viewed[&id], Some(viewed_at), "channel {i}'s viewed time");
     }
 }
+
+/// Walks user-a's channels ten a page as Soup does and, once the first page
+/// is read, gives walk channel 1 (on no first page) activity and a view as
+/// another device would. Whether the walk still returned it.
+async fn walk_returns_channel_moved_mid_walk(
+    pool: &Pool<Postgres>,
+    sort: SimpleSortMethod,
+) -> bool {
+    use crate::domain::list_service::ChannelListServiceImpl;
+    use crate::domain::models::ChannelWithLatest;
+    use crate::domain::ports::ChannelListService;
+    use models_pagination::SortOn;
+
+    let service = ChannelListServiceImpl::new(repo(pool.clone()), repo(pool.clone()), NoFrecency);
+    let (moved, _) = walk_channel(1);
+    let mut walked = HashSet::new();
+    let mut query = Query::Sort(sort, None);
+    loop {
+        let page = service
+            .get_channels(GetChannelsRequest {
+                macro_id: macro_user_id(USER_A),
+                limit: Some(10),
+                include_frecency: false,
+                query,
+            })
+            .await
+            .unwrap();
+        let Some(last) = page.last() else {
+            break;
+        };
+        query = Query::Cursor(Cursor {
+            id: last.channel.channel.id,
+            limit: 10,
+            val: ChannelWithLatest::sort_on(sort)(last),
+            filter: None,
+        });
+        let first_page = walked.is_empty();
+        walked.extend(page.iter().map(|channel| channel.channel.channel.id));
+        if first_page {
+            assert!(
+                !walked.contains(&moved),
+                "walk channel 1 is on a later page"
+            );
+            sqlx::query("UPDATE comms_channels SET updated_at = now() WHERE id = $1")
+                .bind(moved)
+                .execute(pool)
+                .await
+                .unwrap();
+            sqlx::query("UPDATE comms_activity SET viewed_at = now() WHERE channel_id = $1")
+                .bind(moved)
+                .execute(pool)
+                .await
+                .unwrap();
+        }
+    }
+    walked.contains(&moved)
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_created_at_walk_returns_a_channel_that_moves_during_it(pool: Pool<Postgres>) {
+    // The web channel directory lane pages this way.
+    assert!(walk_returns_channel_moved_mid_walk(&pool, SimpleSortMethod::CreatedAt).await);
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../fixtures",
+        scripts("channels_repo", "channel_list_activity_walk")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_viewed_updated_walk_skips_a_channel_that_moves_during_it(pool: Pool<Postgres>) {
+    // Why the lane does not page by viewed or updated time.
+    assert!(!walk_returns_channel_moved_mid_walk(&pool, SimpleSortMethod::ViewedUpdated).await);
+}
