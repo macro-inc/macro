@@ -45,9 +45,12 @@ that commit's tree.
   they are not everything the job reads.
 - A receipt is for committed files: `run` records nothing when the working
   tree has uncommitted changes, or when the check itself changed a file.
-- Steps and the dev shell get a `TMPDIR` the tool clears. A dev shell makes
-  a temporary directory every time a shell starts and never removes it, which
-  runs a shared `/tmp` out of inodes.
+- Steps use the caller's `TMPDIR`, and the tool never removes it. A dev
+  shell's environment makes a temporary directory every time a shell starts
+  and never removes it, which runs a shared `/tmp` out of inodes, so the tool
+  appends lines that remove it and point every shell at the one directory.
+  Don't give steps a directory the tool deletes: a server a step starts
+  (sccache) outlives the run and serves every build on the machine from it.
 - Run git through `git::in_repository`. A git hook exports `GIT_DIR`, and git
   would otherwise act on the repository the hook names.
 

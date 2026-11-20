@@ -60,11 +60,22 @@ pub struct Machine {
     pub workspace: PathBuf,
     /// `RUNNER_TEMP`: emptied before every check.
     pub scratch: PathBuf,
-    /// `TMPDIR` for the dev shell and the steps, emptied with the scratch
-    /// directory. A dev shell makes a temporary directory every time a shell
-    /// starts and never removes it; a runner is thrown away, a machine's
-    /// `/tmp` is not.
+    /// `TMPDIR` for the steps: the caller's own, which the tool never
+    /// removes. A step may start a server that outlives the run and keeps
+    /// its `TMPDIR`, as sccache does for every build on the machine.
     pub tmp: PathBuf,
+}
+
+/// Appended to a dev shell's environment. The environment makes a temporary
+/// directory for every shell that sources it, names it `TMPDIR` and never
+/// removes it; a runner is thrown away, a machine's `/tmp` is not. So the
+/// directory just made goes, and every shell uses [`Machine::tmp`].
+fn one_temporary_directory(tmp: &Path) -> String {
+    let tmp = format!("'{}'", tmp.to_string_lossy().replace('\'', r"'\''"));
+    format!(
+        "\nrmdir \"$NIX_BUILD_TOP\" 2>/dev/null || true\n\
+         export NIX_BUILD_TOP={tmp} TMP={tmp} TMPDIR={tmp} TEMP={tmp} TEMPDIR={tmp}\n"
+    )
 }
 
 /// What steps have handed to the ones after them.
@@ -84,7 +95,6 @@ impl Machine {
         let output = in_repository("nix", &self.workspace)
             .args(["print-dev-env", "--accept-flake-config"])
             .arg(format!(".#{shell}"))
-            .env("TMPDIR", &self.tmp)
             .stderr(std::process::Stdio::inherit())
             .output()
             .context(
@@ -94,7 +104,9 @@ impl Machine {
             bail!("nix print-dev-env .#{shell} failed");
         }
 
-        std::fs::write(&path, output.stdout).context("could not save the dev shell environment")?;
+        let mut environment = output.stdout;
+        environment.extend(one_temporary_directory(&self.tmp).into_bytes());
+        std::fs::write(&path, environment).context("could not save the dev shell environment")?;
         Ok(path)
     }
 
@@ -107,19 +119,14 @@ impl Machine {
 
     fn fresh_scratch(&self) -> Result<(), Report> {
         self.clear();
-        for directory in [&self.scratch, &self.tmp] {
-            std::fs::create_dir_all(directory)
-                .context(format!("could not create {}", directory.display()))?;
-        }
+        std::fs::create_dir_all(&self.scratch)
+            .context(format!("could not create {}", self.scratch.display()))?;
         Ok(())
     }
 
-    /// Remove what the last check left in the scratch and temporary
-    /// directories.
+    /// Remove what the last check left in the scratch directory.
     pub fn clear(&self) {
-        for directory in [&self.scratch, &self.tmp] {
-            let _ = std::fs::remove_dir_all(directory);
-        }
+        let _ = std::fs::remove_dir_all(&self.scratch);
     }
 
     fn run_steps(&self, check: &Check, dev_env: Option<&Path>) -> Result<Outcome, Report> {

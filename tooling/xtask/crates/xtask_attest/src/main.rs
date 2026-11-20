@@ -171,13 +171,6 @@ impl Repository {
         self.cache.join(format!("scratch-{key}"))
     }
 
-    /// Where a run's dev shells and steps put temporary files. Short, because
-    /// tools make sockets under it and a socket's path has a length limit.
-    fn tmp(&self) -> PathBuf {
-        let key = hex::encode(&Sha256::digest(self.root.to_string_lossy().as_bytes())[..4]);
-        self.cache.with_file_name("t").join(key)
-    }
-
     /// Hold the working tree's scratch directory for one run. Two runs in
     /// one tree would write each other's scripts.
     fn lock(&self) -> Result<File, Report> {
@@ -292,7 +285,7 @@ fn run(asked: &[String], again: bool, base: &str) -> Result<bool, Report> {
     let machine = Machine {
         workspace: repository.root.clone(),
         scratch: repository.scratch(),
-        tmp: repository.tmp(),
+        tmp: std::env::temp_dir(),
     };
 
     // A result is recorded for a commit's files. With uncommitted changes a

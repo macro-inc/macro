@@ -14,10 +14,12 @@ impl Fixture {
         let dir = tempfile::tempdir().expect("a directory");
         let workspace = dir.path().join("workspace");
         std::fs::create_dir_all(workspace.join("nested")).expect("a directory");
+        let tmp = dir.path().join("tmp");
+        std::fs::create_dir_all(&tmp).expect("a directory");
         let machine = Machine {
             workspace,
             scratch: dir.path().join("scratch"),
-            tmp: dir.path().join("tmp"),
+            tmp,
         };
         machine.fresh_scratch().expect("a scratch directory");
         Self { _dir: dir, machine }
@@ -159,25 +161,48 @@ fn a_step_does_not_see_the_callers_own_variables() {
     assert!(matches!(outcome, Outcome::Passed));
 }
 
-/// A dev shell makes a temporary directory whenever a shell starts and never
-/// removes it. They must land where the tool clears, not in `/tmp`.
+/// A dev shell's environment makes a temporary directory whenever a shell
+/// sources it and never removes it. Steps must leave none behind, and must
+/// not lose the directory when the tool clears up: a server a step started
+/// keeps using it.
 #[test]
-fn temporary_files_stay_in_the_directory_the_tool_clears() {
+fn a_shell_leaves_no_directory_and_keeps_the_one_it_was_given() {
     let fixture = Fixture::new();
+    let tmp = &fixture.machine.tmp;
+    // What `nix print-dev-env` ends with, then what the tool appends.
+    let mut environment = String::from(concat!(
+        "export NIX_BUILD_TOP=\"$(mktemp -d -t nix-shell.XXXXXX)\"\n",
+        "export TMP=\"$NIX_BUILD_TOP\"\n",
+        "export TMPDIR=\"$NIX_BUILD_TOP\"\n",
+    ));
+    environment.push_str(&one_temporary_directory(tmp));
+    let dev_env = fixture.machine.scratch.join("dev-env");
+    std::fs::write(&dev_env, environment).expect("writes");
 
-    let outcome = fixture.run(&check(vec![step(
-        "makes a temporary file",
-        r#"mktemp > "$GITHUB_WORKSPACE/made""#,
-    )]));
+    let outcome = fixture
+        .machine
+        .run_steps(
+            &check(vec![step(
+                "starts shells and makes a temporary file",
+                r#"bash -c 'bash -c true'; mktemp > "$GITHUB_WORKSPACE/made""#,
+            )]),
+            Some(&dev_env),
+        )
+        .expect("runs");
 
     assert!(matches!(outcome, Outcome::Passed));
     let made = fixture.read("made");
-    assert!(
-        std::path::Path::new(made.trim()).starts_with(&fixture.machine.tmp),
-        "{made} is outside {}",
-        fixture.machine.tmp.display()
+    assert_eq!(
+        std::path::Path::new(made.trim()).parent(),
+        Some(tmp.as_path())
     );
+    let left: Vec<_> = std::fs::read_dir(tmp)
+        .expect("lists")
+        .map(|entry| entry.expect("an entry").file_name())
+        .filter(|name| name.to_string_lossy().starts_with("nix-shell."))
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
 
     fixture.machine.clear();
-    assert!(!fixture.machine.tmp.exists() && !fixture.machine.scratch.exists());
+    assert!(tmp.exists() && !fixture.machine.scratch.exists());
 }
