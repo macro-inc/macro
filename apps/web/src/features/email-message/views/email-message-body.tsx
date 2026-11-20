@@ -40,6 +40,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
                   markdown={bodyMacro()}
                   theme={channelTheme}
                   target="internal"
+                  promptBlocks={false}
                 />
               );
             }}
@@ -49,6 +50,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               markdown={props.message.body_text ?? ''}
               theme={channelTheme}
               target="internal"
+              promptBlocks={false}
             />
           </Match>
           <Match when={true}>{host()}</Match>

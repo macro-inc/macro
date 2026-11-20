@@ -31,6 +31,7 @@ import {
 import type { SetStoreFunction } from 'solid-js/store';
 import { CodeBoxAccessory } from '../../component/accessory/CodeBoxAccessory';
 import { type AccessoryStore, nodeAccessoryPlugin } from '../node-accessory';
+import { registerPromptBlocks } from './prompt-blocks';
 
 enum CodeCaretPosition {
   First = 'first',
@@ -157,6 +158,8 @@ function $getSelectionInfo(
 type CodePluginProps = {
   accessories: AccessoryStore;
   setAccessories: SetStoreFunction<AccessoryStore>;
+  /** Offer prompt blocks: code blocks that run their text with an agent. */
+  promptBlocks?: boolean;
 };
 
 type CodePreviewInfo = {
@@ -171,6 +174,7 @@ function registerCodePlugin(editor: LexicalEditor, props: CodePluginProps) {
   const cleanups: Array<() => void> = [];
 
   cleanups.push(registerCodeHighlighting(editor));
+  if (props.promptBlocks) cleanups.push(registerPromptBlocks(editor));
 
   if (editor.hasNode(CustomCodeNode)) {
     const codeAccessory = nodeAccessoryPlugin({

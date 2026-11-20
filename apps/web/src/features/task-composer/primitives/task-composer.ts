@@ -575,7 +575,7 @@ export function createTaskComposer(
     })
     .withEmojis()
     .withActions()
-    .withCode()
+    .withCode({ promptBlocks: true })
     .withMedia({ fileDrop: true })
     .withSelectionData()
     .withFloatingFormatMenu()

@@ -37,6 +37,7 @@ import {
   type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
+  PROMPT_LANGUAGE,
   type PullRequestMentionNode,
   type ReplyTargetNode,
   type SnapshotNode,
@@ -48,7 +49,7 @@ import {
   type VideoNode,
   type WatermarkNode,
 } from '@macro-inc/lexical-core';
-import { cn } from '@ui';
+import { Card, cn } from '@ui';
 import {
   $getRoot,
   createEditor,
@@ -90,6 +91,10 @@ import { isAllowedLinkUrl } from '@macro-inc/lexical-core/utils/link-url';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import {
+  PromptBlockLabel,
+  PromptBlockRun,
+} from '../accessory/PromptBlockHeader';
 import { AccountManagerRequest as AccountManagerRequestDecorator } from '../decorator/AccountManagerRequest';
 import { AgentActivity as AgentActivityDecorator } from '../decorator/AgentActivity';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
@@ -875,6 +880,28 @@ const Code: TypedRenderableElement<CodeNode> = {
   },
 };
 
+/** Whether ```prompt blocks render as runnable prompt cards; email shows them as code. */
+const PromptBlocksContext = createContext(true);
+
+function StaticPromptBlock(props: { text: string }) {
+  return (
+    <Card
+      variant="filled"
+      depth={2}
+      class="my-2 overflow-hidden font-sans"
+      data-prompt-block
+    >
+      <div class="flex h-11 min-w-0 items-center justify-between gap-2 pr-2 pl-1.5">
+        <PromptBlockLabel />
+        <PromptBlockRun prompt={() => props.text} />
+      </div>
+      <div class="max-h-80 overflow-y-auto whitespace-pre-wrap wrap-anywhere px-3 pb-3 text-sm leading-6 text-ink">
+        {props.text}
+      </div>
+    </Card>
+  );
+}
+
 function StaticCodeContainer(props: {
   language: string;
   text: string;
@@ -882,6 +909,10 @@ function StaticCodeContainer(props: {
   tokens: any;
   nodes: any;
 }) {
+  const promptBlocks = useContext(PromptBlocksContext);
+  if (promptBlocks && props.language === PROMPT_LANGUAGE) {
+    return <StaticPromptBlock text={props.text} />;
+  }
   const [isPreviewMode, setIsPreviewMode] = createSignal(false);
 
   const showPreview = () => {
@@ -1183,6 +1214,7 @@ function Document(
     rootRef?: (ref: HTMLDivElement) => void;
     singleLine?: boolean;
     inert?: boolean;
+    promptBlocks?: boolean;
   } & StaticRenderOptions
 ): JSX.Element {
   // Read while the parsed editor state is active, before rendering decorators.
@@ -1203,11 +1235,13 @@ function Document(
         ref={props.rootRef}
         inert={props.inert}
       >
-        <MapRender
-          children={props.rootNode.getChildren()}
-          theme={props.theme}
-          lazy={props.lazy}
-        />
+        <PromptBlocksContext.Provider value={props.promptBlocks ?? true}>
+          <MapRender
+            children={props.rootNode.getChildren()}
+            theme={props.theme}
+            lazy={props.lazy}
+          />
+        </PromptBlocksContext.Provider>
       </div>
     </>
   );
@@ -1256,6 +1290,8 @@ export function StaticMarkdown(props: {
   lazy?: boolean;
   /** Disable preview interactions while exposing a plain-text equivalent to assistive technology. */
   inert?: boolean;
+  /** Render prompt blocks as runnable cards (default); email bodies show them as code. */
+  promptBlocks?: boolean;
 }) {
   let {
     editor: contextEditor,
@@ -1350,6 +1386,7 @@ export function StaticMarkdown(props: {
         lazy: lazy(),
         rootRef: props.rootRef,
         inert: props.inert,
+        promptBlocks: props.promptBlocks,
       });
     });
   });

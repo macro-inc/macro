@@ -97,3 +97,18 @@ the text colour around the preview, as it did inline. Run just this case by
 adding `svg-preview.browser.e2e.ts` to the command above. On a machine with
 many network interfaces, run under `bwrap --dev-bind / / --unshare-net`, as
 `apps/web/AGENTS.md` explains.
+
+## Prompt blocks
+
+`prompt-blocks.browser.e2e.ts` renders a sent ```` ```prompt ```` message
+(`StaticMarkdown`), the same message in an email body (`promptBlocks={false}`),
+a document editor that allows prompt blocks, and an email composer that does
+not. It checks that the message card's picker starts on Auto, that **Run**
+opens the confirmation with the whole prompt, that **Cancel** starts nothing
+and **Proceed** opens one agent split (a recording split manager stands in for
+the layout), that email shows the fence as code, that a code block's type menu
+offers **Executable prompt** only in the document editor, and, with a hardware
+keyboard, that `/prompt` turns a line into a prompt block. Hosted traffic is
+blocked, so the roster holds only first-party agents and starting the session
+fails after the split opens. Run just this case by adding
+`prompt-blocks.browser.e2e.ts` to the command above.

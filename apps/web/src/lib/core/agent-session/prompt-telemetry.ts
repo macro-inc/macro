@@ -115,6 +115,7 @@ export type PromptSubmitSurface =
   | 'document'
   | 'drive'
   | 'agent_session'
+  | 'prompt_block'
   | 'other';
 
 /** How a new session was asked for, to tell its slower paths apart. */

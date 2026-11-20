@@ -41,6 +41,7 @@ describe('slash menu actions', () => {
     expect(
       availableActions(actions, {
         databasesEnabled: true,
+        promptBlocksEnabled: false,
         hasNodes: () => true,
       }).map((action) => action.id)
     ).toEqual(['database-query', 'database', 'paragraph']);
@@ -50,6 +51,7 @@ describe('slash menu actions', () => {
     expect(
       availableActions(actions, {
         databasesEnabled: false,
+        promptBlocksEnabled: false,
         hasNodes: () => true,
       }).map((action) => action.id)
     ).toEqual(['paragraph']);
@@ -59,15 +61,39 @@ describe('slash menu actions', () => {
     expect(
       availableActions(actions, {
         databasesEnabled: true,
+        promptBlocksEnabled: false,
         hasNodes: () => false,
       }).map((action) => action.id)
     ).toEqual(['paragraph']);
     expect(
       availableActions(actions, {
         databasesEnabled: true,
+        promptBlocksEnabled: false,
         ignoreActionIds: ['paragraph'],
         hasNodes: () => true,
       }).map((action) => action.id)
     ).toEqual(['database-query', 'database']);
+  });
+
+  it('offers prompt blocks only in editors that allow them', () => {
+    const withPrompt: Action[] = [
+      ...actions,
+      {
+        id: 'prompt',
+        name: 'Prompt',
+        keywords: ['prompt'],
+        category: 'Elements',
+        icon,
+        action: run,
+      },
+    ];
+    const ids = (promptBlocksEnabled: boolean) =>
+      availableActions(withPrompt, {
+        databasesEnabled: false,
+        promptBlocksEnabled,
+        hasNodes: () => true,
+      }).map((action) => action.id);
+    expect(ids(true)).toEqual(['paragraph', 'prompt']);
+    expect(ids(false)).toEqual(['paragraph']);
   });
 });

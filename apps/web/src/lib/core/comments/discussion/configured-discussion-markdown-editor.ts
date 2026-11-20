@@ -52,7 +52,7 @@ export function createConfiguredDiscussionMarkdownEditor(
     .withActions({ ignoreActionIds: ['hr', 'table', 'latex'] })
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
-    .withCode()
+    .withCode({ promptBlocks: true })
     .withRestoreFocus()
     .withSelectionData()
     .withFloatingFormatMenu();

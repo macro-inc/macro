@@ -247,6 +247,7 @@ export function registerMarkdownEditing(options: MarkdownEditingOptions) {
       codePlugin({
         accessories: accessoryStore,
         setAccessories: setAccessoryStore,
+        promptBlocks: true,
       })
     )
     .use(checklistControls.plugin)

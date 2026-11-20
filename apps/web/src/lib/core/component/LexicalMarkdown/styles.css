@@ -325,6 +325,24 @@ sup > .md-superscript {
   padding-top: 3rem;
 }
 
+/* A prompt block reads as an embed card: prose, no line gutter. */
+.md-code-box.md-prompt-box {
+  padding: 2.75rem 0.75rem 0.75rem;
+  border: 1px solid var(--color-edge);
+  border-radius: 0.75rem;
+  background-color: var(--color-surface-2);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-code-box.md-prompt-box::before {
+  display: none;
+}
+
 .md-code-box.preview-mode {
   height: 400px;
   overflow: hidden;

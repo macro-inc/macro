@@ -26,6 +26,7 @@ import {
 import { ACTIONS } from '../../plugins/actions/actions';
 import { availableActions } from '../../plugins/actions/available-actions';
 import type { Action, ActionContext } from '../../plugins/actions/types';
+import { hasPromptBlocks } from '../../plugins/code/prompt-blocks';
 import type { MenuOperations } from '../../shared/inlineMenu';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
@@ -177,6 +178,7 @@ export function ActionMenu(props: {
   const validActions = () =>
     availableActions(merged, {
       databasesEnabled: true,
+      promptBlocksEnabled: hasPromptBlocks(props.editor),
       ignoreActionIds: props.ignoreActionIds,
       hasNodes: (dependencies) => props.editor.hasNodes(dependencies),
     });

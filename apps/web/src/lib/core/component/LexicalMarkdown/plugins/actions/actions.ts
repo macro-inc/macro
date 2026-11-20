@@ -16,6 +16,7 @@ import ListChecks from '@icon/system/regular/list-checks.svg';
 import ListNumbers from '@icon/system/regular/list-numbers.svg';
 import Minus from '@icon/system/regular/minus.svg';
 import Quote from '@icon/system/regular/quotes.svg';
+import TerminalIcon from '@icon/system/regular/terminal.svg';
 import TextH1 from '@icon/system/regular/text-h-one.svg';
 import TextH3 from '@icon/system/regular/text-h-three.svg';
 import TextH2 from '@icon/system/regular/text-h-two.svg';
@@ -49,6 +50,7 @@ import {
   INSERT_AWAIT_NODE_COMMAND,
   REPLACE_AWAIT_NODE_COMMAND,
 } from '../await';
+import { $setSelectionToPromptBlock } from '../code/prompt-blocks';
 import { TRY_INSERT_GIF_COMMAND } from '../gif';
 import { TRY_INSERT_EQUATION_COMMAND } from '../katex';
 import { TRY_INSERT_LINK_COMMAND } from '../links';
@@ -200,6 +202,17 @@ export const ACTIONS: Action[] = [
     shortcut: '```',
     action: (editor: LexicalEditor) => {
       editor.dispatchCommand(NODE_TRANSFORM, 'code');
+    },
+    dependencies: [CustomCodeNode],
+  },
+  {
+    id: 'prompt',
+    name: 'Prompt',
+    keywords: ['prompt', 'ai', 'agent', 'run', 'executable'],
+    category: ActionCategory.ELEMENT,
+    icon: TerminalIcon,
+    action: (editor: LexicalEditor) => {
+      editor.update($setSelectionToPromptBlock);
     },
     dependencies: [CustomCodeNode],
   },
