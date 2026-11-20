@@ -1,9 +1,10 @@
 //! Speculative sort-index windows for single-partition filters. A window that
 //! cannot prove a full page reads on from its last candidate, never re-reading
 //! the ones before, by an amount sized from the hit rate it saw, up to
-//! `MAX_CANDIDATES` in total. Filters sparser than that fall back to the
-//! set-based SQL plan. Both plans run inside the caller's read transaction over
-//! the same snapshot.
+//! `MAX_CANDIDATES` per fact source. Filters sparser than that fall back to the
+//! set-based SQL plan. Optimistic facts hold only pending local writes, so
+//! their window runs out long before the cap. Both plans run inside the
+//! caller's read transaction over the same snapshot.
 
 use super::*;
 use predicate_index::{IndexQuery, ReferenceHit};
@@ -295,9 +296,14 @@ fn try_select(
             return Ok(Some(hits));
         }
         // A window short of a full page sizes the next one by its hit rate; one
-        // that holds a page but ends inside the cutoff's tie only doubles.
-        let found = hits.len().min(limit.saturating_sub(1));
-        let Some(next) = next_budget(budget, found, limit) else {
+        // that holds a page but ends inside the cutoff's tie only doubles, since
+        // its hit rate says nothing about how wide the tie is.
+        let next = if cutoff.is_some() {
+            (budget < MAX_CANDIDATES).then(|| budget.saturating_mul(2).min(MAX_CANDIDATES))
+        } else {
+            next_budget(budget, hits.len(), limit)
+        };
+        let Some(next) = next else {
             return Ok(None);
         };
         budget = next;

@@ -753,3 +753,43 @@ fn a_tie_wider_than_the_cap_falls_back_with_the_same_pages() {
         }
     });
 }
+
+/// A full page whose cutoff tie runs past the window doubles the next window
+/// rather than sizing it by the hit rate: with two results per page every
+/// window holds a page, and a hit-rate estimate would give up before the cap.
+#[test]
+fn a_full_page_inside_a_tie_doubles_up_to_the_cap() {
+    const TIE: u32 = 3_000;
+    block_on(async {
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            let sign = match direction {
+                SortDirection::Asc => 1,
+                SortDirection::Desc => -1,
+            };
+            let mut storage = TursoStorage::open_in_memory("bounded-full-tie").unwrap();
+            storage
+                .put_batch_with_projections(
+                    Vec::new(),
+                    (0..TIE + 20)
+                        .map(|n| {
+                            let value = if n < TIE { 0 } else { i64::from(n) };
+                            ProjectionMutation::Replace(document(n, sign * value))
+                        })
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            for tie in [SortDirection::Asc, SortDirection::Desc] {
+                let page = query_with_limit(PredicateExpr::All, direction, tie, 2);
+                let proven = try_select(&storage.connection(), &page, &[])
+                    .unwrap()
+                    .expect("the cap reaches past the tie");
+                let found = proven
+                    .into_iter()
+                    .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+                    .collect::<Vec<_>>();
+                assert_eq!(found, reference(&storage.connection(), &page, &[]));
+            }
+        }
+    });
+}
