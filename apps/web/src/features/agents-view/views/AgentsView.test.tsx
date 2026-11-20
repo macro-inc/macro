@@ -198,7 +198,9 @@ vi.mock('@queries/agent-session/warm', () => ({
 vi.mock('@queries/soup/items', () => ({
   useSoupAstItemsQuery: () => ({ isPending: true }),
 }));
-vi.mock('../../routines/routines-page', () => ({ RoutinesPage: () => null }));
+vi.mock('../../routines/routines-page', () => ({
+  RoutinesPage: () => <div data-testid="routines-list" />,
+}));
 vi.mock('../agents-view.css', () => ({}));
 vi.mock('../components/AgentSessionPane', () => ({
   // Suspends like the real pane, whose session read waits for the first load.
@@ -811,6 +813,18 @@ it('tags a drawer roster entry as sidebar navigation', () => {
   render(() => <AgentsView />);
   fireEvent.click(screen.getByRole('button', { name: 'Roster' }));
   expect(sources).toEqual(['agents']);
+});
+
+it('leaves Routines navigation to its own header without a parent Back button', () => {
+  state.touch = true;
+  state.width = () => 390;
+  state.entry.current = () => ({
+    content: { type: 'component', id: 'routines' },
+  });
+  state.navigationSource.current = () => 'agents';
+  render(() => <AgentsView />);
+  expect(screen.getByTestId('routines-list')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Page back' })).toBeNull();
 });
 
 it('tags a drawer routines entry as sidebar navigation', () => {
