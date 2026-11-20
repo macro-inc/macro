@@ -119,7 +119,8 @@ the next delivery) and returns the image
 stack may override it with `OVERRIDE_TEAMMATE_RUNTIME_IMAGE_{AMD64,ARM64}` =
 `<repository>@sha256:<hex>`, ignored outside `ENVIRONMENT=local`) and the
 environment with public addresses (`MACRO_TEAMMATE_INSTALL_ID`, no
-`MACRO_COMPUTER_ID`). A move (`POST /team_agents/{agent}/install`) or removal
+`MACRO_COMPUTER_ID`; on a local stack, the in-network `OVERRIDE_*` addresses a
+local Macro computer gets, since the teammate joins the stack's network). A move (`POST /team_agents/{agent}/install`) or removal
 first marks the row's `checkpoint`; the old machine stops the agent (its last
 push), then `finish_checkpoint` (internal `.../{install}/checkpointed`, or at
 once when the machine is offline, or after `CHECKPOINT_TIMEOUT`) makes a new

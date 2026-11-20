@@ -4,7 +4,8 @@
 //! - [`AgentAddresses`]: as a Macro computer sees them. Local stacks
 //!   override them per fleet (`OVERRIDE_*`).
 //! - [`PublicAgentAddresses`]: as an owner's own machine sees them, the
-//!   environment's public defaults, never a fleet's override.
+//!   environment's public defaults, never a fleet's override; on a local
+//!   stack, the same as a local Macro computer.
 
 use macro_service_urls::macro_env::Environment;
 use macro_service_urls::{
@@ -82,6 +83,7 @@ fn checked_allowing(
 }
 
 /// The service URLs, before they are checked.
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct ServiceUrls {
     storage: String,
     auth: String,
@@ -250,12 +252,30 @@ impl EnrollmentEnvironment for AgentAddresses {
 }
 
 /// Resolves [`EnrollmentEnvironment`] for an owner's own machine: the
-/// environment's public addresses. A local stack's are loopback, for a
-/// teammate run on the same machine.
+/// environment's public addresses, never a fleet's override. A local stack
+/// is the exception: its teammate runs on the stack's machine, attached to
+/// the stack's network, so it gets what a local Macro computer gets (the
+/// in-network `OVERRIDE_*` names; a named instance's host ports and the
+/// container's own loopback would both miss the stack).
 pub struct PublicAgentAddresses(pub Environment);
+
+/// The URLs an owner's own machine in `environment` reaches Macro at, given
+/// what a Macro computer would get.
+fn own_machine(
+    environment: Environment,
+    computer_facing: impl FnOnce() -> Result<ServiceUrls, TeamAgentError>,
+) -> Result<ServiceUrls, TeamAgentError> {
+    match environment {
+        Environment::Local => computer_facing(),
+        Environment::Develop | Environment::Production => Ok(public(environment)),
+    }
+}
 
 impl EnrollmentEnvironment for PublicAgentAddresses {
     fn environment(&self) -> Result<Vec<(&'static str, String)>, TeamAgentError> {
-        environment(public(self.0), matches!(self.0, Environment::Local))
+        environment(
+            own_machine(self.0, computer_facing)?,
+            matches!(self.0, Environment::Local),
+        )
     }
 }
