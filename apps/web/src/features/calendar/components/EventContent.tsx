@@ -1,6 +1,6 @@
 import type { EventContentArg } from '@fullcalendar/core';
 import ExclamationIcon from '@icon/system/regular/exclamation-mark.svg';
-import { cn } from '@ui';
+import { cn, Spinner } from '@ui';
 import { Show } from 'solid-js';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { calendarEventLocation } from '../utils/macro-call-link';
@@ -15,6 +15,7 @@ interface EventContentProps {
   isSelected: boolean;
   timeFormat: CalendarTimeFormat;
   isNarrow?: boolean;
+  isUpdating?: boolean;
 }
 
 const SINGLE_LINE_EVENT_DURATION_MS = 15 * 60 * 1000;
@@ -46,10 +47,18 @@ export function EventContent(props: EventContentProps) {
   const selfResponseStatus = () =>
     props.event.attendees.find((attendee) => attendee.isSelf)?.responseStatus;
   const everyoneElseDeclined = () => hasEveryoneElseDeclined(props.event);
+  // Multi-day timed events use an all-day footprint, not midnight event times.
+  const isProjectedRange = () => isRenderedAllDay() && !props.event.allDay;
+  const displayedStart = () =>
+    isProjectedRange()
+      ? new Date(props.event.start)
+      : (props.renderProps.event.start ?? new Date(props.event.start));
+  const displayedEnd = () =>
+    isProjectedRange()
+      ? new Date(props.event.end)
+      : (props.renderProps.event.end ?? new Date(props.event.end));
   const usesSingleLineLayout = () => {
-    const duration =
-      new Date(props.event.end).getTime() -
-      new Date(props.event.start).getTime();
+    const duration = displayedEnd().getTime() - displayedStart().getTime();
 
     return (
       !props.event.allDay &&
@@ -60,8 +69,8 @@ export function EventContent(props: EventContentProps) {
   const timeText = () => {
     if (props.isNarrow || props.event.allDay) return undefined;
 
-    const start = new Date(props.event.start);
-    const end = new Date(props.event.end);
+    const start = displayedStart();
+    const end = displayedEnd();
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return props.renderProps.timeText;
     }
@@ -80,6 +89,7 @@ export function EventContent(props: EventContentProps) {
         props.isSelected && 'calendar-event-content-selected'
       )}
       data-response-status={selfResponseStatus()}
+      aria-busy={props.isUpdating || undefined}
     >
       <div
         class={cn(
@@ -94,6 +104,9 @@ export function EventContent(props: EventContentProps) {
           <span class="calendar-event-response-dot" aria-hidden="true" />
         </Show>
         <span class="calendar-event-title-row flex max-w-full min-w-0 shrink-0 items-center gap-0.5">
+          <Show when={props.isUpdating}>
+            <Spinner size="sm" label="Saving event" class="size-3" />
+          </Show>
           <Show when={everyoneElseDeclined()}>
             <span
               role="img"

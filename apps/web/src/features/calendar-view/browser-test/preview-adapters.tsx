@@ -117,6 +117,7 @@ export function useRespondToCalendarJoinRequestMutation(callbacks?: {
 export const isGuestInviteRefused = () => false;
 
 export const useVisibleCalendarsQuery = () => ({ isSuccess: true, data: [] });
+export const calendarEventIsUpdating = () => false;
 export const useDeleteCalendarEventMutation = () => ({
   isPending: false,
   mutate: () => announce('Delete event · Preview only'),
@@ -171,6 +172,7 @@ export const toast = { success: announce, alert: announce, failure: announce };
 
 export const createCalendarRsvpController = () => ({
   pending: () => false,
+  blocked: () => false,
   error: () => undefined,
   scopeOpen: () => false,
   scope: () => 'this_event',

@@ -1,4 +1,7 @@
-import { useRsvpCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  calendarEventIsUpdating,
+  useRsvpCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import type { CalendarRsvpScope } from '@service-email/client';
 import { type Accessor, createSignal } from 'solid-js';
 
@@ -20,9 +23,13 @@ export function createCalendarRsvpController(
   const [scope, setScope] = createSignal<CalendarRsvpScope>('this_event');
   const [error, setError] = createSignal<string>();
   const mutation = useRsvpCalendarEventMutation();
+  const blocked = () => {
+    const event = target();
+    return event !== undefined && calendarEventIsUpdating(event.eventId);
+  };
   const submit = (response: CalendarRsvpResponse, scope: CalendarRsvpScope) => {
     const event = target();
-    if (!event) return;
+    if (!event || blocked()) return;
     if (!navigator.onLine) {
       setError('You are offline. Reconnect to send your response.');
       return;
@@ -48,6 +55,7 @@ export function createCalendarRsvpController(
     );
   };
   return {
+    blocked,
     pending: () => mutation.isPending,
     error,
     scope,
@@ -56,7 +64,7 @@ export function createCalendarRsvpController(
     closeScope: () => setPendingResponse(undefined),
     respond: (response: CalendarRsvpResponse) => {
       const event = target();
-      if (!event) return;
+      if (!event || blocked()) return;
       if (!event.recurring) {
         submit(response, 'all');
         return;
@@ -66,7 +74,7 @@ export function createCalendarRsvpController(
     },
     confirmScope: () => {
       const response = pendingResponse();
-      if (!response) return;
+      if (!response || blocked()) return;
       submit(response, scope());
       setPendingResponse(undefined);
     },

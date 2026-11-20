@@ -1,4 +1,5 @@
 import type { EventInput } from '@fullcalendar/core';
+import type { EventTime } from '@service-calendar/generated/schemas/eventTime';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
@@ -127,6 +128,8 @@ export interface CalendarEvent {
   sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
   recurrenceLines: string[];
+  /** Series master range, retained to apply occurrence edits as relative changes. */
+  seriesTime?: EventTime;
   /** Original IANA timezone for a timed occurrence. */
   timeZone?: string;
   /** Event title. */
@@ -286,6 +289,7 @@ export function mapCalendarOccurrence(
     occurrenceKey: occurrence.occurrenceKey,
     recurrenceId: occurrence.recurrenceId ?? undefined,
     recurrenceLines: event.recurrenceLines ?? [],
+    seriesTime: event.time,
     isCancelled: occurrence.isCancelled,
     isReadOnly: content.isReadOnly,
     conferenceUrl: event.conferenceUrl ?? undefined,

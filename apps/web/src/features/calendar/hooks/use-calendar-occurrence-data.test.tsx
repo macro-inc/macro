@@ -192,6 +192,17 @@ afterEach(() => {
 });
 
 describe('calendar occurrence presentation readiness', () => {
+  it('keeps cached events editable after a background occurrence refresh fails', async () => {
+    requests.calendars.mockResolvedValue([calendar]);
+    requests.occurrences.mockResolvedValue(occurrenceData());
+    const data = renderCalendarData();
+    await waitFor(() => expect(screen.getByText('Planning')).toBeTruthy());
+    requests.occurrences.mockRejectedValue(new Error('Unavailable'));
+    await data.occurrencesQuery.refetch();
+    expect(data.occurrencesQuery.isError).toBe(true);
+    expect(data.isLoading()).toBe(false);
+    expect(screen.getByText('Planning')).toBeTruthy();
+  });
   it('keeps colored events visible during a same-range transport handoff', async () => {
     const [transport, setTransport] = createSignal('rest');
     requests.transport = transport;

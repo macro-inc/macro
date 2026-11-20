@@ -26,6 +26,7 @@ vi.mock('@queries/calendar/calendars', () => ({
   useVisibleCalendarsQuery: () => ({ isSuccess: true, data: [] }),
 }));
 vi.mock('@queries/calendar/mutations', () => ({
+  calendarEventIsUpdating: () => false,
   useDeleteCalendarEventMutation: () => ({
     mutate: mocks.deleteEvent,
     isPending: false,

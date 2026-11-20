@@ -1,7 +1,8 @@
 import { analytics } from '@app/lib/analytics';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
+import { captureCacheWriteSession } from '@graphql-cache/session-writes';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { CalendarEvent as CalendarEventEntity } from '@service-calendar/generated/schemas/calendarEvent';
@@ -21,6 +22,15 @@ import type { CalendarEventSourceContent } from '@service-storage/generated/sche
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
+import {
+  beginCalendarUpdate,
+  type CalendarUpdate,
+  finishCalendarUpdateOperation,
+  installCalendarUpdate,
+  isCalendarEventUpdating,
+  prepareCalendarUpdate,
+  settleCalendarUpdate,
+} from './event-updates';
 import { answeringGraphqlCalendarHost } from './graphql/flag';
 import {
   CalendarMutationError,
@@ -40,6 +50,7 @@ import { invalidateCalendarEventPreviews } from './mention-preview';
 import {
   type CalendarOccurrencesData,
   invalidateCalendarOccurrences,
+  refreshCalendarEventOccurrences,
 } from './occurrences';
 
 export type {
@@ -82,19 +93,25 @@ async function patchOccurrenceCaches(
   };
 }
 
-/**
- * Refreshes what a settled write can change without holding the mutation
- * open: the write is done once the provider answers, while a delta sync can
- * queue behind other cache work for many seconds.
- */
-function refreshAfterWrite(eventId: string) {
+/** A save's interaction lock outlives acceptance, but not its refresh requests. */
+function refreshAfterWrite(eventId: string, update?: CalendarUpdate) {
   fireAndForget(invalidateCalendarInvitations(), 'calendar-mutations');
   invalidateCalendarEventPreviews(eventId);
   const revision = occurrenceWriteRevision;
-  fireAndForget(
-    invalidateCalendarOccurrences(() => revision === occurrenceWriteRevision),
-    'calendar-mutations'
-  );
+  const refresh = async () => {
+    if (!update) {
+      await invalidateCalendarOccurrences(
+        () => revision === occurrenceWriteRevision
+      );
+      return;
+    }
+    try {
+      await refreshCalendarEventOccurrences(update);
+    } finally {
+      finishCalendarUpdateOperation(update.client, update);
+    }
+  };
+  fireAndForget(refresh(), 'calendar-mutations');
 }
 
 function patchEventItems(
@@ -696,109 +713,78 @@ export interface UpdateCalendarEventArgs {
   recurrenceId?: string;
   /** Cache key of the occurrence a scoped update targets, for the optimistic update. */
   occurrenceKey?: string;
+  /** Pre-edit times for an occurrence opened without a cached calendar range; never sent. */
+  timeBasis?: {
+    seriesTime: EventTime;
+    recurrenceLines: string[];
+    occurrence: Pick<
+      CalendarOccurrenceItem['occurrence'],
+      'occurrenceKey' | 'recurrenceId' | 'time'
+    >;
+  };
+  /** UI-owned move span; never serialized into the request. */
+  parentSpan?: Span;
+  /** Shared optimistic cache state is installed; the grid can release its preview. */
+  onOptimistic?: () => void;
+  /** UI-owned acceptance notification, before occurrence revalidation starts. */
+  onWriteAccepted?: () => void;
   patch: Omit<
     UpdateCalendarEventRequest,
     'calendarId' | 'scope' | 'recurrenceId'
   >;
 }
 
+/** Tracks a save through the provider write and confirming occurrence refresh. */
+export const calendarEventIsUpdating = (eventId: string) =>
+  isCalendarEventUpdating(queryClient, eventId);
+
 type UpdateCallbacks = MutationCallbacks<
   CalendarEventEntity | undefined,
   Error,
   UpdateCalendarEventArgs,
-  CalendarMutationContext
+  CalendarUpdate
 >;
-
-/** The per-copy fields a patch rewrites on one copy of the event. */
-function applyCopyPatch<
-  T extends Pick<
-    CalendarEventEntity,
-    'title' | 'description' | 'location' | 'reminders'
-  >,
->(copy: T, patch: UpdateCalendarEventArgs['patch']): T {
-  const next = { ...copy };
-  if (patch.title !== undefined && patch.title !== null) {
-    next.title = patch.title;
-  }
-  if (patch.description !== undefined) {
-    next.description = patch.description;
-  }
-  if (patch.location !== undefined) {
-    next.location = patch.location;
-  }
-  if (patch.reminders !== undefined && patch.reminders !== null) {
-    next.reminders = patch.reminders;
-  }
-  return next;
-}
-
-/**
- * Applies the field patch to a cached item. Per-copy fields land on the
- * addressed copy — the named calendar's, else the canonical (first) one —
- * and on the entity when that copy is canonical, mirroring how the server
- * records them. Times are only patched through to standalone occurrences —
- * recurring expansion is the provider's job, so recurring series keep their
- * cached instances until the refetch lands.
- */
-function applyEventPatch(
-  item: CalendarOccurrenceItem,
-  args: UpdateCalendarEventArgs
-): CalendarOccurrenceItem {
-  const { patch } = args;
-  const sources = item.event.sources ?? [];
-  const targetCalendarId = args.calendarId ?? sources[0]?.calendarId;
-  const patchesCanonical =
-    sources.length === 0 || targetCalendarId === sources[0]?.calendarId;
-  const event = patchesCanonical
-    ? applyCopyPatch(item.event, patch)
-    : { ...item.event };
-  if (patch.guestPolicy && patchesCanonical) {
-    event.guestPolicy = patch.guestPolicy;
-  }
-  if (sources.length > 0) {
-    event.sources = sources.map((copy) =>
-      copy.calendarId === targetCalendarId ? applyCopyPatch(copy, patch) : copy
-    );
-  }
-  const time = patch.time ?? undefined;
-  const isStandalone =
-    event.recurrenceLines.length === 0 &&
-    (item.occurrence.recurrenceId === undefined ||
-      item.occurrence.recurrenceId === null);
-  let occurrence = item.occurrence;
-  if (time) {
-    event.time = time as EventTime;
-    if (isStandalone) {
-      occurrence = { ...occurrence, time: time as EventTime };
-    }
-  }
-  return { ...item, event, occurrence };
-}
 
 async function updateCalendarEvent(
   args: UpdateCalendarEventArgs
 ): Promise<CalendarEventEntity | undefined> {
-  return Telemetry.span('calendar.update_event', async (span) => {
+  const writeSession = captureCacheWriteSession();
+  const operation = async (span: Span) => {
     const host = answeringGraphqlCalendarHost();
     span.setAttr('calendar.event_id', args.eventId);
     span.setAttr('calendar.update.scope', args.scope ?? 'all');
     span.setAttr('calendar.transport', host ? 'graphql' : 'rest');
     try {
-      if (host) return committedEvent(await executeGraphqlUpdate(host, args));
-      return await throwOnErr(() =>
-        emailClient.updateCalendarEvent(args.eventId, {
-          ...args.patch,
-          calendarId: args.calendarId,
-          scope: args.scope,
-          recurrenceId: args.recurrenceId,
-        })
+      const prepared = await span.span('calendar.update_queue', () =>
+        prepareCalendarUpdate(args)
+      );
+      if (!writeSession.isCurrent())
+        throw new Error('Calendar account changed before saving');
+      if (host)
+        return committedEvent(
+          await span.run(() =>
+            executeGraphqlUpdate(host, prepared, undefined, true)
+          )
+        );
+      return await span.run(() =>
+        throwOnErr(() =>
+          emailClient.updateCalendarEvent(args.eventId, {
+            ...prepared.patch,
+            calendarId: prepared.calendarId,
+            scope: prepared.scope,
+            recurrenceId: prepared.recurrenceId,
+          })
+        )
       );
     } catch (error) {
       // Provider messages can quote addresses; record only the category.
       span.error('Calendar event update failed');
       throw error;
     }
-  });
+  };
+  return args.parentSpan
+    ? args.parentSpan.span('calendar.update_event', operation)
+    : Telemetry.span('calendar.update_event', operation);
 }
 
 /**
@@ -814,23 +800,32 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
       CalendarEventEntity | undefined,
       Error,
       UpdateCalendarEventArgs,
-      CalendarMutationContext
+      CalendarUpdate
     >(
       {
-        onMutate: (args) => {
-          const patchesOneOccurrence =
-            args.scope === 'this_event' && args.occurrenceKey !== undefined;
-          return patchOccurrenceCaches(
-            patchEventItems(args.eventId, (item) =>
-              patchesOneOccurrence &&
-              item.occurrence.occurrenceKey !== args.occurrenceKey
-                ? item
-                : applyEventPatch(item, args)
-            )
-          );
+        onMutate: async (args) => {
+          occurrenceWriteRevision += 1;
+          const context = beginCalendarUpdate(queryClient, args);
+          await installCalendarUpdate(queryClient, context);
+          return context;
         },
-        onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, args) => refreshAfterWrite(args.eventId),
+        onSuccess: (_data, args, context) => {
+          if (context?.state.isCurrent()) args.onWriteAccepted?.();
+        },
+        onSettled: (_data, error, args, context) => {
+          if (context) settleCalendarUpdate(context.client, context, !error);
+          if (!context) return;
+          if (
+            error ||
+            context.client !== queryClient ||
+            !context.state.isCurrent()
+          ) {
+            finishCalendarUpdateOperation(context.client, context);
+            if (context.state.isCurrent()) refreshAfterWrite(args.eventId);
+            return;
+          }
+          refreshAfterWrite(args.eventId, context);
+        },
       },
       callbacks
     ),

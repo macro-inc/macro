@@ -348,7 +348,10 @@ export function CalendarInviteCard(props: {
                 <Tabs
                   touch="segmented"
                   aria-label="Your response"
-                  options={RESPONSES}
+                  options={RESPONSES.map((option) => ({
+                    ...option,
+                    disabled: props.actions?.responseDisabled,
+                  }))}
                   value={
                     RESPONSES.find(
                       (option) => option.value === resolved()?.response

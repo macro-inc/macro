@@ -79,6 +79,7 @@ export function EventRsvpSection(props: {
                 aria-pressed={
                   selfAttendee()?.responseStatus === option.response
                 }
+                disabled={rsvp.blocked()}
                 onClick={() => rsvp.respond(option.response)}
               >
                 {option.label}
@@ -106,6 +107,7 @@ export function EventRsvpSection(props: {
       <EventRsvpScopeDialog
         open={rsvp.scopeOpen()}
         scope={rsvp.scope()}
+        pending={rsvp.blocked()}
         onScopeChange={rsvp.setScope}
         onClose={rsvp.closeScope}
         onConfirm={rsvp.confirmScope}
