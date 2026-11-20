@@ -80,6 +80,9 @@ export default {
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
   starting: 'Starting…',
+  unhealthy: 'Not responding',
+  unhealthyHint:
+    "It's back once it reconnects; Macro restarts it if it doesn't",
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',

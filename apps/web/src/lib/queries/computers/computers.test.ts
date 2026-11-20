@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computerPresenceKey,
   computerStatusKey,
+  computersPollInterval,
   retryComputerOffers,
 } from './computers';
 
@@ -43,6 +44,22 @@ describe('computerStatusKey', () => {
     expect(computerStatusKey([computer('a')])).toBe('a:ready');
     expect(computerStatusKey([starting])).toBe('a:starting');
     expect(computerStatusKey(undefined)).toBe('');
+  });
+});
+
+describe('computersPollInterval', () => {
+  const as = (status: ComputerStatus['status']) =>
+    ({ ...computer('a'), status }) as ComputerStatus;
+
+  it('polls fast while a computer is unhealthy, so a recovery or give-up shows', () => {
+    expect(computersPollInterval([as('unhealthy')])).toBe(3000);
+  });
+
+  it('polls slowly while a computer may go unhealthy or recover on its own', () => {
+    expect(computersPollInterval([as('ready')])).toBe(30_000);
+    expect(computersPollInterval([as('failed')])).toBe(30_000);
+    expect(computersPollInterval([as('stopped')])).toBe(false);
+    expect(computersPollInterval(undefined)).toBe(false);
   });
 });
 

@@ -8135,6 +8135,7 @@
           "needs_attention",
           "waiting_for_capacity",
           "ready",
+          "unhealthy",
           "starting",
           "stopping",
           "stopped",
@@ -10952,6 +10953,7 @@
           "starting",
           "running",
           "paused",
+          "unhealthy",
           "failed",
           "released"
         ]
