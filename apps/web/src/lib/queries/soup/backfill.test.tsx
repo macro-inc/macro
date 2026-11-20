@@ -124,6 +124,12 @@ const recencyTree = (signal: boolean, gte: string) => ({
   },
 });
 
+/** The channel lane's pages, which these tests finish at once to reach the
+ * resumable lanes behind it. */
+function isChannelLanePage(input: unknown): boolean {
+  return JSON.stringify(input).includes('"sortMethod":"CREATED_AT"');
+}
+
 function BackfillRunner(props: { userId: string }) {
   useSoupBackfills(
     () => props.userId,
@@ -818,7 +824,7 @@ describe('runSoupBackfills', () => {
     'restarts the runner with %s storage semantics and ignores obsolete completions',
     async (storage) => {
       localStorage.setItem(
-        'graphql-soup-backfill:v19:user-1:channel-directory',
+        'graphql-soup-backfill:v19:user-1:core-entities',
         JSON.stringify({
           userId: 'user-1',
           storageGeneration: 'storage-1',
@@ -841,6 +847,8 @@ describe('runSoupBackfills', () => {
           options: { signal: AbortSignal }
         ) =>
           new Promise((resolve) => {
+            if (isChannelLanePage(variables.input))
+              return resolve({ nextCursor: null });
             fetchInputs.push(variables.input);
             fetchSignals.push(options.signal);
             // Model an already-admitted cache write that cannot be cancelled.
@@ -849,9 +857,7 @@ describe('runSoupBackfills', () => {
       );
 
       const rendered = render(() => <BackfillRunner userId="user-1" />);
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
-      );
+      await vi.waitFor(() => expect(fetchInputs).toHaveLength(1));
       expect(fetchInputs[0]).toMatchObject({
         continuation: { cursor: 'stale-cursor' },
       });
@@ -861,9 +867,7 @@ describe('runSoupBackfills', () => {
       }
       for (const callback of cacheGenerationCallbacks) callback({ storage });
 
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
-      );
+      await vi.waitFor(() => expect(fetchInputs).toHaveLength(2));
       expect(fetchSignals[0]?.aborted).toBe(true);
       expect(fetchInputs[1]).toMatchObject(
         storage === 'preserved'
@@ -875,16 +879,51 @@ describe('runSoupBackfills', () => {
           ? { nextCursor: 'stale-cursor', pagesFetched: 12 }
           : { nextCursor: null, pagesFetched: 0 };
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+        loadSoupBackfillCheckpoint('user-1', 'core-entities')
       ).toMatchObject(expected);
       finishPages[0]({ nextCursor: 'obsolete-cursor' });
       await new Promise((resolve) => setTimeout(resolve, 0));
       expect(
-        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+        loadSoupBackfillCheckpoint('user-1', 'core-entities')
       ).toMatchObject(expected);
       rendered.unmount();
     }
   );
+
+  it('starts an interrupted channel pass again at its first page', async () => {
+    const completedAt = '2026-09-01T00:00:00.000Z';
+    localStorage.setItem(
+      'graphql-soup-backfill:v19:user-1:channel-directory',
+      JSON.stringify({
+        userId: 'user-1',
+        storageGeneration: 'storage-1',
+        nextCursor: 'saved-cursor',
+        pagesFetched: 12,
+        completed: false,
+        scanStartedAt: '2026-09-02T00:00:00.000Z',
+        updatedSince: null,
+        completedAt,
+      })
+    );
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      () => new Promise(() => {})
+    );
+    const rendered = render(() => <BackfillRunner userId="user-1" />);
+    try {
+      await vi.waitFor(() =>
+        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce()
+      );
+      expect(graphqlMocks.hydrateGraphqlSoup.mock.calls[0][1]).toMatchObject({
+        input: { initial: { sortMethod: 'CREATED_AT' } },
+      });
+      // The finished pass before it still answers for the directory.
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+      ).toMatchObject({ nextCursor: null, pagesFetched: 0, completedAt });
+    } finally {
+      rendered.unmount();
+    }
+  });
 
   it.each(['preserved', 'reset'] as const)(
     'resumes completed lane watermarks only for %s storage',
@@ -975,28 +1014,36 @@ describe('runSoupBackfills', () => {
     leaderMocks.createTabLeaderSignal
       .mockReturnValueOnce(firstLeader)
       .mockReturnValueOnce(secondLeader);
-    graphqlMocks.hydrateGraphqlSoup
-      .mockResolvedValueOnce({ nextCursor: 'committed-page-cursor' })
-      .mockImplementation(() => new Promise(() => {}));
+    const coreInputs: unknown[] = [];
+    let corePages = 0;
+    graphqlMocks.hydrateGraphqlSoup.mockImplementation(
+      (_document, variables: { input: unknown }) => {
+        if (isChannelLanePage(variables.input))
+          return Promise.resolve({ nextCursor: null });
+        coreInputs.push(variables.input);
+        corePages += 1;
+        return corePages === 1
+          ? Promise.resolve({ nextCursor: 'committed-page-cursor' })
+          : new Promise(() => {});
+      }
+    );
     const first = render(() => <BackfillRunner userId="user-1" />);
     const second = render(() => <BackfillRunner userId="user-1" />);
     try {
       await vi.waitFor(() =>
         expect(
-          loadSoupBackfillCheckpoint('user-1', 'channel-directory')
+          loadSoupBackfillCheckpoint('user-1', 'core-entities')
         ).toMatchObject({
           nextCursor: 'committed-page-cursor',
           pagesFetched: 1,
         })
       );
-      expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledOnce();
+      await vi.waitFor(() => expect(coreInputs).toHaveLength(2));
       setFirstLeader(false);
       setSecondLeader(true);
-      await vi.waitFor(() =>
-        expect(graphqlMocks.hydrateGraphqlSoup).toHaveBeenCalledTimes(2)
-      );
-      expect(graphqlMocks.hydrateGraphqlSoup.mock.calls[1][1]).toMatchObject({
-        input: { continuation: { cursor: 'committed-page-cursor' } },
+      await vi.waitFor(() => expect(coreInputs).toHaveLength(3));
+      expect(coreInputs[2]).toMatchObject({
+        continuation: { cursor: 'committed-page-cursor' },
       });
       expect(cacheGenerationCallbacks.size).toBe(1);
     } finally {

@@ -17,6 +17,7 @@ import {
   ContactDirectoryScopeError,
   readContactCacheScope,
 } from '../contacts/cache-scope';
+import { sleep } from '@core/util/sleep';
 import { balancedOr } from '../soup/graphql/entity-input';
 import {
   CHANNEL_RECORD_PREFIX,
@@ -26,6 +27,10 @@ import {
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
 const DELETE_BATCH = 500;
+// A failed reconciliation is tried again this many times, this far apart,
+// before the pass fails: failing it pages the whole lane again.
+const RECONCILE_ATTEMPTS = 3;
+const RECONCILE_RETRY_MS = 1_000;
 const NEVER_ABORTED = new AbortController().signal;
 
 type FetchPage = (
@@ -86,6 +91,23 @@ export function readableChannelsInput(
   };
 }
 
+/**
+ * The ids a by-id read of `requested` returned, or undefined when its page is
+ * not complete evidence of which the viewer can read. The server puts a
+ * cursor on every page that reaches its limit, so a page that returned every
+ * requested id is complete even with one.
+ */
+export function returnedChannelIds(
+  requested: readonly string[],
+  page: GraphqlSoupHydrationPage
+): Set<string> | undefined {
+  if (!page.entityIds) return undefined;
+  const returned = new Set(page.entityIds);
+  if (page.nextCursor !== null && !requested.every((id) => returned.has(id)))
+    return undefined;
+  return returned;
+}
+
 /** Which of `ids` the server no longer returns to the viewer. Undefined when
  * a page is not complete evidence. */
 async function unreadableChannels(
@@ -98,8 +120,8 @@ async function unreadableChannels(
   for (const batch of chunks(ids, BY_ID_BATCH)) {
     signal?.throwIfAborted();
     const page = await fetch(readableChannelsInput(lane, batch), { signal });
-    if (page.nextCursor !== null || !page.entityIds) return undefined;
-    const returned = new Set(page.entityIds);
+    const returned = returnedChannelIds(batch, page);
+    if (!returned) return undefined;
     gone.push(...batch.filter((id) => !returned.has(id)));
   }
   return gone;
@@ -132,10 +154,10 @@ async function stillInScope(input: Reconciliation): Promise<boolean> {
   }
 }
 
-/** Deletes the cached channels the viewer can no longer read: channels they
- * were removed from or that were deleted while no event reached them. */
 type ReconcileOutcome = 'incomplete' | 'scope_changed' | 'complete';
 
+/** Deletes the cached channels the viewer can no longer read: channels they
+ * were removed from or that were deleted while no event reached them. */
 async function removeUnreadableChannels(
   input: Reconciliation
 ): Promise<ReconcileOutcome> {
@@ -200,20 +222,54 @@ async function readReconcileScope(
   }
 }
 
+/** A pass whose last page landed but that could not prove which cached
+ * channels are stale. Failing its last page keeps the lane from recording the
+ * pass as complete, which the directory reads as the cache holding exactly
+ * the viewer's channels. */
+export class ChannelDirectoryPassUnproven extends Error {
+  constructor(readonly reason: 'partial_pass' | 'scope' | ReconcileOutcome) {
+    super(`channel directory pass could not reconcile the cache: ${reason}`);
+  }
+}
+
+/** Reconciles, again after a failed read, until the cache is proven. */
+async function reconcile(input: Reconciliation): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const outcome = await removeUnreadableChannels(input);
+      if (outcome === 'complete') return;
+      throw new ChannelDirectoryPassUnproven(outcome);
+    } catch (error) {
+      input.signal?.throwIfAborted();
+      if (
+        error instanceof ChannelDirectoryPassUnproven ||
+        attempt >= RECONCILE_ATTEMPTS
+      )
+        throw error;
+      Telemetry.error(error, { surface: 'channel-directory-reconcile' });
+      await sleep(RECONCILE_RETRY_MS * attempt);
+    }
+  }
+}
+
 /**
  * Page fetcher for the channel backfill lane that also removes what the lane
  * proves stale. The lane lists every channel the viewer joined. When a pass
  * that started at its first page finishes, each cached channel it did not
  * return is read again by id; the ones the server no longer returns are
- * deleted from the cache. A resumed, failed or cancelled pass, or a cache
- * that belongs to another viewer, deletes nothing.
+ * deleted from the cache. A pass that cannot do so (it resumed from a cursor,
+ * a page listed no ids, the cache changed hands, or the reads kept failing)
+ * deletes nothing and fails on its last page, so the lane never records it
+ * complete. Without a cache there is nothing to reconcile.
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
   fetch: FetchPage = fetchDirectoryPage
 ): Promise<FetchPage> {
-  const scope = await readReconcileScope(host, userId);
+  // Listed as the pass begins: a channel cached later by an event is not one
+  // the pass could have missed.
+  let scope = await readReconcileScope(host, userId);
   const seen = new Set<string>();
   let lane: GraphqlSoupInitialInput | undefined;
   let firstPage = true;
@@ -231,26 +287,23 @@ export async function createChannelDirectoryBackfillFetcher(
     if (!page.entityIds) completeEvidence = false;
     for (const id of page.entityIds ?? []) seen.add(id);
 
-    if (page.nextCursor === null && completeEvidence && lane && scope) {
-      const candidates = scope.previous.filter((id) => !seen.has(id));
-      if (candidates.length > 0) {
-        try {
-          await removeUnreadableChannels({
-            host: scope.host,
-            userId,
-            generation: scope.generation,
-            lane,
-            candidates,
-            fetch,
-            signal: options?.signal,
-          });
-        } catch (error) {
-          options?.signal?.throwIfAborted();
-          // Stale records stay until the next pass; the page itself landed.
-          Telemetry.error(error, { surface: 'channel-directory-reconcile' });
-        }
-      }
-    }
+    if (page.nextCursor !== null || !host || host.disabled) return page;
+    if (!completeEvidence || !lane)
+      throw new ChannelDirectoryPassUnproven('partial_pass');
+    // The viewer's identity may have reached the cache only with this pass.
+    scope ??= await readReconcileScope(host, userId);
+    if (!scope) throw new ChannelDirectoryPassUnproven('scope');
+    const candidates = scope.previous.filter((id) => !seen.has(id));
+    if (candidates.length > 0)
+      await reconcile({
+        host: scope.host,
+        userId,
+        generation: scope.generation,
+        lane,
+        candidates,
+        fetch,
+        signal: options?.signal,
+      });
     return page;
   };
 }

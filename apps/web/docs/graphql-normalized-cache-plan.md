@@ -1342,9 +1342,15 @@ the pass would never return it.
 The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
 what a pass proves stale. When a pass that started at its first page finishes,
 each cached channel it did not return is read again by id; the ones the server
-no longer returns are deleted. A resumed, failed or cancelled pass, a page
-without entity ids, or a cache that belongs to another viewer or generation
-deletes nothing. A by-id read also returns public and team channels the viewer
+no longer returns are deleted. A by-id page is evidence only when it lists
+entity ids and either ends or returned every id it was asked for (a page that
+reaches its limit carries a cursor). Its reads are tried three times. A pass
+that cannot reconcile (it resumed from a cursor, a page lacked entity ids, the
+cache belongs to another viewer or changed generation, or the reads kept
+failing) deletes nothing and fails its last page, so its checkpoint is never
+marked complete. The lane restarts every pass at its first page
+(`restartOnRun`); the previous pass's completion keeps the directory complete
+meanwhile. A by-id read also returns public and team channels the viewer
 opened without joining (`isParticipant: false`), so the cache holds those too:
 a joined list filters them out.
 

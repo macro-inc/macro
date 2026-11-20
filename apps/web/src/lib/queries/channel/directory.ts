@@ -69,7 +69,10 @@ import {
   CHANNEL_DIRECTORY_CHECKPOINT_ID,
   CHANNEL_DIRECTORY_INPUT,
 } from './directory-lane';
-import { readableChannelsInput } from './directory-reconcile';
+import {
+  readableChannelsInput,
+  returnedChannelIds,
+} from './directory-reconcile';
 import { channelKeys } from './keys';
 
 // The server answers a by-id read of at most this many channels in one page.
@@ -604,12 +607,12 @@ export function createCachedChannelDirectory(
     // A lookup answers from the directory, so let it see the records first.
     for (const id of ids) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
     await runner();
-    if (page.nextCursor !== null || !page.entityIds)
-      return { returned: undefined };
+    const returned = returnedChannelIds(ids, page);
+    if (!returned) return { returned: undefined };
     const records = untrack(state).records;
     return {
-      returned: new Set(page.entityIds),
-      unreadable: page.entityIds.filter((id) => !records[id]),
+      returned,
+      unreadable: [...returned].filter((id) => !records[id]),
     };
   });
 

@@ -102,6 +102,9 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   // so a finished pass also removes the cached channels it proves stale.
   createFetchPage: createChannelDirectoryBackfillFetcher,
   refreshAll: true,
+  // A pass resumed from a cursor cannot tell which channels are stale, and
+  // the fetcher fails its last page, so a pass always starts at the top.
+  restartOnRun: true,
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
   input: CHANNEL_DIRECTORY_INPUT,
