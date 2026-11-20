@@ -34,7 +34,7 @@ where
     Harness: SessionOpener + AgentSessionNotificationRecipient + Clone,
     Sessions: AgentSessionService,
     Broker: MacroEventBroker,
-    Repo: AgentSessionRepo,
+    Repo: AgentSessionRepo + Clone,
     Connections: ConnectionStore,
     Connect: MacroConnect,
     Auth: MacroAuthorizationService,
