@@ -1,9 +1,10 @@
+#![deny(missing_docs)]
 //! An in-memory stand-in for deadsimple.email's REST API, for local stacks
 //! and previews without a provider key. No real mail moves: mail between
 //! two fake mailboxes is delivered to the other in memory, anything else is
 //! kept in an outbox. Every response says `x-fake-vendor: not-live`.
 //!
-//! It serves the subset of the API the [`super::deadsimple`] adapter uses,
+//! It serves the subset of the API the `agent_mailbox` deadsimple adapter uses,
 //! in the same shapes, and enforces the same confinement: a mailbox-scoped
 //! key sees only its own mailbox (`404` for any other), and only the
 //! provisioning key may create, scope or delete.

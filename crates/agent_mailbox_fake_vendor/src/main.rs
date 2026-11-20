@@ -22,8 +22,7 @@ async fn main() -> Result<(), rootcause::Report> {
         "fake vendor, not live: listening on {}",
         listener.local_addr()?
     );
-    let router =
-        agent_mailbox::outbound::fake_vendor::FakeVendor::new(&arguments.admin_key).router();
+    let router = agent_mailbox_fake_vendor::FakeVendor::new(&arguments.admin_key).router();
     axum::serve(listener, router).await?;
     Ok(())
 }

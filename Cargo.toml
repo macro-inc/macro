@@ -18,6 +18,7 @@ members = [
   "crates/agent_git",
   "crates/team_agents",
   "crates/agent_mailbox",
+  "crates/agent_mailbox_fake_vendor",
   "crates/routines",
   "crates/routine_program",
   "crates/shown_text",

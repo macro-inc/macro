@@ -45,6 +45,9 @@ pub const CURSOR_API_KEY_KMS_ALIAS: &str = "alias/macro-local-cursor-api-key";
 /// Dedicated envelope-encryption key for local ChatGPT account connections.
 pub const CODEX_OAUTH_KMS_ALIAS: &str = "alias/macro-local-codex-oauth";
 
+/// Key email_service encrypts agent mailboxes' scoped provider keys with.
+pub const AGENT_MAILBOX_KMS_ALIAS: &str = "alias/macro-local-agent-mailbox";
+
 /// Key the public MCP OAuth broker encrypts its authorization codes' tokens with.
 pub const MCP_OAUTH_KMS_ALIAS: &str = "alias/macro-local-mcp-oauth";
 

@@ -1,12 +1,12 @@
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{
+use agent_mailbox::domain::models::{
     AgentMailboxId, CreateMailbox, LocalPart, MessageDirection, MessagePage, OutgoingMessage,
     ProviderMessageId, ReplyMessage,
 };
-use crate::domain::ports::{MailboxClient, MailboxProvisioner, ProviderError};
-use crate::outbound::deadsimple::{DeadSimple, ProvisioningKey};
+use agent_mailbox::domain::ports::{MailboxClient, MailboxProvisioner, ProviderError};
+use agent_mailbox::outbound::deadsimple::{DeadSimple, ProvisioningKey};
 
 const ADMIN_KEY: &str = "dse_fake_not_live";
 
