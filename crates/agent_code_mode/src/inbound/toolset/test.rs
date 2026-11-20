@@ -226,6 +226,80 @@ fn every_code_tool_forbids_guessing_the_sdk() {
 }
 
 #[test]
+fn code_tools_say_what_follows_an_unknown_and_forbid_probing_and_scope_guessing() {
+    let never_guess = include_str!("shared/never_guess.md");
+    for rule in [
+        "every type its options take",
+        "When ReadCodeDocs answers a symbol unknown",
+        "never a program that guesses",
+        "Never inspect the SDK at runtime",
+        "toString()",
+        "Never choose who can see or own",
+        "say which scope you used",
+    ] {
+        assert!(never_guess.contains(rule), "never_guess.md lacks {rule:?}");
+    }
+    let tools = toolset().tools;
+    assert!(
+        tools["ReadCodeDocs"]
+            .description
+            .contains("An unknown symbol comes back with the nearest symbols")
+    );
+    assert!(
+        tools["DescribeCodeTools"]
+            .description
+            .contains("after ReadCodeDocs answers a symbol unknown")
+    );
+}
+
+#[test]
+fn an_unknown_symbol_suggests_the_nearest_real_one_and_its_entity() {
+    let read = ReadCodeDocs {
+        symbols: vec!["PropertyNamespace.create".into(), "Zzzzzzzzzzzzzzzz".into()],
+    }
+    .read()
+    .unwrap();
+    assert!(read.references.is_empty());
+    assert_eq!(
+        read.unknown,
+        ["PropertyNamespace.create", "Zzzzzzzzzzzzzzzz"]
+    );
+    // A symbol nothing is near gets no suggestion rather than noise.
+    assert_eq!(read.suggestions.len(), 1);
+    let suggestion = &read.suggestions[0];
+    assert_eq!(suggestion.symbol, "PropertyNamespace.create");
+    assert_eq!(suggestion.did_you_mean[0], "PropertiesNamespace.create");
+    assert!(suggestion.did_you_mean.len() <= 3);
+    assert_eq!(suggestion.entities[0], "properties");
+    // The same unknown symbol asked for twice is suggested for once.
+    let twice = ReadCodeDocs {
+        symbols: vec!["PropertyNamespace.create".into(); 2],
+    }
+    .read()
+    .unwrap();
+    assert_eq!(twice.suggestions.len(), 1);
+}
+
+#[test]
+fn a_type_named_without_its_namespace_suggests_the_namespaced_symbols() {
+    let read = ReadCodeDocs {
+        symbols: vec!["SetPropertyValue".into()],
+    }
+    .read()
+    .unwrap();
+    assert!(read.references.is_empty());
+    assert_eq!(read.unknown, ["SetPropertyValue"]);
+    let suggestion = &read.suggestions[0];
+    assert!(
+        suggestion
+            .did_you_mean
+            .contains(&"properties.SetPropertyValue".to_owned()),
+        "{:?}",
+        suggestion.did_you_mean
+    );
+}
+
+#[test]
 fn symbols_from_an_index_read_as_their_own_references() {
     let read = ReadCodeDocs {
         symbols: vec![

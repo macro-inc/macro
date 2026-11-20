@@ -97,7 +97,8 @@ stacks. Process isolation belongs to
   (`cognition::domain::decide_in_batches`; a late or failed call loses only
   its own entities), for the per-turn prompt (≥ 0.5, top four, 48 KiB) or a
   `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
-  reads symbol references (32 KiB). `Guidance::Selected` (owners with
+  reads symbol references (32 KiB) and answers an unknown symbol with the
+  nearest real ones and the entities that list them (`suggest`). `Guidance::Selected` (owners with
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
   carry `inline_guides`. The routines guide carries the Compose Routines system
   skill after it (`attached_skill`): code mode its code form
