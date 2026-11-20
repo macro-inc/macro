@@ -13,6 +13,19 @@ fn source(span: &str, text: &str) -> Result<(), InputError> {
     Ok(())
 }
 
+/// A written month and day must be grounded in its span: this rejects a model
+/// inventing a year or turning a weekday into a month and day. Spelled-out numeric
+/// dates remain unresolved rather than authorizing a guess.
+fn absolute_source(span: &str, text: &str, year: Option<i32>, day: u32) -> Result<(), InputError> {
+    source(span, text)?;
+    if !span.contains(&day.to_string())
+        || year.is_some_and(|year| !span.contains(&year.to_string()))
+    {
+        return Err(InputError::Extraction);
+    }
+    Ok(())
+}
+
 fn elapsed(minutes: f64) -> Result<Duration, InputError> {
     let milliseconds = minutes * 60_000.0;
     // Composer timestamps have minute precision. Reject unsupported fractions rather
@@ -48,15 +61,7 @@ pub(super) fn date(
             month,
             day,
         } => {
-            source(span, text)?;
-            // Numeric absolute-date facts must be grounded in the selected source span.
-            // This rejects a model inventing a year or turning a weekday into month/day.
-            // Spelled-out numeric dates remain unresolved rather than authorizing a guess.
-            if !span.contains(&day.to_string())
-                || year.is_some_and(|year| !span.contains(&year.to_string()))
-            {
-                return Err(InputError::Extraction);
-            }
+            absolute_source(span, text, *year, *day)?;
             if let Some(year) = year {
                 return NaiveDate::from_ymd_opt(*year, *month, *day).ok_or(InputError::Extraction);
             }
@@ -385,4 +390,45 @@ fn recurrence(
         monthly_by_day: expression.monthly_by_day,
         ends,
     })
+}
+
+/// The day `expression`, written on `today` in `text` about something already
+/// over, names: the latest such day on or before `latest` (`today`, or the day
+/// before it when the wording puts the day earlier), or `None` when it names
+/// none. A month and day with no year is its latest occurrence (that year's or
+/// the year before), and a bare weekday the latest such day; relative days and
+/// weekdays of this or next week count from `today` as ever, so one after
+/// `latest` names nothing past.
+pub(super) fn past_date(
+    expression: &DateExpression,
+    text: &str,
+    today: NaiveDate,
+    latest: NaiveDate,
+) -> Result<Option<NaiveDate>, InputError> {
+    match expression {
+        DateExpression::Absolute {
+            span,
+            year: None,
+            month,
+            day,
+        } => {
+            absolute_source(span, text, None, *day)?;
+            Ok((0..=1)
+                .filter_map(|back| {
+                    NaiveDate::from_ymd_opt(latest.year().checked_sub(back)?, *month, *day)
+                })
+                .find(|candidate| *candidate <= latest))
+        }
+        DateExpression::Weekday {
+            span,
+            weekday,
+            week: WeekRelation::Upcoming,
+        } => {
+            source(span, text)?;
+            let current = latest.weekday().num_days_from_monday();
+            let back = (current + 7 - weekday_index(*weekday)) % 7;
+            Ok(latest.checked_sub_days(Days::new(u64::from(back))))
+        }
+        _ => Ok(Some(date(expression, text, today)?).filter(|on| *on <= latest)),
+    }
 }

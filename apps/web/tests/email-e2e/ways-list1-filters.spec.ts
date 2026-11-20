@@ -232,7 +232,8 @@ test.describe('the Focus filter of a Gmail inbox', () => {
     const question = (await mailbox.synced('Question')).id;
     const promise = (await mailbox.synced('Promise')).id;
     const update = (await mailbox.synced('Update')).id;
-    // Follow up is a thread the owner wrote last in.
+    // Follow up is a thread the owner wrote last in, back in Focus because
+    // its due day has come (`inFocus` makes it due today).
     await replyAtGmail(mailbox, {
       inReplyTo: 'promise-1@example.com',
       to: 'hugo@example.com',
