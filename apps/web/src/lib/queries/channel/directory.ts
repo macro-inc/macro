@@ -61,6 +61,7 @@ import {
 } from '../soup/backfill-checkpoint';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
 import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
+import { isChannelId } from './channel-id';
 import {
   CHANNEL_RECORD_PREFIX,
   CHANNEL_SEARCH_BUCKETS,
@@ -163,6 +164,8 @@ export function lookupChannel(
   const channel = state.records[channelId];
   if (channel)
     return channel.isParticipant ? { status: 'loaded', channel } : MISSING;
+  // No channel has it, and no read could say so.
+  if (!isChannelId(channelId)) return MISSING;
   const outcome = outcomes[channelId];
   if (outcome === 'absent') return MISSING;
   if (!state.complete) return PENDING;
@@ -611,7 +614,7 @@ export function createByIdReader(
     /** Queues a by-id read; false when the id was already requested. Never
      * writes a signal, so a reactive read may call it. */
     request(id: string) {
-      if (requested.has(id)) return false;
+      if (!isChannelId(id) || requested.has(id)) return false;
       requested.add(id);
       batcher.addItem(id);
       return true;
@@ -1136,6 +1139,8 @@ export function createCachedChannelDirectory(
     const settled = reader.settled();
     let unproven = false;
     for (const id of Object.keys(current.incomplete)) {
+      // Never read: no channel has it.
+      if (!isChannelId(id)) continue;
       if (!settled[id]) return 'partial';
       const outcome = outcomes[id];
       if (outcome !== 'returned' && outcome !== 'absent') unproven = true;

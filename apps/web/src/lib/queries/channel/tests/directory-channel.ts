@@ -1,4 +1,5 @@
 import type { DirectoryChannel, DirectoryParticipant } from '../directory-core';
+import { channelName } from './channel-uuid';
 
 const CREATED = '2026-11-01T00:00:00+00:00';
 
@@ -10,7 +11,7 @@ export function directoryChannel(
 ): DirectoryChannel {
   return {
     id,
-    name: `channel ${id}`,
+    name: `channel ${channelName(id)}`,
     channelType: 'public',
     ownerId: 'macro|owner@example.com',
     organizationId: null,

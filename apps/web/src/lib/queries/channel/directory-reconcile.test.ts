@@ -6,7 +6,18 @@ import {
   ChannelDirectoryPassUnproven,
   createChannelDirectoryBackfillFetcher,
 } from './directory-reconcile';
-import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
+import { channelName, channelUuid } from './tests/channel-uuid';
+import {
+  fakeChannelCache,
+  channelRecord as recordWithId,
+} from './tests/directory-fixtures';
+
+/** A channel record named by a readable test name; ids are UUIDs, as the
+ * server's are. */
+const channelRecord = (
+  name: string,
+  overrides?: Parameters<typeof recordWithId>[1]
+) => recordWithId(channelUuid(name), overrides);
 
 const telemetry = vi.hoisted(() => ({ error: vi.fn() }));
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
@@ -61,13 +72,16 @@ function reconcileHost(cachedIds: string[], viewer = 'viewer') {
 /** Lane pages in order, then by-id reads answered from `readable`. Like the
  * server, a by-id page that reaches its limit carries a cursor. */
 function server(lanePages: Page[], readable: string[] = []) {
+  for (const page of lanePages)
+    if (page.entityIds) page.entityIds = page.entityIds.map(channelUuid);
   const pages = [...lanePages];
+  const readableIds = readable.map(channelUuid);
   return vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
     const filter = input.initial?.filters?.channelFilter;
     if (filter) {
       const asked = JSON.stringify(filter).match(/"channelId":"([^"]+)"/g);
       const ids = (asked ?? []).map((part) => part.split('"')[3]);
-      const entityIds = ids.filter((id) => readable.includes(id));
+      const entityIds = ids.filter((id) => readableIds.includes(id));
       return {
         nextCursor: entityIds.length === input.initial?.limit ? 'more' : null,
         entityIds,
@@ -86,8 +100,13 @@ async function runPass(
   for (const input of inputs) await fetchPage(input);
 }
 
+/** The record keys deleted, by test name. */
 const deleted = (host: { deleteRecords: ReturnType<typeof vi.fn> }) =>
-  host.deleteRecords.mock.calls.flatMap(([keys]) => keys as string[]);
+  host.deleteRecords.mock.calls.flatMap(([keys]) =>
+    (keys as string[]).map((key) =>
+      key.replace(/:(.*)$/, (_, id: string) => `:${channelName(id)}`)
+    )
+  );
 
 describe('channel directory reconciliation', () => {
   beforeEach(() => {
@@ -138,6 +157,27 @@ describe('channel directory reconciliation', () => {
         },
       },
     });
+  });
+
+  it('deletes a cached id the server cannot parse without naming it in a read', async () => {
+    const { cache, host } = reconcileHost(['joined', 'removed']);
+    cache.put(recordWithId('not-a-channel'));
+    const fetch = server([{ nextCursor: null, entityIds: ['joined'] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    expect(deleted(host).sort()).toEqual([
+      'GraphqlSoupChannel:not-a-channel',
+      'GraphqlSoupChannel:removed',
+    ]);
+    expect(JSON.stringify(fetch.mock.calls.slice(1))).not.toContain(
+      'not-a-channel'
+    );
   });
 
   it('reads candidates by id in batches of a hundred', async () => {
@@ -270,7 +310,10 @@ describe('channel directory reconciliation', () => {
       .fn()
       .mockResolvedValueOnce({ nextCursor: null, entityIds: [] })
       // A cursor without every named channel: more could follow.
-      .mockResolvedValueOnce({ nextCursor: 'more', entityIds: ['other'] });
+      .mockResolvedValueOnce({
+        nextCursor: 'more',
+        entityIds: [channelUuid('other')],
+      });
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
@@ -377,7 +420,7 @@ describe('channel directory reconciliation', () => {
     await fetchPage(FIRST);
 
     expect(host.deleteRecords).toHaveBeenCalledExactlyOnceWith(
-      ['GraphqlSoupChannel:removed'],
+      [`GraphqlSoupChannel:${channelUuid('removed')}`],
       's1'
     );
   });
@@ -399,7 +442,7 @@ describe('channel directory reconciliation', () => {
           sourceHash: 'readded-2',
         }
       );
-      readable = ['readded'];
+      readable = [channelUuid('readded')];
       return { nextCursor: null, entityIds: [] };
     });
     const fetchPage = await createChannelDirectoryBackfillFetcher(

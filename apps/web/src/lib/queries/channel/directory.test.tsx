@@ -29,6 +29,7 @@ import {
   saveSoupBackfillCheckpoint,
 } from '../soup/backfill-checkpoint';
 import {
+  type ByIdOutcome,
   type ChannelDirectory,
   channelDirectoryPagesQueryOptions,
   channelDirectoryState,
@@ -44,8 +45,24 @@ import {
 } from './directory';
 import type { DirectoryChannel } from './directory-core';
 import { CHANNEL_DIRECTORY_CHECKPOINT_ID } from './directory-lane';
-import { directoryChannel } from './tests/directory-channel';
-import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
+import { channelName, channelUuid } from './tests/channel-uuid';
+import { directoryChannel as channelWithId } from './tests/directory-channel';
+import {
+  fakeChannelCache,
+  channelRecord as recordWithId,
+} from './tests/directory-fixtures';
+
+// Channels are named by readable test names; their ids are UUIDs, as the
+// server's are, since the directory never reads an id it cannot parse.
+const channelRecord = (
+  name: string,
+  overrides?: Parameters<typeof recordWithId>[1]
+) => recordWithId(channelUuid(name), overrides);
+const directoryChannel = (
+  name: string,
+  overrides?: Parameters<typeof channelWithId>[1]
+) => channelWithId(channelUuid(name), overrides);
+
 import { stampCachedChannelView } from './viewed-at';
 
 const VIEWER = 'macro|viewer@example.com';
@@ -146,12 +163,21 @@ function fakeClient(
   return { query } as unknown as Pick<Client, 'query'>;
 }
 
+/** By-id outcomes keyed by test name, keyed by id. */
+const byName = (outcomes: Record<string, ByIdOutcome>) =>
+  Object.fromEntries(
+    Object.entries(outcomes).map(([name, outcome]) => [
+      channelUuid(name),
+      outcome,
+    ])
+  );
+
 const ids = (channels: readonly DirectoryChannel[]) =>
-  channels.map(({ id }) => id);
+  channels.map(({ id }) => channelName(id));
 
 /** The view a lookup shows, or its status when it found nothing. */
-function viewedAt(directory: ChannelDirectory, channelId: string) {
-  const lookup = directory.lookup(channelId);
+function viewedAt(directory: ChannelDirectory, name: string) {
+  const lookup = directory.lookup(channelUuid(name));
   return lookup.status === 'loaded' ? lookup.channel.viewedAt : lookup.status;
 }
 
@@ -161,34 +187,48 @@ describe('lookupChannel', () => {
 
   it('answers a joined record and refuses an unjoined one', () => {
     const state = channelDirectoryState([joined, unjoined], [], false);
-    expect(lookupChannel(state, {}, 'joined')).toEqual({
+    expect(lookupChannel(state, byName({}), channelUuid('joined'))).toEqual({
       status: 'loaded',
       channel: joined,
     });
-    expect(lookupChannel(state, {}, 'unjoined')).toEqual({
+    expect(lookupChannel(state, byName({}), channelUuid('unjoined'))).toEqual({
       status: 'missing',
     });
   });
 
   it('waits on a partial directory unless a by-id read found nothing', () => {
     const state = channelDirectoryState([joined], [], false);
-    expect(lookupChannel(state, {}, 'other').status).toBe('pending');
-    expect(lookupChannel(state, { other: 'absent' }, 'other').status).toBe(
-      'missing'
-    );
-    expect(lookupChannel(state, { other: 'failed' }, 'other').status).toBe(
+    expect(lookupChannel(state, byName({}), channelUuid('other')).status).toBe(
       'pending'
     );
+    expect(
+      lookupChannel(state, byName({ other: 'absent' }), channelUuid('other'))
+        .status
+    ).toBe('missing');
+    expect(
+      lookupChannel(state, byName({ other: 'failed' }), channelUuid('other'))
+        .status
+    ).toBe('pending');
+  });
+
+  it('answers missing at once for an id no channel can have', () => {
+    const state = channelDirectoryState([joined], [], false);
+    expect(lookupChannel(state, {}, 'not-a-channel').status).toBe('missing');
   });
 
   it('waits for a record the complete directory holds without every field', () => {
-    const state = channelDirectoryState([joined], ['thin'], true);
-    expect(lookupChannel(state, {}, 'thin').status).toBe('pending');
+    const state = channelDirectoryState([joined], [channelUuid('thin')], true);
+    expect(lookupChannel(state, byName({}), channelUuid('thin')).status).toBe(
+      'pending'
+    );
     // Returned but still not in the directory: not a joined channel.
-    expect(lookupChannel(state, { thin: 'returned' }, 'thin').status).toBe(
+    expect(
+      lookupChannel(state, byName({ thin: 'returned' }), channelUuid('thin'))
+        .status
+    ).toBe('missing');
+    expect(lookupChannel(state, byName({}), channelUuid('other')).status).toBe(
       'missing'
     );
-    expect(lookupChannel(state, {}, 'other').status).toBe('missing');
   });
 });
 
@@ -201,12 +241,42 @@ describe('by-id reader', () => {
   });
 
   type Read = Parameters<typeof createByIdReader>[0];
+  /** A reader whose ids, requested, read and answered, are test names. */
   function mountReader(read: Read) {
-    return createRoot((dispose) => {
+    const reader = createRoot((dispose) => {
+      disposers.push(dispose);
+      return createByIdReader(async (ids, signal) => {
+        const found = await read(ids.map(channelName), signal);
+        return {
+          returned:
+            found.returned && new Set([...found.returned].map(channelUuid)),
+          unreadable: found.unreadable?.map(channelUuid),
+        };
+      });
+    });
+    return {
+      request: (name: string) => reader.request(channelUuid(name)),
+      outcomes: () =>
+        Object.fromEntries(
+          Object.entries(reader.outcomes()).map(([id, outcome]) => [
+            channelName(id),
+            outcome,
+          ])
+        ),
+    };
+  }
+
+  it('never names an id the server cannot parse in a read', async () => {
+    const read = vi.fn<Read>(async (ids) => ({ returned: new Set(ids) }));
+    const reader = createRoot((dispose) => {
       disposers.push(dispose);
       return createByIdReader(read);
     });
-  }
+    expect(reader.request('not-a-channel')).toBe(false);
+    reader.request(channelUuid('a'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(read.mock.calls.map(([ids]) => ids)).toEqual([[channelUuid('a')]]);
+  });
 
   it('reads a failed id again within the cooldown while others keep failing', async () => {
     const read = vi.fn<Read>(async () => {
@@ -325,9 +395,9 @@ describe('staticChannelDirectory', () => {
     });
 
     expect(directory.complete()).toBe(true);
-    expect(directory.lookup('b').status).toBe('missing');
+    expect(directory.lookup(channelUuid('b')).status).toBe('missing');
     setChannels([directoryChannel('a'), directoryChannel('b')]);
-    expect(directory.lookup('b').status).toBe('loaded');
+    expect(directory.lookup(channelUuid('b')).status).toBe('loaded');
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
   });
 });
@@ -367,24 +437,26 @@ describe('in-memory channel directory', () => {
     );
     const directory = mountMemoryDirectory(network);
 
-    expect(directory.lookup('c').status).toBe('pending');
-    await vi.waitFor(() => expect(directory.lookup('c').status).toBe('loaded'));
+    expect(directory.lookup(channelUuid('c')).status).toBe('pending');
+    await vi.waitFor(() =>
+      expect(directory.lookup(channelUuid('c')).status).toBe('loaded')
+    );
     expect(directory.complete()).toBe(false);
     expect(ids(directory.channels())).toEqual(['c']);
 
     network.release();
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(ids(directory.channels())).toEqual(['a', 'b', 'c', 'd']);
-    expect(directory.lookup('zzz').status).toBe('missing');
+    expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
   });
 
   it('marks a channel the server does not return as missing before the pages land', async () => {
     const network = fakeNetwork([channelRecord('a')], { holdPages: true });
     const directory = mountMemoryDirectory(network);
 
-    expect(directory.lookup('gone').status).toBe('pending');
+    expect(directory.lookup(channelUuid('gone')).status).toBe('pending');
     await vi.waitFor(() =>
-      expect(directory.lookup('gone').status).toBe('missing')
+      expect(directory.lookup(channelUuid('gone')).status).toBe('missing')
     );
   });
 
@@ -418,7 +490,7 @@ describe('in-memory channel directory', () => {
     const directory = mountMemoryDirectory(network);
     await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
 
-    directory.recordView('a', VIEWED_2);
+    directory.recordView(channelUuid('a'), VIEWED_2);
     expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
 
     network.release();
@@ -426,7 +498,7 @@ describe('in-memory channel directory', () => {
     expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
     expect((await directory.readComplete())[0]?.viewedAt).toBe(VIEWED_2);
 
-    directory.recordView('a', VIEWED_1);
+    directory.recordView(channelUuid('a'), VIEWED_1);
     expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
   });
 
@@ -435,7 +507,7 @@ describe('in-memory channel directory', () => {
     const network = fakeNetwork(channels);
     const directory = mountMemoryDirectory(network);
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    directory.recordView('a', VIEWED_2);
+    directory.recordView(channelUuid('a'), VIEWED_2);
 
     const before = network.inputs.length;
     directory.retry();
@@ -512,7 +584,7 @@ function mountCachedDirectory(
       const found = server.filter(({ id }) => named.includes(id));
       for (const record of found)
         cache.put(record, {
-          incomplete: options.unreadable?.includes(record.id),
+          incomplete: options.unreadable?.map(channelUuid).includes(record.id),
         });
       return { nextCursor: null, entityIds: found.map(({ id }) => id) };
     }
@@ -544,9 +616,10 @@ function mountCachedDirectory(
     pageAll,
     stampView,
     /** The view the cached record holds. */
-    cachedViewedAt(channelId: string) {
+    cachedViewedAt(name: string) {
       return (
-        cache.records.get(`GraphqlSoupChannel:${channelId}`)?.record ?? {}
+        cache.records.get(`GraphqlSoupChannel:${channelUuid(name)}`)?.record ??
+        {}
       ).viewedAt;
     },
     /** Holds every listing's answer until the returned release is called. */
@@ -613,7 +686,7 @@ describe('cached channel directory', () => {
 
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
     expect(directory.complete()).toBe(false);
-    expect(directory.lookup('left').status).toBe('missing');
+    expect(directory.lookup(channelUuid('left')).status).toBe('missing');
 
     completeLane('g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
@@ -688,21 +761,34 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
   });
 
+  it('answers a mistyped channel link as missing and reads only real ids', async () => {
+    const { directory, hydrate } = mountCachedDirectory([channelRecord('a')]);
+
+    expect(directory.lookup('not-a-channel').status).toBe('missing');
+    expect(directory.lookup(channelUuid('a')).status).toBe('pending');
+    await vi.waitFor(() =>
+      expect(directory.lookup(channelUuid('a')).status).toBe('loaded')
+    );
+    expect(hydrate.mock.calls.map(([input]) => namedIds(input))).toEqual([
+      [channelUuid('a')],
+    ]);
+  });
+
   it('reads a pending channel by id and answers once its record is cached', async () => {
     const { directory, hydrate } = mountCachedDirectory([
       channelRecord('late', { name: 'Late' }),
     ]);
 
-    expect(directory.lookup('late').status).toBe('pending');
+    expect(directory.lookup(channelUuid('late')).status).toBe('pending');
     await vi.waitFor(() =>
-      expect(directory.lookup('late')).toMatchObject({
+      expect(directory.lookup(channelUuid('late'))).toMatchObject({
         status: 'loaded',
         channel: { name: 'Late' },
       })
     );
-    expect(directory.lookup('never').status).toBe('pending');
+    expect(directory.lookup(channelUuid('never')).status).toBe('pending');
     await vi.waitFor(() =>
-      expect(directory.lookup('never').status).toBe('missing')
+      expect(directory.lookup(channelUuid('never')).status).toBe('missing')
     );
     expect(hydrate).toHaveBeenCalledTimes(2);
   });
@@ -715,14 +801,16 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(host.readQuery).toHaveBeenCalled());
     const listings = host.search.mock.calls.length;
 
-    expect(directory.lookup('late').status).toBe('pending');
+    expect(directory.lookup(channelUuid('late')).status).toBe('pending');
     await vi.waitFor(() =>
-      expect(directory.lookup('late').status).toBe('loaded')
+      expect(directory.lookup(channelUuid('late')).status).toBe('loaded')
     );
 
     expect(host.search).toHaveBeenCalledTimes(listings);
     expect(host.readRecordsByKeys).toHaveBeenLastCalledWith(
-      expect.objectContaining({ keys: ['GraphqlSoupChannel:late'] })
+      expect.objectContaining({
+        keys: [`GraphqlSoupChannel:${channelUuid('late')}`],
+      })
     );
   });
 
@@ -732,11 +820,11 @@ describe('cached channel directory', () => {
       { unreadable: ['thin'] }
     );
 
-    expect(directory.lookup('thin').status).toBe('pending');
+    expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
     // Read once more, then given up on for a while.
     await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
     // Neither answered: still waiting, not missing.
-    expect(directory.lookup('thin').status).toBe('pending');
+    expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
   });
 
   it('keeps waiting on a channel a by-id read gave no evidence for', async () => {
@@ -755,7 +843,7 @@ describe('cached channel directory', () => {
     // Complete once both reads gave up, so the cache answers offline.
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(hydrate).toHaveBeenCalledTimes(2);
-    expect(directory.lookup('thin').status).toBe('pending');
+    expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
     // But not proven: a full read still asks the network.
     expect(ids(await directory.readComplete())).toEqual(['thin']);
     expect(fetchAll).toHaveBeenCalledOnce();
@@ -849,9 +937,9 @@ describe('cached channel directory', () => {
       'channel a',
       'channel b',
     ]);
-    expect(directory.lookup('stale').status).toBe('missing');
+    expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['a', 'b']);
-    expect(directory.lookup('zzz').status).toBe('missing');
+    expect(directory.lookup(channelUuid('zzz')).status).toBe('missing');
     expect(directory.failed()).toBe(false);
   });
 
@@ -874,7 +962,7 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(answer).toBeDefined());
 
     // While the pages are read: a removal, a leave, a join and a rename.
-    cache.records.delete('GraphqlSoupChannel:removed');
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('removed')}`);
     cache.put(channelRecord('left', { isParticipant: false }), {
       sourceHash: 'left-2',
     });
@@ -898,7 +986,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('kept', { name: 'renamed' }), {
       sourceHash: 'kept-2',
     });
-    cache.records.delete('GraphqlSoupChannel:joined');
+    cache.records.delete(`GraphqlSoupChannel:${channelUuid('joined')}`);
     reopen();
     await vi.waitFor(() =>
       expect(directory.channels().map(({ name }) => name)).toEqual(['renamed'])
@@ -935,7 +1023,7 @@ describe('cached channel directory', () => {
 
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
-    expect(directory.lookup('stale').status).toBe('missing');
+    expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
   });
 
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
@@ -960,7 +1048,7 @@ describe('cached channel directory', () => {
     // removal could reach.
     release();
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
-    expect(directory.lookup('gone').status).toBe('missing');
+    expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['a']);
   });
 
@@ -1058,7 +1146,7 @@ describe('cached channel directory', () => {
     completeLane('g1');
     await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
 
-    directory.recordView('a', VIEWED_2);
+    directory.recordView(channelUuid('a'), VIEWED_2);
     expect(viewedAt(directory, 'a')).toBe(VIEWED_2);
     await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
     expect(ids(await directory.readComplete())).toEqual(['a']);
@@ -1071,7 +1159,7 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('a', { viewedAt: VIEWED_0 }));
     completeLane('g1');
     await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_0));
-    directory.recordView('a', VIEWED_2);
+    directory.recordView(channelUuid('a'), VIEWED_2);
     await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));
 
     // A soup page read before the view lands after it.
@@ -1080,7 +1168,7 @@ describe('cached channel directory', () => {
     });
     reopen();
     await vi.waitFor(() =>
-      expect(directory.lookup('a')).toMatchObject({
+      expect(directory.lookup(channelUuid('a'))).toMatchObject({
         channel: { name: 'renamed', viewedAt: VIEWED_2 },
       })
     );
@@ -1097,7 +1185,7 @@ describe('cached channel directory', () => {
     const server = [channelRecord('a', { viewedAt: VIEWED_0 })];
     const { cachedViewedAt, directory } = mountCachedDirectory(server);
 
-    directory.recordView('a', VIEWED_2);
+    directory.recordView(channelUuid('a'), VIEWED_2);
     // The lane has not reached it; its by-id read lands the older record.
     await vi.waitFor(() => expect(viewedAt(directory, 'a')).toBe(VIEWED_2));
     await vi.waitFor(() => expect(cachedViewedAt('a')).toBe(VIEWED_2));

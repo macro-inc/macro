@@ -20,6 +20,7 @@ import {
   readContactCacheScope,
 } from '../contacts/cache-scope';
 import { balancedOr } from '../soup/graphql/entity-input';
+import { isChannelId } from './channel-id';
 import {
   CHANNEL_RECORD_PREFIX,
   listCachedChannelDocuments,
@@ -120,8 +121,10 @@ async function unreadableChannels(
   fetch: FetchPage,
   signal: AbortSignal | undefined
 ): Promise<string[] | undefined> {
-  const gone: string[] = [];
-  for (const batch of chunks(ids, BY_ID_BATCH)) {
+  // No channel has an id the server cannot parse, and naming one in a read
+  // would fail it.
+  const gone = ids.filter((id) => !isChannelId(id));
+  for (const batch of chunks(ids.filter(isChannelId), BY_ID_BATCH)) {
     signal?.throwIfAborted();
     const page = await fetch(readableChannelsInput(lane, batch), { signal });
     const returned = returnedChannelIds(batch, page);

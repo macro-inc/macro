@@ -4,6 +4,7 @@ import type { SearchCacheArgs, SearchCachePage } from '@graphql-cache/protocol';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import type { ChannelDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { vi } from 'vitest';
+import { channelName } from './channel-uuid';
 
 const CREATED = '2026-11-01T00:00:00+00:00';
 
@@ -15,7 +16,7 @@ export function channelRecord(
   return {
     __typename: 'GraphqlSoupChannel',
     id,
-    name: `channel ${id}`,
+    name: `channel ${channelName(id)}`,
     channelType: 'PUBLIC',
     ownerId: 'macro|owner@example.com',
     organizationId: '7',
