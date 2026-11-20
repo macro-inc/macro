@@ -552,14 +552,6 @@ where
         Ok((mailbox, provider_mailbox, key))
     }
 
-    /// The agent's own mailbox, as the agent sees it.
-    pub async fn own_mailbox(
-        &self,
-        agent: &MacroUserIdStr<'_>,
-    ) -> Result<AgentMailboxView, AgentMailboxError> {
-        self.status(agent).await
-    }
-
     /// A page of the agent's messages, newest first.
     #[tracing::instrument(skip_all, fields(agent_mailbox.id, agent_mailbox.message_count), err)]
     pub async fn list_messages(
@@ -759,4 +751,137 @@ fn validate_outgoing(message: &OutgoingMessage) -> Result<(), AgentMailboxError>
         ));
     }
     validate_body(&message.text_body)
+}
+
+/// The agent mailbox use cases, as the inbound adapters call them.
+pub trait AgentMailboxUseCases: Send + Sync + 'static {
+    /// See [`AgentMailboxService::provision`].
+    fn provision(
+        &self,
+        request: ProvisionRequest,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::status`].
+    fn status(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::pause`].
+    fn pause(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::resume`].
+    fn resume(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::release`].
+    fn release(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::list_messages`].
+    fn list_messages(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        page: MessagePage,
+    ) -> impl Future<Output = Result<MessageList, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::read_message`].
+    fn read_message(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        message: &ProviderMessageId,
+    ) -> impl Future<Output = Result<MailMessage, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::send`].
+    fn send(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        idempotency_key: Uuid,
+        message: OutgoingMessage,
+    ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send;
+    /// See [`AgentMailboxService::reply`].
+    fn reply(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        message: &ProviderMessageId,
+        idempotency_key: Uuid,
+        reply: ReplyMessage,
+    ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send;
+}
+
+impl<Repository, Vendor, Cipher, Directory> AgentMailboxUseCases
+    for AgentMailboxService<Repository, Vendor, Cipher, Directory>
+where
+    Repository: AgentMailboxRepository,
+    Vendor: MailboxProvisioner + MailboxClient,
+    Cipher: MailboxKeyCipher,
+    Directory: AgentDirectory,
+{
+    fn provision(
+        &self,
+        request: ProvisionRequest,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send {
+        AgentMailboxService::provision(self, request)
+    }
+    fn status(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send {
+        AgentMailboxService::status(self, agent)
+    }
+    fn pause(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send {
+        AgentMailboxService::pause(self, agent, now)
+    }
+    fn resume(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<AgentMailboxView, AgentMailboxError>> + Send {
+        AgentMailboxService::resume(self, agent, now)
+    }
+    fn release(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), AgentMailboxError>> + Send {
+        AgentMailboxService::release(self, agent, now)
+    }
+    fn list_messages(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        page: MessagePage,
+    ) -> impl Future<Output = Result<MessageList, AgentMailboxError>> + Send {
+        AgentMailboxService::list_messages(self, agent, page)
+    }
+    fn read_message(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        message: &ProviderMessageId,
+    ) -> impl Future<Output = Result<MailMessage, AgentMailboxError>> + Send {
+        AgentMailboxService::read_message(self, agent, message)
+    }
+    fn send(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        idempotency_key: Uuid,
+        message: OutgoingMessage,
+    ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
+        AgentMailboxService::send(self, agent, idempotency_key, message)
+    }
+    fn reply(
+        &self,
+        agent: &MacroUserIdStr<'_>,
+        message: &ProviderMessageId,
+        idempotency_key: Uuid,
+        reply: ReplyMessage,
+    ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
+        AgentMailboxService::reply(self, agent, message, idempotency_key, reply)
+    }
 }

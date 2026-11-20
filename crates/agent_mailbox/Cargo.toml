@@ -6,7 +6,15 @@ version = "0.1.0"
 
 [features]
 default = []
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "dep:serde",
+  "dep:utoipa",
+  "macro_user_id/schema",
+]
 outbound = [
+  "dep:aws-sdk-kms",
   "dep:http",
   "dep:macro_service_urls",
   "dep:macro_tower_layers",
@@ -16,9 +24,12 @@ outbound = [
 ]
 
 [dependencies]
+axum = { workspace = true, optional = true }
+aws-sdk-kms = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 email_validator = { path = "../email_validator" }
 http = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_service_urls = { path = "../macro_service_urls", optional = true }
 macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -29,18 +40,23 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 uuid = { workspace = true, features = ["v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
-agent_mailbox = { path = ".", features = ["outbound"] }
+agent_mailbox = { path = ".", features = ["inbound", "outbound"] }
+bot_id = { path = "../bot_id" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }
+urlencoding = { workspace = true }
 wiremock = { workspace = true }
 
-# The crate depends on itself in tests to turn on `outbound`, which shear reads as unused.
+# The crate depends on itself in tests to turn on its adapters, which shear reads as unused.
 [package.metadata.cargo-shear]
 ignored = ["agent_mailbox"]
