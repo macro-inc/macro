@@ -69,6 +69,17 @@ function vsTruth(state: ReaderState, truth: Row[] | undefined) {
 /** Whether a reader shows anyone. */
 const rowsShown = (state: ReaderState) => !!state.data?.length;
 
+/**
+ * Whether both readers' last reads failed: the server refused this viewer (a
+ * viewer just removed from the channel gets 401 from REST, and the soup read
+ * leaves the channel out).
+ */
+const refused = (snap: Snap) =>
+  !snap.old.isPending &&
+  !snap.new.isPending &&
+  !snap.old.isSuccess &&
+  !snap.new.isSuccess;
+
 /** Whether every row the database has carries the database's join time. */
 function timesOf(state: ReaderState, truth: Row[] | undefined) {
   if (!truth || state.isPending || !state.data) return false;
@@ -276,9 +287,10 @@ export function judge(snap: Snap, truth: Row[] | undefined): Verdict {
         asBag(snap.oldContract[key]) === asBag(snap.newContract[key])
     );
   if (contract.length && onlyTies) bucket = 'tie-order';
-  else if (contract.length && !truth) {
-    // The channel is gone: the right roster is none, and a side still showing
-    // rows kept them from before.
+  else if (contract.length && (!truth || refused(snap))) {
+    // The channel is gone, or the server refuses this viewer: the right roster
+    // is none, and a side still showing rows kept them from before (TanStack
+    // keeps the last data through a failed refetch).
     if (!rowsShown(snap.new) && rowsShown(snap.old)) bucket = 'main-stale';
     else if (rowsShown(snap.new) && !rowsShown(snap.old)) bucket = 'new-wrong';
     else bucket = 'contract-diff';

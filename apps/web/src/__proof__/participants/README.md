@@ -78,7 +78,7 @@ have some.
 | `field.joined_at.main-stamped` | main keeps the time it stamped when sending an add after the add lands (`main/participants.ts:61`, never reread); the head shows the database's | no caller reads `joined_at`; both orders agree with the database |
 | `tie-order` | rows with the same `joined_at`: REST orders by `joined_at` alone, the soup read aggregates without an order | neither side defines it; main's own order varies between reads |
 | `main-stale` | main differs from the database (people, order, or join times changed since its read), the head matches it | the head is right |
-| `main-stale` (channel deleted) | main keeps the rows it read before the channel was deleted (its refetch fails and TanStack keeps the last data); the head shows none | the head is right: the channel is gone |
+| `main-stale` (channel deleted, or viewer refused) | main keeps the rows it read before the channel was deleted or the viewer lost access (its refetch fails, 404 or 401, and TanStack keeps the last data); the head shows none | the head is right: the server shows this viewer nobody |
 
 ## Mutants
 
