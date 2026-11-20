@@ -172,12 +172,10 @@ fn caller(extensions: &rmcp::model::Extensions) -> Result<ToolCaller, rmcp::Erro
 
 /// Tools ChatGPT is never offered. Each one runs code or hands an open-ended
 /// task to an agent, and the plugin directory refuses generic executors.
-const HIDDEN_FROM_CHATGPT: [&str; 5] = [
-    "BashCodeExecution",
+const HIDDEN_FROM_CHATGPT: [&str; 3] = [
     "CreateAgentSession",
     "DispatchCodingAgent",
     "ManageAgentSession",
-    "TextEditorCodeExecution",
 ];
 
 /// Whether an OAuth caller might be ChatGPT: registered under its name, or
