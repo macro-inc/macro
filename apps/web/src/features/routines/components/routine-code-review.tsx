@@ -25,7 +25,7 @@ export function CodeReviewNotice(props: {
           <span class="text-sm font-medium text-ink">
             Paused: its code needs an update
           </span>
-          <span class="whitespace-pre-wrap text-sm text-ink-muted">
+          <span class="select-text whitespace-pre-wrap text-sm text-ink-muted">
             {props.review.reason}
           </span>
         </div>
@@ -83,7 +83,7 @@ function CodeBlock(props: { label: string; source: string }) {
   return (
     <figure class="grid min-w-0 gap-1">
       <figcaption class="text-xs text-ink-muted">{props.label}</figcaption>
-      <pre class="max-h-64 min-w-0 overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+      <pre class="max-h-64 min-w-0 select-text select-children overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
         <code>{props.source}</code>
       </pre>
     </figure>

@@ -27,6 +27,7 @@ mod cancel_stuck_cloud_storage_deploys;
 mod cargo_deny;
 mod cargo_deny_advisories;
 mod cargo_workspace_dependency_check;
+mod channels_e2e;
 mod check_generated;
 mod check_node_modules_nix;
 mod check_tauri_lockfiles;
@@ -63,6 +64,8 @@ mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
+mod observability_aws;
+mod observability_cluster;
 mod observability_image;
 mod path_validation;
 mod pr_ci;
@@ -138,6 +141,16 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
+        slug: "observability_aws",
+        file_name: "observability_aws.yml",
+        render_yaml: || render_gh_workflow(observability_aws::observability_aws)(),
+    },
+    WorkflowFile {
+        slug: "observability_cluster",
+        file_name: "observability_cluster.yml",
+        render_yaml: || render_gh_workflow(observability_cluster::observability_cluster)(),
+    },
+    WorkflowFile {
         slug: "observability_image",
         file_name: "observability_image.yml",
         render_yaml: || render_gh_workflow(observability_image::observability_image)(),
@@ -171,6 +184,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "channels_e2e",
+        file_name: "channels_e2e.yml",
+        render_yaml: || render_gh_workflow(channels_e2e::channels_e2e)(),
     },
     WorkflowFile {
         slug: "test_macrod_update",

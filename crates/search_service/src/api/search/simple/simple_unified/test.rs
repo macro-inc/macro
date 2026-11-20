@@ -947,3 +947,338 @@ async fn a_checked_page_counts_hits_as_an_unfiltered_page_does() {
     assert_eq!(content.hits.len(), 100);
     assert_eq!(rounds.rounds, 1);
 }
+
+// ============ Tests for the caller's turn (search lanes) ============
+
+fn agent_of_caller() -> MacroUserAuthentication {
+    MacroUserAuthentication {
+        agent_id: Some(bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA9E7))),
+        ..caller(macro_authorization::CredentialOrigin::MacroApiJwt)
+    }
+}
+
+fn one_at_a_time() -> SearchLanes {
+    SearchLanes::new(crate::domain::search_lanes::LanePolicy {
+        app_concurrency: 1,
+        concurrency: 1,
+        max_wait: std::time::Duration::from_secs(20),
+    })
+}
+
+fn search_request(query: &str) -> UnifiedSearchRequest {
+    UnifiedSearchRequest {
+        query: query.to_string(),
+        match_type: MatchType::Partial,
+        filters: Default::default(),
+        search_on: SearchOn::NameContent,
+        include_crm: false,
+        calendar_event_scope: Default::default(),
+        term_matching: Default::default(),
+        collapse: None,
+    }
+}
+
+fn no_paging() -> SearchPaginationParams {
+    SearchPaginationParams {
+        page: None,
+        page_size: None,
+        cursor: None,
+    }
+}
+
+fn search_span() -> tracing::Span {
+    unified_search_span(
+        &agent_of_caller(),
+        &no_paging(),
+        &search_request("quarterly plan"),
+    )
+}
+
+struct NoSessions;
+
+impl agent_session::domain::search::AgentSessionSearchMetadataService for NoSessions {
+    fn search_metadata(
+        &self,
+        _ids: Vec<Uuid>,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = agent_session::domain::error::Result<
+                        Vec<agent_session::domain::search::AgentSessionSearchMetadata>,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async { Ok(Vec::new()) })
+    }
+}
+
+struct NoLabels;
+
+impl calendar_events::domain::ports::CalendarEventLabelReader for NoLabels {
+    fn event_labels<'a>(
+        &'a self,
+        _requester_id: &'a str,
+        _event_ids: &'a [Uuid],
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        std::collections::HashMap<
+                            Uuid,
+                            calendar_events::domain::labels::EventLabels,
+                        >,
+                        rootcause::Report,
+                    >,
+                > + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async { Ok(std::collections::HashMap::new()) })
+    }
+}
+
+/// Handler state whose database and OpenSearch cannot be reached, so a
+/// search that gets past its turn waits 25 s for a connection, longer than a
+/// turn's longest wait, and then fails.
+fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(25))
+        .connect_lazy("postgres://user:password@127.0.0.1:1/unreachable")
+        .unwrap();
+    SearchHandlerState {
+        db: readonly_pool::ReadOnlyPool(pool.clone()),
+        crm_db: pool.clone(),
+        opensearch_client: std::sync::Arc::new(
+            opensearch_client::OpensearchClient::new(
+                "http://127.0.0.1:1".to_string(),
+                String::new(),
+                String::new(),
+            )
+            .unwrap(),
+        ),
+        entity_access_service: std::sync::Arc::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool),
+            ),
+        ),
+        authorization_state: macro_authorization::MacroAuthorizationState::new(
+            std::sync::Arc::new(macro_authorization::MacroAuthorizationServiceImpl::new(
+                macro_authorization::MacroAuthJwtValidator::new(
+                    macro_auth::middleware::decode_jwt::JwtValidationArgs::new_testing(),
+                ),
+                macro_authorization::InternalAuthConfig {
+                    api_key: "test-internal-key".to_string(),
+                    default_user_id: None,
+                },
+                macro_authorization::NoBotAuthorizer,
+                macro_authorization::NoUserApiKeyAuthorizer,
+            )),
+        ),
+        agent_session_search_metadata: std::sync::Arc::new(NoSessions),
+        calendar_search_enabled: false,
+        calendar_event_labels: std::sync::Arc::new(NoLabels),
+        term_matching_rollout: std::sync::Arc::new(crate::LocalTermMatching),
+        search_lanes: std::sync::Arc::new(lanes),
+    }
+}
+
+/// A unified search waits for its caller's turn before it reads anything,
+/// and one still waiting at the deadline is refused as busy.
+#[tokio::test(start_paused = true)]
+async fn a_unified_search_waits_for_its_callers_turn_before_reading_anything() {
+    let ctx = unreachable_state(one_at_a_time());
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&agent_of_caller()))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        true,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(refused, Err(SearchError::Busy)), "{refused:?}");
+    assert_eq!(started.elapsed(), std::time::Duration::from_secs(20));
+}
+
+/// A search holds its caller's turn while it reads, so the caller's next
+/// search waits for it, here until the deadline.
+#[tokio::test(start_paused = true)]
+async fn a_search_holds_its_callers_turn_while_it_reads() {
+    let ctx = std::sync::Arc::new(unreachable_state(one_at_a_time()));
+    let mut reading = tokio::spawn({
+        let ctx = std::sync::Arc::clone(&ctx);
+        async move {
+            perform_unified_search(
+                &ctx,
+                &agent_of_caller(),
+                false,
+                no_paging(),
+                search_request("quarterly plan"),
+            )
+            .await
+            .map(|_| ())
+        }
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(1), &mut reading)
+            .await
+            .is_err()
+    );
+
+    let next = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(next, Err(SearchError::Busy)), "{next:?}");
+    assert!(!matches!(reading.await.unwrap(), Err(SearchError::Busy)));
+}
+
+/// A request that cannot be searched fails at once, even while its caller's
+/// lane is full, rather than waiting its turn to be told so.
+#[tokio::test(start_paused = true)]
+async fn a_malformed_search_fails_at_once_while_its_callers_lane_is_full() {
+    let ctx = unreachable_state(one_at_a_time());
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&agent_of_caller()))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &agent_of_caller(),
+        false,
+        no_paging(),
+        search_request("  "),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(
+        matches!(refused, Err(SearchError::EmptyQuery)),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+
+    let mut crm_filtered = search_request("quarterly plan");
+    crm_filtered.filters.email_filters.crm_domains = vec!["example.com".to_string()];
+    let refused =
+        perform_unified_search(&ctx, &agent_of_caller(), false, no_paging(), crm_filtered)
+            .await
+            .map(|_| ());
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::UnsupportedEmailFilter("crm_domains"))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+/// A search records on its span which lane it waited in, how long, and how
+/// the wait ended, so a queued search can be told apart from a slow one.
+#[tokio::test(start_paused = true)]
+async fn a_search_records_its_wait_for_the_callers_turn_on_its_span() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+    let lanes = one_at_a_time();
+
+    let running = take_search_turn(&lanes, search_caller(&agent_of_caller()))
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane"], "agent");
+    assert_eq!(span["search.lane_outcome"], "immediate");
+    assert_eq!(span["search.lane_wait_ms"], "0");
+
+    let refused = take_search_turn(&lanes, search_caller(&agent_of_caller()))
+        .instrument(search_span())
+        .await;
+    assert!(matches!(refused, Err(SearchError::Busy)));
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "refused");
+    assert_eq!(span["search.lane_wait_ms"], "20000");
+
+    let mut waiting = tokio::spawn({
+        let lanes = std::sync::Arc::new(lanes);
+        async move {
+            take_search_turn(&lanes, search_caller(&agent_of_caller()))
+                .instrument(search_span())
+                .await
+                .map(|turn| turn.waited)
+        }
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_secs(3), &mut waiting)
+            .await
+            .is_err()
+    );
+    drop(running);
+    assert_eq!(
+        waiting.await.unwrap().unwrap(),
+        std::time::Duration::from_secs(3)
+    );
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.lane_outcome"], "queued");
+    assert_eq!(span["search.lane_wait_ms"], "3000");
+}
+
+/// The person's own app search never waits behind anything searching for
+/// them: their agent, their routine, a service such as an agent's native
+/// search tools, or their API key, each of which has a lane of its own.
+#[tokio::test(start_paused = true)]
+async fn a_persons_app_search_never_waits_behind_what_searches_for_them() {
+    use macro_authorization::CredentialOrigin;
+
+    let lanes = one_at_a_time();
+    let routine = MacroUserAuthentication {
+        routine_id: Some(Uuid::from_u128(0x2007)),
+        ..caller(CredentialOrigin::MacroApiJwt)
+    };
+    let mut held = Vec::new();
+    for program in [
+        agent_of_caller(),
+        routine,
+        caller(CredentialOrigin::Internal),
+        caller(CredentialOrigin::UserApiKey),
+    ] {
+        let turn = take_search_turn(&lanes, search_caller(&program))
+            .await
+            .unwrap();
+        assert!(!turn.queued, "{:?} shares a lane", program.origin);
+        held.push(turn);
+    }
+
+    let own = take_search_turn(&lanes, search_caller(&caller(CredentialOrigin::Session)))
+        .await
+        .unwrap();
+    assert!(!own.queued);
+}
+
+/// A refused search is a 429 the caller can pace on, not a failure.
+#[test]
+fn a_refused_search_is_answered_too_many_requests_with_retry_after() {
+    let response = axum::response::IntoResponse::into_response(SearchError::Busy);
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");
+}

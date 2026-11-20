@@ -36,7 +36,7 @@ async fn a_missing_database_message_queues_the_exact_upsert_and_is_terminal() {
                 FailureReason::MessageNotFoundInDatabase
             }
         );
-        assert!(error.source.to_string().starts_with("remove_labels: "));
+        assert!(format!("{:#}", error.source).starts_with("remove_labels: "));
         assert_eq!(
             fake.calls(),
             vec![
@@ -181,7 +181,7 @@ async fn each_provider_error_preserves_primary_retry_routing_and_reason() {
             );
             assert_eq!(error.reason, *reason);
             assert_eq!(
-                error.source.to_string(),
+                format!("{:#}", error.source),
                 format!("remove_labels: {provider_error}")
             );
             let queued = fake

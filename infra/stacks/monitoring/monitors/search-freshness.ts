@@ -32,9 +32,13 @@
 //   `overloaded`, `source_missing`, `error`); records lost outside the
 //   workers carry `failure` (`undecodable`, `cut_off_at_stop`, `not_rewound`,
 //   `rewind_unconfirmed`, `queued_without_rewind`).
-// - `search.index.failed_bulk_items`: items OpenSearch failed in the last
-//   attempt of an event queued for a replay or dropped (counter), tagged
-//   `entity_type` and `outcome`.
+// - `search.index.failed_bulk_items`: items OpenSearch failed inside a
+//   `_bulk` response in the last attempt of an event queued for a replay or
+//   dropped (counter), tagged `entity_type`, `outcome` and that attempt's
+//   `failure`: `overloaded` when it refused items to protect itself (a 429
+//   per item), `bulk_items` when it failed them otherwise. Only bulk writes
+//   report items (documents, email messages, call segments, chat repair);
+//   a refusal of the whole request, and single-document writes, count none.
 // - `kafka.consumer.offset_resets`: partition positions librdkafka reset after
 //   an error (counter), tagged `topic`. Usually the position was out of range,
 //   older than the topic's retention, and the consumer moved to the newest
@@ -107,8 +111,19 @@ const EMAIL_BACKLOG = pending(EMAIL, null, MS_PER_HOUR);
 const EMAIL_RETENTION = pending(EMAIL, null, MS_PER_DAY);
 const LIVE_RETENTION = pending(`!${EMAIL}`, 'topic', MS_PER_DAY);
 const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_count()`;
+// Failed items per 5 minutes, a missing bucket read as none. The monitor wants
+// every bucket of half an hour to have some: a burst, such as a drain's 429s
+// that the replays absorb, comes and goes inside that. It reads the rate, a
+// bucket's average times its 300 s: a monitor over `.as_count()` takes only
+// `sum`, which would fire on one burst. It evaluates 7 minutes late, so the
+// newest bucket is complete: an unfinished one reads as none and would
+// recover the alert every 5 minutes.
+const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
-const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
+// Per lane: each task reads email and the live topics on separate consumers,
+// and one that stops reporting must not hide behind the other's readings.
+const LIVE_READINGS = `max:search.index.oldest_pending_ms{${PROD},!${EMAIL}}.fill(null)`;
+const EMAIL_READINGS = `max:search.index.oldest_pending_ms{${PROD},${EMAIL}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
 // only when it ends, so slow rounds leave the minutes between them empty.
 // They judge each entity type's rotation rounds together, one a minute,
@@ -140,8 +155,10 @@ const TITLES = {
   emailRetention: 'Search email backlog within a day of Kafka retention',
   liveRetention: 'Search backlog within a day of Kafka retention',
   dropped: 'Search events committed without reaching the index',
+  failedItems: 'Search bulk index writes keep failing items',
   offsetReset: 'Search indexer reset a Kafka position after an error',
-  silent: 'Search indexer reports no backlog readings',
+  silent: 'Search indexer reports no live backlog readings',
+  emailSilent: 'Search indexer reports no email backlog readings',
   probeLate: 'Search shows changes late end to end',
   probeUnseen: 'Search never showed probe changes',
   probePrefixUnseen: 'Search content prefix search drops matches',
@@ -222,6 +239,11 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
           warning: '5',
         }),
         thresholdGraph({
+          title: TITLES.failedItems,
+          query: `moving_rollup(${FAILED_ITEMS}, 1800, 'min')`,
+          critical: '0',
+        }),
+        thresholdGraph({
           title: TITLES.dropped,
           query: `${DROPPED}.rollup(sum, 900)`,
           critical: '0',
@@ -233,7 +255,12 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         }),
         thresholdGraph({
           title: TITLES.silent,
-          query: READINGS,
+          query: LIVE_READINGS,
+          critical: '0',
+        }),
+        thresholdGraph({
+          title: TITLES.emailSilent,
+          query: EMAIL_READINGS,
           critical: '0',
         }),
       ]),
@@ -305,6 +332,10 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         bars(
           'Events processed by outcome',
           `count:search.index.lag_ms{${INDEXER}} by {outcome}.as_count()`
+        ),
+        bars(
+          'Failed bulk items by entity type, failure and outcome',
+          `default_zero(sum:search.index.failed_bulk_items{${INDEXER}} by {entity_type,failure,outcome}.as_count())`
         ),
         bars(
           'Dropped events by entity type',
@@ -383,6 +414,21 @@ prodMonitor('search-near-retention', {
   runbook: `${RUNBOOK}#retention`,
 });
 
+prodMonitor('search-failed-bulk-items', {
+  title: TITLES.failedItems,
+  service: SERVICE,
+  query: `min(last_30m):${FAILED_ITEMS} > 0`,
+  monitorThresholds: { critical: '0' },
+  pages: false,
+  description:
+    'For 30 minutes, OpenSearch has failed items of {{entity_type.name}} bulk index writes in every 5 minutes, for the reason {{failure.name}}: overloaded when it keeps refusing them to protect itself, bulk_items when it fails them otherwise. Those changes wait for a replay and reach search late, or not at all once their replay fails too.',
+  dashboard,
+  runbook: `${RUNBOOK}#failed-bulk-items`,
+  alertDetail: '{{value}} items in the quietest 5 minutes',
+  recoveryDetail: '{{value}} items in the quietest 5 minutes',
+  evaluationDelay: 420,
+});
+
 prodMonitor('search-dropped-events', {
   title: TITLES.dropped,
   service: SERVICE,
@@ -414,11 +460,24 @@ prodMonitor('search-offset-reset', {
 prodMonitor('search-indexer-silent', {
   title: TITLES.silent,
   service: SERVICE,
-  query: `max(last_5m):${READINGS} < 0`,
+  query: `max(last_5m):${LIVE_READINGS} < 0`,
   monitorThresholds: { critical: '0' },
   pages: false,
   description:
-    'No indexer task has reported a backlog reading for 10 minutes: the consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.',
+    "No indexer task has reported a backlog reading for the live topics (every topic but macro.email) for 10 minutes: the live lane's consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.",
+  dashboard,
+  runbook: `${RUNBOOK}#no-readings`,
+  noDataTimeframe: 10,
+});
+
+prodMonitor('search-email-indexer-silent', {
+  title: TITLES.emailSilent,
+  service: SERVICE,
+  query: `max(last_5m):${EMAIL_READINGS} < 0`,
+  monitorThresholds: { critical: '0' },
+  pages: false,
+  description:
+    "No indexer task has reported a backlog reading for macro.email for 10 minutes: the email lane's consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.",
   dashboard,
   runbook: `${RUNBOOK}#no-readings`,
   noDataTimeframe: 10,
