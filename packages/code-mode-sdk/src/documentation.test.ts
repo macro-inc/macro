@@ -73,7 +73,7 @@ function fixturePages() {
     ['src/entities/example/example/classes/Example.md', EXAMPLE],
     [
       'src/entities/entity/classes/Base.md',
-      '# Class: Base\n\nBase handle. [Child](../../../../generated/other/types.gen/type-aliases/Child.md)',
+      '# Abstract Class: Base\n\nBase handle. [Child](../../../../generated/other/types.gen/type-aliases/Child.md)',
     ],
     [
       'generated/example/types.gen/type-aliases/Request.md',
@@ -123,9 +123,21 @@ describe('TypeDoc documentation packaging', () => {
     );
     expect(entity?.index).toContain('### Example\nAn example handle.');
     expect(entity?.index).toContain('Extends `Base`.\nFields: id');
-    // Inherited methods are read on the class that declares them.
+    // An abstract base's methods are read on the class that declares them.
     expect(entity?.index).not.toContain('Example.rename');
     expect(entity?.index).not.toContain('Constructor');
+  });
+
+  it('names what a class inherits from a concrete class, under its own name', () => {
+    const pages = fixturePages();
+    pages.set(
+      'src/entities/entity/classes/Base.md',
+      '# Class: Base\n\nBase handle.'
+    );
+    const [entity] = pack(pages).entities;
+    expect(entity?.index).toContain(
+      'Extends `Base`.\nFields: id\nInherited from `Base`: `Example.rename`'
+    );
   });
 
   it('keeps lazy return types with generics and unions beside ordinary fields', () => {
