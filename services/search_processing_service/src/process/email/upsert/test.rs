@@ -62,7 +62,7 @@ fn indexes_a_message_without_a_from_contact() {
 type Requests = std::sync::Arc<std::sync::Mutex<Vec<(String, String)>>>;
 
 /// Stands in for OpenSearch: records each request as `METHOD path?query` with
-/// its body, accepts document writes, and answers deletes-by-query.
+/// its body, accepts document and bulk writes, and answers deletes-by-query.
 async fn fake_opensearch() -> (opensearch_client::OpensearchClient, Requests) {
     use axum::{
         Json,
@@ -83,6 +83,8 @@ async fn fake_opensearch() -> (opensearch_client::OpensearchClient, Requests) {
             if uri.path().ends_with("/_delete_by_query") {
                 Json(serde_json::json!({ "deleted": 1, "version_conflicts": 0, "failures": [] }))
                     .into_response()
+            } else if uri.path().ends_with("/_bulk") {
+                Json(serde_json::json!({ "errors": false, "items": [] })).into_response()
             } else {
                 Json(serde_json::json!({ "result": "created" })).into_response()
             }
@@ -199,15 +201,16 @@ async fn bulk_answering_first_with(
     )
 }
 
-/// A thread with one more message than a page holds, so it is written in two
-/// bulk requests.
-async fn two_page_thread(pool: &sqlx::PgPool) -> Uuid {
+/// A thread of `messages` messages a second apart, so pages split it the same
+/// way on every read.
+async fn thread_with_messages(pool: &sqlx::PgPool, messages: i32) -> Uuid {
     let link_id = Uuid::now_v7();
     let thread_id = Uuid::now_v7();
     sqlx::query!(
         "INSERT INTO email_links (id, macro_id, fusionauth_user_id, email_address, provider)
-         VALUES ($1, 'macro|owner@example.com', 'owner', 'owner@example.com', 'GMAIL')",
+         VALUES ($1, 'macro|owner@example.com', 'owner', $2, 'GMAIL')",
         link_id,
+        format!("{link_id}@example.com"),
     )
     .execute(pool)
     .await
@@ -222,10 +225,11 @@ async fn two_page_thread(pool: &sqlx::PgPool) -> Uuid {
     .unwrap();
     sqlx::query!(
         "INSERT INTO email_messages (id, thread_id, link_id, subject, body_text, internal_date_ts)
-         SELECT gen_random_uuid(), $1, $2, 'subject', 'hello there', now()
-         FROM generate_series(1, 101)",
+         SELECT gen_random_uuid(), $1, $2, 'subject', 'message ' || n, now() - make_interval(secs => n)
+         FROM generate_series(1, $3) AS n",
         thread_id,
         link_id,
+        messages,
     )
     .execute(pool)
     .await
@@ -233,9 +237,107 @@ async fn two_page_thread(pool: &sqlx::PgPool) -> Uuid {
     thread_id
 }
 
+/// Counts the page queries a thread reindex issues, by their span.
+#[derive(Clone, Default)]
+struct PageReads(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for PageReads {
+    fn on_new_span(
+        &self,
+        attributes: &tracing::span::Attributes<'_>,
+        _: &tracing::span::Id,
+        _: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if attributes.metadata().name() == "get_paginated_parsed_search_messages_by_thread_id" {
+            self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+}
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn a_thread_reindex_stops_at_its_first_short_page(pool: sqlx::PgPool) {
+    use tracing::instrument::WithSubscriber as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let page_reads = PageReads::default();
+    let subscriber =
+        tracing::Dispatch::new(tracing_subscriber::registry().with(page_reads.clone()));
+    // Another test thread may have registered the page query's callsite with
+    // a "never" interest, so register it with a first pass, then recompute its
+    // interest. The recompute runs under this subscriber because, while it is
+    // the only dispatcher registered, tracing consults just the thread default.
+    let warm_up = thread_with_messages(&pool, 1).await;
+    let (opensearch, _) = fake_opensearch().await;
+    process_upsert_thread_message(&opensearch, &pool, warm_up, "macro|owner@example.com", None)
+        .with_subscriber(subscriber.clone())
+        .await
+        .unwrap();
+    tracing::dispatcher::with_default(&subscriber, tracing::callsite::rebuild_interest_cache);
+
+    // (messages in the thread, page queries, documents per bulk request)
+    for (messages, expected_page_reads, expected_bulk_sizes) in
+        [(1, 1, vec![1]), (100, 2, vec![100]), (101, 2, vec![100, 1])]
+    {
+        let thread_id = thread_with_messages(&pool, messages).await;
+        let (opensearch, requests) = fake_opensearch().await;
+        page_reads.0.store(0, std::sync::atomic::Ordering::SeqCst);
+
+        process_upsert_thread_message(
+            &opensearch,
+            &pool,
+            thread_id,
+            "macro|owner@example.com",
+            None,
+        )
+        .with_subscriber(subscriber.clone())
+        .await
+        .unwrap();
+
+        let bulk_document_ids: Vec<Vec<String>> = requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(request, _)| request.starts_with("POST /emails/_bulk"))
+            .map(|(_, body)| {
+                body.lines()
+                    .filter_map(|line| {
+                        let line: serde_json::Value = serde_json::from_str(line).unwrap();
+                        line["index"]["_id"].as_str().map(str::to_string)
+                    })
+                    .collect()
+            })
+            .collect();
+        let mut indexed: Vec<String> = bulk_document_ids.concat();
+        indexed.sort();
+        let mut stored: Vec<String> = sqlx::query_scalar!(
+            "SELECT thread_id::text || ':' || id::text AS \"id!\" FROM email_messages WHERE thread_id = $1",
+            thread_id,
+        )
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+        stored.sort();
+
+        assert_eq!(
+            page_reads.0.load(std::sync::atomic::Ordering::SeqCst),
+            expected_page_reads,
+            "page queries for a thread of {messages}"
+        );
+        assert_eq!(
+            bulk_document_ids.iter().map(Vec::len).collect::<Vec<_>>(),
+            expected_bulk_sizes,
+            "bulk requests for a thread of {messages}"
+        );
+        assert_eq!(
+            indexed, stored,
+            "every message of a thread of {messages} is indexed once"
+        );
+    }
+}
+
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn a_page_with_rejected_items_does_not_keep_later_pages_out(pool: sqlx::PgPool) {
-    let thread_id = two_page_thread(&pool).await;
+    let thread_id = thread_with_messages(&pool, 101).await;
     let (opensearch, bulks) = bulk_answering_first_with(serde_json::json!({
         "errors": true,
         "items": [
@@ -274,7 +376,7 @@ async fn a_page_with_rejected_items_does_not_keep_later_pages_out(pool: sqlx::Pg
 
 #[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
 async fn a_refused_page_stops_the_thread(pool: sqlx::PgPool) {
-    let thread_id = two_page_thread(&pool).await;
+    let thread_id = thread_with_messages(&pool, 101).await;
     let (opensearch, bulks) = bulk_answering_first_with(serde_json::json!({
         "errors": true,
         "items": [{ "index": { "status": 429, "error": {

@@ -237,6 +237,53 @@ pub(super) fn describe_email_event(event: &EmailTopicEvent) -> EmailEventDescrip
     }
 }
 
+/// The thread a queued reread for `event` is tracked by, when its handling
+/// rereads that whole thread.
+///
+/// A thread reindex reads every message of the thread as it is when the
+/// reindex starts, so one queued and not yet started covers any later reindex
+/// of the same thread, as long as no other event for the thread is queued
+/// behind it (see [`reread_barrier`]). The key leaves out `owner` because a
+/// thread belongs to one link, so every reindex of it names the same owner.
+/// Every other email action writes or deletes particular documents and must
+/// not be coalesced.
+pub(super) fn reread_key(event: &EmailMacroEvent) -> Option<String> {
+    match describe_email_event(&event.event().event).action {
+        EmailIndexAction::ReindexThread { thread_id, .. } => Some(thread_reread_key(thread_id)),
+        EmailIndexAction::UpsertMessage { .. }
+        | EmailIndexAction::UpsertSentMessage { .. }
+        | EmailIndexAction::RemoveMessage { .. }
+        | EmailIndexAction::ReindexThreads { .. }
+        | EmailIndexAction::RemoveLink { .. }
+        | EmailIndexAction::Ignore => None,
+    }
+}
+
+/// The thread reread claim `event` ends when it hands off.
+///
+/// A message action queued behind a thread reindex runs after it and can undo
+/// what it writes: a message removed because its event saw it in spam stays
+/// removed when the thread is restored before the reindex starts. A later
+/// reindex of the thread must then queue behind the message action instead of
+/// being absorbed by the reindex ahead of it.
+pub(super) fn reread_barrier(event: &EmailMacroEvent) -> Option<String> {
+    match describe_email_event(&event.event().event).action {
+        EmailIndexAction::UpsertMessage { .. }
+        | EmailIndexAction::UpsertSentMessage { .. }
+        | EmailIndexAction::RemoveMessage { .. } => {
+            Some(thread_reread_key(email_ordering_key(event)))
+        }
+        EmailIndexAction::ReindexThread { .. }
+        | EmailIndexAction::ReindexThreads { .. }
+        | EmailIndexAction::RemoveLink { .. }
+        | EmailIndexAction::Ignore => None,
+    }
+}
+
+fn thread_reread_key(thread_id: impl std::fmt::Display) -> String {
+    format!("email-thread:{thread_id}")
+}
+
 async fn process_email_index_action(
     db: &PgPool,
     opensearch_client: &OpensearchClient,

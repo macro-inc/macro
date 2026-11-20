@@ -139,14 +139,19 @@ fn test_pool(workers: usize, capacity: usize) -> (WorkerPool, Vec<mpsc::Receiver
 }
 
 fn received_thread_backfilled_event(thread_id: Uuid, offset: i64) -> ReceivedEvent {
-    let event = DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(
-        EMAIL_LINK_ID.to_string(),
+    received_email(
         EmailTopicEvent::ThreadBackfilled(ThreadBackfilledMetadata {
             link_id: EMAIL_LINK_ID,
             owner: user_id(),
             thread_id,
         }),
-    ));
+        offset,
+    )
+}
+
+fn received_email(event: EmailTopicEvent, offset: i64) -> ReceivedEvent {
+    let event =
+        DeclaredMacroEvent::EmailMacroEvent(EmailMacroEvent::new(EMAIL_LINK_ID.to_string(), event));
     attach_event_coordinates(
         Ok::<_, EventBrokerError>(event),
         0,
@@ -2367,7 +2372,7 @@ async fn closed_worker_channel_leaves_the_current_message_uncommitted() {
 async fn bounded_handoff_blocks_when_full_and_preserves_order() {
     let (pool, mut receivers) = test_pool(1, 1);
     let first = received_thread_backfilled_event(EMAIL_THREAD_ID, 1);
-    let second = received_thread_backfilled_event(EMAIL_THREAD_ID, 2);
+    let second = received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 2);
 
     assert!(matches!(
         pool.handoff(Ok::<_, EventBrokerError>(first)).await,
@@ -2589,8 +2594,8 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
     for event in [
         received_agent_session_event(AGENT_SESSION_ID, 1),
         received_agent_session_event(SECOND_AGENT_SESSION_ID, 2),
-        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
-        received_thread_backfilled_event(EMAIL_THREAD_ID, 4),
+        received_email(received_email_event(false), 3),
+        received_email(received_email_event(false), 4),
     ] {
         assert!(matches!(
             pool.handoff(Ok::<_, EventBrokerError>(event)).await,
@@ -2604,6 +2609,113 @@ async fn distinct_sessions_and_non_reread_events_each_hand_off() {
         offsets.push(event.offset);
     }
     assert_eq!(offsets, [1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn a_queued_thread_reindex_absorbs_later_reindexes_until_a_message_event_queues_behind_it() {
+    let (pool, mut receivers) = test_pool(1, 8);
+    let thread_read = |offset| {
+        received_email(
+            EmailTopicEvent::ThreadRead(ThreadReadMetadata {
+                link_id: EMAIL_LINK_ID,
+                owner: user_id(),
+                actor: None,
+                thread_id: EMAIL_THREAD_ID,
+                is_read: true,
+                origin: EmailEventOrigin::UserAction,
+            }),
+            offset,
+        )
+    };
+
+    let mut coalesced = Vec::new();
+    for event in [
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 1),
+        thread_read(2),
+        received_thread_backfilled_event(SECOND_EMAIL_THREAD_ID, 3),
+        // Removes the message from the index whatever the reindex at offset 1
+        // writes, so the next reindex must run after it.
+        received_email(received_email_event(true), 4),
+        thread_read(5),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 6),
+    ] {
+        let outcome = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        coalesced.push(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+    drop(pool);
+
+    let mut offsets = Vec::new();
+    while let Some(event) = receivers[0].recv().await {
+        offsets.push(event.offset);
+    }
+    assert_eq!(coalesced, [false, true, false, false, false, true]);
+    assert_eq!(
+        offsets,
+        [1, 3, 4, 5],
+        "another thread's reindex, a message removal, and the reindex behind it are not absorbed"
+    );
+}
+
+#[tokio::test]
+async fn a_reindex_starting_after_a_barrier_keeps_the_claim_of_the_reindex_behind_it() {
+    let (sender, receiver) = mpsc::channel(WORKER_CHANNEL_CAPACITY);
+    let pending_rereads = Arc::new(PendingRereads::default());
+    let pool = WorkerPool::new(vec![sender], Arc::clone(&pending_rereads), unread_metrics());
+
+    let mut coalesced = Vec::new();
+    for event in [
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 1),
+        received_email(received_email_event(true), 2),
+        received_thread_backfilled_event(EMAIL_THREAD_ID, 3),
+    ] {
+        let outcome = pool.handoff(Ok::<_, EventBrokerError>(event)).await;
+        coalesced.push(matches!(outcome, HandoffOutcome::Coalesced));
+    }
+    assert_eq!(coalesced, [false, false, false]);
+
+    let (started_sender, mut started) = mpsc::unbounded_channel();
+    let resume = Arc::new(tokio::sync::Notify::new());
+    let worker_resume = Arc::clone(&resume);
+    let worker = tokio::spawn(drain_worker_events(
+        receiver,
+        pending_rereads,
+        mpsc::unbounded_channel().0,
+        CancellationToken::new(),
+        move |received| {
+            let started_sender = started_sender.clone();
+            let resume = Arc::clone(&worker_resume);
+            async move {
+                started_sender
+                    .send(received.offset)
+                    .expect("test observes every event");
+                if received.offset == 1 {
+                    resume.notified().await;
+                }
+            }
+        },
+    ));
+    assert_eq!(started.recv().await, Some(1), "first reindex is running");
+
+    assert!(
+        matches!(
+            pool.handoff(Ok::<_, EventBrokerError>(received_thread_backfilled_event(
+                EMAIL_THREAD_ID,
+                4
+            )))
+            .await,
+            HandoffOutcome::Coalesced
+        ),
+        "the reindex at offset 3 is still queued and absorbs this one"
+    );
+
+    resume.notify_one();
+    drop(pool);
+    worker.await.expect("worker drained without panicking");
+    let mut offsets = Vec::new();
+    while let Some(offset) = started.recv().await {
+        offsets.push(offset);
+    }
+    assert_eq!(offsets, [2, 3]);
 }
 
 #[tokio::test]
@@ -2673,7 +2785,7 @@ async fn closed_worker_releases_the_reread_claim() {
 async fn events_with_the_same_ordering_key_stay_on_one_worker_in_order() {
     let (pool, mut receivers) = test_pool(WORKER_COUNT, WORKER_CHANNEL_CAPACITY);
     for offset in 0..8 {
-        let event = received_thread_backfilled_event(EMAIL_THREAD_ID, offset);
+        let event = received_email(received_email_event(false), offset);
         assert!(matches!(
             pool.handoff(Ok::<_, EventBrokerError>(event)).await,
             HandoffOutcome::HandedOff

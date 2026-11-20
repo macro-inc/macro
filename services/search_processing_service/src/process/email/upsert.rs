@@ -226,6 +226,9 @@ pub async fn process_upsert_thread_message(
         if messages.is_empty() {
             break;
         }
+        // A page shorter than the limit is the thread's last, so the empty
+        // page after it is never read.
+        let is_last_page = i64::try_from(messages.len()).is_ok_and(|len| len < message_limit);
 
         let mut delete_message_ids = Vec::new();
         let mut upsert_email_message_args = Vec::new();
@@ -276,7 +279,9 @@ pub async fn process_upsert_thread_message(
             rejected_items.get_or_insert(error);
         }
 
-        // Update offset
+        if is_last_page {
+            break;
+        }
         message_offset += message_limit;
     }
 
