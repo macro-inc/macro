@@ -87,6 +87,15 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
       element
     );
 
+  // The follower's bottom edge sits its own 0.5rem above the stack's top.
+  const expectAboveStack = async () => {
+    const tops = await toasts.evaluateAll((cards) =>
+      cards.map((card) => card.getBoundingClientRect().top)
+    );
+    const box = (await follower.boundingBox())!;
+    expect(Math.min(...tops) - (box.y + box.height)).toBeCloseTo(8, 0);
+  };
+
   // Warm up the toast modules so the trace holds only the animations.
   await show.click();
   await expect(toasts).toHaveCount(1);
@@ -111,11 +120,13 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
     await show.click();
     await expect(toasts).toHaveCount(1);
     await settle(page);
+    await expectAboveStack();
     // A second notice tucks the first behind it.
     await show.click();
     await expect(toasts).toHaveCount(2);
     await settle(page);
     // The control above the stack still follows it.
+    await expectAboveStack();
     const raised = await follower.boundingBox();
     expect(await inset('follower')).toMatch(
       /^calc\(\d+(\.\d+)?px \+ 1\.25rem\)$/
