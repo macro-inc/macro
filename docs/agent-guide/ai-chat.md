@@ -297,7 +297,7 @@ right preview instead of a standalone split. The Agents sidebar stays left and c
 be hidden from its title row or reopened from the leading header control. **Changes** opens a full-width,
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
-The phone list shows startable custom agents as bubbles above the Favorites, Waiting on you, and Conversations sections. Tap a bubble to focus the accessory composer with that agent selected. New agent opens the roster creation flow. The title menu opens Conversations, Agents, Routines, and Archived. Archived has history-based Back and search, and keeps the navigation dock but no composer; Back restores the list or page it was opened from. Long-press a row for its entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
@@ -615,11 +615,7 @@ the shimmer.
   16px top padding when expanded. Light mode uses a faint shadow outline and
   layered outer shadow; dark mode retains the production glass rim and shadow.
   Both modes retain the production composer background.
-- The starting page uses the shared grouped **Auto / Chat / Code** Tabs pill,
-  below the input on desktop and above it in the phone drawer. The shared Tabs
-  component owns spacing, selection, focus, and touch treatment; the composer
-  does not resize or recolor its parts. Verify switching modes with the pointer
-  and keyboard on desktop and at 390×844.
+- Full new-session pages share Home's **Auto / Chat / Code** Tabs and repository row below the composer on desktop and phone, using the same composition, spacing, and alignment. The compact phone list accessory retains its grouped upper drawer. Opening a sent conversation leaves the preflight modes behind. The shared Tabs component owns selection, focus, and touch treatment; verify pointer and keyboard changes on desktop and at 390×844.
   Chat and Code limit the offered agents; the choice
   lasts only while the composer is mounted, and every composer opens in **Auto**. Auto is
   behind the `enable-composer-auto-mode` PostHog flag (Macro employees only), which the
@@ -730,14 +726,7 @@ the shimmer.
 - On Home and New conversation, selecting Code expands the input even
   with an empty or short draft. Both pages place the composer above the viewport's
   vertical center. The heading stays anchored while the composer expands downward,
-  with controls inside the composer. Only the plus attachment action stays on the
-  left of the bottom row. The right group contains mode/repository controls on
-  the Agents desktop composer, then the agent/model selector, dictation, and Send.
-  Home keeps mode and repository controls in its existing drawer below. Mode/repository
-  controls can wrap above the final model, dictation, and Send controls.
-  On mobile, grouped Auto/Chat/Code stays above the composer with repository
-  controls; both pickers open standard bottom drawers. Selecting Chat hides
-  repository controls without remounting the editor or losing the draft.
+  with model and send controls inside the composer. Only the plus attachment action stays on the left of the bottom row; the right group contains the agent/model selector, dictation, and Send. Home and full new-session views place mode and repository controls together in their shared row below the input. The compact phone list composer keeps grouped modes and repository controls in its upper drawer. Both pickers open standard bottom drawers. Selecting Chat hides repository controls without remounting the editor or losing the draft.
   Reduced-motion preferences disable the expansion animation. **Repository**
   (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
   **Auto-detect**, then the repositories the signed-in user reaches
@@ -939,8 +928,7 @@ the shimmer.
 
 ## Routine run history
 
-On phones, Routines uses the shared header islands: Back to the previous page,
-its title, Search, and Create Routine actions stay above the list. Opening a routine replaces them with Back,
+On phones, the Routines list uses the shared hamburger drawer, with Search and Create Routine actions above its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 
