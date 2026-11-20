@@ -163,6 +163,10 @@ export async function openLane(
     failed.push(failure);
     requestFailureSink?.(failure);
   });
+  // Opening every lane at once (the sequences phase opens 192 pages) starves
+  // the dev servers until loads time out: a few page loads at a time.
+  const release = await acquireLoadSlot();
+  try {
   // A page load fetches about a thousand modules from the dev server; the
   // browser fails them all when the host's network changes (failed
   // requests, above). Load the page again then, a few times.
@@ -175,7 +179,43 @@ export async function openLane(
       if (attempt >= 4) throw error;
     }
   }
+  } finally {
+    release();
+  }
   return { side: app.side, app, context, page, touch, failed };
+}
+
+/** Load a new document in an open lane (to `url`, or the same one), a few
+ * page loads at a time across the run, retrying as openLane does. */
+export async function reloadLane(lane: Lane, url?: string, options: { probe?: boolean } = {}) {
+  const release = await acquireLoadSlot();
+  try {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        if (url) await lane.page.goto(url, { waitUntil: "domcontentloaded", timeout: 180_000 });
+        else await lane.page.reload({ waitUntil: "domcontentloaded", timeout: 180_000 });
+        if (options.probe) await loadProbe(lane.page);
+        return;
+      } catch (error) {
+        if (attempt >= 4) throw error;
+      }
+    }
+  } finally {
+    release();
+  }
+}
+
+const LOAD_SLOTS = Number(process.env.PROOF_OPEN_CONCURRENCY ?? 6);
+let loadsRunning = 0;
+const loadWaiters: (() => void)[] = [];
+
+async function acquireLoadSlot(): Promise<() => void> {
+  while (loadsRunning >= LOAD_SLOTS) await new Promise<void>((resolve) => loadWaiters.push(resolve));
+  loadsRunning += 1;
+  return () => {
+    loadsRunning -= 1;
+    loadWaiters.shift()?.();
+  };
 }
 
 export async function loadProbe(page: Page) {

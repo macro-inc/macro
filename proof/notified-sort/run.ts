@@ -17,13 +17,13 @@ import { join } from 'node:path';
 import { runStep, STEP_WEIGHTS, type ActionContext, type StepKind } from './lib/actions.ts';
 import {
   launchBrowser,
-  loadProbe,
   onRequestFailure,
   openLane,
   probeOpenLive,
   probeRead,
   probeSnapLive,
   readHomeDom,
+  reloadLane,
   startApp,
   stopApp,
   type AppServer,
@@ -414,7 +414,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
         );
         // The on-screen list for contract checks: touch Home, Signal or Noise.
         const domTab = s % 2 === 0 ? 'signal' : 'noise';
-        await Promise.all(lanes.dom.map((lane) => lane.page.goto(`${lane.app.origin}/app/home?s0.home.tab=${domTab}`, { waitUntil: 'domcontentloaded' })));
+        await Promise.all(lanes.dom.map((lane) => reloadLane(lane, `${lane.app.origin}/app/home?s0.home.tab=${domTab}`)));
 
         for (let k = 0; k < stepsPerSequence; k++) {
           const kind = ctx.rng.weighted(STEP_WEIGHTS) as StepKind;
@@ -498,10 +498,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
           checks.live = reached;
 
           // 3. Reload: a new document on each side reads every spec.
-          await Promise.all(lanes.reload.map(async (lane) => {
-            await lane.page.reload({ waitUntil: 'domcontentloaded' });
-            await loadProbe(lane.page);
-          }));
+          await Promise.all(lanes.reload.map((lane) => reloadLane(lane, undefined, { probe: true })));
           for (let i = 0; i < specs.length; i++) {
             const read = await readUntilAnswered(`reload ${JSON.stringify(at)} spec${i}`, lanes.reload, () => Promise.allSettled([probeRead(lanes.reload[0], user.macroUserId, specs[i]), probeRead(lanes.reload[1], user.macroUserId, specs[i])]));
             if (read[0].status !== 'fulfilled' || read[1].status !== 'fulfilled') {
