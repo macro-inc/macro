@@ -831,11 +831,11 @@ Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-ca
 actions, and the Customer / Contact picker retire immediately when access is revoked.
 Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
-In team settings, admins and owners see a CRM access switch for each member only
-while `enable-crm-member-access-changes` is enabled. Owners and admins show the
-reason they always retain access instead of a disabled switch. The access row
-sits below the existing member controls; the identity, role and seat layout stays
-the same on desktop and phones.
+In team settings, admins and owners see a **CRM** switch in each member's row,
+after the seat and role menus, only while `enable-crm-member-access-changes` is
+enabled. Owner and admin rows have no switch; one note under the list says they
+always have CRM access. Rows stay one line on desktop; on phones a member's
+controls wrap below their name.
 A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,

@@ -1,4 +1,10 @@
-import { expect, type Page, type TestInfo, test } from '@playwright/test';
+import {
+  expect,
+  type Locator,
+  type Page,
+  type TestInfo,
+  test,
+} from '@playwright/test';
 
 type Agent = {
   userId: string;
@@ -22,6 +28,7 @@ type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting';
 
 const OWNER = 'macro|maya@example.com';
 const MEMBER = 'macro|sam@example.com';
+const ADMIN = 'macro|lee@example.com';
 const ADA = 'macro|ada@agents.macro.invalid';
 
 /** Where to also copy every screenshot, for a PR; unset keeps them in test-results. */
@@ -132,6 +139,8 @@ async function scriptAuthService(
     viewerOwnsRuntimes?: boolean;
     failedCrmSaves?: number;
     extraMembers?: { user_id: string; role: 'admin' | 'member' }[];
+    /** Enterprise teams bill per seat, so every row has its seat plan menu. */
+    enterprise?: boolean;
   } = {}
 ) {
   const backend = {
@@ -359,7 +368,7 @@ async function scriptAuthService(
           owner_id: OWNER,
           allow_non_admin_invites: true,
           crm_enabled: false,
-          enterprise: false,
+          enterprise: options.enterprise ?? false,
         },
         members: members(),
         scheduled_seat_plans: {},
@@ -1114,6 +1123,15 @@ test('a DM with an agent teammate that is not running says so', async ({
   await expect(dm.locator('[data-agent-dm-chip]')).toHaveCount(0);
 });
 
+const CRM_ACCESS = { name: /^CRM access for/ };
+
+/** A member's CRM access switch with its label: the control a click lands on. */
+function crmAccessControl(page: Page, scope: Page | Locator = page) {
+  return scope
+    .getByRole('group')
+    .filter({ has: page.getByRole('switch', CRM_ACCESS) });
+}
+
 test('CRM access can be revoked and restored while privileged roles retain access', async ({
   page,
 }, testInfo) => {
@@ -1122,11 +1140,13 @@ test('CRM access can be revoked and restored while privileged roles retain acces
   const ownerRow = page.locator(`[data-team-member="${OWNER}"]`);
   await ownerRow.waitFor();
   await expect(ownerRow.getByRole('switch')).toHaveCount(0);
+  // One note for the whole list says why owners and admins have no switch.
+  await expect(ownerRow.getByText(/always have/)).toHaveCount(0);
   await expect(
-    ownerRow.getByText('Owners and admins always have access')
-  ).toBeVisible();
-  const control = page.getByRole('group', { name: /^CRM access for/ });
-  const member = control.getByRole('switch', { name: /^CRM access for/ });
+    page.getByText('Owners and admins always have CRM access.')
+  ).toHaveCount(1);
+  const control = crmAccessControl(page);
+  const member = page.getByRole('switch', CRM_ACCESS);
   await expect(member).toHaveCount(1);
   await expect(member).toBeChecked();
   await control.click();
@@ -1146,38 +1166,105 @@ test('CRM access can be revoked and restored while privileged roles retain acces
   await screenshot(page, testInfo, 'crm-access-restored');
 });
 
-for (const width of [360, 390]) {
-  test(`CRM access controls fit the existing member row at ${width}px`, async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== 'phone', 'Phone touch layout');
-    await page.setViewportSize({ width, height: 844 });
-    const backend = await scriptAuthService(page);
-    await page.goto('/');
-    const member = page.locator(`[data-team-member="${MEMBER}"]`);
-    const toggle = member.getByRole('group', { name: /^CRM access for/ });
-    await expect(toggle).toBeVisible();
-    const bounds = await toggle.boundingBox();
-    expect(bounds!.width).toBeGreaterThanOrEqual(44);
-    expect(bounds!.height).toBeGreaterThanOrEqual(44);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-    await toggle.click();
-    await expect(toggle.getByRole('switch')).not.toBeChecked();
-    expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
-  });
+/** Each person row's height, by user id. */
+async function memberRowHeights(page: Page) {
+  const heights: Record<string, number> = {};
+  for (const id of [OWNER, ADMIN, MEMBER]) {
+    const box = await page.locator(`[data-team-member="${id}"]`).boundingBox();
+    heights[id] = Math.round(box!.height);
+  }
+  return heights;
 }
+
+test('CRM access is one control beside the seat and role menus', async ({
+  page,
+}, testInfo) => {
+  const phone = testInfo.project.name === 'phone';
+  const { width: projectWidth, height } = testInfo.project.use.viewport!;
+  const widths = phone ? [projectWidth, 360] : [projectWidth];
+  const backend = await scriptAuthService(page, 2, {
+    enterprise: true,
+    extraMembers: [{ user_id: ADMIN, role: 'admin' }],
+  });
+  const member = page.locator(`[data-team-member="${MEMBER}"]`);
+
+  // The roster without the switch: the row heights to keep.
+  await page.goto('/?crmAccessChanges=off');
+  await member.getByRole('button', { name: 'Seat plan' }).waitFor();
+  const before: Record<number, Record<string, number>> = {};
+  for (const width of widths) {
+    await page.setViewportSize({ width, height });
+    before[width] = await memberRowHeights(page);
+  }
+
+  await page.setViewportSize({ width: projectWidth, height });
+  await page.goto('/');
+  const access = crmAccessControl(page, member);
+  await expect(access).toBeVisible();
+  await screenshot(page, testInfo, 'crm-access-inline');
+  for (const id of [OWNER, ADMIN]) {
+    const row = page.locator(`[data-team-member="${id}"]`);
+    await expect(row.getByRole('switch')).toHaveCount(0);
+    await expect(row.getByText(/always have/)).toHaveCount(0);
+  }
+  const identity = member.locator('[data-member-identity]');
+  const controls = member.locator('[data-member-controls]');
+  await expect(controls.getByRole('switch', CRM_ACCESS)).toHaveCount(1);
+  // It follows the seat and role menus, and Remove stays last.
+  const plan = (await controls
+    .getByRole('button', { name: 'Seat plan' })
+    .boundingBox())!;
+  const role = (await controls
+    .getByRole('button', { name: 'Member' })
+    .boundingBox())!;
+  const first = (await access.boundingBox())!;
+  expect(plan.x).toBeLessThan(role.x);
+  expect(role.x).toBeLessThan(first.x);
+
+  for (const width of widths) {
+    await page.setViewportSize({ width, height });
+    const heights = await memberRowHeights(page);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth)
+    ).toBeLessThanOrEqual(width);
+    const box = (await access.boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    if (!phone) {
+      // Every row, the member's included, stays one line high.
+      expect(heights).toEqual(before[width]);
+      const row = (await controls.boundingBox())!;
+      expect(
+        Math.abs(box.y + box.height / 2 - (row.y + row.height / 2))
+      ).toBeLessThan(2);
+      continue;
+    }
+    // Rows without the switch keep their height; the member's controls wrap
+    // below a full-width identity instead of squeezing the name, and the
+    // switch keeps a full touch target.
+    expect(heights[OWNER]).toBe(before[width]![OWNER]);
+    expect(heights[ADMIN]).toBe(before[width]![ADMIN]);
+    const name = (await identity.boundingBox())!;
+    const wrapped = (await controls.boundingBox())!;
+    expect(wrapped.y).toBeGreaterThanOrEqual(name.y + name.height - 1);
+    expect(box.width).toBeGreaterThanOrEqual(44);
+    expect(box.height).toBeGreaterThanOrEqual(44);
+    if (width !== projectWidth)
+      await screenshot(page, testInfo, `crm-access-inline-${width}`);
+  }
+
+  await access.click();
+  await expect(access.getByRole('switch')).not.toBeChecked();
+  expect(backend.crmSaves).toEqual([{ user_id: MEMBER, enabled: false }]);
+});
 
 test('CRM access controls are hidden from ordinary members', async ({
   page,
 }, testInfo) => {
   await scriptAuthService(page);
   await page.goto(`/?viewer=${encodeURIComponent(MEMBER)}`);
-  await expect(
-    page.getByText('Members', { exact: true }).first()
-  ).toBeVisible();
-  await expect(
-    page.getByRole('group', { name: /^CRM access for/ }).getByRole('switch')
-  ).toHaveCount(0);
+  await expect(page.locator(`[data-team-member="${OWNER}"]`)).toBeVisible();
+  await expect(page.getByRole('switch', CRM_ACCESS)).toHaveCount(0);
+  await expect(page.getByText(/always have/)).toHaveCount(0);
   await screenshot(page, testInfo, 'crm-access-member-settings');
 });
 
@@ -1186,15 +1273,13 @@ test('CRM access save failures keep the prior setting and allow retry', async ({
 }) => {
   const backend = await scriptAuthService(page, 2, { failedCrmSaves: 1 });
   await page.goto('/');
-  const member = page
-    .getByRole('group', { name: /^CRM access for/ })
-    .getByRole('switch');
+  const member = page.getByRole('switch', CRM_ACCESS);
   await expect(member).toBeChecked();
-  await page.getByRole('group', { name: /^CRM access for/ }).click();
+  await crmAccessControl(page).click();
   await expect.poll(() => backend.crmSaves.length).toBe(1);
   await expect(member).toBeEnabled();
   await expect(member).toBeChecked();
-  await page.getByRole('group', { name: /^CRM access for/ }).click();
+  await crmAccessControl(page).click();
   await expect(member).not.toBeChecked();
 });
 
@@ -1204,11 +1289,7 @@ test('CRM access controls are absent while the server write flag is off', async 
   const backend = await scriptAuthService(page);
   await page.goto('/?crmAccessChanges=off');
   await expect(page.locator(`[data-team-member="${OWNER}"]`)).toBeVisible();
-  await expect(
-    page.getByRole('group', { name: /^CRM access for/ })
-  ).toHaveCount(0);
-  await expect(
-    page.getByText('Owners and admins always have access')
-  ).toHaveCount(0);
+  await expect(page.getByRole('switch', CRM_ACCESS)).toHaveCount(0);
+  await expect(page.getByText(/always have/)).toHaveCount(0);
   expect(backend.crmSaves).toEqual([]);
 });
