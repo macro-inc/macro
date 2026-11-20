@@ -107,7 +107,7 @@ function cut(text: string, max: number): string {
 export function mailText(persona: Persona, now: number): string {
   const lines = windowMessages(persona, 'full', now).messages.map((message) => {
     const labels = message.labels.filter((label) => !HIDDEN_LABELS.has(label)).slice(0, 5).map((label) => cut(label, 120));
-    const from = message.from.name.trim() ? `${message.from.name} <${message.from.email}>` : message.from.email;
+    const from = trimAsRust(message.from.name) ? `${message.from.name} <${message.from.email}>` : message.from.email;
     const head = `${message.received_at.slice(0, 16).replace('T', ' ')} · ${cut(from, 120)} · ${cut(message.subject, 200)}${labels.length ? ` · ${labels.join(', ')}` : ''}`;
     const text = message.snippet ? trimAsRust(message.snippet) : undefined;
     return text ? `${head}\n    ${cut(text, 500)}` : head;

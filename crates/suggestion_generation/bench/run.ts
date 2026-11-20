@@ -454,7 +454,8 @@ export async function generate(
     result.cost = await costOf(db, user, new Date(start - 1000), new Date());
   } catch (error) {
     result.error = String(error).slice(0, 500);
-    // A generation that ran out of time may have briefed its drafting sessions: its list is scored all the same.
+    // A generation that ran out of time may have briefed its drafting sessions: its list is scored all the same, from the transcript as it stands now.
+    if (result.generationId) await capture(db, result.generationId, transcript).catch(() => {});
     if (transcript.size) result.workList ??= workListOf(transcript.values());
     // A generation that failed or ran out of time may still have spent: count it.
     if (asked !== undefined) {

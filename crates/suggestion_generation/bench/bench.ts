@@ -15,9 +15,9 @@ import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
-import { lines as reportLines } from './report';
+import { lines as reportLines, withheld, withheldAcross } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
-import { type Attempt, type RunFile, type Section, PARTS, contrast, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, type RunFile, type Section, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -154,6 +154,13 @@ const FIND_WORK_FLAG = 'routine-suggestions-find-work';
 /** Whether a run of `section` scores `persona`'s work lists: the run had the finding step on (`findsWork`) and the persona has a streams key. */
 const listsScored = (section: Section, persona: Persona, findsWork: boolean) => section === 'routines' && findsWork && !!persona.streamsTruth;
 
+/** Forget `attempt`'s work-list judgement: its run, or its person's key, no longer scores one. */
+const dropList = (attempt: Attempt) => {
+  attempt.findingMarks = undefined;
+  attempt.finding = undefined;
+  attempt.findingError = undefined;
+};
+
 /**
  * Judge and score the work list `attempt`'s drafting sessions read, as
  * `find` scores one on its own, in place of any earlier judgement: a
@@ -183,6 +190,7 @@ const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: A
           attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
         }
         if (listsScored(section, persona, findsWork)) await judgeWorkList(at, persona, attempt);
+        else dropList(attempt);
       } else {
         attempt.feedMarks = await judgeFeed(at, grader, persona, attempt.generation);
         attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
@@ -381,7 +389,11 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
         const persona = seatOf(people.get(attempt.persona)!, attempt.seat ?? 1);
         const findsWork = !!run.flags?.[FIND_WORK_FLAG];
         // A build failure keeps its 0: only its work list is judged again, where the run scores one.
-        if (attempt.generation.buildFailed ? !listsScored(run.section, persona, findsWork) : attempt.generation.error) return;
+        if (attempt.generation.buildFailed ? !listsScored(run.section, persona, findsWork) : attempt.generation.error) {
+          // Nothing to judge again; a list judgement its key no longer backs goes.
+          if (!listsScored(run.section, persona, findsWork)) dropList(attempt);
+          return;
+        }
         attempt.benchError = undefined;
         await judgeAndScore(at, run.section, persona, attempt, findsWork);
       }),
@@ -426,7 +438,12 @@ function rescore(path: string) {
     const persona = people.get(attempt.persona)!;
     if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
     else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
-    if (attempt.benchError || !listsScored(run.section, persona, findsWork || !!attempt.findingMarks)) continue;
+    // A list its person's key no longer backs keeps no score from it.
+    if (!listsScored(run.section, persona, findsWork || !!attempt.findingMarks)) {
+      dropList(attempt);
+      continue;
+    }
+    if (attempt.benchError) continue;
     // An empty list needs no judge; any other is scored from the marks it was judged with, which must fit it and the key as they are now.
     const list = attempt.generation.workList ?? NO_LIST;
     const marks = attempt.findingMarks ?? (list.streams.length ? undefined : []);
@@ -463,12 +480,13 @@ async function main() {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('compare two runs of the same section');
       comparable(a, b);
+      const hidden = withheldAcross([a.attempts, b.attempts]);
+      if (hidden) throw new Error(hidden);
       // Margins `noise` measured on these runs' kind of set and judge: score,found,bad.
       // Margins measured on another kind of set or by another judge would decide nothing: there are none by default.
-      const measured = values.margins?.split(',').map(Number);
-      if (!measured) throw new Error('compare needs --margins score,found,bad: measure them with `noise` on two runs of main on this kind of set, judged by this judge (README, Noise)');
-      if (measured.length !== 3 || measured.some((m) => !(m > 0))) throw new Error('--margins takes score,found,bad');
-      const v = verdict(a.attempts, b.attempts, { score: measured[0], found: measured[1], bad: measured[2] });
+      if (values.margins === undefined) throw new Error('compare needs --margins score,found,bad: measure them with `noise` on two runs of main on this kind of set, judged by this judge (README, Noise)');
+      const measured = marginsOf(values.margins);
+      const v = verdict(a.attempts, b.attempts, measured);
       const s = v.parts.score;
       console.log(`${a.section}: ${a.label} → ${b.label}, ${s.attempts[0]} and ${s.attempts[1]} attempts over ${s.people} personas\n\n**${v.verdict.toUpperCase()}**: ${v.why}.`);
       for (const part of Object.keys(PARTS) as (keyof typeof PARTS)[]) {
@@ -493,6 +511,8 @@ async function main() {
       const [a, b] = rest.map(readSide);
       if (a.section !== b.section) throw new Error('noise takes two runs of the same section');
       comparable(a, b);
+      const hidden = withheldAcross([a.attempts, b.attempts]);
+      if (hidden) throw new Error(hidden);
       const n = noiseMargins(a.attempts, b.attempts);
       console.log(`${a.section}: ${n.score.attempts.join(' and ')} attempts of the same build over ${n.score.people} personas`);
       for (const [part, c] of Object.entries(n)) {
@@ -537,7 +557,10 @@ async function main() {
       else console.log(spent().join('\n') || 'no held-out sets');
       break;
     case 'summary':
-      for (const path of rest) console.log(JSON.stringify(summary(readRun(path).attempts), null, 1));
+      for (const path of rest) {
+        const run = readRun(path);
+        console.log(withheld(run) ?? JSON.stringify(summary(run.attempts), null, 1));
+      }
       break;
     default:
       console.log(`usage: bun bench.ts <command> [options]

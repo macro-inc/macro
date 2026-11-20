@@ -233,12 +233,14 @@ export const seatOf = (persona: Persona, seat: number): Persona => ({ ...persona
 const seatTag = (persona: Persona) => ((persona.seat ?? 1) > 1 ? `-s${persona.seat}` : '');
 
 /** The persona as `variant`: its own scenario name, and the signup copy's and later seats' addresses moved to a domain of their own. */
-function variantOf(persona: Persona, variant: Variant): Persona {
+export function variantOf(persona: Persona, variant: Variant): Persona {
   const tag = `${seatTag(persona)}${variant === 'signup' ? '-signup' : ''}`;
   if (!tag) return persona;
   const domain = domainOf(persona.inbox.owner.email);
   const moved = domain.replace(/\.example$/, `${tag}.example`);
-  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replaceAll(`@${domain}`, `@${moved}`));
+  // Not inside a longer domain, as `asWritten` reads it back: no letter, digit or hyphen follows, nor a dot and one.
+  const at = new RegExp(`@${domain.replaceAll('.', '\\.')}(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'g');
+  const rename = <T>(value: T): T => JSON.parse(JSON.stringify(value).replace(at, `@${moved}`));
   return { ...persona, inbox: rename(persona.inbox), workspace: rename(persona.workspace) };
 }
 

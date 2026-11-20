@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 import type { RoutineMark } from './judge';
-import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, windowMessages } from './personas';
+import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, variantOf, windowMessages } from './personas';
 import { type Generation, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox } from './month';
-import { lines } from './report';
-import { type Attempt, failedScore, type RunFile, scoreRoutines, summary } from './score';
+import { lines, withheldAcross } from './report';
+import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary } from './score';
 import { ANCHOR } from './clock';
 
 const HOUR = 60 * 60_000;
@@ -309,6 +309,15 @@ describe('asWritten', () => {
       'user@acme-s2-signup.example.test, fy@acme-s2.example-mail.test; write to bo@acme.example.',
     );
   });
+  test('is what a seat\'s copy moved, and a longer domain stays as written both ways', () => {
+    const ana = persona(1, 1);
+    ana.inbox.messages[0] = { ...ana.inbox.messages[0], from: { name: 'Cy', email: 'cy@acme.example.test' }, to: ['ana@acme.example', 'di@acme.examples.test'] };
+    const copy = variantOf({ ...ana, seat: 2 }, 'signup');
+    expect(copy.inbox.owner.email).toBe('ana@acme-s2-signup.example');
+    expect(copy.inbox.messages[0].from.email).toBe('cy@acme.example.test');
+    expect(copy.inbox.messages[0].to).toEqual(['ana@acme-s2-signup.example', 'di@acme.examples.test']);
+    expect(asWritten(ana, JSON.stringify(copy.inbox))).toBe(JSON.stringify(ana.inbox));
+  });
 });
 
 describe('trimAsRust', () => {
@@ -316,6 +325,18 @@ describe('trimAsRust', () => {
     expect(trimAsRust('\u0085 a \u3000')).toBe('a');
     expect(trimAsRust('\uFEFF')).toBe('\uFEFF');
     expect(boundedList(listOf('\u0085', 'a')).streams.map((stream) => stream.name)).toEqual(['a']);
+  });
+  test('says when a sender\'s name is blank, as the service does', () => {
+    const ana = persona(1, 1);
+    ana.inbox.messages[0] = { ...ana.inbox.messages[0], from: { name: '\u0085', email: 'bo@acme.example' } };
+    expect(mailText(ana, ANCHOR)).toMatch(/^\S+ \S+ \u00B7 bo@acme\.example \u00B7 /);
+  });
+});
+
+describe('compare margins', () => {
+  test('take three finite margins of 0 or more', () => {
+    expect(marginsOf('10.9,0.48,0')).toEqual({ score: 10.9, found: 0.48, bad: 0 });
+    for (const bad of ['1,2', '1,,2', '1,2,Infinity', '1,2,-1', '1,2,x']) expect(() => marginsOf(bad)).toThrow('--margins takes');
   });
 });
 
@@ -358,6 +379,27 @@ describe('the finding score of a run', () => {
     expect(both).toContain('| 0.0 (');
     expect(both).toContain('- a held-out generation #1: bench error');
     expect(both).not.toContain('p3');
+  });
+
+  test('sets two held-out runs side by side only over two people scored in both', () => {
+    const heldout = (persona: string, over: Partial<Attempt> = {}) => attempt({ persona, heldout: true, ...over });
+    const a = [heldout('p1'), heldout('p2')];
+    const b = [heldout('p2'), heldout('p3')];
+    expect(withheldAcross([a, b])).toContain('1 held-out people scored in every run, fewer than 2');
+    expect(withheldAcross([a, [heldout('p1'), heldout('p2', { benchError: 'judge' })]])).toContain('1 held-out people scored');
+    expect(withheldAcross([a, [heldout('p2'), heldout('p1')]])).toBeUndefined();
+    expect(withheldAcross([[attempt({})], [attempt({ persona: 'other' })]])).toBeUndefined();
+  });
+
+  test('shows a held-out list score only over two people\'s lists', () => {
+    const heldout = (persona: string, over: Partial<Attempt> = {}) => attempt({ persona, heldout: true, ...over });
+    const list = scoreWorkList(keyed(), listOf('a', 'b'), [entry(1, 's1'), entry(2, 's2')]);
+    const run: RunFile = { section: 'routines', label: 't', set: 'h', commit: 'c', attempts: [heldout('p1', { finding: list }), heldout('p2', { findingError: 'judge' })] } as RunFile;
+    const shown = lines([run]).join('\n');
+    expect(shown).toContain("1 held-out people's work lists judged, fewer than 2: not shown");
+    expect(shown).not.toContain('named 100%');
+    const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
+    expect(two).toContain('named 100%');
   });
 });
 

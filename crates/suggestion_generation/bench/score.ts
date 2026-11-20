@@ -407,6 +407,19 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
 }
 
 /**
+ * `compare`'s `--margins score,found,bad`, as `noise` prints them: three
+ * finite margins of 0 or more. A margin of 0 is a measurement (two runs that
+ * never moved); one that isn't finite would call every change noise.
+ */
+export function marginsOf(text: string): Margins {
+  const margins = text.split(',').map((margin) => (margin.trim() ? Number(margin) : NaN));
+  if (margins.length !== 3 || margins.some((margin) => !Number.isFinite(margin) || margin < 0)) {
+    throw new Error(`--margins takes score,found,bad: three finite margins of 0 or more, not ${text}`);
+  }
+  return { score: margins[0], found: margins[1], bad: margins[2] };
+}
+
+/**
  * The noise margins from two runs of the same build: for each part, the
  * larger end of the 95% interval of their difference, i.e. how far apart
  * two identical builds land at this size.

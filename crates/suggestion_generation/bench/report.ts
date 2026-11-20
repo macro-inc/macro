@@ -2,14 +2,19 @@
 // its parts, then the attempts that went wrong.
 
 import { MIN_HELDOUT_PEOPLE } from './finding';
-import { type RunFile, scored, summary } from './score';
+import { type Attempt, type RunFile, scored, summary } from './score';
 
-/** Why `run`'s aggregate can't be shown: it holds held-out people, and fewer of them scored than an aggregate needs to show no one's result. */
-function withheld(run: RunFile): string | undefined {
-  if (!run.attempts.some((attempt) => attempt.heldout)) return undefined;
-  const people = new Set(scored(run.attempts).filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size;
-  return people < MIN_HELDOUT_PEOPLE ? `${people} held-out people scored, fewer than ${MIN_HELDOUT_PEOPLE}: their aggregate would show one person's result, so none is shown` : undefined;
+/** Why `sides` can't be shown or set side by side: they hold held-out people, and fewer of them scored in every side than an aggregate needs to show no one's result. */
+export function withheldAcross(sides: Attempt[][]): string | undefined {
+  if (!sides.some((attempts) => attempts.some((attempt) => attempt.heldout))) return undefined;
+  const people = sides.map((attempts) => new Set(scored(attempts).filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)));
+  const common = [...people[0]].filter((name) => people.every((names) => names.has(name))).length;
+  const where = sides.length > 1 ? ' in every run' : '';
+  return common < MIN_HELDOUT_PEOPLE ? `${common} held-out people scored${where}, fewer than ${MIN_HELDOUT_PEOPLE}: their aggregate would show one person's result, so none is shown` : undefined;
 }
+
+/** Why `run`'s aggregate can't be shown (see `withheldAcross`). */
+export const withheld = (run: RunFile) => withheldAcross([run.attempts]);
 
 const secs = (ms: number) => (Number.isFinite(ms) ? `${(ms / 1000).toFixed(0)}s` : '–');
 
@@ -39,7 +44,10 @@ export function lines(runs: RunFile[]): string[] {
     out.push('', `${run.section} (${run.label}): wrong per generation: ${wrong || 'none'}; generations not ready: ${s.failedGenerations}; bench errors: ${s.benchErrors}`);
     if (s.goodDrafts !== undefined) {
       const aimed = s.aimed !== undefined ? `; work streams some suggestion acts on ${s.aimed.toFixed(2)} of ${s.workStreams!.toFixed(1)}` : '';
-      if (s.finding && !s.finding.lists) out.push(`${run.section} (${run.label}): no work list could be judged (${s.finding.errors} failed)`);
+      // A held-out list score shows only over two people's lists or more, like the row above.
+      const listPeople = new Set(run.attempts.filter((a) => a.heldout && a.finding && !a.benchError).map((a) => a.persona)).size;
+      if (s.finding && run.attempts.some((a) => a.heldout) && listPeople < MIN_HELDOUT_PEOPLE) out.push(`${run.section} (${run.label}): ${listPeople} held-out people's work lists judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown`);
+      else if (s.finding && !s.finding.lists) out.push(`${run.section} (${run.label}): no work list could be judged (${s.finding.errors} failed)`);
       else if (s.finding) {
         const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';
         out.push(`${run.section} (${run.label}): work lists read in ${s.finding.read} of ${s.finding.lists} generations${errors}; they named ${(100 * s.finding.found).toFixed(0)}% of the key's work streams, with ${s.finding.unreal.toFixed(1)} of ${s.finding.listed.toFixed(1)} entries naming none`);

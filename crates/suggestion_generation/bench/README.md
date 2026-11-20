@@ -130,7 +130,7 @@ B=crates/suggestion_generation/bench
 bun $B/bench.ts run routines --label main           # one section at its default size
 bun $B/bench.ts run feed --label main --seats 1 --reps 1   # a quick look: one attempt a persona
 bun $B/bench.ts all --label main                    # every section
-bun $B/bench.ts compare <main run.json> <mine run.json>
+bun $B/bench.ts compare <main run.json> <mine run.json> --margins <score,found,bad>
 bun $B/bench.ts report <run.json>...
 bun $B/bench.ts rescore <run.json>...               # after changing an answer key: free, no model calls
 ```
