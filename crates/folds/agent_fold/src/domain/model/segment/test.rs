@@ -173,6 +173,38 @@ fn a_background_job_launch_reads_as_the_work_it_started() {
     );
 }
 
+/// A launch whose program never ran (it failed its type check, or Stop came
+/// during the launch) is not "running in the background".
+#[test]
+fn a_job_launch_that_never_ran_does_not_read_as_running() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-job".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({
+                "status": "failed",
+                "activity": [],
+                "error": "The program wasn't run: it doesn't type-check.",
+                "job": {"title": "Checking routine", "startedAt": "2026-11-19T10:00:00Z", "deadline": "2026-11-19T10:10:00Z"},
+            })),
+            error: None,
+        },
+    };
+    let segments = segments(&[part], true);
+    assert!(
+        segments
+            .iter()
+            .flat_map(|segment| &segment.rows)
+            .all(|row| row.detail.as_deref() != Some("Running in the background")),
+        "{segments:?}"
+    );
+}
+
 #[test]
 fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {

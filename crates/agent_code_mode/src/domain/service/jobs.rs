@@ -46,6 +46,11 @@ const MAX_TITLE_CHARS: usize = 80;
 /// Largest result a `job.settled` event carries; the event itself is
 /// bounded to 64 KiB.
 const MAX_SETTLED_RESULT_BYTES: usize = 48 * 1024;
+/// A settled job's error, cut so the event stays under the 64 KiB limit.
+const MAX_SETTLED_ERROR_BYTES: usize = 8 * 1024;
+/// How often a settle is tried, and the wait before the first retry.
+const SETTLE_ATTEMPTS: u32 = 3;
+const SETTLE_RETRY_FIRST_WAIT: Duration = Duration::from_millis(250);
 /// Most jobs one sweep settles.
 const SWEEP_BATCH: u16 = 100;
 /// How long settled jobs stay in the agent's job list.
@@ -218,7 +223,7 @@ impl Jobs {
             .await
         {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
-            store.settle(identity.session, &record, None).await?;
+            settle_retrying(store.as_ref(), identity.session, &record, None).await?;
             span.record("outcome", "check_failed");
             return Ok(Launch::Started(Box::new(receipt(&record))));
         }
@@ -232,7 +237,7 @@ impl Jobs {
             Err(error) => {
                 record.status = ExecutionStatus::Failed;
                 record.error = Some(error.to_string());
-                store.settle(identity.session, &record, None).await?;
+                settle_retrying(store.as_ref(), identity.session, &record, None).await?;
                 span.record("outcome", "unauthorized");
                 return Err(error);
             }
@@ -242,7 +247,7 @@ impl Jobs {
         if turn.is_cancelled() {
             record.status = ExecutionStatus::Cancelled;
             record.error = Some("Execution cancelled before it started.".into());
-            store.settle(identity.session, &record, None).await?;
+            settle_retrying(store.as_ref(), identity.session, &record, None).await?;
             span.record("outcome", "cancelled");
             return Ok(Launch::Started(Box::new(receipt(&record))));
         }
@@ -621,9 +626,31 @@ async fn settle_job(
         wake: true,
     })
     .map_err(|error| CodeModeError::Storage(rootcause::report!(error).into()))?;
-    let settled = store.settle(session, record, Some(&notification)).await?;
+    let settled = settle_retrying(store, session, record, Some(&notification)).await?;
     tracing::Span::current().record("settled", settled);
     Ok(settled)
+}
+
+/// Settle, retrying a failed write twice with a short backoff: a job left
+/// running waits for the sweep, minutes later, and then reads as interrupted.
+async fn settle_retrying(
+    store: &dyn JobStore,
+    session: AgentSessionId,
+    record: &ExecutionRecord,
+    notification: Option<&PendingNotification>,
+) -> Result<bool, CodeModeError> {
+    let mut wait = SETTLE_RETRY_FIRST_WAIT;
+    for _ in 1..SETTLE_ATTEMPTS {
+        match store.settle(session, record, notification).await {
+            Ok(settled) => return Ok(settled),
+            Err(error) => {
+                tracing::warn!(?error, "could not settle a background job; retrying");
+                tokio::time::sleep(wait).await;
+                wait *= 4;
+            }
+        }
+    }
+    store.settle(session, record, notification).await
 }
 
 /// What the agent reads about a settled job: its result when it fits.
@@ -633,7 +660,9 @@ fn settlement(record: &ExecutionRecord) -> JobSettlement {
         .as_ref()
         .map(|job| job.title.clone())
         .unwrap_or_default();
-    let mut error = record.error.clone();
+    // A thrown error can be as large as the program made it; the event that
+    // carries it must stay under the notification size limit.
+    let mut error = record.error.as_deref().map(truncate_error);
     let result = record.result.clone().filter(|value| {
         let bytes = value.to_string().len();
         let fits = bytes <= MAX_SETTLED_RESULT_BYTES;
@@ -652,6 +681,22 @@ fn settlement(record: &ExecutionRecord) -> JobSettlement {
         result,
         error,
     }
+}
+
+/// The start of a long error, cut on a character boundary.
+fn truncate_error(error: &str) -> String {
+    if error.len() <= MAX_SETTLED_ERROR_BYTES {
+        return error.to_owned();
+    }
+    let mut end = MAX_SETTLED_ERROR_BYTES;
+    while !error.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!(
+        "{} [error cut at {} KiB]",
+        &error[..end],
+        MAX_SETTLED_ERROR_BYTES / 1024
+    )
 }
 
 /// Log the job's state in its session, best effort: views also poll.

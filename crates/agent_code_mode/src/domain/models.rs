@@ -77,8 +77,9 @@ pub enum RunLifetime {
     Job {
         /// When the job stops at the latest.
         deadline: chrono::DateTime<chrono::Utc>,
-        /// Whether the launch declared that the job sends (email, messages);
-        /// otherwise its credential is limited to the no-send scope.
+        /// Whether the launch declared that the job sends (email, messages,
+        /// routine saves, connected apps, the web); otherwise its credential
+        /// is limited to the no-send scope.
         sends: bool,
     },
 }

@@ -14,6 +14,8 @@ struct Rows {
     updates: Mutex<Vec<JobUpdatedNotification>>,
     archived: Mutex<bool>,
     settled: Notify,
+    /// How many settles fail before one goes through.
+    failing_settles: std::sync::atomic::AtomicUsize,
 }
 
 impl Rows {
@@ -114,6 +116,16 @@ impl JobStore for Rows {
         record: &ExecutionRecord,
         notification: Option<&PendingNotification>,
     ) -> Result<bool, CodeModeError> {
+        use std::sync::atomic::Ordering;
+        if self
+            .failing_settles
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return Err(CodeModeError::Unavailable);
+        }
         let mut records = self.records.lock().unwrap();
         let row = records
             .get_mut(&record.execution_id)
@@ -697,4 +709,53 @@ fn a_result_too_large_for_the_event_is_left_out_with_a_reason() {
     let settlement = settlement(&record);
     assert_eq!(settlement.result, None);
     assert!(settlement.error.unwrap().contains("too large"));
+}
+
+/// A failed settle write is retried, so the job settles with its real
+/// outcome now rather than reading as interrupted when the sweep finds it.
+#[tokio::test(start_paused = true)]
+async fn a_settle_that_fails_once_is_retried() {
+    let harness = harness(Credentials::default());
+    harness
+        .rows
+        .failing_settles
+        .store(1, std::sync::atomic::Ordering::SeqCst);
+    let id = ExecutionId::mint();
+    harness.launch(id, check_routine()).await.unwrap();
+    harness.program.started.notified().await;
+    harness.program.release.notify_one();
+    harness.rows.settled.notified().await;
+    assert_eq!(harness.rows.record(id).status, ExecutionStatus::Succeeded);
+    assert_eq!(harness.rows.settlements().len(), 1);
+}
+
+/// A program can throw an error of any size; the event that carries it to
+/// the agent must still fit.
+#[test]
+fn a_huge_error_is_cut_so_its_event_fits() {
+    let record = ExecutionRecord {
+        execution_id: ExecutionId::mint(),
+        acting_as: None,
+        turn_id: None,
+        source: String::new(),
+        status: ExecutionStatus::Failed,
+        result: None,
+        error: Some("é".repeat(100_000)),
+        calls: Vec::new(),
+        activity: Vec::new(),
+        activity_truncated: false,
+        job: None,
+    };
+    let settlement = settlement(&record);
+    assert!(settlement.error.as_ref().unwrap().len() < MAX_SETTLED_ERROR_BYTES + 64);
+    assert!(
+        PendingNotification::new(ProduceNotification {
+            session_id: AgentSessionId::new_from_uuid(macro_uuid::generate_uuid_v7()),
+            subject_id: record.execution_id.to_string(),
+            event: NotificationEvent::JobSettled(settlement),
+            dedupe_key: None,
+            wake: true,
+        })
+        .is_ok()
+    );
 }

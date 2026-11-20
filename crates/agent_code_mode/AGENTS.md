@@ -42,7 +42,9 @@ stacks. Process isolation belongs to
   `enable-background-code-jobs`); elsewhere it runs in the foreground and
   the receipt's `ranInForeground` says why. The launch type-checks and
   mints a credential lasting the job's deadline (`RunLifetime::Job`, 10
-  minutes plus margin; the no-send scope unless `background.sends`), returns a running receipt with `job`, and runs on
+  minutes plus margin; the no-send scope unless `background.sends`, which
+  also refuses routine saves, connected apps and the web, so the
+  compose-routines skill passes `sends: true`), returns a running receipt with `job`, and runs on
   the `JobRuntime`'s own executor (4 slots a replica) on a `TaskTracker`,
   without `watch_turn`: its row (`JobStore::control`, every second), its
   session being archived or gone, a local cancel or shutdown stop it.
@@ -55,6 +57,8 @@ stacks. Process isolation belongs to
   Each state change logs `_macro/job_updated` (best effort). `CancelJob`
   and `POST /agent-sessions/{id}/code-executions/{execution}/cancel` (a
   person with edit access, never a program) set `job_cancel_requested_at`.
+  Any turn may cancel a job, deliberately: cancelling spends no one's
+  access. A settle write is retried twice before the sweep is left to it.
   A job's connected-app calls keep its launching turn's authority and never
   wait for approval; discovery, adding servers and `macro.ui.open` are
   refused in a job. Spans: `agent.job.start`, `agent.job.run` (root, linked;

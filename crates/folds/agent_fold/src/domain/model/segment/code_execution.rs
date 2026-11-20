@@ -82,8 +82,12 @@ pub(super) fn rows(
     }
     let receipt = receipt(detail);
     // A background job's launch: its card shows its progress; the
-    // conversation reads it as the work it started.
-    if let Some(title) = receipt.and_then(job_title) {
+    // conversation reads it as the work it started. A launch that failed its
+    // check or was stopped never ran, and reads like any other program.
+    if let Some(title) = receipt
+        .filter(|receipt| program_status(Some(receipt)) == Some("running"))
+        .and_then(job_title)
+    {
         return Some(vec![ActivityRow {
             id: id.to_owned(),
             label: title.to_owned(),

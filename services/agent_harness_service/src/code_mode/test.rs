@@ -688,6 +688,40 @@ async fn a_run_signs_its_sessions_scope_into_its_credential(pool: sqlx::PgPool) 
         }
         JwtToken::MacroAccessToken(_) => panic!("a code-mode credential is a Macro API token"),
     };
+    // A background job that did not declare it sends gets the no-send scope;
+    // one that did keeps the session's; a session's own scope always wins.
+    let deadline = chrono::Utc::now() + chrono::TimeDelta::minutes(10);
+    for (scope, sends, name) in [
+        (None, false, Some("no_send")),
+        (None, true, None),
+        (Some(SessionScope::Generation), false, Some("generation")),
+    ] {
+        let job = ExecutionIdentity {
+            execution: agent_code_mode::domain::ExecutionId::mint(),
+            lifetime: agent_code_mode::domain::RunLifetime::Job { deadline, sends },
+            ..identity.clone()
+        };
+        let run = RunCredentials {
+            egress: EgressRollout::new(None),
+            signer: MacroApiTokenSigner::new(pool.clone(), "fixture", PRIVATE),
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            gate: Arc::new(Gate {
+                verdict: NativeToolVerdict::RunAs(owner.clone()),
+                calls: AtomicUsize::new(0),
+            }),
+            endpoints: SdkEndpoints::default(),
+            scopes: Arc::new(Scopes(scope)),
+            detach: Arc::new(NeverDetach),
+        }
+        .issue(&job, "fixture", CancellationToken::new())
+        .await
+        .unwrap();
+        assert_eq!(
+            signed(&run.environment.token).as_deref(),
+            name,
+            "job run {scope:?}, sends {sends}"
+        );
+    }
     for (scope, name) in [
         (Some(SessionScope::Generation), Some("generation")),
         (Some(SessionScope::NoSend), Some("no_send")),
