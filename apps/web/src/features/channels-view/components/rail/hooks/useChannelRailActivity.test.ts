@@ -18,6 +18,7 @@ const rail = vi.hoisted(() => ({
   selectedChannel: () => undefined,
   list: { focus: { key: () => undefined } },
   channelActivity: { unreadChannelIds: () => new Set<string>() },
+  channelNotifications: { enabled: () => false },
 }));
 vi.mock('../ChannelsRailContext', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../ChannelsRailContext')>()),

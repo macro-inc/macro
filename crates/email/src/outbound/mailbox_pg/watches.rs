@@ -23,10 +23,11 @@ impl MailboxWatchRepository for PgMailboxSync {
             ORDER BY w.next_run_at LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE email_mailbox_watch_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate c,email_links l WHERE w.link_id=c.link_id AND l.id=w.link_id
-            RETURNING w.link_id,w.revision,l.sync_generation,l.grant_generation"#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
+            RETURNING w.link_id,w.revision,w.failures,l.sync_generation,l.grant_generation"#,lease_id).fetch_optional(&self.db).await.map_err(db_error)?;
         Ok(row.map(|r| WatchLease {
             lease_id,
             revision: r.revision,
+            failures: r.failures,
             mailbox: MailboxKey {
                 link_id: r.link_id,
                 sync_generation: r.sync_generation,
@@ -97,8 +98,13 @@ impl MailboxWatchRepository for PgMailboxSync {
         .map_err(db_error)?;
         tx.commit().await.map_err(db_error)
     }
-    async fn release_watch(&self, lease: &WatchLease, delay: u32) -> Result<(), MailboxError> {
-        sqlx::query!("UPDATE email_mailbox_watch_work SET lease_id=NULL,lease_until=NULL,next_run_at=CASE WHEN revision=$3 THEN now()+make_interval(secs=>$4) ELSE now() END WHERE link_id=$1 AND lease_id=$2",lease.mailbox.link_id,lease.lease_id,lease.revision,f64::from(delay))
+    async fn release_watch(
+        &self,
+        lease: &WatchLease,
+        delay: u32,
+        failures: i32,
+    ) -> Result<(), MailboxError> {
+        sqlx::query!("UPDATE email_mailbox_watch_work SET lease_id=NULL,lease_until=NULL,next_run_at=CASE WHEN revision=$3 THEN now()+make_interval(secs=>$4) ELSE now() END,failures=CASE WHEN revision=$3 THEN $5 ELSE 0 END WHERE link_id=$1 AND lease_id=$2",lease.mailbox.link_id,lease.lease_id,lease.revision,f64::from(delay),failures)
             .execute(&self.db).await.map_err(db_error)?;
         Ok(())
     }
@@ -137,7 +143,7 @@ impl MailboxWatchRepository for PgMailboxSync {
         sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder','mail_folder_live')",binding.link_id,binding.sync_generation,crate::trace_context::current())
             .execute(&mut *tx).await.map_err(db_error)?;
         if matches!(hint, WatchHint::Removed | WatchHint::Reauthorize) {
-            sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1 WHERE link_id=$1",binding.link_id)
+            sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",binding.link_id)
                 .execute(&mut *tx).await.map_err(db_error)?;
         }
         tx.commit().await.map_err(db_error)?;

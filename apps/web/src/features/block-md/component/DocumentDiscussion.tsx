@@ -1,7 +1,9 @@
+import { MobileDiscussion } from '@app/components/discussion/mobile-discussion';
 import { useUrlParams } from '@core/component/ParamsProvider';
 import { useIsAuthenticated } from '@core/context/user';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { EntityDiscussion } from '@core/messages/EntityDiscussion';
+import { isMobile } from '@core/mobile/isMobile';
 import {
   useMessageLink,
   useMessageRootsQuery,
@@ -10,9 +12,8 @@ import { Match, Switch } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**
- * Unanchored document roots rendered with the shared message components. On
- * touch devices the composer moves to the floating accessory region and the
- * conversation shows only once it has roots, as the editor page does.
+ * Unanchored document roots rendered with shared conversation components.
+ * Phone tasks use the shared entry and sheet instead of a floating composer.
  */
 type DocumentDiscussionProps = {
   editorHasFocus: boolean;
@@ -57,7 +58,18 @@ function AuthenticatedDocumentDiscussion(props: DocumentDiscussionProps) {
       canModerate={permissions.isOwner()}
       link={{ type: blockName, id }}
       label={props.label}
-      floatingComposerOnTouch
+      floatingComposerOnTouch={documentKind !== 'task' || !isMobile()}
+      children={
+        documentKind === 'task' && isMobile()
+          ? (conversation) => (
+              <MobileDiscussion
+                conversation={conversation}
+                parent={parent()}
+                canWrite={permissions.canComment()}
+              />
+            )
+          : undefined
+      }
       editorHasFocus={props.editorHasFocus}
     />
   );

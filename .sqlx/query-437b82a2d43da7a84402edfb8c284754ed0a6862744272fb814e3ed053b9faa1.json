@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE focus_links AS (\n                (\n                    SELECT f.link_id\n                    FROM email_thread_focus f\n                    WHERE f.is_focus\n                    ORDER BY f.link_id\n                    LIMIT 1\n                )\n                UNION ALL\n                SELECT (\n                    SELECT f.link_id\n                    FROM email_thread_focus f\n                    WHERE f.is_focus AND f.link_id > l.link_id\n                    ORDER BY f.link_id\n                    LIMIT 1\n                )\n                FROM focus_links l\n                WHERE l.link_id IS NOT NULL\n            )\n            SELECT el.id, el.macro_id,\n                   ARRAY(\n                       SELECT mul.primary_macro_id\n                       FROM macro_user_links mul\n                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id\n                   ) AS \"delegates!\"\n            FROM focus_links l\n            JOIN email_links el ON el.id = l.link_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "delegates!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "437b82a2d43da7a84402edfb8c284754ed0a6862744272fb814e3ed053b9faa1"
+}

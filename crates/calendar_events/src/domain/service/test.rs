@@ -20,6 +20,9 @@ use chrono::{Duration, TimeZone, Utc};
 use macro_event_broker::NoopMacroEventBroker;
 use std::sync::{Arc, Mutex};
 
+/// Stored Google calendars keyed by provider calendar id.
+type TrackedCalendars = Arc<Mutex<Vec<(String, StoredGoogleCalendar)>>>;
+
 #[derive(Clone, Default)]
 struct FakeRepo {
     team_ooo_changed: bool,
@@ -43,6 +46,21 @@ struct FakeRepo {
     export: Option<crate::domain::ics::CalendarEventExport>,
     /// What `forwarded_copy` reads for every event.
     forwarded: Option<crate::domain::ics::ForwardedCopy>,
+    /// Calendars stored by provider id, for a test that follows one account
+    /// across deliveries. Without it every calendar is the nil id with
+    /// `stored_synced_at`.
+    tracked_calendars: Option<TrackedCalendars>,
+    /// The calendar ids each calendar-list reconciliation kept, in order.
+    reconciled_calendar_lists: Arc<Mutex<Vec<Vec<Uuid>>>>,
+}
+
+impl FakeRepo {
+    fn tracking_calendars() -> Self {
+        Self {
+            tracked_calendars: Some(Arc::new(Mutex::new(Vec::new()))),
+            ..Self::default()
+        }
+    }
 }
 
 impl CalendarRepository for FakeRepo {
@@ -275,8 +293,27 @@ impl CalendarRepository for FakeRepo {
         _key: CalendarBackfillJobKey,
         _lease_token: Uuid,
         _account_id: Uuid,
-        _calendar: ProviderCalendar,
+        calendar: ProviderCalendar,
     ) -> Result<StoredGoogleCalendar, Report> {
+        if let Some(tracked) = &self.tracked_calendars {
+            let mut tracked = tracked.lock().unwrap();
+            if let Some((_, stored)) = tracked.iter().find(|(provider_calendar_id, _)| {
+                *provider_calendar_id == calendar.provider_calendar_id
+            }) {
+                return Ok(stored.clone());
+            }
+            let stored = StoredGoogleCalendar {
+                id: Uuid::now_v7(),
+                team_ooo_changed: false,
+                sync_token: None,
+                materialized_range: None,
+                synced_at: None,
+                watch_expires_at: None,
+                watch_unsupported_at: None,
+            };
+            tracked.push((calendar.provider_calendar_id, stored.clone()));
+            return Ok(stored);
+        }
         Ok(StoredGoogleCalendar {
             id: Uuid::nil(),
             team_ooo_changed: self.calendar_ooo_changed,
@@ -297,6 +334,13 @@ impl CalendarRepository for FakeRepo {
         sync: GoogleCalendarSyncSnapshot,
         _events_upserted: usize,
     ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        if let Some(tracked) = &self.tracked_calendars {
+            for (_, stored) in tracked.lock().unwrap().iter_mut() {
+                if stored.id == sync.calendar_id {
+                    stored.synced_at = Some(Utc::now());
+                }
+            }
+        }
         self.sync_snapshots.lock().unwrap().push(sync);
         Ok(self.sync_retirements.clone())
     }
@@ -306,8 +350,12 @@ impl CalendarRepository for FakeRepo {
         _key: CalendarBackfillJobKey,
         _lease_token: Uuid,
         _account_id: Uuid,
-        _calendar_ids: Vec<Uuid>,
+        calendar_ids: Vec<Uuid>,
     ) -> Result<Vec<RetiredCalendarEvent>, Report> {
+        self.reconciled_calendar_lists
+            .lock()
+            .unwrap()
+            .push(calendar_ids);
         Ok(Vec::new())
     }
 
@@ -607,6 +655,7 @@ struct FakeLifecycle {
     claim: CalendarBackfillClaim,
     completions: Arc<Mutex<Vec<()>>>,
     failures: Arc<Mutex<Vec<CalendarBackfillFailureDisposition>>>,
+    deferrals: Arc<Mutex<usize>>,
     failure_outcome: CalendarBackfillFailureOutcome,
     lease_lost: bool,
 }
@@ -617,9 +666,11 @@ impl FakeLifecycle {
             claim: CalendarBackfillClaim::Claimed {
                 lease_token: Uuid::nil(),
                 account_id: Uuid::nil(),
+                round_started_at: Utc::now(),
             },
             completions: Arc::new(Mutex::new(Vec::new())),
             failures: Arc::new(Mutex::new(Vec::new())),
+            deferrals: Arc::new(Mutex::new(0)),
             failure_outcome: CalendarBackfillFailureOutcome {
                 job_transitioned: true,
                 link_reauth_transitioned: false,
@@ -690,6 +741,15 @@ impl CalendarBackfillRepository for FakeLifecycle {
     ) -> Result<CalendarBackfillFailureOutcome, Report> {
         self.failures.lock().unwrap().push(disposition);
         Ok(self.failure_outcome)
+    }
+
+    async fn defer_google_backfill(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+    ) -> Result<(), Report> {
+        *self.deferrals.lock().unwrap() += 1;
+        Ok(())
     }
 }
 
@@ -1099,6 +1159,284 @@ async fn one_failed_calendar_is_isolated_and_the_account_completes() {
         "the run completes rather than failing"
     );
     assert!(lifecycle.failures.lock().unwrap().is_empty());
+}
+
+/// How long the fake per-inbox gate asks a refused caller to wait.
+const INBOX_GATE_WINDOW: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Google behind Macro's per-inbox request gate: it admits `admitted` more
+/// calls, then refuses every call the way the calendar service's gate does.
+#[derive(Clone)]
+struct GatedGoogleProvider {
+    calendar_count: usize,
+    admitted: Arc<Mutex<usize>>,
+    /// A calendar Google itself fails once the gate admits its call.
+    failing_calendar: Option<String>,
+    /// Every calendar `sync_events` was asked for, admitted or refused.
+    sync_requests: Arc<Mutex<Vec<String>>>,
+}
+
+impl GatedGoogleProvider {
+    fn new(calendar_count: usize, admitted: usize) -> Self {
+        Self {
+            calendar_count,
+            admitted: Arc::new(Mutex::new(admitted)),
+            failing_calendar: None,
+            sync_requests: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+
+    /// The window has passed: the gate admits `admitted` calls again.
+    fn refill(&self, admitted: usize) {
+        *self.admitted.lock().unwrap() = admitted;
+    }
+
+    fn take_sync_requests(&self) -> Vec<String> {
+        std::mem::take(&mut self.sync_requests.lock().unwrap())
+    }
+
+    fn admit(&self) -> Result<(), CalendarProviderError> {
+        let mut admitted = self.admitted.lock().unwrap();
+        if *admitted == 0 {
+            return Err(CalendarProviderError::deferred(
+                Some(INBOX_GATE_WINDOW),
+                "Google Calendar API rate limit reached for this inbox",
+            ));
+        }
+        *admitted -= 1;
+        Ok(())
+    }
+}
+
+impl GoogleCalendarProvider for GatedGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, CalendarProviderError> {
+        self.admit()?;
+        Ok((0..self.calendar_count)
+            .map(|index| provider_calendar(&format!("calendar-{index}"), index == 0))
+            .collect())
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, CalendarProviderError> {
+        self.sync_requests
+            .lock()
+            .unwrap()
+            .push(context.target.provider_calendar_id.clone());
+        self.admit()?;
+        if self.failing_calendar.as_ref() == Some(&context.target.provider_calendar_id) {
+            return Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Transient,
+                "Google failed this calendar's poll",
+            ));
+        }
+        Ok(GoogleEventSyncBatch {
+            upserts: Vec::new(),
+            observed_provider_event_ids: Some(Vec::new()),
+            next_sync_token: "next".to_string(),
+            materialized_range: Some(context.target.range),
+            cancelled_provider_event_ids: Vec::new(),
+        })
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _calendar_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, CalendarProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
+}
+
+/// Once Macro's per-inbox request gate refuses a call, it refuses every call
+/// until its window frees, so walking on only meets it again at each
+/// remaining calendar. The round stops at the first refusal and defers,
+/// recording no failure for a calendar it never reached and retiring
+/// nothing. Each later delivery of the round skips what it already synced,
+/// so an inbox with more calendars than one window admits reaches them all.
+#[tokio::test]
+async fn the_inbox_rate_limit_defers_the_round_until_every_calendar_syncs() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::tracking_calendars();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let reconciled = repository.reconciled_calendar_lists.clone();
+    // Each window admits the calendar list and five calendars.
+    let provider = GatedGoogleProvider::new(12, 6);
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider.clone(),
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        None,
+    );
+    let key = CalendarBackfillJobKey {
+        job_id: Uuid::now_v7(),
+        email_link_id: Uuid::now_v7(),
+    };
+    let calendar = |index: usize| format!("calendar-{index}");
+    let mut report = GoogleBackfillRunReport::default();
+    let mut deliver = async || {
+        coordinator
+            .run(
+                key,
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::maintenance_horizon(Utc::now()),
+                &mut report,
+            )
+            .await
+            .expect("an inbox at its request limit is deferred, not failed")
+    };
+
+    assert_eq!(
+        deliver().await,
+        GoogleBackfillOutcome::Deferred {
+            retry_after: INBOX_GATE_WINDOW
+        },
+        "the round waits for the inbox's window to free"
+    );
+    assert_eq!(
+        provider.take_sync_requests(),
+        (0..6).map(calendar).collect::<Vec<_>>(),
+        "the walk stops at the first calendar the gate refuses"
+    );
+    assert_eq!(*lifecycle.deferrals.lock().unwrap(), 1);
+    assert!(
+        recorded_sync_errors.lock().unwrap().is_empty(),
+        "a calendar the round never reached has not failed"
+    );
+    assert!(
+        reconciled.lock().unwrap().is_empty(),
+        "a partial walk must not retire the calendars it did not reach"
+    );
+
+    provider.refill(6);
+    assert!(matches!(
+        deliver().await,
+        GoogleBackfillOutcome::Deferred { .. }
+    ));
+    assert_eq!(
+        provider.take_sync_requests(),
+        (5..11).map(calendar).collect::<Vec<_>>(),
+        "the next delivery resumes at the first calendar this round has not synced"
+    );
+
+    provider.refill(6);
+    assert_eq!(deliver().await, GoogleBackfillOutcome::Complete);
+    assert_eq!(
+        provider.take_sync_requests(),
+        (10..12).map(calendar).collect::<Vec<_>>()
+    );
+    assert_eq!(*lifecycle.deferrals.lock().unwrap(), 2);
+    assert_eq!(lifecycle.completions.lock().unwrap().len(), 1);
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
+    assert!(recorded_sync_errors.lock().unwrap().is_empty());
+    let reconciled = reconciled.lock().unwrap();
+    assert_eq!(
+        reconciled.len(),
+        1,
+        "only the delivery that walked every calendar reconciles the list"
+    );
+    assert_eq!(reconciled[0].len(), 12);
+}
+
+/// A calendar Google failed before the gate stopped the round has failed, so
+/// its error is stored before the round defers, while the refused calendar
+/// records nothing.
+#[tokio::test]
+async fn a_deferred_round_records_the_calendars_that_failed_before_it() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::tracking_calendars();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = GatedGoogleProvider {
+        failing_calendar: Some("calendar-0".to_string()),
+        ..GatedGoogleProvider::new(4, 3)
+    };
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider.clone(),
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    let outcome = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(outcome, GoogleBackfillOutcome::Deferred { .. }));
+    assert_eq!(
+        provider.take_sync_requests(),
+        ["calendar-0", "calendar-1", "calendar-2"]
+    );
+    assert_eq!(
+        recorded_sync_errors.lock().unwrap().as_slice(),
+        ["Google failed this calendar's poll"]
+    );
+}
+
+/// A gate that refuses the calendar list defers the round before any
+/// calendar is touched.
+#[tokio::test]
+async fn a_refused_calendar_list_defers_the_round() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::tracking_calendars();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let provider = GatedGoogleProvider::new(3, 0);
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        provider.clone(),
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    let outcome = coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        outcome,
+        GoogleBackfillOutcome::Deferred {
+            retry_after: INBOX_GATE_WINDOW
+        }
+    );
+    assert!(provider.take_sync_requests().is_empty());
+    assert_eq!(*lifecycle.deferrals.lock().unwrap(), 1);
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
+    assert!(recorded_sync_errors.lock().unwrap().is_empty());
 }
 
 /// Every calendar failing is a wholesale outage: the run fails so the
@@ -1552,7 +1890,8 @@ impl GoogleCalendarProvider for SystemCalendarProvider {
 async fn freshly_synced_system_calendars_are_skipped() {
     let lifecycle = FakeLifecycle::claimed();
     let repo = FakeRepo {
-        stored_synced_at: Some(Utc::now()),
+        // Synced by an earlier round, within the system calendars' interval.
+        stored_synced_at: Some(Utc::now() - Duration::minutes(10)),
         ..FakeRepo::default()
     };
     let coordinator = GoogleCalendarBackfillCoordinator::new(
@@ -1632,7 +1971,8 @@ impl GoogleCalendarProvider for FailingPrimaryBesideSystemCalendarProvider {
 async fn a_fresh_system_calendar_keeps_a_failing_calendar_isolated() {
     let lifecycle = FakeLifecycle::claimed();
     let repository = FakeRepo {
-        stored_synced_at: Some(Utc::now()),
+        // Synced by an earlier round, within the system calendars' interval.
+        stored_synced_at: Some(Utc::now() - Duration::minutes(10)),
         ..FakeRepo::default()
     };
     let recorded_sync_errors = repository.recorded_sync_errors.clone();

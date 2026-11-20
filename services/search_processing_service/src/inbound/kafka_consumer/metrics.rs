@@ -13,9 +13,11 @@
 //!   `entity_type`, and `event_type` and `failure` (the last attempt's
 //!   [`Failure`]) for those dropped after their attempts and replay, or
 //!   `failure` (a [`Loss`]) for those that never finished.
-//! - [`FAILED_BULK_ITEMS`]: items OpenSearch failed in the last attempt of an
-//!   event that was queued for a replay or dropped, by `entity_type` and
-//!   `outcome`.
+//! - [`FAILED_BULK_ITEMS`]: items OpenSearch failed inside a `_bulk`
+//!   response in the last attempt of an event that was queued for a replay
+//!   or dropped, by `entity_type`, `outcome` and that attempt's `failure`
+//!   (`overloaded` when it refused items to protect itself, `bulk_items` when
+//!   it failed them otherwise). A refused whole request reports no items.
 //!
 //! [`LAG`] and [`DROPPED`] also carry `delivery`: `kafka`, or `sqs_replay` for
 //! a replay, whose lag counts from the original record.
@@ -34,6 +36,7 @@ use opentelemetry::{
 use super::{
     EventOutcome, OutcomeRecord, ReceivedEvent, attempts::Failure, entity_type::EntityType,
 };
+use crate::domain::backlog::LaneBacklog;
 
 #[cfg(test)]
 pub(super) mod test;
@@ -195,9 +198,14 @@ impl IndexMetrics {
             EventOutcome::RetryQueued | EventOutcome::Dropped
         ) && record.failed_items > 0
         {
+            let failure = record.failure.unwrap_or(Failure::Error);
             self.failed_bulk_items.add(
                 u64::from(record.failed_items),
-                &[entity_type.clone(), outcome],
+                &[
+                    entity_type.clone(),
+                    outcome,
+                    KeyValue::new(FAILURE, <&'static str>::from(failure)),
+                ],
             );
         }
         if record.outcome == EventOutcome::Dropped {
@@ -225,6 +233,30 @@ impl IndexMetrics {
 
     pub(super) fn pending_ages(&self) -> &PendingAges {
         &self.pending
+    }
+
+    /// This task's [`LaneBacklog`] from its pending ages fresh at `now`, or
+    /// `None` when it has none, so a task that stopped sampling reports
+    /// nothing instead of zero.
+    pub(crate) fn lane_backlog(&self, now: Instant) -> Option<LaneBacklog> {
+        let fresh = self.pending.fresh(now);
+        if fresh.is_empty() {
+            return None;
+        }
+        let mut backlog = LaneBacklog {
+            live: None,
+            email: None,
+        };
+        for (topic, _, age_ms) in fresh {
+            let lane = if EntityType::from_topic(topic) == Some(EntityType::Email) {
+                &mut backlog.email
+            } else {
+                &mut backlog.live
+            };
+            let age = Duration::from_millis(age_ms);
+            *lane = Some(lane.map_or(age, |oldest| oldest.max(age)));
+        }
+        Some(backlog)
     }
 }
 

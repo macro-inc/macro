@@ -108,6 +108,11 @@ pub(crate) enum Handled {
     Indexed,
     /// The event needs no search-index operation.
     Ignored,
+    /// The event's write found nothing in the index to change: a property
+    /// write for an entity the index does not hold yet.
+    NoIndexChange,
+    /// The event's source is gone for good, so there is nothing to index.
+    SourceMissing,
 }
 
 /// How a handled event ended, and after how many attempts.
@@ -132,11 +137,25 @@ impl Attempts {
         Fut: Future<Output = Result<(), E>>,
         E: AttemptError,
     {
+        self.run_handled(|number| {
+            let attempt = attempt(number);
+            async move { attempt.await.map(|()| Handled::Indexed) }
+        })
+        .await
+    }
+
+    /// [`Self::run`] for an attempt that says how it handled the event.
+    pub(crate) async fn run_handled<F, Fut, E>(&self, mut attempt: F) -> Attempted
+    where
+        F: FnMut(u32) -> Fut,
+        Fut: Future<Output = Result<Handled, E>>,
+        E: AttemptError,
+    {
         let mut number = 0;
         loop {
             number += 1;
             let error = match attempt(number).await {
-                Ok(()) => return Ok((Handled::Indexed, number)),
+                Ok(handled) => return Ok((handled, number)),
                 Err(error) => error,
             };
             let diagnosis = error.diagnose();

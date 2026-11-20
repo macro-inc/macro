@@ -111,7 +111,10 @@ From `infra/`:
   partition: read it with `max`. Its retention monitors repeat each topic's
   retention from `infra/stacks/kafka-cluster/topics.ts`; change them together.
   Apply it only after the indexer that records these metrics is deployed:
-  its no-readings monitor fires on missing data.
+  its no-readings monitor fires on missing data. It also reads the
+  `search.freshness.probe_*` metrics of `services/search_freshness_probe`
+  (`src/outbound/metrics.rs`); the probe's heartbeat is declared only once
+  `PROBE_RUNS_IN_PROD` is true, for the same reason.
 - `monitors/storage-pool.ts` reads the `db.client.connection.*` pool metrics
   cloud-storage-service records and the `perform_unified_search` span fields
   from `crates/search_service`; its header is the name and tag contract.
