@@ -464,10 +464,6 @@ impl ComputerRepo for FakeRepo {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
-        // Like the Postgres applier: nothing changed, nothing written.
-        if state == computer.state && effects.is_empty() && !event.only_timed() {
-            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
-        }
         // Latch setup milestones like the Postgres applier.
         let (phase, connected, waiting, payment) = (
             state.phase.clone(),
@@ -482,6 +478,11 @@ impl ComputerRepo for FakeRepo {
         if let Some(setup) = state.setup.as_mut() {
             setup.advance(&phase, connected, waiting, payment, now);
             setup.advance_agent(agent, now);
+        }
+        // Like the Postgres applier: nothing changed, timeline included,
+        // nothing written.
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
         }
         computer.state = state;
         self.push_effects(computer, effects, now);
