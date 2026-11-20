@@ -103,7 +103,6 @@ export default {
     close: 'Tutup',
     delete: 'Hapus',
     rename: 'Ganti nama',
-    more: 'Lainnya',
     search: 'Cari',
     settings: 'Setelan',
   },
@@ -667,8 +666,6 @@ export default {
     create: 'Buat',
     getMobileApp: 'Dapatkan aplikasi seluler',
     signedInAs: 'Login sebagai {{name}}',
-    commandMenu: 'Menu perintah',
-    searchEverything: 'Cari di mana saja',
     customizeSidebar: 'Sesuaikan sidebar',
     customizeSidebarDescription:
       'Pilih aplikasi yang muncul di sidebar dan seret untuk mengubah urutannya. Beranda selalu berada di urutan pertama.',

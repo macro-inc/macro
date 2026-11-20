@@ -1,7 +1,6 @@
 import { isListViewID } from '@app/constants/list-views';
 import { useCrmContactDiscovery } from '@app/features/crm/record-adapter';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import {
   beginInteraction,
@@ -14,10 +13,7 @@ import {
   canOpenInNewTab,
   openInNewTab,
 } from '@components/app/tab-layout/open-in-new-tab';
-import {
-  enableProjects,
-  USE_MACRO_PR_SUMMARY_BLOCK,
-} from '@core/constant/featureFlags';
+import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -451,15 +447,8 @@ function CommandSearchMenu(
   let searchInput: HTMLTextAreaElement | undefined;
 
   const analytics = useAnalytics();
-  const projectsFlag = useFeatureFlag(enableProjects);
-  const categories = () =>
-    CATEGORIES.filter(
-      (item) => item.id !== 'projects' || projectsFlag().enabled
-    );
-  const categoryFilter = () =>
-    CommandState.categoryFilter() === 'projects' && !projectsFlag().enabled
-      ? 'all'
-      : CommandState.categoryFilter();
+  const categories = () => CATEGORIES;
+  const categoryFilter = () => CommandState.categoryFilter();
 
   const { popoverSplit } = useSplitLayout();
   const canOpenInNewSplit = () =>
@@ -614,13 +603,6 @@ function CommandSearchMenu(
 
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
-    if (
-      (item.kind === 'new-project' ||
-        (isEntityItem(item) && item.bucket === 'initiative')) &&
-      !projectsFlag().enabled
-    )
-      return;
-
     props.onSelect?.(item);
     if (props.disableDefaultAction) {
       // Close like a normal selection, just without navigating/running.

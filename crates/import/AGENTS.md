@@ -149,7 +149,7 @@ from this import's other databases into it are not linked.
   their database, and folders, databases, inserted rows, the Page column and
   relation columns are recorded in `import_entity_written` as they are made.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists. Left open: a crash between creating a folder, a database
+  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
   or a row batch and recording it duplicates that one object or batch, and a
   crash between applying a schema op and recording it fails that database on
   resume (Macro refuses the column id).
@@ -159,7 +159,34 @@ from this import's other databases into it are not linked.
   personal copy never takes it, so teammates never see or link to it and
   import their own copy. Planning marks objects a teammate already imported
   and shared as `alreadyImported` (no decision-model call, not counted as
-  copies); the write links them. At write time `claim_team_object` decides per
+  copies); the write links them. `service/lifecycle.rs` checks finished targets
+  through `ImportedTargetReader` during planning and immediately before linking.
+  Reviewed Notion, Linear and Jira all use that policy, including tracker tasks
+  and initiative project identities. `ImportedTarget` maps ledger types once.
+  Inventory reads run with at most eight concurrent requests; generation
+  renewals stay sequential so parent and child locks keep a stable order.
+  Liveness is independent of viewer permissions: losing access alone never
+  renews a still-active target's generation.
+  Missing or trashed documents, folders and database entities get a fresh ledger
+  generation and write ids on explicit re-import; the old trash copy stays
+  untouched. Renewal clears that generation's written markers, team claim and
+  obsolete plan link/rationale fields,
+  preserves child rows, and never resets an `importing` row. Under the ledger
+  row lock the domain rechecks physical liveness, preserving a target restored
+  while that lock was pending. A later restore is a separate lifecycle action
+  and may coexist with the explicitly requested new copy. Delete handlers
+  do not release claims eagerly: liveness checks repair stale claims, including
+  deletion between planning and writing. A replacement write uses its own
+  generation's document id even if the link snapshot still names the old team
+  copy, and clears the review's obsolete `alreadyImported` target. Page, task
+  and database-body writes read the run's shared destinations immediately before
+  creation, so later writes use a replacement's id while live team ids stay put.
+  A missing linked data source requires a fresh plan instead of guessing between
+  a database and tasks folder without its original task mapping. Transient
+  read errors preserve claims. A finished object deleted during a resumed write
+  is staged and reported individually; unrelated objects still finish. Its
+  target is omitted from new links. Personal verdicts never acquire the team
+  slot when replacing a deleted linked copy. At write time `claim_team_object` decides per
   shared object: hold the claim and write, link to a finished copy, take over a
   claim whose holder's run has no live lease, or wait. A waiting row is
   checked again after the rest is written, then parks with `waiting_on` the

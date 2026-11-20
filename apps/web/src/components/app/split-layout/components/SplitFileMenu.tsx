@@ -10,6 +10,7 @@ import {
   makeCreateReminderAction,
   makeFavoriteAction,
   makeMuteAction,
+  notificationSettingsMenuFor,
 } from '@app/features/next-soup/actions';
 import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { EntityTagSubmenu } from '@app/features/property/tags/EntityTagSubmenu';
@@ -30,7 +31,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableEntityAppearance,
-  enableProjects,
   enableReminders,
 } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
@@ -60,6 +60,12 @@ import {
   NotificationMuteMenu,
   NotificationMutePage,
 } from '@notifications/components/NotificationMuteMenu';
+import {
+  NotificationSettingsMenu,
+  NotificationSettingsPage,
+  NotificationSettingsSummary,
+} from '@notifications/components/NotificationSettingsMenu';
+import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 
 import type { ItemType } from '@service-storage/itemType';
 import { Key } from '@solid-primitives/keyed';
@@ -96,6 +102,7 @@ export type DefaultFileOperation = {
 };
 
 export type CustomFileOperation = {
+  id?: string;
   label: string;
   icon: Component;
   action?: () => void | Promise<unknown>;
@@ -130,7 +137,10 @@ export type SplitFileMenuViews = {
 };
 
 function SplitMenuItemContent(
-  props: Pick<SplitFileMenuAction, 'hotkeyToken' | 'icon' | 'label'> & {
+  props: Pick<
+    SplitFileMenuAction,
+    'hotkeyToken' | 'icon' | 'label' | 'disabledReason'
+  > & {
     showHotkey?: boolean;
   }
 ) {
@@ -144,7 +154,12 @@ function SplitMenuItemContent(
           />
         )}
       </Show>
-      <div class="flex-1 truncate">{props.label}</div>
+      <div class="min-w-0 flex-1">
+        <div class="truncate">{props.label}</div>
+        <Show when={props.disabledReason}>
+          <div class="text-xs text-ink-muted">{props.disabledReason}</div>
+        </Show>
+      </div>
       <Show when={props.showHotkey !== false && props.hotkeyToken}>
         <Hotkey
           token={props.hotkeyToken}
@@ -161,6 +176,7 @@ type SplitFileMenuRenderProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerClass?: string;
+  triggerLabel?: string;
   groups: SplitFileMenuActionGroups;
 };
 
@@ -194,6 +210,14 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
             />
           )}
         </Match>
+        <Match when={action().notificationSettingsMenu}>
+          {(menu) => (
+            <NotificationSettingsMenu
+              {...menu()}
+              onActionComplete={() => props.onOpenChange(false)}
+            />
+          )}
+        </Match>
         <Match when={action().copy}>
           <Dropdown.CopyItem
             icon={<Dynamic component={action().icon ?? Copy} class="size-4" />}
@@ -222,6 +246,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         </Match>
         <Match when={true}>
           <Dropdown.Item
+            disabledReason={action().disabledReason}
             onSelect={() => {
               fireAndForget(action().action?.(), 'split-file-menu');
               props.onOpenChange(false);
@@ -238,6 +263,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
         class={cn(props.triggerClass)}
+        aria-label={props.triggerLabel ?? t('splitMenu.fileActions')}
         size="icon-sm"
         variant="ghost"
       >
@@ -266,15 +292,20 @@ function MobileRender(
 ) {
   const [expandedSubmenu, setExpandedSubmenu] = createSignal<string | number>();
   const sections = () => getSplitFileMenuActionSections(props.groups);
-  const [muting, setMuting] = createSignal(false);
+  // A drill-in page that replaces the actions: mute choices or settings.
+  const [page, setPage] = createSignal<'mute' | 'settings'>();
+  const actions = () => sections().flatMap((section) => section.actions);
   const muteMenu = () =>
-    muting()
-      ? sections()
-          .flatMap((section) => section.actions)
-          .find((action) => action.muteMenu)?.muteMenu
+    page() === 'mute'
+      ? actions().find((action) => action.muteMenu)?.muteMenu
+      : undefined;
+  const settingsMenu = () =>
+    page() === 'settings'
+      ? actions().find((action) => action.notificationSettingsMenu)
+          ?.notificationSettingsMenu
       : undefined;
   const close = () => {
-    setMuting(false);
+    setPage(undefined);
     props.onOpenChange(false);
   };
 
@@ -291,7 +322,7 @@ function MobileRender(
             if (action().muteMenu?.muted) {
               action().muteMenu?.onMute(false);
               close();
-            } else setMuting(true);
+            } else setPage('mute');
           }}
         >
           <Dynamic
@@ -304,6 +335,21 @@ function MobileRender(
           <Show when={!action().muteMenu?.muted}>
             <CaretRight class="size-3.5" />
           </Show>
+        </MobileDrawer.Item>
+      );
+    }
+    if (action().notificationSettingsMenu) {
+      return (
+        <MobileDrawer.Item
+          disabled={action().notificationSettingsMenu?.disabled}
+          onClick={() => setPage('settings')}
+        >
+          <BellSimple class="size-4 shrink-0" />
+          {action().label}
+          <Show when={action().notificationSettingsMenu}>
+            {(menu) => <NotificationSettingsSummary preset={menu().preset} />}
+          </Show>
+          <CaretRight class="size-3.5 shrink-0" />
         </MobileDrawer.Item>
       );
     }
@@ -328,7 +374,11 @@ function MobileRender(
         fallback={
           <MobileDrawer.Item
             type="button"
-            class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
+            disabled={!!action().disabledReason}
+            class={cn(
+              nested ? 'pl-9 pr-4' : 'px-4',
+              action().danger && 'text-failure'
+            )}
             onClick={(e) => {
               fireAndForget(action().action?.(e), 'split-file-menu');
               props.onOpenChange(false);
@@ -339,6 +389,7 @@ function MobileRender(
               icon={action().icon}
               hotkeyToken={action().hotkeyToken}
               showHotkey={false}
+              disabledReason={action().disabledReason}
             />
           </MobileDrawer.Item>
         }
@@ -388,7 +439,7 @@ function MobileRender(
       side="bottom"
       open={props.open}
       onOpenChange={(open) => {
-        if (!open) setMuting(false);
+        if (!open) setPage(undefined);
         props.onOpenChange(open);
       }}
       preventScroll={false}
@@ -400,7 +451,7 @@ function MobileRender(
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody>
             <Show
-              when={muteMenu()}
+              when={page()}
               fallback={
                 <>
                   <Show when={props.views}>
@@ -483,13 +534,28 @@ function MobileRender(
                 </>
               }
             >
-              {(menu) => (
-                <NotificationMutePage
-                  {...menu()}
-                  onBack={() => setMuting(false)}
-                  onActionComplete={close}
-                />
-              )}
+              <Show
+                when={settingsMenu()}
+                fallback={
+                  <Show when={muteMenu()}>
+                    {(menu) => (
+                      <NotificationMutePage
+                        {...menu()}
+                        onBack={() => setPage(undefined)}
+                        onActionComplete={close}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                {(menu) => (
+                  <NotificationSettingsPage
+                    {...menu()}
+                    onBack={() => setPage(undefined)}
+                    onActionComplete={close}
+                  />
+                )}
+              </Show>
             </Show>
           </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
@@ -508,6 +574,10 @@ export type SplitFileMenuProps = {
   tools?: BlockTool[];
   /** See {@link SplitFileMenuViews}. Only the mobile drawer renders it. */
   mobileViews?: SplitFileMenuViews;
+  /** Presentation-only grouping for a host's phone action sheet. */
+  mobileActionGroups?: (
+    groups: SplitFileMenuActionGroups
+  ) => SplitFileMenuActionGroups;
   /**
    * Full entity for the menu's entity-gated items. Supply it when the block
    * can build one that generic chrome can't reconstruct from id/name/entityKind
@@ -515,6 +585,7 @@ export type SplitFileMenuProps = {
    */
   entity?: EntityData;
   buttonClass?: string;
+  triggerLabel?: string;
   entityKind: BlockName | BlockAlias;
   permissions: Permissions;
   onDuplicate?: (id: string) => void;
@@ -530,14 +601,15 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
 
   const [open, setOpen] = createSignal(false);
   const [assigningProject, setAssigningProject] = createSignal(false);
-  const projectsFlag = useFeatureFlag(enableProjects);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
   const itemOperations = useItemOperations();
   const quickAccess = useQuickAccess();
   const favoriteAction = makeFavoriteAction();
   const notificationSource = useGlobalNotificationSource();
+  const channelSettings = useChannelNotificationSettings();
   const muteAction = makeMuteAction({
     notificationSource: () => notificationSource,
+    channelSettings,
   });
   const createReminderAction = makeCreateReminderAction({
     onEmailSaved: props.onEmailReminderSaved,
@@ -628,24 +700,39 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     };
   };
 
+  const notificationSettingsOp = (): SplitFileMenuAction | undefined => {
+    const entity = menuEntity();
+    const menu =
+      entity && notificationSettingsMenuFor(channelSettings, [entity]);
+    if (!menu) return undefined;
+    return {
+      id: 'notification-settings',
+      label: t('channelSections.notificationSettings'),
+      icon: BellSimple,
+      notificationSettingsMenu: menu,
+      group: 'notifications' as const,
+    };
+  };
+
   const muteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
     if (!entity || !muteAction.canExecute(entity)) return undefined;
+    // With Notification Settings, Mute joins it in a section of its own.
+    const hasSettings = notificationSettingsMenuFor(channelSettings, [entity]);
     const muted = muteAction.isMuted(entity);
+    const muteMenu = muteAction.menu([entity]);
     return {
       id: 'mute',
-      label: muted
-        ? t('entityActions.unmuteNotifications')
-        : t('entityActions.muteNotifications'),
+      label: muted ? muteMenu.unmuteLabel : muteMenu.label,
       icon: muted ? BellSimple : BellSlash,
-      muteMenu: muteAction.menu([entity]),
+      muteMenu,
       action: () => {
         fireAndForget(muteAction.execute([entity]), 'entity-actions');
       },
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
       },
-      group: 'macro' as const,
+      group: hasSettings ? ('notifications' as const) : ('macro' as const),
     };
   };
 
@@ -855,7 +942,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           { label: op.label },
           Object.getOwnPropertyDescriptors(op)
         );
-        action.id = `operation-${index}`;
+        action.id = op.id ?? `operation-${index}`;
         return action;
       })
       .filter((op) => !!op);
@@ -871,10 +958,10 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return [
       favoriteOp(),
       muteOp(),
+      notificationSettingsOp(),
       reminderOp(),
       addTagOp(),
       ...(props.entityKind === 'task' &&
-      projectsFlag().enabled &&
       (props.permissions === Permissions.OWNER ||
         props.permissions === Permissions.CAN_EDIT)
         ? [
@@ -896,14 +983,20 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     ].filter((op) => !!op);
   });
 
+  // Key each tool by its position before filtering: callers pass `tools` as
+  // a JSX array, which every read of `props.tools` rebuilds, so looking a tool
+  // up again by identity finds nothing and gives every row the same key.
   const filteredTools = createMemo(() =>
-    (props.tools ?? []).filter((tool) => !tool.condition || tool.condition())
+    (props.tools ?? [])
+      .map((tool, index) => ({ tool, id: `tool-${index}` }))
+      .filter(({ tool }) => !tool.condition || tool.condition())
   );
 
   const tools = createMemo<SplitFileMenuAction[]>(() =>
-    filteredTools().map((tool) => ({
-      id: `tool-${props.tools?.indexOf(tool)}`,
+    filteredTools().map(({ tool, id }) => ({
+      id,
       label: typeof tool.label === 'function' ? tool.label() : tool.label,
+      disabledReason: tool.disabledReason,
       icon: tool.icon,
       children: tool.children,
       hotkeyToken: tool.hotkeyToken,
@@ -927,6 +1020,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       sender: [],
       sharing: [],
       macro: [],
+      notifications: [],
       file: [],
       delete: [],
     };
@@ -954,6 +1048,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             open={open()}
             onOpenChange={setOpen}
             triggerClass={props.buttonClass}
+            triggerLabel={props.triggerLabel}
             groups={actionGroups()}
           />
         }
@@ -962,11 +1057,11 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           open={open()}
           onOpenChange={setOpen}
           triggerClass={props.buttonClass}
-          groups={actionGroups()}
+          groups={props.mobileActionGroups?.(actionGroups()) ?? actionGroups()}
           views={props.mobileViews}
         />
       </Show>
-      <Show when={projectsFlag().enabled && assigningProject()}>
+      <Show when={assigningProject()}>
         <ProjectAssignmentDialog
           taskIds={[props.id]}
           onClose={() => setAssigningProject(false)}

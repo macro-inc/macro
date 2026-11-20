@@ -28,8 +28,8 @@ let
           module
           herdr
           {
-            macro.box.macrod = self'.packages.macrod;
-            macro.box.harnessd.package = self'.packages.harnessd;
+            macro.box.macrod = self'.packages.macro-box-macrod;
+            macro.box.harnessd.package = self'.packages.macro-box-harnessd;
           }
         ];
       }
@@ -40,14 +40,19 @@ let
     imports = [ image ];
     macro.box.agentMode = true;
   };
-  machine = guest ./_image.nix;
   container = guest ./_container.nix;
-  agentMachine = guest (agentMode ./_image.nix);
+  firecracker = guest {
+    imports = [ ./_firecracker.nix ];
+    macro.box.firecracker.guestAgent = withSystem system (
+      { self', ... }: self'.packages.firecracker-guest-agent
+    );
+  };
   agentContainer = guest (agentMode ./_container.nix);
-  box = machine.config.macro.box;
+  box = container.config.macro.box;
 in
 {
-  flake.nixosConfigurations.macro-box = machine;
+  flake.nixosConfigurations.macro-box = container;
+  flake.nixosConfigurations.macro-box-firecracker = firecracker;
 
   perSystem =
     {
@@ -58,14 +63,6 @@ in
       ...
     }:
     let
-      # What `incus image import` takes.
-      incusImage =
-        name: nixos:
-        pkgs.runCommand name { } ''
-          mkdir $out
-          ln -s ${nixos.config.system.build.metadata}/tarball/*.tar.xz $out/metadata.tar.xz
-          ln -s ${nixos.config.system.build.qemuImage}/nixos.qcow2 $out/disk.qcow2
-        '';
       # `docker load < result` → <name>:latest; run as DockerFleet does
       # (AGENTS.md).
       dockerImage =
@@ -84,6 +81,27 @@ in
             StopSignal = "SIGRTMIN+3";
           };
         };
+      # What the Firecracker host boots: `vmlinux`, `rootfs.ext4` (the first
+      # drive) and `boot_args`.
+      firecrackerImage =
+        name: nixos:
+        let
+          rootfs = import "${inputs.nixpkgs}/nixos/lib/make-disk-image.nix" {
+            inherit pkgs lib;
+            inherit (nixos) config;
+            partitionTableType = "none";
+            installBootLoader = false;
+            format = "raw";
+            additionalSpace = "2G";
+            baseName = "rootfs";
+          };
+        in
+        pkgs.runCommand name { } ''
+          mkdir $out
+          ln -s ${nixos.config.boot.kernelPackages.kernel.dev}/vmlinux $out/vmlinux
+          ln -s ${rootfs}/rootfs.img $out/rootfs.ext4
+          echo ${lib.escapeShellArg (lib.concatStringsSep " " nixos.config.macro.box.firecracker.kernelParams)} > $out/boot_args
+        '';
     in
     {
       packages = lib.optionalAttrs (system == "x86_64-linux") {
@@ -91,9 +109,8 @@ in
         macro-box-claude-agent-acp = box.claudeAgentAcp;
         macro-agent-runtime = box.agent.runtime;
         macro-box-computer-use-linux = box.agent.computerUse.package;
-        macro-box-incus = incusImage "macro-box-incus" machine;
         macro-box-docker = dockerImage "macro-box" container;
-        macro-box-agent = incusImage "macro-box-agent" agentMachine;
+        macro-box-firecracker = firecrackerImage "macro-box-firecracker" firecracker;
         macro-box-agent-docker = dockerImage "macro-box-agent" agentContainer;
       };
       checks = lib.optionalAttrs (system == "x86_64-linux") {
@@ -131,26 +148,37 @@ in
               ./_guest.nix
               herdr
             ];
+            # Never written, so enrollment fails with its reason.
+            macro.box.enrollFrom = lib.mkDefault "file:/run/macro/enrollment.json";
           };
-          inherit (self'.packages) macrod harnessd;
+          macrod = self'.packages.macro-box-macrod;
+          harnessd = self'.packages.macro-box-harnessd;
+        };
+        macro-box-firecracker-restore = import ./_firecracker-test.nix {
+          inherit pkgs;
+          guest = {
+            imports = [
+              ./_guest.nix
+              herdr
+            ];
+          };
+          macrod = self'.packages.macro-box-macrod;
+          harnessd = self'.packages.macro-box-harnessd;
         };
         macro-box-claude-wrapper = import ./_claude-wrapper-test.nix { inherit pkgs; };
         # start-agent's boot (lock adoption, rollback) and agent-stopped's
         # failure count, against local git repositories.
-        macro-box-boot =
-          pkgs.runCommand "macro-box-boot"
-            {
-              nativeBuildInputs = [
-                pkgs.bash
-                pkgs.bun
-                pkgs.git
-                pkgs.diffutils
-                pkgs.gnused
-                pkgs.coreutils
-                pkgs.gnugrep
-              ];
-            }
-            "bash ${./files}/test-start-agent.sh && touch $out";
+        macro-box-boot = pkgs.runCommand "macro-box-boot" {
+          nativeBuildInputs = [
+            pkgs.bash
+            pkgs.bun
+            pkgs.git
+            pkgs.diffutils
+            pkgs.gnused
+            pkgs.coreutils
+            pkgs.gnugrep
+          ];
+        } "bash ${./files}/test-start-agent.sh && touch $out";
       };
     };
 }

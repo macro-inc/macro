@@ -1,9 +1,10 @@
 import { expect, test } from '@playwright/test';
+import { scrollList } from './scroll-gesture';
 
 for (const surface of ['modal', 'panel']) {
   test(`${surface} invites retain selections across pages without suggesting existing members`, async ({
     page,
-  }, info) => {
+  }) => {
     await page.goto(`/?channel-recipients=${surface}`);
     await expect(page.getByTestId('requests')).toHaveText('0');
     await page.getByRole('button', { name: 'Open participant picker' }).click();
@@ -18,9 +19,11 @@ for (const surface of ['modal', 'panel']) {
     await expect(page.getByTestId('excluded')).toContainText(
       'macro|person0@example.com'
     );
-    if (info.project.name === 'phone')
-      await page.getByRole('button', { name: 'Next options' }).click();
-    else await input.press('PageDown');
+    // Scrolling to the end lists the next page below the first.
+    const listbox = page.getByRole('listbox');
+    await scrollList(listbox);
+    await expect(page.getByTestId('requests')).toHaveText('2');
+    await scrollList(listbox, 150);
     await expect(
       page.getByRole('option', { name: /person51@example\.com/ })
     ).toBeVisible();
@@ -78,7 +81,10 @@ test('touch selection and paging keep the invitation drawer open', async ({
   await expect(
     page.getByRole('option', { name: /person1@example\.com/ })
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Next options' }).tap();
+  const listbox = page.getByRole('listbox');
+  await scrollList(listbox);
+  await expect(page.getByTestId('requests')).toHaveText('2');
+  await scrollList(listbox, 150);
   await page.getByRole('option', { name: /person51@example\.com/ }).tap();
   await expect(input).toBeVisible();
   await page.getByRole('button', { name: 'Add', exact: true }).tap();

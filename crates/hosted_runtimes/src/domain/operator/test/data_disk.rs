@@ -25,7 +25,13 @@ async fn a_lost_guest_is_recreated_on_its_data_disk_with_a_new_enrollment() {
     let operator = operator(FakeFleet::default()).await;
     let id = paid_computer(&operator).await;
     run_effects(&operator).await;
-    assert!(operator.macrod_connected(HARNESS).await.unwrap());
+    assert!(
+        operator
+            .macrod_connected(HARNESS, true)
+            .await
+            .unwrap()
+            .is_computer()
+    );
     // The instance disappears; its data disk stays on the host.
     operator.fleet.created.lock().unwrap().remove(&id);
 

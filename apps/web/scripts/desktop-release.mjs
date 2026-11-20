@@ -83,6 +83,9 @@ function main([command, ...args]) {
     }
     config.enabled = release;
     config.bundleBuild = commitSeconds * 1000;
+    // Rewriting this tracked file dirties the tree, so the Nix flake has no
+    // shortRev: record the commit here for the embedded bundle manifest.
+    config.gitSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
     writeFileSync(CONFIG, `${JSON.stringify(config, null, 2)}\n`);
   } else if (command === 'manifest') {
     const [directory, tag, repository] = args;

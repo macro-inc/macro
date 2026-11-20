@@ -2,10 +2,17 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { type ComponentProps, createMemo } from 'solid-js';
+import { type Accessor, type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+
+const calendar = vi.hoisted(() => ({ syncing: (): boolean => false }));
+
+vi.mock('@queries/calendar/first-sync', () => ({
+  useCalendarFirstSync: (enabled: Accessor<boolean>) => () =>
+    enabled() && calendar.syncing(),
+}));
 
 vi.mock('@components/app/split-layout/split-router/mention-links', () => ({
   useMacroMentionLinkResolver: () => () => undefined,
@@ -51,10 +58,12 @@ const WORK_CALENDAR: EventEditorCalendarOption = {
 };
 
 /** Renders the form and counts the edits it reports back to its host. */
-function showForm(props: Partial<ComponentProps<typeof EventForm>> = {}) {
+function showForm(
+  props: Partial<ComponentProps<typeof EventForm>> = {},
+  calendarOptions: Accessor<EventEditorCalendarOption[]> = () => [WORK_CALENDAR]
+) {
   const edits = { count: 0 };
   render(() => {
-    const calendarOptions = createMemo(() => [WORK_CALENDAR]);
     const controller = createCalendarEventFormController({
       initialValue: {
         title: 'Customer demo',
@@ -66,7 +75,7 @@ function showForm(props: Partial<ComponentProps<typeof EventForm>> = {}) {
         location: '',
         description: '',
         conference: 'none',
-        calendarId: WORK_CALENDAR.id,
+        calendarId: calendarOptions()[0]?.id,
       },
       calendarOptions,
       guestOptions: () => [],
@@ -92,10 +101,44 @@ function showForm(props: Partial<ComponentProps<typeof EventForm>> = {}) {
 }
 
 beforeEach(() => {
+  calendar.syncing = () => false;
   Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('ResizeObserver', ObserverStub);
   vi.stubGlobal('IntersectionObserver', ObserverStub);
   vi.stubGlobal('scrollTo', vi.fn() as unknown as typeof window.scrollTo);
+});
+
+it('keeps the create draft editable until its first calendar can save it', async () => {
+  const [calendars, setCalendars] = createSignal<EventEditorCalendarOption[]>(
+    []
+  );
+  calendar.syncing = () => true;
+  const onSubmit = vi.fn();
+  showForm({ onSubmit }, calendars);
+
+  expect(screen.getByRole('status').textContent).toBe('Syncing your calendar…');
+  expect(screen.queryByRole('button', { name: /^Calendar$/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Create event' })).toBeNull();
+  const title = screen.getByRole('textbox', {
+    name: 'Title',
+  }) as HTMLInputElement;
+  fireEvent.submit(title.form!);
+  expect(onSubmit).not.toHaveBeenCalled();
+  await userEvent.setup().type(title, ' revised');
+
+  setCalendars([WORK_CALENDAR]);
+
+  expect(title.value).toBe('Customer demo revised');
+  await userEvent
+    .setup()
+    .click(screen.getByRole('button', { name: 'Create event' }));
+  expect(onSubmit).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Customer demo revised',
+      calendarId: WORK_CALENDAR.id,
+    }),
+    undefined
+  );
 });
 afterEach(() => {
   cleanup();

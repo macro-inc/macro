@@ -594,13 +594,46 @@ pub struct TeamMember {
     pub email: String,
 }
 
-/// Creates the Macro side of a workspace import: folders mirroring the
-/// source's tree, documents and tasks inside them, and databases.
-///
-/// Every entity is created as `user`, through the same services the app
-/// uses, so permissions, search and sync behave as for anything the user
-/// made by hand.
-pub trait WorkspaceWriter: Send + Sync + 'static {
+/// The physical app entity recorded by an import generation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportedTarget {
+    /// A folder outside trash.
+    Folder(Uuid),
+    /// A document or task outside trash.
+    Document(Uuid),
+    /// A database app entity outside trash.
+    Database(Uuid),
+    /// A tracker project; initiatives support permanent deletion.
+    Initiative(Uuid),
+}
+
+impl ImportedTarget {
+    /// Interpret a recognized ledger entity type and validated UUID.
+    pub fn from_entity(id: &str, kind: &str) -> Option<Self> {
+        let id = id.parse().ok()?;
+        match kind {
+            "md" | "task" => Some(Self::Document(id)),
+            "project" => Some(Self::Folder(id)),
+            "database" => Some(Self::Database(id)),
+            "initiative" => Some(Self::Initiative(id)),
+            _ => None,
+        }
+    }
+}
+
+/// Reads lifecycle state through the imported entity's owning domain.
+pub trait ImportedTargetReader: Send + Sync + 'static {
+    /// Whether an imported target exists outside trash, independently of
+    /// viewer permissions. Transient read failures must be returned.
+    fn target_exists(
+        &self,
+        target: ImportedTarget,
+    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
+}
+
+/// Creates workspace folders, documents, tasks and databases through their
+/// owning services, with the same permissions, search and sync as ordinary writes.
+pub trait WorkspaceWriter: ImportedTargetReader {
     /// Idempotently create a Macro project (initiative) with the ledger's
     /// stable id and the approved visibility, using attributed creation.
     fn create_tracker_project(
@@ -747,6 +780,44 @@ pub struct PlanRow {
 
 /// Ledger operations a workspace import needs beyond single-row staging.
 pub trait NotionPlanRepo: Send + Sync + 'static {
+    /// Stop a writing object whose reviewed link no longer determines its
+    /// shape. Leave it staged for a fresh plan, releasing its claim/waiters.
+    fn require_replan(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        reason: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Before writing a replacement, remove a reviewed link's obsolete target
+    /// and record the replacement's actual sharing. CAS on the writing row.
+    fn clear_stale_link(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        shared: bool,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Replace a finished, deleted target's ledger generation after the domain
+    /// checked its liveness. CAS on the row and target id; never reset an
+    /// importing row. Preserve children; clear old written markers, claims
+    /// and obsolete reviewed link pointers.
+    /// The caller must own the row or belong to the holder's team. Recheck
+    /// physical deletion through `still_deleted` after locking that generation.
+    /// A restored target or transient read error preserves it. `reason` reports
+    /// a deleted finished object skipped while the rest of a write continues.
+    fn renew_deleted_copy<F, Fut>(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        import_id: Uuid,
+        entity_id: &str,
+        reason: Option<&str>,
+        still_deleted: F,
+    ) -> impl Future<Output = Result<bool>> + Send
+    where
+        F: FnOnce() -> Fut + Send,
+        Fut: Future<Output = Result<bool>> + Send;
+
     /// Replace `user`'s current plan for `source`: drop the staged rows of the
     /// previous plan, then stage `rows` in order (parents before children),
     /// linking each to its parent row and to the review the `running` run

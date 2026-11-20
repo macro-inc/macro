@@ -38,6 +38,14 @@ jobs:
     with:
       environment: prod
     secrets: inherit
+  deploy-mcp-chatgpt-worker:
+    needs:
+    - deploy-cloud-storage
+    name: Deploy MCP ChatGPT Worker
+    uses: ./.github/workflows/deploy_mcp_chatgpt_worker.yml
+    with:
+      environment: prod
+    secrets: inherit
   deploy-website:
     if: github.event_name == 'release'
     name: Deploy Website
@@ -80,6 +88,9 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         ref: ${{ github.sha }}
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Mount Namespace cache volume
       uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
       with:
@@ -136,6 +147,9 @@ jobs:
       uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
       with:
         ref: ${{ github.sha }}
+      env:
+        GIT_HTTP_LOW_SPEED_LIMIT: '10000'
+        GIT_HTTP_LOW_SPEED_TIME: '60'
     - name: Download dist
       uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
       with:

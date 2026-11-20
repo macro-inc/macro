@@ -51,6 +51,7 @@ import type {
   SuggestionWriteOutcome,
   SuggestOutcome,
   SuggestRequest,
+  UnusableKnob,
 } from './schemas';
 
 export type scheduledActionHealthResponse200 = {
@@ -1970,6 +1971,67 @@ export const activateScheduledActionTemplate = async (
   } as activateScheduledActionTemplateResponse;
 };
 
+export type listScheduledActionUnusableItemsResponse200 = {
+  data: UnusableKnob[];
+  status: 200;
+};
+
+export type listScheduledActionUnusableItemsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listScheduledActionUnusableItemsResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listScheduledActionUnusableItemsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listScheduledActionUnusableItemsResponseSuccess =
+  listScheduledActionUnusableItemsResponse200 & {
+    headers: Headers;
+  };
+export type listScheduledActionUnusableItemsResponseError = (
+  | listScheduledActionUnusableItemsResponse401
+  | listScheduledActionUnusableItemsResponse404
+  | listScheduledActionUnusableItemsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listScheduledActionUnusableItemsResponse =
+  | listScheduledActionUnusableItemsResponseSuccess
+  | listScheduledActionUnusableItemsResponseError;
+
+export const getListScheduledActionUnusableItemsUrl = (id: string) => {
+  return `/scheduled-actions/${id}/unusable-items`;
+};
+
+export const listScheduledActionUnusableItems = async (
+  id: string,
+  options?: RequestInit
+): Promise<listScheduledActionUnusableItemsResponse> => {
+  const res = await fetch(getListScheduledActionUnusableItemsUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listScheduledActionUnusableItemsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listScheduledActionUnusableItemsResponse;
+};
+
 /**
  * @summary The caller's feed, for them or their own agent.
  */
@@ -2644,9 +2706,11 @@ export const rewriteSuggestion = async (
 /**
  * @summary The caller, or someone acting for them, acts on a suggestion: a background
 prompt suggestion starts its run when the person accepts it in the app (anyone
-else only takes it on); a note or prompt is done once they act on it (open its
-item or the composer), and shows in the feed's `done`. A routine suggestion is
-refused: the person saves its routine in the app, which makes it done.
+else only takes it on); a reply suggestion is only taken on, and is done once
+the person replies on its item; any other note or prompt is done once they act
+on it (open its item or the composer), and shows in the feed's `done`. A
+routine suggestion is refused: the person saves its routine in the app, which
+makes it done.
  */
 export type acceptSuggestionResponse204 = {
   data: void;

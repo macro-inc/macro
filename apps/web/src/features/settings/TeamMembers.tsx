@@ -5,10 +5,7 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import {
-  enableAgentTeammates,
-  enableAiUsageBilling,
-} from '@core/constant/featureFlags';
+import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -72,7 +69,12 @@ import {
   SettingsSection,
 } from './primitives';
 import { useRetryTeamAgentSetup } from './primitives/team-agent-status';
-import { InviteToTeamDialog, useTeamViewer } from './Team';
+import {
+  type InviteKind,
+  InviteToTeamDialog,
+  useCanInviteAgents,
+  useTeamViewer,
+} from './Team';
 import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
@@ -168,7 +170,6 @@ function MemberRow(props: {
   onRoleChange: (role: TeamRole) => void;
   onPlanChange: (plan: PaidPlan) => void;
 }) {
-  const aiUsageBilling = useFeatureFlag(enableAiUsageBilling);
   const displayName = () => getDisplayName(tryMacroId(props.member.user_id));
   const isMemberOwner = () => props.member.role === TeamRole.owner;
   const email = () => {
@@ -217,7 +218,7 @@ function MemberRow(props: {
               value={memberPlan(props.member)}
               onChange={props.onPlanChange}
               disabled={props.planPending}
-              aiUsageBilling={aiUsageBilling().enabled}
+              aiUsageBilling
               pendingDowngrade={props.pendingDowngrade}
             />
           </Show>
@@ -295,7 +296,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
   );
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
-  const [showInviteModal, setShowInviteModal] = createSignal(false);
+  // The invite flow open, if any: people by email, or an agent teammate.
+  const [showInviteModal, setShowInviteModal] = createSignal<InviteKind>();
   const [agentToRemove, setAgentToRemove] = createSignal<TeamAgent | null>(
     null
   );
@@ -303,6 +305,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   // Agent teammates: listed with their status once the flag is on. Loading
   // is not on, and off leaves the roster exactly as it was.
   const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const canInviteAgents = useCanInviteAgents(isAdminOrOwner);
   const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
   const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
   const removeAgentMutation = useRemoveTeamAgentMutation();
@@ -480,23 +483,36 @@ export function TeamMembers(props: { team: TeamSummary }) {
           <Show
             when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
           >
-            <div class="flex items-center gap-2">
+            {/* A narrow page wraps the invite buttons, as a pair, onto
+                their own line. */}
+            <div class="flex flex-wrap items-center gap-2">
               {/* A link someone sends themselves gets opened; keep it one
                   click from the page alongside the email invite. */}
               <CopyTeamInviteLinkButton
                 teamId={props.team.id}
                 class="text-[15px]"
               />
-              {/* Inverted (black on light, white on dark) so inviting is the
-                  page's primary action. */}
-              <Button
-                variant="primary"
-                class="text-[15px]"
-                onClick={() => setShowInviteModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Invite
-              </Button>
+              {/* One button per kind of invite, each opening its flow. */}
+              <div class="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  class="text-[15px]"
+                  onClick={() => setShowInviteModal('people')}
+                >
+                  <PlusIcon class="size-4" />
+                  Invite Human
+                </Button>
+                <Show when={canInviteAgents()}>
+                  <Button
+                    variant="secondary"
+                    class="text-[15px]"
+                    onClick={() => setShowInviteModal('agent')}
+                  >
+                    <PlusIcon class="size-4" />
+                    Invite Agent
+                  </Button>
+                </Show>
+              </div>
             </div>
           </Show>
         }
@@ -767,9 +783,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}
-        canInviteAgents={isAdminOrOwner()}
-        open={showInviteModal()}
-        onClose={() => setShowInviteModal(false)}
+        kind={showInviteModal()}
+        canInviteAgents={canInviteAgents()}
+        open={!!showInviteModal()}
+        onClose={() => setShowInviteModal(undefined)}
       />
     </>
   );

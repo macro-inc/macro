@@ -10,7 +10,8 @@ use crm::domain::{
     auth::{CrmCompanyReceipt, CrmContactReceipt, CrmTeamReceipt},
     companies_repo::{CrmCompanyListSort, CrmCompanySoupCursor},
     email_privacy::{
-        EmailContributionMailbox, EmailPrivacyChange, EmailPrivacyService, EmailPrivacySettings,
+        EmailContributionConsent, EmailContributionMailbox, EmailPrivacyChange,
+        EmailPrivacyService, EmailPrivacySettings,
     },
     model::{
         CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmContactDetail, CrmError,
@@ -61,9 +62,17 @@ const ACTIVITY_EDGES: [(PropertyEntityType, Uuid); 4] = [
 ];
 
 impl EmailPrivacyService for FakeCrm {
+    async fn email_consent(
+        &self,
+        _: &CrmTeamReceipt<MemberTeamRole>,
+    ) -> Result<EmailContributionConsent, CrmError> {
+        panic!("unexpected email_consent call")
+    }
+
     async fn excluded_email_threads(
         &self,
         _: &CrmTeamReceipt<MemberTeamRole>,
+        _: Option<Uuid>,
         _: Option<Uuid>,
     ) -> Result<crm::domain::email_privacy::ExcludedEmailThreads, CrmError> {
         panic!("unexpected excluded_email_threads call")

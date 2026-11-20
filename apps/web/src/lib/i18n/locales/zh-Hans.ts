@@ -103,7 +103,6 @@ export default {
     close: '关闭',
     delete: '删除',
     rename: '重命名',
-    more: '更多',
     search: '搜索',
     settings: '设置',
   },
@@ -642,8 +641,6 @@ export default {
     create: '新建',
     getMobileApp: '获取移动应用',
     signedInAs: '已登录为 {{name}}',
-    commandMenu: '命令菜单',
-    searchEverything: '全局搜索',
     customizeSidebar: '自定义侧边栏',
     customizeSidebarDescription:
       '选择要在侧边栏中显示的应用，拖动可调整顺序。首页始终位于最前。',

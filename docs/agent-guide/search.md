@@ -2,7 +2,9 @@
 
 ## Search
 
-Sidebar `Search` button → `/app/search` with a focused query box. Results
+Sidebar `Search` button → `/app/search` with a focused query box. Until you type
+or add a filter, desktop Search lists nothing and shows its empty state, which
+points to `⌘K` (Ctrl+K elsewhere) for the command menu. Results
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
@@ -44,7 +46,8 @@ as exact; bounded personal-contact windows use their separate policy below.
 
 Ordinary entity relevance keeps its fixed per-item score. Personal contacts use
 exact normalized names, then every query word prefixing a name word in any order,
-then literal contains. Each tier is recent-first with stable identity ties: `jo sm`
+then literal contains, then address terms (`gmail.com`, or a local part unlike
+the name). Each tier is recent-first with stable identity ties: `jo sm`
 and `sm jo` can find John Smith; `jhn` cannot, while `ohn` can. Complete email
 addresses and Macro IDs are exact identities, never display-name aliases.
 Incomplete typed addresses use email-prefix matching.
@@ -114,7 +117,8 @@ For Search intent, extraction selects a search type before extracting only that
 type's supported filters. Task status/priority/assignee/creator filters and channel
 In/From filters use the same controls and resolution as desktop Command K.
 The task Assignee facet reuses selected-first ordering when opening the picker,
-with available agents, team members, and the **Search assignees...** placeholder.
+with you, Unassigned and team members before available agents, and the
+**Search assignees...** placeholder.
 Rows stay in place while selecting or deselecting. Existing selected outsiders
 remain removable, but contact discovery is not available. Desktop chips and the
 mobile filter drawer share this behavior.

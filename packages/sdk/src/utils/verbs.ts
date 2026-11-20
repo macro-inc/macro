@@ -193,8 +193,12 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     copied: 'copyThreadCalendarInvitation',
   },
   notification: {
-    removed: 'removeUnsubscribeItem',
-    listed: 'listTypedNotifications getNotificationTypePreferences',
+    removed: 'removeUnsubscribeItem resetChannelNotificationSettings',
+    listed: `
+      listChannelNotificationSettings
+      listTypedNotifications
+      getNotificationTypePreferences
+    `,
     read: 'getTypedNotificationById',
     deleted: 'bulkDeleteUserNotificationsV2 deleteUserNotificationV2',
     marked:
@@ -204,6 +208,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       unsubscribeItem
     `,
     enabled: 'enableNotificationType',
+    edited: 'updateChannelNotificationSettings',
   },
   properties: {
     labeled: 'ensureTagSet',
@@ -228,6 +233,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       meetingInvitePermissions getCallRecord previewSmartTag getActivity getChannel
       getMyChannelAccessRequest getChannelAccessRequest getContactByEmail getContact getCompany
       getCrmPipeline getCrmPipelinePermissions getCrmPipelineStageRequirements getCrmPipelineTable
+      getCrmEmailPolicy getCrmEmailPrivacy getCrmEmailRulePreview getCrmEmailRuleRevision
       getCrmMemberAccess getCrmTeamSettings getDatabase getDatabasePermissions getDatabaseRowHistory
       getDatabaseViewPositions getDocumentByTeamSlug getDocumentPermissionsToken
       getBatchPreviewHandler getDocument getDocumentBranchName getDocumentGithubPullRequests
@@ -247,6 +253,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       listAccountManagers listAgents listBots listBotChannels listBotTokens listOccurrences
       listTeamCalendar listTeamOutOfOffice meetingList meetingListActive listChannelLabels
       getChannelAttachments listChannelBots getChannelParticipants getChannels listCrmBlockedDomains
+      listCrmEmailPolicyHistory listCrmExcludedEmailThreads
       listCompanyContacts listCrmPipelines listCrmPipelineDetails getCrmPipelineRows listDatabases listDatabaseColumnCasts
       listDatabaseWebhooks getUserDocumentsHandler getSystemSkillsHandler externalChats
       externalChatMessages externalChatMessageAttachments listFavorites listForms
@@ -261,6 +268,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       findCrmPipelineEntries searchCrmPipelineEntries
     `,
     queried: `
+      previewCrmEmailRules validateCrmEmailRules
       queryCrmPipelineRows queryDatabases postItemsSoupAst
       calculateSpreadsheet
     `,
@@ -281,6 +289,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     `,
     edited: `
       passwordsAgentUpdate passwordsAgentSetTotp
+      updateCrmEmailPolicy updateCrmEmailPrivacy
       resetCrmTeamStages updateAgent editAnchor patchBot meetingUpdate editCallRecord
       editCallTranscript patchChannel setChannelPicture setEmailSync setCompanyHidden
       setCrmCompanyName setContactHidden setCrmContactName applyCrmPipelineOps
@@ -292,10 +301,11 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
       updateInitiative entityMessageEdit entityMessagePatchThread editThreadV2 editProjectV2
       patchWebhook
       setDatabaseAppearance setDocumentAppearance setFormAppearance setInitiativeAppearance
-      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition writeDocumentMarkdown
+      applyCanvasEdits editCanvasWithAi editCrmPipeline editPresentation editSpreadsheet editSpreadsheetWithAi editWordDocument patchAgent addCrmContactEmail removeCrmContactEmail setCrmContactEmail updateCrmPipelineEntries updateSavedViewDefinition setSavedViewAppearance writeDocumentMarkdown
     `,
     renamed: 'renameChannelLabel renameCrmPipeline',
     deleted: `
+      cancelCrmEmailRulePreview
       deleteAnchor deleteBot revokeBotToken deleteCallRecord deleteChannelLabel deleteEntityMention
       deleteChannel permanentlyDeleteDocument deleteDocument accessRequestsRemoveDirect
       externalChatRemove deleteDatabaseWebhook deleteSelfHarness deleteHarness deleteInitiative

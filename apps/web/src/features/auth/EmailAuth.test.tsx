@@ -29,6 +29,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
   useSearchParams: () => [mocks.searchParams],
+  useResolvedPath: (path: () => string) => path,
+  useMatch: (path: () => string) => () => ({ path: path(), params: {} }),
 }));
 vi.mock('@app/features/inbox/AddInboxDialog', () => ({
   openAddInboxDialog: mocks.openAddInbox,
@@ -246,6 +248,17 @@ describe('inbox consent callback', () => {
     expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
       'email_link_callback_result',
       { outcome: 'no_gmail_grant' }
+    );
+  });
+
+  it('leaves the callback while the inbox is still being removed', async () => {
+    mocks.init.mockReturnValue(errAsync({ tag: 'InboxBeingRemoved' }));
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'inbox_being_removed' }
     );
   });
 

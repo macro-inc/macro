@@ -13,6 +13,7 @@ mod contact_update;
 mod create_company;
 mod create_contact;
 mod domain_directory;
+mod email_policy;
 mod email_privacy;
 mod get_company_for_team;
 mod get_contact_by_email_for_team;
@@ -28,6 +29,7 @@ mod list_contacts_for_soup;
 mod member_access;
 mod personal_emails;
 mod populate_contact;
+mod population_lifecycle;
 mod population_locks;
 #[cfg(feature = "inbound")]
 mod previews;

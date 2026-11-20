@@ -63,6 +63,15 @@ test('CodeRabbit comments render GitHub markdown, not raw HTML', async ({
     /^(600|700|bold)$/
   );
 
+  // A long file path truncates before the author's name does.
+  const author = inline.getByText('coderabbitai', { exact: true });
+  await expect(author).toBeVisible();
+  expect(
+    await author.evaluate(
+      (element) => element.scrollWidth <= element.clientWidth
+    )
+  ).toBe(true);
+
   if (SCREENSHOT_DIR) {
     await page.screenshot({
       path: `${SCREENSHOT_DIR}/coderabbit-${testInfo.project.name}.png`,

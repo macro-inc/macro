@@ -3889,6 +3889,9 @@
           "409": {
             "description": ""
           },
+          "410": {
+            "description": ""
+          },
           "422": {
             "description": ""
           },
@@ -3948,6 +3951,9 @@
             "description": ""
           },
           "409": {
+            "description": ""
+          },
+          "410": {
             "description": ""
           },
           "422": {
@@ -6839,7 +6845,7 @@
           },
           "source": {
             "type": "string",
-            "description": "The submitted JavaScript module."
+            "description": "The submitted TypeScript module."
           },
           "status": {
             "$ref": "#/components/schemas/ExecutionStatus",

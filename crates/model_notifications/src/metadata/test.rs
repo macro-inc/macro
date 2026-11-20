@@ -1572,6 +1572,7 @@ fn computer_setup_serializes_with_the_computer_and_the_outcome() {
         agent: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer kept crashing.".to_string(),
+            released: false,
         },
     };
 
@@ -1629,6 +1630,7 @@ fn computer_setup_titles_say_ready_or_name_the_computer_and_why_it_failed() {
         agent: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer couldn't be created on the host.".to_string(),
+            released: false,
         },
     };
 
@@ -1666,6 +1668,7 @@ fn an_agent_teammates_computer_setup_names_the_agent() {
         harness_id: None,
         outcome: ComputerSetupOutcome::Failed {
             failure_reason: "The computer couldn't be created on the host.".to_string(),
+            released: false,
         },
         ..ready.clone()
     };

@@ -58,6 +58,9 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   Attachment email filters. Call `threads::update::sync_thread_attachment_flags`
   wherever a message's attachments change or a message is deleted; the MIME
   prefixes in `threads/update.rs` mirror the web client's attachment filters.
+  Search reads attachment kinds per page from `email_attachments` with the
+  same prefixes (`threads::search_filters`), since the kind flags are not
+  backfilled everywhere.
 - Undated provider drafts use creation time for All Mail eligibility; spam/junk
   and trash remain excluded, including the timestamp override for synced Macro
   drafts. Keep ingestion, recomputation, and cached projections aligned.
@@ -112,6 +115,11 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   when it is saved again, sent or discarded, and `document_email` cascades
   with it, so an imported draft attachment would stay in Drive as a plain
   file. Media uploads to static files still include drafts.
+- The message and contact inserts write provider strings through
+  `parse::service_to_db`, which clamps them to their `varchar` widths
+  (`column_limits`) and removes NUL characters (`nul_characters`), which no
+  `text`, `varchar` or `jsonb` value can hold. Route a new provider string
+  column of theirs through both.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
 - A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its

@@ -112,7 +112,9 @@ fn test_email_search_args_quoted_phrase_uses_phrase_query_in_sqs() -> anyhow::Re
         user_id: "macro|alice@example.com".to_string(),
         user_ids: vec![],
         thread_ids: vec![],
+        required_thread_ids: vec![],
         link_ids: vec![],
+        exclude_link_ids: vec![],
         sender: vec![],
         cc: vec![],
         bcc: vec![],
@@ -151,7 +153,9 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
         user_id: "macro|alice@example.com".to_string(),
         user_ids: vec![],
         thread_ids: vec![],
+        required_thread_ids: vec![],
         link_ids: vec![],
+        exclude_link_ids: vec![],
         sender: vec![],
         cc: vec![],
         bcc: vec![],
@@ -220,6 +224,24 @@ fn test_email_search_args_build_injects_simple_query_string() -> anyhow::Result<
     assert!(!text_fields.contains(&serde_json::json!("sender")));
     assert!(!text_fields.contains(&serde_json::json!("sender.parts")));
 
+    Ok(())
+}
+
+#[test]
+fn an_excluded_link_s_mail_never_matches_whatever_grants_it() -> anyhow::Result<()> {
+    let json = EmailQueryBuilder::new(vec!["invoice".to_string()])
+        .user_ids(vec!["macro|owner@example.com".to_string()])
+        .ids(vec!["shared-thread".to_string()])
+        .exclude_link_ids(vec!["deleting-link".to_string()])
+        .build_bool_query()?
+        .build()
+        .to_json();
+
+    let must_not = json["bool"]["must_not"].as_array().unwrap();
+    assert!(
+        must_not.contains(&serde_json::json!({ "terms": { "link_id": ["deleting-link"] } })),
+        "{json}"
+    );
     Ok(())
 }
 
@@ -534,6 +556,75 @@ fn test_build_bool_query_tag_filter_empty_skipped() -> anyhow::Result<()> {
     assert!(
         !filter.iter().any(|f| f.get("nested").is_some()),
         "empty tag_option_ids should emit no nested clause: {filter:?}"
+    );
+    Ok(())
+}
+
+fn access_filter(json: &serde_json::Value) -> &serde_json::Value {
+    &json["bool"]["filter"][0]
+}
+
+#[test]
+fn test_shared_threads_widen_the_mailbox_access() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
+        .match_type("partial")
+        .user_id("macro|viewer@example.com")
+        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .ids(vec!["shared-thread".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(
+        access_filter(&json),
+        &json!({
+            "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                    { "terms": { "entity_id": ["shared-thread"] } },
+                    { "terms": { "user_id": ["macro|viewer@example.com"] } }
+                ]
+            }
+        })
+    );
+    Ok(())
+}
+
+#[test]
+fn test_ids_only_searches_only_the_listed_threads() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
+        .match_type("partial")
+        .user_id("macro|viewer@example.com")
+        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .ids(vec!["shared-thread".to_string()])
+        .ids_only(true);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(
+        access_filter(&json),
+        &json!({ "terms": { "entity_id": ["shared-thread"] } })
+    );
+    Ok(())
+}
+
+#[test]
+fn test_required_thread_ids_narrow_on_top_of_access() -> anyhow::Result<()> {
+    let builder = EmailQueryBuilder::new(vec!["test".to_string()])
+        .match_type("partial")
+        .user_id("macro|viewer@example.com")
+        .user_ids(vec!["macro|viewer@example.com".to_string()])
+        .required_thread_ids(vec!["thread-a".to_string(), "thread-b".to_string()]);
+
+    let json = builder.build_bool_query()?.build().to_json();
+
+    assert_eq!(
+        access_filter(&json),
+        &json!({ "terms": { "user_id": ["macro|viewer@example.com"] } })
+    );
+    let filters = json["bool"]["filter"].as_array().unwrap();
+    assert!(
+        filters.contains(&json!({ "terms": { "entity_id": ["thread-a", "thread-b"] } })),
+        "expected a required thread filter, got {filters:?}"
     );
     Ok(())
 }

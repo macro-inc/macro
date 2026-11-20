@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   captureElementScrollAnchor,
+  captureFirstVisibleScrollAnchor,
   captureScrollAnchor,
   holdScrollAnchor,
   keepScrollAnchorOnResize,
@@ -168,6 +169,36 @@ function stubResizeObserver() {
   };
   return { notify, isObserving: () => callbacks.size > 0 };
 }
+
+describe('first visible scroll anchor', () => {
+  it('keeps the first listed element reaching into view in place', () => {
+    const { scroller, blocks, tops } = setup([-250, -150, -50, 50]);
+    scroller.scrollTop = 1000;
+
+    // The block reaching into view is not listed; the next one is.
+    const anchor = captureFirstVisibleScrollAnchor(scroller, [
+      blocks[0]!,
+      blocks[3]!,
+    ]);
+    expect(anchor?.top).toBe(50);
+
+    // Rows land above it.
+    tops[3] = 350;
+    restoreScrollAnchor(scroller, anchor!);
+    expect(scroller.scrollTop).toBe(1300);
+  });
+
+  it('ignores elements that are all above or below the view', () => {
+    const { scroller, blocks } = setup([-250, 600]);
+
+    expect(
+      captureFirstVisibleScrollAnchor(scroller, [blocks[0]!])
+    ).toBeUndefined();
+    expect(
+      captureFirstVisibleScrollAnchor(scroller, [blocks[1]!])
+    ).toBeUndefined();
+  });
+});
 
 describe('element scroll anchor', () => {
   it('measures from the scroll container, so moving the container is not a reflow', () => {

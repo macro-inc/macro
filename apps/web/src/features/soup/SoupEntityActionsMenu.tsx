@@ -10,10 +10,19 @@ import {
   MenuItem,
   MenuSeparator,
 } from '@core/component/ContextMenu';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
+import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
 import { Key } from '@solid-primitives/keyed';
-import { children, createMemo, type JSX, Show } from 'solid-js';
+import {
+  type Component,
+  type ComponentProps,
+  children,
+  createMemo,
+  type JSX,
+  Show,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
   createSoupEntityActions,
@@ -23,7 +32,16 @@ import {
 interface SoupEntityActionsMenuProps {
   entities: EntityData[];
   list: EntityActionListState;
+  item?: Component<ComponentProps<typeof MenuItem>>;
+  copyItem?: Component<ComponentProps<typeof CopyMenuItem>>;
+  separator?: Component;
   viewContext: EntityActionViewContext;
+  /**
+   * Closes the host menu when an embedded picker (`menuItem`) is done with
+   * it. Plain and mute items close the menu on select themselves, so this is
+   * not called after them: it would land on the dialog or picker the item
+   * opened, or on the menu opened again while the item was still saving.
+   */
   onActionComplete?: () => void;
   onEditTags?: () => void;
   onSetProject?: () => void;
@@ -40,6 +58,9 @@ interface SoupEntityActionsMenuProps {
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
+  const Item = props.item ?? MenuItem;
+  const CopyItem = props.copyItem ?? CopyMenuItem;
+  const Separator = props.separator ?? MenuSeparator;
   const panel = useSplitPanelOrThrow();
   const { buildActionGroups } = createSoupEntityActions({
     markDoneDelegate: () => props.markDoneDelegate?.(),
@@ -64,9 +85,10 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     });
   });
 
-  const handleAction = async (onClick: () => void | Promise<unknown>) => {
+  // Async so an item that throws is reported like one that rejects, and
+  // the menu still closes.
+  const runAction = async (onClick: () => void | Promise<unknown>) => {
     await onClick();
-    props.onActionComplete?.();
   };
 
   return (
@@ -75,58 +97,72 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
         {(group, groupIndex) => (
           <>
             <Show when={groupIndex() > 0}>
-              <MenuSeparator />
+              <Separator />
             </Show>
             <Key each={group().items} by="id">
               {(action) => {
                 return (
                   <Show
-                    when={action().menuItem}
+                    when={action().notificationSettingsMenu}
                     fallback={
                       <Show
-                        when={action().muteMenu}
+                        when={action().menuItem}
                         fallback={
                           <Show
-                            when={action().copy}
+                            when={action().muteMenu}
                             fallback={
-                              <MenuItem
-                                text={action().label}
-                                icon={action().icon}
-                                hotkeyToken={action().hotkeyToken}
-                                shortcut={action().shortcut}
-                                disabled={action().disabled}
-                                onClick={() => handleAction(action().onClick)}
-                                class={
-                                  action().destructive
-                                    ? 'text-failure-ink'
-                                    : undefined
+                              <Show
+                                when={action().copy}
+                                fallback={
+                                  <Item
+                                    text={action().label}
+                                    icon={action().icon}
+                                    hotkeyToken={action().hotkeyToken}
+                                    shortcut={action().shortcut}
+                                    disabled={action().disabled}
+                                    onClick={() =>
+                                      fireAndForget(
+                                        runAction(action().onClick),
+                                        'entity-actions'
+                                      )
+                                    }
+                                    class={
+                                      action().destructive
+                                        ? 'text-failure-ink'
+                                        : undefined
+                                    }
+                                  />
                                 }
-                              />
+                              >
+                                <CopyItem
+                                  text={action().label}
+                                  icon={action().icon}
+                                  hotkeyToken={action().hotkeyToken}
+                                  shortcut={action().shortcut}
+                                  disabled={action().disabled}
+                                  onCopy={async () =>
+                                    (await action().onClick()) !== false
+                                  }
+                                />
+                              </Show>
                             }
                           >
-                            <CopyMenuItem
-                              text={action().label}
-                              icon={action().icon}
-                              hotkeyToken={action().hotkeyToken}
-                              shortcut={action().shortcut}
-                              disabled={action().disabled}
-                              onCopy={async () =>
-                                (await action().onClick()) !== false
-                              }
-                            />
+                            <NotificationMuteMenu {...action().muteMenu!} />
                           </Show>
                         }
                       >
-                        <NotificationMuteMenu
-                          {...action().muteMenu!}
-                          onActionComplete={props.onActionComplete}
-                        />
+                        {(component) => (
+                          <Dynamic
+                            component={component()}
+                            onActionComplete={props.onActionComplete}
+                          />
+                        )}
                       </Show>
                     }
                   >
-                    {(component) => (
-                      <Dynamic
-                        component={component()}
+                    {(menu) => (
+                      <NotificationSettingsMenu
+                        {...menu()}
                         onActionComplete={props.onActionComplete}
                       />
                     )}
@@ -139,7 +175,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       </Key>
       <Show when={hasExtraItems()}>
         <Show when={groups().length > 0}>
-          <MenuSeparator />
+          <Separator />
         </Show>
         {extraItems()}
       </Show>

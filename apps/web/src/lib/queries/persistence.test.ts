@@ -1,3 +1,4 @@
+import type * as PlatformModule from '@core/util/platform';
 import {
   keepPreviousData,
   partialMatchKey,
@@ -20,6 +21,10 @@ import {
   shouldPersistChannelQuery,
 } from './persistence-scopes';
 
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof PlatformModule>()),
+  isTauri: () => true,
+}));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
 }));
@@ -149,29 +154,27 @@ describe('setupQueryPersistence', () => {
   it('isolates writes to the matching scope store', () => {
     const queryClient = new QueryClient();
     const channelStore = createMockStore();
-    const emailStore = createMockStore();
+    const calendarStore = createMockStore();
 
     setupQueryPersistence({
       queryClient,
       scopes: [
         createScope(['channel'], channelStore),
-        createScope(['email', 'threadMessages'], emailStore),
+        createScope(['calendar'], calendarStore),
       ],
     });
 
     queryClient.setQueryData(['channel', 'a'], { value: 'ch' });
-    queryClient.setQueryData(['email', 'threadMessages', 't-1'], {
-      value: 'em',
-    });
+    queryClient.setQueryData(['calendar', 't-1'], { value: 'cal' });
 
     expect(channelStore.set).toHaveBeenCalledTimes(1);
-    expect(emailStore.set).toHaveBeenCalledTimes(1);
+    expect(calendarStore.set).toHaveBeenCalledTimes(1);
     expect(
       (channelStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
     ).toEqual(['channel', 'a']);
     expect(
-      (emailStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
-    ).toEqual(['email', 'threadMessages', 't-1']);
+      (calendarStore.set.mock.calls[0]![0] as PersistedQueryEntry).queryKey
+    ).toEqual(['calendar', 't-1']);
   });
 
   it('ignores queries that match no scope', () => {

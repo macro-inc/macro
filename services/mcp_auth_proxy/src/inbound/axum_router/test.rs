@@ -1787,3 +1787,62 @@ async fn jwt_bearer_still_authenticates_its_user_with_api_key_support_enabled() 
         );
     }
 }
+
+/// A program that drives the email sign-in and reads the code from the
+/// user's inbox ends up holding an MCP grant for the account, so every broker
+/// route refuses a request the code-mode runtime marks as a program's.
+#[tokio::test]
+async fn a_program_cannot_drive_the_sign_in_broker() {
+    let flow = EmailSignIn::start(LOOPBACK_REDIRECT_URI).await;
+    let requests = [
+        get_page(
+            &unchosen_authorize_uri(&flow.client_id, LOOPBACK_REDIRECT_URI, "&sign_in=email"),
+            None,
+        ),
+        get_page(
+            &format!("/email-sign-in?session={}", flow.session),
+            Some(&flow.cookie),
+        ),
+        post_form(
+            "/email-sign-in",
+            &flow.cookie,
+            flow.form(EMAIL_ADDRESS, None),
+        ),
+        post_form(
+            "/email-sign-in",
+            &flow.cookie,
+            flow.form(EMAIL_ADDRESS, Some(EMAIL_CODE)),
+        ),
+        post_form("/authorize", &flow.cookie, "decision=approve".to_owned()),
+        callback_request(&flow.session, Some(&flow.cookie)),
+        register_request(LOOPBACK_REDIRECT_URI),
+        token_request("grant_type=authorization_code&code=x"),
+        Request::post("/revoke")
+            .header(header::CONTENT_TYPE, "application/x-www-form-urlencoded")
+            .body(Body::from("token=x"))
+            .unwrap(),
+    ];
+    for mut request in requests {
+        let route = format!("{} {}", request.method(), request.uri().path());
+        request.headers_mut().insert(
+            macro_authorization::CODE_EXECUTION_HEADER,
+            "1".parse().unwrap(),
+        );
+
+        let response = send(&flow.harness, request).await;
+
+        assert_eq!(response.status, StatusCode::FORBIDDEN, "{route}");
+        assert!(
+            response.body.contains("sign in themselves"),
+            "{route}: {}",
+            response.body
+        );
+    }
+
+    let mut health = Request::get("/health").body(Body::empty()).unwrap();
+    health.headers_mut().insert(
+        macro_authorization::CODE_EXECUTION_HEADER,
+        "1".parse().unwrap(),
+    );
+    assert_eq!(send(&flow.harness, health).await.status, StatusCode::OK);
+}

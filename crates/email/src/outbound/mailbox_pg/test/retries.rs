@@ -2,30 +2,31 @@
 //! it back.
 
 use super::{fixture, snapshot};
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::mailbox::progress::MailboxProgressRepository;
 use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use crate::telemetry_capture::Telemetry;
 use email_api_client::domain::models::{
     Attention, EmailApiError, GateLimit, MailFolder, MailboxChangePage, MailboxMessage,
-    MailboxState, ProviderId, RateLimitOrigin, StreamPosition, StreamToken,
+    MailboxState, ProviderId, RateLimitOrigin, RoundStart, StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use std::collections::VecDeque;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use uuid::Uuid;
 
 /// Answers message reads and folder pages in order.
 #[derive(Default)]
-struct Provider {
+pub(super) struct Provider {
     messages: Mutex<VecDeque<Result<Option<MailboxMessage>, EmailApiError>>>,
     pages: Mutex<VecDeque<MailboxChangePage>>,
 }
 
 impl Provider {
-    fn answering(messages: Vec<Result<Option<MailboxMessage>, EmailApiError>>) -> Self {
+    pub(super) fn answering(messages: Vec<Result<Option<MailboxMessage>, EmailApiError>>) -> Self {
         Self {
             messages: Mutex::new(messages.into()),
             ..Self::default()
@@ -33,7 +34,7 @@ impl Provider {
     }
 }
 
-impl MailboxGateway for Provider {
+impl MailboxGateway for Arc<Provider> {
     async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
         Ok(Vec::new())
     }
@@ -42,6 +43,7 @@ impl MailboxGateway for Provider {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         Ok(self.pages.lock().unwrap().pop_front().unwrap())
     }
@@ -58,15 +60,17 @@ impl MailboxGateway for Provider {
     }
 }
 
-fn sync(
+/// Live and import reads answer from the same queues.
+pub(super) fn sync(
     repo: &PgMailboxSync,
     provider: Provider,
-) -> MailboxSyncService<PgMailboxSync, Provider, PgMailboxSync> {
-    MailboxSyncService::new(repo.clone(), provider, repo.clone())
+) -> MailboxSyncService<PgMailboxSync, Arc<Provider>, PgMailboxSync> {
+    let provider = Arc::new(provider);
+    MailboxSyncService::new(repo.clone(), provider.clone(), provider, repo.clone())
 }
 
 /// `attempts` is what the row had before its next claim adds one.
-async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
+pub(super) async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
     sqlx::query!(
         "INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import,attempts) VALUES ($1,1,$2,true,$3)",
         link,
@@ -78,13 +82,13 @@ async fn queue(db: &PgPool, link: Uuid, provider_id: &str, attempts: i32) {
     .unwrap();
 }
 
-struct Row {
-    attempts: i32,
-    abandoned: bool,
-    delay_seconds: i64,
+pub(super) struct Row {
+    pub(super) attempts: i32,
+    pub(super) abandoned: bool,
+    pub(super) delay_seconds: i64,
 }
 
-async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
+pub(super) async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
     let row = sqlx::query!(
         r#"SELECT attempts,
             available_at = 'infinity' AS "abandoned!",
@@ -104,7 +108,7 @@ async fn row(db: &PgPool, link: Uuid, provider_id: &str) -> Row {
     }
 }
 
-fn outcomes(telemetry: &Telemetry) -> Vec<(String, String, Option<String>)> {
+pub(super) fn outcomes(telemetry: &Telemetry) -> Vec<(String, String, Option<String>)> {
     telemetry
         .spans("outlook.sync.reconcile")
         .into_iter()
@@ -187,7 +191,11 @@ async fn a_message_refused_outright_stops_after_three_attempts_until_it_changes(
     );
 
     // A new change from the provider queues it again with fresh attempts.
-    let stream = repo.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     repo.commit_page(
         &stream,
         &MailboxChangePage {
@@ -347,6 +355,54 @@ async fn mailbox_wide_refusals_do_not_bring_a_message_closer_to_abandonment(db: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn new_mail_on_a_message_an_import_was_reading_waits_for_no_import_delay(db: PgPool) {
+    let (repo, link) = fixture(&db).await;
+    queue(&db, link, "both", 0).await;
+    let import = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(import.is_import);
+    // While the import reads it, a synced folder's page lists the message.
+    sqlx::query!(
+        "UPDATE email_sync_streams SET initial_complete = true, position = 'checkpoint' WHERE link_id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let stream = repo
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    repo.commit_page(
+        &stream,
+        &MailboxChangePage {
+            changed: vec![ProviderId::new("both").unwrap()],
+            removed: Vec::new(),
+            position: StreamPosition::Checkpoint(StreamToken::new("next".into())),
+            reader_revision: 1,
+        },
+    )
+    .await
+    .unwrap();
+
+    // The import's share of the request window refuses the read; live
+    // reads still have room.
+    repo.release_message(
+        &import,
+        MessageRetry::After {
+            seconds: 590,
+            counted: false,
+        },
+    )
+    .await
+    .unwrap();
+
+    assert!(row(&db, link, "both").await.delay_seconds <= 0);
+    let live = repo.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
+    assert!(!live.is_import);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_abandoned_import_message_does_not_hold_the_import_open(db: PgPool) {
     let telemetry = Telemetry::default();
     let _guard = telemetry.install();
@@ -452,11 +508,21 @@ async fn sync_claims_skip_a_mailbox_that_needs_reauth_until_it_is_cleared(db: Pg
 
     set_reauth(true).await.unwrap();
     assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_none());
-    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_none());
+    assert!(
+        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_none());
 
     set_reauth(false).await.unwrap();
     assert!(repo.claim_catalog(Uuid::now_v7()).await.unwrap().is_some());
-    assert!(repo.claim_stream(Uuid::now_v7()).await.unwrap().is_some());
+    assert!(
+        repo.claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(repo.claim_message(Uuid::now_v7()).await.unwrap().is_some());
 }

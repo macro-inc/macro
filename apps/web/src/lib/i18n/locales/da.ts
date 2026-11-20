@@ -104,7 +104,6 @@ export default {
     close: 'Luk',
     delete: 'Slet',
     rename: 'Omdøb',
-    more: 'Mere',
     search: 'Søg',
     settings: 'Indstillinger',
   },
@@ -689,8 +688,6 @@ export default {
     create: 'Opret',
     getMobileApp: 'Hent mobilappen',
     signedInAs: 'Logget ind som {{name}}',
-    commandMenu: 'Kommandomenu',
-    searchEverything: 'Søg i alt',
     customizeSidebar: 'Tilpas sidepanelet',
     customizeSidebarDescription:
       'Vælg, hvilke apps der vises i sidepanelet, og træk for at ændre rækkefølgen. Hjem er altid først.',

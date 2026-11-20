@@ -155,12 +155,16 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
         for query in [
             "",
             "Late person",
+            "late",
+            "other",
             "la per",
             "per la",
             "ate",
             "missing",
             "p004999@",
             "p004999@example.com",
+            "p004999",
+            "example.com",
         ] {
             for mode in [
                 PeopleMode::Command,
@@ -201,7 +205,49 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
             ])
             .await
             .unwrap();
+        // A first name shares the exact tier; a comma list, a hyphenated first
+        // name, a last name and a control character after the name do not.
+        // People the viewer messages lead every word-start match.
+        let first_names = [
+            ("macro|zed@example.com", "Zed", None),
+            ("macro|zed.okafor@example.com", "Zed Okafor", Some(100)),
+            ("macro|zed.group@example.com", "Zed, Group", Some(400)),
+            ("macro|zed.ann@example.com", "Zed-Ann Person", None),
+            ("macro|okafor.zed@example.com", "Okafor Zed", Some(200)),
+            ("macro|zed.control@example.com", "Zed\u{1}Person", None),
+            ("macro|ozeda@example.com", "Ozeda", Some(900)),
+        ];
+        storage
+            .put_batch(
+                first_names
+                    .iter()
+                    .map(|(user, name, _)| (key(user), record(user, name)))
+                    .collect(),
+            )
+            .await
+            .unwrap();
         let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: first_names
+                        .iter()
+                        .filter_map(|(user, _, time)| {
+                            Some(PersonFactPatch {
+                                user_id: (*user).try_into().unwrap(),
+                                facts: PersonFacts {
+                                    last_interaction_ms: Some((*time)?),
+                                    ..Default::default()
+                                },
+                            })
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
         for query in ["zzover", "late\0", "%", "_"] {
             parity(
                 &mut engine,
@@ -210,6 +256,198 @@ fn indexed_stages_match_complete_scan_across_sparse_prefixes_overflow_and_contin
             )
             .await;
         }
+        for mode in [
+            PeopleMode::Command,
+            PeopleMode::Recipient,
+            PeopleMode::Mention,
+            PeopleMode::Property,
+        ] {
+            parity(&mut engine, &request(&scope, "zed okafor", mode), EPOCH).await;
+            let mut request = request(&scope, "zed", mode);
+            request.limit = 2;
+            let mut listed = vec![];
+            loop {
+                let PeopleSearchResult::Page {
+                    people,
+                    next_cursor,
+                    ..
+                } = parity(&mut engine, &request, EPOCH).await
+                else {
+                    panic!("page");
+                };
+                listed.extend(
+                    people
+                        .into_iter()
+                        .map(|person| (person.user_id.to_string(), person.match_rank)),
+                );
+                let Some(cursor) = next_cursor else { break };
+                request.cursor = Some(cursor);
+            }
+            assert_eq!(
+                listed
+                    .iter()
+                    .map(|(user, rank)| (user.as_str(), *rank))
+                    .collect::<Vec<_>>(),
+                [
+                    ("macro|zed.okafor@example.com", 5),
+                    ("macro|zed.group@example.com", 4),
+                    ("macro|okafor.zed@example.com", 4),
+                    ("macro|zed@example.com", 3),
+                    ("macro|zed.ann@example.com", 2),
+                    ("macro|zed.control@example.com", 2),
+                    ("macro|ozeda@example.com", 1),
+                ],
+                "{mode:?}"
+            );
+        }
+    });
+}
+#[test]
+fn messaged_word_prefixes_page_ahead_of_unmessaged_exact_names_at_scale() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        storage
+            .put_batch(
+                (0..300)
+                    .map(|i| {
+                        let user = format!("macro|q{i:06}@example.com");
+                        (key(&user), record(&user, "Person Other"))
+                    })
+                    .chain([(
+                        key("macro|brother@example.com"),
+                        record("macro|brother@example.com", "Brother Person"),
+                    )])
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        engine
+            .update_people_context(&ContextUpdate {
+                scope: scope.clone(),
+                epoch: EPOCH,
+                action: ContextAction::Patch {
+                    updates: (0..200)
+                        .map(|i| (format!("macro|q{i:06}@example.com"), 1000 + i))
+                        .chain([("macro|brother@example.com".to_owned(), 5000)])
+                        .map(|(user, time)| PersonFactPatch {
+                            user_id: user.try_into().unwrap(),
+                            facts: PersonFacts {
+                                last_interaction_ms: Some(time),
+                                ..Default::default()
+                            },
+                        })
+                        .collect(),
+                },
+            })
+            .await
+            .unwrap();
+        for mode in [
+            PeopleMode::Command,
+            PeopleMode::Recipient,
+            PeopleMode::Mention,
+            PeopleMode::Property,
+        ] {
+            let mut request = request(&scope, "other", mode);
+            request.limit = 120;
+            let mut listed = vec![];
+            for _ in 0..3 {
+                let PeopleSearchResult::Page {
+                    people,
+                    next_cursor,
+                    ..
+                } = parity(&mut engine, &request, EPOCH).await
+                else {
+                    panic!("page");
+                };
+                listed.extend(people.into_iter().map(|p| (p.user_id, p.match_rank)));
+                request.cursor = next_cursor;
+            }
+            assert_eq!(listed.len(), 360, "{mode:?}");
+            assert_eq!(listed[0].0.as_ref(), "macro|q000199@example.com");
+            assert!(listed[..200].iter().all(|(_, rank)| *rank == 4), "{mode:?}");
+            assert_eq!(listed[200].0.as_ref(), "macro|p000000@example.com");
+            assert!(listed[200..].iter().all(|(_, rank)| *rank == 3), "{mode:?}");
+        }
+    });
+}
+#[test]
+fn address_terms_match_below_names_on_sparse_and_broad_reads() {
+    block_on(async {
+        let (engine, scope) = seed(5000).await;
+        let mut storage = engine.into_storage();
+        storage
+            .put_batch(vec![
+                (
+                    key("macro|jdoe1@example.org"),
+                    record("macro|jdoe1@example.org", "Jane Doe"),
+                ),
+                (
+                    key("macro|ann@example.net"),
+                    record("macro|ann@example.net", "Test name"),
+                ),
+                (
+                    key("macro|asmith@example.net"),
+                    record("macro|asmith@example.net", "Ann Smith"),
+                ),
+                // Mid-word name and address matches: equally recent, and the
+                // address match's id sorts first, so only the tier orders them.
+                (
+                    key("macro|zsmith@example.net"),
+                    record("macro|zsmith@example.net", "John Smith"),
+                ),
+                (
+                    key("macro|ajohnson@example.net"),
+                    record("macro|ajohnson@example.net", "Pat Lee"),
+                ),
+            ])
+            .await
+            .unwrap();
+        let mut engine = Engine::new(storage);
+        let users = |result: PeopleSearchResult| {
+            let PeopleSearchResult::Page { people, .. } = result else {
+                panic!("page");
+            };
+            people
+                .into_iter()
+                .map(|p| p.user_id.as_ref().to_owned())
+                .collect::<Vec<_>>()
+        };
+
+        // A local part that differs from the name, and a domain.
+        for (query, expected) in [
+            ("jdoe", vec!["macro|jdoe1@example.org"]),
+            ("example.org", vec!["macro|jdoe1@example.org"]),
+            ("jdoe org", vec!["macro|jdoe1@example.org"]),
+            (
+                "ann",
+                vec!["macro|asmith@example.net", "macro|ann@example.net"],
+            ),
+            (
+                "ohn",
+                vec!["macro|zsmith@example.net", "macro|ajohnson@example.net"],
+            ),
+        ] {
+            let result = parity(
+                &mut engine,
+                &request(&scope, query, PeopleMode::Recipient),
+                EPOCH,
+            )
+            .await;
+            assert_eq!(users(result), expected, "{query}");
+        }
+
+        // More address matches than one probe holds read in rank order.
+        let result = parity(
+            &mut engine,
+            &request(&scope, "example.com", PeopleMode::Recipient),
+            EPOCH,
+        )
+        .await;
+        let people = users(result);
+        assert_eq!(people.len(), 50);
+        assert!(people.iter().all(|user| user.ends_with("@example.com")));
     });
 }
 #[test]
@@ -324,6 +562,8 @@ fn indexed_name_search_100k() {
             "ther",
             "Late",
             "missing",
+            "example.com",
+            "p099999",
             "",
         ] {
             let request = request(&scope, query, PeopleMode::Recipient);
@@ -368,6 +608,25 @@ fn name_candidates_use_covering_range_and_exact_record_seeks() {
             "{plan}"
         );
         assert!(!plan.contains("TEMP B-TREE"), "{plan}");
+        let exact = super::test::request(&scope, "zed", PeopleMode::Mention);
+        let read = NameSearchRead::new(&exact, EPOCH, engine.people_read_version()).unwrap();
+        let seed = sql::seeds(&read, NameStage::ExactName).remove(0);
+        let (sql, params) = sql::candidate(&read, Some(NameStage::ExactName), &seed, false);
+        let rows = driver::query(
+            &engine.storage().connection(),
+            &format!("EXPLAIN QUERY PLAN {sql}"),
+            params,
+        )
+        .unwrap();
+        let plan = rows
+            .iter()
+            .map(|row| required_text(row, 3).unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            plan.contains("exact_facts_lookup_idx (attribute=? AND value>=? AND value<?)"),
+            "{plan}"
+        );
     });
 }
 
