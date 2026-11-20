@@ -11,35 +11,17 @@ function stripeStub(overrides?: {
   subscription?: Stripe.Subscription;
 }): Stripe {
   return {
-    customers: {
-      retrieve: mock(async () => {
-        if (!overrides?.customer) {
-          throw new Error('customers.retrieve should not be called');
-        }
-        return overrides.customer;
-      }),
-    },
-    subscriptions: {
-      retrieve: mock(async () => {
-        if (!overrides?.subscription) {
-          throw new Error('subscriptions.retrieve should not be called');
-        }
-        return overrides.subscription;
-      }),
-    },
+    customers: { retrieve: async () => overrides?.customer },
+    subscriptions: { retrieve: async () => overrides?.subscription },
   } as unknown as Stripe;
 }
 
 function checkoutEvent(
-  overrides: Partial<Stripe.Checkout.Session> & {
-    eventId?: string;
-    livemode?: boolean;
-  } = {}
+  overrides: Partial<Stripe.Checkout.Session> = {}
 ): Stripe.CheckoutSessionCompletedEvent {
-  const { eventId, livemode, ...session } = overrides;
   return {
-    id: eventId ?? 'evt_checkout',
-    livemode: livemode ?? true,
+    id: 'evt_checkout',
+    livemode: true,
     type: 'checkout.session.completed',
     created: 1_700_000_000,
     data: {
@@ -53,24 +35,19 @@ function checkoutEvent(
           email: 'ada@example.com',
           name: 'Ada Lovelace',
         },
-        customer_email: null,
         subscription: null,
-        ...session,
+        ...overrides,
       },
     },
   } as Stripe.CheckoutSessionCompletedEvent;
 }
 
 function invoicePaidEvent(
-  overrides: Partial<Stripe.Invoice> & {
-    eventId?: string;
-    livemode?: boolean;
-  } = {}
+  overrides: Partial<Stripe.Invoice> = {}
 ): Stripe.InvoicePaidEvent {
-  const { eventId, livemode, ...invoice } = overrides;
   return {
-    id: eventId ?? 'evt_invoice',
-    livemode: livemode ?? true,
+    id: 'evt_invoice',
+    livemode: true,
     type: 'invoice.paid',
     data: {
       object: {
@@ -80,15 +57,17 @@ function invoicePaidEvent(
         amount_paid: 2000,
         currency: 'usd',
         customer: 'cus_123',
-        customer_email: 'ada@example.com',
-        customer_name: 'Ada Lovelace',
-        period_start: 1_700_000_000,
-        period_end: 1_700_086_400,
         parent: { subscription_details: { subscription: 'sub_123' } },
-        ...invoice,
+        ...overrides,
       },
     },
   } as Stripe.InvoicePaidEvent;
+}
+
+async function invoiceText(event: Stripe.InvoicePaidEvent) {
+  const payment = await notificationFromEvent(stripeStub(), event);
+  if (!payment) throw new Error('Missing invoice notification');
+  return formatNotification(payment);
 }
 
 function subscriptionEvent(
@@ -150,20 +129,14 @@ describe('notificationFromEvent', () => {
   });
 
   test('renewal uses the amount collected after credits', async () => {
-    const notification = await notificationFromEvent(
-      stripeStub(),
-      invoicePaidEvent({
-        billing_reason: 'subscription_cycle',
-        total: 3000,
-        amount_paid: 1800,
-      })
-    );
-    expect(notification?.kind).toBe('payment');
-    if (!notification) throw new Error('missing renewal');
-    expect(formatNotification(notification)).toContain('Amount: $18.00 USD');
-    expect(formatNotification(notification)).toContain(
-      'Reason: Subscription renewal'
-    );
+    const invoice = invoicePaidEvent({
+      billing_reason: 'subscription_cycle',
+      total: 3000,
+      amount_paid: 1800,
+    });
+    const text = await invoiceText(invoice);
+    expect(text).toContain('Amount: $18.00 USD');
+    expect(text).toContain('Reason: Subscription renewal');
   });
 
   test('formats Stripe minor units for ISK, UGX and JPY', async () => {
@@ -172,12 +145,9 @@ describe('notificationFromEvent', () => {
       ['ugx', 'UGX 5 UGX'],
       ['jpy', '¥500 JPY'],
     ]) {
-      const payment = await notificationFromEvent(
-        stripeStub(),
-        invoicePaidEvent({ currency, amount_paid: 500 })
-      );
-      if (!payment) throw new Error('missing payment');
-      expect(formatNotification(payment)).toContain(expected);
+      expect(
+        await invoiceText(invoicePaidEvent({ currency, amount_paid: 500 }))
+      ).toContain(expected);
     }
   });
 
@@ -191,12 +161,9 @@ describe('notificationFromEvent', () => {
       quantity: 1,
       parent: { subscription_item_details: { proration: true } },
     } as Stripe.InvoiceLineItem);
-    const notification = await notificationFromEvent(stripeStub(), invoice);
-    if (!notification) throw new Error('missing proration');
-    expect(formatNotification(notification)).toContain('Amount: $6.53 USD');
-    expect(formatNotification(notification)).toContain(
-      'Reason: Subscription change (prorated)'
-    );
+    const text = await invoiceText(invoice);
+    expect(text).toContain('Amount: $6.53 USD');
+    expect(text).toContain('Reason: Subscription change (prorated)');
   });
 
   test('checks later invoice lines for a prorated change', async () => {

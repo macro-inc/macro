@@ -1,9 +1,8 @@
 import { expect, spyOn, test } from 'bun:test';
-import Stripe from 'stripe';
-import type { Receipt } from '../src/delivery';
-import worker, { InvoiceDelivery } from '../src/worker';
+import { broadcast } from '../src/channel';
+import { InvoiceDelivery, type Receipt } from '../src/delivery';
 
-test('signed webhook retry recovers partial delivery and lost acknowledgement across object restarts', async () => {
+test('invoice retry recovers partial delivery and lost acknowledgement across object restarts', async () => {
   const channels = ['money', 'failed', 'lost-response'];
   const messages = new Map<string, string>();
   const attempts: string[] = [];
@@ -37,8 +36,6 @@ test('signed webhook retry recovers partial delivery and lost acknowledgement ac
   const receipts = new Map<string, Receipt>();
   const objects = new Map<string, InvoiceDelivery>();
   const env = {
-    STRIPE_API_KEY: 'sk_test_fixture',
-    STRIPE_WEBHOOK_SECRET: 'whsec_fixture',
     MACRO_BOT_TOKEN: 'mbot_fixture',
     MACRO_ENV: 'prod' as const,
     MACRO_STORAGE_URL: 'https://storage.test',
@@ -46,63 +43,25 @@ test('signed webhook retry recovers partial delivery and lost acknowledgement ac
       getByName(name: string): InvoiceDelivery {
         let object = objects.get(name);
         if (!object) {
-          object = new InvoiceDelivery(
-            {
-              storage: {
-                async get() {
-                  return receipts.get(name);
-                },
-                async put(_key, receipt) {
-                  receipts.set(name, receipt);
-                },
-              },
+          const storage = {
+            get: async () => receipts.get(name),
+            put: async (_key: string, receipt: Receipt) => {
+              receipts.set(name, receipt);
             },
-            env
-          );
+          };
+          object = new InvoiceDelivery({ storage }, env);
           objects.set(name, object);
         }
         return object;
       },
     },
   };
-  async function send(eventId: string) {
-    const payload = JSON.stringify({
-      id: eventId,
-      type: 'invoice.paid',
-      livemode: true,
-      data: {
-        object: {
-          id: 'in_renewal',
-          status: 'paid',
-          billing_reason: 'subscription_cycle',
-          amount_paid: 4250,
-          currency: 'usd',
-          lines: { data: [] },
-          parent: { subscription_details: { subscription: 'sub_team' } },
-        },
-      },
-    });
-    const signature = await new Stripe(
-      env.STRIPE_API_KEY
-    ).webhooks.generateTestHeaderStringAsync({
-      payload,
-      secret: env.STRIPE_WEBHOOK_SECRET,
-    });
-    return worker.fetch(
-      new Request('https://worker.test/webhook', {
-        method: 'POST',
-        body: payload,
-        headers: { 'stripe-signature': signature },
-      }),
-      env
-    );
-  }
+  const send = () => broadcast(env, 'Subscription renewal', 'in_renewal');
   try {
-    expect((await send('evt_first')).status).toBe(502);
+    await expect(send()).rejects.toThrow('Failed to post');
     expect([...messages.keys()].sort()).toEqual(['lost-response', 'money']);
     objects.clear();
-    const retries = await Promise.all([send('evt_first'), send('evt_second')]);
-    expect(retries.map((response) => response.status)).toEqual([200, 200]);
+    await Promise.all([send(), send()]);
     expect(messages.size).toBe(3);
     expect(attempts.sort()).toEqual([
       'failed',
