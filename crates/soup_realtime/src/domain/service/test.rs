@@ -435,6 +435,47 @@ async fn a_patch_only_for_named_users_skips_current_accessors() {
 }
 
 #[tokio::test]
+async fn a_former_accessor_added_back_hears_only_the_members_patch() {
+    // "back" was removed and added again before the removal was consumed;
+    // "gone" is still removed.
+    let harness = harness(vec![user("member"), user("back")], false, HashSet::new());
+    let for_members = Patch::Updated(document(DOCUMENT_ID));
+    let for_removed = Patch::Deleted(document(DOCUMENT_ID));
+
+    let delivery = harness
+        .service
+        .notify_users(vec![
+            SoupRealtimePatch::for_entity(for_members.clone()),
+            SoupRealtimePatch::only_for_former_accessors(
+                for_removed.clone(),
+                vec![user("back"), user("gone")],
+            ),
+        ])
+        .await
+        .expect("patches are published");
+
+    let messages = harness.messages.lock().expect("messages lock").clone();
+    assert_eq!(
+        messages,
+        vec![
+            SoupRealtimeMessage::new(user("back"), for_members.clone()),
+            SoupRealtimeMessage::new(user("member"), for_members),
+            SoupRealtimeMessage::new(user("gone"), for_removed),
+        ]
+    );
+    assert_eq!(delivery.publish_count, 3);
+    // The removal's entity is the members' access source: one lookup serves both.
+    assert_eq!(harness.access_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(
+        *harness
+            .access_entities
+            .lock()
+            .expect("access entities lock"),
+        vec![document(DOCUMENT_ID)]
+    );
+}
+
+#[tokio::test]
 async fn a_batch_of_patches_only_for_named_users_looks_up_no_access() {
     let harness = harness(vec![user("member")], false, HashSet::new());
     let patch = Patch::Deleted(document(DOCUMENT_ID));
