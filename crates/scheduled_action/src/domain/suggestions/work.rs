@@ -29,6 +29,9 @@ pub const WORK_TEXTS: u16 = 100;
 /// The model the finding call runs on, thinking little: as good at finding
 /// streams as a larger model, in a third of the time.
 pub const WORK_MODEL: &str = "google/gemini-3.8-flash";
+/// Finding calls one list may take: the model is held to the list's shape
+/// by its prompt alone, and about one answer in four strays from it.
+pub const WORK_TRIES: u32 = 2;
 /// Most streams a list keeps, the first listed first.
 pub const MAX_STREAMS: usize = 20;
 

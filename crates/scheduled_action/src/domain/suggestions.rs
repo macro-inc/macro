@@ -61,7 +61,7 @@ use self::ports::{
     BriefPart, GenerationStatuses, Kept, SuggestionRepo, SuggestionSources, WorkModel,
 };
 use self::state::{RoutineSuggestionState, Transition};
-use self::work::{WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WorkList};
+use self::work::{WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WORK_TRIES, WorkList};
 use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
@@ -500,6 +500,7 @@ where
         routine.suggestions.messages = tracing::field::Empty,
         routine.suggestions.texts = tracing::field::Empty,
         routine.suggestions.streams = tracing::field::Empty,
+        routine.suggestions.tries = tracing::field::Empty,
     ), err)]
     async fn find_work(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<WorkList> {
         let Some(model) = &self.work else {
@@ -519,17 +520,31 @@ where
                 .filter(|message| message.snippet.is_some())
                 .count(),
         );
-        let answer = model
-            .complete(
-                user,
-                session,
-                WORK_MODEL,
-                work::prompt(&messages, Utc::now()),
-                work::schema(),
-            )
-            .instrument(tracing::info_span!("routine.suggestions.list_work"))
-            .await?;
-        let list = WorkList::from_answer(answer)?;
+        let prompt = work::prompt(&messages, Utc::now());
+        let mut tries = 0;
+        let list = loop {
+            tries += 1;
+            let answer = model
+                .complete(user, session, WORK_MODEL, prompt.clone(), work::schema())
+                .instrument(tracing::info_span!(
+                    "routine.suggestions.list_work",
+                    routine.suggestions.try = tries
+                ))
+                .await
+                .and_then(|answer| Ok(WorkList::from_answer(answer)?));
+            match answer {
+                Ok(list) => break list,
+                Err(error) if tries < WORK_TRIES => tracing::warn!(
+                    error = %error,
+                    "the finding call answered outside the list's shape; asking again"
+                ),
+                Err(error) => {
+                    span.record("routine.suggestions.tries", tries);
+                    return Err(error);
+                }
+            }
+        };
+        span.record("routine.suggestions.tries", tries);
         span.record("routine.suggestions.streams", list.streams.len());
         Ok(list)
     }
