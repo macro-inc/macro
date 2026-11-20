@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT count(*) FILTER (WHERE created_at > $2) AS \"hour_count!\",\n                   min(created_at) FILTER (WHERE created_at > $2) AS hour_oldest,\n                   count(*) AS \"day_count!\",\n                   min(created_at) AS day_oldest\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND created_at > $3\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "hour_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "hour_oldest",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "day_count!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "day_oldest",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "8a9c25bfa9757ab76cef78e1a327e4e880ba4e0a33e7b03e6bee41aeaf4889b3"
+}
