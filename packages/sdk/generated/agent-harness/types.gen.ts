@@ -5083,9 +5083,10 @@ export type CreateComputerScreenTicketData = {
 };
 
 export type CreateComputerScreenTicketErrors = {
+    400: unknown;
     403: unknown;
     404: unknown;
-    503: unknown;
+    429: unknown;
 };
 
 export type CreateComputerScreenTicketResponses = {

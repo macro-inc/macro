@@ -4439,6 +4439,11 @@ export type createComputerScreenTicketResponse200 = {
   status: 200;
 };
 
+export type createComputerScreenTicketResponse400 = {
+  data: void;
+  status: 400;
+};
+
 export type createComputerScreenTicketResponse403 = {
   data: void;
   status: 403;
@@ -4449,9 +4454,9 @@ export type createComputerScreenTicketResponse404 = {
   status: 404;
 };
 
-export type createComputerScreenTicketResponse503 = {
+export type createComputerScreenTicketResponse429 = {
   data: void;
-  status: 503;
+  status: 429;
 };
 
 export type createComputerScreenTicketResponseSuccess =
@@ -4459,9 +4464,10 @@ export type createComputerScreenTicketResponseSuccess =
     headers: Headers;
   };
 export type createComputerScreenTicketResponseError = (
+  | createComputerScreenTicketResponse400
   | createComputerScreenTicketResponse403
   | createComputerScreenTicketResponse404
-  | createComputerScreenTicketResponse503
+  | createComputerScreenTicketResponse429
 ) & {
   headers: Headers;
 };
