@@ -1081,6 +1081,9 @@ fn unreachable_state(lanes: SearchLanes) -> SearchHandlerState {
         calendar_event_labels: std::sync::Arc::new(NoLabels),
         term_matching_rollout: std::sync::Arc::new(crate::LocalTermMatching),
         search_lanes: std::sync::Arc::new(lanes),
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Taken { remaining: 200 },
+        ))),
     }
 }
 
@@ -1281,4 +1284,243 @@ fn a_refused_search_is_answered_too_many_requests_with_retry_after() {
     let response = axum::response::IntoResponse::into_response(SearchError::Busy);
     assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
     assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "1");
+}
+
+// ============ Tests for the API-key search allowance ============
+
+/// A bucket that always answers the same, or fails as Redis down would, and
+/// counts how often it was asked.
+struct FixedBucket {
+    answer: Option<rate_limit::TokenBucketResult>,
+    takes: std::sync::atomic::AtomicUsize,
+}
+
+impl FixedBucket {
+    fn answering(answer: Option<rate_limit::TokenBucketResult>) -> Self {
+        FixedBucket {
+            answer,
+            takes: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+
+impl rate_limit::TokenBucketPort for FixedBucket {
+    async fn take(
+        &self,
+        _key: rate_limit::RateLimitKey,
+        _config: rate_limit::TokenBucketConfig,
+    ) -> Result<rate_limit::TokenBucketResult, rootcause::Report> {
+        self.takes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.answer.ok_or_else(|| {
+            rootcause::Report::new(std::io::Error::other("connection refused")).into_dynamic()
+        })
+    }
+}
+
+/// An API key whose account used its allowance is refused at once, not after
+/// waiting for its turn, and told when to retry.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_past_its_accounts_allowance_is_refused_before_it_waits() {
+    use macro_authorization::CredentialOrigin;
+
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Empty {
+                retry_after: std::time::Duration::from_millis(300),
+            },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    let api_key = caller(CredentialOrigin::UserApiKey);
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&api_key))
+        .await
+        .unwrap();
+
+    let started = tokio::time::Instant::now();
+    let refused = perform_unified_search(
+        &ctx,
+        &api_key,
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::RateLimited {
+                retry_after_seconds: 1
+            })
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+}
+
+/// When the allowance cannot be read the API key searches anyway: here it
+/// gets as far as waiting for its turn.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_runs_when_its_allowance_cannot_be_read() {
+    use macro_authorization::CredentialOrigin;
+
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(None)),
+        ..unreachable_state(one_at_a_time())
+    };
+    let api_key = caller(CredentialOrigin::UserApiKey);
+    let _running = ctx
+        .search_lanes
+        .take_turn(search_caller(&api_key))
+        .await
+        .unwrap();
+
+    let refused = perform_unified_search(
+        &ctx,
+        &api_key,
+        false,
+        no_paging(),
+        search_request("quarterly plan"),
+    )
+    .await
+    .map(|_| ());
+
+    assert!(matches!(refused, Err(SearchError::Busy)), "{refused:?}");
+}
+
+/// Only a user API key draws on the allowance: the app, agents, routines,
+/// services, Macro API tokens and account managers never ask the bucket.
+#[tokio::test(start_paused = true)]
+async fn only_user_api_key_searches_draw_on_the_allowance() {
+    use macro_authorization::{AccountManagerCredential, CredentialOrigin};
+
+    let bucket = std::sync::Arc::new(FixedBucket::answering(Some(
+        rate_limit::TokenBucketResult::Empty {
+            retry_after: std::time::Duration::from_secs(1),
+        },
+    )));
+    let ctx = SearchHandlerState {
+        api_key_search_buckets: bucket.clone(),
+        ..unreachable_state(one_at_a_time())
+    };
+    let routine = MacroUserAuthentication {
+        routine_id: Some(Uuid::from_u128(0x2007)),
+        ..caller(CredentialOrigin::MacroApiJwt)
+    };
+    let account_manager = caller(CredentialOrigin::AccountManager(AccountManagerCredential {
+        grant_id: Uuid::from_u128(0x6A47),
+        manager_user_id: macro_user_id::user_id::MacroUserIdStr::try_from(
+            "macro|manager@example.com".to_string(),
+        )
+        .unwrap(),
+    }));
+
+    for searcher in [
+        caller(CredentialOrigin::Session),
+        agent_of_caller(),
+        routine,
+        caller(CredentialOrigin::Internal),
+        caller(CredentialOrigin::MacroApiJwt),
+        account_manager,
+    ] {
+        let _running = ctx
+            .search_lanes
+            .take_turn(search_caller(&searcher))
+            .await
+            .unwrap();
+        let result = perform_unified_search(
+            &ctx,
+            &searcher,
+            false,
+            no_paging(),
+            search_request("quarterly plan"),
+        )
+        .await
+        .map(|_| ());
+        assert!(
+            matches!(result, Err(SearchError::Busy)),
+            "{:?}: {result:?}",
+            searcher.origin
+        );
+    }
+
+    assert_eq!(bucket.takes.load(std::sync::atomic::Ordering::SeqCst), 0);
+}
+
+/// An API-key search records on its span whether it was limited, how many
+/// searches its account had left and how long the bucket took, so limited
+/// callers and a slow bucket can be found.
+#[tokio::test(start_paused = true)]
+async fn an_api_key_search_records_its_allowance_on_its_span() {
+    use crate::api::search::span_capture::SpanFields;
+
+    let (fields, _guard) = SpanFields::install();
+
+    let unreadable = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(None)),
+        ..unreachable_state(one_at_a_time())
+    };
+    let account = MacroUserId::parse_from_str("macro|user@example.com")
+        .unwrap()
+        .lowercase();
+    draw_search_allowance(&unreadable, &account)
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "unavailable");
+    assert!(!span.contains_key("search.rate_limit_remaining"));
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
+
+    let allowed = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Taken { remaining: 199 },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    draw_search_allowance(&allowed, &account)
+        .instrument(search_span())
+        .await
+        .unwrap();
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "allowed");
+    assert_eq!(span["search.rate_limit_remaining"], "199");
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
+
+    let limited = SearchHandlerState {
+        api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
+            rate_limit::TokenBucketResult::Empty {
+                retry_after: std::time::Duration::from_millis(1500),
+            },
+        ))),
+        ..unreachable_state(one_at_a_time())
+    };
+    let refused = draw_search_allowance(&limited, &account)
+        .instrument(search_span())
+        .await;
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::RateLimited {
+                retry_after_seconds: 2
+            })
+        ),
+        "{refused:?}"
+    );
+    let span = fields.of("perform_unified_search");
+    assert_eq!(span["search.rate_limit"], "limited");
+    assert_eq!(span["search.rate_limit_remaining"], "0");
+}
+
+/// A limited search is a 429 that says when the account may search again.
+#[test]
+fn a_limited_search_is_answered_too_many_requests_with_its_retry_after() {
+    let response = axum::response::IntoResponse::into_response(SearchError::RateLimited {
+        retry_after_seconds: 3,
+    });
+    assert_eq!(response.status(), axum::http::StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(response.headers()[axum::http::header::RETRY_AFTER], "3");
 }

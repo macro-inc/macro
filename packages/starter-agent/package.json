@@ -1,6 +1,7 @@
 {
   "name": "@macro-inc/starter-agent",
   "private": true,
+  "muppetApi": 1,
   "type": "module",
   "scripts": {
     "start": "bun cli.ts run",
