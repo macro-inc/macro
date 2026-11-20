@@ -409,3 +409,64 @@ it('keeps rows the server listed for a late cache until the input changes', asyn
   expect(reader).toHaveBeenCalledTimes(2);
   client.clear();
 });
+
+it('lets a budgeted read finish before a cache change re-reads it', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  let changed: CacheChangeListener | undefined;
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheChanged: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  };
+  const page: ContactDirectoryPage = {
+    source: 'cache',
+    sync: 'snapshot',
+    offline: false,
+    query: '',
+    nextCursor: null,
+    users: [{ id: 'macro|a@example.com', email: 'a@example.com', name: 'A' }],
+  };
+  const first = Promise.withResolvers<ContactDirectoryPage>();
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockReturnValueOnce(first.promise)
+    .mockResolvedValue(page);
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  function Harness() {
+    window = createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      reader,
+      () => true,
+      { debounceMs: 0, localBudgetMs: 2_000 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledOnce();
+
+  // A busy cache reports changes while the read waits on it. Restarting the
+  // read each time would restart its budget and never reach the server.
+  changed!(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  changed!(parseCacheRevision('3'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(reader.mock.calls[0][3].aborted).toBe(false);
+
+  // Once it lands from the cache, the change it sat through is read.
+  first.resolve(page);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledTimes(2);
+  expect(window!.data()?.users).toHaveLength(1);
+  client.clear();
+});

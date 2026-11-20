@@ -46,6 +46,8 @@ export type ContactDirectoryCursor =
       query: string;
       after: string;
       policyKey: string;
+      /** Continues a window the server listed because the cache was late. */
+      localLate?: boolean;
     };
 export type ContactPeoplePolicy = Pick<
   PeopleSearch,
@@ -144,16 +146,15 @@ export async function readContactDirectory(
       request.cursor?.source === 'server'
         ? undefined
         : await readLocalWithinBudget(host, input);
-    const localLate = local === 'late' || local === 'failed';
-    if (localLate) span.setAttr('contacts.local', local);
-    if ((!local || localLate) && !online)
-      throw new ContactDirectoryUnavailableError();
+    const cacheLate = local === 'late' || local === 'failed';
+    if (cacheLate) span.setAttr('contacts.local', local);
+    if (!local && !online) throw new ContactDirectoryUnavailableError();
     // The read may have been superseded while it waited for the cache.
     signal.throwIfAborted();
     const page =
-      local && !localLate
+      local && !cacheLate
         ? local
-        : { ...(await readServerWindow(input)), localLate };
+        : await readLateAwareServerWindow(input, cacheLate);
     span.setAttr('contacts.source', page.source);
     span.setAttr('contacts.sync', page.sync);
     span.setAttr('contacts.result_count', page.users.length);
@@ -209,8 +210,9 @@ async function readLocalWithinBudget(
   host: ContactDirectoryHost | undefined,
   input: WindowInput
 ): Promise<ContactDirectoryPage | undefined | 'late' | 'failed'> {
+  // Offline there is no server to read instead, so the cache is waited for.
   const budget = input.request.localBudgetMs;
-  if (budget === undefined || input.request.cursor)
+  if (budget === undefined || input.request.cursor || !input.online)
     return readLocalWindow(host, input);
 
   const settle = async () => {
@@ -328,6 +330,27 @@ async function readLocalWindow(
           policyKey,
         }
       : null,
+  };
+}
+
+/** A server page that remembers, on itself and on its continuation, that it
+ * stands in for a late cache: every page of such a window keeps its place. */
+async function readLateAwareServerWindow(
+  input: WindowInput,
+  cacheLate: boolean
+): Promise<ContactDirectoryPage> {
+  const page = await readServerWindow(input);
+  const cursor = input.request.cursor;
+  const localLate =
+    cacheLate || (cursor?.source === 'server' && cursor.localLate === true);
+  if (!localLate) return page;
+  return {
+    ...page,
+    localLate,
+    nextCursor:
+      page.nextCursor?.source === 'server'
+        ? { ...page.nextCursor, localLate }
+        : page.nextCursor,
   };
 }
 

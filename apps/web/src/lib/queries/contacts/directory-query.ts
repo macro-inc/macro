@@ -198,6 +198,38 @@ export function createContactDirectoryWindow(
     });
     onCleanup(() => release?.());
   });
+  const budgeted = options.localBudgetMs !== undefined;
+  let changedWhileReading = false;
+  const rereadAfterCacheChange = () => {
+    // Rows the server listed because the cache was late keep their order
+    // until the input changes, on every page: the cache answering afterwards
+    // would rank them differently under the cursor.
+    const continuation = untrack(request).cursor;
+    if (
+      untrack(data)?.localLate ||
+      (continuation?.source === 'server' && continuation.localLate)
+    )
+      return;
+    const error = untrack(() => query.error);
+    if (!error || error instanceof ContactDirectoryUnavailableError) {
+      // A reply from before this write must not publish under the same
+      // input again. Restart keyset paging against the new local version.
+      batch(() => {
+        setCursor(undefined);
+        invalidate();
+      });
+    }
+  };
+  createEffect(
+    on(
+      () => query.isFetching,
+      (fetching) => {
+        if (fetching || !changedWhileReading) return;
+        changedWhileReading = false;
+        rereadAfterCacheChange();
+      }
+    )
+  );
   createEffect(() => {
     const host = scope().host;
     if (!host) return;
@@ -207,19 +239,15 @@ export function createContactDirectoryWindow(
         () => {
           // Re-read locally as synchronization/context publication progresses.
           if (!enabled()) return;
-          // Rows the server listed because the cache was late keep their
-          // order until the input changes: the cache answering afterwards
-          // would rank them differently under the cursor.
-          if (untrack(data)?.localLate) return;
-          const error = untrack(() => query.error);
-          if (!error || error instanceof ContactDirectoryUnavailableError) {
-            // A reply from before this write must not publish under the same
-            // input again. Restart keyset paging against the new local version.
-            batch(() => {
-              setCursor(undefined);
-              invalidate();
-            });
+          // A read with a budget is not restarted while it runs: a cache busy
+          // enough to be late also reports changes, and each restart would
+          // give it a new budget and never reach the server. It is re-read
+          // once it settles instead.
+          if (budgeted && untrack(() => query.isFetching)) {
+            changedWhileReading = true;
+            return;
           }
+          rereadAfterCacheChange();
         },
         { searchBuckets: () => ['person'] }
       )

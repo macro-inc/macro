@@ -338,7 +338,7 @@ it('reads the server once when a budgeted first page gets no answer from the cac
             name: 'John Smith',
           },
         ],
-        nextCursor: null,
+        nextCursor: 'server-position',
       },
     },
   };
@@ -359,6 +359,21 @@ it('reads the server once when a budgeted first page gets no answer from the cac
   expect(latePage.users.map((user) => user.name)).toEqual(['John Smith']);
   expect(remote).toHaveBeenCalledOnce();
 
+  // Its further pages come from the server too and are marked the same way,
+  // so the whole list keeps its place.
+  const nextPage = await readContactDirectory(
+    VIEWER,
+    stalled,
+    { ...request, cursor: latePage.nextCursor ?? undefined },
+    signal(),
+    true
+  );
+  expect(nextPage.localLate).toBe(true);
+  expect(nextPage.nextCursor).toMatchObject({ localLate: true });
+  expect(remote).toHaveBeenCalledTimes(2);
+  remote.mockClear();
+  remote.mockResolvedValue(serverPage);
+
   // A cache that refuses the read (its owner is changing) is not waited for.
   const refused = host();
   refused.people.search.mockRejectedValue(
@@ -372,7 +387,7 @@ it('reads the server once when a budgeted first page gets no answer from the cac
     true
   );
   expect(failedPage.localLate).toBe(true);
-  expect(remote).toHaveBeenCalledTimes(2);
+  expect(remote).toHaveBeenCalledOnce();
 
   // A cache that answers in time is the answer; the server is not asked.
   const healthy = await readContactDirectory(
@@ -384,10 +399,10 @@ it('reads the server once when a budgeted first page gets no answer from the cac
   );
   expect(healthy.source).toBe('cache');
   expect(healthy.localLate).toBeUndefined();
-  expect(remote).toHaveBeenCalledTimes(2);
+  expect(remote).toHaveBeenCalledOnce();
 
   // A read superseded while it waited asks the server for nothing, and an
-  // offline one has no server to ask.
+  // offline one waits for the cache: it has no server to ask.
   const controller = new AbortController();
   const superseded = readContactDirectory(
     VIEWER,
@@ -400,19 +415,17 @@ it('reads the server once when a budgeted first page gets no answer from the cac
   controller.abort();
   await vi.advanceTimersByTimeAsync(2_000);
   await outcome;
-  const offline = readContactDirectory(
-    VIEWER,
-    stalled,
-    request,
-    signal(),
-    false
-  );
-  const unavailable = expect(offline).rejects.toBeInstanceOf(
-    ContactDirectoryUnavailableError
-  );
-  await vi.advanceTimersByTimeAsync(2_000);
-  await unavailable;
-  expect(remote).toHaveBeenCalledTimes(2);
+  const slow = host();
+  const identity = Promise.withResolvers<{
+    kind: 'hit';
+    data: { user: { id: string } };
+  }>();
+  slow.readQuery.mockReturnValueOnce(identity.promise);
+  const offline = readContactDirectory(VIEWER, slow, request, signal(), false);
+  await vi.advanceTimersByTimeAsync(5_000);
+  identity.resolve({ kind: 'hit', data: { user: { id: VIEWER } } });
+  expect((await offline).source).toBe('cache');
+  expect(remote).toHaveBeenCalledOnce();
   vi.useRealTimers();
 });
 

@@ -250,7 +250,8 @@ export function useUsersMention(
   // People never goes missing without a word: a read still pending after the
   // wait says so too, since nothing else would until it settles.
   const peopleFailed = () =>
-    awaitingDirectory() && !listsPeople() && !waitingForPeople();
+    !listsPeople() &&
+    (failedTwice() || (awaitingDirectory() && !waitingForPeople()));
 
   // Macro leads, then people come before the other agents and bots, as in
   // assignee menus. The directory's personal window keeps its own order among

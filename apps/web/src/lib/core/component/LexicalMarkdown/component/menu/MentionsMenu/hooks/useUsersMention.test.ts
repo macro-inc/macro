@@ -319,6 +319,14 @@ it('never drops People without a word while its read is pending or restarts', as
   setLoading(false);
   expect(directory.peopleFailed()).toBe(false);
   expect(directory.users().map((item) => item.id)).toEqual([sean.id]);
+
+  // A later read that fails twice says so as well, after people were listed.
+  batch(() => {
+    setPeople([]);
+    setError(new Error('cache worker timeout: read'));
+  });
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
   dispose();
 });
 
