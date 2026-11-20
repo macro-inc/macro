@@ -11,6 +11,9 @@ pub const READY_PULL_REQUEST: &str = "When you open a pull request, open it read
 /// Back-link from a pull request to the session that opened it.
 pub const SESSION_BACKLINK: &str = "macro_internal.set_pull_request returns this session's session_url; link it in the pull request description (for example, \"Macro agent session: <session_url>\") so reviewers can see how the change was made. Edit the description to add it if the pull request already exists.";
 
+/// How to link to lines of a file in a GitHub repository.
+pub const GITHUB_FILE_LINKS: &str = "";
+
 /// The pull-request section of the instructions for external MCP clients,
 /// which may be coding agents. In-app hosts have no repository to work in.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
@@ -41,5 +44,16 @@ mod tests {
         assert!(instructions.contains(SESSION_BACKLINK));
         assert!(instructions.contains(READY_PULL_REQUEST));
         assert!(instructions.contains("artifacts directory"));
+        assert!(instructions.contains(GITHUB_FILE_LINKS));
+    }
+
+    #[test]
+    fn github_file_links_pin_a_commit_and_a_line_range() {
+        assert!(GITHUB_FILE_LINKS.contains(
+            "https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>#L<start>-L<end>"
+        ));
+        assert!(GITHUB_FILE_LINKS.contains("git rev-parse HEAD"));
+        assert!(GITHUB_FILE_LINKS.contains("?plain=1"));
+        assert!(GITHUB_FILE_LINKS.contains("/tree/<commit-sha>/<path>"));
     }
 }

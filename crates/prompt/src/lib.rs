@@ -323,6 +323,7 @@ mod tests {
     #[test]
     fn mcp_and_coding_agents_open_ready_pull_requests_with_ci_passing() {
         assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
+        assert!(mcp_instructions("https://macro.com").contains("/blob/<commit-sha>/"));
 
         let coding = coding_agents::PROMPT.to_string();
         assert!(coding.contains("ready for review, not a draft"));
