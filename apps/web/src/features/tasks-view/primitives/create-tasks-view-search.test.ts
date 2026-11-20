@@ -395,6 +395,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
       config: {
         kind: 'tasks',
         version: 1,
+        scope: 'my-tasks',
         layout: 'list',
         sort: [{ id: 'updated_at', reversed: false }],
         dueDate: { type: 'overdue' },
@@ -436,6 +437,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
     return { state, setState, draft, record, setSource };
   });
   expect(fixture.state.dueDate).toEqual({ type: 'overdue' });
+  expect(fixture.state.tab).toBe('my-tasks');
   fixture.setState('dueDate', { type: 'range', start: '2026-10-21' });
   fixture.setState('layout', 'board');
   fixture.setState('groupBy', 'assignee');

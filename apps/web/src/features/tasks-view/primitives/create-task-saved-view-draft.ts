@@ -40,7 +40,7 @@ export function createTaskSavedViewDraft(options: {
   apply: (
     settings: Pick<
       TasksViewState,
-      'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
+      'tab' | 'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
     >
   ) => void;
 }) {
@@ -65,6 +65,7 @@ export function createTaskSavedViewDraft(options: {
     apply: (config) => options.apply(materializeTaskSavedView(config)),
     resetNew: () =>
       options.apply({
+        tab: 'team-tasks',
         facets: DEFAULT_TASK_FACET_SELECTION,
         layout: 'list',
         groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
