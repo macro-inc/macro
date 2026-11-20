@@ -29,7 +29,7 @@ Write it as `macro.routines.create` takes it:
 
 `macro.routines.check(routine, { created })` runs saving's checks without saving. Save only when `ok` is true; otherwise return `problems` and `steps`, fix what they name, and run the program again. A new routine is switched on. Don't run or test it.
 
-Checking takes several seconds, so in an agent session run the program that finds, checks and saves with ExecuteCode's `background: { title: 'Checking routine', sends: true }` (saving a routine needs `sends`): say in one sentence that you are checking the routine and will report back, and end your turn. Reply as below when its `job.settled` event brings the result; fix and run it again in the background when it returns problems. When the receipt says it ran in the foreground instead (`ranInForeground`), reply at once.
+Checking takes several seconds, so in an agent session run the program that finds, checks and saves with ExecuteCode's `background: { title: 'Checking routine', sends: true }` (saving a routine needs `sends`): say in one sentence that you are checking the routine and will report back, and end your turn. Reply as below when its `job.settled` event brings the result; when it returns problems, fix them and run it again: from that event's turn it runs in the foreground, which is fine for a check. When the receipt says it ran in the foreground instead (`ranInForeground`), reply at once.
 
 ## Reply
 

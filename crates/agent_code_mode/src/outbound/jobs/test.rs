@@ -247,3 +247,37 @@ async fn overdue_and_listed_jobs(pool: PgPool) {
             .is_empty()
     );
 }
+
+/// A program's result can hold `\u0000`, which JSONB refuses: the settle and
+/// its event must still be stored.
+#[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]
+async fn a_result_with_a_nul_character_still_settles(pool: PgPool) {
+    let store = store(&pool).await;
+    let mut record = job(chrono::Utc::now() + chrono::TimeDelta::minutes(10));
+    store
+        .launch(session(1), &owner(), &record, CAPS)
+        .await
+        .unwrap();
+    record.status = ExecutionStatus::Succeeded;
+    record.result = Some(json!({"data": "a\u{0}b"}));
+    let event = PendingNotification::new(ProduceNotification {
+        session_id: session(1),
+        subject_id: record.execution_id.to_string(),
+        event: NotificationEvent::JobSettled(JobSettlement {
+            job_id: record.execution_id.as_uuid(),
+            title: "Checking routine".into(),
+            status: JobStatus::Done,
+            result: Some(json!({"data": "a\u{0}b"})),
+            error: Some("x\u{0}y".into()),
+        }),
+        dedupe_key: None,
+        wake: true,
+    })
+    .unwrap();
+    assert!(
+        store
+            .settle(session(1), &record, Some(&event))
+            .await
+            .unwrap()
+    );
+}

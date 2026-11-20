@@ -15,6 +15,9 @@ pub trait BackgroundJobs: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = anyhow::Result<Vec<BackgroundJobSummary>>> + Send + '_>>;
 }
 
+/// Longest a prompt waits for its session's job list.
+const LISTING_LIMIT: std::time::Duration = std::time::Duration::from_secs(2);
+
 impl<
     Sessions,
     Containers,
@@ -61,10 +64,14 @@ where
         let (Some(jobs), AgentAction::Prompt(prompt)) = (&self.background_jobs, action) else {
             return;
         };
-        match jobs.listing(session_id).await {
-            Ok(listing) => prompt.background_jobs = listing,
-            Err(error) => {
+        // A read that stalls must not hold the prompt either.
+        match tokio::time::timeout(LISTING_LIMIT, jobs.listing(session_id)).await {
+            Ok(Ok(listing)) => prompt.background_jobs = listing,
+            Ok(Err(error)) => {
                 tracing::warn!(?error, %session_id, "could not list the session's background jobs");
+            }
+            Err(_) => {
+                tracing::warn!(%session_id, "listing the session's background jobs timed out");
             }
         }
     }

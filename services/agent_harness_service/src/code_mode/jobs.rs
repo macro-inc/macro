@@ -41,15 +41,8 @@ pub struct DetachPolicy<Sessions, Flags = feature_flags::outbound::posthog::Post
 
 impl<Sessions: AgentSessionRepo, Flags: FeatureFlags> DetachPolicy<Sessions, Flags> {
     pub async fn decide(&self, identity: &ExecutionIdentity) -> Result<Detach, CodeModeError> {
-        let session = self.sessions.get(identity.session).await.map_err(storage)?;
-        let prompter = self
-            .sessions
-            .turn_prompter(identity.session)
-            .await
-            .map_err(storage)?;
-        if let Some(refused) = refusal(session.is_background(), prompter.as_ref(), identity) {
-            return Ok(Detach::Refused(refused.into()));
-        }
+        // The flag first: the turn facts are read last, so a turn replaced
+        // during the flag read is seen.
         let enabled = match &self.flags {
             Some(flags) => match flags.load(&identity.owner).await {
                 Ok(snapshot) => snapshot.is_enabled(BACKGROUND_JOBS_FLAG),
@@ -60,6 +53,15 @@ impl<Sessions: AgentSessionRepo, Flags: FeatureFlags> DetachPolicy<Sessions, Fla
             },
             None => false,
         };
+        let session = self.sessions.get(identity.session).await.map_err(storage)?;
+        let prompter = self
+            .sessions
+            .turn_prompter(identity.session)
+            .await
+            .map_err(storage)?;
+        if let Some(refused) = refusal(session.is_background(), prompter.as_ref(), identity) {
+            return Ok(Detach::Refused(refused.into()));
+        }
         if !enabled {
             return Ok(Detach::Refused(NOT_ENABLED.into()));
         }

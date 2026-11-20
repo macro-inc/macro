@@ -206,6 +206,8 @@ impl JobStore for PgJobStore {
             return Ok(false);
         }
         if let Some(notification) = notification {
+            // The event carries the result and error too, into JSONB.
+            let notification = &storable(notification);
             self.notifications
                 .produce(&mut *transaction, notification)
                 .await
@@ -266,4 +268,22 @@ impl JobStore for PgJobStore {
         .map(|record| record.0)
         .collect())
     }
+}
+
+/// A `job.settled` event JSONB can store: without `\u0000`, as [`jsonb`]
+/// leaves the record.
+fn storable(notification: &PendingNotification) -> PendingNotification {
+    let mut notification = notification.clone();
+    if let agent_runtime_protocol::domain::notification::NotificationEvent::JobSettled(settlement) =
+        &mut notification.notification.event
+    {
+        if let Some(result) = settlement.result.as_mut() {
+            super::postgres::strip_nul(result);
+        }
+        if let Some(error) = settlement.error.as_mut() {
+            error.retain(|character| character != '\0');
+        }
+        settlement.title.retain(|character| character != '\0');
+    }
+    notification
 }

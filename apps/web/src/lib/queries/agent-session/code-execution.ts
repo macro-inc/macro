@@ -36,9 +36,10 @@ export function agentCodeExecutionQueryOptions(
     refetchInterval: (query) => {
       const data = query.state.data;
       // A background job runs for up to ten minutes; it is polled until it
-      // settles, and its log frame refetches it at once when it does.
+      // settles, and its log frame refetches it at once when it does. Only
+      // failures in a row stop it: a success resets `fetchFailureCount`.
       if (data?.job && data.status === 'running')
-        return query.state.errorUpdateCount < 5 ? 2000 : false;
+        return query.state.fetchFailureCount < 5 ? 2000 : false;
       return (!data || data.status === 'running') &&
         query.state.dataUpdateCount + query.state.errorUpdateCount < 40
         ? 1000

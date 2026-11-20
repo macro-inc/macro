@@ -28,7 +28,7 @@ pub(super) fn jsonb(record: &ExecutionRecord) -> Result<Value, CodeModeError> {
     Ok(value)
 }
 
-fn strip_nul(value: &mut Value) {
+pub(super) fn strip_nul(value: &mut Value) {
     match value {
         Value::String(text) if text.contains('\0') => *text = text.replace('\0', ""),
         Value::Array(items) => items.iter_mut().for_each(strip_nul),

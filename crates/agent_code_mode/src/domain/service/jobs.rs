@@ -51,6 +51,10 @@ const MAX_SETTLED_ERROR_BYTES: usize = 8 * 1024;
 /// How often a settle is tried, and the wait before the first retry.
 const SETTLE_ATTEMPTS: u32 = 3;
 const SETTLE_RETRY_FIRST_WAIT: Duration = Duration::from_millis(250);
+/// Longest shutdown waits for running jobs to settle as interrupted.
+const SHUTDOWN_LIMIT: Duration = Duration::from_secs(20);
+/// Longest a job waits on one read of its row or session.
+const WATCH_READ_LIMIT: Duration = Duration::from_secs(2);
 /// Most jobs one sweep settles.
 const SWEEP_BATCH: u16 = 100;
 /// How long settled jobs stay in the agent's job list.
@@ -189,10 +193,10 @@ impl Jobs {
                     .get(identity.session, identity.execution)
                     .await
                 {
-                    // The same launch again: its job, not a second one.
+                    // The same launch again: its job, not a second one, or
+                    // the foreground run it fell back to; never a replay.
                     Ok(existing)
-                        if existing.job.is_some()
-                            && existing.source == request.source
+                        if existing.source == request.source
                             && existing.acting_as == Some(identity.acting_as)
                             && existing.turn_id == Some(identity.turn) =>
                     {
@@ -256,6 +260,18 @@ impl Jobs {
             local.insert(record.execution_id, stop.clone());
         }
         self.announce(identity.session, &record).await;
+        // Stop may have come while the announcement was written.
+        if turn.is_cancelled() {
+            if let Ok(mut local) = self.local.lock() {
+                local.remove(&record.execution_id);
+            }
+            record.status = ExecutionStatus::Cancelled;
+            record.error = Some("Execution cancelled before it started.".into());
+            settle_retrying(store.as_ref(), identity.session, &record, None).await?;
+            self.announce(identity.session, &record).await;
+            span.record("outcome", "cancelled");
+            return Ok(Launch::Started(Box::new(receipt(&record))));
+        }
         let started = receipt(&record);
         let run = JobRun {
             store: Arc::clone(store),
@@ -372,10 +388,17 @@ impl Jobs {
     }
 
     /// Stop every job this replica runs; each settles as interrupted.
+    /// Interrupt every job and wait, at most [`SHUTDOWN_LIMIT`], for them to
+    /// settle; one whose settle can't finish in time is left to the sweep.
     pub(super) async fn shutdown(&self) {
         self.shutdown.cancel();
         self.tasks.close();
-        self.tasks.wait().await;
+        if tokio::time::timeout(SHUTDOWN_LIMIT, self.tasks.wait())
+            .await
+            .is_err()
+        {
+            tracing::warn!("background jobs did not settle before shutdown; the sweep will");
+        }
     }
 
     async fn announce(&self, session: AgentSessionId, record: &ExecutionRecord) {
@@ -485,12 +508,18 @@ impl JobRun {
                 tokio::select! {
                     biased;
                     () = self.shutdown.cancelled() => return Err(Stop::Interrupted),
-                    () = self.stop.cancelled() => return Err(Stop::Cancelled),
+                    () = self.stop.cancelled() => {
+                        return Err(if self.shutdown.is_cancelled() {
+                            Stop::Interrupted
+                        } else {
+                            Stop::Cancelled
+                        });
+                    }
                     () = tokio::time::sleep_until(deadline) => return Err(Stop::Ended),
                     permit = &mut acquire => return permit.map_err(|_| Stop::Interrupted),
                     _ = watch.tick() => {
                         watched = watched.wrapping_add(1);
-                        if let Some(stop) = self.watch(watched).await {
+                        if let Some(stop) = self.watch_bounded(watched).await {
                             return Err(stop);
                         }
                     }
@@ -534,13 +563,19 @@ impl JobRun {
                     stop = Stop::Interrupted;
                     cancel.cancel();
                 }
+                // Shutdown cancels `stop` too, as its parent: it still
+                // reads as interrupted, whichever branch runs first.
                 () = self.stop.cancelled(), if stop == Stop::Ended => {
-                    stop = Stop::Cancelled;
+                    stop = if self.shutdown.is_cancelled() {
+                        Stop::Interrupted
+                    } else {
+                        Stop::Cancelled
+                    };
                     cancel.cancel();
                 }
                 _ = watch.tick(), if stop == Stop::Ended => {
                     watched = watched.wrapping_add(1);
-                    if let Some(found) = self.watch(watched).await {
+                    if let Some(found) = self.watch_bounded(watched).await {
                         stop = found;
                         cancel.cancel();
                     }
@@ -577,6 +612,17 @@ impl JobRun {
 
     async fn store_activity(&self) -> Result<(), CodeModeError> {
         self.store.save_activity(self.session, &self.record).await
+    }
+
+    /// [`Self::watch`], given up after [`WATCH_READ_LIMIT`]: a stalled read
+    /// must not keep the loop from seeing a cancel or shutdown.
+    async fn watch_bounded(&self, read: u32) -> Option<Stop> {
+        tokio::time::timeout(WATCH_READ_LIMIT, self.watch(read))
+            .await
+            .unwrap_or_else(|_| {
+                tracing::warn!("a background job's watch read timed out");
+                None
+            })
     }
 
     /// Read the job's row, and on every [`SESSION_EVERY`]th read its
