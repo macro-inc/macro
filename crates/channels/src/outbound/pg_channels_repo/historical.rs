@@ -229,15 +229,32 @@ pub async fn ensure_dm_in(
 }
 
 /// Discover an exact pair without modifying it.
+///
+/// A DM is any channel both people have a row in, active or left, with no
+/// third row. The two people's rows are intersected first, through the
+/// partial `(user_id, channel_id)` indexes on active and on left rows, behind
+/// an `OFFSET 0` fence; only the channels they share are then checked. The
+/// read is bounded by the two people's memberships, never by the table.
 pub async fn find_dm(connection: &mut PgConnection, pair: &DmPair) -> anyhow::Result<Option<Uuid>> {
     Ok(sqlx::query_scalar!(
         r#"
-        SELECT c.id FROM comms_channels c
+        SELECT c.id
+        FROM (
+            (SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $1 AND p.left_at IS NULL
+             UNION ALL
+             SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $1 AND p.left_at IS NOT NULL)
+            INTERSECT
+            (SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $2 AND p.left_at IS NULL
+             UNION ALL
+             SELECT p.channel_id FROM comms_channel_participants p
+             WHERE p.user_id = $2 AND p.left_at IS NOT NULL)
+            OFFSET 0
+        ) shared
+        JOIN comms_channels c ON c.id = shared.channel_id
         WHERE c.channel_type = 'direct_message'
-          AND EXISTS (SELECT 1 FROM comms_channel_participants p
-                      WHERE p.channel_id = c.id AND p.user_id = $1)
-          AND EXISTS (SELECT 1 FROM comms_channel_participants p
-                      WHERE p.channel_id = c.id AND p.user_id = $2)
           AND (SELECT COUNT(*) FROM comms_channel_participants p WHERE p.channel_id = c.id) = 2
         ORDER BY c.created_at, c.id
         LIMIT 1
