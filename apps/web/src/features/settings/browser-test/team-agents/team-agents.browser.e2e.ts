@@ -1315,10 +1315,13 @@ for (const dark of [false, true]) {
     await page.goto(dark ? '/?dark' : '/');
     const row = page.locator('[data-member-kind="agent"]');
     await expect(
-      row.getByRole('button', { name: 'Agent options' })
+      row.getByRole('button', { name: 'Settings for Ada' })
     ).toBeVisible();
-    await row.getByRole('button', { name: 'Agent options' }).click();
-    await page.getByRole('menuitem', { name: 'Change picture' }).click();
+    await row.getByRole('button', { name: 'Settings for Ada' }).click();
+    await page
+      .getByRole('menuitem', { name: 'Change picture' })
+      .or(page.getByRole('button', { name: 'Change picture', exact: true }))
+      .click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('status')).toHaveText('Loading picture…');
     await expect(
@@ -1339,10 +1342,13 @@ for (const dark of [false, true]) {
     expect(saves).toEqual([]);
     await expect(dialog).toBeHidden();
     await expect(
-      row.getByRole('button', { name: 'Agent options' })
+      row.getByRole('button', { name: 'Settings for Ada' })
     ).toBeFocused();
-    await row.getByRole('button', { name: 'Agent options' }).click();
-    await page.getByRole('menuitem', { name: 'Change picture' }).click();
+    await row.getByRole('button', { name: 'Settings for Ada' }).click();
+    await page
+      .getByRole('menuitem', { name: 'Change picture' })
+      .or(page.getByRole('button', { name: 'Change picture', exact: true }))
+      .click();
     await expect(
       dialog.getByRole('button', { name: 'Replace photo', exact: true })
     ).toBeVisible();

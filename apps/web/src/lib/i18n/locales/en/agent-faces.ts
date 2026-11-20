@@ -40,7 +40,6 @@ export default {
     "Couldn't upload the photo, so the agent was added with its initial. Change its picture from Members.",
   saveFailed: "Couldn't save the picture. Try again.",
   changePicture: 'Change picture',
-  agentOptions: 'Agent options',
   pictureTitle: 'Picture for {{name}}',
   loading: 'Loading picture…',
   loadFailed: "Couldn't load the picture. Try again.",
