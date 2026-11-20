@@ -9,11 +9,21 @@ use html5ever::driver::{self, Parser};
 use html5ever::tendril::{StrTendril, TendrilSink};
 use html5ever::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::{Attribute, ExpandedName, LocalName, Namespace, QualName};
-use scraper::Html;
+use scraper::{Html, Node};
 use std::borrow::Cow;
 
 /// The most nodes (elements, runs of text and comments) a parse builds.
+/// Attributes count too, [`ATTRIBUTES_PER_NODE`] to a node: the parser
+/// copies an element's attributes into each formatting element it rebuilds.
 pub const MAX_HTML_NODES: usize = 250_000;
+
+/// About how many attributes take the memory of one node.
+pub const ATTRIBUTES_PER_NODE: usize = 4;
+
+/// The most attributes one element may have. Serialized, they are one tag,
+/// and html5ever checks each attribute name in a tag against every earlier
+/// one; a repeated `<body>` adds its attributes to the one body element.
+pub const MAX_ELEMENT_ATTRIBUTES: usize = 1_000;
 
 /// The deepest a parse nests a node.
 pub const MAX_HTML_DEPTH: usize = 512;
@@ -71,8 +81,7 @@ fn feed(mut parser: Parser<BoundedSink>, html: &str) -> BoundedHtml {
     parser.finish()
 }
 
-/// Scraper's tree, refusing every change once a node past [`MAX_HTML_NODES`]
-/// or deeper than [`MAX_HTML_DEPTH`] would be added.
+/// Scraper's tree, refusing every change once one would pass a bound.
 struct BoundedSink {
     html: Html,
     nodes: usize,
@@ -89,8 +98,20 @@ impl BoundedSink {
     }
 
     fn count_node(&mut self) {
-        self.nodes += 1;
+        self.count_nodes(1);
+    }
+
+    fn count_nodes(&mut self, nodes: usize) {
+        self.nodes += nodes;
         if self.nodes > MAX_HTML_NODES {
+            self.clipped = true;
+        }
+    }
+
+    /// Counts attributes added to an element that then has `total`.
+    fn count_attributes(&mut self, added: usize, total: usize) {
+        self.count_nodes(added / ATTRIBUTES_PER_NODE);
+        if total > MAX_ELEMENT_ATTRIBUTES {
             self.clipped = true;
         }
     }
@@ -183,6 +204,7 @@ impl TreeSink for BoundedSink {
         flags: ElementFlags,
     ) -> NodeId {
         self.count_node();
+        self.count_attributes(attrs.len(), attrs.len());
         self.html.create_element(name, attrs, flags)
     }
 
@@ -264,6 +286,14 @@ impl TreeSink for BoundedSink {
     }
 
     fn add_attrs_if_missing(&mut self, target: &NodeId, attrs: Vec<Attribute>) {
+        if self.clipped {
+            return;
+        }
+        let existing = match self.html.tree.get(*target).map(|node| node.value()) {
+            Some(Node::Element(element)) => element.attrs().count(),
+            _ => 0,
+        };
+        self.count_attributes(attrs.len(), existing + attrs.len());
         if !self.clipped {
             self.html.add_attrs_if_missing(target, attrs);
         }

@@ -207,7 +207,28 @@ fn oversized_bodies() -> Vec<(&'static str, String)> {
             "nested divs",
             format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
         ),
+        // Each rebuilt element copies its attributes.
+        (
+            "attributes on rebuilt bold",
+            format!(
+                "<p>{}{}",
+                (0..100)
+                    .map(|i| format!("<b id={i}{}>", attribute_list(100)))
+                    .collect::<String>(),
+                "<p>x".repeat(500)
+            ),
+        ),
+        // Each `<body>` adds its attributes to the one body element.
+        (
+            "repeated body attributes",
+            (0..5_000).map(|i| format!("<body a{i}>")).collect(),
+        ),
     ]
+}
+
+/// ` a0 a1 …`: attributes without values.
+fn attribute_list(count: usize) -> String {
+    (0..count).map(|i| format!(" a{i}")).collect()
 }
 
 #[test]
