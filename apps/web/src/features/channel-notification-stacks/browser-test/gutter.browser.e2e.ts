@@ -299,3 +299,81 @@ test('the gutter hides what no longer fits as the pane narrows', async ({
   await expect(toggle(page)).toBeVisible();
   await expect(checks(page).first()).toBeVisible();
 });
+
+// Long sender names and addresses wrap inside the row, two lines at most,
+// docked and in the popover: nothing runs past the card or scrolls sideways.
+for (const { name, pane } of [
+  { name: 'docked', pane: 1600 },
+  { name: 'popover', pane: 1200 },
+]) {
+  test(`long sender labels stay inside the ${name} list`, async ({ page }) => {
+    await page.goto(`/gutter.html?pane=${pane}&names=long`);
+    await expect(page.locator('[data-message="m1"]')).toBeVisible();
+    if (name === 'popover') await toggle(page).click();
+    const surface =
+      name === 'docked'
+        ? list(page).locator('[data-slot="card"]')
+        : page.getByRole('dialog');
+    const rows = surface.getByRole('listitem');
+    await expect(rows).toHaveCount(3);
+
+    const layout = await surface.evaluate((element) => {
+      const overflowing = (target: Element) =>
+        target.scrollWidth > target.clientWidth;
+      const scroller = element.querySelector('ul')?.parentElement;
+      const box = element.getBoundingClientRect();
+      return {
+        surface: overflowing(element) || (!!scroller && overflowing(scroller)),
+        rows: [...element.querySelectorAll('li')].map((row) => {
+          const button = row.querySelector('button');
+          const [lead, label] = button?.children ?? [];
+          if (!button || !lead || !label) throw new Error('expected a row');
+          return {
+            overflow: [row, button, label].some(overflowing),
+            insideRight: label.getBoundingClientRect().right <= box.right,
+            // Unread dot and kind icon stay on the first line.
+            leadOffset: Math.abs(
+              lead.getBoundingClientRect().top -
+                label.getBoundingClientRect().top
+            ),
+            lines: Math.round(label.clientHeight / 18),
+          };
+        }),
+      };
+    });
+    expect(layout.surface).toBe(false);
+    for (const row of layout.rows) {
+      expect(row.overflow).toBe(false);
+      expect(row.insideRight).toBe(true);
+      expect(row.leadOffset).toBeLessThanOrEqual(1);
+      expect(row.lines).toBeLessThanOrEqual(2);
+    }
+
+    // The check on a long row stays inside the surface.
+    const row = rows.filter({ hasText: 'mentioned you' });
+    await row.hover();
+    const check = await row
+      .getByRole('button', { name: /^Mark done:/ })
+      .boundingBox();
+    const box = await surface.boundingBox();
+    if (!check || !box) throw new Error('expected the check and the surface');
+    expect(check.x + check.width).toBeLessThanOrEqual(box.x + box.width);
+
+    // A clamped label shows the whole of it in a tooltip.
+    await expect(page.getByRole('tooltip')).toContainText(
+      'Leopold Maximilian Fairweather-Huntington of the Northern Planning Office mentioned you'
+    );
+  });
+}
+
+test('a label that fits shows no tooltip', async ({ page }) => {
+  await open(page, 1600);
+  await list(page)
+    .getByRole('listitem')
+    .filter({ hasText: 'mentioned you' })
+    .getByText('Leo mentioned you')
+    .hover();
+  // Past the tooltip's open delay.
+  await page.waitForTimeout(800);
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+});

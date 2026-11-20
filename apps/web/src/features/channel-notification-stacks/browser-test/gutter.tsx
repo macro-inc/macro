@@ -27,7 +27,16 @@ const params = new URLSearchParams(location.search);
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
 applyTheme(params.get('theme') === 'light' ? 'Macro Light' : 'Macro Dark');
 
-const NAMES: Record<string, string> = { ana: 'Ana', leo: 'Leo', mara: 'Mara' };
+// `?names=long` gives senders long unbroken addresses and a long multi-word
+// name, to check the list's rows wrap them inside the card.
+const NAMES: Record<string, string> =
+  params.get('names') === 'long'
+    ? {
+        ana: 'quarterly.release.coordination.team@synthetic-example-workspace.test',
+        leo: 'Leopold Maximilian Fairweather-Huntington of the Northern Planning Office',
+        mara: 'm.okonkwo-reyes.design@synthetic-example.test',
+      }
+    : { ana: 'Ana', leo: 'Leo', mara: 'Mara' };
 
 function notification(
   id: string,
