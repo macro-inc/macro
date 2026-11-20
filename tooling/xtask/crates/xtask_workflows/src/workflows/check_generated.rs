@@ -21,6 +21,7 @@ pub const PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!(".github/actionlint.yaml"),
     xtask_paths::repo_glob!(".github/zizmor.yml"),
     xtask_paths::repo_glob!("nix/workflow-lint.nix"),
+    xtask_paths::repo_glob!("nix/patches/actionlint-*"),
     xtask_paths::repo_glob!(".github/kafka-cluster-topics.json"),
 ];
 

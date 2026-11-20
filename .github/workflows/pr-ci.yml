@@ -527,6 +527,7 @@ jobs:
               - '.github/actionlint.yaml'
               - '.github/zizmor.yml'
               - 'nix/workflow-lint.nix'
+              - 'nix/patches/actionlint-*'
               - '.github/kafka-cluster-topics.json'
             node_modules_nix:
               - 'bun.lock'
