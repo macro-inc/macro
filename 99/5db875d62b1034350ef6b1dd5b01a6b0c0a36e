@@ -1,0 +1,29 @@
+crates/agent_egress/src/domain/service/actor.rs
+  s_778a35fb352331::t_3ff3fa97bb190c 323-324,352-366,389-390
+crates/agent_egress/src/outbound/actor_mcp.rs
+  s_778a35fb352331::t_3ff3fa97bb190c 147,198
+crates/agent_egress/AGENTS.md
+  s_778a35fb352331::t_14038c09fcd9a1 44-49,52-55
+crates/agent_egress/src/domain/service/test/actor.rs
+  s_778a35fb352331::t_58cbcbbc70d05b 615,620-622,628,633-640,645-648
+crates/agent_egress/src/domain/service/test/telemetry.rs
+  s_778a35fb352331::t_50e88fe47ae3e3 174-177
+crates/agent_egress/src/outbound/actor_mcp/test.rs
+  s_778a35fb352331::t_aba7bd991053f3 174,191,240-242,244-246,248-252
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "995db875d62b1034350ef6b1dd5b01a6b0c0a36e",
+  "prompts": {},
+  "sessions": {
+    "s_778a35fb352331": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6765a9-10bd-46c9-8814-4b0c87b4e29a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
