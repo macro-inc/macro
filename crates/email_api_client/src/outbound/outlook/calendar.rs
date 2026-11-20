@@ -591,18 +591,18 @@ fn preserve_meeting_details(
     // Outlook's own block from the current body takes their place. A
     // description the block cannot be separated from (one an earlier save
     // already rewrote, or one quoting the link in the person's own text) is
-    // written as given, as before.
-    let rewritten = conference_body::split(existing, join).and_then(|(_, meeting)| {
-        conference_body::without_meeting(description, existing, join)
-            .map(|own| format!("{own}{meeting}"))
-    });
-    Ok(rewritten.unwrap_or_else(|_| {
-        tracing::warn!(
-            body_bytes = description.len(),
-            "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
-        );
-        description.into()
-    }))
+    // written as given, as before; a body too large to parse whole is refused.
+    match conference_body::with_saved_meeting(description, existing, join) {
+        Ok(body) => Ok(body),
+        Err(error) if error.is_refused() => Err(error),
+        Err(_) => {
+            tracing::warn!(
+                body_bytes = description.len(),
+                "kept an edited Outlook meeting description whose meeting block Macro cannot separate"
+            );
+            Ok(description.into())
+        }
+    }
 }
 
 fn patch_body(

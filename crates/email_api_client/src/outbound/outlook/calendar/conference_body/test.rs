@@ -170,6 +170,28 @@ fn an_image_the_person_put_in_a_meeting_paragraph_is_refused_not_dropped() {
 }
 
 #[test]
+fn the_saved_block_goes_back_where_the_rewritten_one_was() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = format!("<p>Before</p>{}<p>After</p>", rewritten_block());
+
+    assert_eq!(
+        with_saved_meeting(&edited, &saved, JOIN).unwrap(),
+        format!("<p>Before</p>{}<p>After</p>", teams_block())
+    );
+}
+
+#[test]
+fn a_description_too_large_to_parse_is_refused_not_kept() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let (_, crafted, _) = crafted_bodies().remove(0);
+    let edited = format!("{}{crafted}", rewritten_block());
+
+    let error = with_saved_meeting(&edited, &saved, JOIN).unwrap_err();
+
+    assert!(error.is_refused());
+}
+
+#[test]
 fn only_outermost_provider_blocks_are_split_in_document_order() {
     let first = format!(
         "<div class=\"me-email-text\"><a href=\"{}\">Join</a><div class=\"me-email-inner\">PIN 1</div></div>",

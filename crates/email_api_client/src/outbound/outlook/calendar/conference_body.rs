@@ -1,7 +1,10 @@
 //! Exact provider-owned HTML boundaries, shared by ordinary edits and event replacement.
 use super::*;
 use email_utils::bounded_html;
-use scraper::{ElementRef, Html};
+use scraper::{
+    ElementRef, Html,
+    node::{Node, Text},
+};
 use std::collections::HashMap;
 
 /// Refuses a body whose parse stopped at a bound of [`bounded_html`]: what
@@ -75,6 +78,45 @@ pub(super) fn without_meeting(
     if !provider_blocks(&parsed.html).is_empty() {
         return split(edited, join).map(|(description, _)| description);
     }
+    replace_rewritten_block(parsed.html, saved, join, "")
+}
+
+/// `edited` with Outlook's own meeting block from `saved` where Macro's editor
+/// left its rewritten copy, found as [`without_meeting`] finds it; a block
+/// still carrying its markers is kept as it is. Refused when the block cannot
+/// be separated or a body is too large to parse whole.
+pub(super) fn with_saved_meeting(
+    edited: &str,
+    saved: &str,
+    join: &str,
+) -> Result<String, CalendarProviderError> {
+    let parsed = bounded_html::parse_fragment(edited);
+    if parsed.clipped {
+        tracing::warn!(
+            body_bytes = edited.len(),
+            "refused to split an Outlook event body too large to parse whole"
+        );
+        return Err(CalendarProviderError::refused(TOO_LARGE));
+    }
+    if !provider_blocks(&parsed.html).is_empty() {
+        return Ok(edited.to_owned());
+    }
+    let (_, meeting) = split(saved, join)?;
+    replace_rewritten_block(parsed.html, saved, join, &meeting)
+}
+
+/// Stands in for the removed run until `replacement` takes its place.
+const RUN_MARKER: &str = "\u{E000}macro-meeting-block\u{E000}";
+
+/// Replace the top-level run of `document` that is Macro's rewrite of the
+/// meeting block in `saved` with `replacement`, at the run's position.
+fn replace_rewritten_block(
+    document: Html,
+    saved: &str,
+    join: &str,
+    replacement: &str,
+) -> Result<String, CalendarProviderError> {
+    let mut document = document;
     let (_, meeting) = split(saved, join)?;
     let meeting = bounded_html::parse_fragment(&meeting).html;
     // Each text of the block, with the most media an element holding it has,
@@ -107,7 +149,9 @@ pub(super) fn without_meeting(
         }
     };
 
-    let mut document = parsed.html;
+    if document.root_element().inner_html().contains(RUN_MARKER) {
+        return Err(not_separable());
+    }
     let parts: Vec<_> = document
         .root_element()
         .children()
@@ -146,6 +190,11 @@ pub(super) fn without_meeting(
         return Err(not_separable());
     }
     let removed: Vec<_> = parts[first..=last].iter().map(|part| part.id()).collect();
+    if let Some(mut node) = document.tree.get_mut(removed[0]) {
+        node.insert_before(Node::Text(Text {
+            text: RUN_MARKER.into(),
+        }));
+    }
     for id in removed {
         if let Some(mut node) = document.tree.get_mut(id) {
             node.detach();
@@ -157,7 +206,7 @@ pub(super) fn without_meeting(
             "This event also contains its old meeting link outside the provider block. Review the description in Outlook before replacing it.",
         ));
     }
-    Ok(description)
+    Ok(description.replacen(RUN_MARKER, replacement, 1))
 }
 
 /// Whose a top-level part of an edited description is.
