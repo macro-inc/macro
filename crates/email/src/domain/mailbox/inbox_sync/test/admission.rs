@@ -33,7 +33,7 @@ async fn missing_link_is_terminal_and_lookup_failure_is_retryable_before_prefixi
                 FailureReason::DatabaseQueryFailed
             }
         );
-        assert!(!error.source.to_string().starts_with("gmail_message:"));
+        assert!(!format!("{:#}", error.source).starts_with("gmail_message:"));
         assert_eq!(fake.calls(), vec![Call::Link]);
     }
 }

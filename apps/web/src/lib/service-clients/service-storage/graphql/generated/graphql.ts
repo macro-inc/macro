@@ -1308,7 +1308,8 @@ export type GraphqlDocumentLiteral =
   createdAt: GraphqlDateLiteral; crmAssociated?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; nameContains?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
   |  { createdAt?: never;   /**
    * Associated with a CRM record through its Companies or Contacts
-   * property or a reference to the record. Requires an expanded query
+   * property or a reference to the record; a task also through a custom
+   * entity property that names the record. Requires an expanded query
    * sorted by a timestamp or task due date.
    */
   crmAssociated: GraphqlCrmAssociation; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; nameContains?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }

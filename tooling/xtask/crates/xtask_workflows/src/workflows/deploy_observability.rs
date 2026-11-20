@@ -3,8 +3,8 @@
 //! out to the prod observability stack (`infra/stacks/observability`).
 //! Generated into `deploy-observability.yml`.
 //!
-//! Started by hand only: a rollout replaces the single host, so Grafana, Loki,
-//! Tempo and GoAlert are down for several minutes. `dry_run` (the default)
+//! Started by hand only: a rollout replaces the single host, so GoAlert is
+//! down for several minutes. `dry_run` (the default)
 //! stops before `pulumi up`. Pull requests that change the image build it in
 //! `PR CI`, through [`crate::workflows::observability_image`].
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
@@ -55,7 +55,7 @@ pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
                 description: >-
                   Build, publish and smoke-boot the image and preview the rollout,
                   but leave production alone. Untick to replace the host, which
-                  takes Grafana, Loki, Tempo and GoAlert down for several minutes.
+                  takes GoAlert down for several minutes.
         "#})?,
     );
     Ok(())

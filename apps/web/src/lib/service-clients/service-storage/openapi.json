@@ -32856,7 +32856,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A task also matches when one of\nits custom entity properties names the record. A company also matches\nthrough its contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
               }
             ]
           },

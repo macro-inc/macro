@@ -25,7 +25,7 @@ sender/generic-address checks.
 
 ## Boundaries
 
-- Depends on: `ammonia`, `scraper` (no Macro crates).
+- Depends on: `ammonia`, `scraper`, `html2text` (no Macro crates).
 - Used by: `crates/email`, `crates/email_db_client`, `crates/email_api_client`,
   `crates/graphql_email`, `crates/google_token`, `crates/models_email`,
   `services/calendar_service`, `services/email_service`.
@@ -64,6 +64,20 @@ sender/generic-address checks.
   result: `scraper` leaves `<` and `>` unescaped inside attribute values. The
   same goes for removing text from a `<style>` element: what is left must not
   be able to form `</style>`.
+- HTML-to-text conversion (`body_parsed.rs`) is bounded in memory on every
+  axis, because one message that exhausted it ran the email workers out of
+  memory. It reads at most `MAX_HTML_BYTES` and renders in raw mode (table
+  cells stacked in reading order, never laid out in padded columns) at
+  `TEXT_WIDTH`, wider than any line can be, so no text wraps. It refuses a
+  body whose tables exceed `MAX_TABLE_CELLS` (rows times widest row, since
+  html2text copies a table's column widths into every row) or whose quotes,
+  lists, definitions and headings prefix a line with more than `MAX_INDENT`
+  columns (each prefixes every line inside it; an ordered list as wide as
+  its largest number). The cell count is exact only because the same walk
+  drops every cell's `rowspan` and `colspan`, which raw mode does not need
+  but html2text turns into filler cells and columns. Keep all of it when
+  changing the conversion; `tests/text_conversion_memory.rs` measures the
+  peak.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack.
 
