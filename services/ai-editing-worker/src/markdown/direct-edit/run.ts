@@ -16,10 +16,20 @@
  * 4. Commit at the current revision. Sync-service applies it only at that
  *    revision, so the verified result is exactly what lands; if someone edits
  *    in the meantime, start over (bounded).
+ *
+ * A request with a `baseRevision` is safe to repeat: its AI peer id is derived
+ * from the document, the base revision and the batch, so when a retry finds
+ * that peer's operations already in the document (the first try committed and
+ * its response was lost), it answers `already_applied` and writes nothing.
+ * Without a base revision every request is a new write.
  */
 import type { Span } from '@macro-inc/observability';
 import { LoroDoc, VersionVector } from 'loro-crdt';
-import { nextAiPeerId } from '../../ai-editing/awareness/ai-peer';
+import {
+  AI_PEER_BASE,
+  AI_PEER_COUNT,
+  nextAiPeerId,
+} from '../../ai-editing/awareness/ai-peer';
 import {
   SyncDocumentError,
   type SyncDocumentStorage,
@@ -27,6 +37,7 @@ import {
 import {
   type CommitResult,
   type CommitStats,
+  checkCommentsKept,
   checkDeletions,
   commitBlocks,
   verifyResult,
@@ -69,7 +80,11 @@ export type MergeMode =
   | 'rebased';
 
 export interface DirectEditResponse {
-  outcome: 'committed' | 'unchanged' | 'dry_run';
+  /**
+   * `already_applied`: this request (same document, base revision and batch)
+   * committed before; nothing was written again.
+   */
+  outcome: 'committed' | 'unchanged' | 'dry_run' | 'already_applied';
   /** The document's revision after the commit (the current one otherwise). */
   revision: string;
   changes: BlockChange[];
@@ -163,11 +178,35 @@ function recordStats(span: Span, stats: CommitStats): void {
   span.setAttr('edit.update_bytes', stats.updateBytes);
 }
 
-interface Planned {
-  revision: string;
-  current: DocumentView;
-  result: CommitResult;
-  merge: MergeMode;
+type Planned =
+  | {
+      revision: string;
+      current: DocumentView;
+      result: CommitResult;
+      merge: MergeMode;
+    }
+  | { revision: string; alreadyApplied: true };
+
+/**
+ * The AI peer the batch is written as: derived from the request when it names
+ * a base revision, so a retry of a committed request is recognisable; fresh
+ * otherwise.
+ */
+async function requestPeerId(
+  documentId: string,
+  request: DirectEditRequest
+): Promise<bigint> {
+  if (request.baseRevision === undefined) return nextAiPeerId();
+  const identity = JSON.stringify([
+    documentId,
+    request.baseRevision,
+    request.edits,
+    request.allowDeletingContent ?? false,
+  ]);
+  const digest = new DataView(
+    await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity))
+  );
+  return AI_PEER_BASE + (digest.getBigUint64(0) % AI_PEER_COUNT);
 }
 
 async function planAttempt(
@@ -181,9 +220,14 @@ async function planAttempt(
     storage.load(signal)
   );
   signal.throwIfAborted();
+  const peerId = await requestPeerId(documentId, request);
+  const doc = new LoroDoc();
+  doc.import(snapshot);
+  if (doc.oplogVersion().toJSON().has(`${peerId}`))
+    return { revision, alreadyApplied: true };
   const options = {
     allowDeletingContent: request.allowDeletingContent,
-    peerId: nextAiPeerId(),
+    peerId,
   };
   const current = await readDocument(documentId, snapshot);
   const atBase =
@@ -203,8 +247,6 @@ async function planAttempt(
     return { revision, current, result, merge: 'current' };
   }
 
-  const doc = new LoroDoc();
-  doc.import(snapshot);
   const baseVersion = decodeRevision(request.baseRevision);
   const order = doc.oplogVersion().compare(baseVersion);
   if (order === undefined || order < 0)
@@ -251,6 +293,11 @@ async function planAttempt(
     const mergedView = await readDocument(documentId, merged);
     try {
       verifyResult(requestedMarkdown(current, expected), mergedView);
+      checkCommentsKept(
+        current,
+        mergedView,
+        request.allowDeletingContent ?? false
+      );
       return {
         revision,
         current,
@@ -297,6 +344,13 @@ export async function runDirectEdit(
       signal,
       span
     );
+    if ('alreadyApplied' in planned)
+      return {
+        outcome: 'already_applied',
+        revision: planned.revision,
+        changes: [],
+        merge: 'base',
+      };
     span.setAttr('edit.merge', planned.merge);
     const { result, revision, current, merge } = planned;
     if (!result.changed)
