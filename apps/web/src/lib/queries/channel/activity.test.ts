@@ -1,10 +1,14 @@
 import { queryClient } from '@queries/client';
 import type { ApiActivity } from '@service-storage/generated/schemas/apiActivity';
 import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
+import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
 import { recordChannelViewWhenIdle } from './activity';
+import type { DirectoryChannel } from './directory-core';
 import { channelKeys } from './keys';
+import { directoryChannel } from './tests/directory-channel';
+import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -13,6 +17,9 @@ vi.mock('@queries/client', async () => {
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-channel-activity', () => ({
   recordChannelActivity: vi.fn(),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: vi.fn(),
 }));
 
 const recordActivity = vi.mocked(recordChannelActivity);
@@ -92,4 +99,49 @@ it('writes the recorded row into the activity list instead of refetching it', as
     activity('c', '2026-01-01T00:00:00Z'),
     activity('b', '2026-02-01T00:00:00Z'),
   ]);
+});
+
+it('stamps the recorded view on the directory without the cache', async () => {
+  const key = channelKeys.directory('user').queryKey;
+  queryClient.setQueryData<DirectoryChannel[]>(key, [
+    directoryChannel('a', { viewedAt: '2026-01-01T00:00:00Z' }),
+  ]);
+
+  recordChannelViewWhenIdle('a');
+  await flushIdle();
+
+  expect(queryClient.getQueryData<DirectoryChannel[]>(key)?.[0]?.viewedAt).toBe(
+    '2026-02-01T00:00:00Z'
+  );
+});
+
+it("stamps the recorded view on the cache's channel record", async () => {
+  const cache = fakeChannelCache();
+  cache.put(channelRecord('a', { viewedAt: '2026-01-01T00:00:00Z' }));
+  const writeQuery = vi.fn(async () => undefined);
+  vi.mocked(getGraphqlSoupCacheHost).mockReturnValue({
+    ...cache.host,
+    disabled: false,
+    writeQuery,
+  } as unknown as ReturnType<typeof getGraphqlSoupCacheHost>);
+
+  recordChannelViewWhenIdle('a');
+  await flushIdle();
+
+  expect(writeQuery).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({
+      operationName: 'ChannelViewedAtCacheWrite',
+      data: {
+        soupUpdates: [
+          expect.objectContaining({
+            item: {
+              __typename: 'GraphqlSoupChannel',
+              id: 'a',
+              viewedAt: '2026-02-01T00:00:00Z',
+            },
+          }),
+        ],
+      },
+    })
+  );
 });

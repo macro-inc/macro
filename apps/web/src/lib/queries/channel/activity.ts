@@ -4,6 +4,7 @@ import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
 import { recordChannelActivity } from '@service-storage/graphql-channel-activity';
+import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { scheduleIdle } from '@solid-primitives/scheduled';
 import { useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -15,6 +16,7 @@ import {
 } from '../auth/account-scope';
 import { useQueryAccount } from '../auth/use-query-account';
 import { channelKeys } from './keys';
+import { stampCachedChannelView, stampMemoryChannelView } from './viewed-at';
 
 export function channelActivityQueryOptions(
   account: QueryAccount | undefined,
@@ -63,6 +65,14 @@ async function recordChannelView(channelId: string, account: QueryAccount) {
     channelKeys.activity(account.userId).queryKey,
     (list) => list && upsertChannelActivity(list, activity)
   );
+  const viewedAt = activity.viewed_at;
+  if (!viewedAt) return;
+  // The directory reads views from the channel record, which no soup update
+  // carries for the viewer's own view.
+  stampMemoryChannelView(queryClient, account.userId, channelId, viewedAt);
+  const host = getGraphqlSoupCacheHost();
+  if (host && !host.disabled)
+    await stampCachedChannelView(host, channelId, viewedAt);
 }
 
 /** Idle callbacks wait at most this long behind a busy main thread. */
