@@ -35,6 +35,9 @@ BEGIN
             CONTINUE WHEN NOT FOUND;
             SELECT property_definition_id INTO definition_id FROM database_columns
             WHERE id = outcome_id AND table_id = p.table_id;
+            CONTINUE WHEN NOT FOUND;
+            -- The lock an option append takes, so two cannot read the same last place.
+            PERFORM 1 FROM property_definitions WHERE id = definition_id FOR UPDATE SKIP LOCKED;
             CONTINUE WHEN NOT FOUND OR EXISTS (
                 SELECT 1 FROM property_options
                 WHERE property_definition_id = definition_id AND lower(string_value) = 'declined'
@@ -46,8 +49,14 @@ BEGIN
             FROM (SELECT overlay(gen_random_bytes(16) placing
                 decode(lpad(to_hex((extract(epoch FROM clock_timestamp()) * 1000)::bigint), 12, '0'), 'hex')
                 FROM 1 FOR 6) AS bytes) random;
-            INSERT INTO property_options (id, property_definition_id, string_value, display_order)
-            SELECT option_id, definition_id, 'Declined', coalesce(max(display_order) + 1, 0)
+            -- An appended option takes the palette color of its position
+            -- (properties::TagColor::for_position), unless its field's options
+            -- have no colors, as the commercial-fields backfill left them.
+            INSERT INTO property_options (id, property_definition_id, string_value, display_order, color)
+            SELECT option_id, definition_id, 'Declined', coalesce(max(display_order) + 1, 0),
+                CASE WHEN bool_or(color IS NOT NULL) THEN (ARRAY['#0091FF', '#46A758', '#8E4EC6',
+                    '#F76B15', '#E93D82', '#12A594', '#FFB224', '#3E63DD', '#E5484D', '#F5D90A',
+                    '#889096', '#E54D2E'])[count(*) % 12 + 1] END
             FROM property_options WHERE property_definition_id = definition_id
             ON CONFLICT DO NOTHING;
             GET DIAGNOSTICS added = ROW_COUNT;

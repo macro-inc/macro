@@ -354,6 +354,7 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
     let idle = create(&s, team, PipelineRecordType::Company).await;
     let busy = create(&s, team, PipelineRecordType::Company).await;
     let contended = create(&s, team, PipelineRecordType::Company).await;
+    let stalled = create(&s, team, PipelineRecordType::Company).await;
     let generic = s
         .create(
             team_receipt(team, OWNER),
@@ -386,6 +387,16 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
     forget_declined(&pool, &idle).await;
     forget_declined(&pool, &busy).await;
     forget_declined(&pool, &contended).await;
+    forget_declined(&pool, &stalled).await;
+    // As the commercial-fields backfill left them, with no colors.
+    sqlx::query!(
+        "UPDATE property_options o SET color = NULL FROM database_columns c
+         WHERE c.id = $1 AND o.property_definition_id = c.property_definition_id",
+        busy.commercial_fields.outcome.unwrap().into_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
     let (labels, stale) = outcome_options(&s, &a, &idle).await;
     assert_eq!(labels, ["Open", "Won", "Lost"]);
     let generic_version = s
@@ -395,9 +406,10 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         .table
         .version;
 
-    // A pipeline read holds its row, so the migration passes it by. Another
-    // holds its Outcome's definition, so adding the option would wait: the
-    // migration gives up on that pipeline after its lock timeout and goes on.
+    // A pipeline read holds its row, and another session its Outcome's
+    // definition, so the migration passes both by. A third pipeline's journal
+    // entry would wait on an uncommitted one: the migration gives up on that
+    // pipeline after its lock timeout and goes on.
     let mut reader = pool.begin().await.unwrap();
     sqlx::query!(
         "SELECT id FROM crm_pipeline_entities WHERE id = $1 FOR SHARE",
@@ -415,9 +427,22 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
     .fetch_one(&mut *holder)
     .await
     .unwrap();
+    let stalled_version = outcome_options(&s, &a, &stalled).await.1;
+    let mut journal = pool.begin().await.unwrap();
+    sqlx::query!(
+        r#"INSERT INTO database_changes (database_id, table_id, version, ops, inverse)
+           VALUES ($1, $2, $3, '[]', '{}')"#,
+        stalled.database_id.into_uuid(),
+        stalled.table_id.into_uuid(),
+        stalled_version.0 + 1,
+    )
+    .execute(&mut *journal)
+    .await
+    .unwrap();
     run_declined_migration(&pool).await;
     reader.rollback().await.unwrap();
     holder.rollback().await.unwrap();
+    journal.rollback().await.unwrap();
 
     let (labels, version) = outcome_options(&s, &a, &idle).await;
     assert_eq!(labels, ["Open", "Won", "Lost", "Declined"]);
@@ -443,12 +468,14 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
         .await
         .unwrap();
     assert_eq!(entry[0].cells.get(&outcome).cloned(), won);
-    for skipped in [&busy, &contended] {
+    for skipped in [&busy, &contended, &stalled] {
         assert_eq!(
             outcome_options(&s, &a, skipped).await.0,
             ["Open", "Won", "Lost"]
         );
     }
+    // Giving up undid the stalled pipeline's version bump with its option.
+    assert_eq!(outcome_options(&s, &a, &stalled).await.1, stalled_version);
     assert_eq!(
         s.table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
             .await
@@ -460,11 +487,25 @@ async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool
 
     // A rerun reaches the pipelines it passed by and leaves the others alone.
     run_declined_migration(&pool).await;
-    for skipped in [&busy, &contended] {
+    for skipped in [&busy, &contended, &stalled] {
         assert_eq!(
             outcome_options(&s, &a, skipped).await.0,
             ["Open", "Won", "Lost", "Declined"]
         );
+    }
+    // Declined takes its position's palette color, as an appended option
+    // does, but stays uncolored beside options that have no color.
+    for (p, color) in [(&idle, Some("#F76B15")), (&busy, None)] {
+        let stored = sqlx::query_scalar!(
+            "SELECT o.color FROM property_options o JOIN database_columns c
+               ON o.property_definition_id = c.property_definition_id
+             WHERE c.id = $1 AND o.string_value = 'Declined'",
+            p.commercial_fields.outcome.unwrap().into_uuid(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored.as_deref(), color);
     }
     assert_eq!(
         outcome_options(&s, &a, &idle).await,
