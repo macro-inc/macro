@@ -277,15 +277,35 @@ briefs, customer requests); the sales rep lost one of the two needs only a
 drafted routine meets (found 3.83 to 2.94). Wrong sidebars fell from 0.56 to
 0.19 a generation.
 
+### One onboarding session, judged once a run
+
+Main `fa31ccc0c0` (one routines session for every surface) twice on
+`routines`, every rep at one "now" and each persona's judge prefix written
+once a run (`judgeLast`), 2026-11-19, on one stack:
+
+| Run | Score | Found / needs | Bad | Suggested | First | End |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 70.5 (61.6 to 79.5) | 4.07 / 5.7 | 0.11 | 4.8 | 136 s | 151 s |
+| B | 70.4 (61.5 to 79.3) | 4.11 / 5.7 | 0.15 | 4.9 | 141 s | 155 s |
+
+`noise` A against B: score −0.1 (95% −7.5 to 7.2), found +0.04 (−0.28 to
+0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
+run leaves `MARGINS` as they were.
+
 ## Cost and time
 
-From the baseline runs. A generation's cost is its `ai_usage`; the judge
-(Opus 5.5) costs about as much again.
+An attempt's cost, from the baseline runs (`feed`, 2026-11-18) and main's
+runs above (`routines`, 2026-11-19). A generation's cost is its
+`ai_usage`; the judge is Opus 5.5.
 
 | Section | Generation | Judge | One run (27 attempts) | Wall time of a run |
 | --- | --- | --- | --- | --- |
-| `routines` | $0.21 | $0.24 | about $12 | 31 to 34 minutes |
+| `routines` | $0.08 | $0.05 | about $3.70 | 33 to 35 minutes |
 | `feed` | $0.18 | $0.28 | about $12 | 26 to 32 minutes |
+
+A `routines` run's judge costs $1.35 to $1.65. Of one at $1.64, $0.75 wrote each
+persona's prefix and each attempt's own part, $0.70 was output and $0.20
+cached reads.
 
 A comparison is one run of the change against a stored run of main from the
 same stack: the cost of one run. Run main again when main changes what the
