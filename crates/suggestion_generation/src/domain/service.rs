@@ -36,9 +36,10 @@ use feature_flags::FeatureFlags;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use routine_program::Surface;
-use scheduled_action::domain::suggestions::ROUTINE_SUGGESTIONS_FLAG;
 use scheduled_action::domain::suggestions::model::RoutineGenerationReport;
-use scheduled_action::domain::suggestions::ports::RoutineSuggestionApi;
+use scheduled_action::domain::suggestions::ports::{BriefPart, RoutineSuggestionApi};
+use scheduled_action::domain::suggestions::work::WorkList;
+use scheduled_action::domain::suggestions::{ROUTINE_FIND_WORK_FLAG, ROUTINE_SUGGESTIONS_FLAG};
 use suggestions::domain::model::{GenerationTrigger, SessionKind};
 use suggestions::domain::ports::SuggestionApi;
 use suggestions::domain::service::SUGGESTIONS_FLAG;
@@ -64,6 +65,10 @@ mod test;
 
 /// The longest an onboarding routines session runs: the person is waiting.
 pub const ONBOARDING_ROUTINES_TIMEOUT: Duration = Duration::from_secs(240);
+/// Longest finding the work in a person's month of mail may take at
+/// onboarding; their drafting session goes on from their newest mail alone
+/// after.
+pub const FIND_WORK_TIMEOUT: Duration = Duration::from_secs(120);
 /// The longest a nightly or manual routines session runs: it reviews what
 /// it suggested before, too.
 pub const NIGHTLY_ROUTINES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
@@ -134,6 +139,18 @@ struct Run {
     timezone: Tz,
     suggestions: bool,
     routines: bool,
+    /// Whether onboarding finds the work in the person's month of mail
+    /// first, and drafts from it in a session of its own.
+    find_work: bool,
+}
+
+/// Which kinds of suggestion are on for a person.
+#[derive(Clone, Copy, Default)]
+struct Kinds {
+    suggestions: bool,
+    routines: bool,
+    /// Whether onboarding finds the work in their mail first.
+    find_work: bool,
 }
 
 /// What stops a generation's sessions early.
@@ -159,6 +176,14 @@ struct Ended {
     /// The session, when its cleanup waits for its generation's end to be
     /// stored: its process is stopping.
     deferred: Option<RoutineSessionAction>,
+}
+
+/// Which session to open: its id, its try, and the part of the work it does.
+struct Opened {
+    session: AgentSessionId,
+    attempt: u8,
+    /// [`BriefPart::name`], or `whole` for a suggestions session.
+    part: &'static str,
 }
 
 /// One routines session group's end, and whether it took a second try.
@@ -283,19 +308,20 @@ where
         }
     }
 
-    /// Which kinds are on for the person: suggestions, routine suggestions.
-    async fn kinds(&self, user: &MacroUserIdStr<'_>) -> (bool, bool) {
+    /// Which kinds are on for the person.
+    async fn kinds(&self, user: &MacroUserIdStr<'_>) -> Kinds {
         let Some(flags) = &self.flags else {
-            return (false, false);
+            return Kinds::default();
         };
         match flags.load(user).await {
-            Ok(flags) => (
-                flags.is_enabled(SUGGESTIONS_FLAG),
-                flags.is_enabled(ROUTINE_SUGGESTIONS_FLAG),
-            ),
+            Ok(flags) => Kinds {
+                suggestions: flags.is_enabled(SUGGESTIONS_FLAG),
+                routines: flags.is_enabled(ROUTINE_SUGGESTIONS_FLAG),
+                find_work: flags.is_enabled(ROUTINE_FIND_WORK_FLAG),
+            },
             Err(error) => {
                 tracing::warn!(?error, "feature flags unavailable; nothing generates");
-                (false, false)
+                Kinds::default()
             }
         }
     }
@@ -348,8 +374,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> Result<GenerationOverview, GenerationError> {
-        let (suggestions, _) = self.kinds(user).await;
-        if !suggestions {
+        if !self.kinds(user).await.suggestions {
             return Err(GenerationError::NotFound);
         }
         let facts = self
@@ -377,7 +402,8 @@ where
         timezone: Tz,
         permit: Option<OwnedSemaphorePermit>,
     ) -> Result<StartOutcome, GenerationError> {
-        let (suggestions, routines_on) = self.kinds(user).await;
+        let kinds = self.kinds(user).await;
+        let (suggestions, routines_on) = (kinds.suggestions, kinds.routines);
         let off = match trigger {
             GenerationTrigger::Manual => !suggestions,
             GenerationTrigger::Onboarding | GenerationTrigger::Nightly => {
@@ -490,6 +516,7 @@ where
             timezone,
             suggestions,
             routines,
+            find_work: kinds.find_work,
         };
         let runner = Arc::clone(&self.runner);
         let shutdown = self.shutdown.clone();
@@ -695,8 +722,7 @@ where
         user: &MacroUserIdStr<'static>,
         timezone: Tz,
     ) -> Result<(), GenerationError> {
-        let (suggestions, _) = self.kinds(user).await;
-        if !suggestions || self.plan(user).await != Plan::Paid {
+        if !self.kinds(user).await.suggestions || self.plan(user).await != Plan::Paid {
             return Ok(());
         }
         let now = Utc::now();
@@ -905,49 +931,158 @@ where
     /// The generation's one suggestions session.
     async fn suggestions_session(&self, run: &Run, stop: Stop<'_>) -> Ended {
         let brief = self.suggestions.brief(run.trigger, run.timezone);
-        self.session(run, SessionKind::Suggestions, &[], brief, 1, stop)
-            .await
+        self.session(
+            run,
+            SessionKind::Suggestions,
+            &[],
+            brief,
+            Opened {
+                session: AgentSessionId::new(),
+                attempt: 1,
+                part: "whole",
+            },
+            stop,
+        )
+        .await
     }
 
     /// At onboarding, one routines session per layout group (one for every
     /// surface unless `with_layout` split them), and one that suggested
     /// nothing is retried once; otherwise one session for every surface.
-    /// Each group's end, and whether it was retried.
+    /// An onboarding that finds the work first instead runs two sessions for
+    /// every surface: one that picks from the catalog at once, and one that
+    /// drafts once the work in the person's month of mail is found. Each
+    /// group's end, and whether it was retried.
     async fn routine_sessions(&self, run: &Run, stop: Stop<'_>) -> Vec<GroupEnded> {
         let single = SessionLayout::single();
+        if run.trigger == GenerationTrigger::Onboarding && run.find_work {
+            let surfaces = &single.sessions()[0];
+            let picks = self.routine_group(run, surfaces, BriefPart::Picks, None, stop);
+            let drafts = async {
+                let session = AgentSessionId::new();
+                let work = self.find_work(run, session, stop).await;
+                self.routine_group(
+                    run,
+                    surfaces,
+                    BriefPart::Drafts(work.as_ref()),
+                    Some(session),
+                    stop,
+                )
+                .await
+            };
+            let (picks, drafts) = tokio::join!(picks, drafts);
+            return vec![picks, drafts];
+        }
         let layout = match run.trigger {
             GenerationTrigger::Onboarding => &self.layout,
             GenerationTrigger::Nightly | GenerationTrigger::Manual => &single,
         };
-        let groups = layout.sessions().iter().map(|surfaces| async move {
-            let first = self.routine_session(run, surfaces, 1, stop).await;
-            let retry =
-                run.trigger == GenerationTrigger::Onboarding && !first.work.any() && !stop.any();
-            if retry {
-                GroupEnded {
-                    ended: self.routine_session(run, surfaces, 2, stop).await,
-                    retried: true,
+        let groups = layout
+            .sessions()
+            .iter()
+            .map(|surfaces| self.routine_group(run, surfaces, BriefPart::Whole, None, stop));
+        futures::future::join_all(groups).await
+    }
+
+    /// One routines session doing `part` of the work for `surfaces`, as
+    /// `session` when given, retried once at onboarding when it suggested
+    /// nothing.
+    async fn routine_group(
+        &self,
+        run: &Run,
+        surfaces: &[Surface],
+        part: BriefPart<'_>,
+        session: Option<AgentSessionId>,
+        stop: Stop<'_>,
+    ) -> GroupEnded {
+        let session = session.unwrap_or_else(AgentSessionId::new);
+        let first = self
+            .routine_session(run, surfaces, part, session, 1, stop)
+            .await;
+        let retry =
+            run.trigger == GenerationTrigger::Onboarding && !first.work.any() && !stop.any();
+        if retry {
+            GroupEnded {
+                ended: self
+                    .routine_session(run, surfaces, part, AgentSessionId::new(), 2, stop)
+                    .await,
+                retried: true,
+            }
+        } else {
+            GroupEnded {
+                ended: first,
+                retried: false,
+            }
+        }
+    }
+
+    /// The streams of work in the person's month of mail, for drafting
+    /// session `session`; none when there are none, or they can't be found
+    /// in time or before a stop.
+    async fn find_work(
+        &self,
+        run: &Run,
+        session: AgentSessionId,
+        stop: Stop<'_>,
+    ) -> Option<WorkList> {
+        let span = tracing::info_span!(
+            "routine.find_work",
+            agent.session.id = %session,
+            routine.find_work.outcome = tracing::field::Empty,
+            routine.find_work.streams = tracing::field::Empty,
+        );
+        async {
+            let span = tracing::Span::current();
+            let found = tokio::select! {
+                biased;
+                () = stop.shutdown.cancelled() => Err("cancelled"),
+                () = stop.lost.cancelled() => Err("heartbeat_lost"),
+                found = tokio::time::timeout(
+                    FIND_WORK_TIMEOUT,
+                    self.routines.find_work(&run.user, session.as_uuid()),
+                ) => match found {
+                    Ok(Ok(list)) => Ok(list),
+                    Ok(Err(error)) => {
+                        tracing::warn!(error = ?error, "could not find the work in a person's mail");
+                        Err("failed")
+                    }
+                    Err(_) => Err("timed_out"),
+                },
+            };
+            match found {
+                Ok(list) if !list.streams.is_empty() => {
+                    span.record("routine.find_work.outcome", "found");
+                    span.record("routine.find_work.streams", list.streams.len());
+                    Some(list)
                 }
-            } else {
-                GroupEnded {
-                    ended: first,
-                    retried: false,
+                Ok(_) => {
+                    span.record("routine.find_work.outcome", "none");
+                    span.record("routine.find_work.streams", 0);
+                    None
+                }
+                Err(outcome) => {
+                    span.record("routine.find_work.outcome", outcome);
+                    span.record("otel.status_code", "ERROR");
+                    None
                 }
             }
-        });
-        futures::future::join_all(groups).await
+        }
+        .instrument(span)
+        .await
     }
 
     async fn routine_session(
         &self,
         run: &Run,
         surfaces: &[Surface],
+        part: BriefPart<'_>,
+        session: AgentSessionId,
         attempt: u8,
         stop: Stop<'_>,
     ) -> Ended {
         let brief = match self
             .routines
-            .brief(&run.user, surfaces, run.trigger, run.timezone)
+            .brief(&run.user, surfaces, run.trigger, run.timezone, part)
             .await
         {
             Ok(brief) => brief,
@@ -965,8 +1100,19 @@ where
             .filter_map(|surface| serde_json::to_value(surface).ok())
             .filter_map(|value| value.as_str().map(str::to_owned))
             .collect();
-        self.session(run, SessionKind::Routines, &names, brief, attempt, stop)
-            .await
+        self.session(
+            run,
+            SessionKind::Routines,
+            &names,
+            brief,
+            Opened {
+                session,
+                attempt,
+                part: part.name(),
+            },
+            stop,
+        )
+        .await
     }
 
     /// Run one hidden session with `brief` until its turn ends, its kind's
@@ -978,16 +1124,21 @@ where
         kind: SessionKind,
         surfaces: &[String],
         brief: String,
-        attempt: u8,
+        opened: Opened,
         stop: Stop<'_>,
     ) -> Ended {
-        let session = AgentSessionId::new();
+        let Opened {
+            session,
+            attempt,
+            part,
+        } = opened;
         let span = tracing::info_span!(
             "suggestion.session",
             agent.session.id = %session,
             suggestion.session.kind = kind.as_ref(),
             suggestion.session.surfaces = ?surfaces,
             suggestion.session.attempt = attempt,
+            suggestion.session.part = part,
             suggestion.session.status_reads = tracing::field::Empty,
             suggestion.session.tool_calls = tracing::field::Empty,
             suggestion.session.turns = tracing::field::Empty,

@@ -19,7 +19,15 @@ scheduling runtime.
   routines session for every surface at once (`SessionLayout`: a session that
   sees every surface picks the few routines the mail calls for, where split
   sessions each filled their own), each kind only when its flag is
-  on (`enable-suggestions`, `enable-routine-suggestions`).
+  on (`enable-suggestions`, `enable-routine-suggestions`). An onboarding
+  with `routine-suggestions-find-work` on runs two routines sessions for
+  every surface instead: one that picks catalog routines starts at once,
+  while `RoutineSuggestionApi::find_work` reads the person's month of mail
+  (`routine.find_work` span, at most `FIND_WORK_TIMEOUT`); the one that
+  drafts starts when the work is found, as the session the finding call's
+  usage was recorded with, and from the newest mail alone when it can't be
+  found. Each is retried once on its own when it suggested nothing, the
+  drafting one from the same work.
 - Each session is hidden, the person's, non-billable, and may call its kind's
   tools while its `suggestion_generation_session` row is open. Its brief comes
   from the kind's crate (`SuggestionApi::brief`, `RoutineSuggestionApi::brief`),

@@ -16,6 +16,11 @@ a routines session that suggests nothing is retried once; one that kept a sugges
 was then cut off at its time limit is not (its `suggestion.session` span ends
 `timed_out`). Surfaces AI leaves empty show Macro's templates.
 Routine suggestions are behind the `enable-routine-suggestions` flag.
+With `routine-suggestions-find-work` also on, onboarding runs two routines
+sessions instead of one: one picks catalog routines at once, and the other
+drafts routines once one model call has listed the recurring work in the
+person's last 30 days of mail (`suggestion.session.part` is `picks` or
+`drafts`; `whole` otherwise).
 
 Each generation is one trace, and logs one `routine_suggestions.generated`
 event with its `trigger`:
@@ -24,13 +29,15 @@ event with its `trigger`:
 | --- | --- |
 | Generations | Spans: `resource_name:suggestion.generation`, by `@suggestion.generation.outcome` and `@suggestion.generation.trigger` |
 | A generation's sessions | Spans: `resource_name:suggestion.session` in its trace; `@suggestion.session.kind`, `.ended`, `.tool_calls`, `.turns` |
+| Finding the work | Spans: `resource_name:routine.find_work`, by `@routine.find_work.outcome` (`found`, `none`, `failed`, `timed_out`, `cancelled`, `heartbeat_lost`) and `.streams` |
 | Its suggest calls | Spans: `resource_name:routine.suggestions.suggest`; `@routine.suggestion.ok`, `@routine.suggestion.problems` |
 | Outcome logs | Logs: `service:agent-harness-service @event:routine_suggestions.generated`, by `@outcome` |
 | Rejected suggestions | Logs: `@event:routine_suggestions.suggested @ok:false` |
 
 In the log event, `ready` means every routines session kept a suggestion,
 `partial` that some did not (only when a layout splits the surfaces across
-sessions), `failed` that none did (after a retry at onboarding), and
+sessions, or the picking and drafting sessions of an onboarding that finds the
+work), `failed` that none did (after a retry at onboarding), and
 `cancelled` that the process shut down first. A nightly run that finds
 nothing missing is `failed` by this measure, so the generation metrics and
 the alert below count onboarding runs only.
@@ -58,6 +65,12 @@ only. It notifies; it does not page.
   span) at zero means the inbox was empty or could not be read, so the
   sessions had little to suggest from. Look for `could not read the inbox to
   suggest routines` warnings and email-service health.
+- `routine.find_work` spans that end `failed` or `timed_out` (120 s) leave the
+  drafting session to the newest mail alone. Its `routine.suggestions.read_month`
+  child times the mail read (`.messages`) and `routine.suggestions.list_work`
+  the model call; check email-service health for the first and the model
+  provider for the second.
 - Levers: a person keeps Macro's templates either way. Onboarding runs once
   per person; their nightly runs keep trying. To stop new routines sessions,
-  turn off `enable-routine-suggestions`.
+  turn off `enable-routine-suggestions`; to go back to one routines session at
+  onboarding, turn off `routine-suggestions-find-work`.

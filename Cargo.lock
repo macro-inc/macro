@@ -776,6 +776,7 @@ dependencies = [
  "model_notifications",
  "model_owner",
  "models_dcs",
+ "models_email",
  "models_permissions",
  "models_search",
  "nom 8.0.0",

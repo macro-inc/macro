@@ -13,6 +13,7 @@ use model_owner::CreationPrincipal;
 use scheduled_action::domain::suggestions::model::{
     RetireSuggestion, RoutineSuggestions, SuggestOutcome, SuggestRequest, SuggestionReview,
 };
+use scheduled_action::domain::suggestions::work::WorkStream;
 use suggestions::domain::model::{
     AttachDraft, NewSuggestion, RetireSuggestionRequest, RewriteSuggestion, SuggestionCaller,
     SuggestionError, SuggestionFeed, SuggestionWriteOutcome, SuggestionsReview,
@@ -210,12 +211,40 @@ impl RoutineSessions for FakeSessions {
     }
 }
 
-/// Routine suggestions: a brief naming its trigger and surfaces, and what
-/// each session suggested.
+/// How finding the work in a person's mail goes.
+#[derive(Debug, Clone, Copy)]
+enum Finding {
+    /// It lists this many streams.
+    Found(usize),
+    Fails,
+    /// It never answers.
+    Hangs,
+}
+
+fn stream(n: usize) -> WorkStream {
+    WorkStream {
+        name: format!("Stream {n}"),
+        senders: Vec::new(),
+        count: 4,
+        cadence: "weekly".to_owned(),
+        what: String::new(),
+        action: String::new(),
+        handled_by: String::new(),
+        labels: Vec::new(),
+        keeps: String::new(),
+        examples: Vec::new(),
+    }
+}
+
+/// Routine suggestions: a brief naming its trigger, part and surfaces, what
+/// each session suggested, and the work found for each drafting session.
 struct FakeRoutines {
     repo: Arc<FakeRepo>,
     counts: Arc<Counts>,
     reports: Arc<Mutex<Vec<RoutineGenerationReport>>>,
+    finding: Finding,
+    /// The sessions work was found for.
+    found_for: Mutex<Vec<Uuid>>,
 }
 
 impl RoutineSuggestionApi for FakeRoutines {
@@ -233,8 +262,31 @@ impl RoutineSuggestionApi for FakeRoutines {
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         _: Tz,
+        part: BriefPart<'_>,
     ) -> anyhow::Result<String> {
-        Ok(format!("routines {} {surfaces:?}", trigger.as_ref()))
+        let part = match part {
+            BriefPart::Whole => String::new(),
+            BriefPart::Picks => "picks ".to_owned(),
+            BriefPart::Drafts(Some(work)) => format!("drafts {} ", work.streams.len()),
+            BriefPart::Drafts(None) => "drafts none ".to_owned(),
+        };
+        Ok(format!("routines {} {part}{surfaces:?}", trigger.as_ref()))
+    }
+
+    async fn find_work(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        session: Uuid,
+    ) -> anyhow::Result<WorkList> {
+        self.found_for.lock().unwrap().push(session);
+        match self.finding {
+            Finding::Found(streams) => Ok(WorkList {
+                person: "Runs a bakery".to_owned(),
+                streams: (0..streams).map(stream).collect(),
+            }),
+            Finding::Fails => anyhow::bail!("the model failed"),
+            Finding::Hangs => std::future::pending().await,
+        }
     }
 
     async fn texts(
@@ -961,6 +1013,7 @@ struct Harness {
     plans: Arc<FakePlans>,
     counts: Arc<Counts>,
     reports: Arc<Mutex<Vec<RoutineGenerationReport>>>,
+    routines: Arc<FakeRoutines>,
     shutdown: CancellationToken,
 }
 
@@ -968,6 +1021,18 @@ struct Harness {
 /// everyone, sessions going as `script` says, and `stored` answering
 /// whether a session is stored, when given.
 fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>) -> Harness {
+    build_finding(suggestions, routines, script, stored, None)
+}
+
+/// Likewise, with onboarding finding the work first, going as `finding`
+/// says, when given.
+fn build_finding(
+    suggestions: bool,
+    routines: bool,
+    script: Script,
+    stored: Option<bool>,
+    finding: Option<Finding>,
+) -> Harness {
     let mut flags = FakeFeatureFlags::default();
     for n in 0..PEOPLE {
         flags.set(
@@ -978,12 +1043,23 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
                     ROUTINE_SUGGESTIONS_FLAG.to_owned(),
                     FlagValue::Boolean(routines),
                 ),
+                (
+                    ROUTINE_FIND_WORK_FLAG.to_owned(),
+                    FlagValue::Boolean(finding.is_some()),
+                ),
             ])),
         );
     }
     let counts = Arc::new(Counts::default());
     let reports = Arc::new(Mutex::new(Vec::new()));
     let repo = Arc::new(FakeRepo::default());
+    let routines = Arc::new(FakeRoutines {
+        repo: Arc::clone(&repo),
+        counts: Arc::clone(&counts),
+        reports: Arc::clone(&reports),
+        finding: finding.unwrap_or(Finding::Fails),
+        found_for: Mutex::new(Vec::new()),
+    });
     let sessions = Arc::new(FakeSessions {
         repo: Arc::clone(&repo),
         counts: Arc::clone(&counts),
@@ -1000,11 +1076,7 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
     let service = GenerationService::new(
         Arc::clone(&repo),
         Arc::clone(&sessions),
-        Arc::new(FakeRoutines {
-            repo: Arc::clone(&repo),
-            counts: Arc::clone(&counts),
-            reports: Arc::clone(&reports),
-        }),
+        Arc::clone(&routines),
         Arc::new(FakeSuggestions {
             repo: Arc::clone(&repo),
             counts: Arc::clone(&counts),
@@ -1029,6 +1101,7 @@ fn build(suggestions: bool, routines: bool, script: Script, stored: Option<bool>
         plans,
         counts,
         reports,
+        routines,
         shutdown,
     }
 }
@@ -1188,6 +1261,96 @@ async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_grou
         StartOutcome::Refused(Admission::Done)
     );
     assert_eq!(h.prepared(), groups + 1);
+}
+
+/// An onboarding that finds the work first runs a session that picks from
+/// the catalog at once, and one that drafts from the work found, as the
+/// session the work was found for.
+#[tokio::test(start_paused = true)]
+async fn an_onboarding_that_finds_the_work_picks_and_drafts_in_sessions_of_their_own() {
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(6)));
+    h.onboard().await.unwrap();
+    let mut prompts = h.prompts();
+    prompts.sort();
+    let all = format!("{ALL_SURFACES:?}");
+    assert_eq!(
+        prompts,
+        [
+            format!("routines onboarding drafts 6 {all}"),
+            format!("routines onboarding picks {all}"),
+            "suggestions onboarding".to_owned(),
+        ]
+    );
+    let found_for = h.routines.found_for.lock().unwrap().clone();
+    assert_eq!(found_for.len(), 1);
+    let drafting = h
+        .repo
+        .sessions()
+        .into_iter()
+        .filter(|session| session.kind == SessionKind::Routines)
+        .map(|session| session.id)
+        .collect::<Vec<_>>();
+    assert_eq!(drafting.len(), 2);
+    assert!(drafting.contains(&found_for[0]));
+    assert_eq!(h.reports()[0].sessions, 2);
+    assert_eq!(h.repo.only().status, GenerationStatus::Ready);
+}
+
+/// Work that can't be found, or isn't found in time, leaves drafting to the
+/// person's newest mail; nightly and manual runs never look for it.
+#[tokio::test(start_paused = true)]
+async fn without_the_work_found_the_drafting_session_reads_the_newest_mail() {
+    for finding in [Finding::Fails, Finding::Hangs, Finding::Found(0)] {
+        let h = build_finding(true, true, finishes, Some(true), Some(finding));
+        h.onboard().await.unwrap();
+        let prompts = h.prompts();
+        assert!(
+            prompts
+                .iter()
+                .any(|prompt| prompt.starts_with("routines onboarding drafts none ")),
+            "{finding:?}: {prompts:?}"
+        );
+        assert!(
+            prompts
+                .iter()
+                .any(|prompt| prompt.starts_with("routines onboarding picks ")),
+            "{finding:?}"
+        );
+    }
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(6)));
+    h.repo
+        .due
+        .lock()
+        .unwrap()
+        .push(member(user(), zone_in_its_night()));
+    assert_eq!(h.service.nightly().await.unwrap(), 1);
+    h.service.wait().await;
+    assert!(h.routines.found_for.lock().unwrap().is_empty());
+    assert!(
+        h.prompts()
+            .iter()
+            .any(|prompt| prompt.starts_with("routines nightly ["))
+    );
+}
+
+/// A drafting session that suggested nothing is retried once, from the same
+/// work, which is found only once.
+#[tokio::test(start_paused = true)]
+async fn a_drafting_session_retried_drafts_from_the_same_work() {
+    let second_try: Script = |brief, attempt| {
+        let changes = u32::from(!brief.contains(" drafts ") || attempt == 2);
+        ends(RoutineActionStatus::Succeeded, changes)
+    };
+    let h = build_finding(true, true, second_try, Some(true), Some(Finding::Found(3)));
+    h.onboard().await.unwrap();
+    let drafts = h
+        .prompts()
+        .into_iter()
+        .filter(|prompt| prompt.starts_with("routines onboarding drafts 3 "))
+        .count();
+    assert_eq!(drafts, 2);
+    assert_eq!(h.routines.found_for.lock().unwrap().len(), 1);
+    assert_eq!(h.reports()[0].retries, 1);
 }
 
 /// Onboarding cut short (its process stopped, or its heartbeat did) starts
