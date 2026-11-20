@@ -1,10 +1,7 @@
 use super::*;
 
-fn rendered(
-    build: fn() -> Workflow,
-    patch: fn(&mut serde_yaml::Value) -> Result<()>,
-) -> serde_yaml::Value {
-    serde_yaml::from_str(&crate::workflows::render_patched(build, patch).expect("workflow yaml"))
+fn rendered(build: fn() -> Workflow) -> serde_yaml::Value {
+    serde_yaml::from_str(&crate::workflows::render_gh_workflow(build)().expect("workflow yaml"))
         .expect("parse workflow")
 }
 
@@ -14,14 +11,8 @@ const WORKFLOW: &str = "./.github/workflows/deploy_mcp_chatgpt_worker.yml";
 /// callers and with the same contract as the sync service.
 #[test]
 fn both_pipelines_deploy_the_worker_like_the_sync_service() {
-    let dev = rendered(
-        crate::workflows::deploy_on_push::deploy_on_push,
-        crate::workflows::deploy_on_push::patch,
-    );
-    let prod = rendered(
-        crate::workflows::release_production::release_production,
-        crate::workflows::release_production::patch,
-    );
+    let dev = rendered(crate::workflows::deploy_on_push::deploy_on_push);
+    let prod = rendered(crate::workflows::release_production::release_production);
     for (environment, workflow) in [("dev", dev), ("prod", prod)] {
         let jobs = &workflow["jobs"];
         let worker = &jobs["deploy-mcp-chatgpt-worker"];
@@ -47,11 +38,8 @@ fn both_pipelines_deploy_the_worker_like_the_sync_service() {
 
 #[test]
 fn the_call_contract_matches_the_sync_service() {
-    let worker = rendered(deploy_mcp_chatgpt_worker, patch);
-    let sync = rendered(
-        crate::workflows::deploy_sync_service::deploy_sync_service,
-        crate::workflows::deploy_sync_service::patch,
-    );
+    let worker = rendered(deploy_mcp_chatgpt_worker);
+    let sync = rendered(crate::workflows::deploy_sync_service::deploy_sync_service);
     assert_eq!(worker["on"]["workflow_call"], sync["on"]["workflow_call"]);
     assert_eq!(
         worker["on"]["workflow_dispatch"],
@@ -64,7 +52,7 @@ fn the_call_contract_matches_the_sync_service() {
 /// check leaves the live version serving.
 #[test]
 fn secrets_are_checked_before_deploying() {
-    let worker = rendered(deploy_mcp_chatgpt_worker, patch);
+    let worker = rendered(deploy_mcp_chatgpt_worker);
     let steps = worker["jobs"]["deploy"]["steps"]
         .as_sequence()
         .expect("steps");

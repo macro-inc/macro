@@ -505,6 +505,13 @@ export const enableTaskSourceProperty = defineFlag({
   default: onInDev,
 });
 
+/** Task-composer template selection, authoring, and saved-draft recovery. */
+export const enableTaskTemplates = defineFlag({
+  key: 'enable-task-templates',
+  env: 'ENABLE_TASK_TEMPLATES',
+  default: onInDev,
+});
+
 // Email snooze: the "Remind me" action, its 'h' shortcut, and the shared
 // time-selection command menu.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this
@@ -755,6 +762,24 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
+});
+
+// New Home: Home with Recent and Notifications tabs, desktop only. Replaces
+// the rail's Notifications entry and takes `g h`; old Home stays beside it
+// unless `disable-old-home` is also on. PostHog-gated with a dev-mode
+// default; override with VITE_ENABLE_NEW_HOME.
+export const enableNewHome = defineFlag({
+  key: 'enable-new-home',
+  env: 'ENABLE_NEW_HOME',
+  default: onInDev,
+});
+
+// With `enable-new-home` on, hide old Home so New Home takes its place and
+// `/home`. Off in dev, so dev keeps both Homes side by side to compare;
+// override with VITE_DISABLE_OLD_HOME.
+export const disableOldHome = defineFlag({
+  key: 'disable-old-home',
+  env: 'DISABLE_OLD_HOME',
 });
 
 // Keep navigation numbers off in every environment while unread counts are

@@ -15,6 +15,7 @@ use comms_db_client::channels::seed_channel::SeedChannelOptions;
 use comms_db_client::messages::seed_message::SeedMessageOptions;
 use comms_db_client::model::SimpleMention;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
+use lexical_client::parse_markdown::MarkdownSnapshotOptions;
 use macro_db_client::document::v2::create::CreateDocumentArgs;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
@@ -544,7 +545,7 @@ async fn initialize_markdown_content(
             } else {
                 clients
                     .lexical
-                    .markdown_to_loro_snapshot(markdown)
+                    .markdown_to_loro_snapshot(markdown, MarkdownSnapshotOptions::default())
                     .await
                     .context("converting markdown via lexical-service")?
             };

@@ -5052,6 +5052,10 @@ enum GraphqlEmailSyncStatus {
 	"""
 	NEEDS_REAUTH
 	"""
+	The provider serves no mailbox for the account.
+	"""
+	MAILBOX_UNAVAILABLE
+	"""
 	Synchronization is disabled.
 	"""
 	INACTIVE

@@ -626,7 +626,13 @@ Its long-mention case taps a long document mention in a phone's collapsed pill, 
 `caret.browser.e2e.ts` taps (press and release sent together) into a typed and
 a restored draft and checks the caret moves there: a click that reaches
 `MarkdownShell` before Lexical has read the selectionchange must not call
-`editor.focus()`, which writes the previous caret back.
+`editor.focus()`, which writes the previous caret back. Editor shells focus on
+click only through `focusEditorFromClick` (`LexicalMarkdown/utils.ts`), which
+skips the call while focus is already in the editor; the Markdown core suite's
+`caret.browser.e2e.ts` (composer on desktop and tablet, with a padding tap; phones
+never re-focus there) and the Universal Input suite's (the `MarkdownTextarea`
+email body, desktop/tablet) cover the same tap, sent by the core suite's
+`quick-tap.ts`.
 It also covers phone attaching: the add drawer opens the file picker within the
 tap, and when the iOS app's native photo library fails, a toast's Choose files
 button opens it, because WKWebView ignores a file input click made after the
@@ -768,6 +774,22 @@ row's author; unnamed group chats shorten to two names and a count
 regression is
 `bunx playwright test --config src/features/notifications-inbox/browser-test/playwright.config.ts`.
 
+On touch, a done row or stack notification folds away (`SwipableRow`'s
+`collapseRow`, through `setCollapseEntity`) before the feed hides it; the feed
+hides rows at once, so removing first drops the row before it can animate. The
+same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
+`NotificationsView` at phone width and checks it folds over frames before the
+feed takes it, the row below slides up without a jump, Undo restores it, and
+reduced motion skips the fold.
+
+A swipe row folds only what is inside it: draw a row's divider inside its
+`SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
+behind. A list that can keep a row after a done unfolds it through
+`setExpandEntity`: touch Notifications' Signal/Noise list (`HomeList`, whose
+work feed keeps own work) passes `expand` to `toEntityActionListState`, and
+`executeWithSoup` calls it once the done settles. Its regression is
+`bunx playwright test --config src/features/next-soup/soup-view/views/inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element
@@ -861,6 +883,7 @@ not to account-wide paired machine count; a user can pair several computers.
 
 ### General
 
+- Reuse `InlineTitleEditor` for borderless entity renames; use a bare shared `Input` with focus styling for borderless draft names.
 - Keep contact removal and restoration beside Copy contact link in both record
   headers; keep company actions on Overview. Reuse the hidden mutations and
   confirm company contact/email-sync effects.
@@ -1272,6 +1295,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   between inboxes).
 - Keep email card resize motion on its content wrapper so message and inline
   reply transitions preserve the card's focus target and return to natural height.
+- Capture the composer's visible property definitions with its values at submission; pass them as initial pins so empty custom fields remain editable below the new task title.
 - Task composer submissions retain an account/context-scoped local copy until
   the create response confirms success; never clear newer composer input from a
   late callback or automatically retry an uncertain create. Keep recovery copies
@@ -1279,6 +1303,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Prefill task Source through the originating action's composer preset under
   `enable-task-source-property`; keep the shared composer flag-agnostic and retain
   exact message IDs through property edits. See the Tasks walkthrough.
+- Gate task-template controls and workflow recovery with `enable-task-templates` on desktop and touch; inject availability from `ComposeTask` and retain paused template edits without blocking ordinary tasks or property pins.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
 - Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
