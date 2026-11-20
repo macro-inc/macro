@@ -49,6 +49,8 @@ mod voice_gateway;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_spans;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
