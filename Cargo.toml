@@ -46,6 +46,7 @@ members = [
   "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/channel_labels",
+  "crates/client/cache-bench",
   "crates/client/cache-core",
   "crates/client/cache-turso",
   "crates/client/cache-wasm",

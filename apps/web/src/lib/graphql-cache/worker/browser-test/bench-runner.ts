@@ -1,0 +1,298 @@
+/**
+ * Runs the cache engine benchmark (`bench.html`) in a real browser on OPFS.
+ *
+ * Usage (from apps/web, after `just build-cache-wasm-browser-production`):
+ *   node src/lib/graphql-cache/worker/browser-test/bench-runner.ts \
+ *     --data <dir with seed.ndjson, foreground.ndjson, meta.json> \
+ *     [--profile <browser profile dir>] [--reseed] [--runs 5] [--out results.json]
+ *
+ * The dataset comes from `cargo run -p cache-bench -- generate`. A browser
+ * profile keeps the seeded OPFS database between invocations, so cold-open
+ * and read measurements can be repeated without reseeding.
+ */
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { parseArgs } from 'node:util';
+import { chromium, type Page } from 'playwright';
+
+const { values: args } = parseArgs({
+  options: {
+    data: { type: 'string' },
+    profile: { type: 'string' },
+    reseed: { type: 'boolean', default: false },
+    runs: { type: 'string', default: '5' },
+    out: { type: 'string' },
+    port: { type: 'string', default: '4189' },
+    headed: { type: 'boolean', default: false },
+    'skip-contended': { type: 'boolean', default: false },
+  },
+});
+if (!args.data) throw new Error('--data is required');
+const dataDir = resolve(args.data);
+const profileDir = resolve(args.profile ?? `${dataDir}/profile`);
+const runs = Number(args.runs);
+const port = Number(args.port);
+const here = dirname(fileURLToPath(import.meta.url));
+const webDir = resolve(here, '../../../../../');
+const dist = resolve(here, '.dist-bench');
+const origin = `http://127.0.0.1:${port}`;
+const SCOPE = 'cache-bench';
+
+function lines(path: string): Buffer[] {
+  const buffer = readFileSync(path);
+  const out: Buffer[] = [];
+  let start = 0;
+  for (let index = 0; index < buffer.length; index++) {
+    if (buffer[index] === 10) {
+      if (index > start) out.push(buffer.subarray(start, index));
+      start = index + 1;
+    }
+  }
+  if (start < buffer.length) out.push(buffer.subarray(start));
+  return out;
+}
+
+const seedOps = lines(`${dataDir}/seed.ndjson`);
+const foregroundOps = lines(`${dataDir}/foreground.ndjson`);
+const meta = JSON.parse(readFileSync(`${dataDir}/meta.json`, 'utf8')) as {
+  tier: string;
+  threadIds: string[];
+};
+const homeVariables = JSON.parse(String(foregroundOps[0])).variables;
+const threads = meta.threadIds.slice(0, 5);
+// Background hydration during the contended pass replays mail pages.
+const backgroundBase = '/bench-data/seed';
+const backgroundCount = Math.min(seedOps.length, 40);
+
+type Step = { name: string; ms: number };
+
+function quantile(values: number[], q: number): number {
+  if (values.length === 0) return Number.NaN;
+  const sorted = [...values].sort((a, b) => a - b);
+  const position = (sorted.length - 1) * q;
+  const low = Math.floor(position);
+  const high = Math.ceil(position);
+  const lowValue = sorted[low] ?? Number.NaN;
+  const highValue = sorted[high] ?? Number.NaN;
+  return lowValue + (highValue - lowValue) * (position - low);
+}
+
+function summarize(samples: Record<string, number[]>) {
+  return Object.fromEntries(
+    Object.entries(samples).map(([name, values]) => [
+      name,
+      {
+        n: values.length,
+        p50: round(quantile(values, 0.5)),
+        p90: round(quantile(values, 0.9)),
+        max: round(Math.max(...values)),
+        total: round(values.reduce((sum, value) => sum + value, 0)),
+      },
+    ])
+  );
+}
+
+const round = (value: number) => Math.round(value * 10) / 10;
+
+function collect(target: Record<string, number[]>, steps: Step[], prefix = '') {
+  for (const { name, ms } of steps) {
+    const key = `${prefix}${name}`;
+    target[key] ??= [];
+    target[key].push(ms);
+  }
+}
+
+async function startServer(): Promise<() => void> {
+  if (!existsSync(dist)) throw new Error(`missing ${dist}; build it first`);
+  const server = spawn(
+    process.execPath,
+    [resolve(webDir, 'scripts/cache-wasm/precompressed-preview-server.mjs'), dist],
+    { env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'inherit'] }
+  );
+  await new Promise<void>((ready, fail) => {
+    server.once('error', fail);
+    server.stdout.on('data', (chunk: Buffer) => {
+      if (String(chunk).includes('listening')) ready();
+    });
+  });
+  return () => server.kill();
+}
+
+async function openPage(context: Awaited<ReturnType<typeof chromium.launchPersistentContext>>) {
+  const page = await context.newPage();
+  page.on('console', (message) => {
+    if (message.type() === 'error' || message.type() === 'warning')
+      process.stderr.write(`[page ${message.type()}] ${message.text()}\n`);
+  });
+  page.on('pageerror', (error) => process.stderr.write(`[page error] ${error.stack ?? error}\n`));
+  const started = Date.now();
+  await page.goto(`${origin}/app/bench.html`);
+  await page.waitForFunction(() => document.querySelector('#result')?.getAttribute('data-status') === 'ready');
+  return { page, loadMs: Date.now() - started };
+}
+
+const call = <T>(page: Page, method: string, ...params: unknown[]): Promise<T> =>
+  page.evaluate(
+    ([name, rest]) =>
+      (window as unknown as { cacheBench: Record<string, (...a: unknown[]) => unknown> }).cacheBench[
+        name as string
+      ]?.(...(rest as unknown[])) as Promise<T>,
+    [method, params] as const
+  );
+
+async function main() {
+  const stopServer = await startServer();
+  const fresh = args.reseed || !existsSync(`${profileDir}/.seeded`);
+  if (fresh) {
+    rmProfile();
+    mkdirSync(profileDir, { recursive: true });
+  }
+  const context = await chromium.launchPersistentContext(profileDir, {
+    headless: !args.headed,
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+  });
+  await context.route(`${origin}/bench-data/**`, async (route) => {
+    const url = new URL(route.request().url());
+    const [, , set, index] = url.pathname.split('/');
+    const source = set === 'seed' ? seedOps : foregroundOps;
+    const body = source[Number(index)];
+    if (!body) return route.fulfill({ status: 404 });
+    return route.fulfill({ status: 200, contentType: 'application/json', body });
+  });
+
+  const result: Record<string, unknown> = {
+    tier: meta.tier,
+    when: new Date().toISOString(),
+    seedOps: seedOps.length,
+  };
+  try {
+    if (fresh) {
+      const { page } = await openPage(context);
+      const opened = await call<unknown>(page, 'open', SCOPE);
+      const seedStarted = Date.now();
+      const rows = await call<Array<{ lane: string; ms: number; bytes: number }>>(
+        page,
+        'seed',
+        '/bench-data/seed',
+        seedOps.length
+      );
+      const seedWallMs = Date.now() - seedStarted;
+      const byLane: Record<string, number[]> = {};
+      const bytes: Record<string, number> = {};
+      for (const row of rows) {
+        (byLane[row.lane] ??= []).push(row.ms);
+        bytes[row.lane] = (bytes[row.lane] ?? 0) + row.bytes;
+      }
+      const storage = await call<{ usage: number; files: Array<{ name: string; bytes: number }> }>(page, 'storage');
+      result.seed = {
+        opened,
+        wallMs: seedWallMs,
+        lanes: summarize(byLane),
+        payloadBytes: bytes,
+        storage,
+        telemetry: await call(page, 'telemetry'),
+      };
+      await call(page, 'close');
+      await page.close();
+      writeFileSync(`${profileDir}/.seeded`, new Date().toISOString());
+      log('seed', result.seed);
+    }
+
+    const coldOpen: Record<string, number[]> = {};
+    const reads: Record<string, number[]> = {};
+    const writes: Record<string, number[]> = {};
+    const contended: Record<string, number[]> = {};
+    const background: number[] = [];
+    const lifecycle: unknown[] = [];
+    const telemetry: unknown[] = [];
+    let counts: unknown;
+    for (let run = 0; run < runs; run++) {
+      const { page, loadMs } = await openPage(context);
+      const opened = await call<{
+        totalMs: number;
+        firstReadMs: number;
+        lifecycle: Array<{ name: string; side: string; durationMs?: number }>;
+      }>(page, 'open', SCOPE);
+      (coldOpen['page.load'] ??= []).push(loadMs);
+      (coldOpen['open.total'] ??= []).push(opened.totalMs);
+      (coldOpen['open.firstRead'] ??= []).push(opened.firstReadMs);
+      for (const event of opened.lifecycle) {
+        if (event.durationMs === undefined) continue;
+        (coldOpen[`${event.side}:${event.name}`] ??= []).push(event.durationMs);
+      }
+      lifecycle.push(opened.lifecycle);
+      // Two passes: the first right after open, the second warm.
+      for (const pass of ['first', 'warm']) {
+        const readResult = await call<{ steps: Step[]; counts: unknown }>(
+          page,
+          'readPass',
+          threads,
+          homeVariables
+        );
+        counts = readResult.counts;
+        collect(reads, readResult.steps, `${pass}:`);
+      }
+      const writeResult = await call<{ steps: Step[] }>(
+        page,
+        'writePass',
+        '/bench-data/foreground',
+        foregroundOps.length
+      );
+      collect(writes, writeResult.steps);
+      if (!args['skip-contended']) {
+        const contendedResult = await call<{ steps: Step[]; background: number[] }>(
+          page,
+          'contended',
+          threads,
+          homeVariables,
+          backgroundBase,
+          backgroundCount
+        );
+        collect(contended, contendedResult.steps);
+        background.push(...contendedResult.background);
+      }
+      telemetry.push(await call(page, 'telemetry'));
+      await call(page, 'close');
+      await page.close();
+      process.stderr.write(`run ${run + 1}/${runs} done\n`);
+    }
+    result.coldOpen = summarize(coldOpen);
+    result.reads = summarize(reads);
+    result.writes = summarize(writes);
+    result.contended = summarize(contended);
+    result.backgroundHydrate = summarize({ hydrate: background });
+    result.counts = counts;
+    result.lifecycle = lifecycle;
+    result.telemetry = telemetry;
+    log('coldOpen', result.coldOpen);
+    log('reads', result.reads);
+    log('writes', result.writes);
+    log('contended', result.contended);
+    log('backgroundHydrate', result.backgroundHydrate);
+    log('counts', counts);
+  } finally {
+    await context.close();
+    stopServer();
+  }
+  const out = args.out ?? `${dataDir}/results-${Date.now()}.json`;
+  writeFileSync(out, JSON.stringify(result, null, 2));
+  process.stderr.write(`wrote ${out}\n`);
+}
+
+function rmProfile() {
+  if (existsSync(profileDir)) {
+    // Only ever a profile this runner created.
+    if (!existsSync(`${profileDir}/.seeded`) && !existsSync(`${profileDir}/Default`))
+      throw new Error(`refusing to delete ${profileDir}: not a bench profile`);
+    rmSync(profileDir, { recursive: true, force: true });
+  }
+}
+
+function log(label: string, value: unknown) {
+  const text = JSON.stringify(value, null, 1);
+  process.stdout.write(`\n== ${label}\n${text.length > 4000 ? `${text.slice(0, 4000)}…` : text}\n`);
+}
+
+await main();
