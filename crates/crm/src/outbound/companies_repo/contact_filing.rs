@@ -2,7 +2,7 @@
 //! company lookup creation shares, and the operator-run pass over contacts
 //! that were created without one.
 
-use super::CompaniesRepositoryImpl;
+use super::{CompaniesRepositoryImpl, lock_timeout_as_contended};
 use crate::domain::{
     contact_filing::{ContactFiling, ContactFilingRepository, UnfiledContact},
     model::CrmError,
@@ -121,11 +121,25 @@ impl ContactFilingRepository for CompaniesRepositoryImpl {
         now: DateTime<Utc>,
         dry_run: bool,
     ) -> Result<ContactFiling, CrmError> {
-        let mut tx = self
-            .pool
-            .begin()
+        self.file_under_domain_company(team_id, contact_id, now, dry_run)
             .await
-            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+            .map_err(lock_timeout_as_contended)
+    }
+}
+
+impl CompaniesRepositoryImpl {
+    /// The transaction behind `file_unfiled_contact`.
+    async fn file_under_domain_company(
+        &self,
+        team_id: &Uuid,
+        contact_id: &Uuid,
+        now: DateTime<Utc>,
+        dry_run: bool,
+    ) -> Result<ContactFiling, CrmError> {
+        // A batch takes these locks once per contact. Bounding each wait
+        // keeps a busy team from holding the operator's connection, and the
+        // population queued behind the exclusive lock, for a whole batch.
+        let mut tx = self.begin_population().await?;
 
         // The lock order of a contact edit: privacy, every domain involved,
         // the team, the company row, then the contact row.

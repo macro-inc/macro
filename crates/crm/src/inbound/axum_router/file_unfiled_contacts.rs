@@ -108,7 +108,9 @@ impl FileUnfiledContactsResponse {
 ///
 /// Files one batch of the team's manual contacts that have no company and
 /// returns the counts. Repeat with `after` set to the returned `nextAfter`
-/// until it is absent. Running it again is safe.
+/// until it is absent; a run is complete only then. Running it again is
+/// safe, and retries the contacts counted as `failed` (a lock that stayed
+/// busy for five seconds is one).
 #[tracing::instrument(skip_all, fields(%team_id, dry_run = request.dry_run), err)]
 pub async fn handler<C, St, Eas, Auth>(
     _auth: MacroAuthorizationExtractor<Auth, InternalOnly>,

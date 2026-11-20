@@ -93,8 +93,9 @@ pub trait ContactFilingRepository: Send + Sync + 'static {
     /// under them, so a contact that gained a company meanwhile is left
     /// alone, and so is one that is not `manually_created`. Keeps the
     /// contact's id, addresses, archive state and sources.
-    /// With `dry_run` nothing is written. The caller rules out personal and
-    /// generic provider domains.
+    /// With `dry_run` nothing is written. A lock that is not free within
+    /// five seconds returns [`CrmError::Contended`]. The caller rules out
+    /// personal and generic provider domains.
     fn file_unfiled_contact(
         &self,
         team_id: &Uuid,
