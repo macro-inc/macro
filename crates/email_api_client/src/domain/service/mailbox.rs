@@ -65,8 +65,12 @@ impl<
     L: ProviderRateLimiter,
 > MailboxApiService<R, T, L>
 {
-    /// Resolve the complete physical folder hierarchy.
-    pub async fn folders(&self, mailbox: MailboxAccess) -> Result<Vec<MailFolder>, EmailApiError> {
+    /// Resolve the complete physical folder hierarchy, or report that the
+    /// account has no mailbox the provider will serve.
+    pub async fn folders(
+        &self,
+        mailbox: MailboxAccess,
+    ) -> Result<MailFolderCatalog, EmailApiError> {
         let token = self
             .token(
                 mailbox,

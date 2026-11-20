@@ -7,7 +7,7 @@ opaque `link_id`.
 
 The email-service pubsub workers report each Outlook mailbox about once a
 minute in an `outlook mailbox health` log (backlog, parked and abandoned work,
-oldest wait, recent imports, `sync_active`, `needs_reauth`, `watch_failures`), and trace each unit of sync
+oldest wait, recent imports, `sync_active`, `needs_reauth`, `mailbox_unavailable`, `watch_failures`), and trace each unit of sync
 work as an `outlook.sync.discover`, `.enumerate`, `.reconcile` or `.project`
 span with `outlook.outcome` and `outlook.defer_reason`. Datadog renames the
 Graph and token spans, so find them by their fields:
@@ -20,6 +20,7 @@ Graph and token spans, so find them by their fields:
 | Its Graph requests | Spans: `@outlook.throttle_origin:* @mailbox.link_id:<id>`; a refused one names Graph's `@graph.error_code` |
 | Token lookups | Spans: `@outlook.token_cache:*` |
 | Deferral logs | Logs: `"mailbox sync work deferred"`, grouped by `@defer_reason` |
+| Accounts Graph serves no mailbox for | Logs: `"outlook mailbox health" @mailbox_unavailable:true`; their probes: spans `resource_name:outlook.sync.discover @outlook.defer_reason:no_mailbox`, field `@graph.error_code` ([No mailbox](#no-mailbox)) |
 | Its subscription upkeep | Spans: `resource_name:outlook.subscription.maintain @mailbox.link_id:<id>`, field `@outlook.upkeep_failures` (failed runs in a row); mailboxes whose upkeep Graph keeps refusing or failing: `"outlook mailbox health" @watch_failures:>0` (throttled and token-deferred runs are not counted; find those by `@outlook.defer_reason` on the spans) |
 
 Failed, deferred, throttled and slow (over 5 s) Outlook spans are always
@@ -44,7 +45,10 @@ later, so most of these alerts clear without action. Don't edit queue rows in
 production. An importing folder reads its next page only while its mailbox has
 fewer than 200 messages ready to import; until then its enumerate spans read
 `@outlook.outcome:paced`, which is the import keeping pace, not a stall.
-Messages backed off after their own failures don't count. With the live pass
+Messages backed off after their own failures don't count. Importing folders
+are claimed ahead of finished folders' polls that came due less than five
+minutes earlier, so a walk reads its next page soon after its import has
+room; a poll due longer than that goes first again. With the live pass
 on, the folder's new mail does not wait for its walk
 ([New mail during an import](#new-mail-during-an-import)).
 
@@ -218,6 +222,35 @@ token that works again clears the flag.
   authentication-service deploy. Check its logs for refresh errors.
 - Levers: fix the shared credential or roll back. Mailboxes already marked
   need their users to reconnect.
+
+## No mailbox
+
+Graph answers 404 to an account's Inbox, and to every other mailbox call,
+when it serves the account no mailbox: no Exchange Online licence, an
+inactive or deleted mailbox, or one hosted on premises (`@graph.error_code`
+is usually `MailboxNotEnabledForRESTAPI`). Folder discovery then marks the
+link (`email_links.mailbox_unavailable_at`; the snapshot's
+`mailbox_unavailable`), and every other kind of sync work skips it: folder
+pages, message reads, contacts and photos, drafts, commands, settings and
+subscription upkeep wait unclaimed, so the mailbox sends Graph nothing but
+the probe. Discovery looks again after waiting as long as the link has been
+marked, 30 s at first and at most 12 hours
+(`@outlook.defer_reason:no_mailbox`, `@outlook.defer_seconds`). Any other
+discovery failure, a 5xx included, is retried as before and never marks the
+link. Settings shows the inbox as "No Outlook mailbox for this account",
+and the Integrations row asks for attention.
+
+The first discovery that finds the Inbox clears the mark and makes the
+link's folder, contacts, settings and subscription work due at once, with
+the subscription's failures reset; message rows keep their own retry times.
+A reconnect clears it too and makes that work, and discovery, due at once.
+
+- List them: `env:prod "outlook mailbox health" @mailbox_unavailable:true`,
+  grouped by `@link_id`.
+- Nothing in Macro fixes it: the account's Microsoft 365 administrator
+  assigns an Exchange Online licence (or restores the mailbox). Sync resumes
+  by itself within the probe's wait, at most 12 hours; a reconnect resumes it
+  at once.
 
 ## Persistence errors
 

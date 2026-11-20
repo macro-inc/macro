@@ -1,13 +1,14 @@
 //! Shared workflow environment: secrets, the repo-wide env block, concurrency,
 //! and Namespace cache names. This is the "environment" file.
 
-use gh_workflow::{Concurrency, Expression, Workflow};
+use gh_workflow::expr::typed::{Secret, Var, github};
+use gh_workflow::{Concurrency, Workflow};
 
-/// Declares a `${{ secrets.NAME }}` reference as a `&str` const named `NAME`, so
-/// secret usage is greppable and typo-proof.
+/// Declares a secret as a [`Secret`] const named `NAME`, so secret usage is
+/// greppable and typo-proof; it renders `${{ secrets.NAME }}`.
 macro_rules! secret {
     ($name:ident) => {
-        pub const $name: &str = concat!("${{ secrets.", stringify!($name), " }}");
+        pub const $name: Secret = Secret(stringify!($name));
     };
 }
 
@@ -15,11 +16,14 @@ secret!(APPETIZE_API_TOKEN);
 secret!(ANDROID_RELEASE_DOPPLER_TOKEN);
 secret!(AWS_ACCESS_KEY);
 secret!(AWS_SECRET_ACCESS_KEY);
+secret!(CLA_CHECK_API_KEY);
+secret!(CLA_ORG_READ_TOKEN);
 secret!(CLOUDFLARE_API_TOKEN);
 secret!(DAYTONA_API_KEY);
 secret!(DD_API_KEY);
 secret!(DD_APP_KEY);
 secret!(DOPPLER_TOKEN);
+secret!(GITHUB_TOKEN);
 secret!(IOS_RELEASE_DOPPLER_TOKEN);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_BASE64);
 secret!(MACOS_DEVELOPER_ID_CERTIFICATE_PASSWORD);
@@ -34,11 +38,19 @@ secret!(SEGMENT_WRITE_KEY_PRODUCTION);
 
 /// Webhook that posts to the Macro Alerts channel, a repo *variable*; it takes
 /// [`MACRO_BUILD_ALERT_BOT_TOKEN`] in an `x-macro-channel-bot-token` header.
-/// The hand-written `alert-native-build-failures.yml` posts there too.
-pub const MACRO_BUILD_ALERT_WEBHOOK_URL: &str = "${{ vars.MACRO_BUILD_ALERT_WEBHOOK_URL }}";
+/// [`super::alert_native_build_failures`] posts there too.
+pub const MACRO_BUILD_ALERT_WEBHOOK_URL: Var = Var("MACRO_BUILD_ALERT_WEBHOOK_URL");
+
+/// Workload identity provider that lets CI authenticate to Google Play, a
+/// repo *variable*.
+pub const GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER: Var =
+    Var("GOOGLE_PLAY_WORKLOAD_IDENTITY_PROVIDER");
+
+/// Service account CI acts as on Google Play, a repo *variable*.
+pub const GOOGLE_PLAY_SERVICE_ACCOUNT: Var = Var("GOOGLE_PLAY_SERVICE_ACCOUNT");
 
 /// Cloudflare account id. A repo *variable* (not a secret).
-pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
+pub const CLOUDFLARE_ACCOUNT_ID: Var = Var("CLOUDFLARE_ACCOUNT_ID");
 
 /// S3 nix binary cache store URL, a repo *variable* — e.g.
 /// `s3://macro-nix-cache?region=us-east-1`. The substituter role Cachix used
@@ -46,12 +58,12 @@ pub const CLOUDFLARE_ACCOUNT_ID: &str = "${{ vars.CLOUDFLARE_ACCOUNT_ID }}";
 /// instead of a from-source rebuild. Empty/unset disables all nix-cache
 /// wiring (setup skips the substituter config; push steps no-op), so the
 /// workflows are safe to run before the bucket exists.
-pub const NIX_CACHE_URL: &str = "${{ vars.NIX_CACHE_URL }}";
+pub const NIX_CACHE_URL: Var = Var("NIX_CACHE_URL");
 
 /// Public counterpart of [`NIX_CACHE_SIGNING_KEY`], a repo *variable* — e.g.
 /// `nix-cache.macro.com-1:BASE64...`. Trusted by the nix daemon so substituted
 /// paths verify.
-pub const NIX_CACHE_PUBLIC_KEY: &str = "${{ vars.NIX_CACHE_PUBLIC_KEY }}";
+pub const NIX_CACHE_PUBLIC_KEY: Var = Var("NIX_CACHE_PUBLIC_KEY");
 
 /// Limit on entering the Nix dev shell. Healthy runs take under 9 minutes even
 /// from an empty cache volume, while a stalled store download has run for over
@@ -91,7 +103,7 @@ pub const NIX_CHECKS_CACHE_TAG: &str = "nix-checks";
 pub const WEB_SCCACHE_NAME: &str = "web-ci";
 
 /// Namespace cache tag for the web Generated Code Check alone. Its volume keeps
-/// cargo's `target` directory ([`CARGO_TARGET_VOLUME_DIR`]) and the times its
+/// cargo's `target` directory ([`cargo_target_volume_dir`]) and the times its
 /// sources' contents first appeared. The last job to finish on a tag replaces the
 /// volume, so on a shared tag another job would put back a `target` that never
 /// saw this job's build.
@@ -99,7 +111,9 @@ pub const WEB_CODEGEN_CACHE_TAG: &str = "web-codegen";
 
 /// Cargo's `target` directory, kept on the [`WEB_CODEGEN_CACHE_TAG`] volume and
 /// made reusable by `steps::reuse_cargo_target`.
-pub const CARGO_TARGET_VOLUME_DIR: &str = "${{ github.workspace }}/target";
+pub fn cargo_target_volume_dir() -> String {
+    format!("{}/target", github().workspace())
+}
 
 /// Namespace cache tag for the sync-service worker deploy. Its own pool: this
 /// job compiles for `wasm32-unknown-unknown`, so nothing in the host-target
@@ -126,7 +140,9 @@ pub const WASM_PKG_CACHE_DIR: &str = "/home/runner/.cache/wasm-pkgs";
 /// fixes what differs. Bun never removes a package the lockfile dropped, so
 /// `setup-reqs-web` empties a tree another lockfile installed. PR jobs write it, so no job that deploys, the web PR
 /// Build with its preview credentials included, mounts it.
-pub const NODE_MODULES_VOLUME_DIR: &str = "${{ github.workspace }}/node_modules";
+pub fn node_modules_volume_dir() -> String {
+    format!("{}/node_modules", github().workspace())
+}
 
 /// The deploy build's wasm packages, kept in a GitHub Actions cache rather than
 /// on the cache volume, which PR jobs write. Off the volume on purpose.
@@ -152,8 +168,9 @@ pub fn with_global_env(workflow: Workflow) -> Workflow {
 /// calls the workflow, the group is that run's own, because `PR CI` cancels
 /// its own superseded runs.
 pub fn concurrency(prefix: &str) -> Concurrency {
-    Concurrency::new(Expression::new(format!(
-        "{prefix}-${{{{ github.event_name == 'pull_request' && github.run_id || github.ref }}}}"
-    )))
-    .cancel_in_progress(true)
+    let run_or_ref = github()
+        .event_name()
+        .eq("pull_request")
+        .then_else(github().run_id(), github().git_ref());
+    Concurrency::new(format!("{prefix}-{run_or_ref}")).cancel_in_progress(true)
 }

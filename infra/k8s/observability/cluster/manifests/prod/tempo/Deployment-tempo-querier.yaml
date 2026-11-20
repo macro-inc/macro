@@ -27,7 +27,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 2ba9234115e13a1e05d8adee5092600ab7d345a4d28a1a55d515e39b6828d7ca
+        checksum/config: e65db8750e500c37d513919b059b04353457aa94b2add4b204f372ce614d0d35
       labels:
         app.kubernetes.io/component: querier
         app.kubernetes.io/instance: tempo

@@ -19,7 +19,7 @@ async fn guard(tx: &mut sqlx::PgConnection, lease: &WatchLease) -> Result<(), Ma
 impl MailboxWatchRepository for PgMailboxSync {
     async fn claim_watch(&self, lease_id: Uuid) -> Result<Option<WatchLease>, MailboxError> {
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id
-            WHERE l.is_sync_active AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
+            WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
             ORDER BY w.next_run_at LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE email_mailbox_watch_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate c,email_links l WHERE w.link_id=c.link_id AND l.id=w.link_id
@@ -139,8 +139,11 @@ impl MailboxWatchRepository for PgMailboxSync {
             .execute(&mut *tx).await.map_err(db_error)?;
         // The webhook's trace context rides with the wakeup, so the sync work
         // it makes due joins the webhook's trace. A live pass is woken too:
-        // it is what stores new mail while its folder imports.
-        sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=now() WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder','mail_folder_live')",binding.link_id,binding.sync_generation,crate::trace_context::current())
+        // it is what stores new mail while its folder imports. A stream already
+        // due keeps its place: claims take the longest-due first, so moving it
+        // to now would put it behind every stream that came due since, and a
+        // mailbox notified more often than that line moves would never be read.
+        sqlx::query!("UPDATE email_sync_streams SET notified_at=clock_timestamp(),notified_traceparent=$3,next_run_at=LEAST(next_run_at,now()) WHERE link_id=$1 AND generation=$2 AND kind IN ('folder_catalog','mail_folder','mail_folder_live')",binding.link_id,binding.sync_generation,crate::trace_context::current())
             .execute(&mut *tx).await.map_err(db_error)?;
         if matches!(hint, WatchHint::Removed | WatchHint::Reauthorize) {
             sqlx::query!("UPDATE email_mailbox_watch_work SET next_run_at=now(),revision=revision+1,failures=0 WHERE link_id=$1",binding.link_id)
