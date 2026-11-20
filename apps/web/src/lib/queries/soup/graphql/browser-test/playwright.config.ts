@@ -11,7 +11,7 @@ export default defineConfig({
   reporter: 'line',
   use: { baseURL: 'http://127.0.0.1:4196', headless: true },
   webServer: {
-    command: `just build-cache-wasm && bunx --bun vite --config ${JSON.stringify(`${DIRECTORY}/vite.config.ts`)}`,
+    command: `just build-wasm cache-wasm && bunx --bun vite --config ${JSON.stringify(`${DIRECTORY}/vite.config.ts`)}`,
     cwd: WEB,
     url: 'http://127.0.0.1:4196',
     reuseExistingServer: false,

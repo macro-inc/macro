@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-psd-engine-wasm
+ *   just build-wasm psd-engine
  * which runs wasm-pack over crates/psd_engine into
  * src/lib/core/psd-engine/wasm/ (gitignored).
  */

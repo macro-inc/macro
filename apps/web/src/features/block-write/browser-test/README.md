@@ -42,7 +42,7 @@ to wasm, `crates/docx_engine`) in a worker; build it first.
 ```sh
 (\cd services/sync-service && just worker-build)   # once, builds build/worker/shim.mjs
 \cd apps/web
-just ensure-docx-engine-wasm                       # builds the engine's wasm when sources changed
+just ensure-wasm docx-engine                       # builds the engine's wasm when sources changed
 bunx playwright test -c src/features/block-write/browser-test/playwright.config.ts
 ```
 

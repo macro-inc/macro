@@ -110,147 +110,71 @@
         outputHashes = import ../nix-support/root-cargo-output-hashes.nix;
       };
 
-      cacheWasmPackage = craneLib.mkCargoDerivation {
-        pname = "macro-cache-wasm";
-        version = appVersion;
-        src = jsSrc;
-        cargoArtifacts = null;
-        cargoVendorDir = rootCargoVendorDir;
-        nativeBuildInputs = [
-          pkgs.binaryen
-          # wasm-pack requires the CLI version to exactly match Cargo.lock.
-          pkgs.wasm-bindgen-cli_0_2_126
-          pkgs.wasm-pack
-        ];
-        doCheck = false;
-        preBuild = ''
-          export HOME="$TMPDIR"
-          export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
-        '';
-        buildPhaseCargoCommand = ''
-          wasm-pack build crates/client/cache-wasm \
-            --target web \
-            --release \
-            --mode no-install \
-            --out-dir "$PWD/apps/web/src/lib/graphql-cache/wasm"
-        '';
-        installPhaseCommand = ''
-          mkdir -p $out
-          cp -a apps/web/src/lib/graphql-cache/wasm/. $out/
-        '';
-        doInstallCargoArtifacts = false;
-      };
-
       nodeModules = pkgs.callPackage ../nix-support/node_modules.nix {
         src = jsRoot;
       };
 
-      # Builds one wasm-pack package into apps/web/src/lib/core/<dir>/wasm,
-      # the way its `build-*-wasm` recipe in apps/web/justfile does.
-      mkCoreWasmPackage =
-        {
-          name,
-          crate,
-          dir,
-          simd ? false,
-          profile ? null,
-          cargoArgs ? "",
-        }:
+      # Builds one module of apps/web/wasm-modules.json into its out dir, the
+      # way `just build-wasm <name>` (apps/web/scripts/wasm.ts) does.
+      mkWasmPackage =
+        module:
         let
-          outDir = "apps/web/src/lib/core/${dir}/wasm";
+          outDir = "apps/web/${module.outDir}";
+          cargoArgs =
+            lib.optional (!module.defaultFeatures) "--no-default-features"
+            ++ lib.optionals (module.features != [ ]) [
+              "--features"
+              (lib.concatStringsSep "," module.features)
+            ];
         in
         craneLib.mkCargoDerivation (
           {
-            pname = "macro-${dir}-wasm";
+            pname = "macro-wasm-${module.name}";
             version = appVersion;
             src = jsSrc;
             cargoArtifacts = null;
             cargoVendorDir = rootCargoVendorDir;
             nativeBuildInputs = [
               pkgs.binaryen
+              # wasm-pack requires the CLI version to exactly match Cargo.lock.
               pkgs.wasm-bindgen-cli_0_2_126
               pkgs.wasm-pack
             ];
             doCheck = false;
-            preBuild = cacheWasmPackage.preBuild;
+            preBuild = ''
+              export HOME="$TMPDIR"
+              export XDG_CACHE_HOME="$TMPDIR/xdg-cache"
+            '';
             buildPhaseCargoCommand = ''
-              wasm-pack build ${crate} \
+              wasm-pack build ${module.crateDir} \
                 --target web \
-                ${if profile == null then "--release" else "--profile ${profile}"} \
+                ${if module.profile == "release" then "--release" else "--profile ${module.profile}"} \
                 --mode no-install \
-                --out-dir "$PWD/${outDir}" ${cargoArgs}
+                --out-dir "$PWD/${outDir}" \
+                --out-name ${module.outName} ${
+                  lib.optionalString (cargoArgs != [ ]) "-- ${lib.escapeShellArgs cargoArgs}"
+                }
             '';
             installPhaseCommand = ''
               mkdir -p $out
               cp -a ${outDir}/. $out/
             '';
             doInstallCargoArtifacts = false;
-            passthru = { inherit dir; wasmName = name; };
+            passthru = {
+              inherit outDir;
+              inherit (module) outName;
+            };
           }
-          // lib.optionalAttrs simd {
-            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = "-C target-feature=+simd128";
+          // lib.optionalAttrs (module.rustflags != [ ]) {
+            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS = lib.concatStringsSep " " module.rustflags;
           }
         );
 
-      # Every package `just build-wasm` builds besides the cache. Vite leaves a
-      # missing package's `new URL()` unchanged, so one left out here ships a
-      # desktop bundle that cannot open that kind of file.
-      coreWasmPackages = map mkCoreWasmPackage [
-        {
-          name = "agent_fold";
-          crate = "crates/folds/agent_fold";
-          dir = "agent-fold";
-          cargoArgs = "-- --no-default-features";
-        }
-        {
-          name = "database_sql";
-          crate = "crates/database_sql";
-          dir = "database-sql";
-        }
-        {
-          name = "natural_time";
-          crate = "crates/natural_time";
-          dir = "natural-time";
-        }
-        {
-          name = "pptx_engine";
-          crate = "crates/pptx_engine";
-          dir = "pptx-engine";
-          simd = true;
-        }
-        {
-          name = "docx_engine";
-          crate = "crates/docx_engine";
-          dir = "docx-engine";
-          simd = true;
-        }
-        {
-          name = "fig_engine";
-          crate = "crates/fig_engine";
-          dir = "fig-engine";
-          simd = true;
-          profile = "fig-engine-wasm";
-        }
-        {
-          name = "psd_engine";
-          crate = "crates/psd_engine";
-          dir = "psd-engine";
-          simd = true;
-          profile = "psd-engine-wasm";
-        }
-        {
-          name = "ai_engine";
-          crate = "crates/ai_engine";
-          dir = "ai-engine";
-          simd = true;
-          profile = "ai-engine-wasm";
-        }
-        {
-          name = "password_import_wasm";
-          crate = "crates/password_import_wasm";
-          dir = "password-import";
-        }
-      ];
+      # Every module `just build-wasm` builds. Vite leaves a missing package's
+      # `new URL()` unchanged, so one left out ships a desktop bundle that
+      # cannot open that kind of file.
+      wasmPackages = map mkWasmPackage
+        (builtins.fromJSON (builtins.readFile ../apps/web/wasm-modules.json)).modules;
 
       # A binary of the root workspace (not the nested Tauri one), built
       # natively for this platform.
@@ -364,12 +288,10 @@
               '          { find: /^@tauri-apps\/api/, replacement: resolve(__dirname, "../../node_modules/@tauri-apps/api") },'
 
           printf production > apps/web/tauri/src-tauri/.macro-tauri-env
-          mkdir -p apps/web/src/lib/graphql-cache/wasm
-          cp -a ${cacheWasmPackage}/. apps/web/src/lib/graphql-cache/wasm/
           ${lib.concatMapStrings (pkg: ''
-            mkdir -p apps/web/src/lib/core/${pkg.dir}/wasm
-            cp -a ${pkg}/. apps/web/src/lib/core/${pkg.dir}/wasm/
-          '') coreWasmPackages}
+            mkdir -p ${pkg.outDir}
+            cp -a ${pkg}/. ${pkg.outDir}/
+          '') wasmPackages}
           (
             cd apps/web
             MODE=production NODE_ENV=production bun ../../node_modules/vite/bin/vite.js build -c vite.config.ts
@@ -395,7 +317,7 @@
         doCheck = true;
         checkPhase = ''
           runHook preCheck
-          for name in ${lib.concatMapStringsSep " " (pkg: pkg.wasmName) coreWasmPackages}; do
+          for name in ${lib.concatMapStringsSep " " (pkg: pkg.outName) wasmPackages}; do
             for asset in "apps/web/dist/assets/$name-"*.js "apps/web/dist/assets/''${name}_bg-"*.wasm; do
               test -s "$asset" || { echo "Missing $name wasm bundle asset: $asset" >&2; exit 1; }
             done

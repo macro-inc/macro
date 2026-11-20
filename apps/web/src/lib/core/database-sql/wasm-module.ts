@@ -1,6 +1,6 @@
 /**
  * Typed surface of the `database_sql` wasm package, loaded on first use.
- * `just build-database-sql-wasm` builds it into the gitignored `./wasm/`.
+ * `just build-wasm database-sql` builds it into the gitignored `./wasm/`.
  */
 
 import type {

@@ -8,7 +8,7 @@ let Stream: new (session: string) => FoldStream;
 
 beforeAll(async () => {
   // Keep the worker responsive to Vitest RPC while a cold WASM build runs.
-  await promisify(execFile)('just', ['build-agent-fold-wasm'], {
+  await promisify(execFile)('just', ['build-wasm', 'agent-fold'], {
     cwd: new URL('..', import.meta.url),
     maxBuffer: 10 * 1024 * 1024,
   });

@@ -2,8 +2,8 @@
 # Runs a wasm package build, or restores its output when nothing the package is
 # built from has changed: first from WASM_PKG_CACHE_DIR, then, when
 # WASM_PKG_HTTP_CACHE=1, from Namespace's HTTP cache, which every node reads.
-# Without WASM_PKG_CACHE_DIR it only runs the build, so local `just build-*`
-# behaves as before.
+# Without WASM_PKG_CACHE_DIR it only runs the build; scripts/wasm.ts sets it
+# to a machine-wide directory when it is unset.
 #
 # PR check jobs keep WASM_PKG_CACHE_DIR on the node's cache volume and opt into
 # the HTTP cache. Deploy builds keep it in a GitHub Actions cache, where a run
@@ -14,7 +14,8 @@
 # the package compiles (`wasm_closures` in .github/workspace-dep-closures.json),
 # their slice of Cargo.lock, the root manifest, the toolchain and Nix
 # definitions, the shared assets build scripts read, its profile's env and the
-# build command.
+# build command. A caller that already computed it (scripts/wasm.ts) passes it
+# in WASM_PKG_KEY.
 #
 # usage: cached-wasm-build.sh <closure package> <out dir> -- <build command...>
 set -euo pipefail
@@ -30,7 +31,7 @@ if [ -z "${WASM_PKG_CACHE_DIR:-}" ]; then
   exec "$@"
 fi
 
-key="$(bun "$(dirname "$0")/wasm-cache-key.ts" "$package" -- "$@")"
+key="${WASM_PKG_KEY:-$(bun "$(dirname "$0")/wasm-cache-key.ts" "$package" -- "$@")}"
 entry="$WASM_PKG_CACHE_DIR/$package-$key"
 
 restore() {
@@ -62,9 +63,6 @@ if [ -d "$entry" ]; then
   echo "$package: unchanged inputs, reusing the cached wasm package ($key)"
   restore "$entry"
   touch "$entry"
-  # The dev `ensure-*` recipes compare the output's mtime with its sources'.
-  # The inputs match, so mark the output as current.
-  find "$out_dir" -exec touch {} +
   exit 0
 fi
 

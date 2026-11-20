@@ -59,7 +59,7 @@ instants (`wall-clock.ts`).
 
 - `cargo test -p natural_time`
 - `cargo clippy -p natural_time --target wasm32-unknown-unknown`
-- `just build-natural-time-wasm` in `apps/web`, then
+- `just build-wasm natural-time` in `apps/web`, then
   `bun run test -- src/features/reminders src/lib/core/natural-time`
 
 ## Gotchas

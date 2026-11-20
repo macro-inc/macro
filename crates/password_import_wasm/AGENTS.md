@@ -20,12 +20,12 @@ web import dialog's worker, so the export file never leaves the device.
 ## Boundaries
 
 - Depends on: `password_import` with `reveal-secrets` (the only crate that enables it).
-- Used by: `apps/web/src/lib/core/password-import/` (`just build-password-import-wasm`).
+- Used by: `apps/web/src/lib/core/password-import/` (`just build-wasm password-import`).
 
 ## Checks
 
 - `cargo test -p password_import_wasm`.
-- `just --justfile apps/web/justfile build-password-import-wasm`.
+- `just --justfile apps/web/justfile build-wasm password-import`.
 
 ## Gotchas
 

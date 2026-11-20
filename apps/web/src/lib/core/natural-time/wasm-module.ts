@@ -1,6 +1,6 @@
 /**
  * Typed surface of the `natural_time` wasm package, loaded on first use.
- * `just build-natural-time-wasm` builds it into the gitignored `./wasm/`.
+ * `just build-wasm natural-time` builds it into the gitignored `./wasm/`.
  * The shapes mirror `natural_time::wasm`; the reading rules are the crate
  * docs in `crates/natural_time/src/lib.rs`.
  */

@@ -3,7 +3,7 @@
  * dynamically so the repo type-checks without the generated artifacts.
  *
  * Build the package with:
- *   just build-pptx-engine-wasm
+ *   just build-wasm pptx-engine
  * which runs wasm-pack over crates/pptx_engine into
  * src/lib/core/pptx-engine/wasm/ (gitignored).
  */

@@ -9,7 +9,7 @@ type TestModule = NaturalTimeWasmModule & {
 /**
  * The built natural_time package, initialized synchronously: the test runner
  * serves modules over http, which the package's own loader refuses. Build it
- * with `just build-natural-time-wasm`.
+ * with `just build-wasm natural-time`.
  */
 export async function loadNaturalTimeForTest(): Promise<NaturalTimeWasmModule> {
   const dir = `${process.cwd()}/src/lib/core/natural-time/wasm`;
