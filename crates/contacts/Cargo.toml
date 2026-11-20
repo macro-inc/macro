@@ -16,6 +16,7 @@ default = ["axum", "inbound", "outbound", "ports"]
 inbound = ["axum", "dep:aws-sdk-sqs", "dep:sqs_worker", "ports"]
 outbound = [
   "dep:aws-sdk-sqs",
+  "dep:macro_tower_layers",
   "dep:reqwest",
   "dep:sqlx",
   "dep:urlencoding",
@@ -53,6 +54,7 @@ feature_flags = { path = "../feature_flags" }
 macro_env = { path = "../macro_env" }
 macro_user_id = { path = "../macro_user_id" }
 macro_db_client = { path = "../macro_db_client", optional = true }
+macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 non_empty = { path = "../non_empty", optional = true }
 rootcause = { workspace = true }
 subsequence_match = { path = "../subsequence_match" }

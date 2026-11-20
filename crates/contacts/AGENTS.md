@@ -28,6 +28,9 @@ and kept in sync via the connection gateway.
 - `src/outbound/repository.rs`: Postgres adapter; `src/outbound/gateway.rs`
   notifies the connection gateway of graph changes: `contacts_invalidation`
   with `{"changed": [...]}` when the contacts to re-read are known, `{}` otherwise.
+  For the legacy `Nodes`/`Connections` messages, each user is told the other
+  end of each of their connections (≤500, ordered by id), which the web leader
+  tab re-reads at once.
 
 ## Scope
 

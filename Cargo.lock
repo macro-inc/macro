@@ -5394,6 +5394,7 @@ dependencies = [
  "macro_db_migrator",
  "macro_env",
  "macro_event_broker",
+ "macro_tower_layers",
  "macro_user_id",
  "model-entity",
  "non_empty",

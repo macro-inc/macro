@@ -57,7 +57,7 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
         &self,
         msg: ContactsMessage,
     ) -> Result<(), rootcause::Report> {
-        let (users, connections) = match msg {
+        let (users, connections): (HashSet<_>, Vec<_>) = match msg {
             ContactsMessage::Change(change) => return self.process_change(change).await,
             ContactsMessage::Nodes(ContactsNodes { users }) => {
                 let graph = UndirectedGraph::new(users.iter().map(Vertex::new)).complete();
@@ -82,15 +82,11 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier>
             }
         };
 
+        let invalidations = invalidations_by_user(users, &connections);
         self.repository.create_connections(connections).await?;
 
         self.notifier
-            .invalidate_contacts_for_users(
-                users
-                    .into_iter()
-                    .map(ContactsInvalidation::unknown)
-                    .collect(),
-            )
+            .invalidate_contacts_for_users(invalidations)
             .await?;
         Ok(())
     }
@@ -180,6 +176,37 @@ fn invalidations_by_owner(
     by_owner
         .into_iter()
         .map(|(owner, contacts)| ContactsInvalidation::new(owner, contacts))
+        .collect()
+}
+
+/// One invalidation per user, naming the other end of each of the user's
+/// connections. Self-connections name nobody.
+fn invalidations_by_user(
+    users: HashSet<MacroUserIdStr<'static>>,
+    connections: &[(MacroUserIdStr<'static>, MacroUserIdStr<'static>)],
+) -> Vec<ContactsInvalidation> {
+    let mut peers: HashMap<_, HashSet<_>> = HashMap::new();
+    for (first, second) in connections {
+        if first == second {
+            continue;
+        }
+
+        peers.entry(first).or_default().insert(second);
+        peers.entry(second).or_default().insert(first);
+    }
+
+    users
+        .into_iter()
+        .map(|user| {
+            let mut changed: Vec<_> = peers
+                .get(&user)
+                .into_iter()
+                .flatten()
+                .map(|&peer| peer.clone())
+                .collect();
+            changed.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+            ContactsInvalidation::new(user, changed)
+        })
         .collect()
 }
 
