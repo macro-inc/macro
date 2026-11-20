@@ -143,8 +143,17 @@ const call = <T>(page: Page, method: string, ...params: unknown[]): Promise<T> =
   );
 
 async function main() {
-  const stopServer = await startServer();
   const fresh = args.reseed || !existsSync(`${profileDir}/.seeded`);
+  if (!fresh) {
+    // OPFS belongs to the origin, port included: another port opens an empty
+    // database while this marker skips the seed.
+    const seededOrigin = readFileSync(`${profileDir}/.seeded`, 'utf8').split('\n')[0];
+    if (seededOrigin.startsWith('http') && seededOrigin !== origin)
+      throw new Error(
+        `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
+      );
+  }
+  const stopServer = await startServer();
   if (fresh) {
     rmProfile();
     mkdirSync(profileDir, { recursive: true });
@@ -196,7 +205,7 @@ async function main() {
       };
       await call(page, 'close');
       await page.close();
-      writeFileSync(`${profileDir}/.seeded`, new Date().toISOString());
+      writeFileSync(`${profileDir}/.seeded`, `${origin}\n${new Date().toISOString()}\n`);
       log('seed', result.seed);
     }
 
