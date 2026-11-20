@@ -39,6 +39,28 @@ const log = (line: string) => {
   appendFileSync(`${OUT}/log.txt`, `${text}\n`);
 };
 
+let setupReloads = 0;
+/**
+ * Loads the harness into a page. Chromium aborts module requests now and then
+ * on this machine and keeps a failed module import failed for the document,
+ * so a failed install reloads the page and tries again.
+ */
+async function installOn(page: Page, who: string) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await page.waitForLoadState('load');
+      await px(page, 'install', userId(who));
+      return;
+    } catch (error) {
+      if (attempt >= 8) throw error;
+      setupReloads += 1;
+      log(`${who} setup failed, reloading: ${String(error).split('\n')[0]}`);
+      await sleep(1000);
+      await page.reload({ timeout: 90_000 }).catch(() => undefined);
+    }
+  }
+}
+
 type Fault =
   | { kind: 'none' }
   | { kind: 'delay'; ms: number }
@@ -287,7 +309,11 @@ try {
     await memberContext.route('**/dss/items/soup/graphql', byId);
     await memberContext.route(`**/dss/channels/${id}/participants`, rest);
     if (scenario.load) await startLoad(loader, noiseChannels, noise);
-    await px(member, 'mount', [{ id, type: 'public' }]);
+    await px(member, 'mount', [{ id, type: 'public' }]).catch(async () => {
+      // The page reloaded under the run: install the harness again.
+      await installOn(member, 'member');
+      await px(member, 'mount', [{ id, type: 'public' }]);
+    });
     const start = Date.now();
     const timeline: Sample[] = [];
     let firstOldData: number | null = null;
@@ -357,8 +383,7 @@ try {
   }
 
   await member.goto(`${ORIGIN}/app/home`);
-  await member.waitForLoadState('load');
-  await px(member, 'install', userId('member'));
+  await installOn(member, 'member');
   for (const scenario of SCENARIOS.filter((s) => s.name.includes(ONLY)))
     for (let repeat = 0; repeat < REPEATS; repeat++)
       await runScenario(scenario, repeat);
@@ -377,7 +402,7 @@ try {
       participants: [userId('member')],
     });
     const id = made.body.id;
-    await px(outsider, 'install', userId('outsider'));
+    await installOn(outsider, 'outsider');
     await px(outsider, 'mount', [{ id, type: 'public' }]);
     await px(outsider, 'settle', [id], 20_000);
     const before = (await px<Record<string, Snap>>(outsider, 'snapshot', [id]))[
@@ -410,8 +435,7 @@ try {
     )[id]!;
     await px(outsider, 'unmount', [id]);
     await outsider.reload();
-    await outsider.waitForLoadState('load');
-    await px(outsider, 'install', userId('outsider'));
+    await installOn(outsider, 'outsider');
     await px(outsider, 'mount', [{ id, type: 'public' }]);
     await px(outsider, 'settle', [id], 20_000);
     const reloaded = (
@@ -471,6 +495,7 @@ try {
         repeats: REPEATS,
         watchMs: WATCH_MS,
         lostCalls,
+        setupReloads,
         summary,
         stale,
         outcomes,
