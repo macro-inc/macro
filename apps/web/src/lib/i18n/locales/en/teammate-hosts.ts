@@ -11,7 +11,7 @@ export default {
   noHosts:
     'None of your computers can host an agent yet. Pair one that has macrod and Docker or Podman.',
   pairComputer:
-    'To add one, install macrod on it and pair it from Settings → Runtimes.',
+    'To add one, install macrod on it and pair it from Settings → Machines.',
   hostExperimental: 'Experimental',
   hostOffline: 'Offline',
   hostNotReported: 'Update macrod to host agents',
