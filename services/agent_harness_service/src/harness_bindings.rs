@@ -321,6 +321,7 @@ impl HarnessPresence for PgHarnessPresence {
             "harness.presence.renew",
             replica = %self.replica,
             connections = live.len(),
+            renewed = tracing::field::Empty,
             restored = tracing::field::Empty,
             error = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
@@ -359,6 +360,8 @@ impl HarnessPresence for PgHarnessPresence {
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
                     return Vec::new();
                 }
+                // If the upsert committed just before the timeout, its restores
+                // are lost and not undone; such a row lapses with its lease.
                 Err(_) => {
                     let span = tracing::Span::current();
                     span.record("error", "timed out");
@@ -371,6 +374,7 @@ impl HarnessPresence for PgHarnessPresence {
                     return Vec::new();
                 }
             };
+            tracing::Span::current().record("renewed", renewed.len());
             let restored: Vec<_> = renewed
                 .into_iter()
                 .filter(|row| row.restored)

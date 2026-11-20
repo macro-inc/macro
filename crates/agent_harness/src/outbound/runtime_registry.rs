@@ -25,6 +25,7 @@ use dashmap::DashMap;
 use harness_id::HarnessId;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use tracing::Instrument as _;
 
 use crate::domain::ports::{
     ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
@@ -246,7 +247,17 @@ where
     /// registry before it deletes its row, so a restored connection the
     /// registry no longer holds closed in between, and is closed again. Off
     /// the renewal's path: a close can wait on locks, and a late renewal lets
-    /// every lease here lapse.
+    /// every lease here lapse. Each undo runs inside this renewal's span, so
+    /// the restore and its second close read as one trace.
+    #[tracing::instrument(
+        name = "harness.registry.renew",
+        skip_all,
+        fields(
+            connections = tracing::field::Empty,
+            restored = tracing::field::Empty,
+            undone = tracing::field::Empty,
+        )
+    )]
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
             return;
@@ -257,22 +268,32 @@ where
             .iter()
             .map(|entry| (*entry.key(), entry.id))
             .collect();
+        let span = tracing::Span::current();
+        span.record("connections", live.len());
         if live.is_empty() {
             return;
         }
         let restored = Arc::clone(presence).renew(live).await;
+        span.record("restored", restored.len());
+        let mut undone = 0usize;
         for (harness, connection) in restored {
             if self.connection_of(harness) == Some(connection) {
                 continue;
             }
+            undone += 1;
             tracing::warn!(
                 telemetry_event = "harness_runtime_lease_restore_undone",
                 %harness,
                 %connection,
                 "a renewal restored a connection that closed while it ran; closing it again"
             );
-            tokio::spawn(Arc::clone(presence).disconnected(harness, connection));
+            tokio::spawn(
+                Arc::clone(presence)
+                    .disconnected(harness, connection)
+                    .instrument(span.clone()),
+            );
         }
+        span.record("undone", undone);
     }
 
     /// Drop `connection` from the registry once its transport ends.
