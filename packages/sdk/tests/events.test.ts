@@ -293,6 +293,132 @@ describe('MacroEvents', () => {
     }
   });
 
+  const createdFor = (id: string) => ({
+    event_type: 'document.created' as const,
+    metadata: {
+      document_id: id,
+      document_name: id,
+      owner: 'macro|o@example.com',
+    },
+  });
+  const eventStream = (body: string, close: boolean) =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          if (body) controller.enqueue(new TextEncoder().encode(body));
+          if (close) controller.close();
+        },
+      }),
+      { headers: { 'content-type': 'text/event-stream' } },
+    );
+
+  test('a drop is told once, however many reconnects fail before the stream is back', async () => {
+    let connections = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        connections += 1;
+        if (connections === 1)
+          return eventStream(sseBody(createdFor('before')), true);
+        if (connections === 2) return new Response('down', { status: 503 });
+        return eventStream(sseBody(createdFor('after')), false);
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const after = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        if (event.metadata.document_id === 'after') after.resolve();
+      });
+      const drops: Date[] = [];
+      const opens: Date[] = [];
+      const stop = await macro.events.listen({
+        onDrop: (at) => drops.push(at),
+        onOpen: (at) => opens.push(at),
+      });
+      await Promise.race([
+        after.promise,
+        Bun.sleep(15_000).then(() => {
+          throw new Error('the stream never came back');
+        }),
+      ]);
+      stop();
+
+      expect(connections).toBe(3);
+      expect(drops).toHaveLength(1);
+      expect(opens).toHaveLength(2);
+    } finally {
+      await server.stop(true);
+    }
+  }, 20_000);
+
+  test('a stream that ends at once, with no event, backs off longer each time', async () => {
+    const at: number[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        at.push(Date.now());
+        return eventStream('', true);
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      macro.events.on('document.created', () => undefined);
+      const stop = await macro.events.listen();
+      while (at.length < 3) await Bun.sleep(100);
+      stop();
+
+      const [first = 0, second = 0, third = 0] = at;
+      expect(third - second).toBeGreaterThan((second - first) * 1.5);
+    } finally {
+      await server.stop(true);
+    }
+  }, 20_000);
+
+  test('a handler that throws is reported, and the stream goes on', async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        eventStream(
+          `${sseBody(createdFor('bad'))}${sseBody(createdFor('good'))}`,
+          false,
+        ),
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const good = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        if (event.metadata.document_id === 'bad')
+          throw new Error('handler broke');
+        good.resolve();
+      });
+      const errors: unknown[] = [];
+      const stop = await macro.events.listen({
+        onHandlerError: (error) => errors.push(error),
+      });
+      await Promise.race([
+        good.promise,
+        Bun.sleep(5_000).then(() => {
+          throw new Error('the event after the failed one never arrived');
+        }),
+      ]);
+      stop();
+
+      expect(errors).toEqual([new Error('handler broke')]);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',

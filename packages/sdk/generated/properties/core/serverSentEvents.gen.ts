@@ -133,8 +133,6 @@ export function createSseClient<TData = unknown>({
         const response = await _fetch(request);
 
         if (!response.ok) throw new Error(`SSE failed: ${response.status} ${response.statusText}`);
-        // Connected: a later failure backs off from the first delay again.
-        attempt = 1;
 
         if (!response.body) throw new Error('No body in SSE response');
 
@@ -206,6 +204,11 @@ export function createSseClient<TData = unknown>({
                   data = await responseTransformer(data);
                 }
               }
+
+              // An event arrived, so the connection works: a later failure
+              // backs off from the first delay again. Not on the response
+              // alone, or a stream that ends at once would retry every 3 s.
+              attempt = 1;
 
               onSseEvent?.({
                 data,

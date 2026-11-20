@@ -5,16 +5,7 @@ diff --git a/dist/clients/core/serverSentEvents.ts b/dist/clients/core/serverSen
 index 16c6fbb780a3a399ac7d882e405bd24c82e57c7d..087978f091e9ee0e4b19189da219d4d8c04ab31c 100644
 --- a/dist/clients/core/serverSentEvents.ts
 +++ b/dist/clients/core/serverSentEvents.ts
-@@ -131,6 +131,8 @@ export function createSseClient<TData = unknown>({
-         const response = await _fetch(request);
- 
-         if (!response.ok) throw new Error(`SSE failed: ${response.status} ${response.statusText}`);
-+        // Connected: a later failure backs off from the first delay again.
-+        attempt = 1;
- 
-         if (!response.body) throw new Error('No body in SSE response');
- 
-@@ -140,7 +142,9 @@ export function createSseClient<TData = unknown>({
+@@ -140,7 +140,9 @@
  
          const abortHandler = () => {
            try {
@@ -25,7 +16,19 @@ index 16c6fbb780a3a399ac7d882e405bd24c82e57c7d..087978f091e9ee0e4b19189da219d4d8
            } catch {
              // noop
            }
-@@ -218,6 +222,9 @@ export function createSseClient<TData = unknown>({
+@@ -201,6 +203,11 @@
+                 }
+               }
+ 
++              // An event arrived, so the connection works: a later failure
++              // backs off from the first delay again. Not on the response
++              // alone, or a stream that ends at once would retry every 3 s.
++              attempt = 1;
++
+               onSseEvent?.({
+                 data,
+                 event: eventName,
+@@ -218,6 +225,9 @@
            reader.releaseLock();
          }
  

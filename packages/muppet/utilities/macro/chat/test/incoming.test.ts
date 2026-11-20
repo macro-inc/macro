@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import type { Macro } from '@macro-inc/sdk';
-import { type Message, sdkChat } from '../index.ts';
+import { type CatchUpReport, type Message, sdkChat } from '../index.ts';
 
 type Posted = {
   readonly id: string;
@@ -23,6 +23,8 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     string,
     { readonly reached: () => void; readonly open: Promise<void> }
   >();
+  const broken = new Set<string>();
+  let listFailures = 0;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let dropped: ((at: Date) => void) | undefined;
   let reconnected: ((at: Date) => void) | undefined;
@@ -53,6 +55,7 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     // Roots created or replied to after `after`, newest first, as the SDK
     // gives them.
     messagesAfter: async function* (after: string) {
+      if (broken.has(id)) throw new Error(`no access to ${id}`);
       const gate = gates.get(id);
       gate?.reached();
       await gate?.open;
@@ -81,6 +84,10 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     },
     channels: {
       list: async function* () {
+        if (listFailures > 0) {
+          listFailures -= 1;
+          throw new Error('backend restarting');
+        }
         for (const id of channelIds) yield channel(id);
       },
       byId: (id: string) => channel(id),
@@ -107,6 +114,12 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
         sender: { name: async () => 'Ada' },
       });
     },
+    /** Listing channels fails this many more times, as while the backend restarts. */
+    failListing: (times: number) => {
+      listFailures = times;
+    },
+    /** The channel's history fails for good, as one the agent lost access to does. */
+    break: (channelId: string) => broken.add(channelId),
     drop: (at: Date) => dropped?.(at),
     reconnect: (at: Date) => reconnected?.(at),
     /** Hold the channel's history until `release`; `reached` resolves once a read waits on it. */
@@ -125,8 +138,16 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
   };
 };
 
-const listening = (backend: ReturnType<typeof fakeMacro>) => {
-  const chat = sdkChat({ macro: async () => backend.macro });
+const listening = (
+  backend: ReturnType<typeof fakeMacro>,
+  report: (report: CatchUpReport) => void = () => undefined
+) => {
+  const chat = sdkChat({
+    macro: async () => backend.macro,
+    report,
+    // Retries are tested by what they report, not by waiting.
+    sleep: async () => undefined,
+  });
   const incoming = chat.incoming[Symbol.asyncIterator]();
   return async (): Promise<Message> => (await incoming.next()).value;
 };
@@ -251,3 +272,84 @@ test('a drop during a catch-up is caught up too, once the stream is back', async
     ).id
   ).toBe('a2');
 }, 15_000);
+
+test('a channel whose history keeps failing is skipped and reported, and later catch-ups still run', async () => {
+  const backend = fakeMacro(['dm1', 'dm2']);
+  const reports: CatchUpReport[] = [];
+  const next = listening(backend, (report) => reports.push(report));
+
+  const first = next();
+  await Bun.sleep(10);
+  await backend.live({ id: 'b1', at: '2026-11-18T17:44:00Z', text: 'hi' });
+  expect((await first).id).toBe('b1');
+
+  backend.break('dm1');
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.post({ id: 'b2', at: '2026-11-18T17:46:00Z', text: 'in dm2' }, 'dm2');
+  backend.reconnect(new Date('2026-11-18T17:47:00Z'));
+  expect(
+    (
+      await within(
+        next(),
+        5_000,
+        'the DM in the readable channel never arrived'
+      )
+    ).id
+  ).toBe('b2');
+
+  // A later drop is caught up too: the broken channel didn't wedge it.
+  backend.drop(new Date('2026-11-18T17:48:00Z'));
+  backend.post({ id: 'b3', at: '2026-11-18T17:49:00Z', text: 'again' }, 'dm2');
+  backend.reconnect(new Date('2026-11-18T17:50:00Z'));
+  expect(
+    (await within(next(), 5_000, 'the second catch-up never ran')).id
+  ).toBe('b3');
+  expect(reports).toContainEqual({
+    kind: 'skipped',
+    channelId: 'dm1',
+    error: 'no access to dm1',
+  });
+  expect(reports.filter(({ kind }) => kind === 'caught-up')).toHaveLength(2);
+}, 15_000);
+
+test('with nothing delivered yet, a catch-up starts a minute before the drop', async () => {
+  const backend = fakeMacro();
+  const next = listening(backend);
+
+  const pending = next();
+  await Bun.sleep(10);
+  // Posted just before the drop, while nothing had reached the agent yet.
+  backend.post({ id: 'early', at: '2026-11-18T17:44:30Z', text: 'hello?' });
+  backend.post({ id: 'stale', at: '2026-11-18T17:40:00Z', text: 'old' });
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.reconnect(new Date('2026-11-18T17:45:05Z'));
+
+  expect((await within(pending, 5_000, 'nothing was caught up')).id).toBe(
+    'early'
+  );
+  expect(await nothingWithin(next(), 500)).toBe('nothing');
+});
+
+test('a catch-up the backend refuses is tried again, and says so', async () => {
+  const backend = fakeMacro();
+  const reports: CatchUpReport[] = [];
+  const next = listening(backend, (report) => reports.push(report));
+
+  const first = next();
+  await Bun.sleep(10);
+  await backend.live({ id: 'c1', at: '2026-11-18T17:44:00Z', text: 'hi' });
+  expect((await first).id).toBe('c1');
+
+  backend.failListing(2);
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.post({ id: 'c2', at: '2026-11-18T17:46:00Z', text: 'there?' });
+  backend.reconnect(new Date('2026-11-18T17:47:00Z'));
+
+  expect((await within(next(), 5_000, 'the retry never caught up')).id).toBe(
+    'c2'
+  );
+  expect(reports.filter(({ kind }) => kind === 'retrying')).toEqual([
+    { kind: 'retrying', error: 'backend restarting', retryInMs: 1_000 },
+    { kind: 'retrying', error: 'backend restarting', retryInMs: 2_000 },
+  ]);
+});

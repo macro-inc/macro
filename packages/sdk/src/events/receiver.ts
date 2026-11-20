@@ -41,10 +41,12 @@ export interface ListenOptions {
   /** Abort the stream. */
   signal?: AbortSignal;
   /**
-   * Told each time the stream drops (the server closed it, as a restart or
-   * deploy does, or the connection failed), before it reconnects on its own.
-   * Events published while it was down are not replayed: resync them from
-   * history from `at`, e.g. with a channel's `messagesAfter`.
+   * Told once each time an open stream drops (the server closed it, as a
+   * restart or deploy does, or the connection failed), before it reconnects
+   * on its own; failed reconnect attempts while it is down aren't told.
+   * Events published while it was down are not replayed, unless `resume`
+   * catches a short gap: resync them from history from `at` after `onOpen`,
+   * e.g. with a channel's `messagesAfter`.
    */
   onDrop?: (at: Date) => void;
   /**
@@ -64,7 +66,20 @@ export interface ListenOptions {
   resume?: { readonly lastEventId?: string };
   /** Told each event's id once its handlers are done, to resume from later. */
   onEventId?: (id: string) => void;
+  /** Told when a handler throws or rejects; the stream goes on. */
+  onHandlerError?: (error: unknown) => void;
 }
+
+/** Runs a caller's callback without letting it break the stream. */
+const safely =
+  <Args extends unknown[]>(callback: ((...args: Args) => void) | undefined) =>
+  (...args: Args): void => {
+    try {
+      callback?.(...args);
+    } catch {
+      // The caller's to handle: a callback must not end the stream.
+    }
+  };
 
 /** Attach the entity handles defined for each webhook event. */
 function hydrate(
@@ -155,9 +170,15 @@ export class MacroEvents {
   /**
    * Open a live Server-Sent Events stream of matching broker events. This is
    * the default way to receive events — no public URL or signing secret
-   * required. Delivery is best-effort: events published before the
-   * connection, while disconnected, or dropped for a slow subscriber are
-   * missed; there is no replay.
+   * required. It reconnects on its own when the server ends it or the
+   * connection fails. Delivery is best-effort: events published before the
+   * connection, while it was down, or dropped for a slow subscriber are
+   * missed, unless `resume` replays them from the server's short, per-process
+   * window. Resync from history after `onOpen` reports a reopen.
+   *
+   * A handler that throws doesn't end the stream: the error goes to
+   * `onHandlerError`. The callbacks in `opts` must not throw; one that does
+   * is ignored.
    *
    * Filters default to the event names currently registered with {@link on}.
    * The stream uses those filters for its lifetime; later `.on` / unsubscribe
@@ -188,6 +209,12 @@ export class MacroEvents {
     }
 
     let lastId: string | undefined;
+    // Told once per drop, not once per failed reconnect attempt.
+    let open = false;
+    const onOpen = safely(opts.onOpen);
+    const onDrop = safely(opts.onDrop);
+    const onEventId = safely(opts.onEventId);
+    const onHandlerError = safely(opts.onHandlerError);
     // The generated client sends back the last id it saw on a reconnect; the
     // server replays from it only when asked to resume.
     const resuming = (request: Request): Request => {
@@ -218,7 +245,8 @@ export class MacroEvents {
             resuming(new Request(...request)),
           );
           if (response.ok) {
-            opts.onOpen?.(new Date());
+            open = true;
+            onOpen(new Date());
           }
           return response;
         },
@@ -228,8 +256,9 @@ export class MacroEvents {
         lastId = event.id;
       },
       onSseError: () => {
-        if (controller.signal.aborted) return;
-        opts.onDrop?.(new Date());
+        if (controller.signal.aborted || !open) return;
+        open = false;
+        onDrop(new Date());
       },
     });
 
@@ -238,8 +267,12 @@ export class MacroEvents {
         for await (const data of stream) {
           // The client reads an event's id just before yielding it.
           const id = lastId;
-          await this.dispatchEvent(data);
-          if (id !== undefined) opts.onEventId?.(id);
+          try {
+            await this.dispatchEvent(data);
+          } catch (error) {
+            onHandlerError(error);
+          }
+          if (id !== undefined) onEventId(id);
         }
       } catch {
         if (controller.signal.aborted) return;

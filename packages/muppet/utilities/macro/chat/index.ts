@@ -148,15 +148,46 @@ const rememberedIds = 1_000;
 const catchUpMarginMs = 60_000;
 const directMessage = 'direct_message';
 
+const failureOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
 /** A name for someone with no display name: the front of their id's email. */
 export const nameFromId = (id: string): string =>
   id.replace(/^macro\|/, '').replace(/@.*/, '');
 
+/** What a catch-up after a dropped stream did, for the agent's log. */
+export type CatchUpReport =
+  | {
+      readonly kind: 'caught-up';
+      readonly after: string;
+      readonly channels: number;
+      readonly messages: number;
+    }
+  /** One channel's or thread's history couldn't be read: skipped, the rest still caught up. */
+  | {
+      readonly kind: 'skipped';
+      readonly channelId: string;
+      readonly root?: string;
+      readonly error: string;
+    }
+  /** The whole pass failed (the backend still coming back): tried again after `retryInMs`. */
+  | {
+      readonly kind: 'retrying';
+      readonly error: string;
+      readonly retryInMs: number;
+    };
+
 /** Chat over Macro's SDK, as the account the client is signed in as. */
 export const sdkChat = ({
   macro: connect,
+  report = () => undefined,
+  sleep = (ms) => Bun.sleep(ms),
 }: {
   readonly macro: () => Promise<Macro>;
+  /** Told what each catch-up after a dropped stream did. Must not throw. */
+  readonly report?: (report: CatchUpReport) => void;
+  /** Waits between catch-up attempts. */
+  readonly sleep?: (ms: number) => Promise<void>;
 }): Chat => {
   let me: Promise<string> | undefined;
   const myId = () => {
@@ -301,7 +332,8 @@ export const sdkChat = ({
           const [oldest] = delivered;
           if (oldest !== undefined) delivered.delete(oldest);
         }
-        if (newest === undefined || message.at > newest) newest = message.at;
+        if (newest === undefined || Date.parse(message.at) > Date.parse(newest))
+          newest = message.at;
         emit(message);
       };
 
@@ -374,19 +406,46 @@ export const sdkChat = ({
       // read too.
       const catchUpFrom = async (after: string): Promise<void> => {
         const since = Date.parse(after);
+        let channels = 0;
+        let messages = 0;
+        // Listing the channels failing fails the pass, which is tried again;
+        // one channel or thread failing is skipped and reported, so a bad
+        // one can't stop every later catch-up.
         for await (const channel of macro.channels.list()) {
           const missed: Message[] = [];
-          for await (const root of channel.messagesAfter(after)) {
-            for (const message of [root, ...(await root.thread().replies())]) {
-              if (delivered.has(message.id)) continue;
-              const at = await message.createdAt();
-              if (Date.parse(at) < since) continue;
-              missed.push(await fromHistory(channel, message, at));
+          try {
+            for await (const root of channel.messagesAfter(after)) {
+              let replies: readonly Posted[] = [];
+              try {
+                replies = await root.thread().replies();
+              } catch (error) {
+                report({
+                  kind: 'skipped',
+                  channelId: channel.id,
+                  root: root.id,
+                  error: failureOf(error),
+                });
+              }
+              for (const message of [root, ...replies]) {
+                if (delivered.has(message.id)) continue;
+                const at = await message.createdAt();
+                if (Date.parse(at) < since) continue;
+                missed.push(await fromHistory(channel, message, at));
+              }
             }
+          } catch (error) {
+            report({
+              kind: 'skipped',
+              channelId: channel.id,
+              error: failureOf(error),
+            });
           }
+          channels += 1;
           missed.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
+          messages += missed.length;
           for (const message of missed) deliver(message);
         }
+        report({ kind: 'caught-up', after, channels, messages });
       };
       // Where the next catch-up starts: the earliest drop not caught up yet.
       // It runs once the stream is open again, since a message posted
@@ -406,9 +465,15 @@ export const sdkChat = ({
               try {
                 await catchUpFrom(after);
                 break;
-              } catch {
+              } catch (error) {
                 // The backend is still coming back: try again.
-                await Bun.sleep(Math.min(1_000 * 2 ** attempt, 30_000));
+                const retryInMs = Math.min(1_000 * 2 ** attempt, 30_000);
+                report({
+                  kind: 'retrying',
+                  error: failureOf(error),
+                  retryInMs,
+                });
+                await sleep(retryInMs);
               }
             }
           }
@@ -774,7 +839,7 @@ export const chatting = module({
  * another implementation, e.g. a fake in tests.
  */
 export const chat = (
-  from: { readonly macro: () => Promise<Macro> } | { readonly chat: Chat }
+  from: Parameters<typeof sdkChat>[0] | { readonly chat: Chat }
 ) => {
   const port = 'chat' in from ? from.chat : sdkChat(from);
   // One set of indicators for the process: replies' typing and anything else
