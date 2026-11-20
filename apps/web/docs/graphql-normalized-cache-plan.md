@@ -1345,10 +1345,27 @@ deletes nothing. A by-id read also returns public and team channels the viewer
 opened without joining (`isParticipant: false`), so the cache holds those too:
 a joined list filters them out.
 
-After a reconciled pass, `queries/channel/directory-shadow.ts` compares the
-cache with the REST channel list the app has loaded, once per viewer per tab,
-and records counts per difference kind on one `channel_directory.shadow` span.
-It is temporary: it goes with the REST list.
+`queries/channel/directory.ts` is the app's only reader of the viewer's
+channels: `ChannelDirectoryProvider` in `Root` supplies it, and
+`core/context/channels.ts` reads it (`useChannelDirectory`, `useChannel`,
+`useChannelLookup`, `useChannelName`). With the cache and its backfill on, it
+reads the lane's records from the cache's channel search buckets, again on
+visible cache changes and when the lane's checkpoint completes, and is
+`complete` once a pass of the lane finished in the cache's current storage
+generation; another viewer's cache reads as empty. Without the cache it pages
+the lane's own query (`ChannelDirectoryPage`) into memory, never the REST
+channel list.
+
+A cold cache takes about a minute to fill on a large account, so a lookup of
+one channel answers `loaded`, `pending` or `missing`. A channel a filling
+directory lacks is pending, and the lookup reads it by id (batched, 100 ids
+or 25 ms); it is missing once that read returns nothing for it or the
+directory completes without it. Readers that decide from absence (section
+membership, notification bulk actions, scope checks) wait for `complete()` or
+call `readComplete()`, which pages the network while the cache is still
+filling. Channel writes outside the cache's soup updates (join links,
+renames, new DMs) call `refreshChannelDirectory`, which rereads only the
+in-memory directory.
 
 ## Authoritative Mail membership repair
 
