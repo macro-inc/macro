@@ -29,6 +29,9 @@ import {
  *   `:where(.md *)`, `:is(.a, .b) *` and `html[data-x] *` walk to the root from
  *   every element.
  *
+ * It can't know which classes only ever sit on `<html>` or `<body>`, so
+ * `.tauri-ios *` passes although it filters nothing; name `html` instead.
+ *
  * Measured on a 1,800-element channel (Chrome 157), these were 15 of the 27 ms
  * a whole-page restyle took. `costlySelectors` lists them in a stylesheet; the
  * build fails on any not in `ALLOWED_COSTLY_SELECTORS` (`vite.base.ts`).
@@ -40,7 +43,7 @@ const HIGHLIGHT_PSEUDO_ELEMENTS = new Set([
   'target-text',
   'spelling-error',
   'grammar-error',
-  'highlight',
+  'highlight-function',
 ]);
 
 /** Pseudo-classes Chrome files in a bucket of their own, as it does a class. */
@@ -159,7 +162,9 @@ function filters(components: SelectorComponent[]): boolean {
         return true;
       case 'pseudo-class': {
         const inner = singleArgument(component);
-        return inner !== undefined && (filtered(inner) || filters(subject(inner)));
+        return (
+          inner !== undefined && (filtered(inner) || filters(subject(inner)))
+        );
       }
       default:
         return false;
@@ -253,11 +258,23 @@ function formatComponent(component: SelectorComponent): string {
     case 'namespace':
       return '';
     case 'pseudo-element':
+      if (component.kind === 'highlight-function') {
+        return `::highlight(${component.name})`;
+      }
       return `::${'name' in component ? component.name : component.kind}`;
     case 'pseudo-class': {
       const name = 'name' in component ? component.name : component.kind;
       const list = selectorList(component);
-      return list ? `:${name}(${list.map(formatSelector).join(', ')})` : `:${name}`;
+      if (list) return `:${name}(${list.map(formatSelector).join(', ')})`;
+      // Keep arguments (`:nth-child(2)`, `:lang(en)`) so keys stay distinct.
+      const {
+        type: _type,
+        kind: _kind,
+        ...args
+      } = component as Record<string, unknown>;
+      return Object.keys(args).length > 0
+        ? `:${name}(${JSON.stringify(args)})`
+        : `:${name}`;
     }
     default:
       return '';
@@ -301,14 +318,12 @@ export function costlySelectors(css: string, filename = 'input.css') {
  * Costly selectors the app keeps on purpose, with why. Add one only when the
  * rule has to reach every element.
  */
-export const ALLOWED_COSTLY_SELECTORS: ReadonlyMap<string, string> = new Map(
+export const ALLOWED_COSTLY_SELECTORS: ReadonlyMap<string, string> = new Map([
   [
-    [
-      'html[data-touch-device="true"] .[html[data-touch-device=true]_&~*]:[--mobile-content-inset-top:0px] ~ *',
-      'The queued email sends panel hands the top inset to what follows it. A sibling rule is the only way to reach those elements; it costs about 0.5 ms of a whole-page restyle.',
-    ],
-  ]
-);
+    'html[data-touch-device="true"] .[html[data-touch-device=true]_&~*]:[--mobile-content-inset-top:0px] ~ *',
+    'The queued email sends panel hands the top inset to what follows it. A sibling rule is the only way to reach those elements; it costs about 0.5 ms of a whole-page restyle.',
+  ],
+]);
 
 /** Costly selectors in a stylesheet that the allow-list doesn't cover. */
 export function unexpectedCostlySelectors(css: string, filename?: string) {

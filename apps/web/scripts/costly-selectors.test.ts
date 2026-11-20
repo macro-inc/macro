@@ -24,6 +24,7 @@ describe('costlySelectors', () => {
     'body *',
     ':root *',
     '.a ~ *',
+    ':root ::highlight(search)',
   ])('flags %s', (selector) => {
     expect(costly(selector)).toBe(true);
   });
@@ -54,6 +55,14 @@ describe('costlySelectors', () => {
     expect(costlySelectors(':root { ::selection { color: red } }')).toEqual([
       ':root ::selection',
     ]);
+  });
+
+  it('keeps pseudo-class arguments in the key', () => {
+    expect(
+      costlySelectors(
+        ':where(li:nth-child(2) *), :where(li:nth-child(3) *) { color: red }'
+      )
+    ).toHaveLength(2);
   });
 
   it('lists each selector of a rule separately', () => {

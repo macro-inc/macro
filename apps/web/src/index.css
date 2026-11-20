@@ -89,13 +89,25 @@
    element, again on each custom-property write on <html>, which was a third
    of every whole-page restyle. Engines without highlight inheritance (Safari,
    Firefox) get the descendant rule through the class `highlightInheritance.ts`
-   sets on <html>. A subtree that redefines `--color-ink` adds itself to the
-   first list (`.onboarding-flow`, `.fig-editor-theme` in their own files). */
+   sets on <html>. A subtree that redefines `--color-ink` restarts the tint:
+   add it to the first list (`.onboarding-flow`, `.fig-editor-theme` do it in
+   their own files), or give it `selection-root` when the ink varies by
+   element. */
 :root::selection,
 [data-theme-light]::selection,
 [data-invert]::selection,
 .no-highlight-inheritance ::selection {
   background-color: oklch(from var(--color-ink) l c h / 0.1);
+}
+
+/* For a subtree whose `--color-ink` follows each element (`currentColor`):
+   the tint is computed per element there, as it was everywhere before. The
+   class lets Chrome's ancestor filter skip every element outside it. */
+@utility selection-root {
+  &::selection,
+  & ::selection {
+    background-color: oklch(from var(--color-ink) l c h / 0.1);
+  }
 }
 
 html[data-platform='ios'],
