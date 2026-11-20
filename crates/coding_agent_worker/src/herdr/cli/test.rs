@@ -149,3 +149,83 @@ async fn herdr_core_viewers_report_their_own_state() {
     );
     assert!(!calls.contains("report"));
 }
+
+/// herdr-core's refusal of a `send` to a terminal in its first seconds whose
+/// output has not yet been still: nothing was typed, so it is safe to retry.
+const STILL_STARTING: &str = r#"{"error":{"hint":"nothing was typed; check hc read t9, then retry","kind":"unavailable","message":"t9 is still starting: its output has not settled"}}"#;
+
+/// A fake `hc` whose first `refusals` sends fail like a starting terminal.
+fn starting_hc(root: &Path, refusals: u32) -> std::path::PathBuf {
+    let script = root.join("hc");
+    let calls = root.join("calls");
+    let refused = root.join("refused");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> {calls}
+case "$1" in
+  send)
+    count=$(cat {refused} 2>/dev/null || echo 0)
+    if [ "$count" -lt {refusals} ]; then
+      echo $((count + 1)) > {refused}
+      echo '{still}' >&2
+      exit 1
+    fi
+    echo '{{"status":"idle","turn":1,"started":true}}' ;;
+  *) echo '{{}}' ;;
+esac
+"#,
+            calls = shell_words::quote(&calls.to_string_lossy()),
+            refused = shell_words::quote(&refused.to_string_lossy()),
+            still = STILL_STARTING,
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    script
+}
+
+#[tokio::test]
+async fn a_prompt_to_a_starting_terminal_is_retried_until_it_types() {
+    let root = tempfile::tempdir().unwrap();
+    let herdr = HerdrCli::core(starting_hc(root.path(), 2), "t1");
+    herdr.prompt_agent("macro-abc", "hello").await.unwrap();
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    assert_eq!(
+        calls
+            .lines()
+            .filter(|call| *call == "send macro-abc hello")
+            .count(),
+        3
+    );
+}
+
+#[tokio::test]
+async fn other_send_refusals_are_not_retried() {
+    let root = tempfile::tempdir().unwrap();
+    let script = root.path().join("hc");
+    std::fs::write(
+        &script,
+        "#!/bin/sh\necho '{\"error\":{\"kind\":\"blocked\",\"message\":\"t9 is blocked (permission)\"}}' >&2\nexit 1\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let error = HerdrCli::core(script, "t1")
+        .prompt_agent("macro-abc", "hello")
+        .await
+        .unwrap_err();
+    assert!(!error.still_starting());
+}
+
+#[test]
+fn only_a_settle_refusal_counts_as_still_starting() {
+    let refused = |stderr: &str| HerdrError::Refused {
+        command: "send".to_owned(),
+        stderr: stderr.to_owned(),
+    };
+    assert!(refused(STILL_STARTING).still_starting());
+    assert!(
+        !refused(r#"{"error":{"kind":"unavailable","message":"t9 has exited"}}"#).still_starting()
+    );
+}

@@ -69,6 +69,23 @@ impl HerdrError {
         self.has_code("/error/code", "agent_pane_busy")
     }
 
+    /// herdr-core refused to type into a terminal whose output has not
+    /// settled since it started. Nothing was typed, so the send can retry.
+    pub(crate) fn still_starting(&self) -> bool {
+        let Self::Refused { stderr, .. } = self else {
+            return false;
+        };
+        serde_json::from_str::<Value>(stderr)
+            .ok()
+            .is_some_and(|value| {
+                value.pointer("/error/kind").and_then(Value::as_str) == Some("unavailable")
+                    && value
+                        .pointer("/error/message")
+                        .and_then(Value::as_str)
+                        .is_some_and(|message| message.contains("is still starting"))
+            })
+    }
+
     fn has_code(&self, pointer: &str, code: &str) -> bool {
         let Self::Refused { stderr, .. } = self else {
             return false;
