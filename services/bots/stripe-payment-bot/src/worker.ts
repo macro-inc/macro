@@ -1,19 +1,17 @@
 import Stripe from 'stripe';
 import type { Env as MacroEnv } from '../../../../packages/sdk/src/config';
-import { unwrap } from '../../../../packages/sdk/src/utils';
 import {
-  channelClient,
-  createChannelBroadcaster,
+  broadcast,
+  type ChannelBindings,
   type InvoiceDeliveries,
 } from './channel';
-import { deliverInvoice, type ReceiptStorage } from './delivery';
+
+export { InvoiceDelivery } from './delivery';
+
 import { formatNotification, notificationFromEvent } from './notification';
 
-type WorkerEnv = {
+type WorkerEnv = ChannelBindings & {
   INVOICE_DELIVERIES: InvoiceDeliveries;
-  MACRO_BOT_TOKEN: string;
-  MACRO_ENV: string;
-  MACRO_STORAGE_URL?: string;
   STRIPE_API_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
 };
@@ -34,54 +32,6 @@ function missingBindings(env: WorkerEnv): string[] {
   return REQUIRED_BINDINGS.filter((key) => !env[key]);
 }
 
-function parseMacroEnv(value: string): MacroEnv | undefined {
-  return MACRO_ENVIRONMENTS.find((environment) => environment === value);
-}
-
-export class InvoiceDelivery {
-  private pending?: Promise<void>;
-
-  constructor(
-    private state: { storage: ReceiptStorage },
-    private env: WorkerEnv
-  ) {}
-
-  async fetch(request: Request): Promise<Response> {
-    const { channelId, content } = (await request.json()) as {
-      channelId: string;
-      content: string;
-    };
-    const macroEnv = parseMacroEnv(this.env.MACRO_ENV);
-    if (!macroEnv) throw new Error('Invalid MACRO_ENV');
-    const client = channelClient({
-      env: macroEnv,
-      botToken: this.env.MACRO_BOT_TOKEN,
-      storageUrl: this.env.MACRO_STORAGE_URL,
-    })._client.storage;
-    const path = { parent_type: 'channel', parent_id: channelId };
-
-    this.pending ??= deliverInvoice(this.state.storage, {
-      async exists(id) {
-        const result = await client.entityMessageGetMessage({
-          path: { ...path, id },
-        });
-        if (result.response?.status === 404) return false;
-        unwrap(result);
-        return true;
-      },
-      async create(id) {
-        unwrap(
-          await client.entityMessageCreate({ path, body: { id, content } })
-        );
-      },
-    }).finally(() => {
-      this.pending = undefined;
-    });
-    await this.pending;
-    return new Response(null, { status: 204 });
-  }
-}
-
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     const url = new URL(request.url);
@@ -100,8 +50,7 @@ export default {
       );
     }
 
-    const macroEnv = parseMacroEnv(env.MACRO_ENV);
-    if (!macroEnv) {
+    if (!MACRO_ENVIRONMENTS.includes(env.MACRO_ENV)) {
       return Response.json(
         {
           error: `MACRO_ENV must be one of: ${MACRO_ENVIRONMENTS.join(', ')}`,
@@ -143,18 +92,21 @@ export default {
     }
     if (!notification) return Response.json({ ok: true, ignored: true });
 
+    const invoiceId =
+      notification.kind === 'payment' ? notification.invoice?.id : undefined;
     try {
-      await createChannelBroadcaster(
-        {
-          botToken: env.MACRO_BOT_TOKEN,
-          env: macroEnv,
-          storageUrl: env.MACRO_STORAGE_URL,
-        },
-        env.INVOICE_DELIVERIES
-      )(
+      const channelCount = await broadcast(
+        env,
         formatNotification(notification),
-        notification.kind === 'payment' ? notification.invoice?.id : undefined
+        invoiceId
       );
+      console.log('Posted Stripe notification', {
+        kind: notification.kind,
+        eventId: notification.eventId,
+        subscriptionId: notification.subscriptionId,
+        invoiceId,
+        channelCount,
+      });
     } catch (error) {
       console.error('Failed to post Stripe notification to Macro', error);
       return new Response('Failed to post Stripe notification to Macro', {
@@ -162,13 +114,6 @@ export default {
       });
     }
 
-    console.log('Posted Stripe notification', {
-      kind: notification.kind,
-      eventId: notification.eventId,
-      subscriptionId: notification.subscriptionId,
-      invoiceId:
-        notification.kind === 'payment' ? notification.invoice?.id : undefined,
-    });
     return Response.json({ ok: true });
   },
 };

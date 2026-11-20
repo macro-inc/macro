@@ -40,7 +40,7 @@ test('signed webhook retry recovers partial delivery and lost acknowledgement ac
     STRIPE_API_KEY: 'sk_test_fixture',
     STRIPE_WEBHOOK_SECRET: 'whsec_fixture',
     MACRO_BOT_TOKEN: 'mbot_fixture',
-    MACRO_ENV: 'prod',
+    MACRO_ENV: 'prod' as const,
     MACRO_STORAGE_URL: 'https://storage.test',
     INVOICE_DELIVERIES: {
       getByName(name: string): InvoiceDelivery {
