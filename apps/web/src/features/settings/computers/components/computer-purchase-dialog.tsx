@@ -50,8 +50,8 @@ export function ComputerPurchaseStep(props: {
   declined?: boolean;
   /** No host has room for this size right now; it reads as sold out. */
   noRoomSize?: SizeOffer['size'];
-  /** Under Buy: what happens after it. */
-  headsUp: string;
+  /** Under Buy: what happens after it, when the next step needs a heads-up. */
+  headsUp?: string;
   /** The size or name changed, so an earlier refusal no longer applies. */
   onEdit?: () => void;
   onClose: () => void;
@@ -154,11 +154,6 @@ export function ComputerPurchaseStep(props: {
                     }}
                   />
                 </div>
-
-                {/* The price is on each size and on Buy; one line says how it bills. */}
-                <p class="text-xs text-ink-muted">
-                  {t('settingsBilling.proration')}
-                </p>
 
                 <Switch>
                   <Match when={props.declined}>

@@ -305,11 +305,7 @@ export function ComputerBuyFlow(props: {
                       <StepHeader step="computer" claude="step" />
                     ) : undefined
                   }
-                  headsUp={
-                    guided()
-                      ? t('computers.buyHeadsUp')
-                      : t('computers.buyReadyHeadsUp')
-                  }
+                  headsUp={guided() ? t('computers.buyHeadsUp') : undefined}
                   offers={offers.isSuccess ? offers.data : undefined}
                   failure={
                     offers.isError ? offersFailure(offers.error) : undefined

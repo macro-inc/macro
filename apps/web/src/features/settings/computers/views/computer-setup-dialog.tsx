@@ -535,7 +535,6 @@ export function ComputerSetupSteps(props: {
               if (closed) toast.success(t('computers.claudeSignedIn'));
               signedIn();
             }}
-            footnote={t('computers.claudeSharedAccount')}
             secondary={{
               label: t('computers.claudeUseCreditsInstead'),
               onClick: useCreditsInstead,
@@ -571,10 +570,6 @@ export function ComputerSetupSteps(props: {
             </p>
             <p class="text-sm text-ink-muted">
               {t('computers.setupContinuesInBackground')}
-            </p>
-            {/* No sign-in can happen until setup is retried. */}
-            <p class="text-sm text-ink-muted">
-              {t('computers.claudeSharedAccount')}
             </p>
           </Show>
         </ActionDialogShell.Body>
