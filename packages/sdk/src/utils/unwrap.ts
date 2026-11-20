@@ -25,6 +25,23 @@ function errorDetail(data: unknown): string {
 }
 
 /**
+ * A 422 explains a request body in the API's snake_case field names, while
+ * the SDK's options are camelCase (`dataType` for `data_type`). Name the SDK
+ * option for each field it mentions, so a caller fixes the option it passed.
+ */
+function sdkOptionNames(detail: string): string {
+  const fields = [
+    ...new Set(detail.match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g)),
+  ];
+  if (fields.length === 0) return '';
+  const names = fields.map(
+    (field) =>
+      `\`${field}\` is \`${field.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())}\``,
+  );
+  return ` (in SDK options, ${names.join(', ')}; read the method's reference for the shape each takes)`;
+}
+
+/**
  * A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
  * The message includes the server's explanation, such as a validation error,
  * and `data` holds the parsed error body.
@@ -35,9 +52,10 @@ export class MacroApiError extends MacroError {
     readonly data: unknown,
   ) {
     const detail = errorDetail(data);
+    const names = status === 422 ? sdkOptionNames(detail) : '';
     super(
       detail
-        ? `Macro API error ${status}: ${detail}`
+        ? `Macro API error ${status}: ${detail}${names}`
         : `Macro API error ${status}`,
     );
     this.name = 'MacroApiError';
