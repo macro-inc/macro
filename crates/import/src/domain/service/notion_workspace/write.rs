@@ -493,10 +493,8 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         }
                         return Ok(());
                     }
-                    let snapshot = links.read().await.clone();
-                    let (content, row_links) =
-                        super::databases::body_links(api, &row.id, &snapshot, destinations, progress)
-                            .await?;
+                    let (content, database_links) =
+                        super::databases::body_links(api, &row.id, destinations, progress).await?;
                     let body = task_body(&row, &content, &item.task_fields, people);
                     let properties = task_properties(&row, &item.task_fields, people);
                     let title = if row.title.trim().is_empty() {
@@ -505,6 +503,8 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                         row.title.trim()
                     };
                     let id = derived_id(item.import_id, &format!("task/{}", row.id.as_str()));
+                    let mut row_links = links.read().await.clone();
+                    row_links.databases = database_links;
                     let created = writer
                         .create_task(
                             user,

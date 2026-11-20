@@ -34,7 +34,6 @@ impl WrittenObjects for FakeStore {
         Ok(())
     }
 
-
     async fn record_task_notice(
         &self,
         _: &MacroUserIdStr<'static>,

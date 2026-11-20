@@ -20,7 +20,6 @@ pub(super) struct Writer {
         )>,
     >,
     pub(super) steps: Mutex<Vec<&'static str>>,
-    pub(super) no_private_folder: bool,
     pub(super) database_reads: Mutex<Vec<(Uuid, models_databases::TableId)>>,
     pub(super) deny_database_access: bool,
 
@@ -312,25 +311,6 @@ impl WorkspaceWriter for Writer {
         })
     }
 
-    async fn create_database(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-    ) -> anyhow::Result<NewDatabase> {
-        Ok(NewDatabase {
-            database_id: Uuid::now_v7(),
-            table: models_databases::TableId::new(),
-            title_column: models_databases::ColumnId::new(),
-        })
-    }
-
-    async fn folder_is_private(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-    ) -> anyhow::Result<bool> {
-        Ok(!self.no_private_folder)
-    }
     async fn database_access(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
         Ok(!self.deny_database_access)
     }

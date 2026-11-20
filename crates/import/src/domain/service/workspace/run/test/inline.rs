@@ -11,7 +11,7 @@ use import_notion::domain::views::{NotionView, ViewScope};
 struct Inline;
 impl NotionApi for Inline {
     async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
-        let mut page = Pages.page(id).await?;
+        let mut page = Pages::default().page(id).await?;
         page.title = "Row".into();
         page.parent = NotionParent::DataSource {
             data_source: page_id('d'),
@@ -280,15 +280,12 @@ async fn excluded_sources_keep_named_notion_links_in_the_page(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_personal_database_uses_top_level_when_no_private_folder_exists(pool: PgPool) {
+async fn a_personal_database_keeps_its_safe_page_folder(pool: PgPool) {
     let owner = user("inline-root");
     let tracker = TaskTracker::new();
     let service = service(
         &pool,
-        Writer {
-            no_private_folder: true,
-            ..Writer::default()
-        },
+        Writer::default(),
         CancellationToken::new(),
         tracker.clone(),
     )
@@ -317,12 +314,20 @@ async fn a_personal_database_uses_top_level_when_no_private_folder_exists(pool: 
     tracker.wait().await;
     let report = service.notion_import_report(&owner).await.unwrap();
     assert!(report.failures.is_empty());
-    assert_eq!(service.creator.databases.lock().unwrap()[0].1, None);
+    let folder = service.creator.databases.lock().unwrap()[0]
+        .1
+        .expect("safe page folder");
     assert!(
-        report
-            .warnings
-            .iter()
-            .any(|warning| warning.contains("filed at top level"))
+        !service
+            .creator
+            .folder_has_explicit_grant(&owner, folder)
+            .await
+            .unwrap()
+    );
+    assert_eq!(
+        repo.personal_root_folder(&owner).await.unwrap(),
+        None,
+        "no relocation is needed for a private source path"
     );
 }
 
@@ -856,5 +861,75 @@ async fn a_revoked_database_grant_prevents_holder_lookup_and_keeps_no_access_lin
             .warnings
             .iter()
             .any(|warning| warning.contains("view access unavailable"))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_personal_inline_database_never_lands_under_a_team_shared_folder(pool: PgPool) {
+    let owner = teammate(&pool, "personal-inline-owner", Uuid::now_v7()).await;
+    let tracker = TaskTracker::new();
+    let root = Uuid::now_v7();
+    let writer = Writer::default();
+    writer.grants.lock().unwrap().insert(root);
+    let service = service(&pool, writer, CancellationToken::new(), tracker.clone())
+        .with_notion_connections(Arc::new(InlineConnected));
+    let repo = service.repo.clone();
+    repo.start_run(&owner, ImportSource::Notion, &[])
+        .await
+        .unwrap();
+    repo.set_root_folder(&owner, root).await.unwrap();
+    let mut source = planned_page('d', "Work", false);
+    source.kind = ImportKind::DataSource;
+    let (review, _) = approved(&pool, &owner, &[planned_page('e', "Project", true), source]).await;
+    repo.finish_run(&owner, ImportSource::Notion, RunStatus::Ready, None)
+        .await
+        .unwrap();
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+    let report = service.notion_import_report(&owner).await.unwrap();
+    assert!(report.failures.is_empty(), "{:?}", report.failures);
+    let folder = service.creator.databases.lock().unwrap()[0]
+        .1
+        .expect("personal mirror folder");
+    assert!(
+        !service
+            .creator
+            .folder_has_explicit_grant(&owner, folder)
+            .await
+            .unwrap(),
+        "Personal database must never be filed under a team grant"
+    );
+    let personal_root = repo
+        .personal_root_folder(&owner)
+        .await
+        .unwrap()
+        .expect("persisted personal root");
+    assert_ne!(personal_root, root);
+    assert_eq!(
+        folder, personal_root,
+        "the rootless inline source uses the persisted personal mirror root"
+    );
+    assert!(
+        service
+            .creator
+            .folder_visibilities
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(name, _)| name == "Notion (personal)" || name == "Project")
+            .all(|(_, visibility)| *visibility == crate::domain::ports::ImportVisibility::Personal)
+    );
+    assert!(
+        !service
+            .creator
+            .shares
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|entity| matches!(entity, SharedEntity::Database(_)))
     );
 }

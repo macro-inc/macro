@@ -532,15 +532,9 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                 if let Some(document) = progress.get_for(WrittenKind::Body, row.id.as_str()) {
                     return Ok(Some(change(document)));
                 }
-                let snapshot = links.read().await.clone();
-                let (markdown, row_links) = super::super::databases::body_links(
-                    api,
-                    &row.id,
-                    &snapshot,
-                    destinations,
-                    progress,
-                )
-                .await?;
+                let (markdown, database_links) =
+                    super::super::databases::body_links(api, &row.id, destinations, progress)
+                        .await?;
                 if markdown.trim().is_empty() {
                     return Ok(None);
                 }
@@ -572,6 +566,8 @@ async fn write_row_bodies<Api: NotionApi, Writer: WorkspaceWriter, Store: Writte
                     row.title.trim().to_string()
                 };
                 let id = derived_id(item.import_id, &format!("body/{}", row.id.as_str()));
+                let mut row_links = links.read().await.clone();
+                row_links.databases = database_links;
                 let document: Uuid = writer
                     .create_document(
                         user,

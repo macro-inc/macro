@@ -33,9 +33,10 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await;
     assert_eq!(first.unwrap_err().to_string(), "the process stopped");
@@ -52,9 +53,10 @@ async fn a_database_stopped_part_way_through_its_rows_resumes_without_duplicates
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -122,9 +124,10 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &[]),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap_err();
@@ -141,9 +144,10 @@ async fn resumed_row_bodies_are_neither_read_nor_created_again() {
         Uuid::from_u128(42),
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &Progress::new(&store, &user, item.import_id, &recorded),
         &Cancel::default(),
+        None,
     )
     .await
     .unwrap();
@@ -313,11 +317,12 @@ async fn rows_are_read_again_after_reservation_and_schema_drift_is_reported() {
         &item,
         false,
         &PeopleMap::new(),
-        &NotionLinks::default(),
+        &tokio::sync::RwLock::new(NotionLinks::default()),
         &progress,
         &Cancel::default(),
         &prepared,
         &HashMap::new(),
+        None,
     )
     .await
     .unwrap();
@@ -394,7 +399,7 @@ async fn resumed_schema_keeps_its_original_date_shape_when_rows_change() {
     assert_eq!(resumed.plan.columns[0].shape, ColumnShape::Date);
     assert!(
         store
-            .1
+            .warnings
             .lock()
             .unwrap()
             .iter()

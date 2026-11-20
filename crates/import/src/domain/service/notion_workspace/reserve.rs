@@ -2,7 +2,7 @@
 
 use super::databases::{DatabaseDestination, DatabaseDestinations};
 use super::*;
-use crate::domain::models::TeamClaim;
+use crate::domain::models::{TeamClaim, WrittenKind};
 use crate::domain::ports::{ImportRepo, ImportedDatabase, NotionDatabaseFallback};
 use std::collections::HashSet;
 
@@ -12,44 +12,47 @@ pub(super) struct Reservations {
     pub failures: HashMap<NotionId, String>,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the reviewed set, destination layout and durable ledger"
-)]
-#[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty), err)]
-pub(super) async fn reserve<
-    Api: NotionApi,
-    Writer: WorkspaceWriter,
-    Store: ImportRepo + NotionPlanRepo + WrittenObjects,
->(
-    api: &Api,
-    writer: &Writer,
-    store: &Store,
-    user: &MacroUserIdStr<'static>,
-    set: &WriteSet,
-    place: &Place<'_>,
-    team: Option<Uuid>,
-    written: &[crate::domain::models::WrittenObject],
-    cancel: &write::Cancel,
-) -> Result<Reservations> {
-    let pending: HashSet<Uuid> = set.pending.iter().map(|item| item.import_id).collect();
-    let mut prepared = HashMap::new();
-    let mut destinations = HashMap::new();
-    let mut failures = HashMap::new();
-    let source_titles: HashMap<&str, &str> = set
-        .all
-        .iter()
-        .filter(|item| item.kind == ImportKind::DataSource)
-        .map(|item| (item.notion_id.as_str(), item.title.as_str()))
-        .collect();
-    for item in set
-        .all
-        .iter()
-        .filter(|item| item.kind == ImportKind::DataSource && item.decision == NotionDecision::Copy)
-    {
-        cancel.ensure_running()?;
-        let progress = write::Progress::new(store, user, item.import_id, written);
-        let outcome: anyhow::Result<()> = async {
+impl<R, S, C, W, N> ImportServiceImpl<R, S, C, W, N>
+where
+    R: ImportRepo + CanonicalImportRepo + NotionPlanRepo + NotionRunRepo + WrittenObjects + Clone,
+    S: ConnectorSelect,
+    C: EntityCreator + WorkspaceWriter,
+    W: SlackWorkspaceSource,
+    N: NotionConnections,
+{
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "the reviewed set, destination layout and durable ledger"
+    )]
+    #[tracing::instrument(name = "notion.reserve_databases", skip_all, fields(databases = tracing::field::Empty), err)]
+    pub(super) async fn reserve_databases(
+        &self,
+        api: &N::Api,
+        user: &MacroUserIdStr<'static>,
+        set: &WriteSet,
+        place: &Place<'_>,
+        team: Option<Uuid>,
+        written: &[crate::domain::models::WrittenObject],
+        cancel: &write::Cancel,
+    ) -> Result<Reservations> {
+        let writer = self.creator.as_ref();
+        let store = &self.repo;
+        let pending: HashSet<Uuid> = set.pending.iter().map(|item| item.import_id).collect();
+        let mut prepared = HashMap::new();
+        let mut destinations = HashMap::new();
+        let mut failures = HashMap::new();
+        let source_titles: HashMap<&str, &str> = set
+            .all
+            .iter()
+            .filter(|item| item.kind == ImportKind::DataSource)
+            .map(|item| (item.notion_id.as_str(), item.title.as_str()))
+            .collect();
+        for item in set.all.iter().filter(|item| {
+            item.kind == ImportKind::DataSource && item.decision == NotionDecision::Copy
+        }) {
+            cancel.ensure_running()?;
+            let progress = write::Progress::new(store, user, item.import_id, written);
+            let outcome: anyhow::Result<()> = async {
             if !pending.contains(&item.import_id) {
                 if let Some(row) = store.get(user, item.import_id).await?
                     && row.entity_type.as_deref() == Some(write::DATABASE_ENTITY)
@@ -71,7 +74,7 @@ pub(super) async fn reserve<
                 return Ok(());
             }
             let claim = match team {
-                Some(team) if item.shared || item.already_imported => store.claim_team_object(user, item.import_id, team, item.shared).await?,
+                Some(team) if item.shared || item.already_imported => super::super::lifecycle::claim_team_object(store, writer, user, item.import_id, team, item.shared).await?,
                 _ => TeamClaim::Free,
             };
             match claim {
@@ -91,14 +94,14 @@ pub(super) async fn reserve<
                 TeamClaim::Held | TeamClaim::Free => {}
             }
             let planned = place.folder_for(item, false);
-            let folder = if item.shared && team.is_some() || writer.folder_is_private(user, planned).await? {
-                Some(planned)
-            } else if writer.folder_is_private(user, place.root).await? {
-                progress.warn(&[format!("Source {}: personal database filed in the private Notion area because its page folder is shared", item.notion_id)]).await?;
-                Some(place.root)
-            } else {
-                progress.warn(&[format!("Source {}: no private folder available; personal database filed at top level", item.notion_id)]).await?;
-                None
+            // Visibility is the reviewed verdict, independently of who holds a
+            // team claim. Reuse the same persistent mirror used for personal pages.
+            let visibility = ImportVisibility::from_shared(item.shared);
+            let folder = match visibility {
+                ImportVisibility::Shared => Some(planned),
+                ImportVisibility::Personal => Some(self.personal_item_folder(
+                    user, item.import_id, planned, place.path_for(planned)?,
+                ).await?),
             };
             let database = write::prepare_database(api, writer, user, item, folder, &progress).await?;
             if item.parent.is_none() && folder == Some(place.root) && !item.dependency_of.is_empty() {
@@ -112,22 +115,23 @@ pub(super) async fn reserve<
             prepared.insert(item.notion_id.clone(), database);
             Ok(())
         }.await;
-        if let Err(error) = outcome {
-            let reason = super::super::admission::failure_reason(&error);
-            progress.warn(&[format!("Source {}: unresolved database destination: {reason}; occurrences retain Notion links", item.notion_id)]).await?;
-            destinations.insert(
-                item.notion_id.clone(),
-                DatabaseDestination::Fallback(NotionDatabaseFallback::Unresolved),
-            );
-            failures.insert(item.notion_id.clone(), reason);
+            if let Err(error) = outcome {
+                let reason = super::super::admission::failure_reason(&error);
+                progress.warn(&[format!("Source {}: unresolved database destination: {reason}; occurrences retain Notion links", item.notion_id)]).await?;
+                destinations.insert(
+                    item.notion_id.clone(),
+                    DatabaseDestination::Fallback(NotionDatabaseFallback::Unresolved),
+                );
+                failures.insert(item.notion_id.clone(), reason);
+            }
         }
+        tracing::Span::current().record("databases", destinations.len() as i64);
+        Ok(Reservations {
+            prepared,
+            destinations,
+            failures,
+        })
     }
-    tracing::Span::current().record("databases", destinations.len() as i64);
-    Ok(Reservations {
-        prepared,
-        destinations,
-        failures,
-    })
 }
 
 /// Access is checked before reading another owner's import provenance. The

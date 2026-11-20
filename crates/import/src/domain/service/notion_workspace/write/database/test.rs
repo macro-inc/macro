@@ -311,13 +311,6 @@ impl WorkspaceWriter for FakeWriter {
         })
     }
 
-    async fn folder_is_private(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: Uuid,
-    ) -> anyhow::Result<bool> {
-        Ok(true)
-    }
     async fn database_access(&self, _: &MacroUserIdStr<'static>, _: Uuid) -> anyhow::Result<bool> {
         Ok(true)
     }

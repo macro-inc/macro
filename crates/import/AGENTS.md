@@ -162,16 +162,16 @@ from this import's other databases into it are not linked.
   restarts, writing continues with the rows still `importing`. After five
   adoptions the run fails. Stale-run and stale-row reapers skip Notion
   workspace imports for this reason.
-- A resumed write never creates anything twice: documents, row bodies and
-  tasks get UUIDv5 ids from their ledger row (`WorkspaceWriter` treats an id
-  in use as already written), database columns and options UUIDv5 ids from
-  their database, and folders, databases, inserted rows, the Page column and
-  relation columns are recorded in `import_entity_written` as they are made.
+- Resumed documents, row bodies and tasks use UUIDv5 ids from their ledger
+  generation. Databases, starter tables, title columns and saved views also
+  use deterministic ids, so replay after a lost create response reuses them.
+  Database columns and options derive ids from their database; written markers
+  record folders, inserted rows, the Page column and relation columns.
   Every import reuses the user's "Notion" folder (`import_run.root_folder_id`)
-  while it exists outside trash; a deleted root is replaced on the next write. Left open: a crash between creating a folder, a database
-  or a row batch and recording it duplicates that one object or batch, and a
-  crash between applying a schema op and recording it fails that database on
-  resume (Macro refuses the column id).
+  while it exists outside trash; a deleted root is replaced on the next write.
+  Remaining gaps: a crash between creating a folder or inserting a row batch
+  and recording it can duplicate that folder or batch; a crash between applying
+  a schema operation and recording it can fail that source on resume.
 - `team_id` on a Notion row means "the team's copy": only shared objects take
   it, at `claim_importing` (staged → importing) before anything is written, so
   `import_entity_team_object_key` makes a second teammate's claim fail. A
@@ -200,6 +200,8 @@ from this import's other databases into it are not linked.
   copy, and clears the review's obsolete `alreadyImported` target. Page, task
   and database-body writes read the run's shared destinations immediately before
   creation, so later writes use a replacement's id while live team ids stay put.
+  Read the live page-link map after awaiting body resolution, which can wait
+  while another write publishes a replacement id.
   A missing linked data source requires a fresh plan instead of guessing between
   a database and tasks folder without its original task mapping. Transient
   read errors preserve claims. A finished object deleted during a resumed write
@@ -321,9 +323,11 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   view before converting any body. Use the source UUID as identity within the
   user/team ledger; globally unique Notion source UUIDs never dedupe by title.
 - File owner-only databases with their page when safe. Keep each database's
-  reviewed sharing separate; a personal source falls back to the private Notion
-  root, then top level (with a warning), when concrete ancestor grants are shared.
-  A folder's link-only setting does not grant access to the filed database.
+  reviewed sharing separate. Before filing a Personal source, use the shared
+  `personal_item_folder` / `personal_mirror_folder` path: explicit grants on a
+  folder or ancestor relocate it to the persistent owner-only `Notion (personal)`
+  mirror, with a report note. Derive visibility from the reviewed verdict, never
+  the team claim. A folder's link-only setting does not grant database access.
 - `databases::body_links` builds a separate occurrence map for each page or row;
   `?v` selects the saved view, otherwise the first container tab is assumed and
   reported. Excluded sources retain `notImported` links.
@@ -345,5 +349,5 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   settlement events retain them across retries.
 - Database ids derive from the ledger row; view ids derive from database and
   source-view ids. Record their written markers and reuse an existing caller id
-  after a lost create response. Keep page placement and page link defaults on
-  their existing path; database privacy does not change those defaults.
+  after a lost create response. Reuse the privacy helpers and persisted mirror
+  ids used by pages and tasks; do not create a second personal root or guard.

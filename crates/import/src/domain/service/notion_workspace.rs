@@ -733,18 +733,9 @@ where
             paths: &folder_paths,
             root,
         };
-        let reservations = reserve::reserve(
-            &api,
-            self.creator.as_ref(),
-            &self.repo,
-            user,
-            set,
-            &place,
-            team_id,
-            &written,
-            cancel,
-        )
-        .await?;
+        let reservations = self
+            .reserve_databases(&api, user, set, &place, team_id, &written, cancel)
+            .await?;
         // Reservation records must be visible to every object writer in this attempt.
         let written = self.repo.written(user, &ids).await?;
         let target = Target {

@@ -7,8 +7,7 @@ use models_databases::views::ViewId;
 use super::super::write::Progress;
 use super::*;
 use crate::domain::ports::{
-    NotionDatabaseFallback, NotionDatabaseOccurrence, NotionDatabaseTarget, NotionLinks,
-    WrittenObjects,
+    NotionDatabaseFallback, NotionDatabaseOccurrence, NotionDatabaseTarget, WrittenObjects,
 };
 
 /// Resolve one page-local occurrence map, recording every fallback before conversion.
@@ -16,14 +15,12 @@ use crate::domain::ports::{
 pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
     api: &Api,
     page: &NotionId,
-    base: &NotionLinks,
     destinations: &DatabaseDestinations,
     progress: &Progress<'_, Store>,
-) -> anyhow::Result<(String, NotionLinks)> {
+) -> anyhow::Result<(String, Vec<NotionDatabaseOccurrence>)> {
     let resolved = resolve_page(api, page).await?;
     let mut warnings = resolved.warnings;
-    let mut links = base.clone();
-    links.databases.clear();
+    let mut databases = Vec::new();
     let mut unresolved = 0i64;
     for occurrence in &resolved.body.occurrences {
         for loss in &occurrence.losses {
@@ -127,7 +124,7 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
                 key.container_id, key.ordinal
             ));
         }
-        links.databases.push(NotionDatabaseOccurrence {
+        databases.push(NotionDatabaseOccurrence {
             container_id: key.container_id.clone(),
             ordinal: key.ordinal,
             target,
@@ -155,9 +152,9 @@ pub(in super::super) async fn body_links<Api: NotionApi, Store: WrittenObjects>(
         );
     }
     progress.warn(&warnings).await?;
-    tracing::Span::current().record("occurrences", links.databases.len() as i64);
+    tracing::Span::current().record("occurrences", databases.len() as i64);
     tracing::Span::current().record("unresolved", unresolved);
-    Ok((markdown, links))
+    Ok((markdown, databases))
 }
 
 fn fallback_reason(reason: ReadFailure) -> NotionDatabaseFallback {

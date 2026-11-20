@@ -144,9 +144,10 @@ A missing selected-tab hint uses the first Notion tab and reports that assumptio
 Unsupported filter clauses broaden the view rather than hide source rows; its
 name says **filter approximated** and the report lists every translation loss.
 Formula and rollup columns are labelled snapshots. Database sharing is separate
-from page sharing; a personal database uses a safe personal folder or stays at
-top level with a report warning. A resumed run reuses reserved databases and
-saved views. **Open full review** shows the whole plan in a dialog
+from page sharing; if a personal database's folder or an ancestor has explicit
+sharing grants, it uses the owner-only **Notion (personal)** folder and mirrored
+subfolder path, with a placement note in the report. A resumed run reuses reserved
+databases and saved views. **Open full review** shows the whole plan in a dialog
 (a full-height sheet on phones). **Import …** approves straight from the
 card, with no confirmation step. The agent ends that
 message with "Should I kick it off?"; when the owner answers yes in chat, it

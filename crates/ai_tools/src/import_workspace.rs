@@ -410,63 +410,6 @@ impl import::domain::ports::WorkspaceWriter for ToolEntityCreator {
         }
     }
 
-    #[tracing::instrument(name = "notion.database_filing_access", skip_all, fields(folder_id = %folder), err)]
-    async fn folder_is_private(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        folder: Uuid,
-    ) -> anyhow::Result<bool> {
-        let mut current = Some(folder);
-        let mut seen = std::collections::HashSet::new();
-        while let Some(folder) = current {
-            if !seen.insert(folder) {
-                return Ok(false);
-            }
-            let receipt = self
-                .entity_access_service
-                .generate_entity_access_receipt::<OwnerAccessLevel>(
-                    user,
-                    None,
-                    &folder.to_string(),
-                    model_entity::EntityType::Project,
-                )
-                .await
-                .map_err(|error| anyhow::anyhow!("no owner access to filing folder: {error:?}"))?;
-            let sharing = self
-                .project_service
-                .get_project_permissions(receipt.clone())
-                .await?;
-            if sharing.team_share_access_level.is_some()
-                || sharing
-                    .channel_share_permissions
-                    .as_ref()
-                    .is_some_and(|channels| !channels.is_empty())
-            {
-                return Ok(false);
-            }
-            let users = self
-                .entity_access_service
-                .get_users_by_entity(&folder.to_string(), model_entity::EntityType::Project)
-                .await
-                .map_err(|error| anyhow::anyhow!("filing folder grants unavailable: {error:?}"))?;
-            if users.iter().any(|person| person != user) {
-                return Ok(false);
-            }
-            let project =
-                self.project_service
-                    .get_project(receipt.try_into_requirement::<ViewAccessLevel>().map_err(
-                        |error| anyhow::anyhow!("filing receipt unavailable: {error:?}"),
-                    )?)
-                    .await?;
-            current = project
-                .project_metadata
-                .parent_id
-                .map(|id| Uuid::parse_str(&id))
-                .transpose()?;
-        }
-        Ok(true)
-    }
-
     #[tracing::instrument(skip_all, fields(database_id = %id), err)]
     async fn database_access(
         &self,

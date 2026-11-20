@@ -871,13 +871,6 @@ pub trait WorkspaceWriter: ImportedTargetReader {
         visibility: ImportVisibility,
     ) -> impl Future<Output = anyhow::Result<CreatedImportTask>> + Send;
 
-    /// Whether this folder and its ancestors have only the owner's grants.
-    fn folder_is_private(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        folder: Uuid,
-    ) -> impl Future<Output = anyhow::Result<bool>> + Send;
-
     /// Check current view access before reading another holder's table marker.
     fn database_access(
         &self,

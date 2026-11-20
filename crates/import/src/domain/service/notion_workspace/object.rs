@@ -270,9 +270,9 @@ where
                     target.links,
                     progress,
                     cancel,
-                    personal_child_folder,
                     prepared,
                     &target.reservations.destinations,
+                    personal_child_folder,
                 )
                 .await?;
                 let id = written.database_id.to_string();
@@ -284,11 +284,9 @@ where
                 (id, write::DATABASE_ENTITY)
             }
             _ => {
-                let snapshot = target.links.read().await.clone();
-                let (markdown, links) = databases::body_links(
+                let (markdown, database_links) = databases::body_links(
                     api,
                     &item.notion_id,
-                    &snapshot,
                     &target.reservations.destinations,
                     progress,
                 )
@@ -306,6 +304,8 @@ where
                         (Default::default(), None)
                     }
                 };
+                let mut links = target.links.read().await.clone();
+                links.databases = database_links;
                 let document = self
                     .creator
                     .create_document(
