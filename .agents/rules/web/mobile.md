@@ -146,6 +146,9 @@ read their code, and follow that pattern rather than inventing a new one.
   or inside one (sheets, dialogs and `ChannelInputContainer` do); the app frame
   uses `followViewportHeight`. Publish through that module, never on `<html>`:
   every element inherits a root property, so each write restyles the whole page.
+  Register a composer's follower outside the layout `createComposerLayout`
+  watches, or each keyboard publish re-measures the draft. Checked by ast-grep
+  `tsx-keyboard-viewport-reader-follows`, warning.
   In JS read `virtualKeyboardVisible()`. Sheets with inputs call
   `scrollToFocusedInput` from `onFocusIn`.
   Native iOS viewport clearance must be remeasured on fold/rotation even when
@@ -168,7 +171,9 @@ read their code, and follow that pattern rather than inventing a new one.
   inherited: register the element whose own styles read it (merge into an
   existing ref), not an ancestor. Content in a sheet over the chrome sits in
   `NoContentInsetBottomProvider`. Enforced by ast-grep
-  `tsx-content-inset-reader-follows`, CI error.
+  `tsx-content-inset-reader-follows`, CI error; a stylesheet that reads any of
+  the three values fails `css-viewport-inset-readers` until its file is listed
+  with the element that registers.
 - Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
   and draw nothing when it is 0, so panes without a top safe area or floating
   chrome (the iPhone Duo) get no fade; place them where that inset is set.
