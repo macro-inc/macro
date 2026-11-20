@@ -1,5 +1,6 @@
 use super::*;
-use crate::domain::mailbox::{DatabaseFailure, EffectFailure, LOCK_NOT_AVAILABLE};
+use crate::domain::mailbox::{DatabaseFailure, EffectFailure};
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use models_email::service::{address::ContactInfo, link::UserProvider};
 
 fn context() -> ProjectionContext {

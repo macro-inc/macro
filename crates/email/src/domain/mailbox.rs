@@ -171,14 +171,11 @@ impl std::fmt::Display for DatabaseFailure {
     }
 }
 
-/// The SQLSTATE of a statement that gave up waiting for a lock.
-pub const LOCK_NOT_AVAILABLE: &str = "55P03";
-
 impl DatabaseFailure {
     /// Whether the statement gave up waiting for a lock. The rows were busy,
     /// not wrong, so the same work succeeds once their holder finishes.
     pub fn is_lock_timeout(&self) -> bool {
-        matches!(self, Self::Sqlstate(code) if code == LOCK_NOT_AVAILABLE)
+        matches!(self, Self::Sqlstate(code) if code == super::models::error::LOCK_NOT_AVAILABLE)
     }
 }
 
