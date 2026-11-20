@@ -136,10 +136,15 @@ for (const name of readdirSync(root).sort()) {
         : 'MISSED'
       : caught
         ? `${caught} unexplained`
-        : Object.keys(summary.hungCalls ?? {}).length
+        : productHangs(summary.hungCalls).length
           ? `HUNG ${JSON.stringify(summary.hungCalls)}`
           : 'clean',
   });
+}
+
+/** Hung calls other than loading the harness, which the drivers redo after a reload. */
+function productHangs(hung: Record<string, number> | undefined) {
+  return Object.keys(hung ?? {}).filter((method) => method !== 'install');
 }
 
 function pct(values: number[], p: number) {

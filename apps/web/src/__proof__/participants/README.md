@@ -76,7 +76,7 @@ have some.
 | `field.left_at.missing` | head's fallback and overlay rows set `left_at: null` | no caller reads `left_at` |
 | `field.joined_at.client-stamped` | both sides show an add with the time they stamped when it was sent | client clocks; no caller reads `joined_at` |
 | `tie-order` | rows with the same `joined_at`: REST orders by `joined_at` alone, the soup read aggregates without an order | neither side defines it; main's own order varies between reads |
-| `main-stale` | main differs from the database, the head matches it | the head is right |
+| `main-stale` | main differs from the database (people, order, or join times changed since its read), the head matches it | the head is right |
 
 ## Mutants
 

@@ -173,6 +173,8 @@ const counts = {
   live: {
     converged: 0,
     timedOut: 0,
+    /** Timed-out checks by op, then how the head and main each compared to the database. */
+    timedOutBy: {} as Record<string, number>,
     newBehindMain: 0,
     mainStale: 0,
     latencies: [] as number[],
@@ -856,6 +858,8 @@ async function step(batch: Channel[], round: number) {
           verdict.newVsTruth !== 'na'
         ) {
           counts.live.timedOut += 1;
+          const why = `${ops.get(channel.id)!.kind}: head ${verdict.newVsTruth}, main ${verdict.oldVsTruth}`;
+          counts.live.timedOutBy[why] = (counts.live.timedOutBy[why] ?? 0) + 1;
           // Main matched the database where the head did not: a live update the head missed.
           if (verdict.oldVsTruth === 'match') counts.live.newBehindMain += 1;
         }

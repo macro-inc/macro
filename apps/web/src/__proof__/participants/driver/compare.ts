@@ -66,6 +66,18 @@ function vsTruth(state: ReaderState, truth: Row[] | undefined) {
     : ('misordered' as const);
 }
 
+/** Whether every row the database has carries the database's join time. */
+function timesOf(state: ReaderState, truth: Row[] | undefined) {
+  if (!truth || state.isPending || !state.data) return false;
+  const at = new Map(
+    truth.map((row) => [row.user_id, Date.parse(row.joined_at)])
+  );
+  return state.data.every(
+    (row) =>
+      !at.has(row.user_id) || Date.parse(row.joined_at) === at.get(row.user_id)
+  );
+}
+
 /**
  * Whether rows follow the database's join times, earliest first (both reads
  * promise that order). A row the database doesn't have a time for yet (an add
@@ -257,6 +269,14 @@ export function judge(snap: Snap, truth: Row[] | undefined): Verdict {
     if (newVsTruth === 'match' && oldVsTruth !== 'match') bucket = 'main-stale';
     else if (oldVsTruth === 'match' && newVsTruth !== 'match')
       bucket = 'new-wrong';
+    // Both hold the database's people in an order its times allow; one still
+    // shows join times the database has since changed.
+    else if (
+      newVsTruth === 'match' &&
+      oldVsTruth === 'match' &&
+      timesOf(snap.new, truth) !== timesOf(snap.old, truth)
+    )
+      bucket = timesOf(snap.new, truth) ? 'main-stale' : 'new-wrong';
     else bucket = 'contract-diff';
   } else if (data.length) bucket = 'data-only';
   return {
