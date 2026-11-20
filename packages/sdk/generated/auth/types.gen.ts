@@ -24,6 +24,35 @@ export type AgentApiKey = {
 export type AgentApiKeyProvider = 'anthropic' | 'openai';
 
 /**
+ * An agent's inbox, as admins see it.
+ */
+export type AgentInbox = {
+    /**
+     * Its address, once the provider gave one.
+     */
+    address?: string | null;
+    failure?: null | AgentInboxFailure;
+    /**
+     * A stand-in provider serves it: no real mail moves.
+     */
+    fakeProvider: boolean;
+    /**
+     * Where it is.
+     */
+    state: AgentInboxState;
+};
+
+/**
+ * Why an inbox couldn't be created.
+ */
+export type AgentInboxFailure = 'not_configured' | 'address_taken' | 'quota_exceeded' | 'unavailable' | 'rejected';
+
+/**
+ * Where an agent's inbox is.
+ */
+export type AgentInboxState = 'provisioning' | 'active' | 'failed' | 'paused' | 'releasing' | 'released';
+
+/**
  * What an agent needs to start using the SDK.
  */
 export type AgentSetupResponse = {
@@ -531,6 +560,11 @@ export type CreateTeamAgent = {
      * Profile picture URL (a static file the caller uploaded).
      */
     avatarUrl?: string | null;
+    /**
+     * Give the agent its own email inbox once its computer is bought. An
+     * inbox that can't be made never fails the invite.
+     */
+    inbox?: boolean;
     /**
      * What the agent is responsible for. Seeds its workspace; when this and
      * `personality` are empty the agent asks its owner what to take on.
@@ -2454,6 +2488,7 @@ export type TeamAgent = {
      * Admin who invited the agent.
      */
     createdBy?: string | null;
+    inbox?: null | AgentInbox;
     /**
      * What the agent is responsible for.
      */
@@ -5408,6 +5443,72 @@ export type DeleteTeamAgentResponses = {
 };
 
 export type DeleteTeamAgentResponse = DeleteTeamAgentResponses[keyof DeleteTeamAgentResponses];
+
+export type GetTeamAgentInboxData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/inbox';
+};
+
+export type GetTeamAgentInboxErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * No such agent, or it has no inbox
+     */
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetTeamAgentInboxError = GetTeamAgentInboxErrors[keyof GetTeamAgentInboxErrors];
+
+export type GetTeamAgentInboxResponses = {
+    200: AgentInbox;
+};
+
+export type GetTeamAgentInboxResponse = GetTeamAgentInboxResponses[keyof GetTeamAgentInboxResponses];
+
+export type AddTeamAgentInboxData = {
+    body?: never;
+    path: {
+        /**
+         * The agent's Macro user id.
+         */
+        agent_user_id: string;
+    };
+    query?: never;
+    url: '/team_agents/{agent_user_id}/inbox';
+};
+
+export type AddTeamAgentInboxErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+    /**
+     * No email provider is set up, or email inboxes didn't answer
+     */
+    503: ErrorResponse;
+};
+
+export type AddTeamAgentInboxError = AddTeamAgentInboxErrors[keyof AddTeamAgentInboxErrors];
+
+export type AddTeamAgentInboxResponses = {
+    /**
+     * The inbox; `failed` with a reason when the provider refused, `provisioning` while it keeps trying
+     */
+    200: AgentInbox;
+};
+
+export type AddTeamAgentInboxResponse = AddTeamAgentInboxResponses[keyof AddTeamAgentInboxResponses];
 
 export type GetTeamAgentVoiceData = {
     body?: never;
