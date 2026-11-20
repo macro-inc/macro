@@ -61,13 +61,13 @@ const PING_INTERVAL: Duration = Duration::from_secs(2);
 /// succeeding into a connection that will never answer again.
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(6);
 
-/// How long a socket nobody reads any more waits for its outgoing queue to
-/// end before closing anyway.
+/// How long a socket nobody reads any more waits for every sender to go
+/// before closing anyway.
 ///
-/// A caller tearing its channel down drops both halves at once, and the
-/// messages it queued last are still on their way to the socket; they end
-/// the queue within moments. A connection evicted while a session still
-/// holds its sender never ends the queue, and closes after this.
+/// A caller tearing its channel down drops both halves at once, and its
+/// senders follow the reader within moments; the queue then drains however
+/// long its writes take. A connection evicted while a session still holds
+/// its sender keeps a sender, and closes after this.
 const UNREAD_GRACE: Duration = PING_INTERVAL;
 
 /// A physical WebSocket frame type: one JSON text payload, or a ping.
@@ -147,8 +147,8 @@ async fn bounded_write<Error>(write: impl Future<Output = Result<(), Error>>) ->
 /// sends its close frame and keeps reading until the peer closes (or goes
 /// silent), so nothing the peer already sent is lost. When `incoming`'s
 /// receiver is gone, nothing serves the connection any more: the socket
-/// closes once `outgoing` ends, or after [`UNREAD_GRACE`] if a sender is
-/// still held.
+/// closes once `outgoing` has drained and ended, or after [`UNREAD_GRACE`]
+/// if a sender is still held.
 ///
 /// A frame that fails to decode as `Rx` is dropped with a warning rather than
 /// closing the connection - the rest of the logical stream is unaffected by
@@ -186,7 +186,8 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 let Some(payload) = next_outgoing else {
                     // Frames the peer sent before it sees the close are still
                     // delivered; dropping the socket here would discard them.
-                    if !bounded_write(sink.close()).await {
+                    // With nobody reading, there is nothing left to wait for.
+                    if !bounded_write(sink.close()).await || incoming.is_closed() {
                         break;
                     }
                     closing = true;
@@ -202,7 +203,9 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
                 unread_deadline = Some(Instant::now() + UNREAD_GRACE);
             }
-            () = unread_grace_over => {
+            // A queue with no senders left is draining its last frames and
+            // ends by itself; only a held sender keeps an unread socket open.
+            () = unread_grace_over, if !outgoing.is_closed() => {
                 // The peer sees the close and redials; without it, the pings
                 // would keep an unserved socket looking alive indefinitely.
                 let _ = bounded_write(sink.close()).await;

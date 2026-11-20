@@ -552,3 +552,99 @@ async fn frames_queued_just_before_the_channel_is_dropped_still_go_out() {
         "every frame queued before the drop should reach the peer"
     );
 }
+
+/// A socket whose every write is slow but succeeds, and which answers with a
+/// pong every second: a live peer behind backpressure.
+struct SlowSocket<Writes> {
+    writes: std::pin::Pin<Box<Writes>>,
+    pongs: tokio::time::Interval,
+}
+
+impl<Writes> futures::Sink<TungsteniteMessage> for SlowSocket<Writes>
+where
+    Writes: futures::Sink<TungsteniteMessage, Error = futures::channel::mpsc::SendError>,
+{
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_ready(context)
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        self.get_mut().writes.as_mut().start_send(item)
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_flush(context)
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.get_mut().writes.as_mut().poll_close(context)
+    }
+}
+
+impl<Writes> futures::Stream for SlowSocket<Writes> {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        self.get_mut()
+            .pongs
+            .poll_tick(context)
+            .map(|_| Some(Ok(TungsteniteMessage::Pong(Default::default()))))
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_dropped_channel_drains_its_queue_however_long_the_writes_take() {
+    const QUEUED: usize = 5;
+    let written = Arc::new(std::sync::Mutex::new(0_usize));
+    let counter = Arc::clone(&written);
+    let writes = futures::sink::unfold(counter, |counter, frame: TungsteniteMessage| async move {
+        // Quicker than a ping interval, so the peer's pongs still get
+        // read, but the whole queue takes longer than the grace.
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        if frame.is_text() {
+            *counter.lock().unwrap() += 1;
+        }
+        Ok::<_, futures::channel::mpsc::SendError>(counter)
+    });
+    let (outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    for _ in 0..QUEUED {
+        outgoing.send("{}".to_owned()).unwrap();
+    }
+    // Reader and sender go together, the way a bridge ending drops its channel.
+    drop(outgoing);
+    drop(incoming_rx);
+
+    let socket = SlowSocket {
+        writes: Box::pin(writes),
+        pongs: tokio::time::interval(Duration::from_secs(1)),
+    };
+    timeout(
+        Duration::from_secs(60),
+        run_pump(socket, outgoing_rx, incoming),
+    )
+    .await
+    .expect("the pump should finish once its queue has drained");
+    assert_eq!(
+        *written.lock().unwrap(),
+        QUEUED,
+        "every queued frame should be written before the socket closes"
+    );
+}
