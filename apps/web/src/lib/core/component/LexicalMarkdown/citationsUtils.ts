@@ -241,13 +241,51 @@ const splitMdCitation = (
   return { documentId, nodeId };
 };
 
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})/;
+
+/** Markdown split into code fences and the prose between them, in order. */
+function splitCodeFences(markdown: string): { text: string; code: boolean }[] {
+  const parts: { text: string; code: boolean }[] = [];
+  let fence: string | undefined;
+  let current: string[] = [];
+  const flush = (code: boolean) => {
+    if (current.length) parts.push({ text: current.join('\n'), code });
+    current = [];
+  };
+  for (const line of markdown.split('\n')) {
+    const marker = CODE_FENCE.exec(line)?.[1];
+    if (fence === undefined && marker) {
+      flush(false);
+      fence = marker;
+      current.push(line);
+    } else if (
+      fence !== undefined &&
+      marker?.[0] === fence[0] &&
+      marker.length >= fence.length &&
+      line.trim() === marker
+    ) {
+      current.push(line);
+      flush(true);
+      fence = undefined;
+    } else {
+      current.push(line);
+    }
+  }
+  flush(fence !== undefined);
+  return parts;
+}
+
+/** Expands `[[...]]` citations in prose; code fences keep their text as written. */
 export const replaceCitations = async (input: string): Promise<string> => {
   const citationRegex = /\[\[(.*?)\]\]/g;
+  const parts = splitCodeFences(input);
 
   const citationCache = new Map<string, string>();
   // async lookups, started concurrently so the preview dataloader can batch them
   const pendingCitations = new Map<string, Promise<string>>();
-  const matches = [...input.matchAll(citationRegex)];
+  const matches = parts
+    .filter((part) => !part.code)
+    .flatMap((part) => [...part.text.matchAll(citationRegex)]);
   for (const match of matches) {
     const citation = match[1];
     if (citationCache.has(citation) || pendingCitations.has(citation)) {
@@ -302,7 +340,14 @@ export const replaceCitations = async (input: string): Promise<string> => {
     })
   );
 
-  return input.replace(citationRegex, (_match, citation) => {
-    return citationCache.get(citation) || '';
-  });
+  return parts
+    .map((part) =>
+      part.code
+        ? part.text
+        : part.text.replace(
+            citationRegex,
+            (_match, citation) => citationCache.get(citation) || ''
+          )
+    )
+    .join('\n');
 };
