@@ -51,6 +51,7 @@ members = [
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
   "crates/coding_agent_worker",
+  "crates/teammate_lifecycle",
   "crates/code_execution",
   "crates/cognition",
   "crates/codex_cloud_agents",
