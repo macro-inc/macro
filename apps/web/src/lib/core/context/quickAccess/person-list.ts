@@ -28,6 +28,8 @@ export function createPersonList(options: {
   resetKey?: Accessor<string>;
   localBudgetMs?: number;
   activity: Accessor<ReadonlyMap<string, DateValue>>;
+  /** Members of the viewer's team, to rank a page the server did not. */
+  teammates?: Accessor<ReadonlySet<string>>;
   conversation: (id: string) => EntityItem<ChannelEntity> | undefined;
   excluded: (id: string) => boolean;
 }): QuickAccessList<UserItem> {
@@ -41,6 +43,8 @@ export function createPersonList(options: {
       policy: options.policy,
       resetKey: options.resetKey,
       eligible: (user) => !options.excluded(user.id),
+      teammates: options.teammates,
+      directMessages: options.activity,
       // Menus debounce their own query. Waiting again lands people after
       // every other source and moves the rows under the highlight.
       debounceMs: untrack(options.policy).mode === 'property' ? 200 : 0,

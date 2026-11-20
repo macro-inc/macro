@@ -1,4 +1,5 @@
 import type { IUser } from '@core/user/types';
+import { normalizeNameText, startsWordsOf } from '@core/util/name-match-score';
 import type { CacheHost } from '@graphql-cache/host/types';
 import {
   PEOPLE_MIN_POLICY_VERSION,
@@ -9,7 +10,11 @@ import {
 import { isStaleHydrationScopeError } from '@graphql-cache/protocol';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import type { ContactDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
-import { fetchContactDirectoryPage } from '@service-storage/graphql-contacts';
+import {
+  fetchContactDirectoryByIds,
+  fetchContactDirectoryPage,
+  fetchContactReferencePage,
+} from '@service-storage/graphql-contacts';
 import { hashKey } from '@tanstack/solid-query';
 import { loadContactCheckpoint } from './backfill';
 import {
@@ -17,6 +22,7 @@ import {
   ContactDirectoryScopeError,
   readContactCacheScope,
 } from './cache-scope';
+import { canonicalContactUserId } from './contact-user-id';
 
 export { ContactDirectoryScopeError } from './cache-scope';
 export const CONTACT_WINDOW_SIZE = 50;
@@ -66,10 +72,19 @@ export type ContactDirectoryRequest = {
    * read instead. Without it the read waits for the cache however long it
    * takes. */
   localBudgetMs?: number;
+  /** Members of the viewer's team. The server does not rank its pages, so a
+   * server page reads the teammates a typed search names and lists them among
+   * the first rows. */
+  teammates?: readonly string[];
 };
 export type ContactDirectoryPage = {
   users: IUser[];
   people?: RankedPerson[];
+  /** On the first server page of a typed search: the listed people the text
+   * names, who lead `users`. `exact` by whole name, first name or address;
+   * `wordStart` are the teammates whose name has a word starting with each
+   * typed word, or whose address starts with the typed part of one. */
+  named?: { exact: string[]; wordStart: string[] };
   query: string;
   source: 'cache' | 'server';
   sync: 'cold' | 'partial' | 'snapshot' | 'unavailable';
@@ -178,6 +193,39 @@ function isBoundedWindow(
     policy.excluded.every((id) => bytes(id) <= 1024) &&
     (policy.senderDomain == null || bytes(policy.senderDomain) <= 255)
   );
+}
+
+/** Typed text, normalized, with the person it identifies when it is a whole
+ * address or user ID. */
+type TypedText = { text: string; identity?: string };
+
+function typedText(query: string): TypedText {
+  const text = normalizeNameText(query);
+  if (!text.includes('@')) return { text };
+  const id = text.startsWith('macro|') ? text : `macro|${text}`;
+  return { text, identity: canonicalContactUserId(id) };
+}
+
+/** How typed text names a person, as the leading stages of the local ranking
+ * decide it: a whole address by the one person it identifies, part of an
+ * address by the addresses it starts, a name by the whole name or first name
+ * it equals, or by starting a word of the name with each typed word. */
+function namedBy(
+  { text, identity }: TypedText,
+  user: IUser
+): 'exact' | 'wordStart' | undefined {
+  if (identity) return user.id.toLowerCase() === identity ? 'exact' : undefined;
+
+  if (text.includes('@'))
+    return user.email.toLowerCase().startsWith(text) ? 'wordStart' : undefined;
+
+  const name = normalizeNameText(user.name);
+  const firstName = !text.includes(' ') && !name.includes(',');
+  if (name === text || (firstName && name.split(' ')[0] === text))
+    return 'exact';
+  // Punctuation alone holds no word, and no words start every name.
+  if (!/[\p{Alphabetic}\p{Number}]/u.test(text)) return undefined;
+  return startsWordsOf(user.name, text) ? 'wordStart' : undefined;
 }
 
 /** How far contact hydration has progressed for this storage generation. */
@@ -354,10 +402,20 @@ async function readLateAwareServerWindow(
   };
 }
 
+/** The most people one lookup by ID reads: the server's bound for a request. */
+const MAX_NAMED_LOOKUP = 500;
+
 /** Without a usable local cache, reads one bounded server page. The server
  * filters by name/email subsequence in contact-ID order, without the local
- * recency ranking; explicit exclusions are applied here. A page may be empty
- * and still continue. */
+ * ranking, and each of its searches stops after scanning 2,000 contacts, so a
+ * person typed by name can be far down the page or past it. The first page of
+ * a typed search therefore also reads the people the text names and lists
+ * them first:
+ * - exact matches among the contacts the server's exact search scans;
+ * - the viewer's teammates and a whole typed address, looked up by ID, so
+ *   they are found however large the directory is.
+ * Explicit exclusions are applied here. A page may be empty and still
+ * continue. */
 async function readServerWindow({
   viewer,
   request,
@@ -372,27 +430,92 @@ async function readServerWindow({
   if (request.cursor && request.cursor.source !== 'server')
     throw new ContactDirectoryScopeError();
 
-  const result = await span.span('contacts.read_server_window', () =>
-    fetchContactDirectoryPage(
-      {
-        limit,
-        after: request.cursor?.after ?? null,
-        search: request.query || null,
-      },
-      signal
-    )
-  );
-  if (result.user.id !== viewer) throw new ContactDirectoryScopeError();
+  const typed = typedText(request.cursor ? '' : request.query);
+  const lookupIds = new Set<string>();
+  if (typed.text) {
+    for (const id of [typed.identity, ...(request.teammates ?? [])]) {
+      const supported = id && canonicalContactUserId(id);
+      if (supported && lookupIds.size < MAX_NAMED_LOOKUP)
+        lookupIds.add(supported);
+    }
+  }
+
+  const [result, exact, lookedUp] = await Promise.all([
+    span.span('contacts.read_server_window', () =>
+      fetchContactDirectoryPage(
+        {
+          limit,
+          after: request.cursor?.after ?? null,
+          search: request.query || null,
+        },
+        signal
+      )
+    ),
+    // A lookup by ID already answers for a whole address.
+    typed.text && !typed.identity
+      ? span.span('contacts.read_server_exact', () =>
+          fetchContactReferencePage(
+            { limit, search: request.query, matching: 'ANY_NAME' },
+            signal
+          )
+        )
+      : undefined,
+    lookupIds.size
+      ? span.span('contacts.read_server_named', () =>
+          fetchContactDirectoryByIds([...lookupIds], signal)
+        )
+      : undefined,
+  ]);
+  if ([result, exact, lookedUp].some((read) => read && read.user.id !== viewer))
+    throw new ContactDirectoryScopeError();
 
   const page = result.user.contacts;
-  if (page.nodes.length > limit)
+  const exactNodes = exact?.user.contacts.nodes ?? [];
+  const lookedUpNodes = lookedUp?.user.contactsByUserIds ?? [];
+  if (
+    page.nodes.length > limit ||
+    exactNodes.length > limit ||
+    lookedUpNodes.length > lookupIds.size
+  )
     throw new Error('Contact response exceeds its window');
 
   const excluded = new Set(policy.excluded.map((id) => id.toLowerCase()));
-  return {
-    users: page.nodes
+  const listed = (contacts: readonly ContactDirectoryFieldsFragment[]) =>
+    contacts
       .map(contactToUser)
-      .filter((user) => !excluded.has(user.id.toLowerCase())),
+      .filter((user) => !excluded.has(user.id.toLowerCase()));
+  const namedById = listed(lookedUpNodes).flatMap((user) => {
+    const match = namedBy(typed, user);
+    return match ? [{ user, match }] : [];
+  });
+
+  // Each person is listed once, in the first group that has them.
+  const users = new Map<string, IUser>();
+  const group = (rows: IUser[]) => {
+    const added: string[] = [];
+    for (const user of rows) {
+      if (users.has(user.id)) continue;
+      users.set(user.id, user);
+      added.push(user.id);
+    }
+    return added;
+  };
+  const named = {
+    exact: group([
+      ...listed(exactNodes),
+      ...namedById.flatMap((row) => (row.match === 'exact' ? [row.user] : [])),
+    ]),
+    wordStart: group(namedById.map((row) => row.user)),
+  };
+  group(listed(page.nodes));
+
+  if (typed.text) {
+    span.setAttr('contacts.named_exact_count', named.exact.length);
+    span.setAttr('contacts.named_word_start_count', named.wordStart.length);
+  }
+  return {
+    users: [...users.values()],
+    ...(typed.text ? { named } : {}),
     query: request.query,
     source: 'server',
     sync: 'unavailable',

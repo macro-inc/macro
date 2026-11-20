@@ -244,3 +244,133 @@ it('lists only eligible rows, so dropped rows never count toward the bound', asy
   expect(ids(list())).toEqual([person(0).id, person(2).id]);
   client.clear();
 });
+
+it('orders the first server page by who the viewer works with, and leaves later pages below it', async () => {
+  vi.useFakeTimers();
+  const user = (email: string, name: string) => ({
+    id: `macro|${email}`,
+    email,
+    name,
+  });
+  // As the server window lists them: the named people, then loose matches.
+  const firstPage = [
+    user('aaron@example.com', 'Teo Aaron'),
+    user('teo.dm@example.com', 'Teo Baker'),
+    user('teo.old@example.com', 'Teo Olde'),
+    user('teo.nys@example.com', 'Teo Nys'),
+    user('teodora@example.com', 'Teodora Vance'),
+    user('prefix.dm@example.com', 'Teon Dale'),
+    user('mateo@example.com', 'Mateo Rossi'),
+    user('loose.mate@example.com', 'Stevie Leon'),
+    user('loose.dm@example.com', 'Tate Eton'),
+  ];
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (viewer, _host, request) => ({
+      query: request.query,
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      users: request.cursor
+        ? [user('later.dm@example.com', 'Otto Tennel')]
+        : firstPage,
+      ...(request.cursor
+        ? {}
+        : {
+            named: {
+              exact: [
+                'macro|aaron@example.com',
+                'macro|teo.dm@example.com',
+                'macro|teo.old@example.com',
+                'macro|teo.nys@example.com',
+              ],
+              wordStart: [
+                'macro|teodora@example.com',
+                'macro|prefix.dm@example.com',
+              ],
+            },
+          }),
+      nextCursor: request.cursor
+        ? null
+        : {
+            source: 'server',
+            after: 'next',
+            userId: viewer,
+            query: request.query,
+            policyKey: hashKey([request.policy]),
+          },
+    }));
+  const client = new QueryClient();
+  const [teammates, setTeammates] = createSignal<ReadonlySet<string>>(
+    new Set([
+      'macro|teo.nys@example.com',
+      'macro|teodora@example.com',
+      'macro|loose.mate@example.com',
+    ])
+  );
+  let list: ReturnType<typeof createContactDirectoryList> | undefined;
+  function Harness() {
+    const [search] = createSignal('teo');
+    list = createContactDirectoryList(
+      () => ({ userId: VIEWER }),
+      reader,
+      () => true,
+      {
+        search,
+        debounceMs: 0,
+        teammates,
+        directMessages: () =>
+          new Map([
+            ['macro|teo.old@example.com', '2026-01-05T00:00:00Z'],
+            ['macro|teo.dm@example.com', '2026-03-01T00:00:00Z'],
+            ['macro|prefix.dm@example.com', '2026-06-01T00:00:00Z'],
+            ['macro|loose.dm@example.com', '2026-02-01T00:00:00Z'],
+            ['macro|later.dm@example.com', '2026-07-01T00:00:00Z'],
+          ]),
+      }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls[0][2].teammates).toEqual([
+    'macro|loose.mate@example.com',
+    'macro|teo.nys@example.com',
+    'macro|teodora@example.com',
+  ]);
+  const names = () => list?.data()?.users.map((row) => row.name);
+  expect(names()).toEqual([
+    // Named, direct-message partners: exact by recency, then a word start.
+    'Teo Baker',
+    'Teo Olde',
+    'Teon Dale',
+    // Named teammates never messaged: exact, then a word start.
+    'Teo Nys',
+    'Teodora Vance',
+    // Named, everyone else.
+    'Teo Aaron',
+    // Loose matches, in the same three groups.
+    'Tate Eton',
+    'Stevie Leon',
+    'Mateo Rossi',
+  ]);
+
+  // A later page is listed below, whoever is on it.
+  await list?.loadNext();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(names()?.slice(-2)).toEqual(['Mateo Rossi', 'Otto Tennel']);
+
+  // A roster that changes reads page one again and orders it anew.
+  setTeammates(new Set(['macro|aaron@example.com']));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(names()?.slice(3, 6)).toEqual([
+    'Teo Aaron',
+    'Teo Nys',
+    'Teodora Vance',
+  ]);
+  client.clear();
+});

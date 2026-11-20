@@ -21,9 +21,21 @@ const remote = vi.hoisted(() =>
     throw new Error('A usable local cache must answer without the server');
   })
 );
+const named = vi.hoisted(() =>
+  vi.fn<
+    typeof import('@service-storage/graphql-contacts')['fetchContactReferencePage']
+  >()
+);
+const lookedUp = vi.hoisted(() =>
+  vi.fn<
+    typeof import('@service-storage/graphql-contacts')['fetchContactDirectoryByIds']
+  >()
+);
 vi.mock('./backfill', () => ({ loadContactCheckpoint: checkpoint }));
 vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryPage: remote,
+  fetchContactReferencePage: named,
+  fetchContactDirectoryByIds: lookedUp,
 }));
 const VIEWER = 'macro|viewer@example.com';
 const GENERATION = '00000000-0000-4000-8000-000000000001';
@@ -64,12 +76,31 @@ function host() {
   } satisfies ContactDirectoryHost;
 }
 const signal = () => new AbortController().signal;
+function contact(email: string, name: string | null) {
+  return {
+    __typename: 'GraphqlContact' as const,
+    id: `contact-${email}`,
+    userId: `macro|${email}`,
+    email,
+    name,
+  };
+}
+function contactPage(
+  nodes: ReturnType<typeof contact>[],
+  nextCursor: string | null = null
+) {
+  return { user: { id: VIEWER, contacts: { nodes, nextCursor } } };
+}
 beforeEach(() => {
   checkpoint.mockReturnValue({ pages: 200, completedAt: 1 });
   remote.mockReset();
   remote.mockImplementation(() => {
     throw new Error('A usable local cache must answer without the server');
   });
+  named.mockReset();
+  named.mockResolvedValue(contactPage([]));
+  lookedUp.mockReset();
+  lookedUp.mockResolvedValue({ user: { id: VIEWER, contactsByUserIds: [] } });
 });
 
 it.each([true, false])(
@@ -429,6 +460,164 @@ it('reads the server once when a budgeted first page gets no answer from the cac
   vi.useRealTimers();
 });
 
+it('lists the people a typed search names exactly first on a server page, once each', async () => {
+  // The server pages by contact ID, so the loosely matching rows come first.
+  remote.mockResolvedValue(
+    contactPage(
+      [
+        contact('mateo@example.com', 'Mateo Rossi'),
+        contact('stevie@example.com', 'Stevie Leon'),
+        contact('teo.nys@example.com', 'Teo Nys'),
+      ],
+      'next'
+    )
+  );
+  named.mockResolvedValue(
+    contactPage([
+      contact('teo.nys@example.com', 'Teo Nys'),
+      contact('teo.park@example.com', 'Teo Park'),
+    ])
+  );
+  const page = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo' },
+    signal()
+  );
+  expect(page.users.map((user) => user.name)).toEqual([
+    'Teo Nys',
+    'Teo Park',
+    'Mateo Rossi',
+    'Stevie Leon',
+  ]);
+  expect(page.named).toEqual({
+    exact: ['macro|teo.nys@example.com', 'macro|teo.park@example.com'],
+    wordStart: [],
+  });
+  expect(named).toHaveBeenCalledExactlyOnceWith(
+    { limit: 50, search: 'teo', matching: 'ANY_NAME' },
+    expect.anything()
+  );
+
+  // Only the first page of typed text asks who it names.
+  await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo', cursor: page.nextCursor ?? undefined },
+    signal()
+  );
+  const browsed = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: '', teammates: ['macro|teo.nys@example.com'] },
+    signal()
+  );
+  await readContactDirectory(VIEWER, undefined, { query: ' \u0085' }, signal());
+  expect(browsed.named).toBeUndefined();
+  expect(named).toHaveBeenCalledOnce();
+  expect(lookedUp).not.toHaveBeenCalled();
+});
+it('finds the teammates and the whole address a typed search names by ID, wherever they sort in the directory', async () => {
+  const teammates = [
+    'macro|ana@example.com',
+    'macro|sam@example.com',
+    'macro|ted@example.com',
+    'macro|teo.nys@example.com',
+    'macro|zoe@example.com',
+  ];
+  const directory = [
+    contact('ana@example.com', 'Ana Teodoro'),
+    contact('sam@example.com', 'Sam Lee'),
+    contact('ted@example.com', null),
+    contact('teo.nys@example.com', 'Teo Nys'),
+    contact('vendor@example.org', 'Vera Vendor'),
+    contact('zoe@example.com', 'Zoe Tern'),
+  ];
+  // The scans end before these people: neither server search returns them.
+  remote.mockResolvedValue(
+    contactPage([contact('mateo@example.com', 'Mateo Rossi')], 'next')
+  );
+  lookedUp.mockImplementation(async (ids) => ({
+    user: {
+      id: VIEWER,
+      contactsByUserIds: directory.filter((row) => ids.includes(row.userId)),
+    },
+  }));
+  const read = (query: string, excluded: string[] = []) =>
+    readContactDirectory(
+      VIEWER,
+      undefined,
+      {
+        query,
+        // An ID the server would refuse is never sent.
+        teammates: [...teammates, 'bot|00000000-0000-4000-8000-000000000001'],
+        policy: { mode: 'mention', excluded },
+      },
+      signal()
+    );
+
+  const partial = await read('te');
+  expect(lookedUp).toHaveBeenLastCalledWith(teammates, expect.anything());
+  expect(partial.named).toEqual({
+    exact: [],
+    wordStart: [
+      'macro|ana@example.com',
+      'macro|ted@example.com',
+      'macro|teo.nys@example.com',
+      'macro|zoe@example.com',
+    ],
+  });
+  expect(partial.users.map((user) => user.name)).toEqual([
+    'Ana Teodoro',
+    'ted',
+    'Teo Nys',
+    'Zoe Tern',
+    'Mateo Rossi',
+  ]);
+
+  // A whole first name is an exact match; a longer word only starts with it.
+  expect((await read('Teo')).named).toEqual({
+    exact: ['macro|teo.nys@example.com'],
+    wordStart: ['macro|ana@example.com'],
+  });
+  expect((await read('n teo')).named).toEqual({
+    exact: [],
+    wordStart: ['macro|teo.nys@example.com'],
+  });
+  expect((await read('ted@ex')).named).toEqual({
+    exact: [],
+    wordStart: ['macro|ted@example.com'],
+  });
+
+  // A whole address is looked up itself, teammate or not, without a scan.
+  named.mockClear();
+  expect((await read('Vendor@Example.org')).named).toEqual({
+    exact: ['macro|vendor@example.org'],
+    wordStart: [],
+  });
+  expect(lookedUp).toHaveBeenLastCalledWith(
+    ['macro|vendor@example.org', ...teammates],
+    expect.anything()
+  );
+  expect((await read('teo.nys@example.com')).named).toEqual({
+    exact: ['macro|teo.nys@example.com'],
+    wordStart: [],
+  });
+  expect(named).not.toHaveBeenCalled();
+
+  // Punctuation holds no word, so it names nobody; exclusions still apply.
+  expect((await read('.')).named).toEqual({ exact: [], wordStart: [] });
+  expect(
+    (await read('teo', ['macro|teo.nys@example.com'])).users.map(
+      (user) => user.name
+    )
+  ).toEqual(['Ana Teodoro', 'Mateo Rossi']);
+
+  lookedUp.mockResolvedValue({
+    user: { id: 'macro|other@example.com', contactsByUserIds: [] },
+  });
+  await expect(read('teo')).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+});
 it('binds continuations to query, policy, account and storage; rejects changed core versions', async () => {
   const cache = host();
   const request = { query: 'john' };

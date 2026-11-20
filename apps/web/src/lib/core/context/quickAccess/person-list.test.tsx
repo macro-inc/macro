@@ -3,6 +3,11 @@ import type { CacheChangeListener } from '@graphql-cache/host/types';
 import type { PeopleCache } from '@graphql-cache/people/host';
 import { unsupportedContactSync } from '@graphql-cache/people/test-support';
 import { parseCacheRevision } from '@graphql-cache/protocol';
+import {
+  fetchContactDirectoryByIds,
+  fetchContactDirectoryPage,
+  fetchContactReferencePage,
+} from '@service-storage/graphql-contacts';
 import { render } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createEffect, createMemo, createSignal } from 'solid-js';
@@ -14,6 +19,8 @@ vi.mock('@queries/contacts/backfill', () => ({
 }));
 vi.mock('@service-storage/graphql-contacts', () => ({
   fetchContactDirectoryPage: vi.fn(),
+  fetchContactReferencePage: vi.fn(),
+  fetchContactDirectoryByIds: vi.fn(),
 }));
 afterEach(() => vi.useRealTimers());
 
@@ -410,6 +417,107 @@ it('lists the next page below the first when pages are appended', async () => {
   expect(list?.items().map((item) => item.personOrder)).toEqual([0, 1, 2, 3]);
   expect(list?.windowKey?.()).toBe(window);
   expect(list?.hasMore()).toBe(false);
+
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+});
+
+it('lists a typed teammate first when a tab without the cache reads people from the server', async () => {
+  vi.useFakeTimers();
+  const viewer = 'macro|viewer@example.com';
+  const contact = (email: string, name: string) => ({
+    __typename: 'GraphqlContact' as const,
+    id: `contact-${email}`,
+    userId: `macro|${email}`,
+    email,
+    name,
+  });
+  // The server's page is in contact-ID order: three loose matches, with the
+  // people named Teo past its end.
+  vi.mocked(fetchContactDirectoryPage).mockResolvedValue({
+    user: {
+      id: viewer,
+      contacts: {
+        nodes: [
+          contact('1teo@example.com', 'Stevie Leon'),
+          contact('mateo@example.com', 'Mateo Rossi'),
+          contact('otto@example.com', 'Tate Eton'),
+        ],
+        nextCursor: 'next',
+      },
+    },
+  });
+  // Its exact search reaches one stranger; the teammates sort beyond its scan.
+  vi.mocked(fetchContactReferencePage).mockResolvedValue({
+    user: {
+      id: viewer,
+      contacts: {
+        nodes: [contact('teo.adams@example.com', 'Teo Adams')],
+        nextCursor: 'more',
+      },
+    },
+  });
+  vi.mocked(fetchContactDirectoryByIds).mockResolvedValue({
+    user: {
+      id: viewer,
+      contactsByUserIds: [
+        contact('teo.nys@example.com', 'Teo Nys'),
+        contact('teo.zed@example.com', 'Teo Zed'),
+        contact('zoe@example.com', 'Zoe Hart'),
+      ],
+    },
+  });
+  const client = new QueryClient();
+  let list: ReturnType<typeof createPersonList> | undefined;
+  function Harness() {
+    const [query] = createSignal('teo');
+    list = createPersonList({
+      // No cache host: this tab reads the server.
+      scope: () => ({ userId: viewer }),
+      search: query,
+      enabled: () => true,
+      policy: () => ({ mode: 'mention', excluded: [] }),
+      activity: () =>
+        new Map([['macro|teo.zed@example.com', '2026-03-01T00:00:00Z']]),
+      teammates: () =>
+        new Set([
+          'macro|teo.nys@example.com',
+          'macro|teo.zed@example.com',
+          'macro|zoe@example.com',
+        ]),
+      conversation: () => undefined,
+      excluded: () => false,
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(list?.items().map((item) => item.data.name)).toEqual([
+    // The teammate the viewer messages, the teammate they never did, then the
+    // stranger with the same first name; the server's loose matches follow.
+    'Teo Zed',
+    'Teo Nys',
+    'Teo Adams',
+    'Stevie Leon',
+    'Mateo Rossi',
+    'Tate Eton',
+  ]);
+  expect(list?.items().map((item) => item.personOrder)).toEqual([
+    0, 1, 2, 3, 4, 5,
+  ]);
+  expect(fetchContactDirectoryByIds).toHaveBeenCalledWith(
+    [
+      'macro|teo.nys@example.com',
+      'macro|teo.zed@example.com',
+      'macro|zoe@example.com',
+    ],
+    expect.anything()
+  );
 
   mounted.unmount();
   await vi.runOnlyPendingTimersAsync();

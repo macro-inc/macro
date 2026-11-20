@@ -238,6 +238,15 @@ time a picker stays open afterwards is not counted. Reading the same input again
 after a search ended, as a reopened picker or a re-read after a contact change
 does, starts a new span with `contacts.repeat` true. Never add the query text.
 
+A `contacts.read_window` answered by the server (`contacts.source` `server`,
+a tab without a usable local cache) has a `contacts.read_server_window` child.
+On the first page of a typed search it has two more, read in parallel:
+`contacts.read_server_exact`, the server's exact-name search, and
+`contacts.read_server_named`, the lookup by ID of the viewer's teammates and of
+a whole typed address. That window records `contacts.named_exact_count` and
+`contacts.named_word_start_count`, how many of the listed people the text
+names.
+
 ## Agent sessions
 
 A session's lifetime is reconstructable from these spans. All of them carry
