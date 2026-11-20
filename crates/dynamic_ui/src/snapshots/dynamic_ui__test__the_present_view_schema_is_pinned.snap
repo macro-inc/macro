@@ -1514,10 +1514,10 @@ expression: schema
           "type": "object"
         },
         {
-          "description": "A card with one Connect button, for an app or MCP server the user must\nconnect before you can continue. Present it instead of telling them to\nopen settings; once they connect, an agent session continues by itself.\nOnly for an app that is not connected yet.",
+          "description": "A card with one Connect button, for an app or remote MCP server the\nuser must connect before you can continue, and only one that is not\nconnected yet. Present it instead of telling them to open settings.\nOnce they connect an app, an agent session continues by itself; after\nthey sign in to a server, they reply to continue, so ask them to.",
           "properties": {
             "name": {
-              "description": "The app's display name, e.g. \"Linear\".",
+              "description": "The app's or server's display name, e.g. \"Linear\".",
               "type": "string"
             },
             "target": {

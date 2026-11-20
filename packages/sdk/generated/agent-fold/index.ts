@@ -2928,13 +2928,14 @@ messageId: string }) & { align?: never; botId?: never; children?: never; directi
  */
 ({ type: "tags"; title?: string; tags: TagNode_Deserialize[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; target?: never; wrap?: never } |
 /**
- *  A card with one Connect button, for an app or MCP server the user must
- *  connect before you can continue. Present it instead of telling them to
- *  open settings; once they connect, an agent session continues by itself.
- *  Only for an app that is not connected yet.
+ *  A card with one Connect button, for an app or remote MCP server the
+ *  user must connect before you can continue, and only one that is not
+ *  connected yet. Present it instead of telling them to open settings.
+ *  Once they connect an app, an agent session continues by itself; after
+ *  they sign in to a server, they reply to continue, so ask them to.
  */
 ({ type: "connect";
-/**  The app's display name, e.g. "Linear". */
+/**  The app's or server's display name, e.g. "Linear". */
 name: string; target: ConnectTarget }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting
@@ -3009,13 +3010,14 @@ messageId: string }) & { align?: never; botId?: never; children?: never; directi
  */
 ({ type: "tags"; title?: string; tags: TagNode_Serialize[] }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; name?: never; source?: never; target?: never; wrap?: never } |
 /**
- *  A card with one Connect button, for an app or MCP server the user must
- *  connect before you can continue. Present it instead of telling them to
- *  open settings; once they connect, an agent session continues by itself.
- *  Only for an app that is not connected yet.
+ *  A card with one Connect button, for an app or remote MCP server the
+ *  user must connect before you can continue, and only one that is not
+ *  connected yet. Present it instead of telling them to open settings.
+ *  Once they connect an app, an agent session continues by itself; after
+ *  they sign in to a server, they reply to continue, so ask them to.
  */
 ({ type: "connect";
-/**  The app's display name, e.g. "Linear". */
+/**  The app's or server's display name, e.g. "Linear". */
 name: string; target: ConnectTarget }) & { align?: never; botId?: never; channelId?: never; children?: never; direction?: never; events?: never; expiresAt?: never; gap?: never; groupBy?: never; items?: never; justify?: never; label?: never; limit?: never; markdown?: never; messageId?: never; source?: never; tags?: never; title?: never; wrap?: never } |
 /**
  *  Live cards on which the user answers coding agents' waiting

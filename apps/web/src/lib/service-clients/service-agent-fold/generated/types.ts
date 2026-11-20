@@ -4271,14 +4271,15 @@ export type Widget_Deserialize =
       wrap?: never;
     })
   /**
-   *  A card with one Connect button, for an app or MCP server the user must
-   *  connect before you can continue. Present it instead of telling them to
-   *  open settings; once they connect, an agent session continues by itself.
-   *  Only for an app that is not connected yet.
+   *  A card with one Connect button, for an app or remote MCP server the
+   *  user must connect before you can continue, and only one that is not
+   *  connected yet. Present it instead of telling them to open settings.
+   *  Once they connect an app, an agent session continues by itself; after
+   *  they sign in to a server, they reply to continue, so ask them to.
    */
   | ({
       type: 'connect';
-      /**  The app's display name, e.g. "Linear". */
+      /**  The app's or server's display name, e.g. "Linear". */
       name: string;
       target: ConnectTarget;
     } & {
@@ -4585,14 +4586,15 @@ export type Widget_Serialize =
       wrap?: never;
     })
   /**
-   *  A card with one Connect button, for an app or MCP server the user must
-   *  connect before you can continue. Present it instead of telling them to
-   *  open settings; once they connect, an agent session continues by itself.
-   *  Only for an app that is not connected yet.
+   *  A card with one Connect button, for an app or remote MCP server the
+   *  user must connect before you can continue, and only one that is not
+   *  connected yet. Present it instead of telling them to open settings.
+   *  Once they connect an app, an agent session continues by itself; after
+   *  they sign in to a server, they reply to continue, so ask them to.
    */
   | ({
       type: 'connect';
-      /**  The app's display name, e.g. "Linear". */
+      /**  The app's or server's display name, e.g. "Linear". */
       name: string;
       target: ConnectTarget;
     } & {
