@@ -403,7 +403,7 @@ function EntityCollectionPropertyBody(props: {
   );
 }
 
-export function NonUserEntityChip(props: {
+function NonUserEntityChip(props: {
   property: Property;
   entityId: string;
   entityType: EntityType;
