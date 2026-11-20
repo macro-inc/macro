@@ -8356,10 +8356,11 @@ export const searchContactsResponse = zod
 An email at a company's own domain files the contact under the team's
 company for that domain, creating the company when the team has none; a
 personal or generic provider address, a domain the team blocks, or a
-hidden company leaves the contact without a company. Any team member may
-create one. The team must not already have the email on a contact without
-a company or under that company (409), and the team's CRM killswitch must
-be on (403).
+hidden company leaves the contact without a company. Any team member with
+CRM access may create one. A contact filed under a company is refused when
+that company, or a contact without a company, already has the email as its
+primary address, and one left without a company when another such contact
+has it (409). The team's CRM killswitch must be on (403).
  */
 export const createCrmTeamContactBody = zod
   .object({
@@ -8367,7 +8368,7 @@ export const createCrmTeamContactBody = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company. Optional: omit it\nto add the contact by name only."
+        "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -8649,7 +8650,7 @@ export const setCrmContactCompanyBody = zod
     companyId: zod.uuid().describe('Destination company in the same team.'),
   })
   .describe(
-    'Link a contact without a company, or switch the company of a contact\nwith a known personal-provider email.'
+    "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch."
   );
 
 export const setCrmContactCompanyResponse = zod

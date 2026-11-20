@@ -5,6 +5,7 @@
 use super::{CompaniesRepositoryImpl, lock_timeout_as_contended};
 use crate::domain::{
     contact_filing::{ContactFiling, ContactFilingRepository, UnfiledContact},
+    generic_email_domains::is_generic_email_domain,
     model::CrmError,
 };
 use chrono::{DateTime, Utc};
@@ -153,6 +154,11 @@ impl CompaniesRepositoryImpl {
         let Some((_, company_domain)) = primary.split_once('@') else {
             return Ok(ContactFiling::NotUnfiled);
         };
+        // The caller judged the address it listed. A primary changed since
+        // to a provider address must not key a company.
+        if is_generic_email_domain(company_domain) {
+            return Ok(ContactFiling::NotUnfiled);
+        }
 
         let mut domains: Vec<&str> = before
             .emails

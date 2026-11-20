@@ -185,6 +185,13 @@ fn a_work_address_links_a_first_company_but_cannot_switch() {
     assert_eq!(linked.primary.as_deref(), Some("a@example.org"));
 
     let filed = contact(Some(company), &["a@example.org", &personal], &[]);
+    // A retried link finds the contact already there.
+    assert!(
+        ContactFieldUpdate::Company(company)
+            .resolve(&filed)
+            .unwrap()
+            .changes_nothing(&filed)
+    );
     assert_eq!(
         rejected(ContactFieldUpdate::Company(Uuid::from_u128(2)).resolve(&filed)),
         "company changes require a personal-provider email"

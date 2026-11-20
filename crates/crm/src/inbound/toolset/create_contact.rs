@@ -32,7 +32,7 @@ pub struct CreateContactResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "CreateContact",
-    description = "Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Without a company, a work email links the contact to the company for its domain, adding that company when the team does not have it; a personal email leaves the contact without a company. With a company, any email is accepted, whatever its domain. Find the company with ListCompanies, or add it first with CreateCompany."
+    description = "Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Without a company, a work email links the contact to the company for its domain, adding that company when the team does not have it; a personal email, a domain the team blocks or an archived company leaves the contact without a company, so check companyId in the result. With a company, any email is accepted, whatever its domain. Find the company with ListCompanies, or add it first with CreateCompany."
 )]
 pub struct CreateContact {
     /// Company to add the contact to, if any.

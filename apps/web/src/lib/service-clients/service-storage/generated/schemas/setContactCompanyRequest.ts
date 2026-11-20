@@ -7,7 +7,8 @@
 
 /**
  * Link a contact without a company, or switch the company of a contact
-with a known personal-provider email.
+whose primary email is at a known personal provider. A contact with an
+address on its current company's domain cannot switch.
  */
 export interface SetContactCompanyRequest {
   /** Destination company in the same team. */

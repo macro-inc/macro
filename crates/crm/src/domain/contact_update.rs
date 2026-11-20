@@ -111,7 +111,14 @@ impl ContactFieldUpdate {
             }
             // A contact without a company may be given one whatever its
             // address; moving between companies stays a personal-email edit.
-            Self::Company(_) if current.company_id.is_some() && !current.has_personal_email() => {
+            // Repeating the current company changes nothing and stays allowed,
+            // so a retried link is answered like the first.
+            Self::Company(company_id)
+                if current
+                    .company_id
+                    .is_some_and(|current| current != *company_id)
+                    && !current.has_personal_email() =>
+            {
                 Err(CrmError::InvalidRequest(
                     "company changes require a personal-provider email".into(),
                 ))

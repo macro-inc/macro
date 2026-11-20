@@ -17,7 +17,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 /// Link a contact without a company, or switch the company of a contact
-/// with a known personal-provider email.
+/// whose primary email is at a known personal provider. A contact with an
+/// address on its current company's domain cannot switch.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct SetContactCompanyRequest {
