@@ -178,6 +178,274 @@ describe('MacroEvents', () => {
     }
   });
 
+  test('a stream the server closes (a restart) is reopened, and events after it still arrive', async () => {
+    const posted = (id: string) => ({
+      event_type: 'document.created' as const,
+      metadata: {
+        document_id: id,
+        document_name: id,
+        owner: 'macro|o@example.com',
+      },
+    });
+    let connections = 0;
+    // The first connection delivers one event and ends, as a server that is
+    // shutting down does; the next one delivers the event sent after it.
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        connections += 1;
+        const first = connections === 1;
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(
+                  sseBody(posted(first ? 'before' : 'after')),
+                ),
+              );
+              if (first) controller.close();
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const seen: string[] = [];
+      const after = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        seen.push(event.metadata.document_id);
+        if (event.metadata.document_id === 'after') after.resolve();
+      });
+      const drops: Date[] = [];
+      const opens: Date[] = [];
+      const stop = await macro.events.listen({
+        onDrop: (at) => drops.push(at),
+        onOpen: (at) => opens.push(at),
+      });
+
+      await Promise.race([
+        after.promise,
+        Bun.sleep(8_000).then(() => {
+          throw new Error(
+            `no event after the server closed the stream; saw ${seen.join(', ')}`,
+          );
+        }),
+      ]);
+      stop();
+
+      expect(seen).toEqual(['before', 'after']);
+      expect(connections).toBe(2);
+      // Told of the drop once, and of each open (the first and the reopen),
+      // so a caller can resync what the gap may have missed once events reach
+      // it again.
+      expect(drops).toHaveLength(1);
+      expect(opens).toHaveLength(2);
+      const [, reopened] = opens;
+      const [dropped] = drops;
+      expect(reopened && dropped && reopened >= dropped).toBe(true);
+    } finally {
+      await server.stop(true);
+    }
+  }, 15_000);
+
+  test('a resumed stream asks for the events after its last id, and says which it handled', async () => {
+    const requests: { url: string; lastEventId: string | null }[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) => {
+        requests.push({
+          url: request.url,
+          lastEventId: request.headers.get('last-event-id'),
+        });
+        const event = {
+          event_type: 'document.created' as const,
+          metadata: {
+            document_id: 'd1',
+            document_name: 'd1',
+            owner: 'macro|o@example.com',
+          },
+        };
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(
+                new TextEncoder().encode(`id: e1\n${sseBody(event)}`),
+              );
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        );
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const handled: string[] = [];
+      const seen = Promise.withResolvers<string>();
+      macro.events.on('document.created', (event) => {
+        handled.push(`handler ${event.metadata.document_id}`);
+      });
+      const stop = await macro.events.listen({
+        resume: { lastEventId: 'e0' },
+        onEventId: (id) => {
+          handled.push(`id ${id}`);
+          seen.resolve(id);
+        },
+      });
+
+      expect(
+        await Promise.race([
+          seen.promise,
+          Bun.sleep(5_000).then(() => 'no event id'),
+        ]),
+      ).toBe('e1');
+      stop();
+
+      const [first] = requests;
+      expect(first && new URL(first.url).searchParams.get('resume')).toBe(
+        'true',
+      );
+      expect(first?.lastEventId).toBe('e0');
+      // The id is reported once its event was handled.
+      expect(handled).toEqual(['handler d1', 'id e1']);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
+  const createdFor = (id: string) => ({
+    event_type: 'document.created' as const,
+    metadata: {
+      document_id: id,
+      document_name: id,
+      owner: 'macro|o@example.com',
+    },
+  });
+  const eventStream = (body: string, close: boolean) =>
+    new Response(
+      new ReadableStream({
+        start(controller) {
+          if (body) controller.enqueue(new TextEncoder().encode(body));
+          if (close) controller.close();
+        },
+      }),
+      { headers: { 'content-type': 'text/event-stream' } },
+    );
+
+  test('a drop is told once, however many reconnects fail before the stream is back', async () => {
+    let connections = 0;
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        connections += 1;
+        if (connections === 1)
+          return eventStream(sseBody(createdFor('before')), true);
+        if (connections === 2) return new Response('down', { status: 503 });
+        return eventStream(sseBody(createdFor('after')), false);
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const after = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        if (event.metadata.document_id === 'after') after.resolve();
+      });
+      const drops: Date[] = [];
+      const opens: Date[] = [];
+      const stop = await macro.events.listen({
+        onDrop: (at) => drops.push(at),
+        onOpen: (at) => opens.push(at),
+      });
+      await Promise.race([
+        after.promise,
+        Bun.sleep(15_000).then(() => {
+          throw new Error('the stream never came back');
+        }),
+      ]);
+      stop();
+
+      expect(connections).toBe(3);
+      expect(drops).toHaveLength(1);
+      expect(opens).toHaveLength(2);
+    } finally {
+      await server.stop(true);
+    }
+  }, 20_000);
+
+  test('a stream that ends at once, with no event, backs off longer each time', async () => {
+    const at: number[] = [];
+    const server = Bun.serve({
+      port: 0,
+      fetch: () => {
+        at.push(Date.now());
+        return eventStream('', true);
+      },
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      macro.events.on('document.created', () => undefined);
+      const stop = await macro.events.listen();
+      while (at.length < 3) await Bun.sleep(100);
+      stop();
+
+      const [first = 0, second = 0, third = 0] = at;
+      expect(third - second).toBeGreaterThan((second - first) * 1.5);
+    } finally {
+      await server.stop(true);
+    }
+  }, 20_000);
+
+  test('a handler that throws is reported, and the stream goes on', async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        eventStream(
+          `${sseBody(createdFor('bad'))}${sseBody(createdFor('good'))}`,
+          false,
+        ),
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const good = Promise.withResolvers<void>();
+      macro.events.on('document.created', (event) => {
+        if (event.metadata.document_id === 'bad')
+          throw new Error('handler broke');
+        good.resolve();
+      });
+      const errors: unknown[] = [];
+      const stop = await macro.events.listen({
+        onHandlerError: (error) => errors.push(error),
+      });
+      await Promise.race([
+        good.promise,
+        Bun.sleep(5_000).then(() => {
+          throw new Error('the event after the failed one never arrived');
+        }),
+      ]);
+      stop();
+
+      expect(errors).toEqual([new Error('handler broke')]);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',

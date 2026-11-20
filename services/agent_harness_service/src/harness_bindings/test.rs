@@ -442,10 +442,12 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    Arc::clone(&replica)
+    let restored = Arc::clone(&replica)
         .renew(vec![(harness, connection)])
         .await;
     assert!(reads_connected(&pool, harness).await);
+    // Extending a lapsed lease is not a restore.
+    assert_eq!(restored, []);
 
     sqlx::query!(r#"DELETE FROM harness_runtime_connection"#)
         .execute(&pool)
@@ -457,9 +459,26 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
         .unwrap();
     assert!(!reads_connected(&pool, harness).await);
 
-    replica.renew(vec![(harness, connection)]).await;
+    let other_harness = insert_harness(&pool).await;
+    let other_connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            other_harness,
+            other_connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+
+    let restored = replica
+        .renew(vec![
+            (harness, connection),
+            (other_harness, other_connection),
+        ])
+        .await;
 
     assert!(reads_connected(&pool, harness).await);
+    // Only the row that was gone is reported, so the registry can check it.
+    assert_eq!(restored, [(harness, connection)]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

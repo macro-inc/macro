@@ -1,13 +1,13 @@
+// The host's runtime settings, carried in its EC2 user data.
 export interface Settings {
   region: string;
-  grafanaHost: string;
+  // The observability cluster's ingest hostname, where host Alloy sends.
   otlpHost: string;
   oncallHost: string;
   secretArn: string;
-  alarmTopicArn: string;
   volumeId: string;
-  logsBucket: string;
-  tracesBucket: string;
+  // GoAlert's nightly dumps go under `goalert/` in it.
+  backupBucket: string;
 }
 
 export function validateRegion(region: string): void {
@@ -39,7 +39,7 @@ export function validateRegionalArn(
 
 // Validate runtime values before they reach the NixOS configuration renderer.
 export function validateSettings(settings: Settings): void {
-  const hosts = [settings.grafanaHost, settings.otlpHost, settings.oncallHost];
+  const hosts = [settings.otlpHost, settings.oncallHost];
   for (const host of hosts) {
     if (!/^[a-z0-9-]+\.macro-internal\.com$/.test(host)) {
       throw new Error(
@@ -48,9 +48,7 @@ export function validateSettings(settings: Settings): void {
     }
   }
   if (new Set(hosts).size !== hosts.length) {
-    throw new Error(
-      'Grafana, ingestion and on-call require separate hostnames'
-    );
+    throw new Error('Ingestion and on-call require separate hostnames');
   }
   if (
     !/^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/.test(
@@ -63,13 +61,10 @@ export function validateSettings(settings: Settings): void {
   }
   validateRegion(settings.region);
   validateRegionalArn(settings.secretArn, 'secretsmanager', settings.region);
-  validateRegionalArn(settings.alarmTopicArn, 'sns', settings.region);
   if (!/^vol-[a-f0-9]+$/.test(settings.volumeId)) {
     throw new Error('Invalid data volume ID');
   }
-  for (const bucket of [settings.logsBucket, settings.tracesBucket]) {
-    if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(bucket)) {
-      throw new Error('Invalid telemetry bucket name');
-    }
+  if (!/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(settings.backupBucket)) {
+    throw new Error('Invalid backup bucket name');
   }
 }

@@ -162,6 +162,8 @@ read their code, and follow that pattern rather than inventing a new one.
 - Top edge fades (`MobileTopEdgeFade`) size from `--mobile-content-inset-top`
   and draw nothing when it is 0, so panes without a top safe area or floating
   chrome (the iPhone Duo) get no fade; place them where that inset is set.
+  They draw only on touch devices: desktop split panes set the inset to their
+  in-flow header's height, which would paint a band under the header.
 - Safe areas come from the `--safe-*` CSS variables (e.g.
   `bottom-[var(--safe-bottom,0px)]`); `getSafeAreaInset` only when JS needs
   the number. Never measure insets yourself.

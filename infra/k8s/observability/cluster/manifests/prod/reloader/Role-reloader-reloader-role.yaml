@@ -1,0 +1,61 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  annotations:
+    meta.helm.sh/release-name: reloader
+    meta.helm.sh/release-namespace: observability
+  labels:
+    app: reloader-reloader
+    app.kubernetes.io/instance: reloader
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: reloader
+    app.kubernetes.io/version: v1.4.24
+    chart: reloader-2.2.20
+    helm.sh/chart: reloader-2.2.20
+    heritage: Helm
+    release: reloader
+  name: reloader-reloader-role
+  namespace: observability
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - list
+      - get
+      - watch
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+      - daemonsets
+      - statefulsets
+    verbs:
+      - list
+      - get
+      - update
+      - patch
+  - apiGroups:
+      - batch
+    resources:
+      - cronjobs
+    verbs:
+      - list
+      - get
+  - apiGroups:
+      - batch
+    resources:
+      - jobs
+    verbs:
+      - create
+      - delete
+      - list
+      - get
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch

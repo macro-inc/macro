@@ -27,6 +27,9 @@ pub(super) async fn invalidate_account_freshness(
 /// An unchanged response verifies its content only when the role observed
 /// before its provider request still matches this account's calendar role.
 /// A delayed response must never upgrade itself to a newer stored role.
+/// One read under no role withdraws the stored role, as a changed read
+/// stores none: an Outlook series read without an occurrence Macro could not
+/// read compares equal to a copy an older build stored under a role.
 pub(super) async fn verify_source_access(
     tx: &mut Transaction<'_, Postgres>,
     source: &ProviderEventSource,
@@ -41,8 +44,7 @@ pub(super) async fn verify_source_access(
           AND source.account_id = $1
           AND source.calendar_id = $2
           AND source.provider_event_id = $3
-          AND $4::text IS NOT NULL
-          AND calendar.access_role = $4
+          AND ($4::text IS NULL OR calendar.access_role = $4)
           AND source.provider_access_role IS DISTINCT FROM $4
         "#,
         source.account_id,

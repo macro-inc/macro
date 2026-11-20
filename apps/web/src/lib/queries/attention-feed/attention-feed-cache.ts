@@ -1,4 +1,5 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type {
   AttentionFeedOrder,
   AttentionFeedPosition,
@@ -115,7 +116,8 @@ export async function writeAttentionFeedPatches<
   host: Pick<CacheHost, 'readQuery' | 'writeQuery'>,
   cachedQuery: AttentionFeedCachedQuery,
   pageVariables: readonly Variables[],
-  patches: readonly Patch[]
+  patches: readonly Patch[],
+  generation = cacheSessionGeneration.capture()
 ): Promise<boolean> {
   if (pageVariables.length === 0) return false;
   const pages: Page[] = [];
@@ -142,6 +144,7 @@ export async function writeAttentionFeedPatches<
     const entries = placed[index];
     if (!entries || sameEntries(entries, shape.entries(page))) continue;
     await host.writeQuery({
+      generation,
       ...cachedQuery,
       variables: pageVariables[index],
       data: shape.withEntries(page, entries),

@@ -12,6 +12,7 @@ import {
   getEntityNotifications,
   withEntityNotifications,
 } from '@app/features/soup/entity-notifications';
+import type { FacetSelection } from '@app/features/soup/filters/facets/types';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
@@ -88,32 +89,51 @@ function matchesCapabilities(
 function matchesTab(
   entity: EntityData,
   tab: HomeTab,
-  notifications: () => UnifiedNotification[]
+  notifications: () => UnifiedNotification[],
+  searching: boolean
 ): boolean {
   const notDone = () =>
     entity.type === 'email'
       ? !entity.done
       : notifications().some((notification) => notification.state !== 'done');
-  return match(tab)
-    .with('signal', () => {
-      if (!signalFilter(entity) || !notDone()) return false;
+  return (
+    match(tab)
+      .with('signal', () => {
+        if (!signalFilter(entity) || !notDone()) return false;
 
-      if (
-        entity.type !== 'document' &&
-        entity.type !== 'email' &&
-        entity.type !== 'chat' &&
-        entity.type !== 'project'
-      ) {
-        return true;
-      }
+        if (
+          entity.type !== 'document' &&
+          entity.type !== 'email' &&
+          entity.type !== 'chat' &&
+          entity.type !== 'project'
+        ) {
+          return true;
+        }
 
-      return (
-        new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
-        subWeeks(startOfDay(new Date()), 2).getTime()
-      );
-    })
-    .with('noise', () => noiseFilter(entity) && notDone())
-    .exhaustive(() => false);
+        return (
+          new Date(homeSortTimestamp(entity) ?? 0).getTime() >=
+          subWeeks(startOfDay(new Date()), 2).getTime()
+        );
+      })
+      .with('noise', () => noiseFilter(entity) && notDone())
+      // The viewer's own activity: cache inserts from other users carry no
+      // touch, and only server-classified Signal mail enters, as in Home's
+      // merged recents. A search finds beyond it, as Home's search does:
+      // its service hits carry no touch.
+      .with(
+        'recent',
+        () =>
+          searching ||
+          (homeTimestamp(entity.touchedAt) !== undefined &&
+            (entity.type !== 'email' || entity.isSignal === true))
+      )
+      .exhaustive(() => false)
+  );
+}
+
+function withoutStatus(facets: FacetSelection): FacetSelection {
+  const { read: _read, ...rest } = facets;
+  return rest;
 }
 
 // Cached query meta outlives the view; build the gate at module scope over the
@@ -124,7 +144,7 @@ function homeTabInsertFilter(tab: HomeTab): SoupApiItemFilter {
 
 /** Shared feed membership for the Home list and its sidebar unread indicator. */
 export function useHomeEntitiesQuery(
-  state: Pick<HomeDataSourceInput, 'tab' | 'facets'>,
+  state: Pick<HomeDataSourceInput, 'tab' | 'facets'> & { search?: string },
   options: { enabled?: () => boolean } = {}
 ) {
   const notificationSource = useGlobalNotificationSource();
@@ -143,7 +163,9 @@ export function useHomeEntitiesQuery(
   const viewContext = createMemo(
     (): HomeViewContext => ({
       tab: state.tab,
-      facets: state.facets,
+      // Recent has no Status filter; old Home's saved one doesn't apply.
+      facets:
+        state.tab === 'recent' ? withoutStatus(state.facets) : state.facets,
       facetContext: facetContext(),
       capabilities: capabilities(),
       userId: userId(),
@@ -171,6 +193,7 @@ export function useHomeEntitiesQuery(
     };
   });
 
+  const searching = () => Boolean(state.search?.trim());
   const scopedNotifications = (entity: EntityData) =>
     getEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
@@ -180,7 +203,12 @@ export function useHomeEntitiesQuery(
     return entities
       .filter((entity) => matchesCapabilities(entity, context.capabilities))
       .filter((entity) =>
-        matchesTab(entity, context.tab, () => scopedNotifications(entity))
+        matchesTab(
+          entity,
+          context.tab,
+          () => scopedNotifications(entity),
+          searching()
+        )
       );
   };
 
@@ -193,7 +221,9 @@ export function useHomeEntitiesQuery(
       // same scoped snapshot, but later calls still observe optimistic changes.
       let snapshot: UnifiedNotification[] | undefined;
       const notifications = () => (snapshot ??= scopedNotifications(entity));
-      if (!matchesTab(entity, context.tab, notifications)) return false;
+      if (!matchesTab(entity, context.tab, notifications, searching())) {
+        return false;
+      }
       return unreadFilterFn({ ...entity, notifications });
     });
   };
@@ -202,8 +232,16 @@ export function useHomeEntitiesQuery(
     withEntityNotifications(entity, notificationSource, {
       scopeChannelThreads: true,
     });
+  // Recent rows sort, bucket and show the time of the viewer's last touch,
+  // or, for a search hit without one, of the item's last change.
   const transformEntities = (entities: EntityData[]) =>
-    filterEntities(entities).map(attachNotifications);
+    filterEntities(entities).map((entity) =>
+      attachNotifications(
+        viewContext().tab === 'recent'
+          ? { ...entity, sortTs: entity.touchedAt ?? homeSortTimestamp(entity) }
+          : entity
+      )
+    );
 
   return {
     query,
@@ -436,9 +474,12 @@ function useSoupHomeDataSource(
     let result: HomeDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        mergeRecents()
+        mergeRecents() || state.tab === 'recent'
           ? groupHomeEntitiesByDate(shownEntities(), new Date(now()))
-          : groupHomeEntitiesByTabDate(shownEntities(), viewContext())
+          : groupHomeEntitiesByTabDate(shownEntities(), viewContext()),
+        // The viewer's own activity moves a Recent row to a newer section;
+        // keyed by entity, it keeps its focus and selection as it moves.
+        { keyByEntity: state.tab === 'recent' }
       );
     } else {
       result = buildFlatSoupRows(shownEntities());

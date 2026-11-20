@@ -6,49 +6,41 @@
 //! Runs on the tiny no-cache profile: it's a single `gh api` + `jq` script
 //! (both ship in Namespace's runner base image), no checkout, no build.
 
-use anyhow::Result;
-use gh_workflow::{Event, Job, Level, Permissions, Schedule, Step, Workflow, WorkflowDispatch};
+use gh_workflow::expr::typed::{Str, github, input};
+use gh_workflow::{
+    Event, Job, Level, Permissions, Schedule, Step, Workflow, WorkflowDispatch, WorkflowInput,
+};
 
 use crate::workflows::runners;
 
-/// Build the workflow. The `workflow_dispatch` input block is filled in by
-/// [`patch`] (ordered map + typed boolean default).
+/// Build the workflow.
 pub fn cancel_stuck_cloud_storage_deploys() -> Workflow {
     Workflow::new("Cancel Stuck Cloud Storage Deploys")
         .on(Event::default()
             .add_schedule(Schedule::new("0 * * * *"))
-            .workflow_dispatch(WorkflowDispatch::default()))
+            .workflow_dispatch(
+                WorkflowDispatch::default()
+                    .add_input(
+                        "max-age-minutes",
+                        WorkflowInput::string()
+                            .description("Cancel active runs older than this many minutes")
+                            .required(false)
+                            .default("90"),
+                    )
+                    .add_input(
+                        "dry-run",
+                        WorkflowInput::boolean()
+                            .description("Log what would be cancelled without doing it")
+                            .required(false)
+                            .default(false),
+                    ),
+            ))
         .permissions(
             Permissions::default()
                 .actions(Level::Write)
                 .contents(Level::Read),
         )
         .add_job("cancel-stuck", cancel_stuck())
-}
-
-/// Fill in the ordered `workflow_dispatch` inputs block.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              max-age-minutes:
-                description: Cancel active runs older than this many minutes
-                required: false
-                default: '90'
-                type: string
-              dry-run:
-                description: Log what would be cancelled without doing it
-                required: false
-                default: false
-                type: boolean
-        "#})?,
-    );
-    Ok(())
 }
 
 fn cancel_stuck() -> Job {
@@ -59,10 +51,14 @@ fn cancel_stuck() -> Job {
         // Keep in sync with the deploy trigger's generated filename
         // (see deploy_on_push.rs).
         .add_env(("WORKFLOW_FILE", "deploy_on_push.yml"))
-        .add_env(("MAX_AGE_MINUTES", "${{ inputs.max-age-minutes || '90' }}"))
-        .add_env(("DRY_RUN", "${{ inputs.dry-run || 'false' }}"))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        // Both inputs are empty on the schedule, so each falls back to text.
+        .add_env((
+            "MAX_AGE_MINUTES",
+            input::<Str>("max-age-minutes").or_else("90"),
+        ))
+        .add_env(("DRY_RUN", input::<Str>("dry-run").or_else("false")))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(cancel_runs())
 }
 

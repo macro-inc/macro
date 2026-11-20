@@ -1,7 +1,9 @@
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
@@ -78,18 +80,32 @@ export function createAgentActivitySource(
 ): AgentActivitySource {
   const [live, setLive] = createSignal<AgentActivityRow[]>([]);
   const [retryEpoch, setRetryEpoch] = createSignal(0);
-  const query = useInfiniteQuery(() => activityOptions(sessionId() ?? ''));
+  const query = useInfiniteQuery(() => ({
+    ...activityOptions(sessionId() ?? ''),
+    enabled: !!sessionId() && !crmSnapshotAuthorization().paused,
+  }));
 
-  createEffect(on(sessionId, () => setLive([])));
+  createEffect(
+    on(
+      () => [sessionId(), crmSnapshotAuthorization().epoch],
+      () => setLive([])
+    )
+  );
 
   createEffect(() => {
     const id = sessionId();
     retryEpoch();
-    if (!id) return;
+    const authority = crmSnapshotAuthorization();
+    if (!id || authority.paused) return;
 
     const subscription = client
       .subscription(AgentSessionActivityAppendedDocument, { sessionId: id })
       .subscribe((result) => {
+        if (
+          !cacheSessionGeneration.isCurrent(authority.epoch) ||
+          crmSnapshotAuthorization().paused
+        )
+          return;
         if (result.error) {
           fireAndForget(
             (async () => {
@@ -153,6 +169,7 @@ export function createAgentActivitySource(
   });
 
   const rows = createMemo(() => {
+    if (crmSnapshotAuthorization().paused) return [];
     const byId = new Map<string, AgentActivityRow>();
     // Reading `data` while pending would suspend the panel's section.
     for (const page of query.isPending ? [] : (query.data?.pages ?? [])) {

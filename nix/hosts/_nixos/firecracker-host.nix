@@ -178,7 +178,7 @@ in
       goldenRootDiskGib = lib.mkOption {
         type = lib.types.ints.positive;
         example = 32;
-        description = "Size a golden's rootfs is grown to before its boot: the root disk computers are sold with (the guest grows its filesystem at boot, not at restore). Must equal ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/size.rs.";
+        description = "Size a golden's rootfs is grown to before its boot: the root disk computers are sold with (the guest grows its filesystem at boot, not at restore). Must equal ROOT_DISK_GIB in crates/hosted_runtimes/src/domain/image.rs (each tier's root_disk_gib in domain/size.rs).";
       };
       arcMaxBytes = lib.mkOption {
         type = lib.types.ints.positive;

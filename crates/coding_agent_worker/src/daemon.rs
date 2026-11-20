@@ -93,13 +93,12 @@ impl Daemon {
         #[cfg(unix)]
         let workspaces = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
-            let herdr = crate::herdr::HerdrSession::detect()
+            crate::herdr::HerdrSession::detect()?
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
                 config.workspace.path.clone(),
                 config.herdr.storage_path.clone().unwrap_or(root),
-                herdr.cli(),
             ))
         } else {
             None
@@ -329,14 +328,27 @@ fn adopt(inherited: Option<InheritedAgent>, _turns: &ActiveTurns) -> Option<Runn
 /// every session works in, and each session gets a herdr window.
 #[cfg(unix)]
 fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
-    let herdr = crate::herdr::HerdrSession::detect()?;
-    if !crate::herdr::drives_herdr(&config.harness) {
+    use crate::herdr::HcBinMissing;
+    let herdr = crate::herdr::HerdrSession::detect();
+    let drives_herdr = crate::herdr::drives_herdr(&config.harness);
+    // A herdr-core terminal without `HC_BIN` is still inside herdr: only its
+    // windows are lost.
+    if !drives_herdr && !matches!(herdr, Ok(None)) {
         match std::env::current_dir() {
             Ok(cwd) => config.workspace.path = cwd,
             Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
         }
     }
-    if crate::herdr::drives_herdr(&config.harness) {
+    let herdr = match herdr {
+        Ok(herdr) => herdr?,
+        // A `macrod herdr-acp` harness fails startup with this error itself.
+        Err(HcBinMissing) if drives_herdr => return None,
+        Err(error) => {
+            tracing::error!(error = %error, "herdr-core detected but its windows cannot open");
+            return None;
+        }
+    };
+    if drives_herdr {
         tracing::info!("herdr detected; the harness opens a herdr window per session");
         return None;
     }
@@ -504,19 +516,38 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
     }
 }
 
-/// Re-read the bound agents: whether they are no longer `bots`, so the
-/// stream reopens for the new set.
+/// Re-read the bound agents: `Ok(true)` when they are no longer `bots`, so
+/// the stream reopens for the new set, and `Err` when the service refuses the
+/// credentials. When they cannot be read otherwise, the stream is kept.
 async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
     position: &mut StreamPosition,
 ) -> Result<bool, rootcause::Report> {
     let read_at = std::time::SystemTime::now();
-    let latest = client.bound_agents().await?;
-    if latest.bot_ids == bots {
-        position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
-        return Ok(false);
+    match client.bound_agents().await {
+        Ok(latest) if latest.bot_ids == bots => {
+            position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
+            Ok(false)
+        }
+        Ok(_) => {
+            tracing::info!("bound-agent set changed; reconnecting the event stream");
+            Ok(true)
+        }
+        // The harness was removed or its token revoked: the service checks
+        // credentials only when a stream opens, so stop reading this one.
+        Err(error)
+            if error
+                .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
+                .is_some() =>
+        {
+            Err(error)
+        }
+        // The stream itself is fine: keep reading it and look again on the
+        // next refresh.
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not re-read the bound agents; keeping the event stream");
+            Ok(false)
+        }
     }
-    tracing::info!("bound-agent set changed; reconnecting the event stream");
-    Ok(true)
 }

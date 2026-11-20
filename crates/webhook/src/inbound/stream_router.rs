@@ -107,9 +107,10 @@ pub struct StreamEventsQuery {
 
 /// Asks for the retained events after `Last-Event-ID` before live ones.
 ///
-/// Kept out of the documented parameters while macrod is its one client:
-/// without it the stream is exactly what it was before resuming existed, so
-/// a browser `EventSource` or SDK listener reconnecting never replays.
+/// Kept out of the documented parameters: its clients opt in on their own
+/// (macrod, and the SDK's `listen({ resume })`, which adds it to the URL).
+/// Without it the stream is exactly what it was before resuming existed, so
+/// a browser `EventSource` or another listener reconnecting never replays.
 #[derive(Debug, serde::Deserialize)]
 pub struct ResumeQuery {
     /// `true` replays the retained events after `Last-Event-ID` first. Kept

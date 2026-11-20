@@ -1,0 +1,178 @@
+apiVersion: v1
+data:
+  tempo-query.yaml: |
+    backend: 127.0.0.1:3200
+  tempo.yaml: |
+
+    cache:
+      caches: []
+    compactor:
+      compaction:
+        block_retention: 168h
+        compacted_block_retention: 1h
+        compaction_cycle: 30s
+        compaction_window: 1h
+        max_block_bytes: 107374182400
+        max_compaction_objects: 6000000
+        max_time_per_tenant: 5m
+        retention_concurrency: 10
+        v2_in_buffer_bytes: 5242880
+        v2_out_buffer_bytes: 20971520
+        v2_prefetch_traces_count: 1000
+      ring:
+        kvstore:
+          store: memberlist
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+      ring:
+        kvstore:
+          store: memberlist
+    ingester:
+      lifecycler:
+        ring:
+          kvstore:
+            store: memberlist
+          replication_factor: 3
+        tokens_file_path: /var/tempo/tokens.json
+      max_block_duration: 5m
+    memberlist:
+      abort_if_cluster_join_fails: false
+      bind_addr: []
+      bind_port: 7946
+      cluster_label: 'tempo.observability'
+      gossip_interval: 1s
+      gossip_nodes: 2
+      gossip_to_dead_nodes_time: 30s
+      join_members:
+      - dns+tempo-gossip-ring:7946
+      leave_timeout: 5s
+      left_ingesters_timeout: 5m
+      max_join_backoff: 1m
+      max_join_retries: 10
+      min_join_backoff: 1s
+      node_name: ""
+      packet_dial_timeout: 5s
+      packet_write_timeout: 5s
+      pull_push_interval: 30s
+      randomize_node_name: true
+      rejoin_interval: 0s
+      retransmit_factor: 2
+      stream_timeout: 10s
+    metrics_generator:
+      metrics_ingestion_time_range_slack: 30s
+      processor:
+        local_blocks:
+          concurrent_blocks: 2
+          filter_server_spans: false
+          flush_to_storage: true
+          max_block_bytes: 50000000
+          max_live_traces: 10000
+        service_graphs:
+          dimensions:
+          - deployment.environment
+          max_items: 10000
+          wait: 10s
+          workers: 10
+        span_metrics:
+          dimensions:
+          - deployment.environment
+          intrinsic_dimensions:
+            span_name: false
+      registry:
+        collection_interval: 15s
+        external_labels: {}
+        stale_duration: 15m
+      ring:
+        kvstore:
+          store: memberlist
+      storage:
+        path: /var/tempo/wal
+        remote_write:
+        - send_exemplars: true
+          url: http://mimir.observability.svc.cluster.local:8080/api/v1/push
+        remote_write_add_org_id_header: false
+        remote_write_flush_deadline: 1m
+        wal: null
+      traces_storage:
+        path: /var/tempo/traces
+    multitenancy_enabled: false
+    overrides:
+      defaults:
+        metrics_generator:
+          max_active_series: 50000
+          processors:
+          - local-blocks
+          - span-metrics
+          - service-graphs
+      per_tenant_override_config: /runtime-config/overrides.yaml
+    querier:
+      frontend_worker:
+        frontend_address: tempo-query-frontend-discovery:9095
+      max_concurrent_queries: 20
+      search:
+        query_timeout: 30s
+      trace_by_id:
+        query_timeout: 10s
+    query_frontend:
+      max_outstanding_per_tenant: 2000
+      max_retries: 2
+      mcp_server:
+        enabled: false
+      metrics:
+        concurrent_jobs: 4
+        duration_slo: 0s
+        interval: 5m
+        max_duration: 3h
+        query_backend_after: 30m
+        target_bytes_per_job: 104857600
+        throughput_bytes_slo: 0
+      search:
+        concurrent_jobs: 1000
+        max_spans_per_span_set: 100
+        target_bytes_per_job: 104857600
+      trace_by_id:
+        query_shards: 50
+    server:
+      grpc_server_max_recv_msg_size: 4194304
+      grpc_server_max_send_msg_size: 4194304
+      http_listen_port: 3200
+      http_server_read_timeout: 30s
+      http_server_write_timeout: 30s
+      log_format: logfmt
+      log_level: info
+    storage:
+      trace:
+        backend: s3
+        blocklist_poll: 5m
+        local:
+          path: /var/tempo/traces
+        pool:
+          max_workers: 400
+          queue_depth: 20000
+        s3:
+          bucket: observability-traces-fa2328d
+          endpoint: s3.us-east-2.amazonaws.com
+          region: us-east-2
+        search:
+          prefetch_trace_count: 1000
+        wal:
+          path: /var/tempo/wal
+    stream_over_http_enabled: false
+    usage_report:
+      reporting_enabled: false
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: tempo
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: tempo
+    app.kubernetes.io/version: 2.10.7
+    helm.sh/chart: tempo-distributed-2.26.2
+  name: tempo-config
+  namespace: observability

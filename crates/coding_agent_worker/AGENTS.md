@@ -104,10 +104,34 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   header says "machine connected, service reports offline" instead of "paired,
   machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
-  sessions, config form, logs).
+  sessions, config form, logs). The theme is 24-bit RGB; every drawn frame
+  passes through `ColorSupport::fit_buffer` (`src/tui/ui/color_support.rs`),
+  which maps it to the 256 or 16-color palette when `COLORTERM`,
+  `TERM_PROGRAM` and `TERM` say the terminal has no truecolor (macOS
+  Terminal.app misreads RGB escapes). New draw calls must fit their frame too.
+- `src/tui/logging.rs`: the panel's logs. The Logs tab renders the last 500
+  lines; from startup (once the config lock is held) every line is also
+  appended to `logs/<config name>.log` beside the config (lines from before
+  the lock are written then), so `~/.macrod/logs/macrod.log` by default and
+  `~/.macrod/profiles/logs/<profile>.log` for a profile (`src/log_file.rs`, shared with the
+  update log; 0600, rotated at 10 MB to `.1`). Each run logs `macrod started`
+  (version, pid, config, handoff), the daemon's harness id, and why it ended:
+  quit, input closed, update restart, error, SIGHUP or SIGTERM. A panic is
+  logged as `macrod panicked`; in a spawned task the process keeps running. A
+  `macrod started` with no exit line before it means the previous process was
+  killed (SIGKILL, OOM). The file uses the Logs tab's filter (`RUST_LOG`,
+  default `info`); `RUST_LOG=trace` adds per-message ACP traces (direction
+  and size only).
+- `src/outbound/stream.rs`: the owner, bound-agent and presence lookups and
+  the event stream's response head each get `ANSWER_TIMEOUT` (10 s), so a
+  stalled request fails instead of holding up trigger processing. A failed
+  bound-agent refresh keeps the open stream and tries again on the next one.
+  `src/outbound/agent_session.rs` gives the session create and control calls a
+  trigger awaits inline `CALL_TIMEOUT` (60 s).
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
-  (`hc`) by environment; both stay supported.
+  (`hc`, the binary the terminal's `HC_BIN` names; never `PATH`) by
+  environment; both stay supported.
 - `src/executable.rs`: `PATH` lookup; every spawn of a bare command name goes
   through `launchable`, which finds Windows `.cmd` shims (`npm`, `npx`) and
   never npm's extensionless shell script beside them. The Claude Code adapter
@@ -217,8 +241,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
-- macrod never pulls into the operator's working branch — new herdr worktrees
-  start from a fresh fetch of `origin/main` (see README.md).
+- macrod never pulls into the operator's working branch — new session
+  worktrees start from a fresh fetch of `origin/main` (see README.md).
+- Each native session opens in its own herdr workspace/space, in the
+  background by default; never add it to macrod's or the operator's workspace.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the

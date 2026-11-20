@@ -4,6 +4,7 @@
  * cached log only once the fetched one is what the cache holds.
  */
 
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
 import type { AgentSessionLogQuery } from '@service-storage/graphql/generated/graphql';
 import type { OperationResult } from '@urql/core';
@@ -76,14 +77,28 @@ type Result<T> = OperationResult<T>;
 
 /** A result the exchange marked as coming from the network. */
 function fromNetwork<T>(data: T): Result<T> {
-  const result = { data, stale: false, hasNext: false } as unknown as Result<T>;
+  const result = {
+    data,
+    stale: false,
+    hasNext: false,
+    operation: {
+      context: { cacheSessionGeneration: cacheSessionGeneration.capture() },
+    },
+  } as unknown as Result<T>;
   metadata.set(result, { source: 'live-network' });
   return result;
 }
 
 /** A result the exchange marked as a cache read. */
 function fromCache<T>(data: T): Result<T> {
-  const result = { data, stale: false, hasNext: false } as unknown as Result<T>;
+  const result = {
+    data,
+    stale: false,
+    hasNext: false,
+    operation: {
+      context: { cacheSessionGeneration: cacheSessionGeneration.capture() },
+    },
+  } as unknown as Result<T>;
   metadata.set(result, { source: 'normalized-cache-hit' });
   return result;
 }
@@ -129,6 +144,48 @@ afterEach(() => {
 const settle = () => vi.advanceTimersByTimeAsync(0);
 
 describe('watchAgentSessionLog', () => {
+  it('retains source stamps on buffered and delayed frames across a same-access baseline correction', async () => {
+    const original = cacheSessionGeneration.capture();
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+    host.readQuery.mockResolvedValue({ kind: 'hit', data: logData([1]) });
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    cacheSessionGeneration.initialize('corrected-owner-generation');
+    const delayed = fromNetwork({ agentSessionLogAppended: [entry(3)] });
+    delayed.extensions = { cacheSessionGeneration: original };
+    appended.next(delayed);
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(4)] }));
+    watch.stop();
+    await settle();
+    expect(host.writeQuery.mock.calls.map(([args]) => args.generation)).toEqual(
+      [original, 'corrected-owner-generation']
+    );
+    expect(
+      host.writeQuery.mock.calls[0][0].data.user.agentSession.log.entries.map(
+        (entry: { id: string }) => entry.id
+      )
+    ).toEqual([entry(1).id, entry(2).id, entry(3).id]);
+  });
+
+  it('drops buffered log frames when their session generation retires', async () => {
+    const watch = watchAgentSessionLog(SESSION, 'cache-and-network', {
+      rows: () => undefined,
+      gap: () => undefined,
+    });
+    query.next(fromNetwork(logData([1])));
+    await watch.fetched;
+    host.readQuery.mockResolvedValue({ kind: 'hit', data: logData([1]) });
+    appended.next(fromNetwork({ agentSessionLogAppended: [entry(2)] }));
+    await cacheSessionGeneration.transition(async () => {});
+    watch.stop();
+    await settle();
+    expect(host.writeQuery).not.toHaveBeenCalled();
+  });
+
   it('loads and follows notification frames over GraphQL', async () => {
     const rows = vi.fn();
     const gap = vi.fn();

@@ -503,6 +503,9 @@ export default {
       other: 'ลบ {{count}} รายการแล้ว',
     },
     toastDeleteFailed: 'ลบไม่สำเร็จ',
+    toastPropertySet: {
+      other: 'ตั้งค่า {{property}} ให้ {{count}} รายการแล้ว',
+    },
     toastAddedToFavorites: 'เพิ่มในรายการโปรดแล้ว',
     toastAddedCountToFavorites: {
       other: 'เพิ่ม {{count}} รายการในรายการโปรดแล้ว',
