@@ -7,6 +7,7 @@ import {
 } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
+import { E_TABLE_NODE } from '@macro-inc/lexical-core/transformers/tables';
 import {
   $createParagraphNode,
   $getRoot,
@@ -32,6 +33,15 @@ export type MarkdownRequest =
 export type MarkdownResponse =
   | { action: 'read'; markdown: string; revision: string }
   | { action: 'write'; revision: string; changed: boolean };
+
+/**
+ * What a written body is parsed with: the internal format `readMarkdownBody`
+ * returns, plus GitHub pipe tables, which agents write as they would anywhere
+ * else and documents created from markdown already accept. Nothing else from
+ * the external set: its entity and mention importers would read an unchanged
+ * internal block differently and replace it, dropping its ids and comments.
+ */
+const BODY_IMPORT_TRANSFORMERS = [...INTERNAL_TRANSFORMERS, E_TABLE_NODE];
 
 /** One step turning the current top-level blocks into the requested ones. */
 type BlockStep =
@@ -203,7 +213,7 @@ export async function prepareMarkdownBody(
   try {
     const live = await sessionFromSnapshot(manager, snapshot);
     const requested = createEditingSession();
-    loadMarkdown(requested, markdown);
+    loadMarkdown(requested, markdown, BODY_IMPORT_TRANSFORMERS);
 
     const currentBlocks = toSnapshot(live).root.children;
     const requestedBlocks = toSnapshot(requested).root.children;

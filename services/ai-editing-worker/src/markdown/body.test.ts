@@ -312,3 +312,119 @@ describe('agent read and write back', () => {
     );
   });
 });
+
+describe('pipe tables', () => {
+  it('writes a GitHub pipe table as a table, with chips, escapes and empty cells', async () => {
+    const synced = new SyncedDocument((await markdownToLoroSnapshot('Map'))!);
+    const { revision } = await synced.load();
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: revision,
+        markdown: [
+          'Map',
+          '',
+          '| Task | Owner | Notes |',
+          '| --- | :---: | --- |',
+          '| <m-document-mention>{"documentId":"01a19313-9b37-7e60-b932-bf486394ba48","blockName":"task","blockParams":{}}</m-document-mention> | <m-user-mention>{"userId":"macro|ann@example.com","email":"ann@example.com"}</m-user-mention> | a \\| b |',
+          '| Paths | C:\\\\temp | |',
+        ].join('\n'),
+      },
+      synced,
+      signal()
+    );
+
+    const [, table] = blocks(synced.doc);
+    expect(table.type).toBe('table');
+    const rows = (table.children ?? []).map((row) =>
+      (row.children ?? []).map(textOf)
+    );
+    expect(rows).toEqual([
+      ['Task', 'Owner', 'Notes'],
+      ['', '', 'a | b'],
+      ['Paths', 'C:\\temp', ''],
+    ]);
+    const [taskCell, ownerCell] = table.children?.[1].children ?? [];
+    expect(walk(taskCell).map((node) => node.type)).toContain(
+      'document-mention'
+    );
+    expect(walk(ownerCell).map((node) => node.type)).toContain('user-mention');
+  });
+
+  it('keeps ids, comments and an existing table when a pipe table is added', async () => {
+    const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: DOC });
+    (
+      await manager.initializeFromSnapshot(
+        (await markdownToLoroSnapshot(
+          '# Plan\n\n<m-table><m-table-row><m-table-cell header="row">Who</m-table-cell></m-table-row><m-table-row><m-table-cell>Ann</m-table-cell></m-table-row></m-table>\n\nThe quick brown fox.'
+        ))!
+      )
+    )._unsafeUnwrap();
+    await applyCommentMarkChange(manager, createNoopLiveSyncSource(DOC), {
+      action: 'add',
+      markId: MARK,
+      text: 'brown fox',
+    });
+    const synced = new SyncedDocument(manager.doc.export({ mode: 'snapshot' }));
+    manager.dispose();
+    const [heading, existingTable, fox] = blocks(synced.doc);
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: `${read.markdown}\n\n| Step | Done |\n|---|---|\n| Ship | yes |`,
+      },
+      synced,
+      signal()
+    );
+
+    const after = blocks(synced.doc);
+    expect(after.map((block) => block.type)).toEqual([
+      'heading',
+      'table',
+      'paragraph',
+      'table',
+    ]);
+    expect(after[0].ids).toEqual(heading.ids);
+    expect(after[1]).toEqual(existingTable);
+    expect(after[2]).toEqual(fox);
+    const marks = walk(after[2]).filter((n) => n.type === 'comment-mark');
+    expect(marks[0].ids).toEqual([MARK]);
+    expect(after[3].children?.map((row) => row.children?.map(textOf))).toEqual([
+      ['Step', 'Done'],
+      ['Ship', 'yes'],
+    ]);
+
+    const reread = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (reread.action !== 'read') throw new Error('expected a read');
+    const commits = synced.commits;
+    const rewritten = await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: reread.revision,
+        markdown: reread.markdown,
+      },
+      synced,
+      signal()
+    );
+    expect(rewritten).toMatchObject({ changed: false });
+    expect(synced.commits).toBe(commits);
+  });
+});

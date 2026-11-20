@@ -1,5 +1,8 @@
 import { registerCodeHighlighting } from '@lexical/code';
-import { $convertFromMarkdownString } from '@lexical/markdown';
+import {
+  $convertFromMarkdownString,
+  type Transformer,
+} from '@lexical/markdown';
 import {
   NodeReplacements,
   SupportedNodeTypes,
@@ -46,11 +49,15 @@ export function createEditingSession(): LexicalSession {
 }
 
 /** Load a document from markdown, replacing any existing content. */
-export function loadMarkdown(session: LexicalSession, md: string): void {
+export function loadMarkdown(
+  session: LexicalSession,
+  md: string,
+  transformers: Transformer[] = INTERNAL_TRANSFORMERS
+): void {
   session.editor.update(
     () => {
       $getRoot().clear();
-      $convertFromMarkdownString(md, INTERNAL_TRANSFORMERS);
+      $convertFromMarkdownString(md, transformers);
     },
     { discrete: true }
   );
