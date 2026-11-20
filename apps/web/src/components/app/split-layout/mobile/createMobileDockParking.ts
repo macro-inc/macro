@@ -1,6 +1,9 @@
-import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type { PaneId, SplitRouter } from '@app/lib/split-router';
+import type {
+  PaneId,
+  SplitLocation,
+  SplitRouter,
+} from '@app/lib/split-router';
 import { enableMobileParkedDockViews } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,7 +14,11 @@ import {
   type SplitManager,
   splitOf,
 } from '../layoutManager';
-import { splitContentFromLocation } from '../split-router/legacy-route';
+import {
+  resolveContentLocation,
+  splitContentFromLocation,
+} from '../split-router/legacy-route';
+import { viewRestorationKey } from '../view-restoration-key';
 
 /** Dock views kept mounted besides the shown one, unless the flag says otherwise. */
 const DEFAULT_MAX_PARKED = 5;
@@ -36,13 +43,17 @@ export type MobileDockParking = {
 
 /**
  * The view a content or pane shows, for matching a dock target to a parked
- * pane: agent conversations count as the Agents view. Search starts fresh on
+ * pane: the view it resumes as, so agent conversations count as Agents and
+ * Tasks and Projects, which share content, stay apart. Search starts fresh on
  * every dock tap, and entities open above a view, so neither is parked.
  */
-function dockViewOf(content: SplitContent): string | undefined {
+function dockViewOf(
+  content: SplitContent,
+  location: SplitLocation
+): string | undefined {
   if (content.type !== 'component' || content.id === 'search') return;
 
-  return parseAgentsRoute(content.id) ? 'agents' : content.id;
+  return viewRestorationKey(content.id, location);
 }
 
 /**
@@ -81,7 +92,7 @@ export function createMobileDockParking(options: {
   const viewOfPane = (pane: PaneId): string | undefined => {
     const entry = router.entry(pane);
     return entry
-      ? dockViewOf(splitContentFromLocation(entry.location))
+      ? dockViewOf(splitContentFromLocation(entry.location), entry.location)
       : undefined;
   };
 
@@ -139,7 +150,10 @@ export function createMobileDockParking(options: {
     returnsTo: (view: string) => boolean
   ) => {
     const limit = untrack(maxParked);
-    const target = dockViewOf(content);
+    const target = dockViewOf(
+      content,
+      resolveContentLocation(router.routes, content)
+    );
     if (limit === undefined || !target) {
       manager.replaceAllSplits(content, showOptions);
       return;

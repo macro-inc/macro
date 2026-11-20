@@ -23,14 +23,31 @@ vi.mock(import('@app/observability/flow'), async (importOriginal) => {
 });
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 // The test routes stand in for the app's: `block` shows an entity, the
-// others are dock views named after their route.
+// others are dock views named after their route. `drive` shows the content
+// `mail` does, as Projects shows the Tasks content, and resumes as its own view.
+const routeOf = (content: SplitContent): string => {
+  const view = (content.entryMetadata as { view?: string } | undefined)?.view;
+  return view ?? content.id;
+};
 vi.mock('../split-router/legacy-route', () => ({
+  resolveContentLocation: (_routes: unknown, content: SplitContent) => ({
+    route: {
+      matches: [
+        { id: 'app', params: {} },
+        { id: routeOf(content), params: {} },
+      ],
+    },
+  }),
   splitContentFromLocation: (location: SplitLocation) => {
     const [, root] = location.route.matches;
-    return root?.id === 'block'
-      ? { type: 'channel', id: String(root.params.id) }
-      : { type: 'component', id: root?.id };
+    if (root?.id === 'block')
+      return { type: 'channel', id: String(root.params.id) };
+    return { type: 'component', id: root?.id === 'drive' ? 'mail' : root?.id };
   },
+}));
+vi.mock('../view-restoration-key', () => ({
+  viewRestorationKey: (id: string, location?: SplitLocation) =>
+    location?.route.matches[1]?.id ?? id,
 }));
 
 import { createMemoryHistory } from '@app/lib/split-router/history/memory';
@@ -80,7 +97,7 @@ function setup(url: string, returnsTo: (view: string) => boolean = () => true) {
         fireAndForget(
           Promise.resolve(
             router.navigate(
-              { location: appLocation(content.id) },
+              { location: appLocation(routeOf(content)) },
               {
                 park: options.park as readonly string[] as readonly PaneId[],
                 attributes: options.attributes,
@@ -95,8 +112,12 @@ function setup(url: string, returnsTo: (view: string) => boolean = () => true) {
       unSpotlightSplit: () => {},
     } as unknown as SplitManager;
     const parking = createMobileDockParking({ router, manager, sessionKey });
-    const show = async (id: string) => {
-      parking.show({ type: 'component', id }, { resume: true }, returnsTo);
+    const show = async (id: string, view?: string) => {
+      parking.show(
+        { type: 'component', id, entryMetadata: view ? { view } : undefined },
+        { resume: true },
+        returnsTo
+      );
       await settle();
     };
     const parked = () =>
@@ -222,6 +243,18 @@ describe('mobile dock parking', () => {
     await router.navigate('/home');
     expect(router.panes().map(viewOf)).toEqual(['home']);
     expect(parked()).toEqual([]);
+  });
+
+  it('keeps dock views that share content apart', async () => {
+    const { router, show, parked, viewOf } = track(setup('/home'));
+    await show('mail');
+    await show('mail', 'drive');
+    expect(router.panes().map(viewOf)).toEqual(['drive']);
+    expect(parked().map(viewOf)).toEqual(['home', 'mail']);
+
+    await show('mail');
+    expect(router.panes().map(viewOf)).toEqual(['mail']);
+    expect(parked().map(viewOf)).toEqual(['home', 'drive']);
   });
 
   it('does not park a view the dock cannot show again', async () => {
