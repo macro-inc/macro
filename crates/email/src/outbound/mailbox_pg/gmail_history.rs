@@ -12,9 +12,14 @@ impl GmailHistoryRepository for PgMailboxSync {
         next: &str,
         work: &[HistoryWork],
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
+        // The commit never writes the link, so a share lock is enough to hold
+        // its lifecycle against a disconnect while letting CRM populations,
+        // which share-lock it for their whole transaction, run alongside. The
+        // timeout sends a commit that still cannot lock back for redelivery
+        // instead of holding a pooled connection.
         let current=sqlx::query!(r#"SELECT h.history_id FROM email_links l JOIN email_gmail_histories h ON h.link_id=l.id
-            WHERE l.id=$1 AND l.provider='GMAIL' AND l.is_sync_active AND l.disconnect_requested_at IS NULL FOR UPDATE OF l,h"#,link)
+            WHERE l.id=$1 AND l.provider='GMAIL' AND l.is_sync_active AND l.disconnect_requested_at IS NULL FOR SHARE OF l FOR UPDATE OF h"#,link)
             .fetch_optional(&mut *tx).await.map_err(db_error)?.ok_or(MailboxError::Stale)?;
         if current.history_id != expected {
             return Err(MailboxError::Stale);

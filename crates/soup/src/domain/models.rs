@@ -1184,7 +1184,8 @@ fn map_properties_to_call(expr: &Expr<PropertiesLiteral>) -> Expr<CallLiteral> {
     }
 }
 
-/// An entity whose Companies or Contacts property names a CRM record.
+/// An entity whose Companies or Contacts property names a CRM record, or a
+/// task whose custom entity property does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CrmPropertyEdge {
     /// The entity type the property row is stored under.

@@ -347,3 +347,30 @@ async fn a_repeat_of_an_invite_in_flight_is_coded() {
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(body["code"], "invite_in_progress");
 }
+
+/// A bad purchase key reaches the service, which refuses it before creating
+/// anything, and answers a 400 with a message, not the extractor's 422.
+#[tokio::test]
+async fn an_invalid_purchase_key_is_a_bad_request_with_a_message() {
+    let service = Arc::new(Reached::default());
+    let request = Request::post("/")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            r#"{"purchaseKey": "has space", "name": "Ada", "size": "standard"}"#,
+        ))
+        .unwrap();
+
+    let response = router(service.clone()).oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(service.0.load(Ordering::SeqCst), 1);
+
+    let (status, body) = error_body(TeamAgentError::InvalidPurchaseKey).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["message"],
+        "the purchase key must be 1 to 128 printable ASCII characters"
+    );
+    assert!(body.get("code").is_none());
+}

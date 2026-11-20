@@ -13,6 +13,7 @@ use std::str::FromStr;
 use utoipa::ToSchema;
 
 use agent_session::domain::model::SessionVisibility;
+use bots::domain::models::AgentMcpServer;
 use routine_program::{AgentStep, StepRecord};
 
 use super::event_runs::ConfigurationRevision;
@@ -180,6 +181,12 @@ pub struct ActionConfiguration {
     /// What the routine is for, in the owner's words; empty when unset.
     #[serde(default)]
     pub description: String,
+    /// An icon and colour an agent picked for what the routine does. Saved
+    /// unless the owner chose the routine's appearance, which only the
+    /// appearance endpoint does; absent leaves the stored one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 /// What saving a routine would find wrong, without saving it: the answer to
@@ -196,6 +203,11 @@ pub struct RoutineCheck {
     /// The routine as saving would store it: code steps named and the SDK
     /// their code checks against stamped.
     pub routine: ActionConfiguration,
+    /// Apps the routine needs that its owner hasn't connected, as a routine
+    /// draft's session named them (`missingApps`): the person connects each
+    /// one before saving. Never ones the routine already requires.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing_apps: Vec<AgentMcpServer>,
 }
 
 /// Something a routine draft's session created for the routine to use, such
@@ -243,6 +255,11 @@ pub struct ActionConfigurationUpdate {
     /// An empty string clears it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// An icon and colour an agent picked, as on create. Saved only when the
+    /// update is made for the routine's owner; skipped for anyone else.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(nullable = false)]
+    pub appearance: Option<EntityAppearance>,
 }
 
 impl ActionConfigurationUpdate {
@@ -259,6 +276,7 @@ impl ActionConfigurationUpdate {
             description: self
                 .description
                 .unwrap_or_else(|| stored.description.clone()),
+            appearance: self.appearance,
         }
     }
 }

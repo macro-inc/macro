@@ -1,6 +1,6 @@
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { onCleanup, type ParentProps, Show } from 'solid-js';
+import { children, onCleanup, type ParentProps, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { useFloatRegionAnchor } from './FloatRegionScope';
 import { type FloatRegionName, FloatRegions } from './float-region-state';
@@ -46,7 +46,16 @@ export function FloatRegion(props: FloatRegionProps) {
 
   return (
     <Show when={registration.isWinner() && FloatRegions.mount(props.region)}>
-      {(mountEl) => <Portal mount={mountEl()}>{props.children}</Portal>}
+      {(mountEl) => {
+        const content = children(() => props.children);
+        // An empty contribution still wins, but must not leave a Portal wrapper
+        // that prevents the host's empty region from collapsing.
+        return (
+          <Show when={content.toArray().length > 0}>
+            <Portal mount={mountEl()}>{content()}</Portal>
+          </Show>
+        );
+      }}
     </Show>
   );
 }

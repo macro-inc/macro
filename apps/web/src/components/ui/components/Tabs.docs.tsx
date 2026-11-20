@@ -186,7 +186,7 @@ export default defineDoc({
       id: 'sizes',
       title: 'Sizes',
       description:
-        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets.',
+        'Tabs share Button minimum heights and square icon sizes. Medium labels use 14px text and 12px horizontal padding; large labels use 15px text. Touch treatments retain their minimum targets. `size="composer"` with the inset treatment matches repository controls: 38px frame, 36px items, 14px text with the adjacent control’s inherited line height, 8px label padding, and full rounding.',
       render: SizesDemo,
     },
     {
@@ -198,9 +198,9 @@ export default defineDoc({
     },
     {
       id: 'track',
-      title: 'Composer mode switch',
+      title: 'Legacy track reference',
       description:
-        '`variant="track"` slides one flat pill along a filled track on every device. It is only for the agent composer\'s Chat/Code switch in the composer tray.',
+        '`variant="track"` preserves Home’s existing composer tabs. Other production Auto/Chat/Code switches use the shared grouped Tabs pill.',
       render: TrackDemo,
     },
   ],

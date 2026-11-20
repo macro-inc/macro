@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.needs_reauth,\n            EXISTS(SELECT 1 FROM email_link_microsoft_scopes s WHERE s.link_id = l.id AND s.grant_generation = $2\n                AND s.granted_scopes IS NOT DISTINCT FROM $4) AS \"scopes_stored!\",\n            NOT EXISTS(SELECT 1 FROM email_mailbox_custodians c WHERE c.link_id = l.id AND c.grant_id = l.grant_id\n                AND c.grant_generation = $2 AND c.granted_scopes IS DISTINCT FROM $4) AS \"custodians_stored!\"\n            FROM email_links l WHERE l.id = $1 AND l.grant_generation = $2 AND l.is_sync_active AND l.provider = 'OUTLOOK' AND l.sync_generation = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "needs_reauth",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "scopes_stored!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "custodians_stored!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "a9dc8ebf6e9c88abbcbc1e4725f5b9be0daef25f7d37e399310d7722fdd3f472"
+}

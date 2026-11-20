@@ -118,6 +118,28 @@ fn a_step_sees_its_knobs_typed_but_not_their_values() {
 }
 
 #[test]
+fn a_step_sees_an_entity_knob_as_the_sdk_handle_for_its_kinds() {
+    let with = |id: &str| {
+        program(json!([{
+            "type": "code",
+            "title": "Post bugs",
+            "source": "export async function main({ knobs }: StepContext) { return [knobs.bugs, knobs.target]; }",
+            "knobs": [
+                { "type": "entity", "name": "bugs", "label": "Channel", "entity_types": ["channel"], "value": { "type": "channel", "id": id } },
+                { "type": "entity", "name": "target", "label": "Where", "entity_types": ["document", "project", "database", "user"], "value": { "type": "user", "id": "macro|a@b.c" } },
+            ],
+        }]))
+    };
+    let files = with("c1").check_files();
+    assert_eq!(
+        files[0].source.lines().rev().nth(1).unwrap(),
+        "type StepContext = RoutineStepContext<{  }, { bugs: ReturnType<import('@macro-inc/sdk').Macro['channels']['byId']>; target: ReturnType<import('@macro-inc/sdk').Macro['documents']['byId']> | ReturnType<import('@macro-inc/sdk').Macro['projects']['byId']> | ReturnType<import('@macro-inc/sdk').Macro['databases']['byId']> | ReturnType<import('@macro-inc/sdk').Macro['users']['byId']> }>;"
+    );
+    // Picking another item changes nothing the checker sees.
+    assert_eq!(with("c2").check_files(), files);
+}
+
+#[test]
 fn the_recorded_version_names_the_sdk_and_the_contract() {
     let version = code_version("0.2.2+abc");
     let (sdk, contract) = version.as_str().split_once("+ctx.").unwrap();

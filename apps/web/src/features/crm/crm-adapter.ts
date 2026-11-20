@@ -32,6 +32,10 @@ import {
 } from '@queries/team/teams';
 import { patchTeamCrmSettings } from '@service-auth/crm';
 import { storageServiceClient } from '@service-storage/client';
+import {
+  crmAccessAuthority,
+  crmAccessState,
+} from '@service-storage/crm-access-authority';
 import { crmEmailPolicyClient } from '@service-storage/crm-email-policy';
 import { crmEmailPrivacyClient } from '@service-storage/crm-email-privacy';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -214,6 +218,9 @@ export function createAppCrmContext(): CrmContext {
   };
   const createSettings = () => useTeamCrmConfig(deps);
   return {
+    canAccess: crmAccessAuthority.allowed,
+    accessState: crmAccessState,
+    retryAccess: crmAccessAuthority.refresh,
     createEmailPolicy: () => {
       const team = useCurrentTeamQuery();
       return createEmailPolicySource(

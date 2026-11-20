@@ -168,6 +168,11 @@ the gateway `/email` prefix.
   client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
+- A presigned upload URL's query holds AWS credentials and a session token,
+  and the `UploadAttachmentError`s of every attachment upload are logged. Keep
+  them free of it: strip reqwest errors with `without_url()`, and from an S3
+  error body keep only its `<Code>` (`s3_error_code`), since a
+  `SignatureDoesNotMatch` body echoes the signed request.
 - An attachment's file type comes from a Macro file type's extension on its
   filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
   type names a different Macro file type, and from the MIME type without such
@@ -297,6 +302,10 @@ the gateway `/email` prefix.
   awaited future takes its own stack slot. Pass a Gmail call through a helper
   as a `BoxFuture`, and box an operation the dispatch awaits in several arms;
   a `label_write_sim` test runs the label paths on 1.5 MiB worker stacks.
+- Inbox sync and gmail_ops add the operation as context on a failure's error
+  (`prefix_error_source`), so logs and spans keep its whole chain, and their
+  failure spans record the chain's SQLSTATE as `db.response.status_code`
+  (`pubsub::util::sqlstate`).
 - gmail_ops moves transient Gmail failures to the retry queue like rate limits;
   the primary queue dead-letters after three receives.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
@@ -305,7 +314,12 @@ the gateway `/email` prefix.
   `email::domain::mailbox::inbox_sync::build_contact_connections`.
 - The `link_manager` worker receives one message at a time and renews its
   visibility while processing. Don't raise its receive batch: messages queued
-  behind a long mailbox purge would be redelivered and purged twice.
+  behind a long mailbox purge would be redelivered and purged twice. A
+  deletion whose inbox stays locked past the lock timeout
+  (`InboxLifecycleError::Contended`) runs again in the same delivery, up to six
+  times 20 s apart, before it goes back to the queue, so a short contention
+  does not spend a receive. Contention that outlasts all six attempts on five
+  deliveries still dead-letters the deletion.
   `PurgePacing` (`email::domain::mailbox::link_manager::purge`) sets the purge's write rate.
   Refresh and HealthCheck probes are capped at 240 s so a stalled probe is
   redelivered instead of held in flight. A probe returns an error, and so is
@@ -326,6 +340,16 @@ the gateway `/email` prefix.
   spends live provider quota; Gmail reads three messages at a time to stay
   under the gate's live cap. Don't record message content or addresses on
   its spans.
+- Connecting an inbox writes its `email_links` row, which a CRM contact
+  population share-locks for its whole transaction. The connect transactions
+  (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
+  open with `outbound::link_lock::begin`, a 5 s `lock_timeout`, and a lock
+  timeout is `InitializationError::Contended`. `/email/init` answers it 503,
+  never 409: clients read that route's 409 as a sharing conflict to confirm.
+  `set_credential_owner` keeps waiting, because it follows the Google grant's
+  relocation and a give-up would leave the shared inbox's tokens failing.
+  The token-health writes (`email_db_client::links::update::{set,clear}_link_needs_reauth`)
+  give up after 5 s too and are written again on the next token fetch.
 - To run against `crates/gmail_emulator` instead of Google, set the
   `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
   Google client sets them itself. Without

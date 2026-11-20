@@ -92,6 +92,7 @@ vi.mock('@app/components/drag-drop/create-distance-pointer-sensor', () => ({
 vi.mock('@macro-inc/observability', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@macro-inc/observability')>()),
   Telemetry: {
+    error: vi.fn(),
     span: async (
       _name: string,
       run: (span: { setAttr: () => void }) => Promise<void>

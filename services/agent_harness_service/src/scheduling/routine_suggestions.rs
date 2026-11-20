@@ -15,14 +15,15 @@ const SNIPPET_CHARS: u16 = 500;
 
 /// The newest mail through email_service, which reads it from Gmail and
 /// Outlook, and the apps the person connected through Pipedream.
-pub struct HarnessSuggestionSources<Connections> {
+pub struct HarnessSuggestionSources<Connections, Connect> {
     pub email: Arc<EmailServiceClient>,
-    pub apps: PipedreamConnectedApps<Connections>,
+    pub apps: PipedreamConnectedApps<Connections, Connect>,
 }
 
-impl<Connections> SuggestionSources for HarnessSuggestionSources<Connections>
+impl<Connections, Connect> SuggestionSources for HarnessSuggestionSources<Connections, Connect>
 where
     Connections: pipedream_mcp::domain::ports::ConnectionStore,
+    Connect: pipedream_mcp::domain::ports::MacroConnect,
 {
     async fn inbox(
         &self,

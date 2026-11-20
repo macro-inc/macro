@@ -2,6 +2,7 @@ use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
     ATTACHMENT_WHITELISTED_DOMAINS, DOCUMENT_MIME_TYPES, OCTET_STREAM_DOCUMENT_EXTENSIONS,
 };
+use chrono::{DateTime, Utc};
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
 use sqlx::{Pool, Postgres, Row};
@@ -350,7 +351,7 @@ pub async fn new_email_document_atts(
     db: &Pool<Postgres>,
     link_id: Uuid,
     message_provider_id: &str,
-) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+) -> anyhow::Result<Vec<ClaimedAttachment>> {
     if !message_has_unclaimed_document_attachment(db, link_id, message_provider_id).await? {
         return Ok(Vec::new());
     }
@@ -414,9 +415,10 @@ pub async fn new_email_document_atts(
                         )
                     )
             )
-            RETURNING id
+            RETURNING id, upload_claimed_at
         )
         SELECT
+            claimed.upload_claimed_at AS claimed_at,
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
             a.provider_attachment_id as provider_attachment_id,
@@ -427,12 +429,12 @@ pub async fn new_email_document_atts(
             m.thread_id as thread_db_id,
             from_contact.email_address as sender_email,
             m.subject as subject
-        FROM email_attachments a
+        FROM claimed
+        JOIN email_attachments a ON a.id = claimed.id
         JOIN email_messages m ON a.message_id = m.id
         -- A message can arrive without a sender; every claimed row must come back or its
         -- claim is never released.
         LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS
@@ -444,9 +446,9 @@ pub async fn new_email_document_atts(
         .fetch_all(db)
         .await?;
 
-    let attachments: Vec<AttachmentUploadMetadata> = rows
+    let attachments: Vec<ClaimedAttachment> = rows
         .into_iter()
-        .map(map_row_to_attachment_metadata)
+        .map(map_row_to_claimed_attachment)
         .collect();
 
     // if one or more condition has already been met, return
@@ -516,9 +518,10 @@ pub async fn new_email_document_atts(
                             )
                     )
             )
-            RETURNING id
+            RETURNING id, upload_claimed_at
         )
         SELECT
+            claimed.upload_claimed_at AS claimed_at,
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
             a.provider_attachment_id as provider_attachment_id,
@@ -529,12 +532,12 @@ pub async fn new_email_document_atts(
             m.thread_id as thread_db_id,
             from_contact.email_address as sender_email,
             m.subject as subject
-        FROM email_attachments a
+        FROM claimed
+        JOIN email_attachments a ON a.id = claimed.id
         JOIN email_messages m ON a.message_id = m.id
         -- A message can arrive without a sender; every claimed row must come back or its
         -- claim is never released.
         LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS
@@ -548,7 +551,7 @@ pub async fn new_email_document_atts(
 
     let attachments = rows
         .into_iter()
-        .map(map_row_to_attachment_metadata)
+        .map(map_row_to_claimed_attachment)
         .collect();
 
     Ok(attachments)
@@ -565,7 +568,7 @@ pub async fn new_email_media_atts(
     db: &Pool<Postgres>,
     link_id: Uuid,
     message_provider_id: &str,
-) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+) -> anyhow::Result<Vec<ClaimedAttachment>> {
     let query = format!(
         r#"
         WITH claimed AS (
@@ -582,9 +585,10 @@ pub async fn new_email_media_atts(
                     AND eas.attachment_id IS NULL
                     AND a.upload_claimed_at IS NULL
             )
-            RETURNING id
+            RETURNING id, upload_claimed_at
         )
         SELECT
+            claimed.upload_claimed_at AS claimed_at,
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
             a.provider_attachment_id as provider_attachment_id,
@@ -595,12 +599,12 @@ pub async fn new_email_media_atts(
             m.thread_id as thread_db_id,
             from_contact.email_address as sender_email,
             m.subject as subject
-        FROM email_attachments a
+        FROM claimed
+        JOIN email_attachments a ON a.id = claimed.id
         JOIN email_messages m ON a.message_id = m.id
         -- A draft can have no sender; every claimed row must come back or its
         -- claim is never released.
         LEFT JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE a.id IN (SELECT id FROM claimed)
         ORDER BY a.id
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA
@@ -614,17 +618,19 @@ pub async fn new_email_media_atts(
 
     let attachments = rows
         .into_iter()
-        .map(map_row_to_attachment_metadata)
+        .map(map_row_to_claimed_attachment)
         .collect();
 
     Ok(attachments)
 }
 
 /// Releases an attachment's upload claim so the next claiming query picks it up again.
+/// An abandoned attachment keeps its claim, so it is never released.
 #[tracing::instrument(skip(db), err)]
 pub async fn release_upload_claim(db: &Pool<Postgres>, attachment_id: Uuid) -> anyhow::Result<()> {
     sqlx::query!(
-        "UPDATE email_attachments SET upload_claimed_at = NULL WHERE id = $1",
+        "UPDATE email_attachments SET upload_claimed_at = NULL
+        WHERE id = $1 AND upload_abandoned_at IS NULL",
         attachment_id
     )
     .execute(db)
@@ -641,6 +647,7 @@ pub struct PendingUploadClaim {
 }
 
 /// The message's oldest upload claim that hasn't stored its attachment yet.
+/// An abandoned attachment keeps its claim but is never stored, so it is left out.
 #[tracing::instrument(skip(db), err)]
 pub async fn oldest_pending_upload_claim(
     db: &Pool<Postgres>,
@@ -655,6 +662,7 @@ pub async fn oldest_pending_upload_claim(
         FROM email_attachments a
         WHERE a.message_id = $1
             AND a.upload_claimed_at IS NOT NULL
+            AND a.upload_abandoned_at IS NULL
             AND NOT EXISTS(SELECT 1 FROM document_email d WHERE d.email_attachment_id = a.id)
             AND NOT EXISTS(SELECT 1 FROM email_attachments_sfs s WHERE s.attachment_id = a.id)
         ORDER BY a.upload_claimed_at, a.id
@@ -701,6 +709,23 @@ pub async fn fetch_attachment_upload_metadata_by_id(
 }
 
 /// Helper function to map a database row to AttachmentUploadMetadata
+/// An attachment a claiming query took, with the claim it set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaimedAttachment {
+    pub metadata: AttachmentUploadMetadata,
+    /// The `upload_claimed_at` the claim set. A write that must apply only
+    /// while this claim holds compares the column with it.
+    pub claimed_at: DateTime<Utc>,
+}
+
+fn map_row_to_claimed_attachment(row: sqlx::postgres::PgRow) -> ClaimedAttachment {
+    let claimed_at = row.get("claimed_at");
+    ClaimedAttachment {
+        metadata: map_row_to_attachment_metadata(row),
+        claimed_at,
+    }
+}
+
 fn map_row_to_attachment_metadata(row: sqlx::postgres::PgRow) -> AttachmentUploadMetadata {
     AttachmentUploadMetadata {
         attachment_db_id: row.get("attachment_db_id"),

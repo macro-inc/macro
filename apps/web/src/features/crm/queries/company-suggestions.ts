@@ -39,7 +39,7 @@ export function useQuickAccessCrmCompaniesQuery(
   );
 
   const companies = createMemo<CrmCompanyEntity[]>(() =>
-    queryReadyGate(query)
+    enabled() && queryReadyGate(query)
       ? query.data.entities.filter(
           (entity): entity is CrmCompanyEntity =>
             isCrmCompanyEntity(entity) && !entity.hidden
