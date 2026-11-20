@@ -4,8 +4,9 @@
 
 Chat: the desktop channel gutter, left of the 920px message column. It shows
 a Mark done check beside each not-done notification stack, and a toggle (a
-bell) that opens a list of the channel's not-done or unread stacks. Each part
-has its own flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
+bell) that opens a list of the channel's not-done or unread stacks. One flag,
+`enable-channel-notification-gutter` (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER`),
+covers all of it.
 
 ## How it works
 
@@ -36,12 +37,12 @@ has its own flag (`enable-channel-stack-done-checks`, `enable-channel-notificati
 
 - Checks render through `ChannelThread`'s `gutter` slot (`Thread.GutterSlot`)
   and show only when the pane is ≥1008px wide (`@container/channel-pane`, set
-  in `Channel.tsx` only while the checks flag is on, on desktop, because a
+  in `Channel.tsx` only while the flag is on, on desktop, because a
   size container also contains layout). Replies inherit
   `--thread-gutter-inset`, so every check lines up in one lane.
 - The list docks in the gutter as a `Card` (filled, depth 3) when the gutter
   is ≥240px wide, and opens as a popover (`menu-surface`) otherwise. Below
-  72px it hides. When both flags are on, it leaves the checks their 44px lane.
+  72px it hides. It leaves the checks their 44px lane.
 - The toggle and list show only while the channel has a not-done stack (or
   the not-done read failed, to offer Retry): never while that read loads, and
   not on the Unread tab once everything is done. Unseen stacks carry the

@@ -3,10 +3,7 @@ import { t } from '@app/lib/i18n';
 import type { ThreadGutter } from '@channel/Thread/ThreadGutterSlot';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  enableChannelNotificationList,
-  enableChannelStackDoneChecks,
-} from '@core/constant/featureFlags';
+import { enableChannelNotificationGutter } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { getDisplayNameParts, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -51,15 +48,13 @@ export function createChannelNotificationGutter(options: {
   /** Scroll the channel to a top-level message, or a reply in its thread. */
   goToMessage: (threadId: string, replyId?: string) => void;
 }) {
-  const checksFlag = useFeatureFlag(enableChannelStackDoneChecks);
-  const listFlag = useFeatureFlag(enableChannelNotificationList);
-  const checksEnabled = () => options.ready() && checksFlag().enabled;
-  const listEnabled = () => options.ready() && listFlag().enabled;
+  const flag = useFeatureFlag(enableChannelNotificationGutter);
+  const enabled = () => options.ready() && flag().enabled;
 
   const notificationSource = useGlobalNotificationSource();
   const activeQuery = createChannelActiveNotificationsQuery(
     options.channelId,
-    () => checksEnabled() || listEnabled()
+    enabled
   );
   const active = () => {
     if (activeQuery.isPending) return undefined;
@@ -113,12 +108,11 @@ export function createChannelNotificationGutter(options: {
 
   return {
     /** The checks may show, so the pane is a size container for their lane. */
-    checksFlagOn: () => checksFlag().enabled,
-    checksEnabled,
-    listEnabled,
+    flagOn: () => flag().enabled,
+    enabled,
     /** The checks a top-level message and its replies put in the gutter. */
     threadGutter: (rootId: string): ThreadGutter | undefined => {
-      if (!checksEnabled() || !stacks.notDoneByThread().has(rootId)) return;
+      if (!enabled() || !stacks.notDoneByThread().has(rootId)) return;
       // One object per thread: a new one would rebuild its checks, and drop
       // their focus, on every notification change.
       let gutter = threadGutters.get(rootId);
@@ -150,7 +144,7 @@ export function ChannelNotificationList(props: {
   gutter: ChannelNotificationGutter;
 }) {
   return (
-    <Show when={props.gutter.listEnabled()}>
+    <Show when={props.gutter.enabled()}>
       <MountedNotificationList gutter={props.gutter} />
     </Show>
   );
@@ -167,7 +161,6 @@ function MountedNotificationList(props: { gutter: ChannelNotificationGutter }) {
   return (
     <NotificationList
       gutterWidth={gutterWidth}
-      reserveCheckLane={gutter.checksEnabled}
       open={preferences.open}
       onOpenChange={preferences.setOpen}
       view={preferences.view}

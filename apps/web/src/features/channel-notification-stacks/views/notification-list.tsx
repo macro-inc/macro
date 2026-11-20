@@ -37,8 +37,6 @@ const CHECK_LANE = 44;
 export function NotificationList(props: {
   /** Width of the gutter left of the message column. */
   gutterWidth: Accessor<number>;
-  /** Leave the lane beside the column to the per-message checks. */
-  reserveCheckLane: Accessor<boolean>;
   open: Accessor<boolean>;
   onOpenChange: (open: boolean) => void;
   view: Accessor<NotificationListView>;
@@ -66,10 +64,7 @@ export function NotificationList(props: {
   const stacks = () =>
     props.view() === 'not_done' ? props.notDone() : props.unread();
   const docked = () => props.gutterWidth() >= DOCKED_MIN_GUTTER;
-  const dockedWidth = () =>
-    props.gutterWidth() -
-    EDGE_INSET -
-    (props.reserveCheckLane() ? CHECK_LANE : EDGE_INSET);
+  const dockedWidth = () => props.gutterWidth() - EDGE_INSET - CHECK_LANE;
 
   const markOne = (stack: ChannelStack) =>
     props.view() === 'not_done'

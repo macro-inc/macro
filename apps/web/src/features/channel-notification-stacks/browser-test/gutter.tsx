@@ -233,7 +233,6 @@ function Fixture() {
         gutterWidth={() =>
           Math.max(0, ((paneSize.width ?? pane?.clientWidth ?? 0) - 920) / 2)
         }
-        reserveCheckLane={() => true}
         open={open}
         onOpenChange={setOpen}
         view={view}

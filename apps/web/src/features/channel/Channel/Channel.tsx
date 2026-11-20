@@ -954,7 +954,7 @@ export function Channel(props: ChannelProps) {
                           // Contains layout, so only while its checks may show.
                           !callPanel &&
                             !isTouchDevice() &&
-                            notificationGutter.checksFlagOn() &&
+                            notificationGutter.flagOn() &&
                             '@container/channel-pane'
                         )}
                         ref={setThreadListContainerEl}

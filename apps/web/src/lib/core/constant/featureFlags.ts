@@ -706,20 +706,13 @@ export const enableChatSidebarSectionResize = defineFlag({
   env: 'ENABLE_CHAT_SIDEBAR_SECTION_RESIZE',
 });
 
-// Desktop channel gutter: a Mark done check beside each notification stack. On
-// in development; deployed environments defer to PostHog (Macro staff first).
-export const enableChannelStackDoneChecks = defineFlag({
-  key: 'enable-channel-stack-done-checks',
-  env: 'ENABLE_CHANNEL_STACK_DONE_CHECKS',
-  default: onInDev,
-});
-
-// Desktop channel gutter: the toggleable list of the channel's not-done or
-// unread notification stacks. On in development; deployed environments defer
-// to PostHog (Macro staff first).
-export const enableChannelNotificationList = defineFlag({
-  key: 'enable-channel-notification-list',
-  env: 'ENABLE_CHANNEL_NOTIFICATION_LIST',
+// Desktop channel gutter: a Mark done check beside each notification stack,
+// and a bell toggle opening a list of the channel's not-done or unread stacks.
+// On in development; deployed environments defer to PostHog (Macro staff
+// first).
+export const enableChannelNotificationGutter = defineFlag({
+  key: 'enable-channel-notification-gutter',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_GUTTER',
   default: onInDev,
 });
 

@@ -1083,8 +1083,8 @@ notifications along with the other notifications for that thread.
 
 ## Marking notifications done in the channel gutter
 
-Desktop only. Each part has its own flag: `enable-channel-stack-done-checks`
-and `enable-channel-notification-list`. Both are on in local development.
+Desktop only, behind `enable-channel-notification-gutter`, which is on in
+local development (`VITE_ENABLE_CHANNEL_NOTIFICATION_GUTTER` overrides it).
 Open a channel in a pane at least 1400px wide, so the list docks in the
 gutter, with notifications from another account: new top-level messages, a
 thread reply, and a mention. Then narrow the pane to see the popover and the
