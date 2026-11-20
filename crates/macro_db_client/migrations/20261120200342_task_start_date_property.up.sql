@@ -41,7 +41,7 @@ WITH custom_start_dates AS (
 adopted AS (
     SELECT DISTINCT ON (assignment.entity_id, assignment.entity_type) assignment.id
     FROM entity_properties AS assignment
-    WHERE assignment.property_definition_id IN (SELECT id FROM custom_start_dates)
+    WHERE assignment.property_definition_id = ANY(ARRAY(SELECT id FROM custom_start_dates))
       AND assignment.entity_type <> 'DATABASE_ROW'
       AND NOT EXISTS (
           SELECT 1
