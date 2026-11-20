@@ -445,7 +445,9 @@ below 30 fail startup.
 
 The shared Postgres pool defaults to 30 connections (`DATABASE_MAX_CONNECTIONS`).
 Computer lifecycle observations use one additional dedicated lock connection per
-replica. Serialize connect/disconnect effects by harness across replicas and check
+replica, and harness presence lease renewals another (`harness_bindings.rs`, 5 s
+acquire and statement timeouts), so a starved shared pool can't lapse the leases
+of live harnesses. Serialize connect/disconnect effects by harness across replicas and check
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.

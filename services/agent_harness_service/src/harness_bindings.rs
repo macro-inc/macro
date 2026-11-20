@@ -23,6 +23,7 @@ use bot_id::BotId;
 use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
+use sqlx::postgres::PgPoolOptions;
 use tracing::Instrument as _;
 
 #[cfg(test)]
@@ -35,6 +36,11 @@ const RUNTIME_CONNECTION_LEASE: Duration = Duration::from_secs(30);
 
 /// How often a replica renews the leases of the connections it holds.
 pub const RUNTIME_CONNECTION_RENEW_EVERY: Duration = Duration::from_secs(10);
+
+/// How long a renewal waits for its connection, and then for its statement.
+/// Both well inside the lease, so a stalled renewal fails while the next one
+/// can still land in time.
+const RENEWAL_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// [`HarnessBindings`] over the `agent_configs` table.
 #[derive(Clone)]
@@ -148,13 +154,32 @@ async fn lock_presence(
 /// with the `harnesses` presence timestamps.
 pub struct PgHarnessPresence {
     pool: PgPool,
+    /// One connection only renewals use. A renewal that queues for the shared
+    /// pool behind a burst of other work lets every lease this replica holds
+    /// lapse, and its live harnesses read offline.
+    renewal_pool: PgPool,
     replica: ReplicaId,
 }
 
 impl PgHarnessPresence {
-    /// Wrap a pool, writing as `replica`.
+    /// Wrap a pool, writing as `replica`. Renewals get their own connection
+    /// to the same database.
     pub fn new(pool: PgPool, replica: ReplicaId) -> Self {
-        Self { pool, replica }
+        let statement_timeout = format!("{}ms", RENEWAL_TIMEOUT.as_millis());
+        let renewal_pool = PgPoolOptions::new()
+            .max_connections(1)
+            .acquire_timeout(RENEWAL_TIMEOUT)
+            .connect_lazy_with(
+                pool.connect_options()
+                    .as_ref()
+                    .clone()
+                    .options([("statement_timeout", statement_timeout.as_str())]),
+            );
+        Self {
+            pool,
+            renewal_pool,
+            replica,
+        }
     }
 }
 
@@ -292,6 +317,13 @@ impl HarnessPresence for PgHarnessPresence {
         self: Arc<Self>,
         live: Vec<HarnessConnection>,
     ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
+        let span = tracing::info_span!(
+            "harness.presence.renew",
+            replica = %self.replica,
+            connections = live.len(),
+            restored = tracing::field::Empty,
+            error = tracing::field::Empty,
+        );
         Box::pin(async move {
             let (harnesses, connections): (Vec<_>, Vec<_>) = live
                 .iter()
@@ -315,11 +347,12 @@ impl HarnessPresence for PgHarnessPresence {
                 self.replica.as_uuid(),
                 RUNTIME_CONNECTION_LEASE.as_secs_f64(),
             )
-            .fetch_all(&self.pool)
+            .fetch_all(&self.renewal_pool)
             .await;
             let renewed = match renewed {
                 Ok(renewed) => renewed,
                 Err(error) => {
+                    tracing::Span::current().record("error", tracing::field::display(&error));
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
                     return Vec::new();
                 }
@@ -329,6 +362,7 @@ impl HarnessPresence for PgHarnessPresence {
                 .filter(|row| row.restored)
                 .map(|row| (row.harness_id, row.id))
                 .collect();
+            tracing::Span::current().record("restored", restored.len());
             for (harness, connection) in &restored {
                 tracing::warn!(
                     telemetry_event = "harness_runtime_lease_restored",
@@ -343,6 +377,7 @@ impl HarnessPresence for PgHarnessPresence {
                     restored.contains(&(harness.as_uuid(), connection.as_uuid()))
                 })
                 .collect()
-        })
+        }
+        .instrument(span))
     }
 }
