@@ -16,7 +16,9 @@ import { CrmMemberAccessSection } from './crm-member-access';
 const state = vi.hoisted(() => ({
   viewer: 'macro|maya@example.com',
   accessChanges: true,
+  agentTeammates: false,
   patch: vi.fn(),
+  listAgents: vi.fn(),
 }));
 let client: QueryClient;
 
@@ -43,9 +45,14 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
     enabled:
-      flag.key === 'enable-crm-member-access-changes' && state.accessChanges,
+      (flag.key === 'enable-crm-member-access-changes' &&
+        state.accessChanges) ||
+      (flag.key === 'enable-agent-teammates' && state.agentTeammates),
     loading: false,
   }),
+}));
+vi.mock('@service-auth/team-agents', () => ({
+  teamAgentsClient: { list: state.listAgents },
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/user', async (original) => ({
@@ -88,6 +95,12 @@ const TEAM: TeamWithMembers = {
       role: 'owner',
       plan: 'premium',
     },
+    {
+      user_id: 'macro|ada@agents.example.com',
+      team_id: 'team-one',
+      role: 'member',
+      plan: 'premium',
+    },
   ],
   crm_member_access: {},
 };
@@ -115,6 +128,8 @@ beforeEach(() => {
   });
   state.viewer = 'macro|maya@example.com';
   state.accessChanges = true;
+  state.agentTeammates = false;
+  state.listAgents.mockReset();
   state.patch.mockReset();
   state.patch.mockResolvedValue(ok(undefined));
   client.setQueryData(authKeys.userInfo.queryKey, {
@@ -150,9 +165,11 @@ it("turns a member's CRM access off and back on, saving the team setting each ti
 it('lists owners first and keeps owners and admins on, with the reason on their row', () => {
   renderSection();
   const rows = [...document.querySelectorAll('[data-team-member]')];
+  // Without agent teammates on, an agent's account lists as a person, as in Members.
   expect(rows.map((row) => row.getAttribute('data-team-member'))).toEqual([
     'macro|maya@example.com',
     'macro|sam@example.com',
+    'macro|ada@agents.example.com',
     'macro|leo@example.com',
   ]);
   for (const name of ['Maya Chen', 'Sam Rivera']) {
@@ -177,6 +194,29 @@ it('keeps the previous state when a save fails, and saves on the next try', asyn
   fireEvent.click(leo);
   await waitFor(() => expect(leo.checked).toBe(false));
   expect(state.patch).toHaveBeenCalledTimes(2);
+});
+
+it('waits for the agent teammates, offering a retry when they cannot be read', async () => {
+  state.agentTeammates = true;
+  state.listAgents.mockResolvedValueOnce(
+    err([{ code: 'NETWORK_ERROR', message: 'Unavailable' }])
+  );
+  renderSection();
+
+  const retry = await screen.findByRole('button', { name: 'Try again' });
+  expect(screen.getByRole('alert').textContent).toBe(
+    "Couldn't load who can use CRM."
+  );
+  expect(screen.queryAllByRole('switch')).toHaveLength(0);
+
+  state.listAgents.mockResolvedValueOnce(
+    ok({ agents: [{ userId: 'macro|ada@agents.example.com' }] })
+  );
+  fireEvent.click(retry);
+  await waitFor(() => expect(screen.queryAllByRole('switch')).toHaveLength(3));
+  expect(
+    document.querySelector('[data-team-member="macro|ada@agents.example.com"]')
+  ).toBeNull();
 });
 
 it.each([

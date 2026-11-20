@@ -44,8 +44,9 @@ export function hasCrmAccess(
 /**
  * A team's agent teammates, listed once `enable-agent-teammates` is on.
  * Loading is not on, so a roster read before the flag settles lists no agents;
- * a failed refetch keeps the agents last read. `settled` is true once the
- * flag and, when it is on, the first read of the agents have answered.
+ * a failed refetch keeps the agents last read. `known` is true once the flag
+ * has answered and, when it is on, the agents have been read; `failed` is a
+ * first read that failed with nothing to show, which `retry` reads again.
  */
 export function useTeamAgents(teamId: Accessor<string>) {
   const flag = useFeatureFlag(enableAgentTeammates);
@@ -53,6 +54,7 @@ export function useTeamAgents(teamId: Accessor<string>) {
   const query = useTeamAgentsQuery(teamId, enabled);
   const agents = () =>
     enabled() && queryReadyGate(query) ? query.data.agents : [];
-  const settled = () => !flag().loading && (!enabled() || !query.isPending);
-  return { enabled, agents, settled };
+  const known = () => !flag().loading && (!enabled() || queryReadyGate(query));
+  const failed = () => enabled() && query.isError && query.data === undefined;
+  return { enabled, agents, known, failed, retry: () => query.refetch() };
 }
