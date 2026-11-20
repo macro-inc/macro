@@ -26,8 +26,8 @@ export class TaskNamespace {
   }
 
   /**
-   * Create a task, with its initiative, assignees and due date in the same
-   * request. The task starts Not started.
+   * Create a task, with its initiative, assignees, start and due dates in the
+   * same request. The task starts Not started.
    *
    * @write
    */
@@ -40,7 +40,13 @@ export class TaskNamespace {
     initiative?: Initiative;
     /** Assignees; defaults to the creator. Pass `[]` to leave it unassigned. */
     assignees?: User[];
+    /** The day the task is due, kept as a whole day. */
     dueDate?: Date;
+    /**
+     * The day work on the task starts, kept as a whole day. A start after
+     * `dueDate` is saved as the due date.
+     */
+    startDate?: Date;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
     /** Defaults to team sharing, or private when the session cannot share. */
