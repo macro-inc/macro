@@ -219,11 +219,12 @@ The calendar view's setup prompt decides and acts on own inboxes alone too: a
 delegate with no inbox of their own sees **Connect your calendar**, the Calendar
 is off vs Enable calendar wording counts only own inboxes, and Grant access, Turn
 on and Reconnect only start consent for one of them. It covers the grid only in a
-week without events and with no working calendar the viewer can see; a working
-calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week. On desktop the
-pill rides above the toast stack while it shows anything, so the app-wide
-prompt for the same inbox doesn't cover it.
+week without events and with no working calendar the viewer can see. Otherwise
+(a teammate's out-of-office on the grid, or a working calendar shared with them)
+it is a banner in the page's flow with the same title, description and action,
+above the grid on desktop and tablets and below it on phones, where
+`RangeUnavailableBanner` sits, so it never covers an event. A delegate whose only
+working calendar is shared sees the banner in every week.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
