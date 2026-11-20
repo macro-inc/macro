@@ -136,6 +136,28 @@ export function verifyResult(wanted: string[], afterView: DocumentView): void {
     );
 }
 
+/**
+ * Refuse a result that drops a comment the caller did not mean to delete:
+ * an edited block can lose its comment marks too (a retyped block is rebuilt,
+ * a marked word replaced), not only a deleted one.
+ */
+export function checkCommentsKept(
+  before: DocumentView,
+  after: DocumentView,
+  allowDeletingContent: boolean
+): void {
+  if (allowDeletingContent) return;
+  const kept = new Set(after.blocks.flatMap((block) => block.commentIds));
+  const lost = before.blocks.find((block) =>
+    block.commentIds.some((id) => !kept.has(id))
+  );
+  if (lost)
+    throw new EditRefusal(
+      'comment_loss',
+      `the edit would remove a comment from block ${lost.id}; keep the commented text, or set allow_deleting_content if that is intended`
+    );
+}
+
 function checkUploads(
   view: DocumentView,
   afterView: DocumentView,
@@ -319,6 +341,7 @@ export async function commitBlocks(
     );
   const afterView = await readDocument(documentId, after);
   verifyResult(wanted, afterView);
+  checkCommentsKept(view, afterView, options.allowDeletingContent ?? false);
   checkUploads(view, afterView, wanted);
 
   const afterIds = new Set(afterView.blocks.map((block) => block.id));

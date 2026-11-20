@@ -378,10 +378,12 @@ function reconcileChildren(
         return;
       }
     }
+    // Pair in order by node type: a text run whose format changed (a word
+    // bolded inside a comment mark) is reformatted in place, keeping its mark.
     let last = oldFrom;
     for (let j = newFrom + 1; j < newTo; j++)
       for (let i = last + 1; i < oldTo; i++) {
-        if (usedOld.has(i) || kindOf(olds[i].serialized) !== kindOf(news[j]))
+        if (usedOld.has(i) || olds[i].serialized.type !== news[j].type)
           continue;
         pairOf[j] = i;
         usedOld.add(i);
