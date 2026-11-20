@@ -47,13 +47,25 @@ impl PgMailboxSync {
         self
     }
 
+    /// Every mailbox transaction gives up on a lock it cannot get within 5 s
+    /// (SQLSTATE 55P03), so a write queued behind a long lock holder, such as a
+    /// CRM population share-locking its link, goes back to its caller's retry
+    /// instead of holding a pooled connection.
+    async fn begin(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, sqlx::Error> {
+        let mut tx = self.db.begin().await?;
+        sqlx::query!("SET LOCAL lock_timeout = '5s'")
+            .execute(&mut *tx)
+            .await?;
+        Ok(tx)
+    }
+
     // Serialize only the brief lease-acquisition transactions. Draft and
     // organization workers must atomically observe each other's active leases;
     // no provider IO runs while this lock is held.
     async fn mutation_claim_transaction(
         &self,
     ) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
             .fetch_one(&mut *tx).await.map_err(db_error)?;
         Ok(tx)
@@ -196,7 +208,7 @@ impl MailboxSyncRepository for PgMailboxSync {
             .collect();
         ids.sort_unstable();
         ids.dedup();
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         let advanced = sqlx::query!(
             r#"
@@ -271,7 +283,7 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn reset_stream(&self, lease: &StreamLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         let result = sqlx::query!(r#"
             UPDATE email_sync_streams s SET position = NULL,initial_complete = false,attachments_rechecked = false,next_run_at = now(),lease_id = NULL,lease_until = NULL
@@ -297,7 +309,7 @@ impl MailboxSyncRepository for PgMailboxSync {
     }
 
     async fn open_live_pass(&self, lease: &StreamLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // Under the link lock, as the round's checkpoint commit is: either the
         // checkpoint retires this pass, or the pass sees the round has ended
         // and opens none.
@@ -439,7 +451,7 @@ impl MailboxSyncRepository for PgMailboxSync {
         &self,
         lease: &MessageLease,
     ) -> Result<Option<ImportCompleted>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_attachment_completion(&mut tx, lease.mailbox).await?;
         sqlx::query!(r#"
             DELETE FROM email_message_reconciliation WHERE link_id = $1 AND generation = $2 AND provider_id = $3
