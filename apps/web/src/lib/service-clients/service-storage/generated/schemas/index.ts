@@ -1991,6 +1991,7 @@ export * from './initiativePageRowAllOf';
 export * from './initiativePropertySnapshot';
 export * from './initiativePropertySnapshotDueDate';
 export * from './initiativePropertySnapshotPriority';
+export * from './initiativePropertySnapshotStartDate';
 export * from './initiativePropertySnapshotStatus';
 export * from './initiativeSort';
 export * from './initiativeSummary';

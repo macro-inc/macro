@@ -7,12 +7,12 @@
 import type { PropertyValueOneOfSevenType } from './propertyValueOneOfSevenType';
 
 /**
- * Date/timestamp value
-Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+ * Date value, with or without a time of day
+Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
  */
 export type PropertyValueOneOfSeven = {
   type: PropertyValueOneOfSevenType;
-  /** Date/timestamp value
-Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"} */
+  /** Date value, with or without a time of day
+Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set */
   value: string;
 };

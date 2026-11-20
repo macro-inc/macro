@@ -7,9 +7,11 @@
 import type { SetPropertyValueOneOfThreeType } from './setPropertyValueOneOfThreeType';
 
 /**
- * Date and time value
+ * Date value. Without `has_time` it stands for the whole day it falls
+on where it was picked; with it, for the exact instant.
  */
 export type SetPropertyValueOneOfThree = {
+  has_time?: boolean;
   type: SetPropertyValueOneOfThreeType;
   value: string;
 };

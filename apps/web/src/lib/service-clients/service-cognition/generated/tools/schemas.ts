@@ -13273,6 +13273,9 @@ export const ProjectListResult = z.object({
         status: z.union([z.string().uuid(), z.null()]).optional(),
         priority: z.union([z.string().uuid(), z.null()]).optional(),
         assignees: z.array(z.string()),
+        startDate: z
+          .union([z.string().datetime({ offset: true }), z.null()])
+          .optional(),
         dueDate: z
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
@@ -18020,6 +18023,9 @@ export const ProjectReadResult = z.object({
     status: z.union([z.string().uuid(), z.null()]).optional(),
     priority: z.union([z.string().uuid(), z.null()]).optional(),
     assignees: z.array(z.string()),
+    startDate: z
+      .union([z.string().datetime({ offset: true }), z.null()])
+      .optional(),
     dueDate: z
       .union([z.string().datetime({ offset: true }), z.null()])
       .optional(),

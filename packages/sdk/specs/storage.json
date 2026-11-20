@@ -53135,6 +53135,11 @@
             "format": "uuid",
             "description": "Priority option id, or unset."
           },
+          "startDate": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Start timestamp, or unset."
+          },
           "status": {
             "type": ["string", "null"],
             "format": "uuid",
@@ -59995,7 +60000,7 @@
           },
           {
             "type": "object",
-            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set",
             "required": ["value", "type"],
             "properties": {
               "type": {
@@ -60003,9 +60008,13 @@
                 "enum": ["Date"]
               },
               "value": {
-                "type": "string",
-                "format": "date-time",
-                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                ],
+                "description": "Date value, with or without a time of day\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}, plus \"has_time\": true when a time was set"
               }
             }
           },
@@ -61854,9 +61863,12 @@
           },
           {
             "type": "object",
-            "description": "Date and time value",
+            "description": "Date value. Without `has_time` it stands for the whole day it falls\non where it was picked; with it, for the exact instant.",
             "required": ["value", "type"],
             "properties": {
+              "has_time": {
+                "type": "boolean"
+              },
               "type": {
                 "type": "string",
                 "enum": ["date"]

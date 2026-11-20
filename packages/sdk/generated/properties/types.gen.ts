@@ -533,8 +533,8 @@ export type PropertyValue = {
 } | {
     type: 'Date';
     /**
-     * Date/timestamp value
-     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
+     * Date value, with or without a time of day
+     * Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
      */
     value: string;
 } | {
@@ -600,6 +600,7 @@ export type SetPropertyValue = {
     type: 'boolean';
     value: boolean;
 } | {
+    has_time?: boolean;
     type: 'date';
     value: string;
 } | {
