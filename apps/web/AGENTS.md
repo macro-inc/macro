@@ -235,8 +235,8 @@ New task is the project's own floating `+ Task` pill on every project tab,
 which replaces the Tasks view's (that one creates outside any project and stays
 hidden on project routes), and read-only viewers get none. Its backend-free
 regression renders the real row and float host with a stand-in for the task
-filters (the real phone filter trigger, one button on desktop) and for the
-Tasks view's pill:
+filters (the real phone filter trigger, which `?filters=12` gives a two-digit
+count, one button on desktop) and for the Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 The Reviews list header (the real `ReviewsListHeader`, status tabs, New and
@@ -426,7 +426,7 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
-Keep a member's CRM access switch (visible **CRM**, named `CRM access for <name>`) among the Members row's controls, before Remove, with one note under the list for owners and admins. A row with the switch keeps 12rem for its avatar and name (about 140px of name) and wraps its controls below when the row can't fit both (phones, narrow splits); other rows keep one line, and controls wrap among themselves rather than overflow. The same suite checks this with and without seat plans at 1440, 820 (touch), 390, 360 and 320px.
+Members rows (owners, admins, members and agents) share one shape at every width, like a Machines row: picture, name, email, one summary line (role · plan, plus **Pro at renewal** or **No CRM access** when they apply; an agent's status), and a ⋯ that holds everything the viewer can change in the order plan, role, CRM access (named `CRM access for <name>`), Remove. The ⋯ is a `Dropdown` on desktop and a `MobileDrawer` sheet on touch, switched in `TeamMembers.tsx`. A setting the viewer can't change stays in place, disabled, with its reason written under it; don't use `disabledReason` there, whose tooltip takes the Escape that should close the menu. Names and emails wrap on rows under 480px, as Machines' names do, breaking an address before its `@`. Person rows are keyed by `user_id` (`Key`), so a refetch keeps each row and an open ⋯; don't give `useTeamQuery` `reconcile`, which writes into TanStack's cached object and so into the remove mutation's rollback snapshot. The same suite checks the rows at 1440, 820 (touch), 390, 360 and 320px, and each ⋯ item for owner, admin, member and agent rows.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details
@@ -548,6 +548,12 @@ agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
 `bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
 
+Connect Cursor's API-key field (`SecretInput` from `@ui`, which every secret
+field uses) has a backend-free desktop/phone regression over a scripted auth
+service: masked while typing, the reveal toggle keeping focus, excluded from
+session replay, and saving on Enter:
+`bunx playwright test --config src/features/settings/browser-test/cursor-connect/playwright.config.ts`.
+
 Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
@@ -634,6 +640,13 @@ mounted twice (two desktop tabs), that a sent message renders its
 lines with the spacing the draft showed, that the one-line composer centers its
 buttons on the text line, and pending sends on desktop and phone: clear immediately, restore failed sends, and preserve a new draft typed during delivery.
 It also pastes a Macro link and Markdown into a code block, which must keep both as literal text.
+`layout.browser.e2e.ts` checks, on desktop, tablet and phone, that the one-line
+layout follows the draft after every keystroke, deletion and paste, across
+resizes, and on the first frame after switching channels. It also fails if
+caret moves or one-line edits copy the composer to measure it:
+`createComposerLayout` reads the live editor's lines and probes a copy only
+when the expanded layout can't answer, so keep the per-keystroke measure free
+of clones (a copy per editor update once cost about 40% of each keystroke).
 Its long-mention case taps a long document mention in a phone's collapsed pill, which must open the composer, so keep the pill's draft preview inert down to every descendant (mention chips turn pointer events back on and stop the click).
 `caret.browser.e2e.ts` taps (press and release sent together) into a typed and
 a restored draft and checks the caret moves there: a click that reaches
@@ -793,6 +806,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 `NotificationsView` at phone width and checks it folds over frames before the
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
+
+Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
+row keeps its toggle in place as Hide (beside the Hide under its last
+notification), hovering a row swaps its time for Mark done without moving
+anything, and an open stack leaves the other rows undimmed, on phones too.
 
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
@@ -1455,6 +1473,30 @@ the startup bundle, Lexical nodes, and translated menu labels.
 ### Bad Examples
 - `src/features/block-channel`
 - `src/features/block-pdf`
+
+## Whole-page restyle cost
+
+A custom property written on `<html>`, a theme switch, or a root attribute
+restyles every element, so CSS every element must be tested against multiplies
+each of them. The build fails on such selectors (`scripts/costly-selectors.ts`,
+checked in `vite.base.ts`):
+
+- Set `::selection` on the element that defines its colors
+  (`:root::selection`, `.onboarding-flow::selection`); Chrome's highlight
+  inheritance carries it to descendants, and `no-highlight-inheritance` on
+  `<html>` turns on the per-element fallback elsewhere
+  (`core/util/highlightInheritance.ts`). A subtree whose `--color-ink` varies
+  by element (`currentColor`) takes the `selection-root` utility.
+- Give a `… *` walk an ancestor class outside a list: `.x *` or
+  `:where(.x) *`, never `:where(.x *)`, `:where(.a, .b) *`, or Tailwind's
+  `**:` (use `[&_*]:`). One class per `:where()` keeps zero specificity.
+
+To measure, write `--probe` on `document.documentElement.style` in a
+`requestAnimationFrame` and time `document.body.offsetHeight` right after;
+on a 1,800-element channel this was 27 ms before these rules were rescoped and
+10 ms after (dev build, Chrome). In a Performance trace the same restyle is
+one `UpdateLayoutTree` whose `elementCount` doubles when a `::selection`
+rule matches every element.
 
 ## PDF markup
 

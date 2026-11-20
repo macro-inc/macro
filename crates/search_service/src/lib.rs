@@ -8,6 +8,7 @@ mod outbound;
 pub use api::context::SearchHandlerState;
 pub use api::router as search_router;
 pub use api::swagger::ApiDoc as SearchApiDoc;
+pub use domain::search_allowance::SearchTokenBuckets;
 pub use domain::search_lanes::{LanePolicy, SearchLanes};
 pub use domain::term_matching::TermMatchingRollout;
 pub use outbound::term_matching::{FlaggedTermMatching, LocalTermMatching};

@@ -51,6 +51,12 @@ export function ComposeBody(props: {
     });
   };
 
+  // Outside a split panel there is no sibling to move to, so the key keeps
+  // its default and the browser moves focus.
+  const leaveBody = (e: KeyboardEvent, direction: 'next' | 'prev') => {
+    if (ctx.bodyActions.focusSibling?.(direction)) e.preventDefault();
+  };
+
   let unregisterFormatShortcuts: (() => void) | undefined;
   const captureEditor = (ed: LexicalEditor) => {
     logComposeBody('captureEditor called');
@@ -171,16 +177,8 @@ export function ComposeBody(props: {
                   setCc: (next) => ctx.setRecipients('cc', next),
                 });
               }}
-              onFocusLeaveStart={(e) => {
-                if (!ctx.bodyActions.focusSibling) return;
-                e.preventDefault();
-                ctx.bodyActions.focusSibling('prev');
-              }}
-              onFocusLeaveEnd={(e) => {
-                if (!ctx.bodyActions.focusSibling) return;
-                e.preventDefault();
-                ctx.bodyActions.focusSibling('next');
-              }}
+              onFocusLeaveStart={(e) => leaveBody(e, 'prev')}
+              onFocusLeaveEnd={(e) => leaveBody(e, 'next')}
               portalScope="local"
               onPasteFilesAndDirs={(files, directories) => {
                 if (ctx.disabled()) return;

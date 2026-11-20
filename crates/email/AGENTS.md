@@ -488,7 +488,11 @@ tools — hexagonal, heavily feature-gated.
   The mailbox loops log their own deferrals with `link_id` (gate refusals at
   DEBUG), so the worker must not log them again. Add a new defer reason in `defer_reason`.
   Notification lag rides the same rows: a Graph change notification stamps
-  the folder streams' `notified_at` and `notified_traceparent`. Every claim
+  the folder streams' `notified_at` and `notified_traceparent` and makes them
+  due without moving one already due (`LEAST(next_run_at, now())`): stream
+  claims take the longest-due first across mailboxes, so a reset to now put a
+  due stream behind every stream that came due since, and a mailbox notified
+  more often than that line moved was never read. Every claim
   of the stream carries `notified_at` onto the reconciliation rows its pages
   queue (newest notification wins) until a checkpoint that started reading
   after the notification clears it; enumerate and reconcile spans record
@@ -578,6 +582,19 @@ tools — hexagonal, heavily feature-gated.
   import, and any message that waited for room, behind its whole backlog.
   Gmail's backfill lists its next page behind the threads it queued for the
   same reason. Live folder streams are never paced.
+  A mail folder claim takes an import round ahead of finished folders that
+  came due less than five minutes before it (`IMPORT_ROUND_HEAD_START_SECONDS`
+  in `claim_stream`, which picks the earlier of two one-row candidates). The
+  import round comes off the partial index
+  `email_sync_streams_import_round_claim`; keep its predicate and the query's
+  identical, or each claim reads every due finished folder. Polls of every
+  finished folder share the sync loops and run minutes late, and a round that
+  waited behind them read a page only every few minutes while its import sat
+  empty. A round waiting for room reads nothing: paced, or its page refused
+  by the request gate while its mailbox's message reads hold the import
+  slots, which waits the 10 s pace too. `enumerate_once` then goes on to the
+  next due stream (up to `PACED_CLAIMS_PER_TURN`); otherwise a large import's
+  waiting rounds, due again within seconds, would take the polls' turns.
   A message released after a failed read is due at once when a newer
   revision arrived during the lease.
 - A folder's import round is a delta snapshot, so mail that arrives during it

@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nWITH owned AS MATERIALIZED (\n    SELECT entity.id FROM import_entity AS entity\n    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1\n), inserted AS (\n    INSERT INTO import_entity_written (import_id, kind, object, macro_id)\n    SELECT owned.id, 'task_notice', $3, $4 FROM owned\n    ON CONFLICT (import_id, kind, object) DO NOTHING\n    RETURNING import_id\n)\nSELECT EXISTS (SELECT 1 FROM owned) AS \"owned!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ab08232ae034209729a41bb1f981e399d8b50a8ec9329f849dea1be7e6f93f52"
+}

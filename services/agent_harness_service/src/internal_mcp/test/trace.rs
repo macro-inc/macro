@@ -6,9 +6,8 @@ use agent_session::domain::model::AgentSession;
 use async_trait::async_trait;
 use code_execution::domain::ExecuteRequest;
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use opentelemetry::trace::{SpanContext, TraceContextExt as _, TracerProvider as _};
+use opentelemetry::trace::{SpanContext, TraceContextExt as _};
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
-use tracing_subscriber::layer::SubscriberExt as _;
 
 /// Keeps the span context each execution starts under, then refuses to run.
 #[derive(Clone, Default)]
@@ -66,18 +65,10 @@ async fn an_execution_joins_the_trace_of_the_turn_that_called_it() {
     opentelemetry::global::set_text_map_propagator(
         opentelemetry_sdk::propagation::TraceContextPropagator::new(),
     );
-    let exporter = opentelemetry_sdk::trace::InMemorySpanExporter::default();
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_simple_exporter(exporter.clone())
-        .build();
-    let subscriber = tracing_subscriber::registry()
-        .with(tracing_opentelemetry::layer().with_tracer(provider.tracer("test")));
-    // Global, not thread-local: tests running alongside reach the same
-    // server span callsites with no subscriber of their own, and a
-    // thread-local default loses that race and sees them disabled. Their
-    // spans may land in this exporter too; the links below are followed by id.
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("no other test in this binary installs a global subscriber");
+    let crate::test_spans::ExportedSpans { exporter, provider } =
+        crate::test_spans::exported_spans();
+    // Other tests' spans land in this exporter too; the links below are
+    // followed by id.
 
     let repo = InMemoryAgentSessionRepo::new();
     let session = test_agent_session(AgentSessionId::new());

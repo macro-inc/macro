@@ -39,6 +39,7 @@ pub(super) struct ComputerRow {
     pub(super) setup_completed_at: Option<DateTime<Utc>>,
     pub(super) default_agent_id: Option<Uuid>,
     pub(super) image: Option<String>,
+    pub(super) hibernated_at: Option<DateTime<Utc>>,
 }
 
 pub(super) struct ReservationRow {
@@ -127,6 +128,7 @@ impl TryFrom<ComputerRow> for Computer {
                 .map_err(|_| invalid_row("created_by must be a valid Macro user identifier"))?,
             created_at: row.created_at,
             enrolled_at: row.enrolled_at,
+            hibernated_at: row.hibernated_at,
             setup_completed_at: row.setup_completed_at,
             default_agent_id: row.default_agent_id.map(BotId::new_from_uuid),
             image: row

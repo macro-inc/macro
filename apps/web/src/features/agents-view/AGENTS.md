@@ -27,6 +27,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 
 ## Boundaries
 
+- Scope `agents-view.css` rules with `:where(.agents-scope)`, and give every container that renders them (`.agents-view`, `.agents-view-portal`) the `agents-scope` class: a multi-class `:where()` or a `… *` rule makes every element in the app walk to the root on each restyle (see the web guide's whole-page restyle section).
 - Use the unified selector for Home, new chats, inline and standalone sessions, universal-input AI drafts, and routine agent/model targets; keep old picker components unwired for reference and preserve each host's preference and mutation ownership.
 - Keep `components/AgentsSidebar.tsx`, `AgentSessionRow.tsx`, and `views/AgentSessionListItem.tsx` for reference and Home consumers.
 - Preserve Home row geometry and activity rendering when extracting shared behavior.

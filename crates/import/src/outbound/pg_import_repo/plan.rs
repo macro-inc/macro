@@ -39,9 +39,8 @@ impl NotionPlanRepo for PgImportRepo {
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
-        shared: bool,
     ) -> Result<bool> {
-        self.clear_stale_team_link(user, import_id, shared).await
+        self.clear_stale_team_link(user, import_id).await
     }
 
     async fn renew_deleted_copy<F, Fut>(
@@ -98,7 +97,7 @@ impl NotionPlanRepo for PgImportRepo {
                       (entity.status IN ('importing', 'imported') AND entity.parent_id IS NOT NULL)
                       OR EXISTS (
                           SELECT 1 FROM import_entity_written AS written
-                          WHERE written.import_id = entity.id
+                          WHERE written.import_id = entity.id AND written.kind <> 'task_notice'
                           OFFSET 0
                       )
                   )
@@ -134,7 +133,9 @@ impl NotionPlanRepo for PgImportRepo {
                      review_id)
                 VALUES ($1, $2, $3, $4, 'staged', 'chat', $5, $6, $7)
                 ON CONFLICT (user_id, source, foreign_id) DO UPDATE
-                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata,
+                SET kind = EXCLUDED.kind, metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', import_entity.metadata -> 'personalFolderId',
+                        'separateFolder', import_entity.metadata -> 'separateFolder')),
                     parent_id = EXCLUDED.parent_id, status = 'staged',
                     review_id = EXCLUDED.review_id, last_error = NULL, updated_at = NOW()
                 WHERE import_entity.status IN ('staged', 'discarded')
@@ -196,10 +197,18 @@ impl NotionPlanRepo for PgImportRepo {
         let result = sqlx::query!(
             r#"
             UPDATE import_entity AS entity
-            SET metadata = decided.metadata, updated_at = NOW()
+            SET metadata = decided.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', entity.metadata -> 'personalFolderId',
+                        'separateFolder', entity.metadata -> 'separateFolder')), updated_at = NOW()
             FROM UNNEST($3::text[], $4::jsonb[]) AS decided(foreign_id, metadata)
-            WHERE entity.user_id = $1 AND entity.source = $2
-              AND entity.foreign_id = decided.foreign_id
+            JOIN LATERAL (
+                SELECT candidate.id FROM import_entity AS candidate
+                WHERE candidate.user_id = $1 AND candidate.source = $2
+                  AND candidate.foreign_id = decided.foreign_id
+                OFFSET 0
+            ) AS target ON true
+            WHERE entity.id = target.id AND (SELECT entity.user_id OFFSET 0) = $1
+              AND entity.source = $2
               AND entity.status = 'staged' AND entity.metadata->'plan' IS NOT NULL
             "#,
             user.as_ref(),

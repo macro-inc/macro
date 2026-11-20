@@ -176,6 +176,16 @@ three-step flow:
 Team channels are always discoverable to the team. Private channels can only be viewed or joined by invitation. A DM is a private conversation between two people, or between one person and an agent persona.
 An external email can be selected as a channel participant. For an unregistered recipient, clicking `Add` sends an email invite.
 
+**New direct message** opens a draft message whose To
+field takes either people or one existing conversation. People open their DM
+or group chat, creating it on the first message. While the field is empty it
+also suggests the channels and group chats you belong to (the same set as
+Share To; reach a one-to-one DM by picking the person). A picked channel is the
+only recipient: the field takes no typing and suggests nothing until its chip
+is removed (its X, or Backspace), and once anyone is picked channels are no
+longer suggested. Send posts into the channel and opens it at the message, as
+sending to a DM does. Phones and tablets behave the same.
+
 The channel header's Invite dialog and Participants add controls use paged personal
 suggestions, not a complete address book. Scrolling to the end (or PageDown) lists
 the next page below the earlier ones, up to 500 people; selected people and typed
@@ -1532,8 +1542,9 @@ The sidebar's **New** dropdown spans its button's full width.
 **New** offers separate **New channel** and **New direct message** actions in
 both sidebar layouts. **New channel** opens the existing
 [name, visibility, and optional invitations flow](#create-a-channel).
-**New direct message** opens the existing recipient picker, including people,
-external email addresses, private groups, and available agent personas.
+**New direct message** opens the draft message's recipient picker: people,
+external email addresses, available agent personas, or one channel or group
+chat you belong to (see [Create a channel](#create-a-channel)).
 The sectioned sidebar also offers **New section** in the same menu.
 
 Check each creation action with the sidebar flag on and off; changing the layout
@@ -1838,10 +1849,14 @@ cancellation, and focus restoration before sending invites.
 
 Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
-`Invite` and `Call` actions remain in channel headers, with the
-live-phone-call exceptions described above. `Ask Macro` lives in the channel
-title menu (the `...` after the name, or the split title's menu) on every
-platform. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
+`Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
+live-phone-call exceptions described above. On desktop both the inline
+conversation header and the split header (the channel block, which the
+Notifications preview shows) show them left to right as
+`Ask Macro`, `Invite`, `Call`, after the live viewer avatars; `Ask Macro` is the
+same button a document header shows before Share. The channel title menu (the
+`...` after the name, or the split title's menu) also offers `Ask Macro` on every
+platform; phones show it only there. On narrow desktop panes, the tabs collapse from text labels to icons. Standalone mobile channels
 keep view selection in the title menu. In both a single channel and an adjacent
 channel split, the message composer stays fully visible at the bottom. The
 `Calls` tab lists
@@ -1865,8 +1880,8 @@ Other channels and views retain the floating pill.
 In the Chat workspace — and wherever a channel opens inline inside another
 view's detail stack (a channel mention followed from the email view, say) — the
 conversation renders an inline detail whose top bar holds the channel avatar
-and name, the same inset tab strip, live viewer avatars, and the `Call` and
-`Invite` buttons. An ellipsis follows the name — after the breadcrumb where
+and name, the same inset tab strip, live viewer avatars, and the `Ask Macro`,
+`Invite`, and `Call` buttons. An ellipsis follows the name — after the breadcrumb where
 the host supplies one, as in Home — and opens the same entity actions as
 right-clicking the conversation's rail row: `Open in new split` (when available),
 `Rename`, `Set channel picture`,

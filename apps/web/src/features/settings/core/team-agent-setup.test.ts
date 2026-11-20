@@ -31,37 +31,23 @@ afterEach(() => forgetSetupTiming(computer.id));
 describe('teamAgentRunState', () => {
   it('reads a status this build does not know as not running', () => {
     const unknown = JSON.parse('{"status":"hibernating"}');
-    expect(teamAgentRunState(unknown, undefined)).toBe('not_running');
+    expect(teamAgentRunState(unknown)).toBe('not_running');
   });
 
   it('follows the computer while it is being set up, failed, off, or gone', () => {
-    expect(teamAgentRunState({ status: 'provisioning' }, undefined)).toBe(
-      'setting_up'
-    );
+    expect(teamAgentRunState({ status: 'provisioning' })).toBe('setting_up');
     // The computer is up but the agent hasn't come online yet.
-    expect(teamAgentRunState({ status: 'starting' }, { connected: true })).toBe(
-      'setting_up'
-    );
-    expect(teamAgentRunState({ status: 'failed' }, undefined)).toBe(
-      'setup_failed'
-    );
-    expect(teamAgentRunState({ status: 'paused' }, undefined)).toBe('offline');
-    expect(teamAgentRunState({ status: 'released' }, undefined)).toBe(
-      'not_running'
-    );
+    expect(teamAgentRunState({ status: 'starting' })).toBe('setting_up');
+    expect(teamAgentRunState({ status: 'failed' })).toBe('setup_failed');
+    expect(teamAgentRunState({ status: 'paused' })).toBe('offline');
+    expect(teamAgentRunState({ status: 'released' })).toBe('not_running');
+    expect(teamAgentRunState({ status: 'running' })).toBe('running');
   });
 
-  it('reads a running computer whose macrod is not connected as offline', () => {
-    expect(teamAgentRunState({ status: 'running' }, { connected: false })).toBe(
-      'offline'
-    );
-    expect(teamAgentRunState({ status: 'running' }, { connected: true })).toBe(
-      'running'
-    );
-  });
-
-  it('reads a running computer as running for viewers who cannot see its harness', () => {
-    expect(teamAgentRunState({ status: 'running' }, undefined)).toBe('running');
+  // `unhealthy` is the server's word for a computer past setup that a fleet
+  // check found unreachable, or that crashed and is restarting.
+  it('reads an unhealthy agent as offline for every member', () => {
+    expect(teamAgentRunState({ status: 'unhealthy' })).toBe('offline');
   });
 });
 

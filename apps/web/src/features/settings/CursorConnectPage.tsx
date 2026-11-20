@@ -2,12 +2,13 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
+import KeyIcon from '@icon/system/regular/key.svg';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
 } from '@queries/auth/cursor-api-key';
-import { ApiKeyInput, Button, confirmDialog } from '@ui';
+import { Button, confirmDialog, SecretInput } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import cursorApiKeysScreenshot from './assets/cursor-api-keys.png';
 import { CursorDefaultModel } from './components/cursor-default-model';
@@ -147,12 +148,14 @@ export function CursorConnectPage(props: { onClose: () => void }) {
                         >
                           API key
                         </label>
-                        <ApiKeyInput
+                        <SecretInput
                           ref={focusOnMount}
                           id="cursor-api-key"
                           aria-describedby="cursor-api-key-help"
                           size="lg"
-                          prefix={CURSOR_KEY_PREFIX}
+                          autocomplete="new-password"
+                          icon={<KeyIcon />}
+                          placeholder={`${CURSOR_KEY_PREFIX}…`}
                           value={apiKey()}
                           disabled={saveKey.isPending}
                           onValueChange={setApiKey}
