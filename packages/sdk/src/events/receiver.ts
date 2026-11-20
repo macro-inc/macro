@@ -40,6 +40,12 @@ export interface ListenOptions {
   scope?: WebhookScope;
   /** Abort the stream. */
   signal?: AbortSignal;
+  /**
+   * Told each time the stream drops or fails to connect, before it is
+   * retried; never when the stream is stopped. Events published until it
+   * reconnects are missed.
+   */
+  onDisconnect?: (error: unknown) => void;
 }
 
 /** Attach the entity handles defined for each webhook event. */
@@ -169,6 +175,9 @@ export class MacroEvents {
         filters: JSON.stringify(filters),
       },
       signal: controller.signal,
+      onSseError: (error) => {
+        if (!controller.signal.aborted) opts.onDisconnect?.(error);
+      },
     });
 
     const consume = (async () => {

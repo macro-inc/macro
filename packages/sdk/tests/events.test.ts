@@ -151,6 +151,64 @@ describe('MacroEvents', () => {
     }
   });
 
+  test('listen() tells onDisconnect when the stream fails, and never when it is stopped', async () => {
+    globalThis.fetch = (async () =>
+      new Response('unavailable', { status: 503 })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const dropped = Promise.withResolvers<unknown>();
+    const drops: unknown[] = [];
+    macro.events.on('document.created', () => {});
+    const stop = await macro.events.listen({
+      onDisconnect: (error) => {
+        drops.push(error);
+        dropped.resolve(error);
+      },
+    });
+    const error = await dropped.promise;
+    stop();
+
+    expect(String(error)).toContain('503');
+    expect(drops).toHaveLength(1);
+  });
+
+  test('stopping a stream does not tell onDisconnect', async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode(sseBody(created)));
+            },
+          }),
+          { headers: { 'content-type': 'text/event-stream' } },
+        ),
+    });
+    try {
+      const macro = new Macro({
+        token: 'user-token',
+        hosts: { storage: `http://localhost:${server.port}` },
+      });
+      const delivered = Promise.withResolvers<void>();
+      const drops: unknown[] = [];
+      macro.events.on('document.created', () => delivered.resolve());
+      const stop = await macro.events.listen({
+        onDisconnect: (error) => drops.push(error),
+      });
+      await delivered.promise;
+
+      stop();
+      await Bun.sleep(100);
+
+      expect(drops).toEqual([]);
+    } finally {
+      await server.stop(true);
+    }
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',
