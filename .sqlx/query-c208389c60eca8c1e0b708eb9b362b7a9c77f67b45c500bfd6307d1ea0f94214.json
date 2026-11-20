@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE crm_domain_directory\n                SET enrichment_untracked = false\n                WHERE LOWER(domain) = LOWER($1)\n                  AND enriched_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c208389c60eca8c1e0b708eb9b362b7a9c77f67b45c500bfd6307d1ea0f94214"
+}

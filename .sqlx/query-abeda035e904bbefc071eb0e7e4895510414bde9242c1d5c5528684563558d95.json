@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE crm_domain_directory dd\n                SET enrichment_exhausted = dd.enrichment_attempts >= $2,\n                    enrichment_untracked = NOT EXISTS (\n                        SELECT 1 FROM crm_domains d WHERE d.domain = dd.domain\n                    )\n                WHERE dd.id = ANY($1)\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Int2"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "abeda035e904bbefc071eb0e7e4895510414bde9242c1d5c5528684563558d95"
+}
