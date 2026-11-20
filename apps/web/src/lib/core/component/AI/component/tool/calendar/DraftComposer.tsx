@@ -18,6 +18,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { calendarConsentScopes } from '@core/email-link/consent';
@@ -130,6 +131,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
   // choice under the same flag as the calendar's own event composer.
   // Guest permissions roll out with guest invites.
   const guestInvitesEnabled = useCalendarGuestInvitesFlag();
+  const [preferences] = useCalendarPreferences();
   const [operation, setOperation] = createSignal<'create' | 'reject'>();
   let finalized = false;
 
@@ -322,6 +324,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
             controller={controller}
             macroCallsEnabled
             guestPolicyEditable={guestInvitesEnabled()}
+            timeFormat={preferences.timeFormat}
             class="min-w-0"
             disabled={
               finalized || !props.sink.canAct() || operation() === 'reject'
