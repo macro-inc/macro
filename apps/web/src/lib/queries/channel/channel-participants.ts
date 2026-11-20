@@ -205,12 +205,22 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
     }),
     () => queryClient
   );
+  // The channel whose by-id read last answered without an error.
+  const answered = createMemo<string | undefined>((previous) => {
+    const id = channelId();
+    if (query.isPending || query.error)
+      return previous === id ? previous : undefined;
+    return id;
+  });
   // The soup read leaves out public channels the viewer has not joined, which
-  // REST lets them read. Only a by-id read that came back without the channel
-  // asks REST.
+  // REST lets them read, so a by-id read that came back without the channel
+  // asks REST. So does one that failed before it ever answered, since nothing
+  // retries a failed read; only a later revalidation reads it again. A failed
+  // refresh keeps what the read answered (see `confirmed`).
   const missesChannel = () => {
     const id = channelId();
-    if (!id || query.isPending || query.error) return false;
+    if (!id || query.isPending) return false;
+    if (query.error) return answered() !== id;
     return !query.data?.entities.some(
       (entity) => entity.type === 'channel' && entity.id === id
     );
@@ -225,7 +235,12 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
     if (query.isPending) return undefined;
     const id = channelId();
     // A failed refresh keeps the participants on screen.
-    if (query.error && previous?.channelId === id) return previous;
+    if (
+      query.error &&
+      previous?.channelId === id &&
+      previous.participants !== undefined
+    )
+      return previous;
     const entity = query.data?.entities.find(
       (entity): entity is ChannelEntity =>
         entity.type === 'channel' && entity.id === id

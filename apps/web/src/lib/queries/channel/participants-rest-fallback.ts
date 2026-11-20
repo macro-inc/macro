@@ -21,8 +21,8 @@ const FALLBACK_ATTRIBUTES = {
  * That read returns only channels the viewer joined and team channels of
  * their teams, while REST lets anyone read a public channel's participants.
  * Readers use this only when the channel's by-id GraphQL read came back
- * without the channel. Remove it once the soup channel read returns public
- * channels by id.
+ * without the channel, or failed before it ever answered. Remove it once the
+ * soup channel read returns public channels by id.
  */
 export function channelParticipantsRestFallbackOptions(
   channelId: string,
