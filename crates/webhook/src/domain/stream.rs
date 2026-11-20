@@ -268,6 +268,10 @@ pub struct StreamCandidateEvent {
 
 /// What a subscriber's stream yields.
 #[derive(Debug, Clone)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "nearly every item is an event; boxing it would allocate per event to shrink the rare heartbeat"
+)]
 pub enum StreamItem {
     /// A matching event the subscriber may see.
     Event(NormalizedWebhookEvent),
