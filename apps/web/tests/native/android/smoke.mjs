@@ -247,7 +247,9 @@ try {
   // sheets and composers that follow it), never <html>.
   const css = await evaluate(
     `(() => {
-      const follower = document.querySelector('[style*="--virtual-keyboard-height"]');
+      // A follower has the value itself; other inline styles may only read it.
+      const follower = [...document.querySelectorAll('[style*="--virtual-keyboard-height"]')]
+        .find((element) => element.style.getPropertyValue('--virtual-keyboard-height'));
       return {dvh: document.getElementById('root').getBoundingClientRect().height,
         sheetLift: follower ? parseFloat(follower.style.getPropertyValue('--virtual-keyboard-height')) : null,
         onRoot: document.documentElement.style.getPropertyValue('--virtual-keyboard-height')};
@@ -278,7 +280,13 @@ try {
     await evaluate(`document.getElementById('android-smoke-input').value`),
     'Unsent Android draft'
   );
-  results.keyboard = { start, shown, css, backPreservedDraft: true };
+  results.keyboard = {
+    start,
+    shown,
+    css,
+    sheetLiftChecked: css.sheetLift !== null,
+    backPreservedDraft: true,
+  };
   console.log('Keyboard overlay and Back passed');
 
   // Font/display settings previously recreated the Activity while the native

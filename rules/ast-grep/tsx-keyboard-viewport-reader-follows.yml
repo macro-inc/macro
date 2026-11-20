@@ -9,7 +9,8 @@ note: |-
   keyboard. Register the element (`ref={followKeyboardViewport}`) or an
   ancestor (both inherit; an ancestor outside a composer's measured layout
   keeps a keyboard publish from re-measuring it). The app frame takes its
-  height from `followViewportHeight`.
+  height from `followViewportHeight`, which writes no variable, so it doesn't
+  count as a follower here.
 
   Passes when the element or a JSX ancestor in the same file registers, or it
   is inside `Dialog` or `MobileDrawer`, which register their own content. It
@@ -28,7 +29,7 @@ utils:
   follows:
     has:
       kind: jsx_attribute
-      regex: ^ref=[\s\S]*follow(KeyboardViewport|ViewportHeight)
+      regex: ^ref=[\s\S]*followKeyboardViewport
   follows-own-content:
     has:
       field: name

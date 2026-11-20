@@ -449,7 +449,8 @@ a textarea standing in for a composer, in the iOS app's keyboard path
 with the keyboard and composer growth, the content's padding follows the
 chrome, and `<html>`'s style is never written, since a custom property there
 restyles every element. `just test-mobile-insets-browser` runs it alone; CI's
-Browser Tests job runs it when the publishers or `viewport-insets.ts` change.
+Browser Tests job runs it when the float host, the iOS keyboard handlers or
+`viewport-insets.ts` change.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts, contacts added by name alone, explicit company selection,

@@ -28,3 +28,7 @@ invalid:
     <div ref={setComposer}>
       <div style={{ 'max-height': 'calc(var(--dvh, 1dvh) * 32)' }} />
     </div>
+  - |
+    <div ref={followViewportHeight}>
+      <div class="max-h-[calc(32*var(--dvh,1dvh))]" />
+    </div>

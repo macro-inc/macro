@@ -590,9 +590,10 @@ fn paths_filter() -> Step<Use> {
     // tests: the grid, and the timeline with the Gantt it draws.
     // `calendar_details_changed` covers what the event details browser tests
     // render and the query modules their fixture replaces, whose exports the
-    // fixture must keep matching. `mobile_insets_changed` covers the bottom
-    // chrome and keyboard publishers and the module that writes their values
-    // on the elements that read them.
+    // fixture must keep matching. `mobile_insets_changed` covers what the
+    // insets suite drives: the float host, the iOS keyboard handlers, and the
+    // module that writes their values on the elements that read them.
+    // Android's publisher is unit-tested instead.
     DornyPathsFilter::new(
         "Filter changed paths",
             format!(

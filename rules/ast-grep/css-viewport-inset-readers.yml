@@ -1,7 +1,7 @@
 id: css-viewport-inset-readers
 language: css
 severity: error
-message: A stylesheet reads a mobile viewport value that is written only on the elements that follow it.
+message: A stylesheet reads or sets a mobile viewport value that is written only on the elements that follow it.
 note: |-
   Rule in .agents/rules/web/mobile.md. `--mobile-content-inset-bottom`,
   `--dvh` and `--virtual-keyboard-height` are never on <html>: each is written
