@@ -191,6 +191,7 @@ fn event_label(event: EventName, filter: &EventFilter) -> &'static str {
             None => "Any property changed",
             Some(Some(SystemPropertyKey::Assignees)) => "Assignees changed",
             Some(Some(SystemPropertyKey::DueDate)) => "Due date changed",
+            Some(Some(SystemPropertyKey::StartDate)) => "Start date changed",
             Some(Some(SystemPropertyKey::Project)) => "Project changed",
             Some(Some(SystemPropertyKey::Effort)) => "Effort changed",
             Some(_) => "Property changed",

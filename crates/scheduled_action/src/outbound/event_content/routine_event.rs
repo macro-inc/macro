@@ -196,6 +196,7 @@ fn task_snapshot(
         markdown: markdown.map(truncate).unwrap_or_default(),
         status: None,
         priority: None,
+        start: None,
         due: None,
         assignees: Vec::new(),
         // Projects are read under their own access, which the run does not carry.
@@ -211,6 +212,9 @@ fn task_snapshot(
             }
             (Some(SystemPropertyKey::Priority), Some(PropertyValue::SelectOption(ids))) => {
                 task.priority = option_label(property, ids);
+            }
+            (Some(SystemPropertyKey::StartDate), Some(PropertyValue::Date(start))) => {
+                task.start = Some(start.at());
             }
             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(due))) => {
                 task.due = Some(due.at());

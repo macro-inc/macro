@@ -111,6 +111,7 @@ impl<Properties: TaskProperties> TaskAssignmentContext for DssTaskAssignmentCont
             markdown,
             status: property(SystemPropertyKey::Status).and_then(selected_option),
             priority: property(SystemPropertyKey::Priority).and_then(selected_option),
+            start: property(SystemPropertyKey::StartDate).and_then(date),
             due: property(SystemPropertyKey::DueDate).and_then(date),
             assignee_ids: property(SystemPropertyKey::Assignees)
                 .map(users)

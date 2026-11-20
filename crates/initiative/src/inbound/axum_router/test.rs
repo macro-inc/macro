@@ -113,6 +113,7 @@ fn sample_page() -> crate::domain::reads::InitiativePage {
                 status: Some(Uuid::from_u128(7)),
                 priority: None,
                 assignees: vec![USER_ID.to_string()],
+                start_date: None,
                 due_date: Some(now()),
                 completed: false,
             },
