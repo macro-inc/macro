@@ -62,8 +62,8 @@
     # from the switch's step 8 on (README "Before Grafana runs"); the
     # heartbeat path is open on both.
     goalertUrl = "https://oncall.macro-internal.com";
-    # Only the host's Grafana notifies until the switch.
-    notify = false;
+    # Notifies from the switch's step 6 on; until then only the host's did.
+    notify = true;
     alertTopicArn = "arn:aws:sns:us-east-2:569036502058:observability-prod-alerts";
     # The versions the host's nixpkgs ships with Grafana 13.0.9.
     plugins = {

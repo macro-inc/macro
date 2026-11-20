@@ -9322,32 +9322,17 @@ dependencies = [
 ]
 
 [[package]]
-name = "gh-workflow"
+name = "gh_workflow"
 version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "389296a8f9ebed67f6f49f3ee7fb5870d34b1f134d6033727de8caac3a6336a1"
 dependencies = [
- "async-trait",
- "derive_more 2.1.1",
  "derive_setters",
- "gh-workflow-macros",
  "indexmap 2.14.0",
  "merge",
+ "nom 8.0.0",
+ "pretty_assertions",
  "serde",
  "serde_json",
- "serde_yml",
- "strum_macros 0.27.2",
-]
-
-[[package]]
-name = "gh-workflow-macros"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b8281789edecfe1c6dab6312577f5ec0f7f8b860cad70156b8fc70ebedc786d"
-dependencies = [
- "heck 0.5.0",
- "quote",
- "syn 2.0.117",
+ "serde_yaml",
 ]
 
 [[package]]
@@ -12552,16 +12537,6 @@ checksum = "54cd30df7c7165ce74a456e4ca9732c603e8dc5e60784558c1c6dc047f876733"
 dependencies = [
  "cc",
  "glob",
-]
-
-[[package]]
-name = "libyml"
-version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3302702afa434ffa30847a83305f0a69d6abd74293b6554c18ec85c7ef30c980"
-dependencies = [
- "anyhow",
- "version_check",
 ]
 
 [[package]]
@@ -19326,21 +19301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yml"
-version = "0.0.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e2dd588bf1597a252c3b920e0143eb99b0f76e4e082f4c92ce34fbc9e71ddd"
-dependencies = [
- "indexmap 2.14.0",
- "itoa",
- "libyml",
- "memchr",
- "ryu",
- "serde",
- "version_check",
-]
-
-[[package]]
 name = "serdect"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -24803,7 +24763,8 @@ name = "xtask_workflows"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "gh-workflow",
+ "gh_workflow",
+ "indexmap 2.14.0",
  "indoc",
  "serde_json",
  "serde_yaml",

@@ -3,9 +3,8 @@
 //! until someone runs [`pr_ci`](crate::workflows::pr_ci). Generated into
 //! `ci-gate-reminder.yml`.
 
-use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Workflow,
-};
+use gh_workflow::expr::typed::{Str, github};
+use gh_workflow::{Event, Job, Level, Permissions, PullRequest, PullRequestType, Workflow};
 
 use crate::workflows::pr_ci;
 
@@ -28,9 +27,11 @@ pub fn ci_gate_reminder() -> Workflow {
 fn remind() -> Job {
     Job::default()
         .name("CI not run yet")
-        .cond(Expression::new(
-            "github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
+        )
         .runs_on("ubuntu-latest")
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -39,8 +40,8 @@ fn remind() -> Job {
         })
         .add_step(
             pr_ci::gate_step("Mark the commit as not run", "remind")
-                .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-                .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+                .add_env(("PR_NUMBER", github().event::<Str>("pull_request.number")))
+                .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
                 .add_env(("CI_GATE_DOCS_URL", pr_ci::GATE_DOCS_URL)),
         )
 }
