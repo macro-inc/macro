@@ -242,7 +242,8 @@ each run.
   with `routine-suggestions-find-work` on, `Picks` (catalog picks only, no
   guide) and `Drafts` (drafted routines only). A `Drafts` brief carries the
   work streams `RoutineSuggestionApi::find_work` found (`suggestions/work.rs`:
-  one model call, `WORK_MODEL` thinking little, over the person's last 30
+  one model call (`WORK_TRIES`: asked once more when its answer strays
+  from the list's shape), `WORK_MODEL` thinking little, over the person's last 30
   days of mail, up to 500 messages, the text of the newest 100, read through
   `SuggestionSources::inbox_window`; the answer bounded by `WorkList::from_answer`
   and passed inside `<untrusted>` tags), and drafts one routine per stream

@@ -16,11 +16,13 @@ a routines session that suggests nothing is retried once; one that kept a sugges
 was then cut off at its time limit is not (its `suggestion.session` span ends
 `timed_out`). Surfaces AI leaves empty show Macro's templates.
 Routine suggestions are behind the `enable-routine-suggestions` flag.
-With `routine-suggestions-find-work` also on, onboarding runs two routines
-sessions instead of one: one picks catalog routines at once, and the other
-drafts routines once one model call has listed the recurring work in the
-person's last 30 days of mail (`suggestion.session.part` is `picks` or
-`drafts`; `whole` otherwise).
+With `routine-suggestions-find-work` also on, an onboarding runs one
+routines session that picks catalog routines at once and, once one model
+call (asked once more when its answer strays from the list's shape) has
+listed the recurring work in the person's last 30 days of mail, up to three
+that draft, each from its share of the streams; one drafts from the newest
+mail when none are found (`suggestion.session.part` is `picks` or
+`drafts`; `whole` otherwise). Nightly and manual runs keep one session.
 
 Each generation is one trace, and logs one `routine_suggestions.generated`
 event with its `trigger`:
@@ -68,10 +70,12 @@ only. It notifies; it does not page.
   suggest routines` warnings and email-service health.
 - `routine.find_work` spans that end `failed` or `timed_out` (120 s) leave the
   one drafting session to the newest mail alone, in place of up to three
-  drafting from shares of the streams found. Its `routine.suggestions.read_month`
-  child times the mail read (`.messages`) and `routine.suggestions.list_work`
-  the model call; check email-service health for the first and the model
-  provider for the second.
+  drafting from shares of the streams found. Under it,
+  `routine.suggestions.find_work` counts the messages read (`.messages`,
+  `.texts`), the streams and the model calls (`.tries`); its
+  `routine.suggestions.read_month` child times the mail read and
+  `routine.suggestions.list_work` each model call. Check email-service health
+  for the first and the model provider for the second.
 - Levers: a person keeps Macro's templates either way. Onboarding runs once
   per person; their nightly runs keep trying. To stop new routines sessions,
   turn off `enable-routine-suggestions`; to go back to one routines session at
