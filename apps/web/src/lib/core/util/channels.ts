@@ -5,7 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { TraceContext } from '@macro-inc/observability';
-import { invalidateListChannels } from '@queries/channel/channels';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
@@ -78,7 +78,7 @@ export function useSendMessageToPeople() {
       .catch(() => null);
     if (!messageResponse) return;
 
-    fireAndForget(invalidateListChannels(), 'messages');
+    fireAndForget(refreshChannelDirectory(), 'messages');
     requestContactRefresh();
 
     const navigateToChannel = async () => {

@@ -1,10 +1,10 @@
 import { t } from '@app/lib/i18n';
+import { useChannelDirectory } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import HashIcon from '@icon/system/regular/hash.svg';
 import QuestionMarkIcon from '@icon/system/regular/question-mark.svg';
 import {
-  useAvailableSectionChannelsQuery,
   useChannelLabelsQuery,
   useSmartTagPreviewQuery,
 } from '@queries/channel-labels/channel-labels';
@@ -159,9 +159,7 @@ function SmartSectionPreview(props: {
 function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   const initialScope = props.scope ?? 'personal';
   const teamLabels = useChannelLabelsQuery();
-  const channels = useAvailableSectionChannelsQuery(
-    () => props.canShare && Boolean(props.initial?.channelCount)
-  );
+  const directory = useChannelDirectory();
   const [name, setName] = createSignal(props.initial?.name ?? '');
   const [scope, setScope] = createSignal<ChannelLabelScopeSelection>(
     props.scope ?? 'personal'
@@ -180,12 +178,12 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
   const channelsById = createMemo(
     () =>
       new Map(
-        (channels.isPending ? [] : (channels.data ?? [])).map((channel) => [
+        directory.channels().map((channel) => [
           channel.id,
           {
-            channelType: channel.channel_type,
-            teamId: channel.team_id ?? undefined,
-            isParticipant: channel.is_participant,
+            channelType: channel.channelType,
+            teamId: channel.teamId ?? undefined,
+            isParticipant: channel.isParticipant,
           },
         ])
       )
@@ -196,10 +194,10 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
 
     const teamId = !teamLabels.isPending ? teamLabels.data?.teamId : undefined;
     if (target === 'team' && !teamId) return t('channelSections.noAccess');
-    if (initial.channelCount > 0 && channels.isPending)
-      return t('channelSections.checkingSharing');
-    if (initial.channelCount > 0 && channels.isError)
+    if (initial.channelCount > 0 && directory.failed())
       return t('channelSections.channelsUnavailable');
+    if (initial.channelCount > 0 && !directory.complete())
+      return t('channelSections.checkingSharing');
 
     const error = channelSectionScopeChangeError(initial, channelsById(), {
       teamId: target === 'team' ? teamId : undefined,
@@ -431,14 +429,12 @@ function SectionDialog(props: SectionDialogProps & ManagedDialogProps) {
                 <p class="w-full text-xs leading-5 text-warning">{reason()}</p>
               )}
             </Show>
-            <Show when={channels.isError}>
+            <Show when={directory.failed()}>
               <Button
                 type="button"
                 variant="ghost"
                 size="xs"
-                onClick={() =>
-                  fireAndForget(channels.refetch(), 'channels-view')
-                }
+                onClick={() => directory.retry()}
               >
                 {t('channelSections.retry')}
               </Button>

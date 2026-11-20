@@ -19,7 +19,7 @@ import {
   registerChannelListNotificationRefresh,
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
-import { fetchAllChannels } from '@queries/channel/channels';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 
 export {
   channelsByIdsQueryArgs,
@@ -144,30 +144,32 @@ export function filterChannelsForScope(
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
 
-/** Resolve full built-in membership without changing the rail's loaded pages. */
-export async function fetchChannelGroupIds(
+/** A built-in group's full membership among the viewer's joined channels,
+ * without changing the rail's loaded pages. */
+export function channelGroupIds(
   group: ChannelsGroup,
   excludedIds: readonly string[],
-  signal?: AbortSignal
-): Promise<string[]> {
+  channels: readonly Pick<
+    DirectoryChannel,
+    'id' | 'channelType' | 'isParticipant'
+  >[]
+): string[] {
   const excluded = new Set(excludedIds);
-  const channels = await fetchAllChannels(signal);
   const members = channels.filter((channel) => {
-    if (!channel.is_participant || excluded.has(channel.id)) {
+    if (!channel.isParticipant || excluded.has(channel.id)) {
       return false;
     }
 
     if (group === 'team_channels') {
-      return channel.channel_type === 'team';
+      return channel.channelType === 'team';
     }
 
     if (group === 'direct_messages') {
-      return channel.channel_type === 'direct_message';
+      return channel.channelType === 'direct_message';
     }
 
     return (
-      channel.channel_type !== 'team' &&
-      channel.channel_type !== 'direct_message'
+      channel.channelType !== 'team' && channel.channelType !== 'direct_message'
     );
   });
 

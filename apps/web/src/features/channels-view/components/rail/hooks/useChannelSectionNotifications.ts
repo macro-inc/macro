@@ -1,5 +1,6 @@
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { Telemetry } from '@macro-inc/observability';
 import { markChannelsAsRead } from '@notifications/notification-helpers';
@@ -8,7 +9,7 @@ import { useBulkNotificationPreferencesMutation } from '@queries/notification/un
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { type Accessor, createSignal, type Owner, onCleanup } from 'solid-js';
-import { fetchChannelGroupIds } from '../../../queries';
+import { channelGroupIds } from '../../../queries';
 import type { ChannelSectionKey } from '../../../types';
 
 type SectionNotificationOptions = {
@@ -23,6 +24,7 @@ export function useChannelSectionNotifications(
   options: SectionNotificationOptions
 ) {
   const userId = useUserId();
+  const directory = useChannelDirectory();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
   const requests = new Set<AbortController>();
@@ -83,9 +85,12 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      return Telemetry.span('channels.section.members', () =>
-        fetchChannelGroupIds(section, [], signal)
-      );
+      return Telemetry.span('channels.section.members', async () => {
+        const channels = await directory.readComplete();
+        // Unmounted while the directory filled: apply nothing.
+        if (signal.aborted) return [];
+        return channelGroupIds(section, [], channels);
+      });
     }
 
     return [...new Set(labelFor(section)?.channelIds ?? [])];

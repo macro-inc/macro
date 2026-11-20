@@ -12,7 +12,7 @@ import {
 } from '@channel/Call/call-resolution';
 import { silenceIncomingCallRing } from '@channel/Call/ring-coordination';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTabFocused } from '@core/signal/tabFocus';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -158,11 +158,10 @@ async function reconcileIncomingCall(call: IncomingCall, userId: string) {
 }
 
 export function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
   const callCtx = useCallContextOptional();
 
   return createMemo(() => {
-    const channelsById = channelsCtx.channelsById();
     const joinedChannelId = callCtx?.isInCall()
       ? callCtx.activeChannelId()
       : null;
@@ -170,7 +169,8 @@ export function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
 
     return incomingCalls()
       .filter((call) => {
-        if (!channelsById[call.channelId]) return false;
+        // A channel the directory cannot place yet rings once it loads.
+        if (directory.lookup(call.channelId).status !== 'loaded') return false;
         return (
           call.channelId !== joinedChannelId && call.callId !== joinedCallId
         );
@@ -195,7 +195,7 @@ export function useVisibleIncomingCalls(): Accessor<IncomingCall[]> {
  */
 export function IncomingCallEvents() {
   const callCtx = useCallContextOptional();
-  const channelsCtx = useChannelsContext();
+  const directory = useChannelDirectory();
   const userId = useUserId();
 
   createCallResolutionsEffect((resolution) => {
@@ -207,10 +207,9 @@ export function IncomingCallEvents() {
     if (!DEV_MODE_ENV) return;
 
     window.macroDebugIncomingCall = (options = {}) => {
-      const channelsById = channelsCtx.channelsById();
-      const channelId = options.channelId ?? Object.keys(channelsById)[0];
+      const channelId = options.channelId ?? directory.channels()[0]?.id;
 
-      if (!channelId || !channelsById[channelId]) {
+      if (!channelId || directory.lookup(channelId).status !== 'loaded') {
         console.warn(
           '[incoming-call-widget] No cached channel found for debug call',
           options

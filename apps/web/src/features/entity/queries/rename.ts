@@ -12,7 +12,7 @@ import {
 } from '@queries/auth/account-scope';
 import { useQueryAccount } from '@queries/auth/use-query-account';
 import { callKeys } from '@queries/call/keys';
-import { channelKeys } from '@queries/channel/keys';
+import { refreshChannelDirectory } from '@queries/channel/directory';
 import { queryClient } from '@queries/client';
 import { setHistoryItemName } from '@queries/history/history';
 import { historyKeys } from '@queries/history/keys';
@@ -240,11 +240,7 @@ function observeRenameSettlement(
       queryClient.invalidateQueries({ queryKey: soupKeys._def }),
     ];
     if (operations.some(({ entity }) => entity.type === 'channel'))
-      requests.push(
-        queryClient.invalidateQueries({
-          queryKey: channelKeys.listChannels(account.userId).queryKey,
-        })
-      );
+      requests.push(refreshChannelDirectory());
     for (const { entity } of operations) {
       if (entity.type === 'call')
         requests.push(

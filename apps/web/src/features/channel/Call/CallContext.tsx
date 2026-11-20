@@ -1,5 +1,5 @@
 import { analytics } from '@app/lib/analytics';
-import { useChannelsContext } from '@core/context/channels';
+import { loadedChannel, useChannelDirectory } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import {
   type BackgroundEffect,
@@ -513,7 +513,7 @@ export function useCallContextOptional(): CallState | undefined {
  * and all readonly call state. Returns reactive state + mutation actions.
  */
 function createCallState() {
-  const channels = useChannelsContext();
+  const channelDirectory = useChannelDirectory();
   const userId = useUserId();
   const leaveMutation = useLeaveCallMutation();
   const nativeCall = useMaybeNativeCallState();
@@ -1760,7 +1760,8 @@ function createCallState() {
     connect: (token, source) =>
       callSession.connectWithToken(token, {
         channelTitle: token.channelId
-          ? (channels.channelsById()[token.channelId]?.name ?? null)
+          ? (loadedChannel(channelDirectory.lookup(token.channelId))?.name ??
+            null)
           : null,
         recovery: source === 'auto_rejoin' || source === 'restore',
       }),

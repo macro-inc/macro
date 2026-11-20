@@ -12,8 +12,8 @@ const SUPPORT_CHANNEL_NAME_PREFIX = 'Macro Support x ';
 type ChannelSummary = {
   id: string;
   name?: string | null;
-  owner_id: string;
-  updated_at?: string;
+  ownerId: string;
+  updatedAt: string;
 };
 
 /** The support channel the link opens: the person's own, else their most recently active one. */
@@ -26,16 +26,14 @@ export function findSupportChannelId(
   const supportChannels = channels.filter((channel) =>
     channel.name?.startsWith(SUPPORT_CHANNEL_NAME_PREFIX)
   );
-  const own = supportChannels.find((channel) => channel.owner_id === userId);
+  const own = supportChannels.find((channel) => channel.ownerId === userId);
   if (own) return own.id;
 
   return supportChannels.reduce<ChannelSummary | undefined>(
     (latest, channel) =>
-      !latest || updatedAt(channel) > updatedAt(latest) ? channel : latest,
+      !latest || Date.parse(channel.updatedAt) > Date.parse(latest.updatedAt)
+        ? channel
+        : latest,
     undefined
   )?.id;
-}
-
-function updatedAt(channel: ChannelSummary): number {
-  return channel.updated_at ? Date.parse(channel.updated_at) : 0;
 }

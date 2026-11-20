@@ -1,7 +1,6 @@
 import { useChannel } from '@core/context/channels';
 import { formatDate } from '@core/util/date';
 import ChannelIcon from '@icon/system/regular/hash-straight.svg';
-import { ChannelTypeEnum } from '@service-storage/client';
 import { Avatar } from '@ui';
 import { Show } from 'solid-js';
 
@@ -20,7 +19,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
 
   const shouldRender = () => {
     const c = channel();
-    return !!c && !!c.name && c.channel_type !== ChannelTypeEnum.DirectMessage;
+    return !!c && !!c.name && c.channelType !== 'direct_message';
   };
 
   return (
@@ -43,7 +42,7 @@ export function ChannelCreatedIndicator(props: ChannelCreatedIndicatorProps) {
                 Channel <span class="font-semibold">{c().name}</span> created
               </span>
               <span class="text-xs text-ink-extra-muted">
-                {formatDate(c().created_at, { showTime: true })}
+                {formatDate(c().createdAt, { showTime: true })}
               </span>
             </div>
           </div>

@@ -1,12 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { PickerSheet } from '@components/app/mobile/PickerSheet';
+import { useChannelDirectory } from '@core/context/channels';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createFreshSearch, NAME_MATCH_RANKING } from '@core/util/freshSort';
 import HashIcon from '@icon/system/regular/hash.svg';
 import LockIcon from '@icon/system/regular/lock-simple.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import { useAvailableSectionChannelsQuery } from '@queries/channel-labels/channel-labels';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import {
   Button,
@@ -29,7 +29,7 @@ import {
   Switch,
 } from 'solid-js';
 
-const searchChannels = createFreshSearch<ApiChannelWithLatest>({
+const searchChannels = createFreshSearch<DirectoryChannel>({
   config: {
     ...NAME_MATCH_RANKING,
     fuzzyWeight: 1,
@@ -37,7 +37,7 @@ const searchChannels = createFreshSearch<ApiChannelWithLatest>({
     brevityWeight: 0,
   },
   getName: (channel) => channel.name ?? '',
-  getTimestamp: (channel) => ({ updatedAt: channel.updated_at }),
+  getTimestamp: (channel) => ({ updatedAt: channel.updatedAt }),
 });
 
 export type SectionChannelsPickerProps = {
@@ -49,7 +49,7 @@ export type SectionChannelsPickerProps = {
 
 /** Select additions only; membership removal stays in the channel's section menu. */
 export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
-  const query = useAvailableSectionChannelsQuery();
+  const directory = useChannelDirectory();
   const [search, setSearch] = createSignal('');
   const [selected, setSelected] = createSignal<string[]>([]);
   const [added, setAdded] = createSignal<string[]>([]);
@@ -61,15 +61,12 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
     disposed = true;
   });
 
-  const available = createMemo(() => {
-    if (query.isPending) {
-      return [];
-    }
-
-    return (query.data ?? [])
+  // The joined channels so far; a cold directory lists more as it fills.
+  const available = createMemo(() =>
+    directory
+      .channels()
       .filter((channel) => {
         if (
-          !channel.is_participant ||
           props.label.channelIds.includes(channel.id) ||
           added().includes(channel.id)
         ) {
@@ -78,19 +75,19 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
 
         if (props.label.teamId) {
           return (
-            channel.channel_type === 'team' &&
-            channel.team_id === props.label.teamId
+            channel.channelType === 'team' &&
+            channel.teamId === props.label.teamId
           );
         }
 
         return (
-          channel.channel_type === 'team' ||
-          channel.channel_type === 'public' ||
-          channel.channel_type === 'private'
+          channel.channelType === 'team' ||
+          channel.channelType === 'public' ||
+          channel.channelType === 'private'
         );
       })
-      .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''));
-  });
+      .sort((left, right) => (left.name ?? '').localeCompare(right.name ?? ''))
+  );
   const visible = createMemo(() =>
     searchChannels(available(), search()).map((result) => result.item)
   );
@@ -150,10 +147,10 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
     }
   };
 
-  const channelFace = (channel: ApiChannelWithLatest) => (
+  const channelFace = (channel: DirectoryChannel) => (
     <>
       <Show
-        when={channel.channel_type === 'private'}
+        when={channel.channelType === 'private'}
         fallback={<HashIcon class="size-4 shrink-0 text-ink-muted" />}
       >
         <LockIcon class="size-4 shrink-0 text-ink-muted" />
@@ -197,56 +194,64 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
       </Show>
       <div
         class="min-h-0 flex-1 overflow-y-auto px-3"
-        aria-busy={query.isFetching}
+        aria-busy={!directory.complete()}
       >
+        <For each={visible()}>
+          {(channel) => (
+            <Show
+              when={props.presentation === 'sheet'}
+              fallback={
+                <Checkbox
+                  class="flex w-full gap-2 rounded-lg px-2 py-2 hover:bg-hover"
+                  checked={selected().includes(channel.id)}
+                  disabled={saving()}
+                  onChange={(checked) => toggleChannel(channel.id, checked)}
+                >
+                  <Checkbox.Control />
+                  <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 text-sm">
+                    {channelFace(channel)}
+                  </Checkbox.Label>
+                </Checkbox>
+              }
+            >
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={selected().includes(channel.id)}
+                disabled={saving()}
+                class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm disabled:opacity-50"
+                onPointerDown={(event) => event.preventDefault()}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() =>
+                  toggleChannel(channel.id, !selected().includes(channel.id))
+                }
+              >
+                <InlineCheckbox checked={selected().includes(channel.id)} />
+                {channelFace(channel)}
+              </button>
+            </Show>
+          )}
+        </For>
+        {/* A cold directory lists the channels it has while it fills. */}
         <Switch>
-          <Match when={query.isPending}>
+          <Match when={directory.failed()}>
+            <div class="flex items-center justify-between gap-2 px-2 py-3 text-xs text-ink-muted">
+              {t('channelSections.channelsUnavailable')}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => directory.retry()}
+              >
+                {t('channelSections.retry')}
+              </Button>
+            </div>
+          </Match>
+          <Match when={!directory.complete()}>
             <p class="px-2 py-4 text-sm text-ink-muted">
               {t('channelSections.loadingChannels')}
             </p>
           </Match>
-          <Match when={visible().length > 0}>
-            <For each={visible()}>
-              {(channel) => (
-                <Show
-                  when={props.presentation === 'sheet'}
-                  fallback={
-                    <Checkbox
-                      class="flex w-full gap-2 rounded-lg px-2 py-2 hover:bg-hover"
-                      checked={selected().includes(channel.id)}
-                      disabled={saving()}
-                      onChange={(checked) => toggleChannel(channel.id, checked)}
-                    >
-                      <Checkbox.Control />
-                      <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2 text-sm">
-                        {channelFace(channel)}
-                      </Checkbox.Label>
-                    </Checkbox>
-                  }
-                >
-                  <button
-                    type="button"
-                    role="checkbox"
-                    aria-checked={selected().includes(channel.id)}
-                    disabled={saving()}
-                    class="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm disabled:opacity-50"
-                    onPointerDown={(event) => event.preventDefault()}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() =>
-                      toggleChannel(
-                        channel.id,
-                        !selected().includes(channel.id)
-                      )
-                    }
-                  >
-                    <InlineCheckbox checked={selected().includes(channel.id)} />
-                    {channelFace(channel)}
-                  </button>
-                </Show>
-              )}
-            </For>
-          </Match>
-          <Match when={!query.isError}>
+          <Match when={visible().length === 0}>
             <p class="px-2 py-4 text-sm text-ink-muted">
               {search().trim()
                 ? t('channelSections.noMatchingChannels')
@@ -254,18 +259,6 @@ export function SectionChannelsPicker(props: SectionChannelsPickerProps) {
             </p>
           </Match>
         </Switch>
-        <Show when={query.isError}>
-          <div class="flex items-center justify-between gap-2 px-2 py-3 text-xs text-ink-muted">
-            {t('channelSections.channelsUnavailable')}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => fireAndForget(query.refetch(), 'channels-view')}
-            >
-              {t('channelSections.retry')}
-            </Button>
-          </div>
-        </Show>
       </div>
       <Show when={error()}>
         <p role="alert" class="px-5 pt-3 text-xs text-failure">

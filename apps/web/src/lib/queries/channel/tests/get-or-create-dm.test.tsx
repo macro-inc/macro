@@ -14,7 +14,9 @@ vi.mock('@service-storage/client', () => ({
     getOrCreatePrivateChannel: vi.fn(),
   },
 }));
-vi.mock('../channels', () => ({ invalidateListChannels: vi.fn() }));
+vi.mock('../directory', () => ({
+  refreshChannelDirectory: vi.fn(async () => undefined),
+}));
 
 import {
   useGetOrCreateDirectMessageMutation,

@@ -36,8 +36,8 @@ export function useStartChannelCall(channelId: () => string) {
     return [
       ...(currentUser ? [currentUser] : []),
       ...(channel()?.participants ?? [])
-        .filter((participant) => participant.user_id !== currentUser)
-        .map((participant) => participant.user_id),
+        .filter((participant) => participant.userId !== currentUser)
+        .map((participant) => participant.userId),
     ];
   });
   const channelName = useChannelName(channelId());

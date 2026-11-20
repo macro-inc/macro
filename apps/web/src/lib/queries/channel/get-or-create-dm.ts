@@ -2,15 +2,16 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import {
   type GetOrCreateChannelResponse,
   storageServiceClient,
 } from '@service-storage/client';
-import { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { DirectMessageChannelIdDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import { useMutation } from '@tanstack/solid-query';
-import { ResultAsync } from 'neverthrow';
-import { invalidateListChannels, loadChannelList } from './channels';
+import { okAsync, ResultAsync } from 'neverthrow';
+import { assertQueryAccount, currentQueryAccount } from '../auth/account-scope';
+import { refreshChannelDirectory } from './directory';
 
 type GetOrCreateDmResponse = GetOrCreateChannelResponse;
 
@@ -20,7 +21,8 @@ type GetOrCreateDirectMessageParams = {
 };
 
 /**
- * Create or resolve a 1:1 DM channel for a recipient. Invalidates the channel list on settle.
+ * Create or resolve a 1:1 DM channel for a recipient. Refreshes the in-memory
+ * channel directory on settle.
  */
 export function useGetOrCreateDirectMessageMutation(
   callbacks?: MutationCallbacks<
@@ -52,7 +54,7 @@ export function useGetOrCreateDirectMessageMutation(
           console.error('failed to get or create direct message', error);
         },
         onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+          fireAndForget(refreshChannelDirectory(), 'channel-list'),
       },
       callbacks,
       (variables) => variables.parentSpan
@@ -61,29 +63,9 @@ export function useGetOrCreateDirectMessageMutation(
 }
 
 /**
- * The 1:1 DM between `viewerId` and `recipientId` in a channel list, picked as
- * the server's get-or-create picks it: the oldest two-member DM with both.
- */
-function findDirectMessage(
-  channels: ApiChannelWithLatest[],
-  viewerId: string,
-  recipientId: string
-): string | undefined {
-  let found: ApiChannelWithLatest | undefined;
-  for (const channel of channels) {
-    if (channel.channel_type !== ChannelType.direct_message) continue;
-    if (channel.participants.length !== 2) continue;
-    const members = channel.participants.map(({ user_id }) => user_id);
-    if (!members.includes(viewerId) || !members.includes(recipientId)) continue;
-    if (!found || channel.created_at < found.created_at) found = channel;
-  }
-  return found?.id;
-}
-
-/**
  * The DM with `recipientId`, created if there is none yet. For a recipient
  * that writes first (an agent teammate's greeting), so the conversation shown
- * is the real one its message lands in. Refreshes the channel list after.
+ * is the real one its message lands in. Refreshes the channel directory after.
  */
 export function getOrCreateDirectMessageChannel(
   recipientId: string
@@ -91,22 +73,42 @@ export function getOrCreateDirectMessageChannel(
   return new ResultAsync(
     storageServiceClient.getOrCreateDirectMessage({ recipient_id: recipientId })
   ).map(({ channel_id }) => {
-    fireAndForget(invalidateListChannels(), 'channel-list');
+    fireAndForget(refreshChannelDirectory(), 'channel-list');
     return channel_id;
   });
 }
 
 /**
- * The viewer's existing DM with a recipient, without creating one. Reads the
- * channel list the app already keeps, fetching it only when it isn't loaded.
+ * The viewer's existing DM with a recipient, without creating one: the one
+ * the server's get-or-create would reuse. Asked of the server each time, since
+ * the DM may be one the viewer's directory has not loaded yet.
  */
 export function existingDirectMessage(
   viewerId: string,
   recipientId: string
 ): ResultAsync<string | undefined, unknown> {
-  return ResultAsync.fromPromise(loadChannelList(), (error) => error).map(
-    (channels) => findDirectMessage(channels, viewerId, recipientId)
+  if (recipientId === viewerId) return okAsync(undefined);
+  return ResultAsync.fromPromise(
+    lookupDirectMessage(recipientId),
+    (error) => error
   );
+}
+
+async function lookupDirectMessage(
+  recipientId: string
+): Promise<string | undefined> {
+  const account = currentQueryAccount();
+  assertQueryAccount(account);
+  const result = await getGraphqlSoupClient()
+    .query(
+      DirectMessageChannelIdDocument,
+      { userId: recipientId },
+      { requestPolicy: 'network-only' }
+    )
+    .toPromise();
+  assertQueryAccount(account);
+  if (result.error) throw result.error;
+  return result.data?.user.directMessageChannelId ?? undefined;
 }
 
 type GetOrCreatePrivateChannelParams = {
@@ -115,7 +117,8 @@ type GetOrCreatePrivateChannelParams = {
 };
 
 /**
- * Create or resolve a private group channel for a set of recipients. Invalidates the channel list on settle.
+ * Create or resolve a private group channel for a set of recipients.
+ * Refreshes the in-memory channel directory on settle.
  */
 export function useGetOrCreatePrivateChannelMutation(
   callbacks?: MutationCallbacks<
@@ -147,7 +150,7 @@ export function useGetOrCreatePrivateChannelMutation(
           console.error('failed to get or create private channel', error);
         },
         onSettled: () =>
-          fireAndForget(invalidateListChannels(), 'channel-list'),
+          fireAndForget(refreshChannelDirectory(), 'channel-list'),
       },
       callbacks,
       (variables) => variables.parentSpan

@@ -26,7 +26,7 @@ vi.mock('@core/auth/push-registration-lifecycle', () => ({
 }));
 vi.mock('@tauri-apps/plugin-os', () => ({ version: () => '16' }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLKIT: true }));
-vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
+vi.mock('@core/context/channels', () => ({ useChannelDirectory: vi.fn() }));
 vi.mock('@core/util/platform', () => ({
   isTauri: () => true,
   isPlatform: (platform: string) => platform === 'android',

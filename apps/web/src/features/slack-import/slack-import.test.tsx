@@ -6,9 +6,13 @@ import { importReceipt } from './tests/fake-sources';
 
 const host = vi.hoisted(() => ({
   enabled: true,
-  channels: vi.fn(() => ({ channelsById: () => host.channelsById })),
-  channelsById: {} as Record<string, { id: string }>,
-  invalidateChannels: vi.fn(async () => {}),
+  directory: vi.fn(() => ({
+    lookup: (id: string) => ({
+      status: host.loaded.includes(id) ? 'loaded' : 'missing',
+    }),
+  })),
+  loaded: [] as string[],
+  refreshDirectory: vi.fn(async () => {}),
   invalidateSoup: vi.fn(),
   revalidate: vi.fn(async () => {}),
   createSource: vi.fn(),
@@ -42,10 +46,10 @@ vi.mock('@core/util/reloadForNewerBuild', () => ({
   holdAutomaticReload: vi.fn(),
 }));
 vi.mock('@core/context/channels', () => ({
-  useChannelsContext: host.channels,
+  useChannelDirectory: host.directory,
 }));
-vi.mock('@queries/channel/channels', () => ({
-  invalidateListChannels: host.invalidateChannels,
+vi.mock('@queries/channel/directory', () => ({
+  refreshChannelDirectory: host.refreshDirectory,
 }));
 vi.mock('@queries/client', () => ({ queryClient: {} }));
 vi.mock('@queries/soup/graphql/channel-list-revalidation', () => ({
@@ -95,7 +99,7 @@ afterEach(() => {
   cleanup();
   vi.clearAllMocks();
   host.enabled = true;
-  host.channelsById = {};
+  host.loaded = [];
 });
 
 describe('Slack import production boundary', () => {
@@ -116,7 +120,7 @@ describe('Slack import production boundary', () => {
       host.enabled = gate.enabled;
       render(() => <SlackImport teamId="team" isAdmin={gate.isAdmin} />);
       expect(screen.queryByText('Mounted import')).toBeNull();
-      expect(host.channels).not.toHaveBeenCalled();
+      expect(host.directory).not.toHaveBeenCalled();
       expect(host.createSource).not.toHaveBeenCalled();
     }
   );
@@ -128,11 +132,11 @@ describe('Slack import production boundary', () => {
     await screen.findByText('Mounted import');
     expect(host.createSource).toHaveBeenCalledOnce();
     await host.props!.onCompleted(importReceipt());
-    expect(host.invalidateChannels).toHaveBeenCalledOnce();
+    expect(host.refreshDirectory).toHaveBeenCalledOnce();
     expect(host.invalidateSoup).toHaveBeenCalledOnce();
     expect(host.revalidate).toHaveBeenCalledOnce();
     expect(host.props!.channelHref(importReceipt().jobId)).toBeUndefined();
-    host.channelsById = { imported: { id: 'imported' } };
+    host.loaded = ['imported'];
     expect(host.props!.channelHref('imported')).toBe('/app/channel/imported');
     setTeamId('two');
     await waitFor(() => expect(host.view).toHaveBeenLastCalledWith('two'));
@@ -153,7 +157,7 @@ describe('Slack import production boundary', () => {
   it('hides the promotion after successful completion even if refreshing fails', async () => {
     render(() => <SlackImport teamId="team" isAdmin />);
     await screen.findByText('Mounted import');
-    host.invalidateChannels.mockRejectedValueOnce(new Error('Refresh failed'));
+    host.refreshDirectory.mockRejectedValueOnce(new Error('Refresh failed'));
     await expect(
       host.props!.onCompleted(importReceipt({ status: 'completed' }))
     ).rejects.toThrow('Refresh failed');
