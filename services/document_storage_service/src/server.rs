@@ -385,8 +385,9 @@ async fn run_server() -> anyhow::Result<()> {
         event_broker_tracker.clone(),
     );
     let bots_repo = PgBotsRepo::new(db.clone());
-    // The agent API checks a newly selected MCP app against Pipedream's
-    // directory, the same check the ConfigureAgent tool makes.
+    // The agent API checks a newly selected MCP app against the connector
+    // catalog (native overlays, then Pipedream's directory), the same check
+    // the ConfigureAgent tool makes.
     let bots_service = BotServiceImpl::new(
         bots_repo,
         macro_event_broker.clone(),
@@ -395,9 +396,7 @@ async fn run_server() -> anyhow::Result<()> {
             hosted_runtimes::outbound::pg::PgComputerAgents::new(db.clone()),
         ),
     )
-    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::new(
-        ai_tools::pipedream_client_from_env()?,
-    ));
+    .with_mcp_apps(ai_tools::PipedreamMcpAppCatalog::from_env(db.clone())?);
 
     let authorization_service: AuthorizationService = MacroAuthorizationServiceImpl::new(
         MacroAuthJwtValidator::new(jwt_validation_args.clone()),
