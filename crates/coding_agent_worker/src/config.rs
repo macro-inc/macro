@@ -75,7 +75,8 @@ pub struct HerdrSettings {
     pub arguments: Vec<String>,
     /// Repository cache and worktree location; absent uses instance storage.
     pub storage_path: Option<PathBuf>,
-    /// Switch Herdr to newly launched sessions.
+    /// Switch Herdr to newly launched sessions. Off by default: sessions
+    /// Macro opens should not take over the operator's view.
     pub focus: bool,
 }
 
@@ -85,7 +86,7 @@ impl Default for HerdrSettings {
             model: None,
             arguments: Vec::new(),
             storage_path: None,
-            focus: true,
+            focus: false,
         }
     }
 }

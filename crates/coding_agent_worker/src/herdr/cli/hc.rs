@@ -109,42 +109,16 @@ impl Terminal {
 }
 
 impl Core {
-    /// Add a worktree of `source` at `path` on a new branch from the
-    /// freshly fetched main. Core has no worktree concept; git does it.
-    pub(super) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> rootcause::Result<()> {
-        crate::outbound::git::git(
-            source,
-            &[
-                "worktree",
-                "add",
-                "-b",
-                branch,
-                &path.to_string_lossy(),
-                "origin/main",
-            ],
-        )
-        .await
-        .map(drop)
-    }
-
-    /// Start a shell in a new tab, then replace it with the agent, so the
-    /// agent gets the operator's login environment (PATH, direnv) as it
-    /// would in a terminal they opened themselves.
+    /// Start a shell in a tab of a new space, then replace it with the
+    /// agent, so the agent gets the operator's login environment (PATH,
+    /// direnv) as it would in a terminal they opened themselves. Each
+    /// session gets its own space, apart from the operator's own tabs.
     pub(super) async fn launch_agent(
         &self,
         launch: &AgentLaunch<'_>,
     ) -> Result<Window, HerdrError> {
         self.clear(launch.name).await;
-        // A worktree opens as its own space, as herdr's worktree workspaces did.
-        let space = match launch.worktree_source {
-            Some(_) => new_id(),
-            None => self.space().await,
-        };
+        let space = new_id();
         let tab = new_id();
         let terminal = self
             .start(
@@ -170,6 +144,8 @@ impl Core {
         self.send(&terminal.address, &line).await?;
         self.wait_ready(launch).await?;
         tracing::debug!(terminal = %terminal.address, agent = launch.kind, "agent ready in herdr-core");
+        self.app("space.rename", json!({"id": space, "name": launch.label}))
+            .await;
         self.app("tab.rename", json!({"id": tab, "name": launch.label}))
             .await;
         if launch.focus {

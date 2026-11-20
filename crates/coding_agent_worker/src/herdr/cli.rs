@@ -134,8 +134,6 @@ pub(crate) struct AgentLaunch<'a> {
     pub label: &'a str,
     /// Switch to the tab.
     pub focus: bool,
-    /// For a managed worktree at `cwd`, the repository's main checkout.
-    pub worktree_source: Option<&'a Path>,
     /// A private environment file to source before starting the agent.
     pub environment: Option<&'a Path>,
     /// The agent's arguments.
@@ -174,19 +172,6 @@ impl HerdrCli {
                 terminal: terminal.into(),
                 space: Arc::default(),
             }),
-        }
-    }
-
-    /// Create a fresh worktree of `source` at `path` from the fetched main ref.
-    pub(crate) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> rootcause::Result<()> {
-        match &self.backend {
-            Backend::Legacy(herdr) => Ok(herdr.create_worktree(source, path, branch).await?),
-            Backend::Core(herdr) => herdr.create_worktree(source, path, branch).await,
         }
     }
 

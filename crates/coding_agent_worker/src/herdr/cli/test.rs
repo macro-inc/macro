@@ -83,7 +83,7 @@ esac
 }
 
 #[tokio::test]
-async fn herdr_core_opens_the_agent_as_a_tab_in_macrods_space() {
+async fn herdr_core_starts_the_agent_in_a_login_shell() {
     let root = tempfile::tempdir().unwrap();
     let herdr = HerdrCli::core(fake_hc(root.path()), "t1");
     let args = ["--model".to_owned(), "gpt 5".to_owned()];
@@ -95,7 +95,6 @@ async fn herdr_core_opens_the_agent_as_a_tab_in_macrods_space() {
             cwd: Path::new("/work"),
             label: "fix it",
             focus: false,
-            worktree_source: None,
             environment: Some(Path::new("/private/env file")),
             args: &args,
         })
@@ -107,7 +106,6 @@ async fn herdr_core_opens_the_agent_as_a_tab_in_macrods_space() {
     let calls: Vec<&str> = calls.lines().collect();
     let run = calls.iter().find(|call| call.starts_with("run ")).unwrap();
     assert!(run.contains("--no-parent"));
-    assert!(run.contains("--label herdr.space=space-1"));
     assert!(run.contains(&format!("--label herdr.tab={}", window.tab_id)));
     assert!(run.contains("--label macro.agent=codex"));
     assert!(run.contains("--name macro-abc"));
@@ -227,5 +225,87 @@ fn only_a_settle_refusal_counts_as_still_starting() {
     assert!(refused(STILL_STARTING).still_starting());
     assert!(
         !refused(r#"{"error":{"kind":"unavailable","message":"t9 has exited"}}"#).still_starting()
+    );
+}
+
+fn launch<'a>(name: &'a str, args: &'a [String]) -> AgentLaunch<'a> {
+    AgentLaunch {
+        name,
+        kind: "codex",
+        reports_status: false,
+        cwd: Path::new("/work"),
+        label: "fix it",
+        focus: false,
+        environment: None,
+        args,
+    }
+}
+
+#[tokio::test]
+async fn herdr_core_opens_every_session_in_its_own_space() {
+    let root = tempfile::tempdir().unwrap();
+    let herdr = HerdrCli::core(fake_hc(root.path()), "t1");
+    herdr.launch_agent(&launch("macro-abc", &[])).await.unwrap();
+    herdr.launch_agent(&launch("macro-abc", &[])).await.unwrap();
+
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    let spaces: Vec<&str> = calls
+        .lines()
+        .filter(|call| call.starts_with("run "))
+        .map(|call| {
+            call.split(' ')
+                .find_map(|word| word.strip_prefix("herdr.space="))
+                .unwrap()
+        })
+        .collect();
+    assert_eq!(spaces.len(), 2);
+    // Never the operator's space that macrod runs in.
+    assert!(!spaces.contains(&"space-1"));
+    assert_ne!(spaces[0], spaces[1]);
+}
+
+/// A fake herdr 0.9 that logs each call and answers like it does.
+fn fake_legacy_herdr(root: &Path) -> std::path::PathBuf {
+    let script = root.join("herdr");
+    let calls = root.join("calls");
+    std::fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+printf '%s\n' "$*" >> {calls}
+case "$1 $2" in
+  "workspace create"|"tab create") echo '{{"result":{{"workspace":{{"workspace_id":"w7"}},"tab":{{"tab_id":"w7:t1"}},"root_pane":{{"pane_id":"w7:p1","tab_id":"w7:t1"}}}}}}' ;;
+  *) echo '{{}}' ;;
+esac
+"#,
+            calls = shell_words::quote(&calls.to_string_lossy()),
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o700)).unwrap();
+    script
+}
+
+#[tokio::test]
+async fn herdr_09_opens_every_session_as_its_own_workspace() {
+    let root = tempfile::tempdir().unwrap();
+    let herdr = HerdrCli::new(fake_legacy_herdr(root.path()), Some("w1".to_owned()));
+    let window = herdr.launch_agent(&launch("macro-abc", &[])).await.unwrap();
+    assert_eq!(window.pane_id, "w7:p1");
+
+    let calls = std::fs::read_to_string(root.path().join("calls")).unwrap();
+    let calls: Vec<&str> = calls.lines().collect();
+    assert_eq!(
+        calls[0],
+        "workspace create --cwd /work --label fix it --no-focus"
+    );
+    // Not a tab in macrod's workspace, nor a worktree grouped under the
+    // operator's repository workspace.
+    assert!(!calls.iter().any(|call| call.starts_with("tab create")));
+    assert!(!calls.iter().any(|call| call.starts_with("worktree ")));
+    assert!(
+        calls
+            .iter()
+            .any(|call| call.starts_with("agent start macro-abc --kind codex --pane w7:p1"))
     );
 }
