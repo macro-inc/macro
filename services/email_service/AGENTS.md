@@ -340,6 +340,16 @@ the gateway `/email` prefix.
   spends live provider quota; Gmail reads three messages at a time to stay
   under the gate's live cap. Don't record message content or addresses on
   its spans.
+- Connecting an inbox writes its `email_links` row, which a CRM contact
+  population share-locks for its whole transaction. The connect transactions
+  (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
+  open with `outbound::link_lock::begin`, a 5 s `lock_timeout`, and a lock
+  timeout is `InitializationError::Contended`. `/email/init` answers it 503,
+  never 409: clients read that route's 409 as a sharing conflict to confirm.
+  `set_credential_owner` keeps waiting, because it follows the Google grant's
+  relocation and a give-up would leave the shared inbox's tokens failing.
+  The token-health writes (`email_db_client::links::update::{set,clear}_link_needs_reauth`)
+  give up after 5 s too and are written again on the next token fetch.
 - To run against `crates/gmail_emulator` instead of Google, set the
   `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
   Google client sets them itself. Without
