@@ -208,6 +208,10 @@ export function getEntitySearchText(entity: CombinedEntity): string {
   if (entity.data.type === 'crm_contact') {
     return `${entity.data.name} | ${entity.data.email}`;
   }
+  if (entity.data.type === 'crm_company') {
+    const domains = entity.data.domains.map(({ domain }) => domain).join(' ');
+    return domains ? `${entity.data.name} | ${domains}` : entity.data.name;
+  }
 
   return entity.data.name ?? '';
 }

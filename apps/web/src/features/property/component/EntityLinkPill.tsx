@@ -1,3 +1,4 @@
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { ButtonGroup, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -29,6 +30,7 @@ export function EntityLinkPill(props: {
     iconSize: 'fill',
     loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? ''),
   });
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
 
   // A document's type is known only once its preview loads; keep the split
   // pill mounted meanwhile so the swap can't drop focus or shift the row.
@@ -48,7 +50,7 @@ export function EntityLinkPill(props: {
           aria-label={props.openLabel(display.name())}
           class="min-w-0 shrink justify-start"
           disabled={!display.blockOrFileType()}
-          onClick={open}
+          {...navHandlers}
         >
           <Show when={props.label}>
             {(label) => <span class="shrink-0 text-ink-muted">{label()}:</span>}
