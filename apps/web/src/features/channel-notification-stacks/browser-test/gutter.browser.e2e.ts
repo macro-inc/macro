@@ -159,6 +159,16 @@ test('unread dots follow unseen stacks on the toggle and the rows', async ({
   // seen, so it is not done but shows no dot.
   await expect(toggleDot).toBeVisible();
   await expect(toggle(page)).toHaveAttribute('aria-description', 'Unread');
+  // In line after the count, centred with it.
+  const count = await toggle(page)
+    .getByText('3', { exact: true })
+    .boundingBox();
+  const dot = await toggleDot.boundingBox();
+  if (!count || !dot) throw new Error('expected the count and the dot');
+  expect(dot.x).toBeGreaterThan(count.x + count.width);
+  expect(
+    Math.abs(dot.y + dot.height / 2 - (count.y + count.height / 2))
+  ).toBeLessThanOrEqual(1);
   await expect(rows).toHaveCount(3);
   await expect(unreadDots).toHaveCount(2);
   await expect(

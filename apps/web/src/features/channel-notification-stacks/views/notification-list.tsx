@@ -98,21 +98,16 @@ export function NotificationList(props: {
   const hasUnread = () => props.notDone().some(stackIsUnread);
   const toggleContent = () => (
     <>
-      {/* The dock's unread dot, on the bell's corner. */}
-      <span class="relative flex">
-        <BellIcon class="size-4" />
-        <Show when={hasUnread()}>
-          <span
-            aria-hidden="true"
-            data-unread-dot
-            class="pointer-events-none absolute -top-1 -right-1 rounded-full ring-2 ring-button-secondary-bg"
-          >
-            <UnreadIndicator active class="size-1.5" />
-          </span>
-        </Show>
-      </span>
+      <BellIcon class="size-4" />
       <Show when={stacks().length > 0}>
         <span class="tabular-nums">{stacks().length}</span>
+      </Show>
+      {/* The inbox's unread dot, in line after the count; the button's own
+          gap spaces it like the bell and the count. */}
+      <Show when={hasUnread()}>
+        <span aria-hidden="true" data-unread-dot class="flex items-center">
+          <UnreadIndicator active class="size-1.5" />
+        </span>
       </Show>
     </>
   );

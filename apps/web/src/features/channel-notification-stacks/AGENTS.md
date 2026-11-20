@@ -45,8 +45,9 @@ has its own flag (`enable-channel-stack-done-checks`, `enable-channel-notificati
 - The toggle and list show only while the channel has a not-done stack (or
   the not-done read failed, to offer Retry): never while that read loads, and
   not on the Unread tab once everything is done. Unseen stacks carry the
-  inbox's unread dot (`UnreadIndicator`), and the bell carries the dock's
-  dot while any not-done stack is unseen; both come from the not-done read.
+  inbox's unread dot (`UnreadIndicator`), and the toggle shows the same dot
+  after its count while any not-done stack is unseen; both come from the
+  not-done read.
 - Marking uses the global notification source's bulk done/seen, which applies
   local overrides at once. Apply `withLocalOverrides` to every read here, or
   marked stacks stay on screen until the refetch.

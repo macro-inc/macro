@@ -1101,8 +1101,8 @@ hidden states. Check that:
   message, and the row's check marks it done (or read, in Unread). While a
   list's notifications load it says so, and if the read fails it offers Retry
   instead of an empty list.
-- Unseen stacks show an unread dot before their icon, and the bell shows a
-  dot while any not-done stack is unseen. Reading a stack (here, in Home, or
+- Unseen stacks show an unread dot before their icon, and the toggle shows
+  one after its count while any not-done stack is unseen. Reading a stack (here, in Home, or
   on another device) clears its dot.
 - With nothing left to mark done, the bell and the list hide (an open popover
   closes); a new notification brings the bell back.
