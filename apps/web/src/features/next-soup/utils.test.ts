@@ -1648,6 +1648,28 @@ describe('getChannelEntityTarget', () => {
     }
   );
 
+  it('marks an unseen invite seen when Chat opens the channel', () => {
+    const invite = {
+      ...sendNotification('invite', 'unused'),
+      notification_event_type: 'channel_invite',
+      notification_metadata: {
+        tag: 'channel_invite',
+        content: {
+          invitedBy: 'macro|inviter@example.com',
+          channelName: 'Team',
+        },
+      },
+    } as UnifiedNotification;
+    const seenInvite = asRead({ ...invite, id: 'seen-invite' });
+    const bulkMarkAsRead = vi.fn(async () => {});
+    markChannelNotificationsSeenOnOpen(
+      channelRow({ notifications: [invite, seenInvite] }),
+      notificationSourceWithBulkMarkAsRead(bulkMarkAsRead),
+      { channelReadScope: 'top-level' }
+    );
+    expect(bulkMarkAsRead).toHaveBeenCalledExactlyOnceWith([invite]);
+  });
+
   it('marks top-level notifications on repeated Chat opens, skipping replies and local reads', () => {
     const send = sendNotification('send', 'top-level');
     const root = sendNotification('root', 'root');

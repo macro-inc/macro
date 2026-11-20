@@ -137,7 +137,7 @@ pub(super) async fn get_filtered_entity_notifications(
             ) un
             JOIN notification n ON n.id = un.notification_id
             WHERE (NOT $7::bool OR (
-                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention', 'channel_access_requested')
+                  n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention', 'channel_access_requested', 'channel_invite')
                   AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
               ))
               AND (NOT $8::bool OR requested.entity_type <> 'channel' OR (
