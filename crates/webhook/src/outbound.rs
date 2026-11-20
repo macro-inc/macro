@@ -27,3 +27,7 @@ pub use pg_mcp_subscription_repository::PgMcpSubscriptionRepository;
 pub use pg_repository::PgRepository;
 #[cfg(feature = "outbound")]
 pub use sqs_queue::SqsWebhookQueue;
+#[cfg(feature = "kms")]
+pub mod kms_mcp_secret_cipher;
+#[cfg(feature = "kms")]
+pub use kms_mcp_secret_cipher::KmsMcpSecretCipher;

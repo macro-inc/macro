@@ -13,7 +13,7 @@ consumer = [
   "ingestion",
   "macro_event_broker/outbound",
 ]
-default = ["consumer", "inbound", "outbound", "ports", "stream"]
+default = ["consumer", "inbound", "kms", "outbound", "ports", "stream"]
 inbound = [
   "dep:axum",
   "dep:axum-extra",
@@ -134,6 +134,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 agent_fold = { path = "../folds/agent_fold" }
+async-trait = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 agent_session = { path = "../agent_session", default-features = false, features = [
   "test-utils",
@@ -149,3 +150,4 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
 ] }
 tokio = { workspace = true, features = ["test-util"] }
 tower = { workspace = true }
+zeroize = { workspace = true }
