@@ -179,9 +179,10 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
 /// [`GMAIL_REFUSED_RETRY`]) and tries again; a refusal whose wait would
 /// reach the deadline, or any refusal without one, is the answer. No try
 /// starts at or after the deadline. One still running then finishes, within
-/// the client's own timeouts: cutting it off could drop the gate's admission
-/// after Redis granted it and before its permit exists, holding a slot of
-/// the mailbox until the lease runs out.
+/// the client's own timeouts and with the calls it is made of (the list's
+/// later pages, a token refresh): cutting it off could drop the gate's
+/// admission after Redis granted it and before its permit exists, holding a
+/// slot of the mailbox until the lease runs out.
 async fn wait_out_refusals<O, F, Fut>(
     deadline: Option<Instant>,
     mut read: F,

@@ -346,8 +346,9 @@ the gateway `/email` prefix.
   client in the `Backfill` share, so sync and user writes keep the slots
   and units held for them. That is more than one 10-second window of the
   share, so a window read waits out the gate's refusals for 45 s from its
-  list; a call not started by then is left out, and one still running then
-  finishes (cutting it off could leak a gate slot). A later list page that
+  list; a read not started by then is left out, and one still running then
+  finishes, with the list pages or token refresh it is made of (cutting it
+  off could leak a gate slot). A later list page that
   fails keeps the ids listed before it. Outlook pages through
   `@odata.nextLink` past empty pages (at most ten pages, never one twice,
   its query in any order) and keeps what earlier pages read when a later

@@ -90,27 +90,38 @@ async fn a_read_not_started_by_its_deadline_is_left_out_untried() {
 async fn a_read_running_at_its_deadline_finishes_and_none_starts_after() {
     let tries = Cell::new(0);
     let started = Instant::now();
-
-    // Each try takes 30 s. The first is refused and retried at 31 s; the
-    // second runs past the deadline and is answered; no third starts.
-    let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), || {
-        tries.set(tries.get() + 1);
-        let first = tries.get() == 1;
-        async move {
-            tokio::time::sleep(Duration::from_secs(30)).await;
-            if first {
-                Err(EmailApiError::RateLimited {
-                    retry_after: Some(Duration::from_secs(1)),
-                    origin: RateLimitOrigin::Local,
-                })
-            } else {
-                Ok(None::<MessageWithCalendarParts>)
+    // Each try takes 30 s; the first `answered_on` - 1 are refused, asking
+    // for a second.
+    let slow = |answered_on: u32| {
+        let tries = &tries;
+        move || {
+            tries.set(tries.get() + 1);
+            let refused = tries.get() < answered_on;
+            async move {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                if refused {
+                    Err(EmailApiError::RateLimited {
+                        retry_after: Some(Duration::from_secs(1)),
+                        origin: RateLimitOrigin::Local,
+                    })
+                } else {
+                    Ok(None::<MessageWithCalendarParts>)
+                }
             }
         }
-    })
-    .await;
+    };
 
+    // The second try starts at 31 s and runs past the deadline: it finishes.
+    let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), slow(2)).await;
     assert!(matches!(answer, Ok(None)));
+    assert_eq!(tries.get(), 2);
+    assert_eq!(started.elapsed(), Duration::from_secs(61));
+
+    // Refused past the deadline, it is the answer: no third try starts.
+    tries.set(0);
+    let started = Instant::now();
+    let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), slow(3)).await;
+    assert!(matches!(answer, Err(EmailApiError::RateLimited { .. })));
     assert_eq!(tries.get(), 2);
     assert_eq!(started.elapsed(), Duration::from_secs(61));
 }
