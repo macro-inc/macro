@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO team_agent_inboxes (agent_user_id, team_id, request_id, state)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (agent_user_id) DO UPDATE SET agent_user_id = EXCLUDED.agent_user_id\n            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,\n                      last_error, updated_at\n            ",
+  "query": "\n            UPDATE team_agent_inboxes\n            SET mailbox_id = COALESCE($2, mailbox_id),\n                address = COALESCE($3, address),\n                state = $4,\n                last_error = $5,\n                fake_provider = $6,\n                updated_at = now()\n            WHERE agent_user_id = $1\n            RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,\n                      last_error, fake_provider, updated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -40,6 +40,11 @@
       },
       {
         "ordinal": 7,
+        "name": "fake_provider",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -48,8 +53,10 @@
       "Left": [
         "Text",
         "Uuid",
-        "Uuid",
-        "Text"
+        "Text",
+        "Text",
+        "Text",
+        "Bool"
       ]
     },
     "nullable": [
@@ -60,8 +67,9 @@
       true,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "1b9230a7fc987bc4367bd69e43fd45fab062bf44db91c1dc420c6c8b6fffcc97"
+  "hash": "d70075adf1d8905e0e607ff940ffa1d5236d9ce629ba1d9dc091c6ab4a46e4cc"
 }

@@ -2378,6 +2378,7 @@ dependencies = [
  "doppler-config",
  "email",
  "email_db_client",
+ "email_service_client",
  "email_validator",
  "entity_access",
  "entity_registry",
@@ -21250,6 +21251,7 @@ dependencies = [
  "axum",
  "bot_id",
  "chrono",
+ "email_service_client",
  "entity_access",
  "feature_flags",
  "harness_id",
@@ -21277,6 +21279,7 @@ dependencies = [
  "user_api_key",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 

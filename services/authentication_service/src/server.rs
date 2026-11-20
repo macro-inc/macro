@@ -757,33 +757,49 @@ async fn run_server() -> anyhow::Result<()> {
     );
     // Agent teammates: off for every admin unless `enable-agent-teammates`
     // is on for them in PostHog.
-    let team_agents_service = Arc::new(team_agents::domain::service::TeamAgentServiceImpl::new(
-        team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
-        team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
-        team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
-            user_api_key::domain::service::UserApiKeyServiceImpl::new(
-                user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(db.clone()),
+    let team_agents_service = Arc::new(
+        team_agents::domain::service::TeamAgentServiceImpl::new(
+            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+            team_agents::outbound::team_membership::TeamsMembership::new(teams_service.clone()),
+            team_agents::outbound::agent_api_keys::UserApiKeys::new(Arc::new(
+                user_api_key::domain::service::UserApiKeyServiceImpl::new(
+                    user_api_key::outbound::pg_user_api_keys_repo::PgUserApiKeysRepo::new(
+                        db.clone(),
+                    ),
+                ),
+            )),
+            team_agents::outbound::agent_git_repos::AgentGitRepos::new(
+                agent_git::client::AgentGitClient::new(
+                    macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
+                    internal_key.clone(),
+                )
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?,
+            ),
+            team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
+                computer_service.clone(),
+                hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
+            ),
+            agent_credentials::rollout::PgAgentCreators::new(db.clone()),
+            feature_flags.clone(),
+            team_agents::outbound::setup_notices::IngressSetupNotices::new(
+                notification_ingress_service.clone(),
+                team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
+            ),
+            crate::outbound::agent_addresses::AgentAddresses,
+        )
+        // Agent inboxes: email_service makes and serves the mailbox; off for
+        // every admin unless `enable-agent-inboxes` is on for them.
+        .with_inboxes(team_agents::domain::inbox::InboxService::new(
+            team_agents::outbound::pg_agent_inboxes::PgAgentInboxes::new(db.clone()),
+            team_agents::outbound::email_service_mailboxes::EmailServiceMailboxes::new(
+                email_service_client::EmailServiceClient::new(
+                    internal_key.clone(),
+                    EmailServiceUrl::new()?.to_string(),
+                )
+                .agent_mailboxes(),
             ),
         )),
-        team_agents::outbound::agent_git_repos::AgentGitRepos::new(
-            agent_git::client::AgentGitClient::new(
-                macro_service_urls::AgentGitServiceUrl::new()?.to_string(),
-                internal_key.clone(),
-            )
-            .map_err(|error| anyhow::anyhow!("{error:?}"))?,
-        ),
-        team_agents::outbound::hosted_runtimes_computers::HostedRuntimesComputers::new(
-            computer_service.clone(),
-            hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy),
-        ),
-        agent_credentials::rollout::PgAgentCreators::new(db.clone()),
-        feature_flags.clone(),
-        team_agents::outbound::setup_notices::IngressSetupNotices::new(
-            notification_ingress_service.clone(),
-            team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo::new(db.clone()),
-        ),
-        crate::outbound::agent_addresses::AgentAddresses,
-    ));
+    );
     let domain_notice_service =
         Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
             // The notice goes to the admin's email correspondents, read from

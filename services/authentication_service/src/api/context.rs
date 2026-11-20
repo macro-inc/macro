@@ -239,6 +239,10 @@ pub(crate) type TeamAgentsServiceType = team_agents::domain::service::TeamAgentS
         NotificationIngressType,
         team_agents::outbound::pg_team_agents_repo::PgTeamAgentsRepo,
     >,
+    team_agents::domain::inbox::InboxService<
+        team_agents::outbound::pg_agent_inboxes::PgAgentInboxes,
+        team_agents::outbound::email_service_mailboxes::EmailServiceMailboxes,
+    >,
 >;
 
 pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServiceImpl<

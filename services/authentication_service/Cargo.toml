@@ -85,6 +85,7 @@ document_storage_service_client = { path = "../../crates/document_storage_servic
 models_sfs = { path = "../../crates/models_sfs" }
 static_file_service_client = { path = "../../crates/static_file_service_client" }
 user_api_key = { path = "../../crates/user_api_key", features = ["postgres"] }
+email_service_client = { path = "../../crates/email_service_client" }
 team_agents = { path = "../../crates/team_agents", features = ["inbound", "outbound"] }
 agent_credentials = { path = "../../crates/agent_credentials", features = ["postgres"] }
 agent_git = { path = "../../crates/agent_git", default-features = false, features = ["client"] }

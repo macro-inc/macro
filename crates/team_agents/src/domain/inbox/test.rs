@@ -48,6 +48,7 @@ impl AgentInboxRepository for FakeRecords {
             address: None,
             state: AgentInboxState::Provisioning,
             last_error: None,
+            fake_provider: false,
             updated_at: DateTime::UNIX_EPOCH,
         };
         records.push(record.clone());
@@ -89,6 +90,7 @@ impl AgentInboxRepository for FakeRecords {
         record.address = update.address.clone().or(record.address.take());
         record.state = update.state;
         record.last_error = update.last_error;
+        record.fake_provider = update.fake_provider;
         Ok(record.clone())
     }
 }
@@ -135,6 +137,7 @@ impl FakeMailboxes {
             address: Some(ADDRESS.to_owned()),
             state,
             last_error: None,
+            fake_provider: false,
         }
     }
 }
@@ -227,6 +230,7 @@ async fn provisioning_names_the_mailbox_after_the_agent_and_stores_its_address()
             address: Some(ADDRESS.to_owned()),
             state: AgentInboxState::Active,
             failure: None,
+            fake_provider: false,
         }
     );
     let record = records.only();
