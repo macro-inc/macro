@@ -225,24 +225,107 @@ impl McpEventSubscription {
     }
 }
 
-/// A subscription to create or refresh.
-#[derive(Debug, Clone)]
+/// A subscription to create or refresh: the body of the internal subscribe
+/// call the MCP server makes for the acting user.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct McpSubscribeRequest {
     /// What identifies the subscription; the subscriber comes from the caller.
     pub event_type: String,
     /// Subscription arguments.
+    #[cfg_attr(feature = "inbound", schema(value_type = Object))]
     pub arguments: serde_json::Value,
     /// Callback URL.
     pub endpoint_url: String,
     /// The compiled filter, when the caller compiled one. A refresh of a
     /// stored subscription may omit it, and the stored filter is kept.
+    #[cfg_attr(feature = "inbound", schema(value_type = Option<Object>))]
     pub filter: Option<McpEventFilter>,
-    /// The new signing secret in plaintext, to sign the endpoint challenge.
+    /// The new `whsec_` signing secret in plaintext, to sign the endpoint
+    /// challenge.
+    #[cfg_attr(feature = "inbound", schema(value_type = String))]
+    #[serde(with = "whsec_secret")]
     pub secret: SigningSecret,
     /// The same secret encrypted for storage.
     pub secret_ciphertext: McpSecretCiphertext,
     /// The suggested lifetime.
     pub ttl: McpTtlRequest,
+}
+
+mod whsec_secret {
+    use serde::{Deserialize as _, Deserializer, Serializer};
+    use webhook_signature::standard::SigningSecret;
+
+    pub(super) fn serialize<S: Serializer>(
+        secret: &SigningSecret,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&secret.expose())
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<SigningSecret, D::Error> {
+        let text = zeroize::Zeroizing::new(String::deserialize(deserializer)?);
+        SigningSecret::parse(&text).map_err(serde::de::Error::custom)
+    }
+}
+
+/// What names a subscription to remove: the body of the internal
+/// unsubscribe call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct McpUnsubscribeRequest {
+    /// MCP event type name.
+    pub event_type: String,
+    /// Subscription arguments.
+    #[cfg_attr(feature = "inbound", schema(value_type = Object))]
+    pub arguments: serde_json::Value,
+    /// Callback URL.
+    pub endpoint_url: String,
+}
+
+impl McpUnsubscribeRequest {
+    /// The key of `user_id`'s subscription.
+    #[must_use]
+    pub fn into_key(self, user_id: MacroUserIdStr<'static>) -> McpSubscriptionKey {
+        McpSubscriptionKey {
+            user_id,
+            endpoint_url: self.endpoint_url,
+            event_type: self.event_type,
+            arguments: self.arguments,
+        }
+    }
+}
+
+/// Why an internal subscription call failed, as its error body says.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "code", rename_all = "snake_case")]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub enum McpSubscriptionErrorBody {
+    /// The request is invalid.
+    InvalidParams {
+        /// What is wrong.
+        message: String,
+    },
+    /// A new subscription needs a compiled filter.
+    FilterRequired,
+    /// No subscription has this key.
+    NotFound,
+    /// The user holds the most subscriptions allowed.
+    ResourceExhausted {
+        /// The limit.
+        max: u32,
+    },
+    /// The callback endpoint failed verification.
+    CallbackEndpointError {
+        /// The failure category.
+        reason: McpEndpointFailure,
+    },
+    /// Something on our side failed.
+    Internal,
 }
 
 /// A subscription made or refreshed.
