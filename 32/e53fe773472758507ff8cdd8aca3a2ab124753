@@ -1,0 +1,38 @@
+services/agent_harness_service/AGENTS.md
+  s_3fb64aa1344508::t_529aa879e467d5 184-189
+services/agent_harness_service/src/internal_mcp.rs
+  s_3fb64aa1344508::t_ed02575566eb13 112
+services/agent_harness_service/src/public_mcp/tool_service/test.rs
+  s_3fb64aa1344508::t_1881cead11e963 293,505-516,522-526,663-704,710-715,724-746,751-769,776-794
+  s_3fb64aa1344508::t_627e1efc397019 288,705-709,747-750
+  s_3fb64aa1344508::t_c0fb8c2f7d77f0 716-723,770-775
+  s_3fb64aa1344508::t_a3eaed05ae699a 795
+services/agent_harness_service/src/public_mcp/tool_service.rs
+  s_3fb64aa1344508::t_212aba6a5cfe08 15-17,20-26,151-162,247-249,274,278-301
+services/agent_harness_service/src/public_mcp/direct_tools_instructions.md
+  s_4a729c529d6245::t_efc21831d3be40 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "32e53fe773472758507ff8cdd8aca3a2ab124753",
+  "prompts": {},
+  "sessions": {
+    "s_3fb64aa1344508": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f46da021-47a6-468f-bf45-ce0294d06c4d",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4a729c529d6245": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "39c3662c-b410-4f38-aa9c-467272cd6d37",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
