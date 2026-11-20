@@ -7,7 +7,7 @@
 
 import { CATALOG } from './catalog';
 import type { CardMark, FeedMarks, RoutineMark } from './judge';
-import type { FeedTruth, RoutinesTruth } from './personas';
+import type { FeedTruth, RoutinesTruth, StreamsTruth } from './personas';
 import type { Generation } from './run';
 
 export type Section = 'routines' | 'feed';
@@ -28,6 +28,13 @@ export type Score = {
   quality: number | null;
   /** The judge's rating of the whole feed, 1–10. */
   feedRating?: number;
+  /** Routines: drafted suggestions, and the good ones of each kind: each meets a need and has nothing wrong. */
+  drafts?: number;
+  goodDrafts?: number;
+  goodPicks?: number;
+  /** A month persona: work streams of its key that some suggestion acts on, of how many. */
+  aimed?: number;
+  workStreams?: number;
 };
 
 export type Attempt = {
@@ -95,11 +102,15 @@ export function catalogFlags(generation: Generation, i: number, mark: RoutineMar
   };
 }
 
-export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth): Score {
+export function scoreRoutines(generation: Generation, marks: RoutineMark[], truth: RoutinesTruth, streams?: StreamsTruth): Score {
   const needIds = new Set(truth.needs.map((need) => need.id));
+  const work = new Set(streams?.streams.filter((stream) => stream.kind === 'work').map((stream) => stream.id));
   const found = new Set<string>();
+  const aimed = new Set<string>();
   const wrong: Record<string, number> = {};
   let bad = 0;
+  let goodDrafts = 0;
+  let goodPicks = 0;
   generation.routines.forEach((row, i) => {
     const mark = marks[i];
     // A catalog routine is scored by its key (catalogFlags); a drafted one is the judge's call.
@@ -120,9 +131,16 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
           invented: mark.invented,
         };
     for (const [name, holds] of Object.entries(flags)) count(wrong, name, holds);
-    if (Object.values(flags).some(Boolean)) bad++;
+    const flawed = Object.values(flags).some(Boolean);
+    if (flawed) bad++;
     // One that can't work or doesn't fit meets nothing: for a catalog pick, by its key too.
     if (!flags.broken && !flags.unsafe && !flags.misfit) for (const id of meets) found.add(id);
+    // Good: it meets a need of the key and nothing is wrong with it.
+    if (meets.length && !flawed) {
+      if (key) goodPicks++;
+      else goodDrafts++;
+    }
+    for (const id of mark.streams ?? []) if (work.has(id)) aimed.add(id);
   });
   const needs = truth.needs.length;
   return {
@@ -135,6 +153,10 @@ export function scoreRoutines(generation: Generation, marks: RoutineMark[], trut
     invented: wrong.invented ?? 0,
     wrong,
     quality: mean(marks.map((mark) => mark.keep)),
+    drafts: generation.routines.filter((row) => !row.catalog_key).length,
+    goodDrafts,
+    goodPicks,
+    ...(streams ? { aimed: aimed.size, workStreams: work.size } : {}),
   };
 }
 
@@ -174,7 +196,7 @@ export function scoreFeed(generation: Generation, marks: FeedMarks, truth: FeedT
 
 /** A generation the build failed (see `Generation.buildFailed`): it found nothing. */
 export function failedScore(needs: number): Score {
-  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null };
+  return { score: 0, needs, found: 0, missed: [], suggestions: 0, bad: 0, invented: 0, wrong: {}, quality: null, drafts: 0, goodDrafts: 0, goodPicks: 0 };
 }
 
 // ---------- summaries ----------
@@ -211,6 +233,18 @@ export function summary(attempts: Attempt[]) {
     wrongPerRun: Object.fromEntries(Object.entries(wrong).map(([k, v]) => [k, v / Math.max(1, done.length)])),
     quality: avg(done.flatMap((a) => (a.score.quality === null ? [] : [a.score.quality]))),
     feedRating: done.some((a) => a.score.feedRating !== undefined) ? avg(done.map((a) => a.score.feedRating ?? 0)) : undefined,
+    // Routines runs scored before good suggestions were counted have none of these.
+    ...(done.length && done.every((a) => a.score.goodDrafts !== undefined)
+      ? {
+          drafts: avg(done.map((a) => a.score.drafts!)),
+          goodDrafts: avg(done.map((a) => a.score.goodDrafts!)),
+          goodPicks: avg(done.map((a) => a.score.goodPicks!)),
+          fiveGoodDrafts: done.filter((a) => a.score.goodDrafts! >= 5).length,
+        }
+      : {}),
+    ...(done.length && done.every((a) => a.score.aimed !== undefined)
+      ? { aimed: avg(done.map((a) => a.score.aimed!)), workStreams: avg(done.map((a) => a.score.workStreams!)) }
+      : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
     firstMedianMs: quantile(first, 0.5),
     firstP90Ms: quantile(first, 0.9),

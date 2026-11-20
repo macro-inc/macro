@@ -16,7 +16,7 @@ import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
-import { type Attempt, type Margins, type RunFile, type Section, PARTS, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
+import { type Attempt, type Margins, type RunFile, type Section, PARTS, contrast, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
 type SectionSpec = {
@@ -160,7 +160,7 @@ const judgeAndScore = (at: Stack, section: Section, persona: Persona, attempt: A
     try {
       if (section === 'routines') {
         attempt.routineMarks = await judgeRoutines(at, grader, persona, attempt.generation);
-        attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);
+        attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
       } else {
         attempt.feedMarks = await judgeFeed(at, grader, persona, attempt.generation);
         attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
@@ -391,7 +391,7 @@ function rescore(path: string) {
   }
   for (const attempt of run.attempts) {
     const persona = people.get(attempt.persona)!;
-    if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!);
+    if (attempt.routineMarks) attempt.score = scoreRoutines(attempt.generation, attempt.routineMarks, persona.routinesTruth!, persona.streamsTruth);
     else if (attempt.feedMarks) attempt.score = scoreFeed(attempt.generation, attempt.feedMarks, persona.feedTruth!);
   }
   writeFileSync(path, `${JSON.stringify(run, null, 1)}\n`);
@@ -429,6 +429,15 @@ async function main() {
         const c = v.parts[part];
         const digits = part === 'score' ? 1 : 2;
         console.log(`- ${part}: ${c.a.toFixed(digits)} → ${c.b.toFixed(digits)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(digits)} (95% ${c.interval[0].toFixed(digits)} to ${c.interval[1].toFixed(digits)}), margin ${c.margin}: ${c.verdict}`);
+      }
+      // Good suggestions are reported, not judged against a margin: none has been measured for them.
+      for (const [part, get] of [
+        ['good drafts', (attempt: Attempt) => attempt.score?.goodDrafts],
+        ['good catalog picks', (attempt: Attempt) => attempt.score?.goodPicks],
+      ] as const) {
+        if (![...a.attempts, ...b.attempts].every((attempt) => attempt.benchError || get(attempt) !== undefined)) continue;
+        const c = contrast(a.attempts, b.attempts, (attempt) => get(attempt)!);
+        console.log(`- ${part}: ${c.a.toFixed(2)} → ${c.b.toFixed(2)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)} (95% ${c.interval[0].toFixed(2)} to ${c.interval[1].toFixed(2)}), no margin`);
       }
       console.log(`- cost per generation: ${v.usd[0].toFixed(3)} → ${v.usd[1].toFixed(3)} (difference 95% ${v.usdInterval[0].toFixed(3)} to ${v.usdInterval[1].toFixed(3)})`);
       console.log(`- time: B/A median ×${v.wallRatio.toFixed(2)}`);
