@@ -461,12 +461,13 @@ pub trait BotService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<AuthenticatedBot, BotError>> + Send;
 }
 
-/// Whether a Pipedream app slug is one an agent may pin.
+/// Whether a connector catalog slug is one an agent may pin.
 ///
-/// The directory is Pipedream's. `Ok(false)` is a definite miss. `Err` means
-/// the directory could not be asked, and the slug must not be stored.
+/// The catalog is Pipedream's app directory plus the apps overlaid onto the
+/// native MCP stack. `Ok(false)` is a definite miss. `Err` means the catalog
+/// could not be asked, and the slug must not be stored.
 pub trait McpAppCatalog: Send + Sync + 'static {
-    /// `true` when `slug` is a connectable Pipedream app.
+    /// `true` when `slug` is a connectable catalog app.
     fn is_connectable_app(&self, slug: &str)
     -> impl Future<Output = Result<bool, BotError>> + Send;
 }

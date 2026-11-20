@@ -195,11 +195,12 @@ pub fn build_bot_tool_context(
                 event_broker,
                 harnesses::domain::service::HarnessServiceImpl::new(
                     harnesses::outbound::pg_harness_repo::PgHarnessRepo::new(pool.clone()),
-                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool),
+                    hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
                 ),
             )
             .with_mcp_apps(crate::mcp_app_catalog::PipedreamMcpAppCatalog::new(
                 pipedream,
+                pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo::new(pool),
             )),
         ),
         entity_access_service,
