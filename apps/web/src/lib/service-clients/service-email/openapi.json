@@ -6216,7 +6216,7 @@
       },
       "InitErrorCodeResponse": {
         "type": "object",
-        "description": "Structured 400 body carrying a machine-readable code. Clients branch on\n`code` instead of parsing the human message.",
+        "description": "Structured 400 or 409 body carrying a machine-readable code. Clients branch\non `code` instead of parsing the human message.",
         "required": ["code", "message"],
         "properties": {
           "code": {
@@ -7415,11 +7415,16 @@
         "type": "object",
         "description": "Returned with a `409 Conflict` when a connect targets an external mailbox another\nmacro user has already connected. The client surfaces a confirmation; on confirm it\nretries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.",
         "required": [
+          "code",
           "email_address",
           "existing_owner_email",
           "existing_link_id"
         ],
         "properties": {
+          "code": {
+            "type": "string",
+            "description": "Always [`SHARED_INBOX_CONFLICT_CODE`]: every other 409 carries its own code."
+          },
           "email_address": {
             "type": "string",
             "description": "The mailbox address that is already connected."

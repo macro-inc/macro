@@ -267,3 +267,46 @@ async fn a_busy_inbox_is_a_503_never_a_sharing_conflict() {
     .into_response();
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
 }
+
+#[tokio::test]
+async fn both_providers_share_prompts_are_one_coded_conflict_with_their_fields() {
+    let link = Uuid::now_v7();
+    for error in [
+        ConnectionError::SharedInboxConflict {
+            email_address: "team@example.com".into(),
+            existing_owner_email: "owner@example.com".into(),
+            existing_link_id: link,
+        },
+        ConnectionError::MailboxInitialization(InitializationError::SharingConfirmation {
+            link_id: link,
+            email: "team@example.com".into(),
+            owner_email: "owner@example.com".into(),
+        }),
+    ] {
+        let response = InitError::from(error).into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = body_json(response).await;
+        assert_eq!(body["code"], SHARED_INBOX_CONFLICT_CODE);
+        assert_eq!(body["email_address"], "team@example.com");
+        assert_eq!(body["existing_owner_email"], "owner@example.com");
+        assert_eq!(body["existing_link_id"], link.to_string());
+    }
+}
+
+#[tokio::test]
+async fn other_conflicts_carry_their_own_code_and_no_share_fields() {
+    for (error, code) in [
+        (
+            InitializationError::IdentityConflict,
+            INBOX_IDENTITY_CONFLICT_CODE,
+        ),
+        (InitializationError::Changed, INBOX_CHANGED_CODE),
+    ] {
+        let response =
+            InitError::from(ConnectionError::MailboxInitialization(error)).into_response();
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = body_json(response).await;
+        assert_eq!(body["code"], code);
+        assert!(body.get("email_address").is_none());
+    }
+}

@@ -6,8 +6,8 @@
  */
 
 /**
- * Structured 400 body carrying a machine-readable code. Clients branch on
-`code` instead of parsing the human message.
+ * Structured 400 or 409 body carrying a machine-readable code. Clients branch
+on `code` instead of parsing the human message.
  */
 export interface InitErrorCodeResponse {
   /** Stable machine-readable error code. */

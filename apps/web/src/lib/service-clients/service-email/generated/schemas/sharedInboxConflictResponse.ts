@@ -11,6 +11,8 @@ macro user has already connected. The client surfaces a confirmation; on confirm
 retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
  */
 export interface SharedInboxConflictResponse {
+  /** Always [`SHARED_INBOX_CONFLICT_CODE`]: every other 409 carries its own code. */
+  code: string;
   /** The mailbox address that is already connected. */
   email_address: string;
   /** The existing link that would be shared if the caller confirms. */

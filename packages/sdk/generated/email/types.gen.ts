@@ -1300,8 +1300,8 @@ export type GuestPolicy = {
 };
 
 /**
- * Structured 400 body carrying a machine-readable code. Clients branch on
- * `code` instead of parsing the human message.
+ * Structured 400 or 409 body carrying a machine-readable code. Clients branch
+ * on `code` instead of parsing the human message.
  */
 export type InitErrorCodeResponse = {
     /**
@@ -1825,6 +1825,10 @@ export type Settings = {
  * retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
  */
 export type SharedInboxConflictResponse = {
+    /**
+     * Always [`SHARED_INBOX_CONFLICT_CODE`]: every other 409 carries its own code.
+     */
+    code: string;
     /**
      * The mailbox address that is already connected.
      */

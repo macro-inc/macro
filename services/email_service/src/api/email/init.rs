@@ -75,8 +75,20 @@ pub const NO_GMAIL_GRANT_CODE: &str = "NO_GMAIL_GRANT";
 /// Stable machine-readable code for [`InitializationError::InboxBeingRemoved`].
 pub const INBOX_BEING_REMOVED_CODE: &str = "INBOX_BEING_REMOVED";
 
-/// Structured 400 body carrying a machine-readable code. Clients branch on
-/// `code` instead of parsing the human message.
+/// Stable machine-readable code for a mailbox another Macro user already
+/// connected: Gmail's [`ConnectionError::SharedInboxConflict`] and Outlook's
+/// [`InitializationError::SharingConfirmation`]. Clients offer to share the
+/// inbox only for this code.
+pub const SHARED_INBOX_CONFLICT_CODE: &str = "SHARED_INBOX_CONFLICT";
+
+/// Stable machine-readable code for [`InitializationError::IdentityConflict`].
+pub const INBOX_IDENTITY_CONFLICT_CODE: &str = "INBOX_IDENTITY_CONFLICT";
+
+/// Stable machine-readable code for [`InitializationError::Changed`].
+pub const INBOX_CHANGED_CODE: &str = "INBOX_CHANGED";
+
+/// Structured 400 or 409 body carrying a machine-readable code. Clients branch
+/// on `code` instead of parsing the human message.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct InitErrorCodeResponse {
     /// Stable machine-readable error code.
@@ -96,8 +108,9 @@ fn connection_error_status(error: &ConnectionError) -> StatusCode {
             InitializationError::IdentityConflict
             | InitializationError::Changed
             | InitializationError::SharingConfirmation { .. } => StatusCode::CONFLICT,
-            // Clients read a 409 here as a sharing conflict to confirm, so a
-            // busy inbox answers 503 like any other passing failure.
+            // Clients released before the coded 409s read any 409 here as a
+            // sharing conflict to confirm, so a busy inbox answers 503 like any
+            // other passing failure.
             InitializationError::Unavailable | InitializationError::Contended => {
                 StatusCode::SERVICE_UNAVAILABLE
             }
@@ -161,12 +174,44 @@ impl IntoResponse for InitError {
             } => (
                 status_code,
                 Json(SharedInboxConflictResponse {
+                    code: SHARED_INBOX_CONFLICT_CODE.to_string(),
                     email_address,
                     existing_owner_email,
                     existing_link_id,
                 }),
             )
                 .into_response(),
+            InitErrorKind::MailboxInitialization(InitializationError::SharingConfirmation {
+                link_id,
+                email,
+                owner_email,
+            }) => (
+                status_code,
+                Json(SharedInboxConflictResponse {
+                    code: SHARED_INBOX_CONFLICT_CODE.to_string(),
+                    email_address: email,
+                    existing_owner_email: owner_email,
+                    existing_link_id: link_id,
+                }),
+            )
+                .into_response(),
+            InitErrorKind::MailboxInitialization(
+                error @ (InitializationError::IdentityConflict | InitializationError::Changed),
+            ) => {
+                let code = if matches!(error, InitializationError::IdentityConflict) {
+                    INBOX_IDENTITY_CONFLICT_CODE
+                } else {
+                    INBOX_CHANGED_CODE
+                };
+                (
+                    status_code,
+                    Json(InitErrorCodeResponse {
+                        code: code.to_string(),
+                        message: error.to_string(),
+                    }),
+                )
+                    .into_response()
+            }
             InitErrorKind::AlreadyInitialized => (
                 status_code,
                 Json(InitErrorCodeResponse {
@@ -201,6 +246,8 @@ impl IntoResponse for InitError {
 /// retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct SharedInboxConflictResponse {
+    /// Always [`SHARED_INBOX_CONFLICT_CODE`]: every other 409 carries its own code.
+    pub code: String,
     /// The mailbox address that is already connected.
     pub email_address: String,
     /// The email of the macro user who first connected the mailbox.

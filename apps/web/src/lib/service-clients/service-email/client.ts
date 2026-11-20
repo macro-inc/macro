@@ -175,12 +175,31 @@ export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
  */
 export const INBOX_BEING_REMOVED_CODE = 'INBOX_BEING_REMOVED' as const;
 
+/**
+ * Error code `init` returns (HTTP 409) when the mailbox signed in at consent is
+ * not the one the inbox being reconnected syncs.
+ */
+export const INBOX_IDENTITY_CONFLICT_CODE = 'INBOX_IDENTITY_CONFLICT' as const;
+
+/**
+ * Error code `init` returns (HTTP 409) when the inbox changed while it was being
+ * connected. Connecting again works.
+ */
+export const INBOX_CHANGED_CODE = 'INBOX_CHANGED' as const;
+
 type InitErrorCode =
   | 'PAYMENT_REQUIRED'
   | typeof SHARED_INBOX_CONFLICT_CODE
   | typeof ALREADY_INITIALIZED_CODE
   | typeof NO_GMAIL_GRANT_CODE
-  | typeof INBOX_BEING_REMOVED_CODE;
+  | typeof INBOX_BEING_REMOVED_CODE
+  | typeof INBOX_IDENTITY_CONFLICT_CODE
+  | typeof INBOX_CHANGED_CODE;
+
+type InitConflictBody = Partial<SharedInboxConflictResponse> & {
+  code?: string;
+  message?: string;
+};
 
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
@@ -248,9 +267,10 @@ export const emailClient = {
 
     return fetchWithToken<InitResponse, InitErrorCode>(`${emailHost}${path}`, {
       method: 'POST',
-      // A custom handler replaces safeFetch's default status mapping. 409 carries
-      // the shared-inbox conflict fields and 400 a machine-readable code; other
-      // statuses fall back to the same HTTP_ERROR shape callers already branch on.
+      // A custom handler replaces safeFetch's default status mapping. 400 and 409
+      // carry a machine-readable code, and a shared-inbox conflict its fields;
+      // other statuses fall back to the same HTTP_ERROR shape callers already
+      // branch on.
       errorResponseHandler: async (response) => {
         if (response.status === 402)
           return {
@@ -261,15 +281,28 @@ export const emailClient = {
         if (response.status === 409) {
           const body = (await response
             .json()
-            .catch(() => null)) as SharedInboxConflictResponse | null;
-          return {
-            code: SHARED_INBOX_CONFLICT_CODE,
-            // The caller formats the prompt; the fields it needs ride along as JSON.
-            message: JSON.stringify({
-              emailAddress: body?.email_address ?? '',
-              existingOwnerEmail: body?.existing_owner_email ?? '',
-            }),
-          };
+            .catch(() => null)) as InitConflictBody | null;
+          if (
+            body?.code === INBOX_IDENTITY_CONFLICT_CODE ||
+            body?.code === INBOX_CHANGED_CODE
+          ) {
+            return { code: body.code, message: body.message ?? '' };
+          }
+          // Only a coded conflict offers to share the inbox. A server released
+          // before the codes sends a real conflict's fields with no code.
+          const sharing =
+            body?.code === SHARED_INBOX_CONFLICT_CODE ||
+            (body?.code === undefined && Boolean(body?.email_address));
+          if (sharing) {
+            return {
+              code: SHARED_INBOX_CONFLICT_CODE,
+              // The caller formats the prompt; the fields it needs ride along as JSON.
+              message: JSON.stringify({
+                emailAddress: body?.email_address ?? '',
+                existingOwnerEmail: body?.existing_owner_email ?? '',
+              }),
+            };
+          }
         }
         if (response.status === 400) {
           const body = (await response.json().catch(() => null)) as {

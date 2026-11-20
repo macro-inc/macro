@@ -53,3 +53,10 @@ export function announceConsentCancelled() {
     subtext: 'Sign-in was cancelled before access was granted.',
   });
 }
+
+/** Shown when the mailbox signed in at consent is not the one the inbox syncs. */
+export const INBOX_IDENTITY_CONFLICT_MESSAGE =
+  'This inbox is connected to another account';
+
+/** Shown when the inbox changed while it was being connected. */
+export const INBOX_CHANGED_MESSAGE = 'Something changed, try again';
