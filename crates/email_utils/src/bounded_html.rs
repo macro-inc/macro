@@ -71,6 +71,19 @@ fn is_formatting(name: &QualName) -> bool {
         )
 }
 
+/// The elements that put a marker in html5ever's list of active formatting
+/// elements: it compares and rebuilds only the entries after the last one.
+fn starts_formatting_section(node: &Node) -> bool {
+    let Node::Element(element) = node else {
+        return false;
+    };
+    &*element.name.ns == HTML_NAMESPACE
+        && matches!(
+            &*element.name.local,
+            "td" | "th" | "caption" | "applet" | "object" | "marquee" | "template"
+        )
+}
+
 /// The deepest a parse nests a node.
 pub const MAX_HTML_DEPTH: usize = 512;
 
@@ -239,9 +252,10 @@ impl BoundedSink {
 
     /// About how many elements html5ever's list of active formatting
     /// elements holds once a formatting element with tag hash `child` goes
-    /// into `parent`: the formatting elements holding it, with at most
-    /// [`IDENTICAL_FORMATTING_COPIES`] of any one tag, as html5ever drops
-    /// older copies of a tag it already holds that many of.
+    /// into `parent`: the formatting elements holding it inside the nearest
+    /// table cell (or other element that starts a section of the list), with
+    /// at most [`IDENTICAL_FORMATTING_COPIES`] of any one tag, as html5ever
+    /// drops older copies of a tag it already holds that many of.
     fn active_formatting_with(&self, parent: NodeId, child: u64) -> usize {
         let Some(parent) = self.html.tree.get(parent) else {
             return 1;
@@ -249,7 +263,8 @@ impl BoundedSink {
         let mut tags: Vec<(u64, usize)> = vec![(child, 1)];
         let holders = std::iter::once(parent)
             .chain(parent.ancestors())
-            .take(MAX_HTML_DEPTH);
+            .take(MAX_HTML_DEPTH)
+            .take_while(|holder| !starts_formatting_section(holder.value()));
         for tag in holders.filter_map(|holder| self.formatting_tags.get(&holder.id())) {
             let distinct = tags.len();
             match tags.iter_mut().find(|(seen, _)| seen == tag) {

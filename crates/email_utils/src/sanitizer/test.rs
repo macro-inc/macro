@@ -95,6 +95,19 @@ fn unclosed_identical_formatting_tags_are_not_clipped() {
 }
 
 #[test]
+fn formatting_in_nested_table_cells_counts_per_cell() {
+    // Each cell starts a new section of html5ever's formatting list.
+    let levels: String = (0..40)
+        .map(|i| format!("<table><tr><td><font color=\"#{i}\">Level {i}"))
+        .collect();
+
+    let sanitized = sanitize_email_html(&levels);
+
+    assert!(sanitized.contains("Level 39"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
 fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
     // A frameset document has no body, so the fragment parse is cleaned.
     let html = format!(
