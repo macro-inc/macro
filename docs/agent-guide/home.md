@@ -4,7 +4,9 @@
 
 Touch devices render the Inbox as **Notifications**: a floating Signal/Noise
 pill strip with a leading filter drawer (Status and Type), pull-to-refresh,
-and swipe-left to mark done. On touch, Signal is a pure notification feed — the viewer's own
+and swipe-left to mark done. A swiped row folds away, divider and all, before
+it leaves; a row the feed keeps (the viewer's own work) unfolds again once the
+done settles. The touch list shows no Undo for a done. On touch, Signal is a pure notification feed — the viewer's own
 touched-by-me recents are not merged in; that merge is desktop Home's Signal
 only, so sent mail and AI chats without notifications appear only on desktop.
 Access requests, grants and removals on a paired machine appear as rows about

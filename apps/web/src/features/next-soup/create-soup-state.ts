@@ -230,6 +230,9 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
   const [collapseEntityCallback, setCollapseEntityCallback] = createSignal<
     ((entityId: string) => Promise<void>) | undefined
   >(undefined);
+  const [expandEntityCallback, setExpandEntityCallback] = createSignal<
+    ((entityId: string) => void) | undefined
+  >(undefined);
 
   const indexOf = (id: string): number => rows().findIndex((r) => r.id === id);
 
@@ -468,6 +471,12 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
           isModality('touch')
         );
       },
+    },
+
+    /** Unfolds a row that was folded for a done but stayed in the list. */
+    expandEntity: {
+      callback: expandEntityCallback,
+      set: setExpandEntityCallback,
     },
   };
 };

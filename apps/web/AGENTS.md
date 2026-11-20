@@ -812,6 +812,13 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+A swipe row folds only what is inside it: draw a row's divider inside its
+`SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
+behind. A list that can keep a row after a done unfolds it through
+`setExpandEntity`; touch's Signal/Noise list (soup) does it in
+`executeWithSoup` once the done settles. Its regression is
+`bunx playwright test --config src/features/next-soup/soup-view/views/inbox/browser-test/playwright.config.ts`.
+
 ## Message notification reads
 
 Gate automatic message notification reads on the actual message element

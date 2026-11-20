@@ -43,6 +43,8 @@ export type EntityActionListState = {
     SoupState['collapseEntity'],
     'callback' | 'shouldCollapse'
   >;
+  /** Unfolds a row folded for a done that the list kept. */
+  expandEntity?: Pick<SoupState['expandEntity'], 'callback'>;
   /** Lists that can keep rows in place while an action changes their sort. */
   positions?: Pick<SoupState['positions'], 'hold'>;
 };

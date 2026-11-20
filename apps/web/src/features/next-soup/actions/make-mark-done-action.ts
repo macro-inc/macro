@@ -561,10 +561,12 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       ? (soup.items.get(opts.nextEntityId) ?? fallbackNextRow)
       : fallbackNextRow;
 
+    let folded = false;
     if (soup.collapseEntity.shouldCollapse()) {
       const collapse = soup.collapseEntity.callback();
       if (collapse) {
         await Promise.all(targets.map((entity) => collapse(entity.id)));
+        folded = true;
       }
     }
 
@@ -600,8 +602,32 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
             })
         : undefined);
 
-    await execute(targets, restoreFocus, { ...opts, navigateBack });
+    try {
+      await execute(targets, restoreFocus, { ...opts, navigateBack });
+    } finally {
+      if (folded) unfoldKeptRows(soup, targets);
+    }
   };
 
   return { canExecute, execute, executeWithSoup };
 };
+
+/**
+ * Unfolds the rows a done folded away that the list still shows once the done
+ * settles: own work the feed keeps in place, or rows a failed done restored.
+ */
+function unfoldKeptRows(
+  soup: EntityActionListState,
+  entities: readonly EntityData[]
+) {
+  const expand = soup.expandEntity?.callback();
+  if (!expand) return;
+  const listed = new Set<string>();
+  for (let index = 0; index < soup.items.count(); index++) {
+    const row = soup.items.at(index);
+    if (row) listed.add(row.original.id);
+  }
+  for (const entity of entities) {
+    if (listed.has(entity.id)) expand(entity.id);
+  }
+}
