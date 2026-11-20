@@ -101,7 +101,7 @@ export type ScreenFrameSize = { width: number; height: number };
 
 /** Rolling numbers for the stats overlay; `undefined` when a transport can't measure one. */
 export type ScreenStats = {
-  fps: number;
+  fps: number | undefined;
   kbps: number;
   rttMs: number | undefined;
   decodeMs: number | undefined;
