@@ -64,7 +64,11 @@ export interface ListenOptions {
    * resync from history as well, and expect repeats (drop them by id).
    */
   resume?: { readonly lastEventId?: string };
-  /** Told each event's id once its handlers are done, to resume from later. */
+  /**
+   * Told each event's id once its handlers are done, whether or not they
+   * succeeded (an event that always fails must not be replayed forever), to
+   * resume from later.
+   */
   onEventId?: (id: string) => void;
   /** Told when a handler throws or rejects; the stream goes on. */
   onHandlerError?: (error: unknown) => void;

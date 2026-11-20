@@ -10,6 +10,8 @@ type Posted = {
   readonly thread?: string;
   /** Reading it back from history fails. */
   readonly unreadable?: boolean;
+  /** Deleted, but still listed for its replies. */
+  readonly deleted?: boolean;
 };
 
 /**
@@ -44,7 +46,11 @@ const fakeMacro = (channelIds: readonly string[] = ['dm1']) => {
     }),
     toJSON: () => ({
       id: posted.id,
-      detail: { thread_id: posted.thread ?? null, attachments: [] },
+      detail: {
+        thread_id: posted.thread ?? null,
+        attachments: [],
+        deleted_at: posted.deleted ? '2026-11-18T17:46:30Z' : null,
+      },
     }),
     thread: () => ({
       replies: async () =>
@@ -403,4 +409,46 @@ test('a message that cannot be read is skipped and reported, and the rest of its
     message: 'bad',
     error: 'cannot read bad',
   });
+});
+
+test('a drop soon after the first open catches up nothing from before it', async () => {
+  const backend = fakeMacro();
+  const next = listening(backend);
+
+  const pending = next();
+  await Bun.sleep(10);
+  // Posted before this process listened: a previous one may have answered it.
+  backend.post({ id: 'before', at: '2026-11-18T17:39:50Z', text: 'old' });
+  backend.reconnect(new Date('2026-11-18T17:40:00Z'));
+  backend.drop(new Date('2026-11-18T17:40:10Z'));
+  backend.reconnect(new Date('2026-11-18T17:40:12Z'));
+
+  expect(await nothingWithin(pending, 1_000)).toBe('nothing');
+});
+
+test('a root deleted while the stream was down is not delivered, its new reply is', async () => {
+  const backend = fakeMacro();
+  const next = listening(backend);
+
+  const pending = next();
+  await Bun.sleep(10);
+  backend.drop(new Date('2026-11-18T17:45:00Z'));
+  backend.post({
+    id: 'gone',
+    at: '2026-11-18T17:45:10Z',
+    text: 'oops',
+    deleted: true,
+  });
+  backend.post({
+    id: 'gone-reply',
+    at: '2026-11-18T17:45:20Z',
+    text: 'what was that?',
+    thread: 'gone',
+  });
+  backend.reconnect(new Date('2026-11-18T17:46:00Z'));
+
+  expect((await within(pending, 5_000, 'nothing was caught up')).id).toBe(
+    'gone-reply'
+  );
+  expect(await nothingWithin(next(), 500)).toBe('nothing');
 });

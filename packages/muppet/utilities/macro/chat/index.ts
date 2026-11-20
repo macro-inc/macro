@@ -146,6 +146,8 @@ const recent = 20;
 const rememberedIds = 1_000;
 /** A catch-up starts this long before the newest message delivered, or the drop. */
 const catchUpMarginMs = 60_000;
+/** A catch-up waits up to this long first, so agents reconnecting together after a deploy don't all read at once. */
+const catchUpSpreadMs = 5_000;
 const directMessage = 'direct_message';
 
 const failureOf = (error: unknown): string =>
@@ -434,6 +436,9 @@ export const sdkChat = ({
               }
               for (const message of [root, ...replies]) {
                 if (delivered.has(message.id)) continue;
+                // A root deleted in the gap is still listed for its live
+                // replies; the stream would never have delivered it.
+                if (message.toJSON().detail?.deleted_at) continue;
                 // One message that can't be read is skipped, not the rest
                 // of its channel.
                 try {
@@ -471,6 +476,10 @@ export const sdkChat = ({
       // a catch-up leaves this set, for another pass after it.
       let pending: string | undefined;
       let open = true;
+      // Nothing before the stream first opened is caught up: the margin is
+      // for events late within this listen, not for what a previous process
+      // may have answered.
+      let firstOpened: number | undefined;
       let catchingUp = false;
       const catchUp = async (): Promise<void> => {
         if (catchingUp) return;
@@ -479,6 +488,7 @@ export const sdkChat = ({
           while (open && pending !== undefined) {
             const after = pending;
             pending = undefined;
+            await sleep(Math.random() * catchUpSpreadMs);
             for (let attempt = 0; ; attempt += 1) {
               try {
                 await catchUpFrom(after);
@@ -507,15 +517,19 @@ export const sdkChat = ({
           // order, another channel's event lagging) is read; the ids
           // delivered drop the overlap.
           const from = new Date(
-            Math.min(
-              newest === undefined ? droppedAt.getTime() : Date.parse(newest),
-              droppedAt.getTime()
-            ) - catchUpMarginMs
+            Math.max(
+              Math.min(
+                newest === undefined ? droppedAt.getTime() : Date.parse(newest),
+                droppedAt.getTime()
+              ) - catchUpMarginMs,
+              firstOpened ?? Number.NEGATIVE_INFINITY
+            )
           ).toISOString();
           if (pending === undefined || Date.parse(from) < Date.parse(pending))
             pending = from;
         },
-        onOpen: () => {
+        onOpen: (at) => {
+          firstOpened ??= at.getTime();
           open = true;
           catchUp().catch(() => undefined);
         },
