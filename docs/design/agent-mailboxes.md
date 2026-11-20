@@ -46,7 +46,8 @@ flowchart LR
 - **Confinement twice.** A message id from the caller reaches the provider only
   with the caller's scoped key, which cannot see another inbox; the service also
   checks the `inbox_id` the provider reports and answers `not_found` on a mismatch.
-- **Send policy.** An agent's program must quote its owner's approval
+- **Send policy.** The agent mailbox's send and reply routes count as sends for
+  a session scoped to sending nothing. An agent's program must quote its owner's approval
   (`confirmation`) to send or reply, as with every other email send from a
   program. Each mailbox is capped at 10 sends an hour and 40 a day, counting
   sends in flight; the provider's own hourly cap is set to the same 10 as a
@@ -74,7 +75,9 @@ flowchart LR
   write they record, so overlapping provisioning attempts, a release and the
   sweep never interleave at the provider. A release that starts while a create
   is in flight waits for it, then deletes what it made.
-- Release revokes the scoped key, then deletes the provider mailbox and its mail.
+- Release revokes every key the provider lists as scoped to exactly that
+  mailbox (the stored one and any minted but never stored), then deletes the
+  provider mailbox and its mail.
 - The sweep runs every minute: stalled provisioning, unfinished releases, and
   mailboxes paused for more than 30 days (rechecked in the write that starts
   the release, so a resume in between wins). A step that fails is set aside
