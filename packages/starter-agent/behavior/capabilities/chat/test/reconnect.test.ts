@@ -1,44 +1,57 @@
 import { expect, test } from 'bun:test';
 import type { Trace } from '../../../agent/claude.ts';
-import { streamDrops } from '../context.ts';
+import { streamOutages } from '../context.ts';
 
-test('each drop of the events stream is a reconnect span with the running count and the refusal status', () => {
-  const spans: { name: string; attributes: Record<string, unknown> }[] = [];
+test('each drop of the events stream is a reconnect span that lasts until the stream reopens, with the running count', async () => {
+  const spans: {
+    name: string;
+    attributes: Record<string, unknown>;
+    ended: boolean;
+  }[] = [];
   const trace: Trace = async (name, run) => {
-    const attributes: Record<string, unknown> = {};
-    spans.push({ name, attributes });
-    return run({
+    const span = {
+      name,
+      attributes: {} as Record<string, unknown>,
+      ended: false,
+    };
+    spans.push(span);
+    const result = await run({
       set: (key, value) => {
-        attributes[key] = value;
+        span.attributes[key] = value;
       },
       traceparent: () => undefined,
     });
+    span.ended = true;
+    return result;
   };
-  const dropped = streamDrops(trace);
+  const stream = streamOutages(trace);
 
-  dropped({
-    error: new Error('SSE failed: 503 Service Unavailable'),
-    retried: true,
-  });
-  dropped({ error: new TypeError('fetch failed'), retried: false });
+  stream.opened();
+  stream.dropped();
+  await Promise.resolve();
+  expect(spans).toEqual([
+    {
+      name: 'chat.events.reconnect',
+      attributes: { 'chat.events.reconnects': 1 },
+      ended: false,
+    },
+  ]);
+
+  stream.opened();
+  stream.dropped();
+  stream.opened();
+  await Bun.sleep(0);
 
   expect(spans).toEqual([
     {
       name: 'chat.events.reconnect',
-      attributes: {
-        'chat.events.reconnects': 1,
-        'chat.events.retried': true,
-        'error.type': 'Error',
-        'http.response.status_code': 503,
-      },
+      attributes: { 'chat.events.reconnects': 1 },
+      ended: true,
     },
     {
       name: 'chat.events.reconnect',
-      attributes: {
-        'chat.events.reconnects': 2,
-        'chat.events.retried': false,
-        'error.type': 'TypeError',
-      },
+      attributes: { 'chat.events.reconnects': 2 },
+      ended: true,
     },
   ]);
 });

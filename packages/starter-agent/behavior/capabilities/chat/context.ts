@@ -1,6 +1,5 @@
 import { behavior, type ContextOf } from '@macro-inc/muppet/core/behavior';
 import { channel } from '@macro-inc/muppet/core/event';
-import type { StreamDrop } from '@macro-inc/sdk';
 import { z } from 'zod';
 import type { Trace } from '../../agent/claude.ts';
 import type { Base } from '../../context/index.ts';
@@ -23,31 +22,30 @@ const queueDirectory = 'queue';
 const reconnectSpan = 'chat.events.reconnect';
 
 /**
- * Counts the events stream's drops: each is a `chat.events.reconnect` span
- * carrying how many there have been in this process, so a flapping stream
- * shows as a rising count, and whether the stream reconnects
- * (`chat.events.retried`; not when the server ended it). Messages posted
- * until it reconnects are missed.
+ * Times the events stream's outages: each drop is a `chat.events.reconnect`
+ * span from the drop until the stream opens again, carrying how many drops
+ * there have been in this process, so a flapping stream shows as a rising
+ * count. Messages posted until it reopens are missed unless resynced.
  */
-export const streamDrops = (trace: Trace) => {
+export const streamOutages = (trace: Trace) => {
   let drops = 0;
-  return ({ error, retried }: StreamDrop): void => {
-    drops += 1;
-    const count = drops;
-    void trace(reconnectSpan, async (span) => {
-      span.set('chat.events.reconnects', count);
-      span.set('chat.events.retried', retried);
-      span.set(
-        'error.type',
-        error instanceof Error ? error.name : typeof error
-      );
-      // The SDK's stream refuses a non-2xx answer as `SSE failed: <status> …`.
-      const status = /^SSE failed: (\d{3})\b/.exec(
-        error instanceof Error ? error.message : String(error)
-      )?.[1];
-      if (status !== undefined)
-        span.set('http.response.status_code', Number(status));
-    });
+  let reopened: (() => void) | undefined;
+  return {
+    dropped: (): void => {
+      reopened?.();
+      drops += 1;
+      const count = drops;
+      const open = Promise.withResolvers<void>();
+      reopened = open.resolve;
+      void trace(reconnectSpan, async (span) => {
+        span.set('chat.events.reconnects', count);
+        await open.promise;
+      });
+    },
+    opened: (): void => {
+      reopened?.();
+      reopened = undefined;
+    },
   };
 };
 
@@ -60,7 +58,7 @@ export const chatContext = (
   const sdk = sdkChat({
     macro,
     myName: config.identity.name,
-    disconnected: streamDrops(trace),
+    stream: streamOutages(trace),
   });
   const chat = { ...sdk, ...observeOutgoing(sdk, log, toolNames) };
   const unanswered = channel<Conversation>();

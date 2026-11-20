@@ -62,6 +62,9 @@ import {
   wiring,
 } from './index.ts';
 
+// Imports are evaluated before this line runs: loading the code ends here.
+const loadedAt = Date.now();
+
 const usage =
   'usage: bin/agent <run|list|describe|exec|guard|function> [input]';
 const presenceLog = 'presence';
@@ -100,97 +103,103 @@ const run = async (): Promise<void> => {
   const outsideStart = Telemetry.captureContext();
   const { running } = await startOrExit(
     () =>
-      traceStart(process.env, async (phase) => {
-        // The online report comes later, when presence opens; it still
-        // belongs to the start, so Macro's side joins the setup trace.
-        const startContext = Telemetry.captureContext();
-        await phase('agent.start.checks', async () => {
-          await configured(claude);
-          await configured(sandboxProgram);
-        });
-        const { presence, hosts } = await phase('agent.start.addresses', () =>
-          configured(wiring.addresses)
-        );
-        const apiKey = await phase('agent.start.credentials', () =>
-          configured(() => base.credentials.get(macroKey))
-        );
-        process.on('SIGTERM', () => {
-          void Telemetry.flush().finally(() => process.exit(exitCodes.stopped));
-        });
-        // Once presence is open, the agent tells Macro it is up: its row turns
-        // Running and its inviter hears it is ready.
-        const online = reportsOnline({
-          post: () =>
-            startContext.run(() =>
-              Telemetry.span(
-                'agent.online.report',
-                { kind: 'client' },
-                async (span) => {
-                  const headers: Record<string, string> = {
-                    'x-macro-user-api-key': apiKey,
-                  };
-                  span.injectTraceHeaders(headers);
-                  const { status } = await fetch(
-                    `${hosts.auth}${onlineRoute}`,
-                    {
-                      method: 'POST',
-                      headers,
-                    }
-                  );
-                  span.setAttr('http.response.status_code', status);
-                  return status;
-                }
-              )
-            ),
-          log: (entry) => void base.log.event(presenceLog, entry),
-        });
-        // The agent shows online in Macro for as long as it runs.
-        stayOnline({
-          onOnline: online.report,
-          open: () => {
-            const socket = new WebSocket(presence, {
-              headers: { 'x-macro-user-api-key': apiKey },
-            });
-            return {
-              send: (data) => socket.send(data),
-              isOpen: () => socket.readyState === openState,
-              onOpen: (handle) => socket.addEventListener('open', handle),
-              onClose: (handle) =>
-                socket.addEventListener('close', ({ code, reason }) =>
-                  handle(code, reason)
-                ),
-            };
-          },
-          log: (entry) => void base.log.event(presenceLog, entry),
-        });
-        // The standing schedules exist before anything fires; ones the agent changed are left alone.
-        await phase('agent.start.schedules', () =>
-          ensureSchedules(assistant.decorations.schedules)
-        );
-        // A new agent's first wake is to ask its owner who it is.
-        await phase('agent.start.introduction', () =>
-          ensureIntroduction(base, assistant.decorations.schedules)
-        );
-        const systemPrompt = await phase(
-          'agent.start.charter',
-          async () => (await base.disk.read(base.config.charter)) ?? ''
-        );
-        const started = outsideStart.run(() =>
-          assistant.run(parallel({ systemPrompt, ...scripts }))
-        );
-        // Built, credentials read, presence open and sources started: a healthy
-        // boot, so the launcher's rollback starts from this HEAD.
-        await phase('agent.start.healthy', () =>
-          markHealthy({
-            git: (args) =>
-              base.shell.run(gitCommand('git', base.config.root, args)),
-            disk: base.disk,
-            file: files.lastGood,
-          })
-        );
-        // Wrapped, so the start's span ends here instead of awaiting the loop.
-        return { running: started };
-      }),
+      traceStart(
+        process.env,
+        async (phase) => {
+          // The online report comes later, when presence opens; it still
+          // belongs to the start, so Macro's side joins the setup trace.
+          const startContext = Telemetry.captureContext();
+          await phase('agent.start.checks', async () => {
+            await configured(claude);
+            await configured(sandboxProgram);
+          });
+          const { presence, hosts } = await phase('agent.start.addresses', () =>
+            configured(wiring.addresses)
+          );
+          const apiKey = await phase('agent.start.credentials', () =>
+            configured(() => base.credentials.get(macroKey))
+          );
+          process.on('SIGTERM', () => {
+            void Telemetry.flush().finally(() =>
+              process.exit(exitCodes.stopped)
+            );
+          });
+          // Once presence is open, the agent tells Macro it is up: its row turns
+          // Running and its inviter hears it is ready.
+          const online = reportsOnline({
+            post: () =>
+              startContext.run(() =>
+                Telemetry.span(
+                  'agent.online.report',
+                  { kind: 'client' },
+                  async (span) => {
+                    const headers: Record<string, string> = {
+                      'x-macro-user-api-key': apiKey,
+                    };
+                    span.injectTraceHeaders(headers);
+                    const { status } = await fetch(
+                      `${hosts.auth}${onlineRoute}`,
+                      { method: 'POST', headers }
+                    );
+                    span.setAttr('http.response.status_code', status);
+                    return status;
+                  }
+                )
+              ),
+            log: (entry) => void base.log.event(presenceLog, entry),
+          });
+          // The agent shows online in Macro for as long as it runs.
+          stayOnline({
+            onOnline: online.report,
+            open: () => {
+              const socket = new WebSocket(presence, {
+                headers: { 'x-macro-user-api-key': apiKey },
+              });
+              return {
+                send: (data) => socket.send(data),
+                isOpen: () => socket.readyState === openState,
+                onOpen: (handle) => socket.addEventListener('open', handle),
+                onClose: (handle) =>
+                  socket.addEventListener('close', ({ code, reason }) =>
+                    handle(code, reason)
+                  ),
+              };
+            },
+            log: (entry) => void base.log.event(presenceLog, entry),
+          });
+          // The standing schedules exist before anything fires; ones the agent changed are left alone.
+          await phase('agent.start.schedules', () =>
+            ensureSchedules(assistant.decorations.schedules)
+          );
+          // A new agent's first wake is to ask its owner who it is.
+          await phase('agent.start.introduction', () =>
+            ensureIntroduction(base, assistant.decorations.schedules)
+          );
+          const systemPrompt = await phase(
+            'agent.start.charter',
+            async () => (await base.disk.read(base.config.charter)) ?? ''
+          );
+          const started = outsideStart.run(() =>
+            assistant.run(parallel({ systemPrompt, ...scripts }))
+          );
+          // Built, credentials read, presence open and sources started: a healthy
+          // boot, so the launcher's rollback starts from this HEAD.
+          await phase('agent.start.healthy', () =>
+            markHealthy({
+              git: (args) =>
+                base.shell.run(gitCommand('git', base.config.root, args)),
+              disk: base.disk,
+              file: files.lastGood,
+            })
+          );
+          // Wrapped, so the start's span ends here instead of awaiting the loop.
+          return { running: started };
+        },
+        [
+          { name: 'agent.start.load', end: loadedAt },
+          { name: 'agent.start.telemetry', start: loadedAt, end: telemetryAt },
+        ]
+      ),
     {
       flush: () => Telemetry.flush(),
       wait: (ms) => Bun.sleep(ms),
@@ -203,6 +212,7 @@ const run = async (): Promise<void> => {
 
 // Spans export only when the computer names an OTLP endpoint.
 await startTelemetry({ environment: process.env, agent: base.config.me });
+const telemetryAt = Date.now();
 
 switch (command) {
   case undefined:

@@ -12,6 +12,8 @@ fn a_computer_is_never_given_this_machines_loopback_as_its_telemetry_intake() {
         "http://collector.localhost:4318",
         "http://127.0.0.1:4318",
         "http://[::1]:4318",
+        "http://0.0.0.0:4318",
+        "http://[::]:4318",
     ] {
         assert_eq!(reachable(loopback), None, "{loopback}");
     }

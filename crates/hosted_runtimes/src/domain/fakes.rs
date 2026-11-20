@@ -479,6 +479,11 @@ impl ComputerRepo for FakeRepo {
             setup.advance(&phase, connected, waiting, payment, now);
             setup.advance_agent(agent, now);
         }
+        // Like the Postgres applier: nothing changed, timeline included,
+        // nothing written.
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
+        }
         computer.state = state;
         self.push_effects(computer, effects, now);
         Ok(Some(Applied::Changed(Box::new(computer.clone()))))

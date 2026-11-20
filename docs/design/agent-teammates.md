@@ -122,8 +122,8 @@ child per step, in the computer's setup trace when the image passes
 `agent.capability_script` span whose context reaches the script's process.
 Each message the listener screens is a `chat.screen` span (verdict and each
 probability by question, never the text), and each drop of the events
-stream a `chat.events.reconnect` span with the process's running count and
-whether it reconnects (a stream the server ends does not).
+stream a `chat.events.reconnect` span from the drop until the stream reopens,
+with the process's running count.
 The agent's account appears only as a hash.
 
 ## Defaults, for review

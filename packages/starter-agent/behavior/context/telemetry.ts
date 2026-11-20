@@ -195,6 +195,13 @@ const failing = async <Value>(
   }
 };
 
+/** A step of the start that ran before its span could: from `start` (the process's start when absent) to `end`, Unix ms. */
+export type EarlierStep = {
+  readonly name: string;
+  readonly start?: number;
+  readonly end: number;
+};
+
 /**
  * Runs the agent's start as one `agent.start` span, from the launcher's start
  * when it passes its timings (its steps become `agent.launch.*`), otherwise
@@ -205,7 +212,8 @@ const failing = async <Value>(
  */
 export const traceStart = <Value>(
   environment: Environment,
-  run: (phase: StartPhase) => Promise<Value>
+  run: (phase: StartPhase) => Promise<Value>,
+  earlier: readonly EarlierStep[] = []
 ): Promise<Value> => {
   const processStart = Date.now() - process.uptime() * 1000;
   const launch = launchTimings(environment[launchTimingsVariable]);
@@ -214,7 +222,13 @@ export const traceStart = <Value>(
       'agent.start',
       { startTime: launch?.started ?? processStart },
       (span) => {
+        // The launcher's steps, then those in this process that ran before
+        // telemetry could record them, backdated.
         if (launch !== undefined) recordLaunch(launch);
+        for (const step of earlier)
+          Telemetry.span(step.name, {
+            startTime: step.start ?? processStart,
+          }).end(step.end);
         return failing(span, () =>
           run((name, step) => span.span(name, (child) => failing(child, step)))
         );

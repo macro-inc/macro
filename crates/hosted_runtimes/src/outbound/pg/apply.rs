@@ -131,30 +131,12 @@ impl PgComputerRepo {
                 return Ok(Some(Applied::Rejected(rejected)));
             }
         };
-        if state == computer.state && effects.is_empty() {
-            return Ok(Some(Applied::Changed(Box::new(computer))));
-        }
-        for effect in &effects {
-            if let Effect::Create { generation, .. } = effect {
-                computer.enrollment_generation = *generation;
-            }
-        }
-        if effects.iter().any(Effect::starts_guest) {
-            Self::count_admitted_start(tx, host, now).await?;
-        }
+        // The setup timeline is part of the state: an event that only
+        // advances it (a finished agent hand-off) is still a change.
         let agent = crate::domain::setup::AgentProgress {
             reported_online: matches!(event, Event::AgentOnline),
             delivered: matches!(event, Event::AgentDelivered),
         };
-        Self::store_effects(tx, computer_id, effects, now).await?;
-
-        if let Some(tag) = serde_json::to_value(&state.phase)?
-            .get("phase")
-            .and_then(serde_json::Value::as_str)
-        {
-            span.record("phase", tag);
-        }
-
         let waiting_for_capacity = state.waiting_for_capacity();
         let (phase, connected, payment) = (
             state.phase.clone(),
@@ -171,6 +153,26 @@ impl PgComputerRepo {
                 finished
             })
             .unwrap_or_default();
+
+        if state == computer.state && effects.is_empty() {
+            return Ok(Some(Applied::Changed(Box::new(computer))));
+        }
+        for effect in &effects {
+            if let Effect::Create { generation, .. } = effect {
+                computer.enrollment_generation = *generation;
+            }
+        }
+        if effects.iter().any(Effect::starts_guest) {
+            Self::count_admitted_start(tx, host, now).await?;
+        }
+        Self::store_effects(tx, computer_id, effects, now).await?;
+
+        if let Some(tag) = serde_json::to_value(&state.phase)?
+            .get("phase")
+            .and_then(serde_json::Value::as_str)
+        {
+            span.record("phase", tag);
+        }
 
         if !state.is_live() {
             sqlx::query!(
