@@ -205,13 +205,8 @@ impl RedisClient {
         team_id: Uuid,
     ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
         let key = crm_population_key(team_id);
-        self.acquire_write_slot(&SlotSet {
-            key: &key,
-            capacity: CRM_POPULATION_CAPACITY,
-            lease: LEASE,
-            wait: Duration::ZERO,
-        })
-        .await
+        self.try_acquire_write_slot(&key, CRM_POPULATION_CAPACITY)
+            .await
     }
 
     /// One of the fleet's CRM population slots if one is free now. A
@@ -220,13 +215,34 @@ impl RedisClient {
     pub async fn try_acquire_crm_population_fleet_slot(
         &self,
     ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
-        self.acquire_write_slot(&SlotSet {
-            key: CRM_POPULATION_FLEET_KEY,
-            capacity: CRM_POPULATION_FLEET_CAPACITY,
-            lease: LEASE,
-            wait: Duration::ZERO,
-        })
-        .await
+        self.try_acquire_write_slot(CRM_POPULATION_FLEET_KEY, CRM_POPULATION_FLEET_CAPACITY)
+            .await
+    }
+
+    /// One admission check, with no span of its own: idle population
+    /// workers ask for a fleet slot every second or so.
+    async fn try_acquire_write_slot(
+        &self,
+        key: &str,
+        capacity: u32,
+    ) -> redis::RedisResult<Option<BackfillWriteSlot>> {
+        let id = Uuid::now_v7().to_string();
+        let mut connection = self.inner.get_multiplexed_async_connection().await?;
+        let in_flight: u32 = ACQUIRE
+            .key(key)
+            .arg(&id)
+            .arg(capacity)
+            .arg(LEASE.as_millis().to_string())
+            .invoke_async(&mut connection)
+            .await?;
+        Ok((in_flight > 0).then(|| BackfillWriteSlot {
+            inner: Some(SlotLease {
+                client: self.inner.clone(),
+                key: key.to_string(),
+                id,
+                lease: LEASE,
+            }),
+        }))
     }
 
     #[tracing::instrument(

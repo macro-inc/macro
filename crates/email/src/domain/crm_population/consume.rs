@@ -18,6 +18,21 @@ use uuid::Uuid;
 /// back with its next mail; a history page is published again by its outbox.
 pub const MAX_ATTEMPTS: u32 = 6;
 
+/// Deliveries after which a population with no attempt count of its own (a
+/// history page, or a contact whose entry is gone) is given up. Deliveries
+/// also count refusals of a busy team, so this leaves room for those.
+pub const MAX_DELIVERIES: u32 = 30;
+
+/// Whether a worker may take its next message.
+pub enum FleetAdmission<Slot> {
+    /// A fleet slot, held while the worker receives and runs one message.
+    Admitted(Slot),
+    /// The fleet runs as many populations as it may.
+    Busy,
+    /// The slots could not be read.
+    Unavailable,
+}
+
 /// What the listener does with a delivered message.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PopulationDisposition {
@@ -110,12 +125,13 @@ where
     /// messages queued rather than receiving and hiding them, which would
     /// spend their deliveries. While it waits the worker holds no message and
     /// no database connection.
-    pub async fn fleet_slot(&self) -> Option<S::Slot> {
+    pub async fn fleet_slot(&self) -> FleetAdmission<S::Slot> {
         match self.slots.fleet().await {
-            Ok(slot) => slot,
+            Ok(Some(slot)) => FleetAdmission::Admitted(slot),
+            Ok(None) => FleetAdmission::Busy,
             Err(error) => {
                 tracing::warn!(error = ?error, "could not reach the CRM population fleet slots");
-                None
+                FleetAdmission::Unavailable
             }
         }
     }
@@ -164,7 +180,7 @@ where
     async fn contact(&self, message: &CrmPopulationContact, receive_count: u32) -> Handled {
         let link = match self.mailboxes.link(message.link_id).await {
             Ok(Some(link)) => link,
-            Ok(None) => return Handled::done("mailbox_gone"),
+            Ok(None) => return self.discard(message, "mailbox_gone").await,
             Err(error) => {
                 tracing::warn!(error = ?error, "could not read the mailbox of a CRM population");
                 return Handled::retry("lookup_failed", backoff::wait(FAILED, receive_count), None);
@@ -172,7 +188,7 @@ where
         };
         let team = match self.crm.get_team_id_for_user(link.macro_id.as_ref()).await {
             Ok(Some(team)) => team,
-            Ok(None) => return Handled::done("no_team"),
+            Ok(None) => return self.discard(message, "no_team").await,
             Err(error) => {
                 tracing::warn!(error = ?error, "could not read the team of a CRM population");
                 return Handled::retry("lookup_failed", backoff::wait(FAILED, receive_count), None);
@@ -187,6 +203,21 @@ where
             }
             Err(refused) => refused,
         }
+    }
+
+    /// Ends a population that has nothing to do, with its pending entry:
+    /// left behind, the entry would absorb every later request for the
+    /// correspondent until it expired.
+    async fn discard(&self, message: &CrmPopulationContact, outcome: &'static str) -> Handled {
+        if let Err(error) = self
+            .requests
+            .pending
+            .discard(message.link_id, &message.contact, message.claim)
+            .await
+        {
+            tracing::warn!(error = ?error, "could not discard a pending CRM population");
+        }
+        Handled::done(outcome)
     }
 
     /// One of the team's slots, or the refusal to record. Never waits: a
@@ -239,20 +270,22 @@ where
             return self.settle(link.id, message, "rejected").await;
         };
 
-        let attempt = match self
+        // An entry counts failed attempts exactly. Without one, deliveries
+        // stand in for them, which also count a busy team's refusals.
+        let (attempt, limit) = match self
             .requests
             .pending
             .fail(link.id, contact, message.claim)
             .await
         {
-            Ok(Some(attempt)) => attempt,
-            Ok(None) => receive_count,
+            Ok(Some(attempt)) => (attempt, MAX_ATTEMPTS),
+            Ok(None) => (receive_count, MAX_DELIVERIES),
             Err(count_error) => {
                 tracing::warn!(error = ?count_error, "could not count a failed CRM population");
-                receive_count
+                (receive_count, MAX_DELIVERIES)
             }
         };
-        if attempt >= MAX_ATTEMPTS {
+        if attempt >= limit {
             tracing::error!(error = ?error, %team, reason, attempt, "giving up on a CRM population");
             return self
                 .settle(link.id, message, "gave_up")
@@ -326,7 +359,7 @@ where
             tracing::warn!(error = ?error, "the CRM refused a history page; dropping it");
             return Handled::done("rejected");
         };
-        if receive_count >= MAX_ATTEMPTS {
+        if receive_count >= MAX_DELIVERIES {
             tracing::error!(error = ?error, reason, attempt = receive_count, "giving up on a CRM history page");
             return Handled::done("gave_up").with_attempt(receive_count);
         }

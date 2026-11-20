@@ -237,7 +237,7 @@ the gateway `/email` prefix.
   attachment fan-outs only log their failures, and the metadata step is enqueued
   last. BackfillMessage only drains operations enqueued before thread writes.
 - Backfill keeps a message hidden while its operation runs
-  (`process::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
+  (`pubsub::util::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
   visibility timeout). Without it, a slow thread is delivered to a second
   worker, which counts the written thread again.
 - Each backfill thread write, and each BackfillMessage write still draining,
@@ -270,12 +270,19 @@ the gateway `/email` prefix.
   population then takes one of its team's four slots
   (`try_acquire_crm_population_slot`, the `email:backfill:crm_population_slots`
   key) without waiting: a refused one is hidden on the queue with a growing
-  back-off, which also holds back that mailbox's other populations. Filling a
-  team's slot set by hand pauses its populations, and nothing else. A failed
-  population (`CrmError::Contended`, a lock or statement timeout, any storage
-  error) is hidden for 30 s doubling to 15 minutes and given up after six
-  attempts with one ERROR; the next mail asks again. See
-  `email::domain::crm_population`.
+  back-off (5 s doubling to an hour), which also holds back that mailbox's
+  other populations. Filling a team's slot set by hand pauses its populations
+  without holding a worker; each mailbox comes back within an hour of the
+  pause ending, and a pause longer than about three days starts moving head
+  messages to the dead-letter queue (100 deliveries). A failed population
+  (`CrmError::Contended`, a lock or statement timeout, any storage error) is
+  hidden for 30 s doubling to 15 minutes and given up after six attempts with
+  one ERROR; the next mail asks again. A history page, or a contact whose
+  pending entry is gone, has no attempt count and is given up after 30
+  deliveries. A pending entry whose claim has not run for an hour (its message
+  dead-lettered, or lost before it was sent) is claimed again by the next
+  request, and a population that finds no team or no mailbox deletes its
+  entry. See `email::domain::crm_population`.
 - `gmail_ops` workers decode both label write forms: single-message
   `ModifyMessageLabels` and `ModifyMessageLabelsBatch` (up to 1,000 messages).
   From ten messages up a batch is one `batchModify`, which a permanent failure

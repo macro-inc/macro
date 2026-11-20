@@ -213,3 +213,104 @@ async fn failures_count_per_claim_and_a_released_claim_is_sent_again() {
     };
     assert!(redis.record_crm_population(link, &[history]).await.unwrap()[0].is_some());
 }
+
+/// Marks the entry's claim as last taken long ago, as when its message was
+/// dead-lettered or lost before it was sent.
+async fn age(redis: &RedisClient, link: Uuid, contact: &PopulateCrmContactPayload) {
+    let mut connection = redis
+        .inner
+        .get_multiplexed_async_connection()
+        .await
+        .unwrap();
+    let _: i64 = redis::cmd("HSET")
+        .arg(key(link, contact))
+        .arg("claimed_at")
+        .arg(0)
+        .query_async(&mut connection)
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_claim_whose_message_never_ran_is_taken_over() {
+    let redis = client();
+    let link = mailbox();
+    let contact = request("buyer@example.com", 200, false, None);
+    let orphan = claimed(
+        &redis
+            .record_crm_population(link, std::slice::from_ref(&contact))
+            .await
+            .unwrap(),
+    );
+
+    age(&redis, link, &contact).await;
+    let again = redis
+        .record_crm_population(link, std::slice::from_ref(&contact))
+        .await
+        .unwrap();
+    let replacement = again[0].expect("a stale claim no longer absorbs requests");
+    assert_ne!(replacement, orphan);
+    assert!(matches!(
+        redis
+            .take_crm_population(link, &contact, replacement)
+            .await
+            .unwrap(),
+        PendingContact::Claimed(_)
+    ));
+    assert_eq!(
+        redis
+            .take_crm_population(link, &contact, orphan)
+            .await
+            .unwrap(),
+        PendingContact::Superseded,
+        "a live claim keeps its entry"
+    );
+
+    // A message that finds the entry's claim stale adopts it.
+    age(&redis, link, &contact).await;
+    assert!(matches!(
+        redis
+            .take_crm_population(link, &contact, orphan)
+            .await
+            .unwrap(),
+        PendingContact::Claimed(_)
+    ));
+}
+
+#[tokio::test]
+async fn a_discarded_entry_lets_the_next_request_send_again() {
+    let redis = client();
+    let link = mailbox();
+    let contact = request("buyer@example.com", 200, false, None);
+    let claim = claimed(
+        &redis
+            .record_crm_population(link, std::slice::from_ref(&contact))
+            .await
+            .unwrap(),
+    );
+
+    redis
+        .discard_crm_population(link, &contact, Uuid::now_v7())
+        .await
+        .unwrap();
+    assert!(
+        redis
+            .record_crm_population(link, std::slice::from_ref(&contact))
+            .await
+            .unwrap()[0]
+            .is_none(),
+        "only the claim's own message discards it"
+    );
+
+    redis
+        .discard_crm_population(link, &contact, claim)
+        .await
+        .unwrap();
+    assert!(
+        redis
+            .record_crm_population(link, std::slice::from_ref(&contact))
+            .await
+            .unwrap()[0]
+            .is_some()
+    );
+}

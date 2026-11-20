@@ -124,7 +124,7 @@ pub(crate) async fn keep_invisible<F: Future>(
                     .change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
                     .await
                 {
-                    tracing::warn!(error = ?error, "failed to keep a running backfill operation hidden");
+                    tracing::warn!(error = ?error, "failed to keep a running queue operation hidden");
                 }
             }
         }

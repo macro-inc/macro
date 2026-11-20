@@ -544,13 +544,21 @@ async fn gmail_a_population_left_on_the_backfill_queue_still_reaches_the_crm() -
     let ada_primary = ada.link_gmail().await?;
     let carol = format!("carol@{COMPANY}");
 
-    // The mail is there before there is a team to learn from it.
+    // The mail is there before there is a team to learn from it, and the
+    // population its sync asked for has found no team and ended: only the
+    // forwarded request below can file Carol.
     ada_primary.deliver(&Mail::new(
         &format!("Carol <{carol}>"),
         "Renewal",
         "Shall we renew?",
     ))?;
     ada_primary.wait_for_preview("inbox", "Renewal").await?;
+    eventually(
+        "the sync's own population to end",
+        Duration::from_secs(120),
+        async || Ok((stack.queue_depth("crm-population.fifo").await? == 0).then_some(())),
+    )
+    .await?;
     seed_team(&stack, &[(&ada, &ada_primary)]).await?;
     assert_eq!(contact(&ada, &carol).await?, Value::Null);
 

@@ -2,6 +2,7 @@ use super::process;
 use crate::composition::workers::CrmServiceType;
 use crate::pubsub::worker_lifecycle::run_until_cancelled;
 use crate::util::redis::RedisClient;
+use email::domain::crm_population::FleetAdmission;
 use rand::Rng;
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,7 +10,9 @@ use tokio_util::sync::CancellationToken;
 
 /// Shortest and longest pause before a worker asks again for a fleet slot.
 const FLEET_BUSY_PAUSE: std::ops::RangeInclusive<Duration> =
-    Duration::from_millis(250)..=Duration::from_secs(1);
+    Duration::from_secs(1)..=Duration::from_secs(3);
+/// Pause after the fleet slots could not be read, or a receive failed.
+const UNAVAILABLE_PAUSE: Duration = Duration::from_secs(5);
 
 /// A population worker's queue handle and composed service.
 #[derive(Clone)]
@@ -74,12 +77,9 @@ async fn run(ctx: CrmPopulationContext, cancellation_token: CancellationToken) {
         }
 
         // Pause before restarting to avoid rapid restart loops.
-        if run_until_cancelled(
-            &cancellation_token,
-            tokio::time::sleep(Duration::from_secs(5)),
-        )
-        .await
-        .is_none()
+        if pause(&cancellation_token, Duration::from_secs(5))
+            .await
+            .is_none()
         {
             return;
         }
@@ -93,15 +93,21 @@ async fn receive_while_running(ctx: &CrmPopulationContext, cancellation_token: &
         else {
             return;
         };
-        let Some(slot) = admitted else {
-            let pause = rand::rng().random_range(FLEET_BUSY_PAUSE);
-            if run_until_cancelled(cancellation_token, tokio::time::sleep(pause))
-                .await
-                .is_none()
-            {
-                return;
+        let slot = match admitted {
+            FleetAdmission::Admitted(slot) => slot,
+            FleetAdmission::Busy => {
+                let wait = rand::rng().random_range(FLEET_BUSY_PAUSE);
+                if pause(cancellation_token, wait).await.is_none() {
+                    return;
+                }
+                continue;
             }
-            continue;
+            FleetAdmission::Unavailable => {
+                if pause(cancellation_token, UNAVAILABLE_PAUSE).await.is_none() {
+                    return;
+                }
+                continue;
+            }
         };
 
         let running = slot
@@ -123,6 +129,7 @@ async fn receive_while_running(ctx: &CrmPopulationContext, cancellation_token: &
                     }
                     Err(error) => {
                         tracing::error!(error = ?error, "error receiving CRM populations");
+                        pause(cancellation_token, UNAVAILABLE_PAUSE).await?;
                     }
                 }
                 Some(())
@@ -132,4 +139,8 @@ async fn receive_while_running(ctx: &CrmPopulationContext, cancellation_token: &
             return;
         }
     }
+}
+
+async fn pause(cancellation_token: &CancellationToken, duration: Duration) -> Option<()> {
+    run_until_cancelled(cancellation_token, tokio::time::sleep(duration)).await
 }

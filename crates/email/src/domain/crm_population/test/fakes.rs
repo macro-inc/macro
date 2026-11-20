@@ -201,6 +201,16 @@ impl PendingContacts for Fake {
         self.call("settle")?;
         Ok(self.0.lock().unwrap().settled.clone())
     }
+    async fn discard(
+        &self,
+        _: Uuid,
+        _: &PopulateCrmContactPayload,
+        claim: Uuid,
+    ) -> anyhow::Result<()> {
+        assert_eq!(claim, CLAIM);
+        self.call("discard")?;
+        Ok(())
+    }
     async fn restore(
         &self,
         _: Uuid,

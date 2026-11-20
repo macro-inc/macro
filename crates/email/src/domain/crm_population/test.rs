@@ -161,10 +161,11 @@ async fn a_busy_team_hides_the_message_without_touching_the_database_any_further
         .service()
         .process(&delivered("buyer@example.com"), 20)
         .await;
+    // A team paused for long backs each mailbox off for up to an hour.
     retried_within(
         disposition,
-        Duration::from_secs(450),
-        Duration::from_secs(900),
+        Duration::from_secs(1800),
+        Duration::from_secs(3600),
     );
 }
 
@@ -288,7 +289,7 @@ async fn requests_made_during_a_run_get_one_new_message_or_wait_for_redelivery()
 }
 
 #[tokio::test]
-async fn a_gone_mailbox_or_teamless_owner_ends_the_population() {
+async fn a_gone_mailbox_or_teamless_owner_ends_the_population_with_its_entry() {
     let fake = Fake::default();
     fake.0.lock().unwrap().link = None;
     let disposition = fake
@@ -296,7 +297,7 @@ async fn a_gone_mailbox_or_teamless_owner_ends_the_population() {
         .process(&delivered("buyer@example.com"), 1)
         .await;
     assert_eq!(disposition, PopulationDisposition::Done);
-    assert_eq!(fake.calls(), ["link"]);
+    assert_eq!(fake.calls(), ["link", "discard"]);
 
     let fake = Fake::default();
     fake.0.lock().unwrap().team = None;
@@ -305,7 +306,7 @@ async fn a_gone_mailbox_or_teamless_owner_ends_the_population() {
         .process(&delivered("buyer@example.com"), 1)
         .await;
     assert_eq!(disposition, PopulationDisposition::Done);
-    assert_eq!(fake.calls(), ["link", "team"]);
+    assert_eq!(fake.calls(), ["link", "team", "discard"]);
 }
 
 #[tokio::test]
@@ -362,8 +363,14 @@ async fn a_history_page_checkpoints_only_after_every_contact_inside_a_team_slot(
         Duration::from_secs(30),
     );
     assert!(!fake.calls().contains(&"history_finish"));
-    assert_eq!(
+    // Deliveries count a busy team's refusals too, so a page is not given up
+    // at the attempts a contact is.
+    assert!(matches!(
         fake.service().process(&message, MAX_ATTEMPTS).await,
+        PopulationDisposition::Retry { .. }
+    ));
+    assert_eq!(
+        fake.service().process(&message, MAX_DELIVERIES).await,
         PopulationDisposition::Done
     );
 }

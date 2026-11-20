@@ -87,6 +87,14 @@ impl PendingContacts for RedisPendingContacts {
             .settle_crm_population(link, contact, claim, next)
             .await
     }
+    async fn discard(
+        &self,
+        link: Uuid,
+        contact: &PopulateCrmContactPayload,
+        claim: Uuid,
+    ) -> anyhow::Result<()> {
+        Ok(self.0.discard_crm_population(link, contact, claim).await?)
+    }
     async fn restore(
         &self,
         link: Uuid,

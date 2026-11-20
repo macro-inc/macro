@@ -100,6 +100,14 @@ pub trait PendingContacts: Send + Sync + 'static {
         claim: Uuid,
         next: Uuid,
     ) -> impl Future<Output = anyhow::Result<SettledContact>> + Send;
+    /// Deletes the entry if `claim` holds it, for a mailbox that is gone or
+    /// whose owner has no team: its requests mean nothing.
+    fn discard(
+        &self,
+        link: Uuid,
+        contact: &PopulateCrmContactPayload,
+        claim: Uuid,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Gives a handed entry back to `claim` after `next`'s message could not
     /// be sent, so a redelivery of `claim` finds it again.
     fn restore(

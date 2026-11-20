@@ -14,7 +14,7 @@ pub type ThreadContactsMap = HashMap<Uuid, Vec<(String, Option<String>)>>;
 
 /// `(email, name, first_at, last_at)` for a contact's known activity
 /// range on a link — what the `populate_crm_for_user` historical seed
-/// hands to `PopulateCrmContact`.
+/// turns into CRM population requests.
 pub type CrmContactRange = (String, Option<String>, DateTime<Utc>, DateTime<Utc>);
 
 /// fetch message sender from db
@@ -83,8 +83,8 @@ struct RecipientQueryResult {
 }
 
 /// One row per sent-message recipient on `link_id`, with the
-/// `(email, name, first_at, last_at)` shape ready to fan out to
-/// `PopulateCrmContact`. `first_at` / `last_at` are
+/// `(email, name, first_at, last_at)` shape ready to turn into CRM
+/// population requests. `first_at` / `last_at` are
 /// `MIN(internal_date_ts)` / `MAX(internal_date_ts)` over the contact's
 /// matching messages — so a single populate job per contact carries
 /// the full known activity range. `email` is lowercased; `name` comes
