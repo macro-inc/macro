@@ -1,8 +1,11 @@
 use crate::{
     DocumentFilters,
     ast::{
-        ExpandErr, crm_association::CrmAssociation, date::DateLiteral, email::Email,
-        properties::PropertiesLiteral,
+        ExpandErr,
+        crm_association::CrmAssociation,
+        date::DateLiteral,
+        email::Email,
+        properties::{EntityRefId, PropertiesLiteral, PropertyMatchValue},
     },
 };
 use document_sub_type::DocumentSubType;
@@ -22,6 +25,10 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use strum::IntoEnumIterator;
 use uuid::Uuid;
+
+/// The permanently assigned system Assignees property, shared by tasks and initiatives.
+/// Keep this layer WASM-safe; Soup tests verify the ID against `system_properties`.
+pub const ASSIGNEES_PROPERTY_ID: Uuid = Uuid::from_u128(0x00000001_0000_0000_0000_000000000001);
 
 /// the literal type that can appear in the item filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -246,6 +253,24 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
         let is_email_attachment_node =
             is_email_attachment.map(|v| Expr::Literal(DocumentLiteral::IsEmailAttachment(v)));
 
+        let membership = task_filters
+            .owner_or_assignee
+            .map(|owner| {
+                let assignee = EntityRefId::new(owner.principal_id())?;
+                Ok::<_, ExpandErr>(Expr::and(
+                    Expr::val(DocumentLiteral::SubType(DocumentSubType::Task)),
+                    Expr::or(
+                        Expr::val(DocumentLiteral::Owner(owner)),
+                        Expr::val(DocumentLiteral::Property(PropertiesLiteral {
+                            property_definition_id: ASSIGNEES_PROPERTY_ID,
+                            entity_type: None,
+                            value: PropertyMatchValue::EntityRef(assignee),
+                        })),
+                    ),
+                ))
+            })
+            .transpose()?;
+
         let normal_expr = [
             file_types_node,
             document_id_nodes,
@@ -255,6 +280,7 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
             notification_state_node,
             sub_types_node,
             is_email_attachment_node,
+            membership,
         ]
         .into_iter()
         .fold_with(Expr::and);

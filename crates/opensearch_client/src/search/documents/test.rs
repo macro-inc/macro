@@ -132,6 +132,50 @@ fn test_build_bool_query_join_shape_sub_type_filter() -> anyhow::Result<()> {
 }
 
 #[test]
+fn personal_tasks_union_owner_and_assignee_without_replacing_access() -> anyhow::Result<()> {
+    let builder = DocumentQueryBuilder::new(vec!["launch".into()])
+        .user_id("macro|viewer@example.com")
+        .ids(vec!["shared-task".into()])
+        .owner_or_assignee(Some("macro|viewer@example.com".into()));
+    let json = builder.build_bool_query()?.build().to_json();
+    let filters = json["bool"]["filter"].as_array().unwrap();
+    assert!(filters.contains(&serde_json::json!({"term": {"sub_type": "task"}})));
+    let membership = filters
+        .iter()
+        .find(|filter| {
+            filter["bool"]["should"].as_array().is_some_and(|branches| {
+                branches.iter().any(|branch| branch.get("nested").is_some())
+            })
+        })
+        .unwrap();
+    assert_eq!(membership["bool"]["minimum_should_match"], 1);
+    let branches = membership["bool"]["should"].as_array().unwrap();
+    assert_eq!(
+        branches[0],
+        serde_json::json!({"term": {"owner_id": "macro|viewer@example.com"}})
+    );
+    let property = &branches[1]["nested"]["query"]["bool"]["filter"];
+    assert_eq!(
+        property[0]["term"]["properties.definition_id"],
+        "00000001-0000-0000-0000-000000000001"
+    );
+    assert_eq!(
+        property[1]["terms"]["properties.values"],
+        serde_json::json!(["macro|viewer@example.com"])
+    );
+    assert!(
+        filters.iter().any(
+            |filter| filter["bool"]["should"].as_array().is_some_and(|branches| {
+                branches.iter().any(|branch| {
+                    branch["terms"]["entity_id"] == serde_json::json!(["shared-task"])
+                })
+            })
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn test_build_bool_query_join_shape_has_inner_hits() -> anyhow::Result<()> {
     let builder = DocumentQueryBuilder::new(vec!["foo".to_string(), "bar".to_string()])
         .match_type("partial")

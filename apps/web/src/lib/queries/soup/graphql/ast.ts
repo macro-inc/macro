@@ -443,6 +443,7 @@ function mapInitiativeLiteral(literal: unknown): GraphqlInitiativeLiteralInput {
   if (field === 'id') return { id: mapString(value, 'id') };
   if (field === 'o') return { owner: mapString(value, 'owner') };
   if (field === 'ns') return { notificationState: mapNotificationState(value) };
+  if (field === 'prop') return { property: mapPropertiesLiteral(value) };
   return unsupported(`initiative literal ${field}`);
 }
 

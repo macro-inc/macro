@@ -48,6 +48,7 @@ projects.
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
 
 ## Gotchas
+- Keep task owner-or-assignee membership in its own required OR filter, using indexed `owner_id` and nested Assignees values; never replace the parent access filter or explicit property filters.
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an

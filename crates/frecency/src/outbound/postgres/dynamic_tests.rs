@@ -894,6 +894,7 @@ async fn test_dynamic_filter_document_task_include_cbm_atm_nc(pool: PgPool) {
         document_filters: DocumentFilters {
             task_filters: TaskFilters {
                 include_cbm_atm_nc: Some(true),
+                ..Default::default()
             },
             ..Default::default()
         },

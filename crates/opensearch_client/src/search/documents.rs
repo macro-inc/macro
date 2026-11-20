@@ -114,6 +114,7 @@ pub(crate) struct DocumentQueryBuilder {
     tag_option_ids: Vec<String>,
     match_all_tags: bool,
     term_matching: DocumentTermMatching,
+    owner_or_assignee: Option<String>,
 }
 
 impl DocumentQueryBuilder {
@@ -126,6 +127,7 @@ impl DocumentQueryBuilder {
             tag_option_ids: Vec::new(),
             match_all_tags: false,
             term_matching: DocumentTermMatching::default(),
+            owner_or_assignee: None,
         }
     }
 
@@ -170,6 +172,11 @@ impl DocumentQueryBuilder {
         self
     }
 
+    pub fn owner_or_assignee(mut self, principal: Option<String>) -> Self {
+        self.owner_or_assignee = principal;
+        self
+    }
+
     /// Parent/child join query: one `has_child` clause per term, ANDed
     /// inside `bool.must`, or a single passage clause under
     /// [`DocumentTermMatching::Dynamic`]. Parent metadata filters (owner, ids,
@@ -203,6 +210,23 @@ impl DocumentQueryBuilder {
         // Optional sub_type filter (parent field).
         if !self.sub_types.is_empty() {
             bool_query.filter(QueryType::terms("sub_type", self.sub_types.clone()));
+        }
+
+        if let Some(principal) = &self.owner_or_assignee {
+            bool_query.filter(QueryType::term("sub_type", "task".to_string()));
+            let mut membership = BoolQueryBuilder::new();
+            membership.should(QueryType::term("owner_id", principal.clone()));
+            let assignees = PropertyFilterArg {
+                definition_id: "00000001-0000-0000-0000-000000000001".into(),
+                values: vec![principal.clone()],
+                date_range: None,
+                has_date: None,
+            };
+            if let Some(assigned) = build_property_filter(&assignees) {
+                membership.should(assigned);
+            }
+            membership.minimum_should_match(1);
+            bool_query.filter(membership.build().into());
         }
 
         // Property filters: one nested clause per filter, ANDed via bool.filter.
@@ -518,6 +542,8 @@ pub struct DocumentSearchArgs {
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
     pub term_matching: DocumentTermMatching,
+    /// Restrict tasks to this owner or Assignees property reference.
+    pub owner_or_assignee: Option<String>,
 }
 
 impl From<DocumentSearchArgs> for DocumentQueryBuilder {
@@ -536,6 +562,7 @@ impl From<DocumentSearchArgs> for DocumentQueryBuilder {
             .tag_option_ids(args.tag_option_ids)
             .match_all_tags(args.match_all_tags)
             .term_matching(args.term_matching)
+            .owner_or_assignee(args.owner_or_assignee)
     }
 }
 

@@ -1514,6 +1514,8 @@ enum GraphqlInitiativeLiteral {
     DueAfter(String),
     /// Exact notification state for the requester; also opts in.
     NotificationState(GraphqlNotificationState),
+    /// A property condition that composes with initiative ownership.
+    Property(GraphqlFilterPropertiesLiteral),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1531,6 +1533,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
             Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
+            Self::Property(property) => InitiativeLiteral::Property(property.into_literal()?),
         };
         Ok(Expr::val(literal))
     }

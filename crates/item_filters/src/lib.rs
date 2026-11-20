@@ -65,12 +65,17 @@ pub struct TaskFilters {
     /// even when they do not match other document filters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub include_cbm_atm_nc: Option<bool>,
+    /// Match tasks owned by or assigned to this principal, independently of completion.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    #[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+    pub owner_or_assignee: Option<model_owner::Owner>,
 }
 
 impl IsEmpty for TaskFilters {
     fn is_empty(&self) -> bool {
         // false is equivalent to "disabled" and should not affect filtering.
-        self.include_cbm_atm_nc != Some(true)
+        self.include_cbm_atm_nc != Some(true) && self.owner_or_assignee.is_none()
     }
 }
 

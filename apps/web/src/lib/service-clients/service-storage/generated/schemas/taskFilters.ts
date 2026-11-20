@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { TaskFiltersIncludeCbmAtmNc } from './taskFiltersIncludeCbmAtmNc';
+import type { TaskFiltersOwnerOrAssignee } from './taskFiltersOwnerOrAssignee';
 
 /**
  * Task-only filters nested under document filters.
@@ -13,4 +14,6 @@ export interface TaskFilters {
   /** Include tasks that are created by me, assigned to me, and not completed,
 even when they do not match other document filters. */
   include_cbm_atm_nc?: TaskFiltersIncludeCbmAtmNc;
+  /** Match tasks owned by or assigned to this principal, independently of completion. */
+  owner_or_assignee?: TaskFiltersOwnerOrAssignee;
 }

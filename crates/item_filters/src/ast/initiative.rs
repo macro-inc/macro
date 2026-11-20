@@ -32,6 +32,9 @@ pub enum InitiativeLiteral {
     /// An initiative with a non-deleted notification in this exact state.
     #[serde(rename = "ns")]
     NotificationState(crate::NotificationState),
+    /// A property condition that composes with initiative ownership.
+    #[serde(rename = "prop")]
+    Property(crate::ast::properties::PropertiesLiteral),
 }
 
 impl ExpandFrame<InitiativeLiteral> for InitiativeFilters {

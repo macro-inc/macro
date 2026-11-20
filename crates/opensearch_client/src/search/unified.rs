@@ -95,6 +95,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             tag_option_ids: args.document_search_args.tag_option_ids,
             match_all_tags: args.document_search_args.match_all_tags,
             term_matching: args.document_search_args.term_matching,
+            owner_or_assignee: args.document_search_args.owner_or_assignee,
         }
     }
 }
@@ -243,6 +244,8 @@ pub struct UnifiedDocumentSearchArgs {
     pub tag_option_ids: Vec<String>,
     pub match_all_tags: bool,
     pub term_matching: DocumentTermMatching,
+    /// Restrict tasks to this owner or Assignees property reference.
+    pub owner_or_assignee: Option<String>,
 }
 
 #[derive(Debug, Default, Clone)]

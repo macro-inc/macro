@@ -2527,6 +2527,10 @@ export type TaskFilters = {
      * even when they do not match other document filters.
      */
     include_cbm_atm_nc?: boolean | null;
+    /**
+     * Match tasks owned by or assigned to this principal, independently of completion.
+     */
+    owner_or_assignee?: string | null;
 };
 
 /**

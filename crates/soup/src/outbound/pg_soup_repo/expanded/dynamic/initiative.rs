@@ -88,6 +88,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
     filter: Option<&Expr<InitiativeLiteral>>,
 ) -> String {
     fn fold(expr: &Expr<InitiativeLiteral>) -> String {
+        if let Some(predicate) = super::membership::initiative_predicate(expr) {
+            return predicate;
+        }
         match expr {
             Expr::And(a, b) => format!("({} AND {})", fold(a), fold(b)),
             Expr::Or(a, b) => format!("({} OR {})", fold(a), fold(b)),
@@ -106,6 +109,13 @@ pub(in crate::outbound::pg_soup_repo) fn build_initiative_filter(
             Expr::Literal(InitiativeLiteral::DueAfter(date)) => due_date_filter(">=", date),
             Expr::Literal(InitiativeLiteral::NotificationState(state)) => {
                 build_notification_state_clause("i.id", "initiative", *state)
+            }
+            Expr::Literal(InitiativeLiteral::Property(property)) => {
+                super::property_literal_predicate(
+                    property,
+                    "i.id::text",
+                    super::PropertyProbe::PerCandidate,
+                )
             }
         }
     }
@@ -149,7 +159,7 @@ pub(super) fn initiative_top_clause(
     } else {
         ""
     };
-    let access = if names_initiative_ids(filter) {
+    let access = if names_initiative_ids(filter) || super::membership::bounds_initiatives(filter) {
         initiative_access_clause()
     } else {
         INITIATIVE_LISTING_ACCESS.to_owned()

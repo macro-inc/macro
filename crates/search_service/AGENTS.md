@@ -53,6 +53,7 @@ per-entity-type search plus a unified search across them — mounted into
 
 ## Gotchas
 
+- Forward task owner-or-assignee membership to OpenSearch independently of access, subtype, and explicit person/property filters; do not materialize and merge separate search pages.
 - Search spans and logs never carry what the user typed: not the query, its
   terms, or the name term. Skip those arguments and record sizes and enums
   (`term_len`, `search.terms`, `search.search_on`). The unified
