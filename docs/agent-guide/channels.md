@@ -1837,7 +1837,8 @@ Inset tabs sit in the channel header:
 `Messages` / `Attachments` / `Calls` / `Participants`.
 `Ask Macro`, `Invite`, and `Call` actions remain in channel headers, with the
 live-phone-call exceptions described above. On desktop both the inline
-conversation header and the split header show them left to right as
+conversation header and the split header (the channel block, which the
+Notifications preview shows) show them left to right as
 `Ask Macro`, `Invite`, `Call`, after the live viewer avatars; `Ask Macro` is the
 same button a document header shows before Share. The channel title menu (the
 `...` after the name, or the split title's menu) also offers `Ask Macro` on every
