@@ -94,6 +94,9 @@ Google Workspace and enabled Outlook connections offer provider consent.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.
+During verification, **Connect inbox** stays in place with a loading indicator.
+Check idle, checking, refusal and retry on desktop and phone: the action keeps
+its label and width, and error copy wraps without being clipped.
 A verified sign-in refusal shows **Sign-in was rejected. Check your username
 and app password.** The provider's **Create an app password** link stays
 available. Server settings and confirmation remain; re-enter the cleared

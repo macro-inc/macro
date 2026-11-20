@@ -246,3 +246,43 @@ it('keeps password entry closed when the server refuses discovery for an unverif
   );
   expect(screen.queryByLabelText('Password or app password')).toBeNull();
 });
+
+it('keeps the same connection action and label while checking, failing and retrying', async () => {
+  const first =
+    Promise.withResolvers<
+      Result<{ linkId: string }, { code: string; message: string }[]>
+    >();
+  const retry =
+    Promise.withResolvers<
+      Result<{ linkId: string }, { code: string; message: string }[]>
+    >();
+  mail.connect
+    .mockReturnValueOnce(first.promise)
+    .mockReturnValueOnce(retry.promise);
+  render(() => (
+    <ImapConnectDialog
+      open
+      onOpenChange={() => {}}
+      onResult={() => {}}
+      emailAddress="owner@example.com"
+    />
+  ));
+  const password = await screen.findByLabelText('Password or app password');
+  fireEvent.click(screen.getByRole('checkbox', { name: /I trust/ }));
+  fireEvent.input(password, { target: { value: 'synthetic-test-password' } });
+  const button = screen.getByRole('button', { name: 'Connect inbox' });
+  fireEvent.click(button);
+  await vi.waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+  expect(screen.getByRole('button', { name: 'Connect inbox' })).toBe(button);
+  expect(button.textContent).toBe('Connect inbox');
+  first.resolve(
+    err([{ code: 'IMAP_CONNECTION_REFUSED', message: 'credentials_rejected' }])
+  );
+  await screen.findByRole('alert');
+  expect(button.getAttribute('aria-busy')).toBeNull();
+  fireEvent.input(password, { target: { value: 'corrected-test-password' } });
+  fireEvent.click(button);
+  await vi.waitFor(() => expect(button.getAttribute('aria-busy')).toBe('true'));
+  expect(screen.getByRole('button', { name: 'Connect inbox' })).toBe(button);
+  retry.resolve(ok({ linkId: 'connected-inbox' }));
+});

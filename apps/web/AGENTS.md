@@ -2068,3 +2068,7 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
 - Keep confirmed IMAP server settings after verification refusal, clear secret
   fields, and offer the catalog app-password help link. Render only whitelisted
   error guidance; a connection failure must never imply a rejected password.
+
+- Keep IMAP connect action labels mounted through verification with Button
+  loading, and reserve a wrapping error area so refusal/retry does not shift
+  the footer. Avoid fixed action widths or clipped error copy.

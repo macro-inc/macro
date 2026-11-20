@@ -510,11 +510,13 @@ function ConnectForm(props: ImapConnectProps) {
                   </Show>
                 </Show>
               </Show>
-              <Show when={error()}>
-                <p role="alert" class="text-sm text-failure">
-                  {error()}
-                </p>
-              </Show>
+              <div class="min-h-[3lh] text-sm">
+                <Show when={error()}>
+                  <p role="alert" class="text-failure">
+                    {error()}
+                  </p>
+                </Show>
+              </div>
             </fieldset>
             <div class="flex justify-end gap-2">
               <Button
@@ -528,15 +530,10 @@ function ConnectForm(props: ImapConnectProps) {
                 <Button
                   type="submit"
                   variant="primary"
-                  disabled={busy() || (phase() === 'servers' && !confirmed())}
+                  loading={busy()}
+                  disabled={phase() === 'servers' && !confirmed()}
                 >
-                  {phase() === 'address'
-                    ? busy()
-                      ? 'Finding settings…'
-                      : 'Find settings'
-                    : busy()
-                      ? 'Checking connection…'
-                      : 'Connect inbox'}
+                  {phase() === 'address' ? 'Find settings' : 'Connect inbox'}
                 </Button>
               </Show>
             </div>
