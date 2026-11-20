@@ -435,7 +435,8 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
 }
 
 /// Re-read the bound agents: `Some` ends the stream when they are no longer
-/// `bots` (or cannot be read), `None` keeps it.
+/// `bots` or the service refuses the credentials, `None` keeps it, also when
+/// they cannot be read.
 async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
@@ -451,6 +452,20 @@ async fn bound_agents_changed(
             tracing::info!("bound-agent set changed; reconnecting the event stream");
             Some(ServeOutcome::Idle)
         }
-        Err(error) => Some(ServeOutcome::Ended(error)),
+        // The harness was removed or its token revoked: the service checks
+        // credentials only when a stream opens, so stop reading this one.
+        Err(error)
+            if error
+                .downcast_current_context::<crate::outbound::stream::CredentialsRefused>()
+                .is_some() =>
+        {
+            Some(ServeOutcome::Ended(error))
+        }
+        // The stream itself is fine: keep reading it and look again on the
+        // next refresh.
+        Err(error) => {
+            tracing::warn!(error = ?error, "could not re-read the bound agents; keeping the event stream");
+            None
+        }
     }
 }
