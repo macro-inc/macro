@@ -409,7 +409,11 @@ async function planAttempt(context: DirectEditRun): Promise<Planned> {
           options.opacity
         );
         try {
-          verifyResult(requestedMarkdown(current, expected), afterView);
+          verifyResult(
+            requestedMarkdown(current, expected),
+            afterView,
+            current
+          );
           checkCommentsKept(
             current,
             afterView,

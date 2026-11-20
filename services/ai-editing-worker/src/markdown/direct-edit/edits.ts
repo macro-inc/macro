@@ -15,6 +15,13 @@ import { FrozenMediaError, redactMedia, restoreMedia } from './media';
 /** Markdown longer than this is refused; the snapshot limit binds well before. */
 export const MAX_MARKDOWN_CHARS = 1_000_000;
 
+/**
+ * The longest the document's markdown may grow to while a batch applies,
+ * checked before each replacement so a run of `replace_all` edits cannot
+ * expand past memory before the 4 MiB snapshot check.
+ */
+const MAX_EDITED_CHARS = 4 * MAX_MARKDOWN_CHARS;
+
 const blockId = z.string().min(1).max(256);
 /** A block id, or `start` / `end`. */
 const position = blockId;
@@ -219,15 +226,12 @@ function crossBlockMatch(list: Entry[], old: string, edit: number) {
       edit
     );
   const end = at + old.length;
+  // A match that starts or ends inside a separator takes the blocks on both
+  // sides of it: skip only blocks wholly before its start or after its end.
   let first = 0;
-  while (
-    first < list.length - 1 &&
-    offsets[first] + list[first].markdown.length < at
-  )
-    first++;
+  while (first < list.length - 1 && offsets[first + 1] <= at) first++;
   let last = list.length - 1;
-  // A match that starts or ends in a separator takes the block beside it.
-  while (last > 0 && offsets[last] > end) last--;
+  while (last > 0 && offsets[last] - 2 >= end) last--;
   const merged = joined.slice(
     offsets[first],
     offsets[last] + list[last].markdown.length
@@ -319,6 +323,13 @@ function applyReplace(
         : nearest(list, edit.old)
     );
   }
+  const growth = total * (edit.new.length - edit.old.length);
+  if (growth > 0 && joinedMarkdown(list).length + growth > MAX_EDITED_CHARS)
+    throw new EditRefusal(
+      'too_large',
+      `edit ${n}: the edited document would exceed ${MAX_EDITED_CHARS} characters`,
+      n
+    );
   if (total > 1 && !edit.replace_all)
     throw new EditRefusal(
       'ambiguous_match',
@@ -370,6 +381,12 @@ export function applyEdits(
       const where = before ? edit.insert_before : edit.insert_after;
       if (!edit.markdown.trim())
         throw new EditRefusal('empty_edit', `edit ${n}: markdown is empty`, n);
+      if (joinedMarkdown(list).length + edit.markdown.length > MAX_EDITED_CHARS)
+        throw new EditRefusal(
+          'too_large',
+          `edit ${n}: the edited document would exceed ${MAX_EDITED_CHARS} characters`,
+          n
+        );
       list.splice(insertionIndex(list, where, before, n), 0, {
         markdown: edit.markdown,
         opaque: false,

@@ -786,4 +786,100 @@ describe('second review', () => {
         EditRefusal
       );
   });
+
+  it('a match starting inside a separator takes the block before it', async () => {
+    const synced = new SyncedDocument(await buildSnapshot('A\n\nBeta'));
+    const { after } = await run(
+      { edits: [{ old: '\nBeta', new: '\nGamma' }] },
+      synced
+    );
+    expect(after.blocks.map((b) => b.markdown)).toEqual(['A', 'Gamma']);
+  });
+
+  it('text inserted before a commented word stays out of the comment', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('The cat sat.', [{ text: 'cat', id: 'cm-cat' }])
+    );
+    const { after } = await run(
+      { edits: [{ old: 'The cat', new: 'The big cat' }] },
+      synced
+    );
+    const marks: string[] = [];
+    const walkMarks = (node: { type: string; children?: unknown[] }) => {
+      if (node.type === 'comment-mark')
+        marks.push(
+          (node.children as { text?: string }[]).map((c) => c.text).join('')
+        );
+      for (const child of node.children ?? [])
+        walkMarks(child as { type: string; children?: unknown[] });
+    };
+    for (const node of after.nodes) walkMarks(node);
+    expect(after.blocks[0].markdown).toBe('The big cat sat.');
+    expect(marks).toEqual(['cat']);
+  });
+
+  it('a replace_all batch that would grow past the limit is too large', async () => {
+    const error = await runDirectEdit(
+      DOC,
+      {
+        edits: Array.from({ length: 40 }, () => ({
+          old: 'A',
+          new: 'AA',
+          replace_all: true,
+        })),
+      },
+      new SyncedDocument(await buildSnapshot('A')),
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+    expect((error as EditRefusal).code).toBe('too_large');
+  });
+
+  it('a percent-encoded data URI parameter is redacted', async () => {
+    const uri = 'data:image/png;name=a%20b;base64,iVBORw0KGgo=';
+    const synced = new SyncedDocument(
+      await buildSnapshot(`Before.\n\n![pic](${uri})`)
+    );
+    const read = await readMarkdownBlocks(DOC, synced, signal());
+    expect(read.blocks.map((b) => b.markdown).join('\n')).not.toContain(
+      'iVBOR'
+    );
+  });
+
+  it('changing an uploaded video link is refused; deleting the video is not', async () => {
+    const video =
+      '<m-video>{"url":"https://static.example.com/v.mp4","srcType":"dss","id":"vid-1","width":640,"height":360,"scale":1,"controls":true}</m-video>';
+    const markdown = `Intro.\n\n${video}\n\n[link](https://static.example.com/v.mp4)`;
+    const snapshot = await buildSnapshot(markdown);
+    const read = await readDocument(DOC, snapshot);
+    const block = read.blocks.find((b) => b.markdown.includes('m-video'));
+
+    const changed = await runDirectEdit(
+      DOC,
+      { edits: [{ old: 'v.mp4","srcType', new: 'w.mp4","srcType' }] },
+      new SyncedDocument(snapshot),
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+    const { response } = await run(
+      { edits: [{ delete: block.id }], allowDeletingContent: true },
+      new SyncedDocument(snapshot)
+    );
+
+    expect((changed as EditRefusal).code).toBe('frozen_media');
+    expect(response.outcome).toBe('committed');
+  });
+
+  it('moving the first of many blocks to the end reports one move', async () => {
+    const markdown = Array.from({ length: 2100 }, (_, i) => `P${i}`).join(
+      '\n\n'
+    );
+    const synced = new SyncedDocument(await buildSnapshot(markdown));
+    const read = await readDocument(DOC, synced.snapshot());
+    const { response } = await run(
+      { edits: [{ move: read.blocks[0].id, after: 'end' }] },
+      synced
+    );
+    expect(response.changes.filter((c) => c.kind === 'moved')).toHaveLength(1);
+  }, 60_000);
 });

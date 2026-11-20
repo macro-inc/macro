@@ -6,8 +6,9 @@
 import type { SerializedNode } from './document';
 import { walk } from './document';
 
+/** RFC 2397: parameters may be percent-encoded (`;name=a%20b`). */
 const DATA_URI_RE =
-  /data:[a-z]+\/[a-z0-9.+-]+(?:;[a-z0-9=-]+)*,[A-Za-z0-9+/=%_-]+/gi;
+  /data:[a-z]+\/[a-z0-9.+-]+(?:;[a-z0-9=%._+-]+)*,[A-Za-z0-9+/=%_-]+/gi;
 const PLACEHOLDER_RE = /data:redacted,[0-9a-zA-Z]*/g;
 
 export class FrozenMediaError extends Error {}
