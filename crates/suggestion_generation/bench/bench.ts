@@ -9,6 +9,7 @@ import { parseArgs } from 'node:util';
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
 import { keyGaps } from './catalog';
 import { makeHeldout, spend, spent } from './heldout';
+import { runFinding } from './finding';
 import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } from './judge';
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
@@ -100,6 +101,9 @@ const OPTIONS = {
   out: { type: 'string' },
   concurrency: { type: 'string' },
   margin: { type: 'string' },
+  model: { type: 'string', default: 'anthropic/claude-sonnet-5-5' },
+  prompt: { type: 'string' },
+  thinking: { type: 'string' },
 } as const;
 
 const commitOf = (dir: string) =>
@@ -465,8 +469,27 @@ async function main() {
       if (rest[0] === 'stop') stopStub(values.instance!);
       else startStub(values.instance!);
       break;
+    case 'find': {
+      let people = personas(values.set!).filter((persona) => persona.streamsTruth);
+      if (values.personas) people = people.filter((persona) => values.personas!.split(',').includes(persona.name));
+      if (!people.length) throw new Error(`no persona in set ${values.set} has a streams key`);
+      if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
+      await runFinding(stack(values.instance!, values.tempo!), people, {
+        model: values.model!,
+        thinking: values.thinking === 'low' ? 'low' : undefined,
+        reps: Number(values.reps ?? 2),
+        label: values.label!,
+        set: values.set!,
+        prompt: values.prompt,
+        concurrency: Number(values.concurrency ?? 6),
+      });
+      break;
+    }
     case 'heldout':
-      if (rest[0] === 'make') await makeHeldout(stack(values.instance!, values.tempo!), rest[1], Number(rest[2] ?? 3));
+      if (rest[0] === 'make') {
+        if (rest[3] && rest[3] !== 'month') throw new Error('heldout make <name> [count] [month]');
+        await makeHeldout(stack(values.instance!, values.tempo!), rest[1], Number(rest[2] ?? 3), rest[3] === 'month');
+      }
       else console.log(spent().join('\n') || 'no held-out sets');
       break;
     case 'summary':
@@ -484,11 +507,14 @@ async function main() {
   rejudge <run.json…>  judge and score again without generating
   rescore <run.json…>  score again from the marks it has (a changed key), free
   stub [stop]          start or stop the stand-in
-  heldout make <name> [count] | heldout list
+  find                 the finding step alone on a month set: --model, --prompt (default find.md), --reps
+  heldout make <name> [count] [month] | heldout list
+                       (month: 30 days of mail, up to 500 messages, and a streams key)
 
 options: --instance sugbench --set tune|<held-out set> --personas a,b --label local
          --seats <copies of each persona> --reps <rounds> (default: the section's size)
-         --concurrency <generations at once> (default: the section's) --out <file> --margin <points>`);
+         --concurrency <generations at once> (default: the section's) --out <file> --margin <points>
+         --model, --thinking low, --prompt <file> (find)`);
   }
 }
 

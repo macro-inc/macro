@@ -83,7 +83,7 @@ function token(at: Stack, grader: string) {
 
 async function complete<T>(at: Stack, grader: string, prompt: string, instructions: string, schema: object): Promise<T> {
   let last: unknown;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0, busy = 0; attempt < 3; attempt++) {
     try {
       const response = await call<{ outcome: { status: string; result?: T; reason?: string } }>(
         `${at.harness}/cognition/structured-completion`,
@@ -104,6 +104,12 @@ async function complete<T>(at: Stack, grader: string, prompt: string, instructio
     } catch (error) {
       last = error;
       if (/\b401\b/.test(String(error))) tokens.delete(grader);
+      // The harness runs 16 completions at once and refuses the rest: wait for a slot without spending an attempt.
+      if (/ 503: .*busy/.test(String(error)) && busy++ < 60) {
+        attempt--;
+        await Bun.sleep(5_000 + Math.random() * 10_000);
+        continue;
+      }
     }
     await Bun.sleep(3000);
   }
