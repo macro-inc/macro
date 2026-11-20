@@ -349,6 +349,18 @@ pub async fn projection_updates_for_write<S: Storage>(
     data: &Value,
     reuse_stored_identity: bool,
 ) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let response = WriteResponse::new(schema, query, operation, variables, data);
+    projection_updates_for_response(storage, &response, reuse_stored_identity).await
+}
+
+/// [`projection_updates_for_write`] over a response the other passes share.
+pub async fn projection_updates_for_response<S: Storage>(
+    storage: &S,
+    response: &WriteResponse<'_>,
+    reuse_stored_identity: bool,
+) -> Result<Vec<ProjectionMutation>, ProjectionError<S::Error>> {
+    let (operation, variables, data) =
+        (response.operation(), response.variables(), response.data());
     // A revalidation of an absent/inaccessible thread must also revoke its
     // local membership. This includes retrying an already-committed delete,
     // whose idempotent response can no longer identify the removed thread.
@@ -373,17 +385,16 @@ pub async fn projection_updates_for_write<S: Storage>(
             RecordKey::new(format!("{TYPE}:{id}")).map_err(error)?,
         )]);
     }
-    let parsed = parsed_document(query).map_err(error)?;
-    let op = parsed.operation(operation).map_err(error)?;
-    let updates = normalize(schema, op, variables, data)
-        .map_err(error)?
-        .into_iter()
+    let updates = response
+        .updates()?
+        .iter()
         .filter(|(key, record)| {
             key.as_ref().starts_with(&format!("{TYPE}:"))
                 && FIELDS
                     .iter()
                     .any(|field| record.fields.contains_key(*field))
         })
+        .map(|(key, record)| (key.clone(), record.clone()))
         .collect::<Vec<_>>();
     if updates.is_empty() {
         return Ok(vec![]);

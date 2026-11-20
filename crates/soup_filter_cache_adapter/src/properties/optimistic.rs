@@ -29,7 +29,8 @@ pub async fn augment_optimistic<S: PredicateIndexStorage>(
     data: &Value,
     mutations: Vec<OptimisticProjectionMutation>,
 ) -> Result<Vec<OptimisticProjectionMutation>, ProjectionError<S::Error>> {
-    let changes = prepare(schema, storage, query, operation, variables, data, true).await?;
+    let response = crate::WriteResponse::new(schema, query, operation, variables, data);
+    let changes = prepare(storage, &response, true).await?;
     let keys: Vec<_> = mutations
         .iter()
         .map(|mutation| mutation.record_key().clone())

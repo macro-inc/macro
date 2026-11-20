@@ -27,11 +27,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    SoupFilterCompileOutcome, WriteResponse, authoritative_projection_mutations,
     compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
     mail::ProjectionError as MailProjectionError, notification_deletion_updates,
-    notification_projection_updates, optimistic_notification_updates,
-    optimistic_projection_mutations,
+    notification_projection_updates, notification_projection_updates_for,
+    optimistic_notification_updates, optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1658,45 +1658,40 @@ impl CacheEngine {
             .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
+            // The passes below share one normalization of the response.
+            let response_schema = state.engine_mut()?.schema_snapshot();
+            let response = WriteResponse::new(
+                &response_schema,
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+            );
             if reuse_stored_identity {
                 projections.extend(
-                    notification_projection_updates(
-                        &state.engine_mut()?.schema_snapshot(),
-                        state.engine_mut()?.storage(),
-                        &query,
-                        operation_name.as_deref(),
-                        &vars,
-                        &data,
-                    )
-                    .await
-                    .map_err(err_js)?,
+                    notification_projection_updates_for(state.engine_mut()?.storage(), &response)
+                        .await
+                        .map_err(err_js)?,
                 );
             }
             projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates_for_write(
-                    &state.engine_mut()?.schema_snapshot(),
+                soup_filter_cache_adapter::mail::projection_updates_for_response(
                     state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &data,
+                    &response,
                     reuse_stored_identity,
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
-            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
-                &state.engine_mut()?.schema_snapshot(),
-                state.engine_mut()?.storage(),
-                &query,
-                operation_name.as_deref(),
-                &vars,
-                &data,
-                reuse_stored_identity,
-                projections,
-            )
-            .await
-            .map_err(|error| state.mail_projection_error(error))?;
+            let projections =
+                soup_filter_cache_adapter::properties::augment_authoritative_response(
+                    state.engine_mut()?.storage(),
+                    &response,
+                    reuse_stored_identity,
+                    projections,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1751,45 +1746,40 @@ impl CacheEngine {
             .map_err(err_js)?;
             let reuse_stored_identity =
                 state.can_reuse_stored_identity(identity.as_deref()).await?;
+            // The passes below share one normalization of the response.
+            let response_schema = state.engine_mut()?.schema_snapshot();
+            let response = WriteResponse::new(
+                &response_schema,
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+            );
             if reuse_stored_identity {
                 projections.extend(
-                    notification_projection_updates(
-                        &state.engine_mut()?.schema_snapshot(),
-                        state.engine_mut()?.storage(),
-                        &query,
-                        operation_name.as_deref(),
-                        &variables,
-                        &data,
-                    )
-                    .await
-                    .map_err(err_js)?,
+                    notification_projection_updates_for(state.engine_mut()?.storage(), &response)
+                        .await
+                        .map_err(err_js)?,
                 );
             }
             projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates_for_write(
-                    &state.engine_mut()?.schema_snapshot(),
+                soup_filter_cache_adapter::mail::projection_updates_for_response(
                     state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &variables,
-                    &data,
+                    &response,
                     reuse_stored_identity,
                 )
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
-            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
-                &state.engine_mut()?.schema_snapshot(),
-                state.engine_mut()?.storage(),
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-                reuse_stored_identity,
-                projections,
-            )
-            .await
-            .map_err(|error| state.mail_projection_error(error))?;
+            let projections =
+                soup_filter_cache_adapter::properties::augment_authoritative_response(
+                    state.engine_mut()?.storage(),
+                    &response,
+                    reuse_stored_identity,
+                    projections,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?;
             let scope: Option<HydrationScope> =
                 serde_wasm_bindgen::from_value(hydration_scope).map_err(err_js)?;
             let result = match scope {
@@ -2211,42 +2201,38 @@ impl CacheEngine {
                 &projection_data,
             )
             .map_err(err_js)?;
-            projections.extend(
-                notification_projection_updates(
-                    &state.engine_mut()?.schema_snapshot(),
-                    state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &projection_data,
-                )
-                .await
-                .map_err(err_js)?,
-            );
-            projections.extend(
-                soup_filter_cache_adapter::mail::projection_updates(
-                    &state.engine_mut()?.schema_snapshot(),
-                    state.engine_mut()?.storage(),
-                    &query,
-                    operation_name.as_deref(),
-                    &vars,
-                    &projection_data,
-                )
-                .await
-                .map_err(|error| state.mail_projection_error(error))?,
-            );
-            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
-                &state.engine_mut()?.schema_snapshot(),
-                state.engine_mut()?.storage(),
+            // The passes below share one normalization of the response.
+            let response_schema = state.engine_mut()?.schema_snapshot();
+            let response = WriteResponse::new(
+                &response_schema,
                 &query,
                 operation_name.as_deref(),
                 &vars,
                 &projection_data,
-                true,
-                projections,
-            )
-            .await
-            .map_err(|error| state.mail_projection_error(error))?;
+            );
+            projections.extend(
+                notification_projection_updates_for(state.engine_mut()?.storage(), &response)
+                    .await
+                    .map_err(err_js)?,
+            );
+            projections.extend(
+                soup_filter_cache_adapter::mail::projection_updates_for_response(
+                    state.engine_mut()?.storage(),
+                    &response,
+                    true,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections =
+                soup_filter_cache_adapter::properties::augment_authoritative_response(
+                    state.engine_mut()?.storage(),
+                    &response,
+                    true,
+                    projections,
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_in_generation(
