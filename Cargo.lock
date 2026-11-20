@@ -7737,6 +7737,7 @@ dependencies = [
 name = "email_focus_worker"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "ai_usage",
  "aws-sdk-cloudwatch",
  "calendar_events",

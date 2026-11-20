@@ -13,6 +13,7 @@ name = "email_focus_worker_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+activity = { path = "../../crates/activity", default-features = false, features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-cloudwatch = { workspace = true }
 calendar_events = { path = "../../crates/calendar_events", features = ["postgres"] }
