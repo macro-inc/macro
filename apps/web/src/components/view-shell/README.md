@@ -136,6 +136,10 @@ The sheet occupies no resize track and does not resize or remount the list or
 preview. Detail headers add no sidebar trigger; floating channel headers keep
 their measured local chrome.
 
+Use `<ViewShell.TopBar touch>` to display an explicit touch composition without
+caller-owned responsive visibility classes. It retains the same measured islands
+and default navigation behavior.
+
 On touch, `ViewShell.TopBar` inside `ViewShell.Main`, `ViewShell.Detail`, or a
 `CollectionPanes` detail floats over the pane as mobile chrome, like the split
 header of a standalone view. Wrap its title in `ViewShell.TopBarTitle`, its
@@ -148,6 +152,10 @@ Content under a bar that does not float (no enclosing pane) keeps resetting the
 inset; check with `useTouchTopBarsFloat`.
 
 A detail whose standalone view has a split header shows that same header in a
+
+Scrollable navigation can reuse `ScrollIndicators` with `appearance="gradient"`,
+`gradientColor="menu"`, and `falloff="mobile"` for the shared 32px edge stops.
+Keep its positioning container above any fixed footer so the bottom fade ends there.
 touch preview. The host wraps the pane in `SplitHeaderScope.Root` and renders
 `SplitHeaderScope.TopBar`; the detail fills that bar as it fills its own
 split's header. A detail with a mobile view renders it, and its `MobileHeader`

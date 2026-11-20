@@ -11,15 +11,17 @@ const CALENDAR_PERIOD_PATHS = {
   dayGridMonth: 'month',
   timeGridWeek: 'week',
   timeGridDay: 'day',
+  timeGridThreeDay: '3days',
   agenda: 'agenda',
 } as const satisfies Record<CalendarPeriodView, string>;
 
 export const calendarPeriodParams = z.object({
   period: z
-    .enum(['month', 'week', 'day', 'agenda'])
+    .enum(['month', 'week', 'day', '3days', 'agenda'])
     .transform((period): CalendarPeriodView => {
       if (period === 'month') return 'dayGridMonth';
       if (period === 'day') return 'timeGridDay';
+      if (period === '3days') return 'timeGridThreeDay';
       if (period === 'agenda') return 'agenda';
       return 'timeGridWeek';
     }),

@@ -853,6 +853,8 @@ function Main(props: ViewShellMainProps) {
 function TopBar(
   props: JSX.HTMLAttributes<HTMLDivElement> & {
     floating?: boolean;
+    /** Render this explicit mobile composition in the pane's floating chrome. */
+    touch?: boolean;
     /** Replaces automatic navigation when the host owns the leading action. */
     navigation?: JSX.Element;
   }
@@ -862,6 +864,7 @@ function TopBar(
     'class',
     'ref',
     'floating',
+    'touch',
     'navigation',
   ]);
   const [bar, setBar] = createSignal<HTMLDivElement>();
@@ -876,6 +879,7 @@ function TopBar(
         ref={mergeRefs(setBar, local.ref, tourTarget(VIEW_SHELL_TOUR.topBar))}
         class={cn(
           '@container/split-header flex h-12 min-w-0 shrink-0 items-center gap-1 px-2 py-3 not-touch:gap-2 not-touch:py-2 not-touch:pl-3 touch:hidden',
+          local.touch && 'touch:flex',
           local.class,
           floats() &&
             'touch:pointer-events-none touch:absolute touch:inset-x-0 touch:top-0 touch:z-split-panel-chrome touch:h-auto touch:min-h-0 touch:gap-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)] touch:pb-3'

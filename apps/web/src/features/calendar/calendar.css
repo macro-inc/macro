@@ -1,5 +1,6 @@
 @reference "../../index.css";
 @import "./calendar-month.css";
+@import "./calendar-phone-grid.css";
 
 .calendar-view {
 	container-name: calendar-view;

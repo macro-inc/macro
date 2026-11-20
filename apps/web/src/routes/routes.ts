@@ -793,6 +793,11 @@ export const bookingLinksRoute = defineRoute({
   path: 'scheduling',
   search: [bookingLinksSearch.namespace],
 });
+export const calendarSettingsRoute = defineRoute({
+  info: OPEN_TO_AGENTS,
+  id: 'calendar-settings',
+  path: 'calendar/settings',
+});
 export const calendarSplitRoute = defineRoute({
   info: OPEN_TO_AGENTS,
   id: CALENDAR_ROUTE_ID,

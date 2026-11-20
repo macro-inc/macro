@@ -10,6 +10,7 @@ import type { CalendarTeamIdentity } from '@queries/calendar/team-keys';
 import { type Accessor, Show, Suspense } from 'solid-js';
 import { useCalendarTeamSharingFlag } from '../calendar/hooks/use-calendar-ui-flag';
 import { TeamSharingSettings } from './components/team-sharing-settings';
+import type { CalendarSharing } from './core/model';
 
 function useCalendarTeamIdentity(enabled: Accessor<boolean>) {
   const userId = useUserId();
@@ -25,42 +26,53 @@ function useCalendarTeamIdentity(enabled: Accessor<boolean>) {
   return { identity, query };
 }
 
-function CalendarTeamSettingsContent() {
-  const flag = useCalendarTeamSharingFlag();
-  const { identity, query: identityQuery } = useCalendarTeamIdentity(flag);
+/** Shared settings transport; page and desktop presentations use the same identity guard. */
+export function useCalendarTeamSettings() {
+  const enabled = useCalendarTeamSharingFlag();
+  const { identity, query: identityQuery } = useCalendarTeamIdentity(enabled);
   const sharing = useTeamCalendarSharingQuery(identity);
   const setSharing = useSetTeamCalendarSharingMutation();
-  return (
-    <TeamSharingSettings
-      hasTeam={identity() !== undefined}
-      teamLoading={identityQuery.isPending}
-      sharing={
-        sharing.isSuccess && !sharing.isPaused
-          ? sharing.data.sharing
-          : undefined
-      }
-      error={
+  return {
+    enabled,
+    get hasTeam() {
+      return identity() !== undefined;
+    },
+    get teamLoading() {
+      return identityQuery.isPending;
+    },
+    get sharing() {
+      return sharing.isSuccess && !sharing.isPaused
+        ? sharing.data.sharing
+        : undefined;
+    },
+    get error() {
+      return (
         sharing.isError ||
         identityQuery.isError ||
         sharing.isPaused ||
         identityQuery.isPaused
-      }
-      onChange={(value) => {
-        const current = identity();
-        if (!current) return;
-        setSharing.mutate(
-          { identity: current, sharing: value },
-          {
-            onError: () => toast.failure('Could not update calendar sharing'),
-          }
-        );
-      }}
-      onRetry={() => {
-        fireAndForget(identityQuery.refetch(), 'calendar-team');
-        fireAndForget(sharing.refetch(), 'calendar-team');
-      }}
-    />
-  );
+      );
+    },
+    onChange(value: CalendarSharing) {
+      const current = identity();
+      if (!current) return;
+      setSharing.mutate(
+        { identity: current, sharing: value },
+        {
+          onError: () => toast.failure('Could not update calendar sharing'),
+        }
+      );
+    },
+    onRetry() {
+      fireAndForget(identityQuery.refetch(), 'calendar-team');
+      fireAndForget(sharing.refetch(), 'calendar-team');
+    },
+  };
+}
+
+function CalendarTeamSettingsContent() {
+  const settings = useCalendarTeamSettings();
+  return <TeamSharingSettings {...settings} />;
 }
 
 export function CalendarTeamSettings() {

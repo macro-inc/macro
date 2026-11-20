@@ -43,7 +43,9 @@ const shiftedDateForView = (
     shifted.setMonth(shifted.getMonth() + offset);
   } else {
     shifted.setDate(
-      shifted.getDate() + (view === 'timeGridDay' ? offset : offset * 7)
+      shifted.getDate() +
+        offset *
+          (view === 'timeGridDay' ? 1 : view === 'timeGridThreeDay' ? 3 : 7)
     );
   }
   return shifted;

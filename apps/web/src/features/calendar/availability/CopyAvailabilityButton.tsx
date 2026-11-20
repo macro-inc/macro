@@ -10,6 +10,7 @@ import { CopyAvailabilityDialog } from './CopyAvailabilityDialog';
 export function CopyAvailabilityButton(props: {
   class?: string;
   size?: ButtonSize;
+  label?: string;
 }) {
   const dialog = useImperativeDialog(CopyAvailabilityDialog);
   const connectedInboxes = useCalendarConnectedInboxes();
@@ -29,6 +30,7 @@ export function CopyAvailabilityButton(props: {
         onClick={showDialog}
       >
         <CalendarCheckIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+        {props.label}
       </Button>
     </Show>
   );

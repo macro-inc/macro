@@ -47,7 +47,7 @@ const TIME_FORMAT_OPTIONS: Array<{
   { value: '24-hour', label: '24-hour' },
 ];
 
-function createCalendarSettingsControls() {
+export function createCalendarSettingsControls() {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();

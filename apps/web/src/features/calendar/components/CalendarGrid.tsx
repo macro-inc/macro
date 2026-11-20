@@ -266,6 +266,12 @@ export function CalendarGrid(props: CalendarGridProps) {
       fixedWeekCount={false}
       views={{
         dayGridMonth: { dayMaxEvents: true },
+        timeGridThreeDay: {
+          type: 'timeGrid',
+          duration: { days: 3 },
+          dateIncrement: { days: 3 },
+          dateAlignment: 'day',
+        },
         // Preset durations outrank the root options; override only custom spans.
         ...customViewRange(),
       }}
@@ -401,7 +407,11 @@ export function CalendarGrid(props: CalendarGridProps) {
     >
       <FullCalendar.DayHeaderContent>
         {({ date, text, view }) => {
-          if (view.type === 'timeGridWeek' || view.type === 'timeGridDay') {
+          if (
+            view.type === 'timeGridWeek' ||
+            view.type === 'timeGridDay' ||
+            view.type === 'timeGridThreeDay'
+          ) {
             const weekday =
               formatWeekdayHeader[
                 props.settings.useNarrowDayHeaders ? 'narrow' : 'short'

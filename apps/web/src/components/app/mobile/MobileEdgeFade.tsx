@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { MOBILE_EDGE_FADE_FALLOFF, mobileEdgeFade } from '@core/util/edge-fade';
 import { Layer } from '@ui';
 import { Show } from 'solid-js';
 
@@ -12,8 +13,8 @@ import { Show } from 'solid-js';
  */
 
 /** Extra distance the gradients bleed past the chrome they cover. */
-const TOP_FALLOFF = '32px';
-const BOTTOM_FALLOFF = '32px';
+const TOP_FALLOFF = `${MOBILE_EDGE_FADE_FALLOFF}px`;
+const BOTTOM_FALLOFF = `${MOBILE_EDGE_FADE_FALLOFF}px`;
 
 export function MobileTopEdgeFade() {
   return (
@@ -26,8 +27,7 @@ export function MobileTopEdgeFade() {
             // No top chrome or safe area means nothing to dissolve under:
             // the falloff shrinks to 0 with the inset.
             height: `calc(var(--mobile-content-inset-top, 0px) + min(var(--mobile-content-inset-top, 0px) * 100, ${TOP_FALLOFF}))`,
-            background:
-              'linear-gradient(to bottom, var(--color-surface) 10%, 70%, transparent)',
+            background: mobileEdgeFade('top'),
           }}
         />
       </Layer>
@@ -43,8 +43,7 @@ export function MobileBottomEdgeFade() {
         class="pointer-events-none absolute inset-x-0 bottom-0 -z-10"
         style={{
           top: `calc(${BOTTOM_FALLOFF} * -1)`,
-          background:
-            'linear-gradient(to top, var(--color-surface), 60%, transparent)',
+          background: mobileEdgeFade('bottom'),
         }}
       />
     </Layer>

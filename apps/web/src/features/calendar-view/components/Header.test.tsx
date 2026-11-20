@@ -29,9 +29,16 @@ vi.mock('@app/components/view-shell', () => ({
     aside: { isCollapsed: () => false, isOverlay: () => false },
     breakpoints: { narrow: () => false },
   }),
+  ViewSidebar: { Toggle: () => <button>Show sidebar</button> },
   ViewShell: {
-    TopBar: (props: { children: JSX.Element }) => (
-      <header>{props.children}</header>
+    TopBar: (props: { children: JSX.Element; navigation?: JSX.Element }) => (
+      <header>
+        {props.navigation}
+        {props.children}
+      </header>
+    ),
+    TopBarIsland: (props: { children: JSX.Element }) => (
+      <div>{props.children}</div>
     ),
   },
 }));
@@ -183,16 +190,18 @@ describe('calendar headers', () => {
     expect(search.getAttribute('data-expanded')).toBe('false');
   });
 
-  it('retains the touch preview month picker and settings', () => {
+  it('renders the touch month island with navigation and search', () => {
     state.touch = true;
     render(() => <Header presentation="workspace" />);
     expect(screen.getByRole('button', { name: 'Choose month' })).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Calendar settings' })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeTruthy();
     expect(
       screen.queryByRole('button', { name: 'New event or call' })
     ).toBeNull();
     expect(screen.queryByRole('heading', { name: 'October 2026' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Search events' })).toBeTruthy();
+    expect(
+      screen.queryByRole('button', { name: 'Calendar settings' })
+    ).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ const CALENDAR_PERIOD_LABELS = {
   dayGridMonth: 'calendar.viewMonth',
   timeGridWeek: 'calendar.viewWeek',
   timeGridDay: 'calendar.viewDay',
+  timeGridThreeDay: 'calendar.viewThreeDays',
   agenda: 'calendar.viewAgenda',
 } satisfies Record<CalendarPeriodView, TranslationKey>;
 

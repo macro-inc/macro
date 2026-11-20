@@ -57,24 +57,24 @@ export function PhoneMonth(props: {
       ref={setElement}
       class="phone-month absolute inset-0 z-10 overflow-y-auto px-1 pt-3 pb-[calc(var(--mobile-content-inset-bottom,0px)+6rem)]"
     >
+      <div
+        class="grid text-center text-xs text-ink-muted"
+        style={{
+          'grid-template-columns': `repeat(${props.showWeekends ? 7 : 5}, minmax(0, 1fr))`,
+        }}
+      >
+        <For each={month.weekdays()}>
+          {(day) => (
+            <span class="py-1">
+              {day.date.toLocaleDateString(formatLocale(), {
+                weekday: 'narrow',
+              })}
+            </span>
+          )}
+        </For>
+      </div>
       <Layer offset={1}>
         <div class="rounded-3xl bg-surface p-2">
-          <div
-            class="grid text-center text-xs text-ink-muted"
-            style={{
-              'grid-template-columns': `repeat(${props.showWeekends ? 7 : 5}, minmax(0, 1fr))`,
-            }}
-          >
-            <For each={month.weekdays()}>
-              {(day) => (
-                <span class="py-1">
-                  {day.date.toLocaleDateString(formatLocale(), {
-                    weekday: 'narrow',
-                  })}
-                </span>
-              )}
-            </For>
-          </div>
           <div
             class="grid"
             style={{

@@ -1,3 +1,4 @@
+import { MOBILE_EDGE_FADE_FALLOFF, mobileEdgeFade } from '@core/util/edge-fade';
 import { cn } from '@ui';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 
@@ -32,6 +33,8 @@ export const ScrollIndicators = (props: {
   class?: string;
   noBorderStart?: boolean;
   noBorderEnd?: boolean;
+  falloff?: 'mobile';
+  startOffset?: () => number;
 }) => {
   let startIndicator: HTMLDivElement | undefined;
   let endIndicator: HTMLDivElement | undefined;
@@ -54,7 +57,9 @@ export const ScrollIndicators = (props: {
       );
     } else {
       const { scrollTop, scrollHeight, clientHeight } = ref;
-      startIndicator.style.opacity = String(thresholdOpacity(scrollTop));
+      startIndicator.style.opacity = String(
+        thresholdOpacity(scrollTop - (props.startOffset?.() ?? 0))
+      );
       endIndicator.style.opacity = String(
         thresholdOpacity(scrollHeight - clientHeight - scrollTop)
       );
@@ -88,7 +93,14 @@ export const ScrollIndicators = (props: {
       <div
         ref={startIndicator}
         aria-hidden="true"
-        style={gradientStyle()}
+        style={
+          props.falloff === 'mobile'
+            ? {
+                height: `${MOBILE_EDGE_FADE_FALLOFF}px`,
+                background: mobileEdgeFade('top', gradientColor()),
+              }
+            : gradientStyle()
+        }
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()
@@ -110,7 +122,14 @@ export const ScrollIndicators = (props: {
       <div
         ref={endIndicator}
         aria-hidden="true"
-        style={gradientStyle()}
+        style={
+          props.falloff === 'mobile'
+            ? {
+                height: `${MOBILE_EDGE_FADE_FALLOFF}px`,
+                background: mobileEdgeFade('bottom', gradientColor()),
+              }
+            : gradientStyle()
+        }
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()

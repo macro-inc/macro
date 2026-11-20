@@ -1,6 +1,8 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
-import { CopyAvailabilityButton } from '@app/features/calendar/availability/CopyAvailabilityButton';
-import { CalendarSettingsDropdown } from '@app/features/calendar/components/CalendarSettingsDropdown';
+import {
+  useViewShell,
+  ViewShell,
+  ViewSidebar,
+} from '@app/components/view-shell';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { MonthPickerPopover } from '@app/features/calendar/components/month-picker/MonthPickerPopover';
@@ -177,7 +179,14 @@ export function Header(props: {
     return (
       <Show when={shell} fallback={props.children}>
         {/* Floats over the pane, which reserves its measured height. */}
-        <ViewShell.TopBar class="touch:flex">{props.children}</ViewShell.TopBar>
+        <ViewShell.TopBar
+          class="touch:flex"
+          navigation={
+            <ViewSidebar.Toggle action="expand" presentation="pill" />
+          }
+        >
+          {props.children}
+        </ViewShell.TopBar>
       </Show>
     );
   }
@@ -301,32 +310,9 @@ export function Header(props: {
           </TouchHeaderLeft>
 
           <TouchHeaderRight>
-            <HeaderIsland class="px-1">
-              <div
-                ref={tourTarget(CALENDAR_TOUR.period)}
-                class="flex items-center gap-1"
-              >
-                <Show when={!isMobile()}>
-                  <PeriodSelector isNarrow={isNarrow()} />
-                  <div class="flex shrink-0 items-center gap-1">
-                    {previous()}
-                    {next()}
-                  </div>
-                </Show>
-                <Show when={isMobile()}>
-                  <CopyAvailabilityButton size="icon-lg" />
-                </Show>
-                <Show when={!isMobile()}>
-                  <CalendarSearch />
-                </Show>
-                <Show when={showBookingLinks()}>
-                  <CalendarSchedulingActions />
-                </Show>
-                <Show when={isMobile()}>
-                  <CalendarSettingsDropdown />
-                </Show>
-              </div>
-            </HeaderIsland>
+            <ViewShell.TopBarIsland>
+              <CalendarSearch />
+            </ViewShell.TopBarIsland>
           </TouchHeaderRight>
         </TouchHeader>
       </Match>

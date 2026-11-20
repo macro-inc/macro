@@ -19,6 +19,7 @@ export default {
   viewLabel: 'Calendar view',
   periodLabel: 'Period',
   viewDay: 'Day',
+  viewThreeDays: '3 days',
   viewWeek: 'Week',
   viewMonth: 'Month',
   viewAgenda: 'Agenda',

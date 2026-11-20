@@ -45,6 +45,7 @@ import {
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
+  CalendarSettingsRouteView,
   CallDetailRouteView,
   CallsCallDetail,
   CallsRouteView,
@@ -106,6 +107,7 @@ import {
   baseRoute,
   bookingLinksRoute,
   bookingReceiptRoute,
+  calendarSettingsRoute,
   calendarSplitRoute,
   callDetailRoute,
   callsCallRoute,
@@ -454,6 +456,10 @@ export function appRouteElements(): JSX.Element {
             component={ExternalChatRouteView}
           />
         </Route>
+        <Route
+          definition={calendarSettingsRoute}
+          component={CalendarSettingsRouteView}
+        />
         <Route
           definition={calendarSplitRoute}
           component={CalendarRouteView}

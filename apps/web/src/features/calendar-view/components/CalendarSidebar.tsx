@@ -38,6 +38,7 @@ import { addDays, format, getDaysInMonth, startOfWeek } from 'date-fns';
 import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { useCalendarFocus } from '../calendar-focus-target';
 import { CALENDAR_TOUR } from '../tour';
+import { MobileCalendarSidebar } from '../views/mobile/calendar-sidebar';
 import { NeedsReplyList } from '../views/needs-reply/NeedsReplyList';
 import {
   CalendarCreateBookingLinkItem,
@@ -354,7 +355,7 @@ function CalendarTeamOooSection() {
   );
 }
 
-export function CalendarSidebar() {
+function DesktopCalendarSidebar() {
   const shell = useViewShell();
   const composerHost = useCalendarComposerHost();
   const closeOverlay = () => {
@@ -427,5 +428,13 @@ export function CalendarSidebar() {
         </ViewSidebar.Nav>
       </ViewSidebar.Footer>
     </ViewSidebar.Root>
+  );
+}
+
+export function CalendarSidebar() {
+  return (
+    <Show when={isTouchDevice()} fallback={<DesktopCalendarSidebar />}>
+      <MobileCalendarSidebar />
+    </Show>
   );
 }

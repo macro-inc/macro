@@ -1,0 +1,62 @@
+/* Provisional phone layout values; grid-line rules remain in calendar.css. */
+@media (max-width: 639px) {
+  html[data-touch-device="true"] .calendar-view-content {
+    --calendar-phone-axis-width: 46px;
+    --calendar-phone-axis-gap: 6px;
+    --calendar-phone-card-radius: 20px;
+    --calendar-phone-card-inset: 8px;
+    padding-inline: 0 var(--calendar-phone-card-inset);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-axis,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-slot-label,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid colgroup col:first-child {
+    width: var(--calendar-phone-axis-width) !important;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-scroller-harness-liquid {
+    position: relative;
+    isolation: isolate;
+    clip-path: inset(0 0 0 var(--calendar-phone-axis-width) round var(--calendar-phone-card-radius) var(--calendar-phone-card-radius) 0 0);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-scroller-harness-liquid::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 var(--calendar-phone-axis-width);
+    z-index: -1;
+    background: var(--color-surface-2);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-slot-label-cushion,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-axis-cushion {
+    visibility: hidden;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-col-header-cell {
+    background: var(--color-page);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-body .fc-day-sat,
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .fc-timegrid-body .fc-day-sun {
+    background: color-mix(in srgb, var(--color-hover) 50%, transparent);
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-weekday {
+    font-size: 12px;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timegrid .calendar-day-header-date {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell {
+    text-align: left;
+  }
+
+  html[data-touch-device="true"] .calendar-view .fc-timeGridDay-view .fc-col-header-cell-cushion {
+    width: 48px;
+  }
+}

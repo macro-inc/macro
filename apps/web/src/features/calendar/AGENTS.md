@@ -116,14 +116,25 @@ host lives in `../block-calendar/`.
   uses the workspace navigation context. Keep grid paging and scroll timing in
   `CalendarPagerContext.tsx`.
 - Compose the desktop date-navigation/tabs/search row above the 22px month title
-  and creation actions; retain the existing touch header and matching skeleton.
-  The month picker uses 304px width and 64×40px choices.
+  and creation actions; the touch header uses the shell menu toggle, month/Today
+  island, and Search only. Keep its loading skeleton aligned. The desktop month
+  picker uses 304px width and 64×40px choices.
 - Wrap the desktop content card in `Layer offset={1}` and use `bg-surface`, with
   12px gaps and clipped rounded corners; keep Agenda headers opaque at the same
   depth. Keep navigation outside and the opening hour label inside the viewport.
 - Mount `Popover.Content` with its open state when using `ScopedPortal`, so the
   focus scope attaches to real content and restores focus when the picker closes.
 - Keep the phone Month overlay's device switch in `../calendar-view/calendar-month.tsx`; reuse each FullCalendar page's bounded six-week occurrence source, honor hidden weekends, and anchor focus requests to visible phone rows.
+- Host phone navigation through the shell's `NavigationSheet`, as Email does;
+  `views/mobile/calendar-sidebar.tsx` contains views, account calendars, booking
+  links, and a fixed `MobileDrawer.Section` Settings footer. Keep desktop sidebar
+  sections unchanged. `/calendar/settings` is an authenticated full page over
+  existing display, account, availability, countdown, and team-sharing owners.
+- Keep phone grid layout tokens in `calendar-phone-grid.css`; hours sit outside
+  the timed card, with day headers and all-day lanes above it. The active grid
+  supplies a stationary gutter through `create-mobile-grid-axis.ts`; synchronize
+  its vertical scroll, and reveal the shared 32px fade only past the opening offset.
+  Keep grid-line rules unchanged. `timeGridThreeDay` advances by three days.
 - Keep Agenda on the navigation context, with five fourteen-day windows clipped
   to supported occurrence bounds; never pass Agenda to a FullCalendar API.
 - Keep the visible Agenda day anchored through late data and window rotation;

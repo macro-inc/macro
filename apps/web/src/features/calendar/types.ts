@@ -18,7 +18,8 @@ import { canEditCalendarEventTime } from './utils/event-interaction';
 export type CalendarGridPeriodView =
   | 'dayGridMonth'
   | 'timeGridWeek'
-  | 'timeGridDay';
+  | 'timeGridDay'
+  | 'timeGridThreeDay';
 
 /** Route periods; Agenda is not a FullCalendar view. */
 export type CalendarPeriodView = CalendarGridPeriodView | 'agenda';

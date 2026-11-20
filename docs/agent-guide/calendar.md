@@ -1,6 +1,6 @@
 # Calendar
 
-## Calendar — `/app/calendar/<month-or-week-or-day-or-agenda>`
+## Calendar — `/app/calendar/<month-or-week-or-day-or-3days-or-agenda>`
 
 The top of the Calendar sidebar holds the Calendar `TutorialSidebarItem` (from `features/video-tutorials`) once that video is in its catalog; touch devices show no tutorials.
 
@@ -27,7 +27,12 @@ and the month title stay outside; day headers, all-day events, and the grid stay
 inside. Pinning a left panel preserves the gap. In Day and Week, the opening
 7am label remains fully readable below the all-day lane. Phone content extends
 behind floating creation and dock controls, with scroll clearance for the last row.
-Phone weekdays use single-letter labels. Phone Month shows a six-week date card,
+Phone time-grid headers show short weekday labels above their dates. Hour labels
+sit in a stationary 46px gutter outside the rounded timed card; day headers and
+all-day lanes stay above it. Hours scroll vertically with the active grid while
+its columns and day headers swipe horizontally. The shared 32px top fade appears
+only past the opening scroll position. Grid lines remain unchanged. Phone Month
+weekday letters sit above its six-week card, which shows
 up to three event-color dots per day, a separate picked-day highlight and Today
 marker, and the picked day's event list below. Week-start and hidden-weekend
 preferences apply to this card. Event links focus its visible row, not a hidden
@@ -420,9 +425,10 @@ guests on a copy they can change. A solo entry listing the user's inbox as its
 organizer, as Macro writes on a primary calendar, and the mailbox organizer row
 Outlook puts on every event of a read-only calendar are not meetings. The switch shows once the setting loads,
 saves at once and restores itself with a toast when the save fails. Phones reach
-the same rows from the mobile Settings sheet's **Calendar** page. The calendar
-view's own phone settings sheet (the header gear) shows and hides single
-calendars like the desktop sidebar (below) and, like it, has no Busy switch.
+the same rows from the global mobile Settings sheet's **Calendar** page or from
+Calendar's drawer → **Settings** → **Availability** → **Busy calendars**. The latter
+is a full-page drill-in, not another drawer. Visibility and colors remain separate
+controls in Calendar's navigation drawer.
 
 The **Sidebar** section's **Next meeting countdown** switch (on by default, saved in
 the same browser-local preferences) controls the app rail's Calendar badge:
@@ -507,7 +513,7 @@ An account checkbox toggles its calendars together in one update. The checkbox
 responds immediately; Needs reply filters hidden sources immediately, while each grid
 page refreshes on deferred tasks rather than re-rendering all pages during the click.
 The sidebar can be resized or collapsed on desktop; in narrow desktop panes
-it opens over the grid. Phones do not show the sidebar or its navigation drawer.
+it opens over the grid. Phones use the shell's left navigation drawer.
 
 `Needs reply` shows up to five actionable unanswered invitations from the existing
 progressive upcoming-calendar source. It searches 14 days first and extends through
@@ -523,16 +529,20 @@ immediately. Loading, empty, and error/retry states are distinct.
 A failed background refresh keeps the last loaded invitations visible alongside
 an error and Retry, including invitations from later search windows. An initial
 failure or an uncached account/date range shows no retained invitations.
-The mobile split header places a month selector and Today in its left island;
-selecting the month opens the date-selection drawer. On a phone the right
-island keeps full-sized Availability, `Booking links`, and Settings actions; on
-a tablet it holds the period selector, previous and next, Search, and (unless
-the pane is narrow, when the sidebar holds it) `Booking links`, and Settings
-stays in the sidebar footer. The New menu
-beside the bottom AI input offers Event, feature-gated Call, and feature-gated
-Reminder. Touch devices never show Calendar as an inline preview, so the touch
-header has no preview variant. On desktop, inline Calendar previews (Home,
-Notifications) keep their host's chrome without adding another sidebar.
+The phone header has three islands: the shell's menu toggle, Month/Today, and
+Search. There is no large title beneath them. The menu opens the same shell
+`NavigationSheet` used by Email. Its views are Agenda, Day, 3 days, Week, and
+Month; choosing one closes the drawer. Calendars are grouped by account, with
+colored visibility checkboxes; hold a calendar for its color and **Show only this
+calendar**. Booking links lists enabled links, copy actions, New, Copy availability,
+and Manage booking links. Mini-month, New event, upcoming events, routines,
+tutorials, and connection promotions remain desktop-only sidebar content.
+Settings stays in a fixed rounded group below the scrolling drawer list. Both
+scroll edges use the shared fades. Settings opens `/app/calendar/settings`, with
+Back and title islands and Display, Accounts, Availability, and Preferences groups.
+It reuses the existing preference stores and mutations; desktop settings remain
+unchanged. Busy calendars is a page within Settings and Back returns to the main
+Settings page. On desktop, inline Calendar previews retain their host's chrome.
 
 With `enable-calendar-team-sharing` enabled, **Settings → Calendar** also has
 **Team sharing**: one `Share with teammates` row whose select offers
@@ -735,25 +745,18 @@ calendar and footer controls stay fixed. Nested calendar accounts remain grouped
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
-name, per-calendar checkbox). Accounts start collapsed. Subscribed system calendars
+name, per-calendar checkbox). Accounts start expanded.
 (Google holidays, birthdays) carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
 warning icon whose tooltip shows `Sync failed: <provider error>`, Settings → Calendar's
 wording; touch has no hover, so on phones and tablets that line is written under the
 calendar's name instead (the row grows to fit), as a menu item's disabled reason is. The
 account keeps syncing its other calendars and the badge clears on its own once that
 calendar syncs again.
-Phones have no sidebar, so the header gear's settings sheet carries the same list under
-`Calendars`, between Period and Display, laid out like the mobile filter drawer's
-groups (Tasks → Filters): each account is its own card whose header row shows or hides
-all of its calendars (a minus when only some show) with its selection filling the whole
-row, caret included. The trailing caret (`Expand <address>`) opens one
-`MobileFilterDrawer.Option` per calendar with the same swatch, warning and RSS marks, so
-neighbouring shown calendars join into one selection. Period, Week starts on and Time
-format use the same options as single choices, and Show weekends as a checkbox. Accounts
-start collapsed each time the sheet opens. The rows write the same browser-local
-visibility as the sidebar and Settings → Calendar, so all three agree. With accounts
-expanded the sheet scrolls under its pinned handle. The gear's dropdown form (the
-sidebar footer's `Settings`) has no `Calendars` group: the sidebar lists them itself.
+The phone navigation drawer uses plain account captions and calendar rows rather
+than the old header-gear settings sheet. Visibility and color still write the same
+browser-local calendar preferences. The separate Settings page contains display
+preferences, account consent actions, availability hours and busy calendars, next
+meeting countdown, and flag-gated team sharing.
 
 On desktop, clicking or dragging empty grid time opens the event composer.
 While an event's details are open, a press on empty grid time closes them and
@@ -1772,5 +1775,5 @@ opens the actual occurrence so you can clear your own response there.
 
 Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
 
-On touch, Calendar workspace controls float within the calendar pane, beside the
-sidebar, with an explicit safe-area top gutter. They do not cover the sidebar title.
+On touch, Calendar workspace controls use the shell's floating islands with its
+safe-area gutter. Calendar navigation uses the shell's left `NavigationSheet`.

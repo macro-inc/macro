@@ -41,6 +41,7 @@ import { AgendaSetup } from '../views/agenda/AgendaSetup';
 import { CalendarComposerDock } from '../views/composer/CalendarComposerDock';
 import { CalendarComposerHost } from '../views/composer/CalendarComposerHost';
 import { CalendarGridNavigation } from '../views/grid-navigation/CalendarGridNavigation';
+import { MobileCalendarGridAxis } from '../views/mobile/calendar-grid-axis';
 import { SelectedCalendarEvent } from '../views/selection/SelectedCalendarEvent';
 import { CalendarSidebar } from './CalendarSidebar';
 import { Header } from './Header';
@@ -156,6 +157,14 @@ function CalendarPages() {
         role="region"
         aria-label="Calendar periods"
       >
+        <Show
+          when={isMobile() && calendarPager.periodView() !== 'dayGridMonth'}
+        >
+          <MobileCalendarGridAxis
+            root={() => calendarPager.activePage()?.element()}
+            viewport={viewport}
+          />
+        </Show>
         <Pager.Viewport class="size-full min-w-0 min-h-0">
           <For each={CALENDAR_PAGE_IDS}>
             {(pageId) => (
@@ -249,10 +258,13 @@ function WorkspaceContent(props: {
             <div class="flex size-full min-h-0 min-w-0">
               <CalendarComposerDock />
               <ViewShell.Root
+                contentLayout="collection"
                 asidePreferenceKey="calendar"
                 resizable
                 aside={
-                  composerPinned() ? false : { preserveDuringResize: false }
+                  !isMobile() && composerPinned()
+                    ? false
+                    : { preserveDuringResize: false }
                 }
                 main={{ preferredWidth: 640 }}
                 class="min-w-0 flex-1 !w-auto"

@@ -236,7 +236,8 @@ export function Page(props: {
     firstWritableCalendar()?.color ??
     DEFAULT_CALENDAR_SOURCE.color;
   const isActive = () => pager.isActive(props.id);
-  const useNarrowWeekdayHeaders = () => isMobile() || props.useNarrowDayHeaders;
+  const useNarrowWeekdayHeaders = () =>
+    !isMobile() && props.useNarrowDayHeaders;
   // Let the checkbox update before remapping occurrences and redrawing the grid.
   // Each page has its own deferred update, so the scheduler can yield between
   // the three FullCalendar instances.
@@ -459,6 +460,7 @@ export function Page(props: {
               eventsById={eventsById}
               grid={grid}
               onLoadingBlockingChange={setLoadingDecorationBlocking}
+              scrollIndicators={!isMobile()}
               focusInOverlay={
                 isMobile() && pager.periodView() === 'dayGridMonth'
               }
@@ -496,6 +498,7 @@ function CalendarPageHost(props: {
   grid: CalendarGridHandle;
   onLoadingBlockingChange: (blocking: boolean) => void;
   focusInOverlay?: boolean;
+  scrollIndicators: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -586,7 +589,9 @@ function CalendarPageHost(props: {
 
   return (
     <>
-      <CalendarScrollIndicators calendarElement={props.grid.element} />
+      <Show when={props.scrollIndicators}>
+        <CalendarScrollIndicators calendarElement={props.grid.element} />
+      </Show>
       <CalendarPageDataStatus
         data={props.data}
         changingView={isActive() && pager.isChangingView()}
