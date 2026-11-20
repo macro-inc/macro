@@ -1095,8 +1095,8 @@ hidden states. Check that:
   message while the thread is collapsed. Clicking it removes the check and
   marks that stack's notifications done in Home.
 - A toggle with the notifications bell and a count sits at the top left of
-  the gutter. With ≥240px of gutter (pane ≥1400px), it opens a list docked
-  in the gutter. Narrower panes open the list as a popover. Not done and Unread switch which stacks it
+  the gutter. With ≥240px of gutter (pane ≥1400px), it opens the list as a
+  card docked in the gutter. Narrower panes open the list as a popover. Not done and Unread switch which stacks it
   lists. Clicking a row scrolls to its message, and the row's check marks it
   done (or read, in Unread). While a list's notifications load it says so,
   and if the read fails it offers Retry instead of an empty list.

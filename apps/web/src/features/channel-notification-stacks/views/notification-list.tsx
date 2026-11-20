@@ -1,7 +1,7 @@
 import { t } from '@app/lib/i18n';
 import BellIcon from '@icon/system/regular/bell.svg';
 import { Popover } from '@kobalte/core/popover';
-import { Button } from '@ui';
+import { Button, Card } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
 import { NotificationListPanel } from '../components/notification-list-panel';
 import type { SenderName } from '../components/stack-label';
@@ -111,9 +111,15 @@ export function NotificationList(props: {
               {toggleContent()}
             </Button>
             <Show when={props.open()}>
-              <div class="flex min-h-0 w-full flex-col">
+              {/* Docked, the list is a card raised off the channel. */}
+              <Card
+                data-docked-list
+                variant="filled"
+                depth={3}
+                class="min-h-0 w-full p-2"
+              >
                 {panel(props.onOpenStack)}
-              </div>
+              </Card>
             </Show>
           </Match>
           <Match when={!docked()}>

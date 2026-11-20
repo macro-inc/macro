@@ -34,6 +34,11 @@ test('a wide pane docks the list beside one check per stack', async ({
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const rows = list(page).getByRole('listitem');
   await expect(rows).toHaveCount(3);
+  // Docked, the list is a filled card raised off the channel.
+  await expect(list(page).locator('[data-slot="card"]')).toHaveAttribute(
+    'data-variant',
+    'filled'
+  );
   // The docked list stays clear of the checks' lane.
   const listRight = await list(page).evaluate(
     (element) => element.getBoundingClientRect().right
@@ -152,6 +157,8 @@ test('a narrow pane opens the list as a popover', async ({ page }) => {
   await toggle(page).click();
   const popover = page.getByRole('dialog');
   await expect(popover.getByRole('listitem')).toHaveCount(3);
+  // The popover keeps the menu surface; only the docked list is a card.
+  await expect(popover.locator('[data-slot="card"]')).toHaveCount(0);
   await popover
     .getByRole('listitem')
     .filter({ hasText: 'mentioned you' })

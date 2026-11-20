@@ -39,9 +39,9 @@ has its own flag (`enable-channel-stack-done-checks`, `enable-channel-notificati
   in `Channel.tsx` only while the checks flag is on, on desktop, because a
   size container also contains layout). Replies inherit
   `--thread-gutter-inset`, so every check lines up in one lane.
-- The list docks in the gutter when it is ≥240px wide and opens as a popover
-  otherwise. Below 72px it hides. When both flags are on, it leaves the checks
-  their 44px lane.
+- The list docks in the gutter as a `Card` (filled, depth 3) when the gutter
+  is ≥240px wide, and opens as a popover (`menu-surface`) otherwise. Below
+  72px it hides. When both flags are on, it leaves the checks their 44px lane.
 - Marking uses the global notification source's bulk done/seen, which applies
   local overrides at once. Apply `withLocalOverrides` to every read here, or
   marked stacks stay on screen until the refetch.
