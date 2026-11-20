@@ -568,10 +568,10 @@ pub async fn run() -> anyhow::Result<()> {
             None => backends,
         }
     };
-    // Routines count the grants these same backends dispatch, so they ask
-    // them who is on Connect alone and which apps Connect serves; `None`
-    // where Connect isn't configured.
-    let routine_connect = connect
+    // Sessions and routines are offered only the grants these same backends
+    // dispatch, so they ask them who is on Connect alone and which apps
+    // Connect serves; `None` where Connect isn't configured.
+    let dispatch_connect = connect
         .clone()
         .map(|connect| Arc::new(backends(Some(connect))));
     let connectors = backends(connect);
@@ -822,7 +822,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
-        routine_connect.clone(),
+        dispatch_connect.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -933,6 +933,7 @@ pub async fn run() -> anyhow::Result<()> {
             provisioner: EgressProvisioner::new(
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
+                dispatch_connect.clone(),
                 egress_base_url.clone(),
             ),
             sessions: session_repo.clone(),
@@ -1647,6 +1648,7 @@ pub async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
+                dispatch_connect.clone(),
                 egress_base_url,
             )
             .with_external_base_url(config.external_egress_base_url.clone()),
@@ -2001,7 +2003,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         routine_sessions::PipedreamConnectedApps::new(
             PgConnectionRepo::new(pool.clone()),
-            routine_connect.clone(),
+            dispatch_connect.clone(),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -2028,7 +2030,7 @@ pub async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps::new(
                 PgConnectionRepo::new(pool.clone()),
-                routine_connect.clone(),
+                dispatch_connect.clone(),
             ),
         ),
         session_repo.clone(),

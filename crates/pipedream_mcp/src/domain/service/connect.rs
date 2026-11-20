@@ -13,6 +13,7 @@
 
 use crate::domain::models::{ConnectApp, ConnectionProvider, MacroUserIdStr, PipedreamConnection};
 use crate::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect, PipedreamConnect};
+use tracing::Instrument as _;
 
 #[cfg(test)]
 mod test;
@@ -221,6 +222,57 @@ async fn revoke<P: PipedreamConnect + MacroConnect>(backends: &P, record: &Piped
             "failed to delete remote connection"
         );
     }
+}
+
+/// Whether `user_id` is on Macro Connect alone, asked of `connect`, the
+/// connector backends dispatch uses (`None` where Connect isn't configured).
+/// The rollout can wait on PostHog when its answer isn't cached, so the wait
+/// has its own span.
+pub async fn connect_only<C>(connect: Option<&C>, user_id: &MacroUserIdStr<'static>) -> bool
+where
+    C: MacroConnect,
+{
+    let Some(connect) = connect else {
+        return false;
+    };
+    let span = tracing::info_span!(
+        "pipedream.connect_only",
+        pipedream.connect_only = tracing::field::Empty
+    );
+    let connect_only = connect.connect_only(user_id).instrument(span.clone()).await;
+    span.record("pipedream.connect_only", connect_only);
+    connect_only
+}
+
+/// `user_id`'s `connections` that connector dispatch (`ConnectorBackends`)
+/// serves, the one definition every lister of usable connections shares:
+/// enabled rows; a Macro Connect grant only where Connect is configured
+/// (`connect` is the dispatching backends, `None` where it isn't); and a
+/// Pipedream grant only for a user not on Connect alone, whose Pipedream
+/// grants dispatch refuses. The rollout is asked only when an enabled
+/// Pipedream grant depends on it.
+pub async fn dispatchable<C>(
+    connect: Option<&C>,
+    user_id: &MacroUserIdStr<'static>,
+    connections: Vec<PipedreamConnection>,
+) -> Vec<PipedreamConnection>
+where
+    C: MacroConnect,
+{
+    let asks_rollout = connections
+        .iter()
+        .any(|record| record.enabled && record.provider == ConnectionProvider::Pipedream);
+    let connect_only = asks_rollout && connect_only(connect, user_id).await;
+    connections
+        .into_iter()
+        .filter(|record| {
+            record.enabled
+                && match record.provider {
+                    ConnectionProvider::Connect => connect.is_some(),
+                    ConnectionProvider::Pipedream => !connect_only,
+                }
+        })
+        .collect()
 }
 
 /// The Connect app to connect `app_slug` through, or `None` when Connect does

@@ -15,7 +15,8 @@ use agent_egress::domain::model::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
+use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
+use pipedream_mcp::domain::service::dispatchable;
 use std::sync::Arc;
 
 use crate::domain::error::{HarnessError, Result};
@@ -27,28 +28,36 @@ use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 mod test;
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections, Servers> {
+pub struct EgressProvisioner<Connections, Servers, Connect> {
     connections: Arc<Connections>,
     custom_servers: Arc<Servers>,
+    /// The connector backends dispatch uses, where Macro Connect is
+    /// configured, so a session is offered only the grants they serve.
+    connect: Option<Arc<Connect>>,
     base_url: String,
     external_base_url: Option<String>,
 }
 
-impl<Connections, Servers> EgressProvisioner<Connections, Servers>
+impl<Connections, Servers, Connect> EgressProvisioner<Connections, Servers, Connect>
 where
     Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
+    Connect: MacroConnect,
 {
     /// Build the provisioner over the Pipedream connection store, the custom
-    /// MCP server store, and the egress proxy's public address.
+    /// MCP server store, the connector backends that dispatch the owner's
+    /// connections (`None` where Macro Connect isn't configured), and the
+    /// egress proxy's public address.
     pub fn new(
         connections: Arc<Connections>,
         custom_servers: Arc<Servers>,
+        connect: Option<Arc<Connect>>,
         base_url: impl Into<String>,
     ) -> Self {
         Self {
             connections,
             custom_servers,
+            connect,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             external_base_url: None,
         }
@@ -106,6 +115,7 @@ where
                 "could not list Pipedream connections: {error:?}"
             ))
         })?;
+        let pipedream = dispatchable(self.connect.as_deref(), owner, pipedream).await;
         let (native, pipedream) = mcp_select::select_connections(native, pipedream);
         Ok((
             pipedream
@@ -123,10 +133,12 @@ where
     }
 }
 
-impl<Connections, Servers> SandboxEgressProvisioner for EgressProvisioner<Connections, Servers>
+impl<Connections, Servers, Connect> SandboxEgressProvisioner
+    for EgressProvisioner<Connections, Servers, Connect>
 where
     Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
+    Connect: MacroConnect,
 {
     fn external_mcp_servers(
         &self,
