@@ -1176,3 +1176,51 @@ async fn with_the_rollout_off_the_list_and_an_agents_voice_are_refused() {
     ));
     assert_eq!(journal.entries().len(), before);
 }
+
+/// An invited agent whose account exists but whose computer isn't bought yet.
+fn agent_without_a_computer(created_at: chrono::DateTime<chrono::Utc>) -> TeamAgentRecord {
+    TeamAgentRecord {
+        user_id: user("macro|sam-rivera-abc123@agents.macro.invalid"),
+        team_id: Uuid::parse_str(TEAM).unwrap(),
+        created_by: Some(user(ADMIN)),
+        persona_seed: PersonaSeed {
+            creator_id: Some(user(ADMIN)),
+            name: "Sam Rivera".to_owned(),
+            job_description: "Runs vendor relations.".to_owned(),
+            personality: "Dry, direct, kind.".to_owned(),
+            voice: None,
+        },
+        created_at,
+        first_online_at: None,
+    }
+}
+
+/// The invite reserves the computer in the same request that made the
+/// account, so a computer missing just after the invite is still coming.
+#[tokio::test]
+async fn an_agent_invited_moments_ago_without_a_computer_yet_is_provisioning() {
+    let (service, _) = service(true, FakeComputers::default());
+    service.repository.agents.lock().unwrap().push((
+        agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(1)),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
+    ));
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Provisioning);
+}
+
+/// Past [`crate::domain::models::ORPHANED_INVITE_AFTER`], the invite that
+/// should have bought the computer died.
+#[tokio::test]
+async fn an_agent_still_without_a_computer_long_after_its_invite_failed() {
+    let (service, _) = service(true, FakeComputers::default());
+    service.repository.agents.lock().unwrap().push((
+        agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(11)),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
+    ));
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
+}

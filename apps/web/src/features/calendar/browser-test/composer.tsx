@@ -18,6 +18,7 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { useCalendarSources } from '../hooks/use-calendar-sources';
 import { type CalendarEvent, mapCalendarOccurrence } from '../types';
 
 declare global {
@@ -43,24 +44,30 @@ const WEEK = createCalendarOccurrenceQueryRange(
  */
 function Fixture() {
   const userId = useUserId();
+  const { sourceById } = useCalendarSources();
   const occurrences = useCalendarOccurrencesQuery(() => ({
     userId: userId(),
     range: WEEK,
   }));
   const events = () =>
     queryReadyGate(occurrences)
-      ? occurrences.data.items.map((item) => mapCalendarOccurrence(item))
+      ? occurrences.data.items.map((item) =>
+          mapCalendarOccurrence(item, { sourceById: sourceById() })
+        )
       : [];
   const [editing, setEditing] = createSignal<CalendarEvent>();
   const [saved, setSaved] = createSignal(0);
-  // The split's panel, reduced to what a composer asks of it: closing.
+  // The split's panel, reduced to what a composer asks of it: closing, and
+  // on touch the sheet's pinned chrome.
+  const [drawerHeader, setDrawerHeader] = createSignal<HTMLElement>();
   const panel = {
     handle: { close: () => setEditing(undefined), setDisplayName: () => {} },
+    drawerHeader: isTouchDevice() ? drawerHeader : undefined,
   } as unknown as SplitPanelContextType;
 
   return (
-    <main class="flex h-dvh gap-4 bg-page p-4 text-ink">
-      <section aria-label="Events" class="flex w-56 flex-col gap-2">
+    <main class="flex h-dvh flex-col gap-4 overflow-y-auto bg-page p-4 text-ink sm:flex-row">
+      <section aria-label="Events" class="flex shrink-0 flex-col gap-2 sm:w-56">
         <For each={events()}>
           {(event) => (
             <Button
@@ -83,8 +90,9 @@ function Fixture() {
         {(event) => (
           <section
             aria-label="Event composer"
-            class="portal-scope relative w-120 rounded-xl bg-surface"
+            class="portal-scope relative w-120 max-w-full rounded-xl bg-surface"
           >
+            <div ref={setDrawerHeader} />
             <SplitPanelContext.Provider value={panel}>
               <EventComposerSplit
                 event={event}

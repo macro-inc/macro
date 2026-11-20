@@ -23,6 +23,11 @@ pub enum SetupPhase {
     Create,
     /// Guest boot until macrod enrolls, claims its harness and connects.
     Boot,
+    /// An agent teammate's computer: macrod connected until the agent is
+    /// handed over, which also waits for the charge to settle.
+    AgentHandoff,
+    /// The hand-off until the agent reports online.
+    AgentStart,
 }
 
 impl SetupPhase {
@@ -32,6 +37,8 @@ impl SetupPhase {
             Self::Payment => "computer.setup.payment",
             Self::Create => "computer.setup.create",
             Self::Boot => "computer.setup.boot",
+            Self::AgentHandoff => "computer.setup.agent_handoff",
+            Self::AgentStart => "computer.setup.agent_start",
         }
     }
 }
@@ -45,6 +52,16 @@ pub struct PhaseTiming {
     pub started_at: DateTime<Utc>,
     /// When the next milestone arrived.
     pub ended_at: DateTime<Utc>,
+}
+
+/// Where an agent teammate's computer is in handing its agent over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgentProgress {
+    /// The agent reported online: this event is its report. Giving up on a
+    /// start also stops the wait, but is no report.
+    pub reported_online: bool,
+    /// macrod took the agent: this event says the hand-off finished.
+    pub delivered: bool,
 }
 
 /// Whether the purchase's payment is confirmed yet.
@@ -78,6 +95,12 @@ pub struct SetupTimeline {
     /// The guest waited for host capacity before it could boot.
     #[serde(default)]
     pub waited_for_capacity: bool,
+    /// The agent teammate was first handed to macrod.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_delivered_at: Option<DateTime<Utc>>,
+    /// The agent teammate first reported online.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent_online_at: Option<DateTime<Utc>>,
 }
 
 impl SetupTimeline {
@@ -90,6 +113,8 @@ impl SetupTimeline {
             booting_at: None,
             connected_at: None,
             waited_for_capacity: false,
+            agent_delivered_at: None,
+            agent_online_at: None,
         }
     }
 
@@ -107,6 +132,36 @@ impl SetupTimeline {
     /// written before it, the payment confirmation that started it.
     pub fn provisioning_started_at(&self) -> Option<DateTime<Utc>> {
         self.provisioned_at.or(self.paid_at)
+    }
+
+    /// Record an agent teammate's first hand-off and first online report at
+    /// `now`; returns the waits that ended. Only once macrod has connected,
+    /// and only the first of each: redeliveries and restarts add nothing.
+    pub fn advance_agent(&mut self, agent: AgentProgress, now: DateTime<Utc>) -> Vec<PhaseTiming> {
+        let mut finished = Vec::new();
+        if let Some(connected_at) = self.connected_at
+            && self.agent_delivered_at.is_none()
+            && agent.delivered
+        {
+            self.agent_delivered_at = Some(now);
+            finished.push(PhaseTiming {
+                phase: SetupPhase::AgentHandoff,
+                started_at: connected_at,
+                ended_at: now,
+            });
+        }
+        if let Some(delivered_at) = self.agent_delivered_at
+            && self.agent_online_at.is_none()
+            && agent.reported_online
+        {
+            self.agent_online_at = Some(now);
+            finished.push(PhaseTiming {
+                phase: SetupPhase::AgentStart,
+                started_at: delivered_at,
+                ended_at: now,
+            });
+        }
+        finished
     }
 
     /// Record the milestones the state reached at `now`; returns the waits

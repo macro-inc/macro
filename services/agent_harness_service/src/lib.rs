@@ -49,6 +49,8 @@ mod voice_gateway;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_spans;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
@@ -1897,10 +1899,12 @@ pub async fn run() -> anyhow::Result<()> {
                             };
                             let send: runtime_commands::SendAgent = {
                                 let runtimes = Arc::clone(&runtimes);
-                                Arc::new(move |harness, environment| {
+                                Arc::new(move |harness, environment, traceparent| {
                                     let runtimes = Arc::clone(&runtimes);
                                     Box::pin(async move {
-                                        runtimes.apply_agent(harness, environment).await
+                                        runtimes
+                                            .apply_agent(harness, environment, traceparent)
+                                            .await
                                     })
                                 })
                             };

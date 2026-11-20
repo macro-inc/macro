@@ -89,6 +89,9 @@ pub struct Computer {
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
+    /// When overcommit relief hibernated it, until it wakes. A hibernated
+    /// guest runs no macrod but stays `Running` to its team: a prompt wakes it.
+    pub hibernated_at: Option<DateTime<Utc>>,
     /// When the team finished the guided setup after buying it.
     pub setup_completed_at: Option<DateTime<Utc>>,
     /// The coding agent the computer came with, once created. Bots are
@@ -507,7 +510,7 @@ pub struct SizeOffer {
     pub vcpus: u32,
     /// Memory in GiB.
     pub memory_gb: u32,
-    /// Root disk size in GiB.
+    /// Whole disk quota in GiB: root and `/home` together.
     pub disk_gb: u32,
     /// Price for one computer.
     pub quote: Quote,
@@ -648,6 +651,10 @@ pub enum ComputerStatusKind {
     WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
+    /// Past setup but not answering: macrod was missing at a fleet check
+    /// while the guest runs, or the guest crashed and is restarting. It
+    /// comes back by itself; only a give-up is [`Self::Failed`].
+    Unhealthy,
     /// Guest is starting.
     Starting,
     /// Guest is shutting down.
@@ -821,9 +828,41 @@ impl Computer {
             | Phase::Stopped
             | Phase::Destroying => None,
         };
+        // Before the first connection the same signs are setup still going.
+        // A missed check, not the disconnect itself, so a reconnect flap
+        // stays ready; a hibernated guest is asleep, not missing. Crashes
+        // count inside the lifecycle's own window: the list is pruned only on
+        // the next crash.
+        let unhealthy = self.enrolled_at.is_some()
+            && match self.state.phase {
+                Phase::Running => {
+                    self.hibernated_at.is_none()
+                        && !self.state.macrod_connected
+                        && self.state.macrod_misses >= 1
+                }
+                Phase::Crashed { retry: Some(_), .. } => true,
+                // Restarting after a crash, or a boot whose macrod has
+                // already missed a check. A retry clears the crashes and
+                // reads Starting; so does a power-on or a move with no crash
+                // inside the window.
+                Phase::Booting => {
+                    self.state.macrod_misses >= 1
+                        || self
+                            .state
+                            .recent_crashes
+                            .iter()
+                            .any(|at| now - *at < crate::domain::lifecycle::CRASH_WINDOW)
+                }
+                Phase::Provisioning { .. }
+                | Phase::Crashed { retry: None, .. }
+                | Phase::Stopping
+                | Phase::Stopped
+                | Phase::Destroying => false,
+            };
         let status = match self.state.phase {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
+            _ if unhealthy => ComputerStatusKind::Unhealthy,
             Phase::Running => ComputerStatusKind::Ready,
             Phase::Booting | Phase::Crashed { retry: Some(_), .. } => ComputerStatusKind::Starting,
             Phase::Stopped if self.state.power_on_requested => ComputerStatusKind::Starting,
