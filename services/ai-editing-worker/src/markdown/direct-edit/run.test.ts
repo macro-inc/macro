@@ -882,4 +882,52 @@ describe('second review', () => {
     );
     expect(response.changes.filter((c) => c.kind === 'moved')).toHaveLength(1);
   }, 60_000);
+
+  it('replacing text before an opaque block, separator kept, leaves the block alone', async () => {
+    const snapshot = await buildSnapshot('Tail\n\nA private bit.', [
+      { text: 'private', id: 'hl-1', plain: true },
+    ]);
+    const opaque = (await readDocument(DOC, snapshot)).blocks[1];
+    const { response, after } = await run(
+      { edits: [{ old: 'Tail\n\n', new: 'Done\n\n' }] },
+      new SyncedDocument(snapshot)
+    );
+    expect(opaque.opaque).toBe(true);
+    expect(response.outcome).toBe('committed');
+    expect(after.blocks.map((b) => b.id)).toContain(opaque.id);
+    expect(after.blocks[0].markdown).toBe('Done');
+  });
+
+  it('prose that reads like a placeholder is not refused', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('Before: data:redacted,example')
+    );
+    const { response } = await run(
+      { edits: [{ old: 'Before', new: 'After' }] },
+      synced
+    );
+    expect(response.outcome).toBe('committed');
+  });
+
+  it('a new bold run after a commented word stays out of the comment', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('Say word here.', [{ text: 'word', id: 'cm-word' }])
+    );
+    const { after } = await run(
+      { edits: [{ old: 'word here', new: 'word**new** here' }] },
+      synced
+    );
+    const marks: string[] = [];
+    const walkMarks = (node: { type: string; children?: unknown[] }) => {
+      if (node.type === 'comment-mark')
+        marks.push(
+          (node.children as { text?: string }[]).map((c) => c.text).join('')
+        );
+      for (const child of node.children ?? [])
+        walkMarks(child as { type: string; children?: unknown[] });
+    };
+    for (const node of after.nodes) walkMarks(node);
+    expect(after.blocks[0].markdown).toBe('Say word**new** here.');
+    expect(marks).toEqual(['word']);
+  });
 });
