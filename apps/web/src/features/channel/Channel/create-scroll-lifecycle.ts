@@ -57,6 +57,7 @@ export function createScrollLifecycle(options: {
   };
 
   return {
+    phase,
     send,
     isReady: () => phase() === 'ready' || phase() === 'waiting-for-element',
     isDisposed: () => phase() === 'disposed',

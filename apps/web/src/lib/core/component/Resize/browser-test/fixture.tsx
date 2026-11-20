@@ -6,7 +6,7 @@ import {
   $getRoot,
   createEditor,
 } from 'lexical';
-import { createSignal, For, onCleanup, onMount } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { createComposerLayout } from '../../LexicalMarkdown/utils/create-composer-layout';
 import { Resize } from '../Resize';
@@ -93,4 +93,48 @@ function App() {
   );
 }
 
-render(() => <App />, document.getElementById('root')!);
+declare global {
+  interface Window {
+    showOverlayAside: () => void;
+  }
+}
+
+/**
+ * Navigation docked as the first panel, then moved over Main as an overlay,
+ * as ViewShell does when a split narrows it: the docked panel and the only
+ * gutter leave in the same update.
+ */
+function OverlayAside() {
+  const [overlay, setOverlay] = createSignal(false);
+  window.showOverlayAside = () => setOverlay(true);
+  return (
+    <div style={{ width: '100vw', height: '100vh' }}>
+      <Resize.Zone direction="horizontal" gutter={8}>
+        <Show
+          when={overlay()}
+          fallback={
+            <Resize.Panel id="aside" minSize={180}>
+              <p>Docked navigation</p>
+            </Resize.Panel>
+          }
+        >
+          <div style={{ position: 'absolute', inset: '0 auto 0 0' }}>
+            <p>Overlay navigation</p>
+          </div>
+        </Show>
+        <Resize.Panel id="main" minSize={180}>
+          <Scroll viewportProps={{ 'data-testid': 'scroller' }}>
+            <For each={Array.from({ length: 100 }, (_, index) => index)}>
+              {(index) => <p style={{ padding: '12px' }}>Message {index}</p>}
+            </For>
+          </Scroll>
+        </Resize.Panel>
+      </Resize.Zone>
+    </div>
+  );
+}
+
+render(
+  () => (location.search === '?overlay-aside' ? <OverlayAside /> : <App />),
+  document.getElementById('root')!
+);

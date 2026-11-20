@@ -258,6 +258,13 @@ static-file endpoints receive thumbnail sizing. The backend-free regression is
 Split dragging and composer reflow have a backend-free browser regression:
 `bunx playwright test --config src/lib/core/component/Resize/browser-test/playwright.config.ts`.
 It exercises the real resize solver, scroll container, and Lexical layout primitive.
+The same suite checks, every painted frame, that a panel keeps its scroll
+position when navigation moves from a docked panel to an overlay: `Resize.Zone`
+renders panels and gutters as separate insertions, because reconciling them as
+one list detached and re-appended the panel beside the aside.
+
+A Bombadil property, "a loaded channel does not move by itself", explores the
+channel timeline against a local E2E stack; see `tests/bombadil/README.md`.
 
 Stacked splits have a backend-free browser regression over the real split
 router and tiled layout: splitting keeps the pane mounted, stacked gutters drag
