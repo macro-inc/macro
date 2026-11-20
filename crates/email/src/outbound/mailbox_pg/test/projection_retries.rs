@@ -209,7 +209,11 @@ async fn a_projection_whose_claims_keep_ending_unfinished_is_abandoned_unproject
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for claimed_after in 0..5 {
-        let lease = repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+        let lease = repo
+            .claim_projection(Uuid::now_v7())
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(lease.unfinished_claims, claimed_after);
         expire_lease(&db, id).await;
     }
@@ -241,10 +245,17 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
     for _ in 0..3 {
-        repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+        repo.claim_projection(Uuid::now_v7())
+            .await
+            .unwrap()
+            .unwrap();
         expire_lease(&db, id).await;
     }
-    let unfinished = repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+    let unfinished = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(unfinished.unfinished_claims, 3);
 
     repo.finish_projection(
@@ -258,7 +269,11 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
     .unwrap();
     make_due(&db, id).await;
 
-    let next = repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+    let next = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(next.unfinished_claims, 0);
 }
 
@@ -266,7 +281,11 @@ async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPoo
 async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;
-    let late = repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+    let late = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
     expire_lease(&db, id).await;
 
     repo.finish_projection(
@@ -280,6 +299,10 @@ async fn a_retry_recorded_after_the_lease_ran_out_still_counts_as_unfinished(db:
     .unwrap();
 
     // The late retry neither cleared the lease nor gave its claim back.
-    let next = repo.claim_projection(Uuid::now_v7()).await.unwrap().unwrap();
+    let next = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!((next.attempts, next.unfinished_claims), (2, 1));
 }
