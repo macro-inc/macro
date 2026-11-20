@@ -29,6 +29,7 @@ const fakeMacro = () => {
   const posted: Posted[] = [];
   const activeSince: string[] = [];
   let meCalls = 0;
+  let unreadable = false;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let options: ListenOptions | undefined;
   const handle = (message: Posted) => ({
@@ -58,6 +59,7 @@ const fakeMacro = () => {
     // Roots posted or replied to after `after`, newest first, as the SDK
     // gives them.
     messagesAfter: async function* (after: string) {
+      if (unreadable) throw new Error('no access');
       const active = (root: Posted) =>
         root.at > after ||
         posted.some((reply) => reply.thread === root.id && reply.at > after);
@@ -95,6 +97,10 @@ const fakeMacro = () => {
     meCalls: () => meCalls,
     options: () => options,
     post: (message: Posted) => posted.push(message),
+    /** The DM's history can't be read, as one the agent lost access to. */
+    unreadable: (yes: boolean) => {
+      unreadable = yes;
+    },
     live: async (message: Posted) => {
       posted.push(message);
       await handler?.({
@@ -252,4 +258,23 @@ test('the agent is listening only once the stream is open and a round trip worke
   backend.options()?.onOpen?.(now);
   await within(chat.listening(), 'never listening');
   expect(backend.meCalls()).toBeGreaterThan(before);
+});
+
+test('a channel that cannot be read is skipped, and a later catch-up still runs', async () => {
+  const backend = fakeMacro();
+  const { next } = listening(backend, { at: '2026-11-19T11:59:00Z' });
+
+  const pending = next();
+  await Bun.sleep(10);
+  backend.unreadable(true);
+  backend.options()?.onOpen?.(now);
+  await Bun.sleep(50);
+
+  backend.unreadable(false);
+  backend.post({ id: 'later', at: '2026-11-19T11:59:40Z', text: 'still?' });
+  backend.options()?.onDrop?.(now);
+  backend.options()?.onOpen?.(now);
+  expect((await within(pending, 'the later catch-up never ran')).entry.id).toBe(
+    'later'
+  );
 });

@@ -363,6 +363,7 @@ export const sdkChat = ({
           const since = Date.parse(after);
           let channels = 0;
           let messages = 0;
+          let skipped = 0;
           span.set('chat.catch_up.after', after);
           for await (const channel of macro.channels.activeSince(after)) {
             if (channels >= catchUpChannels) {
@@ -371,18 +372,28 @@ export const sdkChat = ({
             }
             channels += 1;
             const missed: Incoming[] = [];
-            for await (const root of channel.messagesAfter(after, {
-              maxItems: catchUpMessages,
-            }))
-              for (const message of [
-                root,
-                ...(await root.thread().replies()),
-              ]) {
-                if (seen.has(message.id)) continue;
-                const at = await message.createdAt();
-                if (Date.parse(at) < since) continue;
-                missed.push(await fromHistory(channel, message, at));
+            // One channel or thread that can't be read is skipped and
+            // counted, so it can't stop every later catch-up.
+            try {
+              for await (const root of channel.messagesAfter(after, {
+                maxItems: catchUpMessages,
+              })) {
+                let replies: readonly Posted[] = [];
+                try {
+                  replies = await root.thread().replies();
+                } catch {
+                  skipped += 1;
+                }
+                for (const message of [root, ...replies]) {
+                  if (seen.has(message.id)) continue;
+                  const at = await message.createdAt();
+                  if (Date.parse(at) < since) continue;
+                  missed.push(await fromHistory(channel, message, at));
+                }
               }
+            } catch {
+              skipped += 1;
+            }
             missed.sort(
               (a, b) => Date.parse(a.entry.at) - Date.parse(b.entry.at)
             );
@@ -391,6 +402,7 @@ export const sdkChat = ({
           }
           span.set('chat.catch_up.channels', channels);
           span.set('chat.catch_up.messages', messages);
+          span.set('chat.catch_up.skipped', skipped);
         });
 
       const stored = await cursor.read().catch(() => undefined);
