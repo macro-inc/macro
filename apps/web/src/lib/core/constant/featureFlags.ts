@@ -170,6 +170,16 @@ export const enableAgentTeammates = defineFlag({
 });
 
 /**
+ * Agent inboxes: an agent teammate gets its own email address, added at
+ * invite or from its row in Members. The backend checks the same key.
+ */
+export const enableAgentInboxes = defineFlag({
+  key: 'enable-agent-inboxes',
+  env: 'ENABLE_AGENT_INBOXES',
+  default: DEV_MODE_ENV || undefined,
+});
+
+/**
  * Auto in the agent composer's mode switch: the agent harness picks Chat or
  * Code per prompt. Macro employees only; the backend checks the same key.
  */

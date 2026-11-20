@@ -104,6 +104,27 @@ describe('teamAgentsPollInterval', () => {
       teamAgentsPollInterval([grace, { ...ada, status: 'unhealthy' }])
     ).toBe(3000);
   });
+
+  it("polls fast while a running agent's inbox is still being created", () => {
+    const inbox = {
+      address: null,
+      state: 'provisioning' as const,
+      failure: null,
+    };
+    expect(teamAgentsPollInterval([{ ...grace, inbox }])).toBe(3000);
+    expect(
+      teamAgentsPollInterval([
+        {
+          ...grace,
+          inbox: {
+            ...inbox,
+            address: 'grace@agents.example.com',
+            state: 'active',
+          },
+        },
+      ])
+    ).toBe(30_000);
+  });
 });
 
 describe('team agent mutations', () => {

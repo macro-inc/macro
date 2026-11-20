@@ -6,6 +6,7 @@
  */
 import type {
   AgentApiKey,
+  AgentInbox,
   AgentSetupResponse,
   AgentVoice,
   AiBillingErrorBody,
@@ -6977,6 +6978,161 @@ export const deleteTeamAgent = async (
     status: res.status,
     headers: res.headers,
   } as deleteTeamAgentResponse;
+};
+
+/**
+ * @summary The agent's email inbox: its address and state. Asks email_service again
+while the inbox is being created. Requires a team admin or owner.
+ */
+export type getTeamAgentInboxResponse200 = {
+  data: AgentInbox;
+  status: 200;
+};
+
+export type getTeamAgentInboxResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getTeamAgentInboxResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getTeamAgentInboxResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getTeamAgentInboxResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getTeamAgentInboxResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getTeamAgentInboxResponseSuccess = getTeamAgentInboxResponse200 & {
+  headers: Headers;
+};
+export type getTeamAgentInboxResponseError = (
+  | getTeamAgentInboxResponse400
+  | getTeamAgentInboxResponse401
+  | getTeamAgentInboxResponse403
+  | getTeamAgentInboxResponse404
+  | getTeamAgentInboxResponse500
+) & {
+  headers: Headers;
+};
+
+export type getTeamAgentInboxResponse =
+  | getTeamAgentInboxResponseSuccess
+  | getTeamAgentInboxResponseError;
+
+export const getGetTeamAgentInboxUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/inbox`;
+};
+
+export const getTeamAgentInbox = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<getTeamAgentInboxResponse> => {
+  const res = await fetch(getGetTeamAgentInboxUrl(agentUserId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getTeamAgentInboxResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getTeamAgentInboxResponse;
+};
+
+/**
+ * @summary Give the agent its own email inbox, or retry the one it has; one inbox
+per agent however often this is called. Its mail belongs to the agent's
+own account. Requires a team admin or owner.
+ */
+export type addTeamAgentInboxResponse200 = {
+  data: AgentInbox;
+  status: 200;
+};
+
+export type addTeamAgentInboxResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type addTeamAgentInboxResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type addTeamAgentInboxResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type addTeamAgentInboxResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type addTeamAgentInboxResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type addTeamAgentInboxResponse503 = {
+  data: ErrorResponse;
+  status: 503;
+};
+
+export type addTeamAgentInboxResponseSuccess = addTeamAgentInboxResponse200 & {
+  headers: Headers;
+};
+export type addTeamAgentInboxResponseError = (
+  | addTeamAgentInboxResponse400
+  | addTeamAgentInboxResponse401
+  | addTeamAgentInboxResponse403
+  | addTeamAgentInboxResponse404
+  | addTeamAgentInboxResponse500
+  | addTeamAgentInboxResponse503
+) & {
+  headers: Headers;
+};
+
+export type addTeamAgentInboxResponse =
+  | addTeamAgentInboxResponseSuccess
+  | addTeamAgentInboxResponseError;
+
+export const getAddTeamAgentInboxUrl = (agentUserId: string) => {
+  return `/team_agents/${agentUserId}/inbox`;
+};
+
+export const addTeamAgentInbox = async (
+  agentUserId: string,
+  options?: RequestInit
+): Promise<addTeamAgentInboxResponse> => {
+  const res = await fetch(getAddTeamAgentInboxUrl(agentUserId), {
+    ...options,
+    method: 'PUT',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: addTeamAgentInboxResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as addTeamAgentInboxResponse;
 };
 
 /**

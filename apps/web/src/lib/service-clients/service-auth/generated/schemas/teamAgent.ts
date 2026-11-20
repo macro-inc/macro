@@ -6,6 +6,7 @@
  */
 import type { TeamAgentComputerId } from './teamAgentComputerId';
 import type { TeamAgentCreatedBy } from './teamAgentCreatedBy';
+import type { TeamAgentInbox } from './teamAgentInbox';
 import type { TeamAgentStatus } from './teamAgentStatus';
 
 /**
@@ -19,6 +20,7 @@ export interface TeamAgent {
   createdAt: string;
   /** Admin who invited the agent. */
   createdBy?: TeamAgentCreatedBy;
+  inbox?: TeamAgentInbox;
   /** What the agent is responsible for. */
   jobDescription: string;
   /** Display name. */
