@@ -43,7 +43,7 @@ pub enum UploadAttachmentError {
     ParseError(String),
 
     #[error("Database error: {0}")]
-    DatabaseError(String),
+    DatabaseError(anyhow::Error),
 
     #[error("Attachment filename is missing")]
     FilenameMissing,
@@ -60,9 +60,6 @@ pub enum UploadAttachmentError {
     /// superseded draft revision. There is nothing left to import.
     #[error("Attachment was deleted before it could be imported")]
     AttachmentDeleted,
-
-    #[error("DSS response did not include a presigned URL")]
-    PresignedUrlMissing,
 
     #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
     PresignedUrlUploadFailed(reqwest::StatusCode, String),
@@ -167,7 +164,7 @@ async fn upload_media_attachment(
         },
     )
     .await
-    .map_err(|e| UploadAttachmentError::DatabaseError(e.to_string()))?;
+    .map_err(UploadAttachmentError::DatabaseError)?;
 
     Ok(sfs_response.id)
 }
@@ -215,8 +212,14 @@ async fn store_document_attachment(
     )
     .await?;
 
-    if dss_response.data.document_response.presigned_url.is_some() {
-        upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
+    if let Some(presigned_url) = &dss_response.data.document_response.presigned_url {
+        upload_data_to_presigned_url(
+            presigned_url,
+            &dss_response.data.content_type,
+            attachment_data,
+            &base64_hash,
+        )
+        .await?;
     }
 
     // 5. Get document id
@@ -395,20 +398,17 @@ async fn create_dss_document_record(
 
 /// Uploads the provided data to the presigned URL from the DSS response.
 async fn upload_data_to_presigned_url(
-    dss_response: &CreateDocumentResponse,
+    presigned_url: &str,
+    content_type: &str,
     attachment_data: Vec<u8>,
     base64_hash: &str,
 ) -> Result<(), UploadAttachmentError> {
-    let presigned_url = dss_response
-        .data
-        .document_response
-        .presigned_url
-        .as_ref()
-        .ok_or(UploadAttachmentError::PresignedUrlMissing)?;
-
+    // Without the explicit length an empty file goes out with no
+    // Content-Length at all, which storage refuses with 411.
     let response = reqwest::Client::new()
         .put(presigned_url)
-        .header("content-type", &dss_response.data.content_type)
+        .header("content-type", content_type)
+        .header("content-length", attachment_data.len())
         .header("x-amz-checksum-sha256", base64_hash)
         .body(attachment_data)
         .send()

@@ -166,3 +166,34 @@ fn invalid_sender_keeps_the_other_attachment_properties() {
     assert_eq!(property.subject.as_deref(), Some("Quarterly report"));
     assert!(property.source.is_some());
 }
+
+#[tokio::test]
+async fn an_empty_document_is_uploaded_with_its_length() {
+    use wiremock::matchers::{header, method};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    // S3 answers a PUT without a Content-Length with 411 Length Required.
+    let storage = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(header("content-length", "0"))
+        .respond_with(ResponseTemplate::new(200))
+        .with_priority(1)
+        .mount(&storage)
+        .await;
+    Mock::given(method("PUT"))
+        .respond_with(ResponseTemplate::new(411))
+        .with_priority(2)
+        .mount(&storage)
+        .await;
+    let (_, base64_hash) = calculate_hashes(&[]);
+
+    let uploaded = upload_data_to_presigned_url(
+        &format!("{}/document", storage.uri()),
+        "application/pdf",
+        Vec::new(),
+        &base64_hash,
+    )
+    .await;
+
+    assert!(uploaded.is_ok(), "{uploaded:?}");
+}
