@@ -37,8 +37,9 @@ pub enum Fetch {
 }
 
 /// Why an update didn't take.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display)]
 #[serde(rename_all = "camelCase")]
+#[strum(serialize_all = "camelCase")]
 pub enum UpdateFailure {
     /// The image couldn't be fetched.
     ImageUnavailable,

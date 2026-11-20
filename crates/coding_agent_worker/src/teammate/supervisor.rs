@@ -150,8 +150,13 @@ pub async fn supervise<EngineImpl: Engine>(
                 Err(_) => Fetch::Unavailable,
             };
             span.record("outcome", tracing::field::debug(fetch));
-            let mut update =
-                ImageUpdate::new(lifecycle.settled_image.clone(), supervision.image.clone());
+            // The fallback is the image the container being replaced runs
+            // (it may not have finished its own trial yet), else the last
+            // settled one.
+            let fallback = running_image(engine, &name, &supervision.image)
+                .await
+                .or_else(|| lifecycle.settled_image.clone());
+            let mut update = ImageUpdate::new(fallback, supervision.image.clone());
             let next = match update.fetched(fetch) {
                 UpdateAction::Run { image, status } => Running {
                     image,
@@ -309,8 +314,9 @@ fn record_rollback(
         generation = install.generation,
         delivery = install.delivery,
         reason = ?reason,
-        image_id = image.image_id.as_str(),
-        previous_image_id = abandoned.image_id.as_str(),
+        // The image that failed, and the one running again in its place.
+        image_id = abandoned.image_id.as_str(),
+        previous_image_id = image.image_id.as_str(),
     );
     span.in_scope(|| {
         tracing::warn!(reason = ?reason, "the teammate went back to its previous image");
@@ -368,6 +374,21 @@ async fn replaced<EngineImpl: Engine>(engine: &EngineImpl, name: &str, delivery:
         engine.container(name).await,
         Ok(Some(state)) if state.delivery.is_some_and(|labelled| labelled != delivery)
     )
+}
+
+/// The image the install's running container runs, as the engine reports
+/// it (of `like`'s repository: only its id is used to run it again).
+async fn running_image<EngineImpl: Engine>(
+    engine: &EngineImpl,
+    name: &str,
+    like: &TeammateImage,
+) -> Option<TeammateImage> {
+    let state = engine.container(name).await.ok()??;
+    let image_id = state.image_id.filter(|_| state.running)?;
+    Some(TeammateImage {
+        repository: like.repository.clone(),
+        image_id,
+    })
 }
 
 /// What a restarted macrod finds under the install's name.

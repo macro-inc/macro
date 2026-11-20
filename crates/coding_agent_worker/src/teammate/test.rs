@@ -10,6 +10,7 @@ use agent_runtime_protocol::domain::schema::v0::{
 use tokio::sync::{broadcast, mpsc};
 
 use super::cli::{parse_df_available_kib, version_at_least};
+use super::command::{Observed, list_row};
 use super::engine::{
     ContainerState, Delivery, Engine, EngineError, EngineInfo, EngineUnavailable, RunSpec,
     TeammateNetwork, run_arguments,
@@ -26,6 +27,9 @@ const OTHER_IMAGE_ID: &str =
     "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const REPOSITORY: &str = "ghcr.io/macro-inc/teammate-runtime";
 const OTHER_TAGGED: &str = "ghcr.io/macro-inc/teammate-runtime:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const THIRD_IMAGE_ID: &str =
+    "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
+const THIRD_TAGGED: &str = "ghcr.io/macro-inc/teammate-runtime:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc";
 const TAGGED: &str = "ghcr.io/macro-inc/teammate-runtime:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
 const LINUX: Platform = Platform {
@@ -1933,4 +1937,76 @@ async fn the_teammate_network_reaches_every_run() {
         panic!("not run");
     };
     assert_eq!(spec.extra_network, Some(network));
+}
+
+/// A new image replaced the settled one and runs, but not yet for its whole
+/// trial, when a third arrives and crashes: the fallback is the image the
+/// replaced container ran, not the older settled one.
+#[tokio::test(start_paused = true)]
+async fn a_crashing_image_falls_back_to_the_one_it_replaced() {
+    let mut fixture = settled_fixture().await;
+    fixture
+        .engine
+        .state()
+        .registry
+        .insert(OTHER_TAGGED.to_owned(), OTHER_IMAGE_ID.to_owned());
+    fixture
+        .engine
+        .state()
+        .registry
+        .insert(THIRD_TAGGED.to_owned(), THIRD_IMAGE_ID.to_owned());
+    fixture.teammates.handle(image_request(2, OTHER_IMAGE_ID));
+    next_states(&mut fixture.statuses, 3).await;
+    tokio::time::sleep(Duration::from_secs(56)).await;
+
+    fixture.teammates.handle(image_request(3, THIRD_IMAGE_ID));
+    next_states(&mut fixture.statuses, 3).await;
+    fixture.exit.send(1).unwrap();
+
+    assert_eq!(
+        next_states(&mut fixture.statuses, 3).await,
+        [
+            TeammateRunState::Restarting { attempt: 1 },
+            TeammateRunState::Starting,
+            TeammateRunState::RolledBack {
+                reason: TeammateRunFailure::CrashLoop
+            }
+        ]
+    );
+    assert_eq!(
+        run_images_and_exits(&fixture.engine).last().unwrap().0,
+        OTHER_IMAGE_ID
+    );
+}
+
+#[test]
+fn the_list_shows_the_image_the_container_runs_and_a_rollback() {
+    let mut kept = stored(install(3));
+    kept.image = image(THIRD_IMAGE_ID);
+    let mut update = teammate_lifecycle::replacement::ImageUpdate::new(
+        Some(image(OTHER_IMAGE_ID)),
+        image(THIRD_IMAGE_ID),
+    );
+    update.fetched(teammate_lifecycle::replacement::Fetch::Unavailable);
+    kept.lifecycle.update = Some(update);
+    let running = Observed::Container(ContainerState {
+        running: true,
+        delivery: Some(Delivery::of(&install(3))),
+        image_id: Some(OTHER_IMAGE_ID.to_owned()),
+    });
+
+    assert_eq!(
+        list_row(&kept, &running),
+        format!(
+            "{:<40} {:>10}  {:<12}  running, rolled back (imageUnavailable)",
+            "install-1", 3, "bbbbbbbbbbbb"
+        )
+    );
+    assert_eq!(
+        list_row(&stored(install(1)), &Observed::Absent),
+        format!(
+            "{:<40} {:>10}  {:<12}  absent",
+            "install-1", 1, "aaaaaaaaaaaa"
+        )
+    );
 }

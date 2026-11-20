@@ -9,7 +9,9 @@ use rootcause::prelude::ResultExt as _;
 use tokio::io::AsyncWriteExt as _;
 
 use super::cli::CliEngine;
-use super::engine::{Engine, PROVIDER_TARGET, container_name, network_name, provider_volume_name};
+use super::engine::{
+    ContainerState, Engine, PROVIDER_TARGET, container_name, network_name, provider_volume_name,
+};
 use super::store::{Store, StoredInstall, teammates_directory};
 
 /// What `macrod teammate` does.
@@ -88,30 +90,71 @@ async fn list() -> rootcause::Result<()> {
         "INSTALL", "GENERATION", "IMAGE"
     );
     for stored in installs {
-        let id = &stored.install.install_id;
-        let container = if engine_found {
-            match engine.container(&container_name(id)).await {
-                Ok(Some(state)) if state.running => "running",
-                Ok(Some(_)) => "exited",
-                Ok(None) => "absent",
-                Err(_) => "unknown",
+        let observed = if engine_found {
+            match engine
+                .container(&container_name(&stored.install.install_id))
+                .await
+            {
+                Ok(Some(state)) => Observed::Container(state),
+                Ok(None) => Observed::Absent,
+                Err(_) => Observed::Unknown,
             }
         } else {
-            "no engine"
+            Observed::NoEngine
         };
-        let image = stored
-            .image
-            .image_id
-            .strip_prefix("sha256:")
-            .unwrap_or(&stored.image.image_id);
-        println!(
-            "{:<40} {:>10}  {:<12}  {container}",
-            id.as_str(),
-            stored.install.generation,
-            image.chars().take(12).collect::<String>(),
-        );
+        println!("{}", list_row(&stored, &observed));
     }
     Ok(())
+}
+
+/// What the engine says about an install's container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Observed {
+    /// No engine answered.
+    NoEngine,
+    /// The engine didn't say.
+    Unknown,
+    /// There is no container.
+    Absent,
+    /// The container, as the engine sees it.
+    Container(ContainerState),
+}
+
+/// One `macrod teammate list` row: the image the container actually runs
+/// (the kept image when none runs), and whether it is the rolled-back one.
+pub fn list_row(stored: &StoredInstall, observed: &Observed) -> String {
+    let image_id = match observed {
+        Observed::Container(state) => state.image_id.as_deref(),
+        Observed::NoEngine | Observed::Unknown | Observed::Absent => None,
+    }
+    .unwrap_or(stored.image.image_id.as_str());
+    let short: String = image_id
+        .strip_prefix("sha256:")
+        .unwrap_or(image_id)
+        .chars()
+        .take(12)
+        .collect();
+    let rolled_back = stored
+        .lifecycle
+        .update
+        .as_ref()
+        .and_then(teammate_lifecycle::replacement::ImageUpdate::rolled_back);
+    let container = match observed {
+        Observed::Container(state) if state.running => match rolled_back {
+            Some(reason) => format!("running, rolled back ({reason})"),
+            None => "running".to_owned(),
+        },
+        Observed::Container(_) => "exited".to_owned(),
+        Observed::Absent => "absent".to_owned(),
+        Observed::Unknown => "unknown".to_owned(),
+        Observed::NoEngine => "no engine".to_owned(),
+    };
+    format!(
+        "{:<40} {:>10}  {:<12}  {container}",
+        stored.install.install_id.as_str(),
+        stored.install.generation,
+        short,
+    )
 }
 
 async fn logs(install: &TeammateInstallId, follow: bool, tail: u32) -> rootcause::Result<()> {
