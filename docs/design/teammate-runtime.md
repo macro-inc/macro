@@ -237,6 +237,12 @@ network can reach, including other machines on your network and, on a cloud
 VM, its metadata service."* macrod takes no root and writes no firewall
 rules in v1.
 
+On a local stack only, macrod's `[macro] teammate_network` names the stack's
+Docker network (`macro-<instance>_services`), which every teammate container
+also joins, so the agent reaches the stack's services by their in-network
+names; the service gives a local install those addresses, as it gives a local
+Macro computer. Production never sets it.
+
 Really restricting egress is a follow-up, not built here. Either of these
 works:
 

@@ -12,7 +12,7 @@ use tokio::sync::{broadcast, mpsc};
 use super::cli::{parse_df_available_kib, version_at_least};
 use super::engine::{
     ContainerState, Delivery, Engine, EngineError, EngineInfo, EngineUnavailable, RunSpec,
-    run_arguments,
+    TeammateNetwork, run_arguments,
 };
 use super::host::{Platform, can_host, host_report};
 use super::store::{Lifecycle, Store, StoredInstall};
@@ -350,7 +350,7 @@ async fn fixture_with(directory: tempfile::TempDir, store: Store) -> Fixture {
         .state()
         .registry
         .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
-    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into(), None);
     let statuses = teammates.subscribe();
     teammates.detect().await;
     Fixture {
@@ -463,6 +463,7 @@ async fn the_capability_is_declared_only_when_an_engine_answers_and_nothing_is_w
             Store::new(directory.path().to_owned()),
             LINUX,
             SECCOMP.into(),
+            None,
         );
 
         let report = teammates.detect().await;
@@ -487,6 +488,7 @@ fn the_container_runs_with_exactly_the_specified_flags() {
         credentials_file: "/home/ada/.macrod/teammates/h/install-1/agent.env".into(),
         seccomp_profile: SECCOMP.into(),
         previous_exit: PreviousExit::Exited { code: 78 },
+        extra_network: None,
     };
 
     let arguments: Vec<String> = run_arguments(&spec)
@@ -860,7 +862,7 @@ async fn a_restarted_macrod_adopts_the_running_container() {
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
 
     let report = teammates.detect().await;
@@ -906,7 +908,7 @@ async fn a_restarted_macrod_starts_an_exited_container_again() {
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -966,7 +968,7 @@ async fn a_run_on_a_machine_that_cant_host_fails_without_keeping_anything() {
     let directory = tempfile::tempdir().unwrap();
     let store = Store::new(directory.path().to_owned());
     let (engine, _exit) = FakeEngine::new(Err(EngineUnavailable::Unreachable));
-    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store.clone(), LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
 
@@ -1032,7 +1034,7 @@ async fn the_real_engine_runs_the_container_confined_and_deletes_it_on_stop() {
         super::SECCOMP_PROFILE.as_bytes(),
     )
     .unwrap();
-    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp);
+    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp, None);
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
 
@@ -1232,6 +1234,7 @@ async fn a_terminal_exit_survives_a_macrod_restart_and_a_new_delivery_starts_it(
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
+        None,
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1275,6 +1278,7 @@ async fn a_macrod_restart_in_a_backoff_keeps_the_last_exit() {
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
+        None,
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1303,7 +1307,7 @@ async fn an_adopted_containers_exit_is_passed_on_once() {
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
     next_states(&mut statuses, 1).await;
@@ -1329,7 +1333,7 @@ async fn an_exit_macrod_did_not_see_is_passed_as_unknown() {
         .state()
         .images
         .insert(IMAGE_ID.to_owned(), IMAGE_ID.to_owned());
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -1584,7 +1588,7 @@ async fn the_real_engine_swaps_images_rolls_back_and_keeps_the_volume() {
         super::SECCOMP_PROFILE.as_bytes(),
     )
     .unwrap();
-    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp);
+    let teammates = Teammates::new(engine, store.clone(), Platform::current(), seccomp, None);
     let mut statuses = teammates.subscribe();
     teammates.detect().await;
     let name = format!("macro-teammate-{}", install_id.as_str());
@@ -1691,6 +1695,7 @@ async fn a_stop_whose_deletion_failed_is_not_started_by_a_restarted_macrod() {
         fixture.store.clone(),
         LINUX,
         SECCOMP.into(),
+        None,
     );
     let mut statuses = restarted_macrod.subscribe();
     restarted_macrod.detect().await;
@@ -1747,7 +1752,7 @@ async fn a_running_container_on_another_image_is_updated_not_adopted() {
             image_id: Some(IMAGE_ID.to_owned()),
         },
     );
-    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into());
+    let teammates = Teammates::new(engine.clone(), store, LINUX, SECCOMP.into(), None);
     let mut statuses = teammates.subscribe();
 
     teammates.detect().await;
@@ -1786,7 +1791,13 @@ pub(crate) async fn fake_hosting() -> (
         .state()
         .registry
         .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
-    let teammates = Arc::new(Teammates::new(engine.clone(), store, LINUX, SECCOMP.into()));
+    let teammates = Arc::new(Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        None,
+    ));
     let report = teammates.detect().await;
     ((teammates, report), engine, exit, directory)
 }
@@ -1822,6 +1833,7 @@ fn a_credentials_path_a_mount_option_list_cant_carry_is_refused() {
             credentials_file: path.into(),
             seccomp_profile: SECCOMP.into(),
             previous_exit: PreviousExit::Unknown,
+            extra_network: None,
         };
         assert_eq!(
             run_arguments(&spec),
@@ -1846,4 +1858,79 @@ pub(crate) fn run_images(engine: &FakeEngine) -> Vec<String> {
         .into_iter()
         .map(|(image_id, _)| image_id)
         .collect()
+}
+
+#[test]
+fn a_local_stack_network_is_a_second_network_on_the_run() {
+    let spec = RunSpec {
+        install_id: TeammateInstallId::new("install-1").unwrap(),
+        delivery: Delivery {
+            generation: 1,
+            delivery: 1,
+        },
+        image_id: IMAGE_ID.to_owned(),
+        credentials_file: "/home/ada/.macrod/teammates/h/install-1/agent.env".into(),
+        seccomp_profile: SECCOMP.into(),
+        previous_exit: PreviousExit::Unknown,
+        extra_network: Some(TeammateNetwork::new("macro-wolf_services").unwrap()),
+    };
+
+    let arguments: Vec<String> = run_arguments(&spec)
+        .unwrap()
+        .into_iter()
+        .map(|argument| argument.into_string().unwrap())
+        .collect();
+
+    let networks: Vec<&str> = arguments
+        .windows(2)
+        .filter(|pair| pair[0] == "--network")
+        .map(|pair| pair[1].as_str())
+        .collect();
+    // The install's own network stays; the stack's is added.
+    assert_eq!(
+        networks,
+        ["macro-teammate-install-1", "macro-wolf_services"]
+    );
+}
+
+#[test]
+fn a_teammate_network_name_is_one_the_engine_reads_as_a_name() {
+    assert!(TeammateNetwork::new("macro-wolf_services").is_ok());
+    assert!(TeammateNetwork::new("macro.stack-1").is_ok());
+    for bad in ["", "-x", "host;rm", "a b", "--privileged", &"a".repeat(129)] {
+        assert!(TeammateNetwork::new(bad).is_err(), "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn the_teammate_network_reaches_every_run() {
+    let directory = tempfile::tempdir().unwrap();
+    let store = Store::new(directory.path().join("teammates/harness-1"));
+    let (engine, _exit) = FakeEngine::new(Ok(docker_info()));
+    engine
+        .state()
+        .registry
+        .insert(TAGGED.to_owned(), IMAGE_ID.to_owned());
+    let network = TeammateNetwork::new("macro-wolf_services").unwrap();
+    let teammates = Teammates::new(
+        engine.clone(),
+        store,
+        LINUX,
+        SECCOMP.into(),
+        Some(network.clone()),
+    );
+    let mut statuses = teammates.subscribe();
+    teammates.detect().await;
+
+    teammates.handle(run_request(1));
+    next_states(&mut statuses, 3).await;
+
+    let Some(Call::Run(spec)) = engine
+        .calls()
+        .into_iter()
+        .rfind(|call| matches!(call, Call::Run(_)))
+    else {
+        panic!("not run");
+    };
+    assert_eq!(spec.extra_network, Some(network));
 }

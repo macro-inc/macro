@@ -107,6 +107,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   before every dial (`runtime.rs`), and the dial lists
   `teammate-container` only when nothing is wrong; each connection then
   sends the report and every install's last state (`teammate::Link`).
+  `[macro] teammate_network` (local stack only) adds a second `--network`,
+  the stack's, beside the install's own.
   `RunTeammate`/`StopTeammate` go through one ordered queue: the highest
   `(generation, delivery)` wins and lower or equal ones are ignored; a new
   delivery stops the old container with `docker stop -t 90`; stops delete

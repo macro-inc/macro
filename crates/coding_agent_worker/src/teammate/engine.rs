@@ -117,6 +117,35 @@ pub struct RunSpec {
     pub seccomp_profile: PathBuf,
     /// The previous run's exit, for `teammate-boot`'s failed-boot count.
     pub previous_exit: PreviousExit,
+    /// A second network beside the install's own: a local stack's, so the
+    /// agent reaches its services by their names (development only).
+    pub extra_network: Option<TeammateNetwork>,
+}
+
+/// A Docker network name the engine reads only as a name: a letter or
+/// digit, then letters, digits, `_`, `.` or `-`, at most 128.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TeammateNetwork(String);
+
+/// A name that isn't a network name.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0:?} is not a network name")]
+pub struct InvalidTeammateNetwork(String);
+
+impl TeammateNetwork {
+    /// `name`, if it is a network name.
+    pub fn new(name: &str) -> Result<Self, InvalidTeammateNetwork> {
+        if lazy_regex::regex_is_match!(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$", name) {
+            Ok(Self(name.to_owned()))
+        } else {
+            Err(InvalidTeammateNetwork(name.to_owned()))
+        }
+    }
+
+    /// The name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl RunSpec {
@@ -268,6 +297,17 @@ pub fn run_arguments(spec: &RunSpec) -> Result<Vec<OsString>, UnsafeMountPath> {
             "/run/teammate-runtime".to_owned(),
             "--network".to_owned(),
             network_name(&spec.install_id),
+        ]
+        .into_iter()
+        .map(OsString::from),
+    );
+    // A second `--network` needs Docker Engine 25 or Podman.
+    if let Some(network) = &spec.extra_network {
+        arguments.push("--network".into());
+        arguments.push(network.as_str().into());
+    }
+    arguments.extend(
+        [
             "--mount".to_owned(),
             format!("type=volume,src={volume},dst={VOLUME_TARGET}"),
             "--mount".to_owned(),

@@ -83,13 +83,19 @@ pub type HostTeammates = Teammates<test::FakeEngine>;
 pub fn host(
     harness_id: impl std::fmt::Display,
     ingest: ingest::IngestTarget,
+    network: Option<&str>,
 ) -> rootcause::Result<HostTeammates> {
     let seccomp_profile = install_seccomp_profile()?;
+    let network = network
+        .map(engine::TeammateNetwork::new)
+        .transpose()
+        .map_err(|error| rootcause::report!("[macro] teammate_network: {error}"))?;
     let mut teammates = Teammates::new(
         cli::CliEngine::new(),
         Store::for_harness(harness_id)?,
         Platform::current(),
         seccomp_profile,
+        network,
     );
     // The lifecycle spans go to the service from here on; without a client
     // they are dropped, and teammates are still hosted.
@@ -189,6 +195,8 @@ struct Shared<EngineImpl> {
     store: Store,
     platform: Platform,
     seccomp_profile: PathBuf,
+    /// A local stack's network every container also joins (development).
+    network: Option<engine::TeammateNetwork>,
     statuses: broadcast::Sender<Status>,
     latest: Mutex<BTreeMap<TeammateInstallId, Status>>,
     /// The last engine check.
@@ -209,6 +217,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
         store: Store,
         platform: Platform,
         seccomp_profile: PathBuf,
+        network: Option<engine::TeammateNetwork>,
     ) -> Self {
         let (statuses, _) = broadcast::channel(64);
         let shared = Arc::new(Shared {
@@ -216,6 +225,7 @@ impl<EngineImpl: Engine> Teammates<EngineImpl> {
             store,
             platform,
             seccomp_profile,
+            network,
             statuses,
             latest: Mutex::new(BTreeMap::new()),
             host: Mutex::new(None),
@@ -620,6 +630,7 @@ fn spawn_supervisor<EngineImpl: Engine>(
     let supervision = Supervision {
         credentials_file: shared.store.credentials_file(&stored.install.install_id),
         seccomp_profile: shared.seccomp_profile.clone(),
+        network: shared.network.clone(),
         install: stored.install,
         image: stored.image,
         resume,

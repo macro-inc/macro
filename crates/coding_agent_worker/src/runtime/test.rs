@@ -8,6 +8,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
     Runtime::start(
         &MacroApi {
             egress_url: None,
+            teammate_network: None,
             api_url: format!("http://{}", listener.local_addr().unwrap()),
             storage_url: "http://unused".to_owned(),
             web_url: "http://unused".to_owned(),
@@ -202,6 +203,7 @@ async fn the_agent_starts_while_the_runtime_dials() {
     let _runtime = Runtime::start(
         &MacroApi {
             egress_url: None,
+            teammate_network: None,
             api_url: format!("http://{}", listener.local_addr().unwrap()),
             storage_url: "http://unused".to_owned(),
             web_url: "http://unused".to_owned(),

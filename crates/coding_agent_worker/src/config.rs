@@ -120,12 +120,18 @@ pub struct MacroApi {
     pub storage_url: String,
     /// Base URL of the Macro web app, used for the pairing and settings links.
     pub web_url: String,
+    /// Local stack only: a Docker network (`macro-<instance>_services`) every
+    /// hosted teammate's container also joins, so the agent reaches the
+    /// stack's services by their in-network names. Never set elsewhere.
+    #[serde(default)]
+    pub teammate_network: Option<String>,
 }
 
 impl Default for MacroApi {
     fn default() -> Self {
         Self {
             egress_url: None,
+            teammate_network: None,
             api_url: "https://gateway.macro.com/agent-harness".to_owned(),
             storage_url: "https://gateway.macro.com/dss".to_owned(),
             web_url: "https://macro.com/app".to_owned(),

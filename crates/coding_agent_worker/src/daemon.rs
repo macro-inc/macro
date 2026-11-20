@@ -84,6 +84,7 @@ fn host_teammates(
             ),
             token: credentials.token.clone(),
         },
+        macro_api.teammate_network.as_deref(),
     )
     .inspect_err(|error| tracing::warn!(error = ?error, "could not set up hosting teammates"))
     .ok()

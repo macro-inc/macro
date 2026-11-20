@@ -41,6 +41,8 @@ pub struct Supervision {
     pub credentials_file: PathBuf,
     /// The teammate seccomp profile on the host.
     pub seccomp_profile: PathBuf,
+    /// A local stack's network the container also joins (development).
+    pub network: Option<super::engine::TeammateNetwork>,
     /// Whether macrod restarted and resumes this kept delivery (adopting
     /// its container if it still runs), rather than starting a new one.
     pub resume: bool,
@@ -479,6 +481,7 @@ async fn start<EngineImpl: Engine>(
             credentials_file: supervision.credentials_file.clone(),
             seccomp_profile: supervision.seccomp_profile.clone(),
             previous_exit,
+            extra_network: supervision.network.clone(),
         })
         .await?;
     Ok(previous_exit)

@@ -40,6 +40,20 @@ fn a_partial_macro_table_overrides_only_its_keys() {
 }
 
 #[test]
+fn a_local_stack_names_the_teammate_network_and_production_none() {
+    let config: Config = toml::from_str(&format!(
+        "{DEFAULT}\n[macro]\nteammate_network = \"macro-wolf_services\"\n"
+    ))
+    .expect("a teammate network parses");
+    assert_eq!(
+        config.macro_api.teammate_network.as_deref(),
+        Some("macro-wolf_services")
+    );
+    let production: Config = toml::from_str(DEFAULT).unwrap();
+    assert_eq!(production.macro_api.teammate_network, None);
+}
+
+#[test]
 fn embedded_credentials_parse() {
     let with_credentials = format!(
         "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\n",
@@ -154,6 +168,7 @@ fn harness_env_is_optional() {
 fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
     let local = MacroApi {
         egress_url: None,
+        teammate_network: None,
         api_url: "http://localhost:50009/agent-harness".to_owned(),
         storage_url: "http://localhost:50009/dss".to_owned(),
         web_url: "http://localhost:3000/app".to_owned(),
@@ -165,6 +180,7 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
 
     let secure = MacroApi {
         egress_url: None,
+        teammate_network: None,
         api_url: "https://gateway.macro.com/agent-harness/".to_owned(),
         storage_url: "https://gateway.macro.com/dss".to_owned(),
         web_url: "https://macro.com/app/".to_owned(),

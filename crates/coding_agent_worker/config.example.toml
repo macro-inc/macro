@@ -18,6 +18,9 @@
 # api_url = "http://localhost:50009/agent-harness"
 # # Base URL of the storage service (harness pairing + live event stream).
 # storage_url = "http://localhost:50009/dss"
+# # Local stack only: the stack's Docker network every hosted teammate's
+# # container also joins (needs Docker Engine 25 or Podman).
+# teammate_network = "macro-<instance>_services"
 # # Base URL of the Macro web app, used for the pairing and settings links.
 # web_url = "http://localhost:3000/app"
 
