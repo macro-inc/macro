@@ -1394,6 +1394,42 @@ describe('cached channel directory', () => {
     });
   });
 
+  it('never calls the rows of a fallback waiting on by-id reads complete as the storage resets', async () => {
+    let walks = 0;
+    const { directory, hydrate, pageAll, resetStorage } = mountCachedDirectory(
+      [channelRecord('a')],
+      {
+        // The reads that would decide the listed channels never answer.
+        byIdGate: new Promise(() => {}),
+        pageAll: async (signal) => {
+          walks += 1;
+          if (walks === 1)
+            return [
+              directoryChannel('a'),
+              directoryChannel('gone', { channelType: 'private' }),
+            ];
+          return new Promise((_, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason))
+          );
+        },
+      }
+    );
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() =>
+      expect(ids(directory.channels()).sort()).toEqual(['a', 'gone'])
+    );
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
+    const seen = recordStates(directory);
+
+    resetStorage('g2');
+
+    await vi.waitFor(() => expect(pageAll).toHaveBeenCalledTimes(2));
+    await new Promise((done) => setTimeout(done, 50));
+    expect(seen.length).toBeGreaterThan(1);
+    expect(seen.filter(({ complete }) => complete)).toEqual([]);
+    expect(directory.failed()).toBe(false);
+  });
+
   it('pages the network again when the storage resets under the fallback', async () => {
     const { directory, pageAll, resetStorage } = mountCachedDirectory(
       [channelRecord('a')],

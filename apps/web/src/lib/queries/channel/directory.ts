@@ -313,16 +313,20 @@ function createViewStamps() {
   };
 }
 
+function sameIds(
+  a: Readonly<Record<string, true>>,
+  b: Readonly<Record<string, true>>
+) {
+  const ids = Object.keys(a);
+  return ids.length === Object.keys(b).length && ids.every((id) => b[id]);
+}
+
 function sameState(a: ChannelDirectoryState, b: ChannelDirectoryState) {
   if (a.complete !== b.complete) return false;
   const aIds = Object.keys(a.records);
   if (aIds.length !== Object.keys(b.records).length) return false;
   if (aIds.some((id) => a.records[id] !== b.records[id])) return false;
-  const aIncomplete = Object.keys(a.incomplete);
-  return (
-    aIncomplete.length === Object.keys(b.incomplete).length &&
-    aIncomplete.every((id) => b.incomplete[id])
-  );
+  return sameIds(a.incomplete, b.incomplete);
 }
 
 type UrqlQuery = Pick<Client, 'query'>;
@@ -758,6 +762,18 @@ type LaneFallback =
   | { status: 'loaded'; channels: readonly DirectoryChannel[] }
   | { status: 'failed' };
 
+/** What the cached directory shows, written at once so that no reader pairs
+ * one part with another's older value. */
+type ShownDirectory = {
+  state: ChannelDirectoryState;
+  /** The fallback's status `state` was built for. */
+  fallback: LaneFallback['status'];
+  /** The channels the fallback waits on a by-id read to decide, by id. */
+  unconfirmed: Readonly<Record<string, true>>;
+};
+
+const NO_IDS: Readonly<Record<string, true>> = {};
+
 /** Why the directory paged the network itself. */
 type FallbackReason =
   | 'lane_failed'
@@ -882,15 +898,21 @@ export function createCachedChannelDirectory(
 ): ChannelDirectory {
   const { host, userId } = deps;
   const index = createChannelDirectoryIndex(host);
-  const [state, setState] = createSignal(EMPTY_CHANNEL_DIRECTORY_STATE);
+  // Written only by `render`. One signal, not a store: the records hold
+  // thousands of channels, which a store would wrap field by field.
+  const [shown, setShown] = createSignal<ShownDirectory>({
+    state: EMPTY_CHANNEL_DIRECTORY_STATE,
+    fallback: 'idle',
+    unconfirmed: NO_IDS,
+  });
+  const state = createMemo(() => shown().state);
   const views = createViewStamps();
   const view = createMemo(() => views.apply(state()));
   // Cached records older than a recorded view that the view was written
   // over again: a soup page read before the view can overwrite it.
   const restamped = new WeakSet<DirectoryChannel>();
-  const [fallback, setFallback] = createSignal<LaneFallback>({
-    status: 'idle',
-  });
+  // Shown with the rows it gives once `render` runs.
+  let fallback: LaneFallback = { status: 'idle' };
   const controller = new AbortController();
   onCleanup(() => controller.abort());
   // The network walk the fallback is waiting on, aborted when it stops.
@@ -963,24 +985,49 @@ export function createCachedChannelDirectory(
     { onSettle: () => renderConfirmed() }
   );
   // The channels the network fallback decides by a by-id read, as of the
-  // last read of the cache, and how many of them no read has decided yet.
+  // last read of the cache.
   let confirmations: string[] | undefined;
-  const [unconfirmed, setUnconfirmed] = createSignal(0);
+
+  /** Publishes what `render` built with the fallback's status, keeping each
+   * part that did not change. */
+  const show = (
+    next: ChannelDirectoryState,
+    unconfirmed: Readonly<Record<string, true>>
+  ) => {
+    const current = untrack(shown);
+    const nextState = sameState(current.state, next) ? current.state : next;
+    const nextUnconfirmed = sameIds(current.unconfirmed, unconfirmed)
+      ? current.unconfirmed
+      : unconfirmed;
+    if (
+      nextState === current.state &&
+      nextUnconfirmed === current.unconfirmed &&
+      current.fallback === fallback.status
+    )
+      return;
+    setShown({
+      state: nextState,
+      fallback: fallback.status,
+      unconfirmed: nextUnconfirmed,
+    });
+  };
 
   /** Shows the last read and, once the network's channels loaded, those
    * channels as the evidence since leaves them. A render after by-id reads
    * settled (`settle`) reuses the confirmations the last read chose. */
   const render = (settle = false) => {
-    const network = untrack(fallback);
+    const network = fallback;
     if (network.status !== 'loaded') {
-      const next = lastRead
-        ? channelDirectoryState(
-            lastRead.channels,
-            lastRead.incompleteIds,
-            lane.complete
-          )
-        : EMPTY_CHANNEL_DIRECTORY_STATE;
-      if (!sameState(untrack(state), next)) setState(next);
+      show(
+        lastRead
+          ? channelDirectoryState(
+              lastRead.channels,
+              lastRead.incompleteIds,
+              lane.complete
+            )
+          : EMPTY_CHANNEL_DIRECTORY_STATE,
+        NO_IDS
+      );
       return;
     }
     const evidence: FallbackEvidence = {
@@ -1000,16 +1047,12 @@ export function createCachedChannelDirectory(
         generation === undefined
           ? []
           : fallbackConfirmations(network.channels, evidence);
-    const open = confirmations.filter(
-      (id) =>
-        evidence.confirmed[id] !== 'returned' &&
-        evidence.confirmed[id] !== 'absent'
-    ).length;
-    // `complete` reads both, so it never pairs one with the other's old value.
-    batch(() => {
-      setUnconfirmed(open);
-      if (!sameState(untrack(state), next)) setState(next);
-    });
+    const open: Record<string, true> = {};
+    for (const id of confirmations) {
+      const outcome = evidence.confirmed[id];
+      if (outcome !== 'returned' && outcome !== 'absent') open[id] = true;
+    }
+    show(next, open);
     if (settle) return;
     for (const id of confirmations) confirm.request(id);
   };
@@ -1044,8 +1087,9 @@ export function createCachedChannelDirectory(
     confirm.renew(changed.filter((id) => confirmed[id] === 'absent'));
   };
 
+  /** Stops showing the network's channels from the caller's next render. */
   const stopFallback = () => {
-    if (untrack(fallback).status === 'idle') return;
+    if (fallback.status === 'idle') return;
     walk?.abort();
     walk = undefined;
     fallbackRun += 1;
@@ -1054,7 +1098,7 @@ export function createCachedChannelDirectory(
     seen = undefined;
     confirmations = undefined;
     confirm.reset();
-    setFallback({ status: 'idle' });
+    fallback = { status: 'idle' };
   };
 
   const stampView = (channelId: string, viewedAt: string) =>
@@ -1145,18 +1189,17 @@ export function createCachedChannelDirectory(
         // the rest wait for a by-id read.
         await refresh();
         if (signal.aborted || run !== fallbackRun) return;
-        batch(() => {
-          setFallback({ status: 'loaded', channels });
-          render();
-        });
+        fallback = { status: 'loaded', channels };
+        render();
       } catch (error) {
         if (signal.aborted || run !== fallbackRun) return;
         Telemetry.error(error, { surface: 'channel-directory-fallback' });
-        setFallback({ status: 'failed' });
+        fallback = { status: 'failed' };
+        render();
       }
     });
   const startFallback = (reason: FallbackReason) => {
-    if (untrack(fallback).status !== 'idle') return;
+    if (fallback.status !== 'idle') return;
     fallbackRun += 1;
     // Changes from here on are at least as new as the pages it reads.
     observed = recordsById(lastRead);
@@ -1164,7 +1207,8 @@ export function createCachedChannelDirectory(
     seen = new Set(observed.keys());
     confirmations = undefined;
     confirm.reset();
-    setFallback({ status: 'loading' });
+    fallback = { status: 'loading' };
+    render();
     walk?.abort();
     walk = new AbortController();
     // Never rejects: a failed read is reported inside.
@@ -1177,7 +1221,7 @@ export function createCachedChannelDirectory(
   /** Pages the network again from what the cache holds now, when what the
    * fallback saw of the cache went away with its storage or its viewer. */
   const restartFallback = () => {
-    if (untrack(fallback).status === 'idle') return;
+    if (fallback.status === 'idle') return;
     stopFallback();
     startFallback('scope_changed');
   };
@@ -1190,12 +1234,14 @@ export function createCachedChannelDirectory(
     const changed = adopted !== undefined && adopted !== (scope ?? null);
     adopted = scope ?? null;
     generation = scope;
-    if (changed) {
-      reader.reset();
-      // What was read, and seen since, was of the cache in other hands.
-      lastRead = undefined;
-      restartFallback();
-    }
+    if (changed)
+      batch(() => {
+        reader.reset();
+        // What was read, and seen since, was of the cache in other hands.
+        lastRead = undefined;
+        restartFallback();
+        render();
+      });
     if (scope === undefined) {
       // Another viewer's cache: nothing in it is this viewer's.
       lane = LANE_NOT_STARTED;
@@ -1290,12 +1336,14 @@ export function createCachedChannelDirectory(
         generation = undefined;
         lane = LANE_NOT_STARTED;
         lastRead = undefined;
-        // What a by-id read wrote into the old one is gone, and the fallback
-        // saw the old one.
-        reader.reset();
         adopted = undefined;
-        restartFallback();
-        render();
+        batch(() => {
+          // What a by-id read wrote into the old one is gone, and the
+          // fallback saw the old one.
+          reader.reset();
+          restartFallback();
+          render();
+        });
       }
       refreshNow();
     })
@@ -1319,9 +1367,9 @@ export function createCachedChannelDirectory(
   // listed only once its by-id read lands it. The network's pages prove the
   // channels the cache vouches for, and by-id reads decide the rest.
   const proven = createMemo(() => {
-    const current = state();
+    const { state: current, fallback: status, unconfirmed } = shown();
     if (!current.complete) return false;
-    if (fallback().status === 'loaded') return unconfirmed() === 0;
+    if (status === 'loaded') return Object.keys(unconfirmed).length === 0;
     const outcomes = reader.outcomes();
     for (const id of Object.keys(current.incomplete)) {
       // Never read: no channel has it.
@@ -1344,10 +1392,13 @@ export function createCachedChannelDirectory(
       if (untrack(proven)) return untrack(view).joined;
       return views.applyList(await deps.fetchAll());
     },
-    failed: () => !state().complete && fallback().status === 'failed',
+    failed: () => {
+      const { state: current, fallback: status } = shown();
+      return !current.complete && status === 'failed';
+    },
     retry() {
-      if (untrack(fallback).status !== 'failed') return;
-      setFallback({ status: 'idle' });
+      if (fallback.status !== 'failed') return;
+      fallback = { status: 'idle' };
       startFallback('retry');
     },
     recordView(channelId, viewedAt) {
