@@ -289,6 +289,16 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
+  // The create dialog offers a built-in property only where it applies, so it
+  // needs the entity type when every selected entity shares one. A host with
+  // no selection (a draft) supplies it through its properties context.
+  const selectedEntityType = () => {
+    const [first, ...rest] = props.state.selectedEntities.map(
+      propertyEditorEntityType
+    );
+    return rest.every((type) => type === first) ? first : undefined;
+  };
+
   let searchInput: HTMLInputElement | undefined;
   /**
    * The create dialog takes focus with it when it closes, and the next keys
@@ -500,6 +510,7 @@ export function PropertyEditorDialog(props: {
           <CreatePropertyModal
             isOpen
             initialName={initialName()}
+            entityType={selectedEntityType()}
             autoPinOnCreate={false}
             onClose={closeCreateProperty}
             onPropertyCreated={handlePropertyCreated}
