@@ -190,7 +190,10 @@ impl McpEventEnqueuer for SqsWebhookQueue {
 /// delivery.
 fn prepare_mcp_message(message: &McpEventQueueMessage) -> anyhow::Result<PreparedWebhookMessage> {
     let group_id = format!("mcp:{}", message.mcp_subscription_id);
-    let deduplication_id = format!("mcp:{}:{}", message.mcp_subscription_id, message.event.event_id);
+    let deduplication_id = format!(
+        "mcp:{}:{}",
+        message.mcp_subscription_id, message.event.event_id
+    );
     let body = serde_json::to_string(message).context("unable to serialize mcp queue message")?;
     Ok(PreparedWebhookMessage {
         body,

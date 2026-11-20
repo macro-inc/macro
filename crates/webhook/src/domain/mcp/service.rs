@@ -356,9 +356,7 @@ where
             McpDeliveryOutcome::Permanent => Attempt::Permanent,
             McpDeliveryOutcome::Retryable(failure) => {
                 tracing::info!(reason = %failure, "mcp event delivery failed; retrying");
-                Attempt::Retry(
-                    retry_delay(receive_count).unwrap_or(INTERNAL_RETRY_DELAY),
-                )
+                Attempt::Retry(retry_delay(receive_count).unwrap_or(INTERNAL_RETRY_DELAY))
             }
         }
     }

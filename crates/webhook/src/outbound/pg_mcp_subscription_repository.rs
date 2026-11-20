@@ -40,7 +40,10 @@ struct SubscriptionRow {
     expires_at: DateTime<Utc>,
 }
 
-fn decode_error(column: &str, source: impl std::error::Error + Send + Sync + 'static) -> sqlx::Error {
+fn decode_error(
+    column: &str,
+    source: impl std::error::Error + Send + Sync + 'static,
+) -> sqlx::Error {
     sqlx::Error::ColumnDecode {
         index: column.to_owned(),
         source: Box::new(source),
@@ -73,8 +76,12 @@ impl TryFrom<SubscriptionRow> for McpEventSubscription {
     }
 }
 
-fn into_subscriptions(rows: Vec<SubscriptionRow>) -> Result<Vec<McpEventSubscription>, sqlx::Error> {
-    rows.into_iter().map(McpEventSubscription::try_from).collect()
+fn into_subscriptions(
+    rows: Vec<SubscriptionRow>,
+) -> Result<Vec<McpEventSubscription>, sqlx::Error> {
+    rows.into_iter()
+        .map(McpEventSubscription::try_from)
+        .collect()
 }
 
 impl McpSubscriptionRepo for PgMcpSubscriptionRepository {

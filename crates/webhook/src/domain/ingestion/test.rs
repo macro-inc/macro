@@ -2238,8 +2238,7 @@ async fn mcp_fan_out_failure_is_transient() {
         fail: true,
         ..RecordingMcpFanout::default()
     };
-    let service =
-        service(access, repository, MockEnqueuer::default()).with_mcp_fanout(mcp);
+    let service = service(access, repository, MockEnqueuer::default()).with_mcp_fanout(mcp);
 
     let error = service
         .ingest_document_event(document_event)

@@ -134,21 +134,30 @@ impl McpEndpointClient for ReqwestWebhookValidationClient {
         secret: &SigningSecret,
         subscription_id: &McpSubscriptionId,
     ) -> Result<(), McpEndpointVerifyError> {
-        let url = self.resolve(endpoint_url).await.map_err(|error| match error {
-            EndpointValidationError::InvalidConfiguration(message) => {
-                McpEndpointVerifyError::InvalidUrl(message)
-            }
-            EndpointValidationError::ResolutionFailure(_) => {
-                McpEndpointVerifyError::Failed(McpEndpointFailure::ConnectionRefused)
-            }
-        })?;
+        let url = self
+            .resolve(endpoint_url)
+            .await
+            .map_err(|error| match error {
+                EndpointValidationError::InvalidConfiguration(message) => {
+                    McpEndpointVerifyError::InvalidUrl(message)
+                }
+                EndpointValidationError::ResolutionFailure(_) => {
+                    McpEndpointVerifyError::Failed(McpEndpointFailure::ConnectionRefused)
+                }
+            })?;
         let challenge = new_challenge();
         let body = serde_json::to_vec(&McpControlEnvelope::Verification {
             challenge: challenge.clone(),
         })
         .map_err(|_| McpEndpointVerifyError::Failed(McpEndpointFailure::ChallengeFailed))?;
         let response = self
-            .post_signed(url, secret, subscription_id, &verification_message_id(), body)
+            .post_signed(
+                url,
+                secret,
+                subscription_id,
+                &verification_message_id(),
+                body,
+            )
             .await
             .map_err(McpEndpointVerifyError::Failed)?;
         let status = response.status();

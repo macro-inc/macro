@@ -105,14 +105,20 @@ impl McpEventSubscriptionService for FakeService {
             .push(Call::Subscribe(user_id.as_ref().to_owned(), request));
         Ok(McpSubscribeResult {
             id: McpSubscriptionId::from_stored("sub_1".to_owned()),
-            refresh_before: Utc.with_ymd_and_hms(2026, 1, 1, 0, 0, 0).single().expect("valid"),
+            refresh_before: Utc
+                .with_ymd_and_hms(2026, 1, 1, 0, 0, 0)
+                .single()
+                .expect("valid"),
             filter,
         })
     }
 
     async fn unsubscribe(&self, key: McpSubscriptionKey) -> Result<(), McpSubscriptionError> {
         self.take_error()?;
-        self.calls.lock().expect("lock").push(Call::Unsubscribe(key));
+        self.calls
+            .lock()
+            .expect("lock")
+            .push(Call::Unsubscribe(key));
         Ok(())
     }
 }
@@ -231,7 +237,10 @@ async fn only_the_internal_key_with_an_acting_user_is_admitted() {
         service.clone(),
         "PUT",
         MCP_EVENT_SUBSCRIPTIONS_PATH,
-        &[(INTERNAL_API_KEY_HEADER, "nope"), (INTERNAL_MACRO_USER_ID_HEADER, USER)],
+        &[
+            (INTERNAL_API_KEY_HEADER, "nope"),
+            (INTERNAL_MACRO_USER_ID_HEADER, USER),
+        ],
         subscribe_body(),
     )
     .await;

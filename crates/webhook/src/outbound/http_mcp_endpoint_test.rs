@@ -92,7 +92,8 @@ async fn verification_fails_on_a_wrong_or_missing_echo() {
     )
     .await;
     let empty = server_answering(ResponseTemplate::new(204)).await;
-    let huge = server_answering(ResponseTemplate::new(200).set_body_string("x".repeat(10_000))).await;
+    let huge =
+        server_answering(ResponseTemplate::new(200).set_body_string("x".repeat(10_000))).await;
     for server in [wrong, empty, huge] {
         assert_eq!(
             client()
@@ -129,7 +130,11 @@ async fn verification_failures_are_categorised() {
     };
     assert_eq!(
         client()
-            .verify(&format!("http://{closed}/hook"), &secret(), &subscription_id())
+            .verify(
+                &format!("http://{closed}/hook"),
+                &secret(),
+                &subscription_id()
+            )
             .await,
         Err(McpEndpointVerifyError::Failed(
             McpEndpointFailure::ConnectionRefused
@@ -185,12 +190,24 @@ async fn delivery_outcomes_follow_the_status() {
     for (status, expected) in [
         (410, McpDeliveryOutcome::Permanent),
         (413, McpDeliveryOutcome::Permanent),
-        (429, McpDeliveryOutcome::Retryable(McpEndpointFailure::Http4xx)),
-        (500, McpDeliveryOutcome::Retryable(McpEndpointFailure::Http5xx)),
+        (
+            429,
+            McpDeliveryOutcome::Retryable(McpEndpointFailure::Http4xx),
+        ),
+        (
+            500,
+            McpDeliveryOutcome::Retryable(McpEndpointFailure::Http5xx),
+        ),
     ] {
         let server = server_answering(ResponseTemplate::new(status)).await;
         let outcome = client()
-            .deliver(&server.uri(), &secret(), &subscription_id(), "msg_1", Vec::new())
+            .deliver(
+                &server.uri(),
+                &secret(),
+                &subscription_id(),
+                "msg_1",
+                Vec::new(),
+            )
             .await;
         assert_eq!(outcome, expected, "status {status}");
     }
@@ -198,7 +215,13 @@ async fn delivery_outcomes_follow_the_status() {
     let https_only = ReqwestWebhookValidationClient::new().expect("client builds");
     assert_eq!(
         https_only
-            .deliver("http://example.com/hook", &secret(), &subscription_id(), "msg_1", Vec::new())
+            .deliver(
+                "http://example.com/hook",
+                &secret(),
+                &subscription_id(),
+                "msg_1",
+                Vec::new()
+            )
             .await,
         McpDeliveryOutcome::Permanent
     );

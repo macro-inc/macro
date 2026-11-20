@@ -32,7 +32,12 @@ fn document() -> MessageParent {
 
 /// The broker envelope webhooks deliver for a mention, serialized from the
 /// real event types so the filter's paths follow the contract.
-fn mentioned(parent: MessageParent, author: &str, entity_type: &str, entity_id: &str) -> serde_json::Value {
+fn mentioned(
+    parent: MessageParent,
+    author: &str,
+    entity_type: &str,
+    entity_id: &str,
+) -> serde_json::Value {
     let event = Event::with_schema_version(
         MessageTopicEvent::Mentioned(MessageMentionedMetadata {
             parent,
@@ -120,7 +125,12 @@ fn channel_mentions_of_me_match_only_channel_mentions_of_me() {
 fn me_is_the_subscriber_not_a_fixed_user() {
     let filter = my_channel_mentions();
     let envelope = mentioned(channel(), ME, "user", OTHER);
-    assert!(filter.matches("message.mentioned", &CHANNEL_ID.to_string(), &envelope, OTHER));
+    assert!(filter.matches(
+        "message.mentioned",
+        &CHANNEL_ID.to_string(),
+        &envelope,
+        OTHER
+    ));
 }
 
 #[test]

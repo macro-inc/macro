@@ -39,7 +39,13 @@ async fn setup(pool: &PgPool) -> anyhow::Result<PgMcpSubscriptionRepository> {
     Ok(PgMcpSubscriptionRepository::new(pool.clone()))
 }
 
-fn upsert(user_id: &str, url: &str, query: &str, events: &[&str], expires_in: Duration) -> McpSubscriptionUpsert {
+fn upsert(
+    user_id: &str,
+    url: &str,
+    query: &str,
+    events: &[&str],
+    expires_in: Duration,
+) -> McpSubscriptionUpsert {
     let key = McpSubscriptionKey {
         user_id: user(user_id),
         endpoint_url: url.to_owned(),
@@ -63,7 +69,13 @@ fn upsert(user_id: &str, url: &str, query: &str, events: &[&str], expires_in: Du
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    let first = upsert(ME, URL, "mentions", &["message.mentioned"], Duration::hours(1));
+    let first = upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    );
     let stored = repo.upsert(first.clone()).await?;
     assert_eq!(stored.id, first.id);
     assert_eq!(stored.subscription_id, first.subscription_id);
@@ -101,13 +113,29 @@ async fn upsert_inserts_then_refreshes_in_place(pool: PgPool) -> anyhow::Result<
 async fn expired_rows_are_not_live(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
     let expired = repo
-        .upsert(upsert(ME, URL, "old", &["message.posted"], -Duration::minutes(1)))
+        .upsert(upsert(
+            ME,
+            URL,
+            "old",
+            &["message.posted"],
+            -Duration::minutes(1),
+        ))
         .await?;
     let live = repo
-        .upsert(upsert(ME, URL, "new", &["message.posted"], Duration::hours(1)))
+        .upsert(upsert(
+            ME,
+            URL,
+            "new",
+            &["message.posted"],
+            Duration::hours(1),
+        ))
         .await?;
 
-    assert!(repo.get(&user(ME), &expired.subscription_id).await?.is_some());
+    assert!(
+        repo.get(&user(ME), &expired.subscription_id)
+            .await?
+            .is_some()
+    );
     assert_eq!(repo.get_live(expired.id).await?, None);
     assert_eq!(repo.get_live(live.id).await?, Some(live.clone()));
     assert_eq!(repo.count_live(&user(ME)).await?, 1);
@@ -117,7 +145,11 @@ async fn expired_rows_are_not_live(pool: PgPool) -> anyhow::Result<()> {
     assert_eq!(matching, vec![live.clone()]);
 
     assert_eq!(repo.delete_expired(&user(ME)).await?, 1);
-    assert!(repo.get(&user(ME), &expired.subscription_id).await?.is_none());
+    assert!(
+        repo.get(&user(ME), &expired.subscription_id)
+            .await?
+            .is_none()
+    );
     assert_eq!(repo.delete_expired(&user(ME)).await?, 0);
     Ok(())
 }
@@ -126,7 +158,13 @@ async fn expired_rows_are_not_live(pool: PgPool) -> anyhow::Result<()> {
 async fn delete_is_scoped_to_the_user(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
     let mine = repo
-        .upsert(upsert(ME, URL, "mentions", &["message.mentioned"], Duration::hours(1)))
+        .upsert(upsert(
+            ME,
+            URL,
+            "mentions",
+            &["message.mentioned"],
+            Duration::hours(1),
+        ))
         .await?;
     assert!(!repo.delete(&user(OTHER), &mine.subscription_id).await?);
     assert!(repo.delete(&user(ME), &mine.subscription_id).await?);
@@ -137,8 +175,14 @@ async fn delete_is_scoped_to_the_user(pool: PgPool) -> anyhow::Result<()> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
-    repo.upsert(upsert(ME, URL, "mentions", &["message.mentioned"], Duration::hours(1)))
-        .await?;
+    repo.upsert(upsert(
+        ME,
+        URL,
+        "mentions",
+        &["message.mentioned"],
+        Duration::hours(1),
+    ))
+    .await?;
     repo.upsert(upsert(
         ME,
         "https://hooks.example.com/expired",
@@ -166,15 +210,30 @@ async fn live_endpoint_is_per_user_and_url(pool: PgPool) -> anyhow::Result<()> {
 async fn matching_reads_only_the_audience(pool: PgPool) -> anyhow::Result<()> {
     let repo = setup(&pool).await?;
     let mine = repo
-        .upsert(upsert(ME, URL, "mentions", &["message.mentioned"], Duration::hours(1)))
+        .upsert(upsert(
+            ME,
+            URL,
+            "mentions",
+            &["message.mentioned"],
+            Duration::hours(1),
+        ))
         .await?;
     let theirs = repo
-        .upsert(upsert(OTHER, URL, "mentions", &["message.mentioned"], Duration::hours(1)))
+        .upsert(upsert(
+            OTHER,
+            URL,
+            "mentions",
+            &["message.mentioned"],
+            Duration::hours(1),
+        ))
         .await?;
 
     let only_me = repo
         .list_live_matching(
-            vec![ME.to_owned(), "11111111-1111-1111-1111-111111111111".to_owned()],
+            vec![
+                ME.to_owned(),
+                "11111111-1111-1111-1111-111111111111".to_owned(),
+            ],
             "message.mentioned",
         )
         .await?;

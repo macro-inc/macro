@@ -54,7 +54,10 @@ impl McpSubscriptionId {
         .to_string();
         let digest = Sha256::digest(serialized.as_bytes());
         let truncated = digest.get(..SUBSCRIPTION_ID_DIGEST_BYTES).unwrap_or(&[]);
-        Self(format!("{SUBSCRIPTION_ID_PREFIX}{}", hex::encode(truncated)))
+        Self(format!(
+            "{SUBSCRIPTION_ID_PREFIX}{}",
+            hex::encode(truncated)
+        ))
     }
 
     /// Wrap an id read back from storage.

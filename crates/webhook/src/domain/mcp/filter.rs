@@ -268,19 +268,28 @@ impl McpFilterClause {
         Ok(())
     }
 
-    fn matches(&self, event: &str, entity_id: &str, envelope: &serde_json::Value, me: &str) -> bool {
+    fn matches(
+        &self,
+        event: &str,
+        entity_id: &str,
+        envelope: &serde_json::Value,
+        me: &str,
+    ) -> bool {
         self.events.iter().any(|name| name == event)
             && self
                 .ids
                 .as_ref()
                 .is_none_or(|ids| ids.iter().any(|id| id == entity_id))
             && self.all_of.iter().all(|condition| {
-                condition.field.value(event, envelope).is_some_and(|actual| {
-                    condition.one_of.iter().any(|accepted| match accepted {
-                        McpFilterValue::Literal { value } => value == actual,
-                        McpFilterValue::Me => me == actual,
+                condition
+                    .field
+                    .value(event, envelope)
+                    .is_some_and(|actual| {
+                        condition.one_of.iter().any(|accepted| match accepted {
+                            McpFilterValue::Literal { value } => value == actual,
+                            McpFilterValue::Me => me == actual,
+                        })
                     })
-                })
             })
     }
 }

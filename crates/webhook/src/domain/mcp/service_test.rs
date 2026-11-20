@@ -3,8 +3,7 @@ use crate::domain::mcp::filter::{
     McpEventFilter, McpFieldCondition, McpFilterClause, McpFilterField, McpFilterValue,
 };
 use crate::domain::mcp::models::{
-    McpEndpointFailure, McpEventSubscription, McpSecretCiphertext, McpSubscriptionId,
-    McpTtlRequest,
+    McpEndpointFailure, McpEventSubscription, McpSecretCiphertext, McpSubscriptionId, McpTtlRequest,
 };
 use chrono::{DateTime, Utc};
 use std::sync::{Arc, Mutex};
@@ -135,7 +134,11 @@ impl McpSubscriptionRepo for FakeRepo {
             .into_iter()
             .filter(|row| {
                 user_ids.iter().any(|id| id == row.user_id.as_ref())
-                    && row.filter.event_names().iter().any(|name| name == event_name)
+                    && row
+                        .filter
+                        .event_names()
+                        .iter()
+                        .any(|name| name == event_name)
                     && row.is_live(now)
             })
             .collect())
@@ -301,7 +304,10 @@ async fn subscribe_verifies_once_and_refresh_keeps_the_filter() {
     let service = service(&repo, &endpoint);
 
     let first = service
-        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await
         .expect("subscribed");
     assert!(first.refresh_before > Utc::now());
@@ -338,7 +344,10 @@ async fn an_invalid_filter_is_refused_before_the_endpoint_is_called() {
     let result = service(&repo, &endpoint)
         .subscribe(user(ME), request("email", Some(filter)))
         .await;
-    assert!(matches!(result, Err(McpSubscriptionError::InvalidParams(_))));
+    assert!(matches!(
+        result,
+        Err(McpSubscriptionError::InvalidParams(_))
+    ));
     assert_eq!(endpoint.verify_count(), 0);
 }
 
@@ -352,7 +361,10 @@ async fn a_failed_challenge_stores_nothing() {
         ..FakeEndpoint::accepting()
     };
     let result = service(&repo, &endpoint)
-        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await;
     assert!(matches!(
         result,
@@ -420,7 +432,10 @@ async fn unsubscribe_removes_by_key() {
     let endpoint = FakeEndpoint::accepting();
     let service = service(&repo, &endpoint);
     let made = service
-        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await
         .expect("subscribed");
     let key = McpSubscriptionKey {
@@ -472,11 +487,17 @@ async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
     let endpoint = FakeEndpoint::accepting();
     let subscriptions = service(&repo, &endpoint);
     subscriptions
-        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await
         .expect("subscribed");
     subscriptions
-        .subscribe(user(OTHER), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(OTHER),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await
         .expect("subscribed");
     let queue = FakeQueue::default();
@@ -514,7 +535,10 @@ async fn fan_out_reaches_matching_subscribers_in_the_audience_only() {
 
 async fn subscribed(repo: &FakeRepo) -> McpEventSubscription {
     service(repo, &FakeEndpoint::accepting())
-        .subscribe(user(ME), request("mentions", Some(mentions_of_me_in_channels())))
+        .subscribe(
+            user(ME),
+            request("mentions", Some(mentions_of_me_in_channels())),
+        )
         .await
         .expect("subscribed");
     repo.rows().remove(0)

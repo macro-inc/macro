@@ -425,7 +425,10 @@ impl McpEventDeliveryService for TestMcpDelivery {
     }
 }
 
-fn mcp_raw_message(receipt_handle: &str, receive_count: Option<u32>) -> (McpEventQueueMessage, RawWebhookEventQueueMessage) {
+fn mcp_raw_message(
+    receipt_handle: &str,
+    receive_count: Option<u32>,
+) -> (McpEventQueueMessage, RawWebhookEventQueueMessage) {
     let message = McpEventQueueMessage::new(uuid::Uuid::now_v7(), queue_message("event-1").event);
     let mut raw = raw_message(
         "mcp-1",

@@ -1156,15 +1156,16 @@ async fn run_server() -> anyhow::Result<()> {
         ),
         authorization_state.clone(),
     );
-    let mcp_event_delivery_service = webhook::domain::mcp::service::McpEventDeliveryServiceImpl::new(
-        mcp_subscription_repository.clone(),
-        webhook::outbound::KmsMcpSecretCipher::new(
-            cursor_api_key::cipher::AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
-                &aws_config,
-            )),
-        ),
-        webhook_http_client.clone(),
-    );
+    let mcp_event_delivery_service =
+        webhook::domain::mcp::service::McpEventDeliveryServiceImpl::new(
+            mcp_subscription_repository.clone(),
+            webhook::outbound::KmsMcpSecretCipher::new(
+                cursor_api_key::cipher::AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
+                    &aws_config,
+                )),
+            ),
+            webhook_http_client.clone(),
+        );
 
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
