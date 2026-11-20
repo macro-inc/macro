@@ -3,6 +3,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type ChannelStack,
   channelStacks,
+  keepUnchangedStacks,
   stacksByThread,
 } from '../core/channel-stacks';
 
@@ -16,17 +17,29 @@ export function createChannelNotificationStacks(sources: {
   /** Unread notifications, which the channel loads anyway. */
   unread: Accessor<readonly UnifiedNotification[]>;
 }) {
-  const notDone = createMemo<ChannelStack[]>(() =>
-    channelStacks(
-      (sources.active() ?? []).filter(
-        (notification) => notification.state !== 'done'
-      )
-    )
+  const notDone = createMemo<ChannelStack[]>(
+    (previous) =>
+      keepUnchangedStacks(
+        previous,
+        channelStacks(
+          (sources.active() ?? []).filter(
+            (notification) => notification.state !== 'done'
+          )
+        )
+      ),
+    []
   );
-  const unread = createMemo<ChannelStack[]>(() =>
-    channelStacks(
-      sources.unread().filter((notification) => notification.state === 'unseen')
-    )
+  const unread = createMemo<ChannelStack[]>(
+    (previous) =>
+      keepUnchangedStacks(
+        previous,
+        channelStacks(
+          sources
+            .unread()
+            .filter((notification) => notification.state === 'unseen')
+        )
+      ),
+    []
   );
   const notDoneByThread = createMemo(() => stacksByThread(notDone()));
 

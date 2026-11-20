@@ -1,7 +1,11 @@
 import type { UnifiedNotification } from '@notifications/types';
 import type { NotifEvent } from '@service-notification/generated/schemas';
 import { describe, expect, it } from 'vitest';
-import { channelStacks, stacksByThread } from './channel-stacks';
+import {
+  channelStacks,
+  keepUnchangedStacks,
+  stacksByThread,
+} from './channel-stacks';
 
 function notification(
   id: string,
@@ -146,5 +150,30 @@ describe('stacksByThread', () => {
     expect(index.get('m-jonah')?.root.map((stack) => stack.kind)).toEqual([
       'mention',
     ]);
+  });
+});
+
+describe('keepUnchangedStacks', () => {
+  it('keeps an unchanged stack and replaces a changed one', () => {
+    const before = channelStacks([
+      send('a', 1, 'ana'),
+      reply('b', 2, 'leo', 'root-1'),
+    ]);
+    const after = keepUnchangedStacks(
+      before,
+      channelStacks([
+        send('a', 1, 'ana'),
+        send('c', 3, 'mara'),
+        reply('b', 2, 'leo', 'root-1'),
+      ])
+    );
+
+    const thread = (stacks: typeof before) =>
+      stacks.find((stack) => stack.kind === 'thread');
+    const messages = (stacks: typeof before) =>
+      stacks.find((stack) => stack.kind === 'messages');
+    expect(thread(after)).toBe(thread(before));
+    expect(messages(after)).not.toBe(messages(before));
+    expect(messages(after)?.notifications).toHaveLength(2);
   });
 });

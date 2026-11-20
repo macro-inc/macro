@@ -2,7 +2,10 @@
 // pane whose width the test sets; no network. Marking applies at once, as the
 // notification source's local overrides do.
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
-import { ThreadGutterSlot } from '@channel/Thread/ThreadGutterSlot';
+import {
+  type ThreadGutter,
+  ThreadGutterSlot,
+} from '@channel/Thread/ThreadGutterSlot';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { UnifiedNotification } from '@notifications/types';
 import type { NotifEvent } from '@service-notification/generated/schemas';
@@ -99,11 +102,13 @@ const ROWS: Row[] = [
 
 declare global {
   interface Window {
-    setPaneWidth: (width: number) => void;
+    resizeGutterPane: (width: number) => void;
     /** Messages the channel was asked to scroll to, as `thread/reply`. */
     opened: string[];
     /** Notification ids marked done or read, in order. */
     marked: { kind: 'done' | 'read'; ids: string[] }[];
+    /** A new unseen message notification from Ana. */
+    notify: (id: string, messageId: string) => void;
   }
 }
 window.opened = [];
@@ -111,7 +116,7 @@ window.marked = [];
 
 function Fixture() {
   const [width, setWidth] = createSignal(Number(params.get('pane') ?? '1600'));
-  window.setPaneWidth = setWidth;
+  window.resizeGutterPane = setWidth;
   const [records, setRecords] = createSignal(NOTIFICATIONS);
   const [open, setOpen] = createSignal(true);
   const [view, setView] = createSignal<NotificationListView>('not_done');
@@ -131,14 +136,29 @@ function Fixture() {
       )
     );
   };
-  const gutterFor = (rootId: string) =>
-    stacks.notDoneByThread().has(rootId)
-      ? stackChecksGutter({
-          stacks: () => stacks.notDoneByThread().get(rootId),
-          senderName: (id) => NAMES[id],
-          onDone: (stack) => mark('done', [stack]),
-        })
-      : undefined;
+  window.notify = (id, messageId) =>
+    setRecords((current) => [
+      ...current,
+      notification(id, 10 + current.length, 'ana', 'unseen', {
+        tag: 'channel_message_send',
+        content: { messageId, messageContent: '', channelType: 'public' },
+      }),
+    ]);
+  // One gutter per thread, as the channel keeps them.
+  const gutters = new Map<string, ThreadGutter>();
+  const gutterFor = (rootId: string) => {
+    if (!stacks.notDoneByThread().has(rootId)) return;
+    let gutter = gutters.get(rootId);
+    if (!gutter) {
+      gutter = stackChecksGutter({
+        stacks: () => stacks.notDoneByThread().get(rootId),
+        senderName: (id) => NAMES[id],
+        onDone: (stack) => mark('done', [stack]),
+      });
+      gutters.set(rootId, gutter);
+    }
+    return gutter;
+  };
 
   let pane!: HTMLDivElement;
   const [paneEl, setPaneEl] = createSignal<HTMLElement>();

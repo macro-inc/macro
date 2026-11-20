@@ -140,6 +140,36 @@ export function channelStacks(
   return stacks.sort((a, b) => Date.parse(a.latestAt) - Date.parse(b.latestAt));
 }
 
+/**
+ * `next`, with each stack that has not changed since `previous` kept as the
+ * earlier object, so a list keyed by reference keeps its row (and focus).
+ */
+export function keepUnchangedStacks(
+  previous: readonly ChannelStack[],
+  next: ChannelStack[]
+): ChannelStack[] {
+  const byKey = new Map(previous.map((stack) => [stack.key, stack]));
+  return next.map((stack) => {
+    const earlier = byKey.get(stack.key);
+    return earlier && sameNotifications(earlier, stack) ? earlier : stack;
+  });
+}
+
+// The rest of a stack derives from its notifications.
+function sameNotifications(a: ChannelStack, b: ChannelStack) {
+  return (
+    a.notifications.length === b.notifications.length &&
+    a.notifications.every((notification, index) => {
+      const other = b.notifications[index];
+      return (
+        notification.id === other?.id &&
+        notification.state === other.state &&
+        notification.sender_id === other.sender_id
+      );
+    })
+  );
+}
+
 /** Index stacks by the top-level message their check sits on or under. */
 export function stacksByThread(
   stacks: readonly ChannelStack[]

@@ -85,6 +85,35 @@ test('Unread lists only unseen stacks and marks them read', async ({
   await expect(checks(page)).toHaveCount(3);
 });
 
+test('a new notification keeps focus on the other stacks', async ({ page }) => {
+  await open(page, 1600);
+  const focusStays = async (target: ReturnType<Page['locator']>) => {
+    await target.focus();
+    await target.evaluate((element) => {
+      (element as HTMLElement).dataset.probe = 'focused';
+    });
+    await page.evaluate(() =>
+      window.notify(`n${window.marked.length + 10}-${Date.now()}`, 'm2')
+    );
+    await expect(page.locator('[data-probe="focused"]')).toBeFocused();
+    await page.evaluate(() =>
+      document.querySelector('[data-probe]')?.removeAttribute('data-probe')
+    );
+  };
+
+  await focusStays(
+    page.locator('[data-message="r1"] [data-thread-gutter] button')
+  );
+  await focusStays(
+    list(page)
+      .getByRole('listitem')
+      .filter({ hasText: 'mentioned you' })
+      .getByRole('button')
+      .first()
+  );
+  await expect(toggle(page)).toContainText('3');
+});
+
 // A narrow split (140px of gutter): the list opens in a popover, and opening
 // a stack from it closes the popover.
 test('a narrow pane opens the list as a popover', async ({ page }) => {
@@ -109,12 +138,12 @@ test('the gutter hides what no longer fits as the pane narrows', async ({
   page,
 }) => {
   await open(page, 1600);
-  await page.evaluate(() => window.setPaneWidth(1000));
+  await page.evaluate(() => window.resizeGutterPane(1000));
   // 40px of gutter: no room for the toggle or the checks' 44px lane.
   await expect(toggle(page)).toHaveCount(0);
   await expect(checks(page).first()).toBeHidden();
 
-  await page.evaluate(() => window.setPaneWidth(1600));
+  await page.evaluate(() => window.resizeGutterPane(1600));
   await expect(toggle(page)).toBeVisible();
   await expect(checks(page).first()).toBeVisible();
 });

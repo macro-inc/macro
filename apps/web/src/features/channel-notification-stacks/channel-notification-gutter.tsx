@@ -84,6 +84,8 @@ export function createChannelNotificationGutter(options: {
       'channel-notification-stacks'
     );
 
+  const threadGutters = new Map<string, ThreadGutter>();
+
   const openStack = (stack: ChannelStack) => {
     const { messageId, threadId } = stack.anchor;
     if (threadId) options.goToMessage(threadId, messageId);
@@ -98,11 +100,18 @@ export function createChannelNotificationGutter(options: {
     /** The checks a top-level message and its replies put in the gutter. */
     threadGutter: (rootId: string): ThreadGutter | undefined => {
       if (!checksEnabled() || !stacks.notDoneByThread().has(rootId)) return;
-      return stackChecksGutter({
-        stacks: () => stacks.notDoneByThread().get(rootId),
-        senderName,
-        onDone: (stack) => mark('done', [stack]),
-      });
+      // One object per thread: a new one would rebuild its checks, and drop
+      // their focus, on every notification change.
+      let gutter = threadGutters.get(rootId);
+      if (!gutter) {
+        gutter = stackChecksGutter({
+          stacks: () => stacks.notDoneByThread().get(rootId),
+          senderName,
+          onDone: (stack) => mark('done', [stack]),
+        });
+        threadGutters.set(rootId, gutter);
+      }
+      return gutter;
     },
     pane: options.pane,
     stacks,
