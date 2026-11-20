@@ -1157,7 +1157,7 @@
     "/agent-sessions/{session_id}/activity": {
       "get": {
         "tags": ["agent-sessions"],
-        "summary": "Read activity using the same visibility capability as the session transcript.",
+        "summary": "Read session-visible activity after filtering CRM rows for the requester.",
         "operationId": "get_agent_session_activity",
         "parameters": [
           {

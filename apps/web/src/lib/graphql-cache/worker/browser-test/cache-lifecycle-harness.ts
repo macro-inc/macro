@@ -209,6 +209,7 @@ const api = {
     const owner = 'browser-test-seed';
     const queued = await host.enqueueOptimisticMutation(
       {
+        generation: (await host.authority!.current()).generation,
         uuid: crypto.randomUUID(),
         query: stringifyDocument(mutation),
         variables: {
@@ -241,9 +242,10 @@ const api = {
     const mutation = `mutation RetryBudget($input: SetEntityPropertyInput!) {
       setEntityProperty(input: $input) { id displayName }
     }`;
-    const enqueue = (id: string) =>
+    const enqueue = async (id: string) =>
       host.enqueueOptimisticMutation(
         {
+          generation: (await host.authority!.current()).generation,
           uuid: crypto.randomUUID(),
           query: mutation,
           variables: {
@@ -358,6 +360,7 @@ const api = {
   ): Promise<void> {
     const host = requireOwner();
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(limit),
@@ -411,6 +414,7 @@ const api = {
   async identityReset(): Promise<{ old: unknown; current: unknown }> {
     const host = requireOwner();
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(1),
@@ -418,6 +422,7 @@ const api = {
       identity: 'cache-lifecycle-user-a',
     });
     await host.writeQuery({
+      generation: (await host.authority!.current()).generation,
       query: query('CacheLifecycleQuery'),
       operationName: 'CacheLifecycleQuery',
       variables: variables(2),

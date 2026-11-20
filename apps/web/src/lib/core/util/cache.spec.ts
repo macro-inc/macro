@@ -58,6 +58,29 @@ describe('cache', () => {
     expect(mockFn).toHaveBeenCalledTimes(2);
   });
 
+  test.each(['reject', 'error'])(
+    'keeps a replacement entry when an invalidated call returns %s',
+    async (failure) => {
+      const old =
+        Promise.withResolvers<
+          Result<{ data: string }, ResultError<string>[]>
+        >();
+      const fetch = vi
+        .fn()
+        .mockReturnValueOnce(old.promise)
+        .mockResolvedValue(ok({ data: 'fresh' }));
+      const cached = cache(fetch, { forever: true });
+      const original = cached('document').catch(() => {});
+      cached.invalidate('document');
+      await cached('document');
+      if (failure === 'reject') old.reject(new Error('Old request failed'));
+      else old.resolve(err([{ code: 'ERROR', message: 'Old request failed' }]));
+      await original;
+      expect(await cached('document')).toEqual(ok({ data: 'fresh' }));
+      expect(fetch).toHaveBeenCalledTimes(2);
+    }
+  );
+
   test('handle different argument combinations', async () => {
     const cachedFn = cache(mockFn, { minutes: 5 });
 

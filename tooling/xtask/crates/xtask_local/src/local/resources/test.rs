@@ -84,7 +84,14 @@ fn slack_import_queues_match_deployment_and_have_redrive() {
     assert!(
         QUEUES
             .iter()
-            .filter(|queue| queue.name != main.name && queue.name != dlq.name)
+            .filter(|queue| {
+                ![
+                    main.name,
+                    dlq.name,
+                    macro_queues::EmailCrmPopulationQueue::LOCAL,
+                ]
+                .contains(&queue.name)
+            })
             .all(|queue| queue.attributes().is_empty())
     );
 }

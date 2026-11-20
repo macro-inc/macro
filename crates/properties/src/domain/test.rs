@@ -211,7 +211,7 @@ fn property_definition_for_event(
 fn create_property_definition_request() -> CreatePropertyDefinitionRequest {
     CreatePropertyDefinitionRequest {
         scope: CreatePropertyScope::User,
-        display_name: "Priority".to_string(),
+        display_name: "Launch Tier".to_string(),
         data_type: PropertyDataType::Entity {
             specific_type: Some(EntityType::Document),
             multi: true,
@@ -429,6 +429,62 @@ async fn property_definition_event_delete_publishes_pre_delete_snapshot() {
         "Archived priority"
     );
     assert_eq!(published.envelope["metadata"]["data_type"], "SELECT_STRING");
+}
+
+#[tokio::test]
+async fn create_property_definition_refuses_a_built_in_property_name() {
+    // No repository expectation: a reserved name must not reach it.
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(MockPropertiesRepo::new(), event_broker.clone());
+
+    for (typed, built_in) in [
+        ("Contacts", "Contacts"),
+        ("companies", "Companies"),
+        ("DUE DATE", "Due Date"),
+        ("Owner", "Owner"),
+    ] {
+        let request = CreatePropertyDefinitionRequest {
+            display_name: typed.to_string(),
+            ..create_property_definition_request()
+        };
+        let result = service
+            .create_property_definition(&caller_user_id(), None, &request)
+            .await;
+
+        assert!(
+            matches!(result, Err(PropertiesErr::ReservedName(name)) if name == built_in),
+            "{typed}: {result:?}"
+        );
+    }
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn create_property_definition_allows_a_name_that_only_resembles_a_built_in_one() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .withf(|_, display_name, _, _, _, _| display_name == "Contact")
+        .return_once(|_, _, _, _, _, _| {
+            Box::pin(async {
+                Ok(property_definition_for_event(
+                    Uuid::from_u128(0xC1),
+                    "Contact",
+                    DataType::Entity,
+                    true,
+                ))
+            })
+        });
+    let service = service_with_event_broker(repo, RecordingEventBroker::default());
+    let request = CreatePropertyDefinitionRequest {
+        display_name: "Contact".to_string(),
+        ..create_property_definition_request()
+    };
+
+    let result = service
+        .create_property_definition(&caller_user_id(), None, &request)
+        .await;
+
+    assert!(result.is_ok(), "{result:?}");
 }
 
 #[tokio::test]
