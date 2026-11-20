@@ -569,14 +569,15 @@ function isSubObject(type: ts.Type) {
 }
 
 /**
- * Whether a class has public methods, or readonly properties that lead to
- * some (a namespace that only groups others, like `macro.imports.notion`).
+ * Whether a class has public methods (its own or an abstract base's), or
+ * readonly properties that lead to some (a namespace that only groups
+ * others, like `macro.imports`).
  */
 function leadsToMethods(
   declaration: ts.ClassDeclaration,
   visiting: Set<ts.ClassDeclaration>
 ): boolean {
-  if (publicMethods(declaration).length > 0) return true;
+  if (methodsOf(declaration).length > 0) return true;
   if (visiting.has(declaration)) return false;
   visiting.add(declaration);
   return declaration.members.some((member) => {
