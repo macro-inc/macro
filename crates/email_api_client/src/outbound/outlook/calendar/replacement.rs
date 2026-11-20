@@ -7,6 +7,9 @@ use std::collections::{HashMap, HashSet};
 const STEP_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarReplacementStep";
 
+/// The product name every language's label for a Teams meeting's place keeps.
+const TEAMS_PRODUCT_NAME: &str = "Microsoft Teams";
+
 fn changed() -> CalendarProviderError {
     unsupported(
         "The event changed in Outlook after the preview. Open both events to review them; no changed event has been overwritten or cancelled.",
@@ -134,6 +137,22 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
         }
         if let Some(locations) = body["locations"].as_array_mut() {
             locations.retain(|v| v["displayName"].as_str() != Some(join));
+        }
+    }
+    // Outlook names a Teams meeting's place after it ("Microsoft Teams
+    // Meeting", in the mailbox's language); without the meeting it names
+    // nothing.
+    if remove_conference && event["onlineMeetingProvider"].as_str() == Some("teamsForBusiness") {
+        let names_teams = |location: &Value| {
+            location["displayName"]
+                .as_str()
+                .is_some_and(|name| name.contains(TEAMS_PRODUCT_NAME))
+        };
+        if names_teams(&body["location"]) {
+            body["location"] = json!({"displayName":""});
+        }
+        if let Some(locations) = body["locations"].as_array_mut() {
+            locations.retain(|location| !names_teams(location));
         }
     }
     if !remove_conference && event["isOnlineMeeting"].as_bool() == Some(true) {
@@ -339,6 +358,23 @@ fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
             }
         }
     }
+}
+
+/// The replacement's guests: its attendees but the organizer, whom Macro lists
+/// among an Outlook event's attendees as accepted.
+fn guest_count(body: &Value, source: &Value) -> usize {
+    let organizer = source["organizer"]["emailAddress"]["address"].as_str();
+    body["attendees"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|attendee| {
+            let address = attendee["emailAddress"]["address"].as_str();
+            !address
+                .zip(organizer)
+                .is_some_and(|(address, organizer)| address.eq_ignore_ascii_case(organizer))
+        })
+        .count()
 }
 
 impl OutlookApiClientRepository {
@@ -550,7 +586,7 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
             is_organizer: source["isOrganizer"].as_bool() == Some(true),
             title: body["subject"].as_str().unwrap_or("").into(),
             time,
-            attendee_count: body["attendees"].as_array().map_or(0, Vec::len),
+            attendee_count: guest_count(&body, &source),
             is_series: !body["recurrence"].is_null(),
             remove_conference,
             provider_url: safe_event_url(&source),
