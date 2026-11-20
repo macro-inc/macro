@@ -15,7 +15,12 @@ const INLINE_BOX_TOLERANCE_PX = 8;
 const SAMPLE_LENGTH = 8;
 
 /** The compact line's room, from the last probe, and what it depends on. */
-type CompactRoom = { containerWidth: number; font: string; width: number };
+type CompactRoom = {
+  containerWidth: number;
+  font: string;
+  lineInsets: string;
+  width: number;
+};
 
 /** What a probe of the compact layout found. */
 type ProbeResult = { wraps: boolean; room?: CompactRoom };
@@ -31,6 +36,20 @@ function contentWidth(element: HTMLElement) {
     px(style.borderLeftWidth) -
     px(style.borderRightWidth)
   );
+}
+
+/** The paragraph's own inline insets, such as an indent, which narrow its room. */
+function lineInsets(line: HTMLElement) {
+  const style = getComputedStyle(line);
+  return [
+    style.paddingInlineStart,
+    style.paddingInlineEnd,
+    style.marginInlineStart,
+    style.marginInlineEnd,
+    style.borderInlineStartWidth,
+    style.borderInlineEndWidth,
+    style.textIndent,
+  ].join(' ');
 }
 
 function lineHeightOf(element: HTMLElement) {
@@ -148,6 +167,7 @@ function probeCompactLayout(
         ? {
             containerWidth,
             font: getComputedStyle(liveEditor).font,
+            lineInsets: lineInsets(line),
             width: contentWidth(line),
           }
         : undefined;
@@ -191,8 +211,8 @@ export function createComposerLayout(
   let queued = false;
   let disposed = false;
   let resizeFrame: number | undefined;
-  // The compact line's room, keyed by the container's width and the editor's
-  // font. Anything else outside the draft (controls, the layout attribute,
+  // The compact line's room, keyed by the container's width, the editor's
+  // font and the paragraph's insets (an indent). Anything else outside the draft (controls, the layout attribute,
   // loaded fonts) can change it too, so each of those drops it.
   let compactRoom: CompactRoom | undefined;
   let observer: MutationObserver | undefined;
@@ -214,14 +234,15 @@ export function createComposerLayout(
    * widths alone; undefined when only a probe can tell.
    */
   const fitsCompactRoom = (element: HTMLElement, containerWidth: number) => {
+    const line = element.firstElementChild;
     if (
+      !(line instanceof HTMLElement) ||
       compactRoom?.containerWidth !== containerWidth ||
-      compactRoom.font !== getComputedStyle(element).font
+      compactRoom.font !== getComputedStyle(element).font ||
+      compactRoom.lineInsets !== lineInsets(line)
     )
       return undefined;
     const room = compactRoom.width;
-    const line = element.firstElementChild;
-    if (!(line instanceof HTMLElement)) return undefined;
     // The paragraph's contents, not the paragraph: its box spans the line.
     const range = element.ownerDocument.createRange();
     range.selectNodeContents(line);

@@ -5,6 +5,7 @@ import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
+  $isParagraphNode,
   createEditor,
 } from 'lexical';
 import { createEffect, createRoot, createSignal } from 'solid-js';
@@ -398,5 +399,29 @@ describe('composer layout', () => {
     input.setText('a'.repeat(33));
     await flushMeasurements();
     expect(input.isCompact()).toBe(false);
+  });
+
+  it('probes again when the paragraph is indented or outdented', async () => {
+    const input = setup();
+    input.setMode('expanded');
+    input.setText('a'.repeat(20));
+    await flushMeasurements();
+    const clone = vi.spyOn(input.container, 'cloneNode');
+
+    const setIndent = (indent: number) =>
+      input.editor.update(
+        () => {
+          const paragraph = $getRoot().getFirstChild();
+          if ($isParagraphNode(paragraph)) paragraph.setIndent(indent);
+        },
+        { discrete: true }
+      );
+    // The indent narrows the paragraph's room, so the cached room is stale.
+    setIndent(1);
+    await flushMeasurements();
+    expect(clone).toHaveBeenCalledTimes(1);
+    setIndent(0);
+    await flushMeasurements();
+    expect(clone).toHaveBeenCalledTimes(2);
   });
 });
