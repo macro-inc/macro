@@ -45,6 +45,9 @@ const webDir = resolve(here, '../../../../../');
 const dist = resolve(here, '.dist-bench');
 const origin = `http://127.0.0.1:${port}`;
 const SCOPE = 'cache-bench';
+// Marks a profile directory this runner created, so a reseed only ever deletes
+// one of those.
+const OWNED = '.bench-profile';
 
 function lines(path: string): Buffer[] {
   const buffer = readFileSync(path);
@@ -177,16 +180,19 @@ async function main() {
     const seededOrigin = readFileSync(`${profileDir}/.seeded`, 'utf8').split(
       '\n'
     )[0];
-    if (seededOrigin.startsWith('http') && seededOrigin !== origin)
+    if (seededOrigin !== origin)
       throw new Error(
-        `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
+        seededOrigin.startsWith('http')
+          ? `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
+          : 'profile marker records no origin; rerun with --reseed'
       );
   }
-  const stopServer = await startServer();
   if (fresh) {
     rmProfile();
     mkdirSync(profileDir, { recursive: true });
+    writeFileSync(`${profileDir}/${OWNED}`, '');
   }
+  const stopServer = await startServer();
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: !args.headed,
     executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
@@ -331,11 +337,7 @@ async function main() {
 
 function rmProfile() {
   if (existsSync(profileDir)) {
-    // Only ever a profile this runner created.
-    if (
-      !existsSync(`${profileDir}/.seeded`) &&
-      !existsSync(`${profileDir}/Default`)
-    )
+    if (!existsSync(`${profileDir}/${OWNED}`))
       throw new Error(`refusing to delete ${profileDir}: not a bench profile`);
     rmSync(profileDir, { recursive: true, force: true });
   }
