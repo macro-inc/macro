@@ -61,14 +61,20 @@ export async function refreshChannelParticipants(channelId: string) {
 
 // The soup client module sets up the GraphQL cache; load it only when a write
 // needs a refresh, so mutation modules stay light to import. Mounted readers
-// refresh through the coordinator, which dedupes with notification refreshes;
-// without one, a direct read updates the cached record.
+// refresh through the coordinator, which dedupes with notification refreshes,
+// and the write waits for that read so its caller shows the new roster, as it
+// did when it awaited the REST read; without one, a direct read updates the
+// cached record.
 async function refreshChannelDetail(query: QueryRevalidation) {
   const { getGraphqlSoupClient } = await import(
     '@service-storage/graphql-soup'
   );
   const client = getGraphqlSoupClient();
-  if (channelNotificationRefresh(client).invalidateQuery(query)) return;
+  const coordinator = channelNotificationRefresh(client);
+  if (coordinator.invalidateQuery(query)) {
+    await coordinator.refresh([query]);
+    return;
+  }
   const result = await client
     .query(query.document, query.variables, { requestPolicy: 'network-only' })
     .toPromise();
