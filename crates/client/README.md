@@ -249,11 +249,13 @@ entity-only optimism and retain that recovery query for eventual commit/replay.
 
 ## Streaming text search
 
-Text search binds normalized subsequence patterns to Turso queries scoped by
-`(profile, bucket)` through `search_documents_browse_idx`. Every query token must
-match: `abc` becomes `%a%b%c%`, with literal SQL wildcards and escapes quoted in
-the bound value. Rows containing NUL pass the SQL prefilter because SQLite LIKE
-stops at NUL; Rust verifies them without truncation. Searching documents does not
+Text search streams each `(profile, bucket)` through
+`search_documents_browse_idx`, and the adapter drops rows in which some query
+token is not an ordered byte subsequence of `search_text` before decoding the
+rest. A token whose characters occur in order also has its UTF-8 bytes in order,
+so this keeps every row the core accepts. It replaces a SQL `LIKE '%a%b%c%'`
+prefilter that Turso evaluated several times slower per token; contact search,
+which must avoid decoding records, keeps its bound LIKE. Searching documents does not
 read cached email buckets. Empty bucket selection still means every profile bucket.
 The index includes `search_text` and `source_hash` after its existing browse keys,
 so filtering and result reads use an index-only scan without table lookups.

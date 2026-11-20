@@ -1,5 +1,9 @@
-//! SQL prefilter for the core's Unicode-normalized subsequence search.
-//! Values are bound; rows stream to the core for final scoring without a limit.
+//! Bucket scans for the core's Unicode-normalized subsequence search. Rows
+//! stream from the covering browse index, and a byte-level subsequence test
+//! drops rows no token can match before the core scores the rest, without a
+//! limit. Turso's LIKE does the same test several times slower per token, so
+//! only the contact search, which must skip decoding records, still filters in
+//! SQL.
 
 use super::{SEARCH_LOAD, SearchProfile, SearchQuery, driver, text};
 use crate::{PhysicalResetReason, TursoStorageError, key::RecordKey};
@@ -9,6 +13,7 @@ use turso_core::{Numeric, Row, Value};
 pub(super) fn visit_row(
     row: &Row,
     profile: SearchProfile,
+    query: &SearchQuery,
     key_buffer: &mut String,
     visit: &mut impl FnMut(SearchDocumentRef<'_>),
 ) -> Result<(), TursoStorageError> {
@@ -33,6 +38,9 @@ pub(super) fn visit_row(
     else {
         return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
     };
+    if !may_match(query, search_text.as_str()) {
+        return Ok(());
+    }
     let record_key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), key_buffer)?;
     visit(SearchDocumentRef {
         profile,
@@ -45,12 +53,31 @@ pub(super) fn visit_row(
     Ok(())
 }
 
-pub(super) fn statement(
-    profile: SearchProfile,
-    bucket: &str,
-    query: &SearchQuery,
-) -> (String, driver::Values) {
-    statement_with_base(SEARCH_LOAD, profile, bucket, query)
+/// Every row of one profile bucket; [`visit_row`] applies the query.
+pub(super) fn statement(profile: SearchProfile, bucket: &str) -> (String, driver::Values) {
+    (
+        SEARCH_LOAD.to_owned(),
+        vec![text(profile.as_str()), text(bucket)],
+    )
+}
+
+/// Whether every token of `query` occurs in `text` as an ordered subsequence of
+/// bytes. A token whose characters occur in order also has its UTF-8 bytes in
+/// order, so this keeps every row the core's character match accepts.
+pub(super) fn may_match(query: &SearchQuery, text: &str) -> bool {
+    let text = text.as_bytes();
+    query.tokens().all(|token| {
+        let mut rest = text;
+        token.bytes().all(
+            |byte| match rest.iter().position(|candidate| *candidate == byte) {
+                Some(at) => {
+                    rest = rest.get(at + 1..).unwrap_or_default();
+                    true
+                }
+                None => false,
+            },
+        )
+    })
 }
 
 pub(super) fn statement_with_base(
