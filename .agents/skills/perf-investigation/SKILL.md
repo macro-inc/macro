@@ -206,12 +206,15 @@ const slot = (n) => agg(
       sort: { type: "measure", aggregation: "sum", metric: `@ui.long_animation_frame_script_${n}.duration_ms`, order: "desc" } } ]);
 const norm = (url) => (url ?? "").replace(/-[A-Za-z0-9_-]{8}\.js$/, ".js");
 const ranked = new Map();
-for (const rows of await Promise.all([1, 2, 3].map(slot)))
+const slots = await Promise.all([1, 2, 3].map(slot));
+slots.forEach((rows, index) => {
+  const field = (name) => `@ui.long_animation_frame_script_${index + 1}.${name}`;
   for (const { by, c0, c1, c2 } of rows) {
-    const key = `${Object.values(by)[0]} | ${norm(Object.values(by)[1])}`;
+    const key = `${by[field("invoker")]} | ${norm(by[field("source_url")])}`;
     const total = ranked.get(key) ?? { scripts: 0, ms: 0, forcedLayoutMs: 0 };
     ranked.set(key, { scripts: total.scripts + c0, ms: total.ms + c1, forcedLayoutMs: total.forcedLayoutMs + c2 });
   }
+});
 return [...ranked].sort((a, b) => b[1].ms - a[1].ms).slice(0, 20);
 ```
 

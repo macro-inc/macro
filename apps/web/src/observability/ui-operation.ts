@@ -110,8 +110,14 @@ type LongAnimationFrameEntry = PerformanceEntry & {
 };
 
 const MAX_ENTRIES = 200;
-/** Scripts kept per long frame and reported per operation. */
+/** Scripts reported per operation. */
 const MAX_SCRIPTS = 3;
+/**
+ * Scripts kept per long frame, more than are reported so a frame that
+ * straddles an operation's start or end still has the scripts inside the
+ * operation's window. Chrome lists only scripts of 5 ms or more.
+ */
+const MAX_FRAME_SCRIPTS = 10;
 const MAX_ATTRIBUTION_LENGTH = 200;
 /**
  * How long a finished operation waits before reading long frames. Chrome
@@ -145,7 +151,7 @@ function frameScripts(entry: LongAnimationFrameEntry) {
     forced += script.forcedStyleAndLayoutDuration ?? 0;
   const scripts = [...(entry.scripts ?? [])]
     .sort((a, b) => b.duration - a.duration)
-    .slice(0, MAX_SCRIPTS)
+    .slice(0, MAX_FRAME_SCRIPTS)
     .map(
       (script): ScriptTiming => ({
         start: script.startTime,

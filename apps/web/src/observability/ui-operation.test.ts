@@ -259,6 +259,26 @@ describe('UI operation timing', () => {
     expect(JSON.stringify(spans)).not.toMatch(/secret|01HXYZ|late/);
   });
 
+  it('picks the reported scripts from those inside the window of a straddling frame', () => {
+    const operation = startUiOperation('message.send');
+    now = 150;
+    operation.finish();
+    records.push(
+      longFrame(0, 200, [
+        { startTime: 0, duration: 30, invoker: 'before-1', sourceURL: '' },
+        { startTime: 30, duration: 30, invoker: 'before-2', sourceURL: '' },
+        { startTime: 60, duration: 30, invoker: 'before-3', sourceURL: '' },
+        { startTime: 110, duration: 10, invoker: 'inside', sourceURL: '' },
+      ])
+    );
+    vi.advanceTimersByTime(150);
+    expect(spans[0].attrs).toMatchObject({
+      'ui.long_animation_frame_script_count': 1,
+      'ui.long_animation_frame_script_1.invoker': 'inside',
+      'ui.long_animation_frame_script_1.duration_ms': 10,
+    });
+  });
+
   it('reports at once when the page is hidden before late entries arrive', () => {
     const operation = startUiOperation('message.send');
     operation.finish();
