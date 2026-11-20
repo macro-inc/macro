@@ -535,7 +535,7 @@ type ByIdReaderOptions = {
 
 /**
  * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
- * id is read once until `reset`, except that the ids whose reads failed are
+ * id is read once until `reset` or `renew`, except that the ids whose reads failed are
  * forgotten together at most every `BY_ID_RETRY_AFTER_MS`, so a lookup still
  * asking for one reads it again within that time of its failure.
  */
@@ -657,6 +657,27 @@ export function createByIdReader(
       requested.add(id);
       batcher.addItem(id);
       return true;
+    },
+    /** Forgets what the reads of these ids settled, so asking reads them
+     * again: each answered for a record the cache has changed since. Reads
+     * that failed or are under way are left alone. */
+    renew(ids: readonly string[]) {
+      const current = untrack(outcomes);
+      const settled = new Set(
+        ids.filter(
+          (id) => current[id] === 'returned' || current[id] === 'absent'
+        )
+      );
+      if (settled.size === 0) return;
+      for (const id of settled) {
+        requested.delete(id);
+        attempts.delete(id);
+      }
+      setOutcomes((previous) =>
+        Object.fromEntries(
+          Object.entries(previous).filter(([id]) => !settled.has(id))
+        )
+      );
     },
     /** Forgets every read, for a new storage generation. */
     reset() {
@@ -994,16 +1015,24 @@ export function createCachedChannelDirectory(
   ) => {
     if (!observed || !changes) return;
     const next = records();
+    const changed: string[] = [];
     for (const [id, channel] of next) {
       const before = observed.get(id);
-      if (before !== channel && !deepEqual(before, channel))
+      if (before !== channel && !deepEqual(before, channel)) {
         changes.set(id, channel);
+        changed.push(id);
+      }
     }
     const incomplete = new Set(read.incompleteIds);
     for (const id of observed.keys())
       if (!next.has(id) && !incomplete.has(id)) changes.set(id, null);
     for (const id of next.keys()) seen?.add(id);
     observed = next;
+    // A channel a by-id read found gone that the cache wrote again since:
+    // the viewer may have rejoined it. One the read returned is shown as the
+    // cache holds it, so a later write needs no read.
+    const confirmed = untrack(confirm.outcomes);
+    confirm.renew(changed.filter((id) => confirmed[id] === 'absent'));
   };
 
   const stopFallback = () => {
@@ -1039,7 +1068,27 @@ export function createCachedChannelDirectory(
     }
   };
 
+  /** A by-id read answered for the record the cache held then. One that
+   * returned a channel whose record now lacks a field, or found gone a
+   * channel whose record arrived since without one, proves nothing of the
+   * record now cached: forget it, so the channel is read again. */
+  const renewStaleReads = (
+    before: ChannelDirectoryRead | undefined,
+    read: ChannelDirectoryRead
+  ) => {
+    const outcomes = untrack(reader.outcomes);
+    const wasIncomplete = new Set(before?.incompleteIds);
+    reader.renew(
+      read.incompleteIds.filter(
+        (id) =>
+          outcomes[id] === 'returned' ||
+          (outcomes[id] === 'absent' && !wasIncomplete.has(id))
+      )
+    );
+  };
+
   const publish = (read: ChannelDirectoryRead) => {
+    const before = lastRead;
     lastRead = read;
     // Built once, and only when one of them needs it.
     let byId: Map<string, DirectoryChannel> | undefined;
@@ -1051,7 +1100,11 @@ export function createCachedChannelDirectory(
     restampOlderRecords(records);
     // A finished pass reconciled the cache: it answers alone again.
     if (lane.complete) stopFallback();
-    render();
+    // `complete` reads both, so it never pairs one with the other's old value.
+    batch(() => {
+      renewStaleReads(before, read);
+      render();
+    });
     // Before the lane finishes it fills these itself. Ids already requested
     // do not count, so ones that keep failing cannot hold back the rest.
     if (lane.complete) {

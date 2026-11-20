@@ -934,6 +934,68 @@ describe('cached channel directory', () => {
     expect(named().size).toBe(600);
   });
 
+  it('reads a channel by id again when its record loses a field after a read returned it', async () => {
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory([
+      channelRecord('thin'),
+    ]);
+    cache.put(channelRecord('a'));
+    cache.put(channelRecord('thin'), { incomplete: true });
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'thin']);
+    expect(hydrate).toHaveBeenCalledOnce();
+
+    // Another query writes the record again without a directory field, and
+    // the next read of it is held.
+    let release!: () => void;
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
+    hydrate.mockImplementationOnce(async () => {
+      await held;
+      cache.put(channelRecord('thin'), { sourceHash: 'thin-3' });
+      return { nextCursor: null, entityIds: [channelUuid('thin')] };
+    });
+    cache.put(channelRecord('thin'), {
+      incomplete: true,
+      sourceHash: 'thin-2',
+    });
+    reopen();
+
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    expect(directory.complete()).toBe(false);
+    expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
+
+    release();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'thin']);
+  });
+
+  it('reads a channel by id again when its record arrives after a read found it absent', async () => {
+    const server: ChannelDirectoryFieldsFragment[] = [];
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory(server);
+    cache.put(channelRecord('a'));
+    // Before the lane finishes, a link to a channel the viewer has not
+    // joined yet is read by id.
+    expect(directory.lookup(channelUuid('joined')).status).toBe('pending');
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledOnce());
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.lookup(channelUuid('joined')).status).toBe('missing');
+
+    // The viewer joins, and the join's record lands without every field.
+    server.push(channelRecord('joined'));
+    cache.put(channelRecord('joined'), { incomplete: true });
+    reopen();
+
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() =>
+      expect(directory.lookup(channelUuid('joined')).status).toBe('loaded')
+    );
+    expect(directory.complete()).toBe(true);
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'joined']);
+  });
+
   it('reads every channel from the network until complete, then from the cache', async () => {
     const network = [directoryChannel('a'), directoryChannel('b')];
     const { cache, directory, fetchAll } = mountCachedDirectory([], {
@@ -1153,6 +1215,58 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
     expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
+  });
+
+  it('reads a channel again that a by-id read found gone once the viewer rejoins it', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    const server = [channelRecord('kept')];
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory(server, {
+      pageAll: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    cache.put(channelRecord('kept'));
+    // Cached when the viewer lost it, and no removal reached the cache.
+    cache.put(channelRecord('stale'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
+      sourceHash: 'stale-2',
+    });
+    reopen();
+    await vi.waitFor(() => expect(viewedAt(directory, 'stale')).toBe(VIEWED_2));
+    answer([directoryChannel('kept')]);
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
+    expect(hydrate).toHaveBeenCalledOnce();
+
+    // The viewer rejoins it while the network's pages are still shown, and
+    // the next read is held.
+    let release!: () => void;
+    const held = new Promise<void>((done) => {
+      release = done;
+    });
+    const read = hydrate.getMockImplementation();
+    hydrate.mockImplementationOnce(async (...args) => {
+      await held;
+      return read!(...args);
+    });
+    server.push(channelRecord('stale', { name: 'rejoined' }));
+    cache.put(channelRecord('stale', { name: 'rejoined' }), {
+      sourceHash: 'stale-3',
+    });
+    reopen();
+
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    expect(directory.complete()).toBe(false);
+    release();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.channels().map(({ name }) => name)).toEqual([
+      'channel kept',
+      'rejoined',
+    ]);
   });
 
   it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
