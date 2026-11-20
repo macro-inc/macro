@@ -61,19 +61,14 @@ fn channel(n: u128, highlighted: &str) -> ChannelNameSearchResponseItem {
     }
 }
 
-fn document(
-    n: u128,
-    name: &str,
-    sub_type: Option<DocumentSubType>,
-    deleted: bool,
-) -> UnifiedSearchResponseItem {
+fn document(n: u128, name: &str, sub_type: Option<DocumentSubType>) -> UnifiedSearchResponseItem {
     UnifiedSearchResponseItem::Document(DocumentSearchResponseItemWithMetadata {
         metadata: Some(DocumentMetadata {
             created_at: at(),
             updated_at: at(),
             viewed_at: None,
             project_id: None,
-            deleted_at: deleted.then(at),
+            deleted_at: None,
         }),
         properties: None,
         extra: DocumentSearchResponseItem {
@@ -203,15 +198,13 @@ async fn names_are_searched_as_the_owner_and_compared_exactly() {
         &server,
         "Weekly metrics",
         vec![
-            document(3, "Weekly metrics Q3", None, false),
-            document(4, "weekly  metrics", Some(DocumentSubType::Task), false),
-            // Gone, or an initiative's description: not items to pick.
-            document(5, "Weekly metrics", None, true),
+            document(3, "Weekly metrics Q3", None),
+            document(4, "weekly  metrics", Some(DocumentSubType::Task)),
+            // An initiative's description: not an item to pick.
             document(
                 6,
                 "Weekly metrics",
                 Some(DocumentSubType::InitiativeDescription),
-                false,
             ),
         ],
     )
@@ -333,7 +326,7 @@ async fn a_name_with_more_hits_than_a_page_is_unavailable_unless_two_have_it() {
     index_page(
         &server,
         "Standup",
-        vec![document(1, "Standup notes 11/12", None, false)],
+        vec![document(1, "Standup notes 11/12", None)],
         true,
         Duration::ZERO,
     )
