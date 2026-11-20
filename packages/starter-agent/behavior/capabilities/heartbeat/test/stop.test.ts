@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
 import type { Agent, Woke } from '@macro-inc/muppet/core/agent';
 import type { CommitResult } from '../commit.ts';
-import { counted, stopMessage, stopper } from '../stop.ts';
+import { restartExitCode } from '../restart.ts';
+import { counted, stopMessage, stopper, watchMarker } from '../stop.ts';
 
 const wake = {
   request: 'r',
@@ -108,4 +109,52 @@ test('a sync that throws still exits 0, and a second signal does nothing more', 
     'flush',
     'exit 0',
   ]);
+});
+
+test('a restart (a land touched the marker) stops the same way, then exits 75', async () => {
+  const { seen, stop } = recorder(0, Promise.resolve('pushed'));
+  await stop(restartExitCode);
+  await stop();
+  expect(seen).toEqual([
+    `commit ${stopMessage}`,
+    `log ${JSON.stringify({ stop: 'synced', result: 'pushed' })}`,
+    'flush',
+    `exit ${restartExitCode}`,
+  ]);
+});
+
+test('the marker watch fires once, when the marker changes from what it was at the start', async () => {
+  const contents = [undefined, undefined, '2026-11-20T20:00:00Z\n', 'later\n'];
+  let reads = 0;
+  let fired = 0;
+  const slept: number[] = [];
+  await watchMarker({
+    read: async () => contents[Math.min(reads++, contents.length - 1)],
+    sleep: async (ms) => {
+      slept.push(ms);
+    },
+    everyMs: 1000,
+    changed: () => {
+      fired += 1;
+    },
+  });
+  expect(fired).toBe(1);
+  expect(reads).toBe(3);
+  expect(slept).toEqual([1000, 1000]);
+});
+
+test('a marker already there at the start (the last land) is not a restart', async () => {
+  const contents = ['old\n', 'old\n', 'new\n'];
+  let reads = 0;
+  let fired = 0;
+  await watchMarker({
+    read: async () => contents[Math.min(reads++, contents.length - 1)],
+    sleep: async () => undefined,
+    everyMs: 1000,
+    changed: () => {
+      fired += 1;
+    },
+  });
+  expect(fired).toBe(1);
+  expect(reads).toBe(3);
 });

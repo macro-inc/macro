@@ -46,10 +46,14 @@ export type Stop = {
 const timedOut = 'timed out';
 const stopped = 0;
 
-/** The SIGTERM handler: syncs once when idle, then exits 0. A second signal does nothing more. */
-export const stopper = (deps: Stop): (() => Promise<void>) => {
+/**
+ * The SIGTERM handler, and a restart's: syncs once when idle, then exits with
+ * `code` (0, or 75 for a restart onto code a land brought). Only the first
+ * call does anything.
+ */
+export const stopper = (deps: Stop): ((code?: number) => Promise<void>) => {
   let stopping: Promise<void> | undefined;
-  const stop = async (): Promise<void> => {
+  const stop = async (code: number): Promise<void> => {
     const running = deps.running();
     if (running > 0) await deps.log({ stop: 'not synced', running });
     else {
@@ -62,10 +66,38 @@ export const stopper = (deps: Stop): (() => Promise<void>) => {
       await deps.log({ stop: 'synced', result });
     }
     await deps.flush();
-    deps.exit(stopped);
+    deps.exit(code);
   };
-  return () => {
-    stopping ??= stop();
+  return (code = stopped) => {
+    stopping ??= stop(code);
     return stopping;
   };
+};
+
+/**
+ * Waits for the restart marker (MUPPET_RESTART_FILE) to change from what it
+ * was when the agent started: a land in any of its processes touches it.
+ * `changed` is called once, then the watch ends. The agent then stops
+ * itself with 75, so no launcher needs a watch of its own.
+ */
+export const watchMarker = async ({
+  read,
+  sleep,
+  everyMs,
+  changed,
+}: {
+  /** The marker's contents; undefined while there is none. */
+  readonly read: () => Promise<string | undefined>;
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly everyMs: number;
+  readonly changed: () => void;
+}): Promise<void> => {
+  const initial = await read();
+  for (;;) {
+    await sleep(everyMs);
+    if ((await read()) !== initial) {
+      changed();
+      return;
+    }
+  }
 };

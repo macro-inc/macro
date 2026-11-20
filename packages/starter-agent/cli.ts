@@ -45,9 +45,15 @@ import { commit } from './behavior/capabilities/heartbeat/commit.ts';
 import { limits, logs } from './behavior/capabilities/heartbeat/config.ts';
 import { repositoryOf } from './behavior/capabilities/heartbeat/live.ts';
 import { gitCommand } from './behavior/capabilities/heartbeat/repository.ts';
-import { markHealthy } from './behavior/capabilities/heartbeat/restart.ts';
+import {
+  markHealthy,
+  restartExitCode,
+} from './behavior/capabilities/heartbeat/restart.ts';
 import { ensureSchedules } from './behavior/capabilities/heartbeat/schedules.ts';
-import { stopper } from './behavior/capabilities/heartbeat/stop.ts';
+import {
+  stopper,
+  watchMarker,
+} from './behavior/capabilities/heartbeat/stop.ts';
 import { macroKey } from './behavior/context/index.ts';
 import { configured, startOrExit } from './behavior/context/startup.ts';
 import { ensureIntroduction } from './behavior/events/handlers/identity.ts';
@@ -113,6 +119,15 @@ const run = async (): Promise<void> => {
   // including the files it tells its launcher through (`launcherFiles`): a
   // healthy boot, or a restart onto code it landed.
   const files = launcherFiles();
+  // A land, in any of the agent's processes, touches the restart marker: the
+  // agent then stops the way a stop does and exits 75, which its launcher
+  // (teammate-boot's supervisor, macrod or systemd) starts again.
+  void watchMarker({
+    read: () => base.disk.read(files.restart),
+    sleep: (ms) => Bun.sleep(ms),
+    everyMs: limits.restartPoll,
+    changed: () => void stop(restartExitCode),
+  });
   // Wakes are traces of their own: the event loop starts in this context,
   // outside the start's span.
   const outsideStart = Telemetry.captureContext();

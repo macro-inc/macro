@@ -32,6 +32,8 @@ export const limits = {
   commitLockWait: 60_000,
   /** The last sync on a stop gives up after this: the supervisor kills the process soon after (`docker stop -t 90`). */
   stopSync: 40_000,
+  /** How often the running agent looks at its restart marker (a land touched it). */
+  restartPoll: 1_000,
   landLockWait: 30 * 60_000,
   ciTimeout: 15 * 60_000,
   ciPoll: 10_000,
