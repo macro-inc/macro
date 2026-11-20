@@ -69,6 +69,29 @@ export class MacroForbiddenError extends MacroApiError {
   }
 }
 
+/**
+ * `error`, with a 422's message naming the SDK option for each API field it
+ * mentions. `names` maps the snake_case fields a method's body sends to the
+ * camelCase options it took them from (`data_type` to `dataType`); only that
+ * method knows the mapping, so only it calls this, from its catch.
+ */
+export function withOptionNames(
+  error: unknown,
+  names: Readonly<Record<string, string>>,
+): unknown {
+  if (!(error instanceof MacroApiError) || error.status !== 422) return error;
+  const mentioned = Object.entries(names).filter(([field]) =>
+    new RegExp(`\\b${field}\\b`).test(error.message),
+  );
+  if (mentioned.length > 0) {
+    const pairs = mentioned.map(
+      ([field, option]) => `\`${field}\` is the \`${option}\` option`,
+    );
+    error.message += ` (${pairs.join(', ')}; read the method's reference for the shape it takes)`;
+  }
+  return error;
+}
+
 /** The API error class for an HTTP status. */
 function apiError(status: number, data: unknown): MacroApiError {
   return status === 403
@@ -96,4 +119,20 @@ export function unwrap<TData, TError>(res: {
   if (res.error !== undefined)
     throw apiError(res.response?.status ?? 0, res.error);
   return res.data as TData;
+}
+
+/**
+ * {@link unwrap} for a method whose body renames its camelCase options to
+ * snake_case fields: a 422 names the option behind each field it mentions
+ * ({@link withOptionNames}).
+ */
+export function unwrapNamingOptions<TData, TError>(
+  res: { data?: TData; error?: TError; response?: Response },
+  names: Readonly<Record<string, string>>,
+): TData {
+  try {
+    return unwrap(res);
+  } catch (error) {
+    throw withOptionNames(error, names);
+  }
 }

@@ -625,6 +625,44 @@ async fn property_option_event_add_string_publishes_full_returned_state_and_exac
 }
 
 #[tokio::test]
+async fn a_tag_added_without_a_color_takes_the_palette_color_for_its_position() {
+    let property_definition_id = Uuid::from_u128(0xC7A6);
+    let definition =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    repo.expect_create_property_option()
+        .withf(|_, display_order, _, color| {
+            *display_order == 1 && color.as_deref() == Some("#46A758")
+        })
+        .return_once(move |_, display_order, value, color| {
+            let option = property_option_for_event(
+                Uuid::from_u128(0xC7A7),
+                property_definition_id,
+                display_order,
+                value,
+                color.as_deref(),
+            );
+            Box::pin(async move { Ok(option) })
+        });
+    let service = service_with_event_broker(repo, RecordingEventBroker::default());
+    let request = AddPropertyOptionRequest::SelectString {
+        option: AddStringOptionRequest {
+            display_order: 1,
+            value: "Urgent".to_string(),
+            color: None,
+        },
+    };
+
+    let created = service
+        .add_property_option(&caller_user_id(), None, property_definition_id, &request)
+        .await
+        .unwrap();
+
+    assert_eq!(created.color.as_deref(), Some("#46A758"));
+}
+
+#[tokio::test]
 async fn property_option_event_add_number_publishes_number_payload() {
     let property_definition_id = Uuid::from_u128(0xB3);
     let option_id = Uuid::from_u128(0xB4);
