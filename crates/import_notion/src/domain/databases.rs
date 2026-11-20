@@ -362,6 +362,7 @@ fn read_failure(error: NotionError) -> Result<ReadFailure, NotionError> {
     match error {
         NotionError::NotFound => Ok(ReadFailure::NotFound),
         NotionError::Forbidden => Ok(ReadFailure::Forbidden),
+        NotionError::Decode(_) => Ok(ReadFailure::InvalidObject),
         NotionError::Upstream { status: 400, .. } => Ok(ReadFailure::InvalidObject),
         other => Err(other),
     }

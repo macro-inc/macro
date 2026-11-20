@@ -63,7 +63,7 @@ fn a_status_column_becomes_a_select_and_its_cells_point_at_the_planned_options()
     let in_progress = options[1].0;
     assert_eq!(
         cell(
-            &NotionValue::Option("in progress".to_string()),
+            &NotionValue::Option("in progress".into()),
             &column,
             &PeopleMap::new()
         ),
@@ -71,7 +71,7 @@ fn a_status_column_becomes_a_select_and_its_cells_point_at_the_planned_options()
     );
     assert_eq!(
         cell(
-            &NotionValue::Option("Blocked".to_string()),
+            &NotionValue::Option("Blocked".into()),
             &column,
             &PeopleMap::new()
         ),
@@ -218,10 +218,7 @@ fn text_snapshots_render_every_value_a_reader_would_recognize() {
     assert_eq!(text(&NotionValue::Number(16.0)), Some("16".to_string()));
     assert_eq!(text(&NotionValue::Number(2.5)), Some("2.5".to_string()));
     assert_eq!(
-        text(&NotionValue::Options(vec![
-            "Q3".to_string(),
-            "Infra".to_string()
-        ])),
+        text(&NotionValue::Options(vec!["Q3".into(), "Infra".into()])),
         Some("Q3, Infra".to_string())
     );
     assert_eq!(
@@ -321,6 +318,11 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
             title: Some("Name".to_string()),
             columns: vec![
                 PlannedColumn {
+                    property_id: "stat".into(),
+                    option_ids: HashMap::from([
+                        ("id-Doing".into(), doing),
+                        ("id-Done".into(), done)
+                    ]),
                     id: status,
                     property: "Status".to_string(),
                     name: "Status".to_string(),
@@ -330,6 +332,8 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
                     },
                 },
                 PlannedColumn {
+                    property_id: "pts".into(),
+                    option_ids: HashMap::new(),
                     id: points,
                     property: "Points".to_string(),
                     name: "Points".to_string(),
@@ -397,10 +401,7 @@ fn a_data_source_plans_its_columns_creates_them_after_the_title_and_fills_a_rows
         created: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
         in_trash: false,
         properties: BTreeMap::from([
-            (
-                "Status".to_string(),
-                NotionValue::Option("done".to_string()),
-            ),
+            ("Status".to_string(), NotionValue::Option("done".into())),
             ("Points".to_string(), NotionValue::Empty),
             (
                 "Projects".to_string(),

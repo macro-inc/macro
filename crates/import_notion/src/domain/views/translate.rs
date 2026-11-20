@@ -6,7 +6,7 @@ use models_databases::{ColumnId, ColumnKind};
 
 use super::model::*;
 use super::{filter, layout};
-use crate::domain::macro_cells::{ColumnPlan, ColumnShape, capped_name};
+use crate::domain::macro_cells::{ColumnPlan, capped_name};
 use crate::domain::model::{NotionDataSource, NotionPropertyKind};
 
 /// Bind stable ids and original names using the columns/cells the importer
@@ -26,24 +26,17 @@ pub fn bindings(
                 let planned = plan
                     .columns
                     .iter()
-                    .find(|column| column.property == property.name)?;
-                let options = match (&property.kind, &planned.shape) {
-                    (
-                        NotionPropertyKind::Select { options }
-                        | NotionPropertyKind::Status { options }
-                        | NotionPropertyKind::MultiSelect { options },
-                        ColumnShape::Select {
-                            options: planned, ..
-                        },
-                    ) => options
+                    .find(|column| column.property_id == property.id)?;
+                let options = match &property.kind {
+                    NotionPropertyKind::Select { options }
+                    | NotionPropertyKind::Status { options }
+                    | NotionPropertyKind::MultiSelect { options } => options
                         .iter()
                         .filter_map(|option| {
-                            let label = capped_name(&option.name);
-                            let id = planned
-                                .iter()
-                                .find(|(_, known)| known.eq_ignore_ascii_case(&label))?
-                                .0;
-                            Some((option.name.clone(), id))
+                            planned
+                                .option_ids
+                                .get(&option.id)
+                                .map(|id| (option.name.clone(), *id))
                         })
                         .collect(),
                     _ => BTreeMap::new(),

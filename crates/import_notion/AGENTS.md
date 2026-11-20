@@ -66,7 +66,10 @@ maps a data source onto Macro database columns and cells
 - Decoding skips (and warns on) a single unreadable search/query item rather
   than failing the page; fixtures in `fixtures/` cover every property type.
 - Unknown property and value types map to `Unsupported` / `Empty`, never an
-  error.
+  error. Data sources may have a `data_source_id` parent with their containing
+  `database_id` (externally synced sources); retain that database identity.
+  Isolate malformed source metadata as `SourceUnavailable` rather than losing
+  other sources in the same placement. Transient provider errors still propagate.
 - `databases::discover_database_dependencies` reads standalone page bodies
   without expanding `Inventory` or querying dependency rows. Its cache and
   source deduplication belong to one workspace client; import mappings must
@@ -81,6 +84,10 @@ maps a data source onto Macro database columns and cells
   selection and translation belong to the caller; a multi-source container
   retains every source, and a URL fragment never supplies the selected view.
 
+- Select/status values retain Notion option ids as well as labels. `ColumnPlan`
+  matches by id when supplied and by name only when no id was supplied; callers
+  must report `option_losses` and restore reserved option mappings on resume.
+  View bindings use the same stable mapping, including renamed options.
 - Formula and rollup column names label their values as Notion snapshots.
   Before planning columns, union `macro_cells::date_range_properties` from
   the source rows with stable property ids used by timeline views, then call

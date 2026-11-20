@@ -113,6 +113,17 @@ pub enum ViewLossKind {
     Setting,
 }
 
+impl std::fmt::Display for ViewLossKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Filter => "filter approximated",
+            Self::Sort => "sort omitted",
+            Self::Layout => "layout approximated",
+            Self::Setting => "setting approximated",
+        })
+    }
+}
+
 /// One machine-readable loss associated with a path in the source view.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ViewLoss {

@@ -225,6 +225,44 @@ pub struct NotionOption {
     pub color: String,
 }
 
+/// A selected option keeps its stable identity when its label changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotionOptionValue {
+    /// Stable option id, when supplied by Notion.
+    pub id: Option<String>,
+    /// Current display label.
+    pub name: String,
+}
+
+impl From<String> for NotionOptionValue {
+    fn from(name: String) -> Self {
+        Self { id: None, name }
+    }
+}
+impl From<&str> for NotionOptionValue {
+    fn from(name: &str) -> Self {
+        name.to_owned().into()
+    }
+}
+
+/// Which identity was available to match a row value to its reserved schema.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OptionMatch {
+    /// The response included a stable option id.
+    Id,
+    /// The response supplied only its name.
+    Name,
+}
+impl std::fmt::Display for OptionMatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Id => "option id",
+            Self::Name => "option name",
+        })
+    }
+}
+
 /// One property value on a page.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", content = "value", rename_all = "snake_case")]
@@ -234,9 +272,9 @@ pub enum NotionValue {
     /// A number.
     Number(f64),
     /// A select or status option label.
-    Option(String),
+    Option(NotionOptionValue),
     /// Multi-select labels.
-    Options(Vec<String>),
+    Options(Vec<NotionOptionValue>),
     /// A date, or the start and end of a range, as ISO-8601 strings.
     Date {
         /// The start.

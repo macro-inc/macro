@@ -27,7 +27,7 @@ fn a_page_keeps_its_tags_and_typed_properties_as_document_properties() {
     let page = row(vec![
         (
             "Tags",
-            NotionValue::Options(vec!["roadmap".to_string(), "q3".to_string()]),
+            NotionValue::Options(vec!["roadmap".into(), "q3".into()]),
         ),
         ("Reviewed", NotionValue::Checkbox(true)),
         ("Effort", NotionValue::Number(3.0)),
@@ -38,7 +38,7 @@ fn a_page_keeps_its_tags_and_typed_properties_as_document_properties() {
                 end: None,
             },
         ),
-        ("Area", NotionValue::Option("Infra".to_string())),
+        ("Area", NotionValue::Option("Infra".into())),
         (
             "Spec",
             NotionValue::Url("https://acme.test/spec".to_string()),
@@ -104,8 +104,8 @@ fn a_task_list_row_maps_its_named_columns_onto_task_fields_and_keeps_the_rest_in
     .into_iter()
     .collect();
     let task = row(vec![
-        ("Stage", NotionValue::Option("In progress".to_string())),
-        ("Urgency", NotionValue::Option("High".to_string())),
+        ("Stage", NotionValue::Option("In progress".into())),
+        ("Urgency", NotionValue::Option("High".into())),
         (
             "Deadline",
             NotionValue::Date {
@@ -114,7 +114,7 @@ fn a_task_list_row_maps_its_named_columns_onto_task_fields_and_keeps_the_rest_in
             },
         ),
         ("Owner", NotionValue::People(vec![alice])),
-        ("Sprint", NotionValue::Option("Sprint 12".to_string())),
+        ("Sprint", NotionValue::Option("Sprint 12".into())),
     ]);
     let fields = NotionTaskFields {
         status: Some("Stage".to_string()),

@@ -16,7 +16,8 @@ use models_databases::{
 use uuid::Uuid;
 
 use super::model::{
-    NotionDataSource, NotionId, NotionPage, NotionPropertyKind, NotionPropertySchema, NotionValue,
+    NotionDataSource, NotionId, NotionOptionValue, NotionPage, NotionPropertyKind,
+    NotionPropertySchema, NotionValue, OptionMatch,
 };
 
 #[cfg(test)]
@@ -141,6 +142,72 @@ impl ColumnPlan {
     }
 }
 
+/// A value omitted because the reserved select schema has no matching option.
+#[derive(Debug, Clone)]
+pub struct OmittedOption {
+    /// Stable property identity.
+    pub property_id: String,
+    /// Display name for the report.
+    pub property: String,
+    /// The omitted value's identity and label.
+    pub value: NotionOptionValue,
+    /// The available matching identity.
+    pub matched_by: OptionMatch,
+}
+
+impl ColumnPlan {
+    /// Report precisely the select values that row_cells leaves empty.
+    pub fn option_losses(&self, row: &NotionPage) -> Vec<OmittedOption> {
+        self.columns
+            .iter()
+            .flat_map(|column| {
+                let ColumnShape::Select { options, .. } = &column.shape else {
+                    return Vec::new();
+                };
+                row.properties
+                    .get(&column.property)
+                    .into_iter()
+                    .flat_map(option_values)
+                    .filter(|value| option_id(value, column, options).is_none())
+                    .map(|value| OmittedOption {
+                        property_id: column.property_id.clone(),
+                        property: column.property.clone(),
+                        value: value.clone(),
+                        matched_by: if value.id.is_some() {
+                            OptionMatch::Id
+                        } else {
+                            OptionMatch::Name
+                        },
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+}
+
+fn option_values(value: &NotionValue) -> Vec<&NotionOptionValue> {
+    match value {
+        NotionValue::Option(value) => vec![value],
+        NotionValue::Options(values) => values.iter().collect(),
+        _ => Vec::new(),
+    }
+}
+
+fn option_id(
+    value: &NotionOptionValue,
+    column: &PlannedColumn,
+    options: &[(OptionId, String)],
+) -> Option<OptionId> {
+    if let Some(id) = &value.id {
+        return column.option_ids.get(id).copied();
+    }
+    let label = capped_name(&value.name);
+    options
+        .iter()
+        .find(|(_, known)| known.eq_ignore_ascii_case(&label))
+        .map(|(id, _)| *id)
+}
+
 /// Stable property ids whose rows contain date end values. Union this set
 /// with properties used by timeline views before planning columns.
 pub fn date_range_properties(source: &NotionDataSource, rows: &[NotionPage]) -> HashSet<String> {
@@ -163,6 +230,10 @@ pub fn date_range_properties(source: &NotionDataSource, rows: &[NotionPage]) -> 
 /// A Macro column planned for a Notion property.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlannedColumn {
+    /// Stable source property identity, independent of its display name.
+    pub property_id: String,
+    /// Stable Notion option identities mapped to reserved Macro options.
+    pub option_ids: HashMap<String, OptionId>,
     /// The column id, minted before the column is created.
     pub id: ColumnId,
     /// The Notion property it holds, by name.
@@ -303,7 +374,27 @@ pub fn planned_column(
             ColumnShape::People { multi: false }
         }
     };
+    let source_options = match &property.kind {
+        NotionPropertyKind::Select { options }
+        | NotionPropertyKind::MultiSelect { options }
+        | NotionPropertyKind::Status { options } => options.as_slice(),
+        _ => &[],
+    };
+    let option_ids = source_options
+        .iter()
+        .filter_map(|option| {
+            let ColumnShape::Select { options, .. } = &shape else {
+                return None;
+            };
+            options
+                .iter()
+                .find(|(_, label)| label.eq_ignore_ascii_case(&capped_name(&option.name)))
+                .map(|(id, _)| (option.id.clone(), *id))
+        })
+        .collect();
     Some(PlannedColumn {
+        property_id: property.id.clone(),
+        option_ids,
         id: ColumnId::from_uuid(derived_id(namespace, &format!("column/{}", property.id))),
         property: property.name.clone(),
         name: names.of(property),
@@ -445,20 +536,9 @@ pub fn cell(value: &NotionValue, column: &PlannedColumn, people: &PeopleMap) -> 
             _ => None,
         },
         ColumnShape::Select { multi, options } => {
-            let labels: Vec<&str> = match value {
-                NotionValue::Option(label) => vec![label.as_str()],
-                NotionValue::Options(labels) => labels.iter().map(String::as_str).collect(),
-                _ => Vec::new(),
-            };
-            let refs: Vec<OptionRef> = labels
+            let refs: Vec<OptionRef> = option_values(value)
                 .into_iter()
-                .filter_map(|label| {
-                    let label = capped_name(label);
-                    options
-                        .iter()
-                        .find(|(_, known)| known.eq_ignore_ascii_case(&label))
-                        .map(|(id, _)| OptionRef::Id(*id))
-                })
+                .filter_map(|value| option_id(value, column, options).map(OptionRef::Id))
                 .take(if *multi { usize::MAX } else { 1 })
                 .collect();
             (!refs.is_empty()).then_some(CellValue::Options(refs))
@@ -486,14 +566,18 @@ pub fn cell(value: &NotionValue, column: &PlannedColumn, people: &PeopleMap) -> 
 pub fn text(value: &NotionValue) -> Option<String> {
     let rendered = match value {
         NotionValue::Text(text)
-        | NotionValue::Option(text)
         | NotionValue::Url(text)
         | NotionValue::Email(text)
         | NotionValue::Phone(text)
         | NotionValue::Timestamp(text)
         | NotionValue::UniqueId(text) => text.clone(),
+        NotionValue::Option(option) => option.name.clone(),
         NotionValue::Number(number) => format_number(*number),
-        NotionValue::Options(labels) => labels.join(", "),
+        NotionValue::Options(labels) => labels
+            .iter()
+            .map(|option| option.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", "),
         NotionValue::Date { start, end } => match end {
             Some(end) => format!("{start} → {end}"),
             None => start.clone(),

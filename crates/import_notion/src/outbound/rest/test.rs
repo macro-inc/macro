@@ -994,3 +994,43 @@ async fn database_placements_keep_access_failures_distinct_from_needing_views() 
     assert_eq!(body.occurrences[4].title, "Notion database");
     assert_eq!(transport.requests().len(), 5);
 }
+
+#[tokio::test(start_paused = true)]
+async fn one_malformed_source_does_not_lose_other_sources_in_the_placement() {
+    use crate::domain::databases::{
+        DatabaseLoss, ReadFailure, SourceOwnership, read_page_databases,
+    };
+    let fixture: serde_json::Value =
+        serde_json::from_str(include_str!("../../../fixtures/database_occurrences.json")).unwrap();
+    let mut unreadable = fixture["owned_source"].clone();
+    unreadable["parent"] = json!({"type":"workspace"});
+    let transport = ScriptedTransport::new(vec![
+        ok(fixture["page_markdown"].clone()),
+        ok(fixture["database"].clone()),
+        ok(unreadable),
+        ok(fixture["linked_source"].clone()),
+    ]);
+    let client = NotionRestClient::new(
+        transport,
+        Arc::new(RequestPacer::new(NOTION_REQUEST_INTERVAL)),
+    );
+    let body = read_page_databases(
+        &client,
+        &NotionId::parse("598337872cf94fdf8782e53db20768a5").unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(body.occurrences[0].sources.len(), 2);
+    assert_eq!(body.occurrences[0].sources[0].ownership, None);
+    assert_eq!(
+        body.occurrences[0].sources[1].ownership,
+        Some(SourceOwnership::Linked)
+    );
+    assert!(matches!(
+        &body.occurrences[0].losses[0],
+        DatabaseLoss::SourceUnavailable {
+            reason: ReadFailure::InvalidObject,
+            ..
+        }
+    ));
+}

@@ -32,13 +32,34 @@ fn a_page_with_every_property_type_flattens_into_values() {
                 ("Empty notes".into(), NotionValue::Empty),
                 ("Budget".into(), NotionValue::Number(1250.5)),
                 ("No budget".into(), NotionValue::Empty),
-                ("Priority".into(), NotionValue::Option("High".into())),
+                (
+                    "Priority".into(),
+                    NotionValue::Option(crate::domain::model::NotionOptionValue {
+                        id: Some("o1".into()),
+                        name: "High".into()
+                    })
+                ),
                 ("No priority".into(), NotionValue::Empty),
                 (
                     "Tags".into(),
-                    NotionValue::Options(vec!["web".into(), "ios".into()]),
+                    NotionValue::Options(vec![
+                        crate::domain::model::NotionOptionValue {
+                            id: Some("t1".into()),
+                            name: "web".into()
+                        },
+                        crate::domain::model::NotionOptionValue {
+                            id: Some("t2".into()),
+                            name: "ios".into()
+                        }
+                    ]),
                 ),
-                ("Status".into(), NotionValue::Option("In progress".into())),
+                (
+                    "Status".into(),
+                    NotionValue::Option(crate::domain::model::NotionOptionValue {
+                        id: Some("s1".into()),
+                        name: "In progress".into()
+                    })
+                ),
                 (
                     "Due".into(),
                     NotionValue::Date {
@@ -199,5 +220,29 @@ fn a_data_source_outside_a_database_is_unreadable() {
     assert_eq!(
         source.into_data_source(),
         Err("data source 1a44be1209534631a1d67d4c2b1b4a2f is not under a database".into())
+    );
+}
+
+#[test]
+fn option_identity_survives_the_documented_page_response() {
+    let page: WirePage =
+        serde_json::from_str(include_str!("../../../../fixtures/page.json")).unwrap();
+    let page = page.into_page();
+    let priority = serde_json::to_value(&page.properties["Priority"]).unwrap();
+    assert_eq!(priority["value"]["id"], "o1");
+    let tags = serde_json::to_value(&page.properties["Tags"]).unwrap();
+    assert_eq!(tags["value"][0]["id"], "t1");
+}
+
+#[test]
+fn an_externally_synced_data_source_keeps_its_containing_database() {
+    let mut value: serde_json::Value =
+        serde_json::from_str(include_str!("../../../../fixtures/data_source.json")).unwrap();
+    let database = value["parent"]["database_id"].clone();
+    value["parent"] = serde_json::json!({ "type": "data_source_id", "data_source_id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "database_id": database });
+    let source: WireDataSource = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        source.into_data_source().unwrap().database_id,
+        serde_json::from_value::<NotionId>(database).unwrap()
     );
 }
