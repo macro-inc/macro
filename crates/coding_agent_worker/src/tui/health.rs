@@ -72,6 +72,7 @@ pub(crate) enum TriggerHealth {
 
 /// How often a herdr-core terminal's app tab is re-read: the app can adopt or
 /// park it at any time.
+#[cfg(unix)]
 const VIEWER_CHECK_EVERY: Duration = Duration::from_secs(10);
 
 /// Where this terminal can be seen.
