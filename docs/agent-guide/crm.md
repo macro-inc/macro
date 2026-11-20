@@ -524,8 +524,8 @@ company's CRM fields. Use **Add column** or a column header's menu to customize
 columns. Pipeline Stage options initially copy the team's current deal stages. Open
 pipelines refresh other editors' changes periodically; a local edit refreshes
 immediately after saving.
-Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, or **Lost**, independent
-of Stage. Edit it from the table, a board card, a record's Pipelines card, or
+Every pipeline that tracks a company or contact also has **Outcome**: **Open**, **Won**, **Lost**, or **Declined**
+(a deal the team turned down: closed, but not lost), independent of Stage. Edit it from the table, a board card, a record's Pipelines card, or
 Add deal; select it in filters or board grouping like any other select. New
 entries start Open. Existing exact “Closed won” and “Closed lost” stage labels
 seed the outcome once, with the stages themselves retained.
@@ -620,7 +620,7 @@ Rows match companies by domain and contacts by email, creating missing ones
 pipeline columns of the same name, adding missing custom select options. Monetary
 amounts and currency codes occupy separate CSV columns; omitted currencies
 default to USD, and unsupported currency or Outcome labels refuse the affected
-row. Outcome exports and imports as Open, Won or Lost. A record
+row. Outcome exports and imports as Open, Won, Lost or Declined. A record
 the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
