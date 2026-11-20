@@ -377,7 +377,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   };
 
   const hasValidCustomEmail = () => {
-    const input = inputValue();
+    // Trimmed as commitEmails trims, so a padded address still counts.
+    const input = inputValue().trim();
     if (!input || !EmailValidator.validate(input)) return false;
     return true;
   };

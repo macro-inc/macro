@@ -90,6 +90,15 @@ for (const composer of ['new', 'forward']) {
   });
 }
 
+test('Tab adds a typed address with a trailing space', async ({ page }) => {
+  const { to } = await open(page, 'new');
+  await to.click();
+  await page.keyboard.type('new@example.com ');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('[draggable="true"]')).toHaveCount(1);
+  await expect(to).toBeFocused();
+});
+
 // Text that isn't an address is cleared as focus moves on, as a click
 // elsewhere clears it.
 for (const composer of ['new', 'reply', 'forward']) {
