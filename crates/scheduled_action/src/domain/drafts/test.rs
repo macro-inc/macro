@@ -394,6 +394,7 @@ pub(super) fn configuration(name: &str, trigger: Value, steps: Value) -> ActionC
         enabled: true,
         run_visibility: Default::default(),
         description: String::new(),
+        appearance: None,
     }
 }
 
@@ -1136,6 +1137,39 @@ async fn a_draft_stops_its_session_once_a_check_passes() {
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
 }
 
+/// A draft keeps the look AI picked from Macro's icons, and drops a pick
+/// naming an icon Macro doesn't have.
+#[tokio::test(start_paused = true)]
+async fn a_draft_keeps_the_look_ai_picked_from_macros_icons() {
+    for (icon, kept) in [("bug", true), ("not-an-icon", false)] {
+        let look: model_entity::EntityAppearance = serde_json::from_value(json!({
+            "icon": { "kind": "macro", "name": icon },
+            "color": "red",
+        }))
+        .unwrap();
+        let picked = look.clone();
+        let rows = Arc::new(Rows::default());
+        let mut sessions = Sessions::new(
+            &rows,
+            Box::new(move |_| {
+                vec![plain(ActionConfiguration {
+                    appearance: Some(picked.clone()),
+                    ..configuration(
+                        "Bug tasks",
+                        message_posted(&[]),
+                        json!([code_step("Make a task", "good")]),
+                    )
+                })]
+            }),
+        );
+        sessions.hangs = true;
+        let sessions = Arc::new(sessions);
+
+        let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+        assert_eq!(drafted.appearance, kept.then_some(look), "{icon}");
+    }
+}
 /// A turn that can't be read a few times in a row ends the draft as failed,
 /// well before its timeout, and still cleans up.
 #[tokio::test(start_paused = true)]

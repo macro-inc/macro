@@ -216,16 +216,21 @@ function InboxAccountGroup(props: {
     (selection.options().length ? selection.label() : 'No inboxes connected');
 
   return (
-    <section
+    <ViewSidebar.Section
+      id="accounts"
+      label="Accounts"
       aria-label="Email accounts"
+      pinned
       class={cn(
         'shrink-0 rounded-xl border border-edge-button bg-control not-touch:elevated p-1',
         props.class
       )}
     >
-      <h2 class="px-2 pt-1 pb-1.5 text-xs font-medium text-ink-muted">
-        Accounts
-      </h2>
+      <ViewSidebar.SectionHeader>
+        <h2 class="px-2 pt-1 pb-1.5 text-xs font-medium text-ink-muted">
+          Accounts
+        </h2>
+      </ViewSidebar.SectionHeader>
       <Dropdown placement="bottom-start">
         <Dropdown.Trigger
           variant="ghost"
@@ -291,7 +296,7 @@ function InboxAccountGroup(props: {
           Connect another account
         </Button>
       </div>
-    </section>
+    </ViewSidebar.Section>
   );
 }
 

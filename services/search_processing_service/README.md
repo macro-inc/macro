@@ -212,7 +212,7 @@ cargo run --features disable_processing
 4. Watch service logs for Kafka receive/decode/commit errors, processing retry warnings, events dropped after three attempts, and consumer supervisor restarts. A commit error can result in a safe duplicate; a dropped processing event or crash in the commit-after-handoff window can require recovery. A stop records a `kafka.consumer_stop` span (`drain_ms`, `aborted_workers`, `worker_panicked`, `lost`, `rewound_partitions`, `not_rewound`, `unconfirmed`) and logs the partitions committed back for redelivery, queued events on partitions it no longer owned, queued events whose rewind could not be confirmed (check the group's committed offsets before a backfill), and the started events cut off, each as `topic/partition@offset`.
 5. Each Kafka record gets a `kafka.process` span (`kafka_util::consumer_span`), parented on the producer's trace when the record carries one. It covers handoff, the wait in the worker channel and processing, and records `macro.event.type`, `macro.event.id` and, for agent sessions, `agent.session.id`; a dropped event marks it failed. Its child `process_event` span covers processing alone and records `partition`, `offset`, `event_type`, `entity_id` (the producer key, except for entity properties, whose key can name a user), `entity_type`, `delivery` (`kafka`, or `sqs_replay` under a replay's `search.replay_event` span), `record_age_ms` (how long after the broker recorded the event processing began), `attempts`, and `outcome`: `indexed`, `ignored` (nothing to index, including a property change on an entity type without a search index), `retry_queued` (its attempts failed and its replay is queued), `failed` (a replay the queue delivers again), `source_missing` (a replay whose row is still missing, or a channel message whose channel is gone), `dropped` (error status: its replay could not be queued, or failed on its last delivery), `no_index_change` (the event changes nothing indexed: known at handoff, or a property write for an entity the index does not hold yet), or `coalesced`, a zero-length span for an event a queued reread covered. An event whose last attempt failed also records `failure` (`bulk_items`, `overloaded`, `source_missing` or `error`) and `failed_items`, the items OpenSearch failed in that attempt's bulk request. `kafka.process` is the service's top-level consumer span, so exact per-topic throughput and error rates come from `trace.Consumer.hits` and `trace.Consumer.errors` grouped by `peer.messaging.destination`. Breakdowns by `@event_type` or `@outcome` come from indexed spans, which are a sample.
 6. Each inbox removal gets an `email.mailbox_delete` span that lasts until the service stops following it: the task ended, or the service shut down. It records `link_id`, `task_id`, `restarted_task_id` (the replacement after a restart), `queued_ms` (time spent waiting for a slot, when it waited), `deleted`, `total`, `restarts`, `poll_errors` (progress reads that failed) and `outcome`: `completed`; `canceled`; `unfollowed` when the service shut down while following; and, with error status, `failed`, `unreadable` (progress unreadable for 30 minutes; the task may still run), `not_started` (shut down before the delete or its replacement was sent) or `start_interrupted` (shut down after a start was sent, so OpenSearch may have accepted it). A task no longer followed is the one in `restarted_task_id` when it is set, `task_id` otherwise; read it with `GET _tasks/<id>`, or list `GET _tasks?actions=*byquery&detailed=true` and match `X-Opaque-Id`. After `start_interrupted`, check that list before deleting again; after `not_started`, a delete-by-query on the `link_id` removes the documents.
-7. Freshness and losses are OTel metrics (`src/inbound/kafka_consumer/metrics.rs`), unsampled and exported every 60 s, graphed on the Search freshness dashboard (`infra/stacks/monitoring/monitors/search-freshness.ts`), whose monitors post to the Alerts channel (runbook `docs/runbooks/search-freshness.md`). `search.index.lag_ms` is a histogram of the time from the record's Kafka timestamp, set when it was published, to the end of its processing (unlike `record_age_ms`, taken when processing begins), tagged `entity_type`, `event_type`, `outcome` and `delivery` (`kafka`, or `sqs_replay` for a replay, whose lag still counts from the original record); freshness reads `outcome:indexed`, and `retry_queued` marks an event that will be late. `search.index.oldest_pending_ms` reports every 10 s, per assigned `topic` and `partition`, the age of the oldest record not yet processed, 0 when caught up. It reads the consumer's position and cached watermarks rather than processed events, so it keeps rising while the consumer is stalled, when the lag histogram records nothing. `search.index.dropped_events` counts events committed without reaching the index: by `entity_type`, `event_type`, `delivery` and the last attempt's `failure` (`bulk_items`, `overloaded`, `source_missing` or `error`) when dropped after their attempts and replay, or by `failure` (`undecodable`, `cut_off_at_stop`, `not_rewound`, `rewind_unconfirmed`, `queued_without_rewind`) for records lost outside the workers. `search.index.failed_bulk_items` adds the items OpenSearch failed in the last attempt of an event that was queued for a replay or dropped, by `entity_type` and `outcome`. The service flushes its telemetry on exit, so losses at a stop are exported. Producers count every publish in `event_broker.publishes` (`topic`, wire `event_type`, `outcome`), which separates live email events from imports. Every 60 s each task also publishes the oldest pending age it sees per lane to CloudWatch (`Macro/SearchProcessing` `OldestPendingSeconds`, dimensions `Environment` and `Lane`: `email`, or `live` for every other topic; `src/outbound/cloudwatch_backlog.rs`). A task sends a lane only when it owns a partition in it with a fresh reading. The service's autoscaling tracks the `Maximum` of each lane beside CPU (`infra/stacks/search-processing-service/service.ts`), so a backlog vetoes scale-in.
+7. Freshness and losses are OTel metrics (`src/inbound/kafka_consumer/metrics.rs`), unsampled and exported every 60 s, graphed on the Search freshness dashboard (`infra/stacks/monitoring/monitors/search-freshness.ts`), whose monitors post to the Alerts channel (runbook `docs/runbooks/search-freshness.md`). `search.index.lag_ms` is a histogram of the time from the record's Kafka timestamp, set when it was published, to the end of its processing (unlike `record_age_ms`, taken when processing begins), tagged `entity_type`, `event_type`, `outcome` and `delivery` (`kafka`, or `sqs_replay` for a replay, whose lag still counts from the original record); freshness reads `outcome:indexed`, and `retry_queued` marks an event that will be late. `search.index.oldest_pending_ms` reports every 10 s, per assigned `topic` and `partition`, the age of the oldest record not yet processed, 0 when caught up. It reads the consumer's position and cached watermarks rather than processed events, so it keeps rising while the consumer is stalled, when the lag histogram records nothing. `search.index.dropped_events` counts events committed without reaching the index: by `entity_type`, `event_type`, `delivery` and the last attempt's `failure` (`bulk_items`, `overloaded`, `source_missing` or `error`) when dropped after their attempts and replay, or by `failure` (`undecodable`, `cut_off_at_stop`, `not_rewound`, `rewind_unconfirmed`, `queued_without_rewind`) for records lost outside the workers. `search.index.failed_bulk_items` adds the items OpenSearch failed in the last attempt of an event that was queued for a replay or dropped, by `entity_type`, `outcome` and that attempt's `failure` (`overloaded` for items refused inside the bulk response, such as a 429 per item, `bulk_items` for items failed otherwise); a refusal of the whole request reports no items. The service flushes its telemetry on exit, so losses at a stop are exported. Producers count every publish in `event_broker.publishes` (`topic`, wire `event_type`, `outcome`), which separates live email events from imports. Every 60 s each task also publishes the oldest pending age it sees per lane to CloudWatch (`Macro/SearchProcessing` `OldestPendingSeconds`, dimensions `Environment` and `Lane`: `email`, or `live` for every other topic; `src/outbound/cloudwatch_backlog.rs`). A task sends a lane only when it owns a partition in it with a fresh reading. The service's autoscaling tracks the `Maximum` of each lane beside CPU (`infra/stacks/search-processing-service/service.ts`), so a backlog vetoes scale-in.
 
 For the local broker, inspect group lag with:
 
@@ -244,6 +244,7 @@ Every search-indexed entity has a POST endpoint on sps's internal surface. They 
 | Documents | `POST /internal/backfill/documents` | `{"file_types": ["pdf"], "sub_type": "task", "updated_after": "...", "updated_before": "..."}` |
 | Emails | `POST /internal/backfill/emails` | `{"thread_ids": ["<uuid>"], "since": "2026-03-16T00:00:00Z", "index_override": "emails_v2", "batch_size": 100}` |
 | Email attachment status | `POST /internal/backfill/email-attachment-status` | `{"after_document_id": "<cursor>", "page_size": 500, "docs_per_second": 100}` — `{}` = every document linked to an email attachment, updated directly; see below |
+| Deleted chat messages | `POST /internal/backfill/deleted-chat-messages` | `{"dry_run": false, "after_message_id": "<cursor>", "page_size": 500, "messages_per_second": 1000}` — `{}` = a dry run over every indexed chat message; see below |
 
 ### Search event queue workers
 
@@ -251,7 +252,7 @@ While a worker processes a message it hides it again every 30 seconds for anothe
 
 ### Backfill cap and pause
 
-Every backfill in a task shares one cap on the work it has in flight, `BACKFILL_MAX_IN_FLIGHT` (default 20). Each wait is for a single unit, so the semaphore serves the queue workers and the direct backfills in arrival order. An SQS worker waits for one unit, takes whatever else is free up to `QUEUE_MAX_MESSAGES`, receives at most that many messages with a 2-second wait, and gives back the units it got no message for; each message keeps one unit until it is processed. A worker that finds the queue empty holds nothing and asks again after the rest of the queue's long-poll wait, so after a quiet spell the first new message can wait up to about 18 seconds to be picked up. Direct backfills (agent sessions, properties, email attachment status) take one unit per write. The cap is per task, so the service-wide limit is the cap times the running task count. Everything on the search event queue passes the gate, including the user-profile removals an account deletion sends and the replays of live events whose attempts failed; the Kafka consumer itself does not. A pause therefore also holds those replays, which stay on the queue until it lifts.
+Every backfill in a task shares one cap on the work it has in flight, `BACKFILL_MAX_IN_FLIGHT` (default 20). Each wait is for a single unit, so the semaphore serves the queue workers and the direct backfills in arrival order. An SQS worker waits for one unit, takes whatever else is free up to `QUEUE_MAX_MESSAGES`, receives at most that many messages with a 2-second wait, and gives back the units it got no message for; each message keeps one unit until it is processed. A worker that finds the queue empty holds nothing and asks again after the rest of the queue's long-poll wait, so after a quiet spell the first new message can wait up to about 18 seconds to be picked up. Direct backfills (agent sessions, properties, email attachment status, deleted chat messages) take one unit per write or page. The cap is per task, so the service-wide limit is the cap times the running task count. Everything on the search event queue passes the gate, including the user-profile removals an account deletion sends and the replays of live events whose attempts failed; the Kafka consumer itself does not. A pause therefore also holds those replays, which stay on the queue until it lifts.
 
 `PUT /internal/backfill/pause` with `{"paused": true}` pauses every backfill in every task, and `{"paused": false}` resumes them; `GET /internal/backfill/pause` reads the switch. It is one item (`control:backfills`) in the backfill jobs table. A task reads it before it starts its workers (giving up after 5 seconds and starting unpaused) and then 10 seconds after each read (a read that takes over 5 seconds is abandoned and keeps the last state), so a change takes effect within about 15 seconds. While paused, SQS workers take no messages, which wait on the queue (they still expire after its retention, 4 days by default); backfills that enqueue stop between pages; direct backfills wait before their next write; and a cancel or shutdown still ends a paused job. Work already admitted finishes. A paused backfill job still reports `running`. A task that cannot read the switch keeps the state it last read.
 
@@ -297,17 +298,65 @@ loses nothing permanently: its full writes leave the flag unindexed in
 `_source`, the backfill reindexes every attachment's parent, and an unindexed
 `false` reads the same as an absent field.
 
+### Deleted chat messages
+
+Deleting one message from a chat used to leave its document in the `chats`
+index, where chat search still matches the chat through it, and a backfill
+only writes, so it cannot remove them. This job walks the index's message
+documents in message id order, looks up their `ChatMessage` rows, and deletes
+the documents whose row is gone; a message's row is deleted outright, so a
+missing row is a deleted message. Each page is looked up on the backfill
+replica, and every message the replica lacks is looked up again on the primary
+before it is counted or deleted, so a lagging replica cannot remove a message
+just written. Messages of a chat whose row is also gone are removed the same
+way; the chat's own document stays, and search drops it since its row is gone.
+A message deleted while the job runs may be read as live from a lagging
+replica and passed over; its own delete event removes its document.
+Database access is primary-key lookups; nothing is written there.
+
+The job is a dry run unless the body says `"dry_run": false`: it reads and
+counts, and deletes nothing. Run the dry run first. The job record's entity is
+`deleted-chat-messages-dry-run` for a dry run and `deleted-chat-messages` for
+a run. The status poll reports
+`enqueued` (indexed messages read), `missing` (messages whose row is gone, the
+documents a run deletes), `updated` (documents deleted, 0 in a dry run), and
+`cursor`, the last message id it finished. Each page's
+`search.deleted_chat_messages.page` span also records `gone_with_chat`, how
+many of its gone messages belong to a chat whose row is gone too, and
+`gone_sample`, up to 10 of them as `chat_id:message_id`. Traces keep few of
+these pages, so each page with gone messages also logs one `info` event, "chat
+message repair page found messages whose row is gone", with `job_id`,
+`dry_run`, `gone`, `gone_with_chat` (absent when the chat lookup failed, which
+logs a warning) and `gone_sample`. Check a dry run's finds against
+`ChatMessage` from those events before the real run.
+
+It reads at most `messages_per_second` (default 1000) indexed messages a
+second, in pages of `page_size` (default 500, at most 1000), and deletes with
+routed `_bulk` deletes. A 429 or a cluster block stops it with status
+`stopped`, as does a page with any failed delete, and `error` says how many
+of the page's deletes failed. A stopped page records nothing, so `cursor` is
+the page before it; resume a run with
+`{"dry_run": false, "after_message_id": "<cursor>"}`, which repeats that page
+(without `dry_run` the resume only counts). Documents the stopped page did
+delete are not read again once the index has refreshed, so neither run's
+`missing` or `updated` counts them, and a resumed run's counters are not the
+total of both runs. A failed or cancelled job
+resumes the same way.
+
 ### Against dev (deployed service)
 
-```bash
-AUTH_KEY=$(aws secretsmanager get-secret-value \
-  --secret-id document-storage-service-auth-key-dev \
-  --region us-east-1 --query SecretString --output text)
+The internal routes are behind the gateway: `https://dev-gateway.macro.com/search-processing`
+on dev and `https://gateway.macro.com/search-processing` in production
+(`SearchProcessingServiceUrl` in `crates/macro_service_urls`). They take the
+service's `INTERNAL_API_KEY`, which `doppler run` hands to curl without printing
+it:
 
-curl -X POST https://search-processing-dev.macro.com/internal/backfill/calls \
-  -H "Content-Type: application/json" \
-  -H "x-internal-auth-key: $AUTH_KEY" \
-  -d '{}'
+```bash
+doppler run -p search-processing-service -c dev -- sh -c '
+  curl -X POST https://dev-gateway.macro.com/search-processing/internal/backfill/calls \
+    -H "Content-Type: application/json" \
+    -H "x-internal-auth-key: $INTERNAL_API_KEY" \
+    -d "{}"'
 ```
 
 Dev sps consumes the shared `search-event-queue-dev`; backfill messages will interleave with normal ingest. If the deploy brings a mapping change, recreate the relevant index (via `infra/stacks/opensearch/helpers/scripts/create_indices.ts`) before triggering the backfill so stale-mapping docs don't linger.

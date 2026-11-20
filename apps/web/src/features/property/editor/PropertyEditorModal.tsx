@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -29,6 +30,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import {
+  ERROR_MESSAGES,
   macroEntityToPropertyEntityType,
   PropertyDataTypeIcon,
   toPropertyApiValue,
@@ -45,6 +47,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
 import type { PropertyOptionResponse } from '@service-properties/generated/schemas/propertyOptionResponse';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
@@ -286,11 +289,21 @@ export function PropertyEditorDialog(props: {
     setCreatePropertyInitialName(initialName);
   };
 
+  let searchInput: HTMLInputElement | undefined;
+  /**
+   * The create dialog takes focus with it when it closes, and the next keys
+   * would reach the app's shortcuts. Hand focus back to the search field.
+   */
+  const closeCreateProperty = () => {
+    setCreatePropertyInitialName(null);
+    if (!isTouchDevice()) searchInput?.focus();
+  };
+
   const handlePropertyCreated = async (
     _propertyDefinitionId?: string,
     propertyDefinition?: PropertyDefinition
   ) => {
-    setCreatePropertyInitialName(null);
+    closeCreateProperty();
     if (!propertyDefinition) return;
 
     const revision = editorRevision;
@@ -327,6 +340,48 @@ export function PropertyEditorDialog(props: {
       toPropertyDefinitionDomain(created.definition, created.property_options)
     );
     props.onModeChange('direct');
+  };
+
+  /** Adds a property to the selection and opens its value. */
+  const selectProperty = async (
+    property: Property | PropertyDefinitionDomain
+  ) => {
+    const revision = editorRevision;
+    await props.onPropertyAdded?.([propertyIdentity(property)]);
+    if (!props.isOpen || revision !== editorRevision) return;
+    props.onTargetChange(property);
+    props.onModeChange('direct');
+  };
+
+  /**
+   * Leaves the create dialog for the built-in property it suggested, as if
+   * that property had been picked from the list. A host that edits the
+   * property with its own control still takes the value through `onSave`.
+   */
+  const selectBuiltInProperty = async (definitionId: string) => {
+    const revision = editorRevision;
+    let builtIn: PropertyDefinitionResponse | undefined;
+    try {
+      builtIn = await fetchPropertyDefinitionWithOptions(definitionId);
+    } catch (error) {
+      console.error('Failed to fetch the built-in property', error);
+    }
+
+    if (!props.isOpen || revision !== editorRevision) return;
+    if (!builtIn) {
+      toast.failure(ERROR_MESSAGES.PROPERTY_FETCH);
+      return;
+    }
+
+    closeCreateProperty();
+    await selectProperty(
+      'definition' in builtIn
+        ? toPropertyDefinitionDomain(
+            builtIn.definition,
+            builtIn.property_options
+          )
+        : toPropertyDefinitionDomain(builtIn)
+    );
   };
 
   const { dispose: disposeHotkey } = registerHotkey({
@@ -366,6 +421,9 @@ export function PropertyEditorDialog(props: {
             <PropertiesIcon class="size-3" />
           </span>
           <SearchInput
+            inputRef={(element) => {
+              searchInput = element;
+            }}
             placeHolder={placeholder() || defaultPlaceholder}
             value={searchValue}
             setValue={setSearchValue}
@@ -405,13 +463,7 @@ export function PropertyEditorDialog(props: {
                       ? () => props.onModeChange('tag')
                       : undefined
                   }
-                  onPropertySelected={async (property) => {
-                    const revision = editorRevision;
-                    await props.onPropertyAdded?.([propertyIdentity(property)]);
-                    if (!props.isOpen || revision !== editorRevision) return;
-                    props.onTargetChange(property);
-                    props.onModeChange('direct');
-                  }}
+                  onPropertySelected={selectProperty}
                 />
               </div>
             </Match>
@@ -449,8 +501,9 @@ export function PropertyEditorDialog(props: {
             isOpen
             initialName={initialName()}
             autoPinOnCreate={false}
-            onClose={() => setCreatePropertyInitialName(null)}
+            onClose={closeCreateProperty}
             onPropertyCreated={handlePropertyCreated}
+            onUseBuiltIn={selectBuiltInProperty}
           />
         )}
       </Show>
@@ -459,6 +512,7 @@ export function PropertyEditorDialog(props: {
 }
 
 function SearchInput(props: {
+  inputRef?: (element: HTMLInputElement) => void;
   placeHolder: string;
   setValue: Setter<string>;
   value: Accessor<string>;
@@ -475,7 +529,10 @@ function SearchInput(props: {
 
   return (
     <CommandMenuSearchInput
-      ref={inputRef}
+      ref={(element: HTMLInputElement) => {
+        inputRef = element;
+        props.inputRef?.(element);
+      }}
       type={props.inputType ?? 'text'}
       class="text-base"
       placeholder={props.placeHolder}

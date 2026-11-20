@@ -329,6 +329,16 @@ pub const NOT_ATTESTABLE: &[NotAttestable] = &[
         why: "waits for `check-tauri-lockfiles`, which decides whether it runs",
     },
     NotAttestable {
+        call: "observability-aws",
+        job: "validate",
+        why: "validates OpenTofu through the AWS layer's separate Nix flake on CI",
+    },
+    NotAttestable {
+        call: "observability-cluster",
+        job: "check-manifests",
+        why: "renders Helm charts and validates manifests through the cluster's separate Nix flake on CI",
+    },
+    NotAttestable {
         call: "macrod-update",
         job: "macos",
         why: OTHER_SYSTEM,

@@ -7,6 +7,8 @@ import {
   ListHeader,
   ListHeaderSearch,
 } from '@app/components/view-shell/ListHeader';
+import { useProjectSavedViews } from '@app/features/projects/context/project-saved-views-context';
+import { t } from '@app/lib/i18n';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -30,12 +32,23 @@ export type TasksHeaderProps = {
 
 export function TaskViewBreadcrumbItem() {
   const { state, savedViews } = useTasksView();
-  const tabTitle = () =>
-    state.savedViewActive && savedViews
-      ? taskSavedViewTitle(savedViews.view())
-      : (TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks');
+  const projectViews = useProjectSavedViews();
+  const projectSavedView = () =>
+    projectViews?.active() ? projectViews.draft.view() : undefined;
+  const savedViewActive = () =>
+    state.savedViewActive || projectSavedView()?.kind === 'saved';
+  const tabTitle = () => {
+    const projectView = projectSavedView();
+    if (projectView?.kind === 'saved') return projectView.record.name;
+    if (projectView?.kind === 'new') return t('viewMenus.newView');
+    if (state.savedViewActive && savedViews)
+      return taskSavedViewTitle(savedViews.view());
+    return (
+      TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? t('nav.tasks')
+    );
+  };
   const appearance = () => {
-    const view = savedViews?.view();
+    const view = projectSavedView() ?? savedViews?.view();
     return view?.kind === 'saved' ? view.record.appearance : undefined;
   };
 
@@ -48,7 +61,7 @@ export function TaskViewBreadcrumbItem() {
       {(item) => {
         const label = () => (
           <>
-            <Show when={state.savedViewActive}>
+            <Show when={savedViewActive()}>
               <EntityIcon
                 targetType="saved_view"
                 appearance={appearance()}

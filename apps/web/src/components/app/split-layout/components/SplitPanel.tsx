@@ -59,7 +59,7 @@ export function SplitPanel(props: SplitPanelProps) {
   );
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
-  const navigationCollapsed = createSignal(true);
+  const navigationCollapsed = createSignal(false);
   const [titleFileMenuRef, setTitleFileMenuRef] =
     createSignal<HTMLDivElement>();
   const [titleFileMenuTrigger, setTitleFileMenuTrigger] =
@@ -193,8 +193,12 @@ export function SplitPanel(props: SplitPanelProps) {
 
   const hasSplitHeader = () => {
     const content = props.handle.content();
+    // Composable views own desktop chrome, but mobile islands still need the
+    // split header's portal targets while their MobileHeader is mounted.
+    const ownsMobileHeader =
+      isTouchDevice() && mobileHeaderOwner[0]() !== undefined;
     return (
-      !usesComposableLayout() &&
+      (!usesComposableLayout() || ownsMobileHeader) &&
       !(
         isTouchDevice() &&
         content.type === 'component' &&

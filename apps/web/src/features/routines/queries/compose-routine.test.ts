@@ -212,6 +212,22 @@ describe('a drafted routine in the editor', () => {
     expect(draft.created).toEqual(created);
   });
 
+  it('keeps the look AI picked, which creating the routine saves', () => {
+    const appearance = {
+      icon: { kind: 'macro', name: 'tag-simple' },
+      color: 'green',
+    } as const;
+    const draft = draftFromRoutine(routine({ appearance }), 'claude');
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.appearance).toEqual(appearance);
+    expect(draftToCreateBody(draft).appearance).toEqual(appearance);
+
+    const plain = draftFromRoutine(routine(), 'claude');
+    if (typeof plain === 'string') throw new Error(plain);
+    expect(plain.appearance).toBeUndefined();
+    expect(draftToCreateBody(plain)).not.toHaveProperty('appearance');
+  });
+
   it('keeps a trigger limited to the items it names', () => {
     const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
     const draft = draftFromRoutine(
@@ -244,6 +260,28 @@ describe('a drafted routine in the editor', () => {
     expect(draft.triggers?.[0]).toMatchObject({
       kind: 'schedule',
       frequency: 'day',
+    });
+  });
+
+  it('requires the apps a drafted Ask AI step uses, connected or not, and saves them', () => {
+    const linear = { app_slug: 'linear', server_name: 'Linear' };
+    const notion = { app_slug: 'notion', server_name: 'Notion' };
+    const draft = draftFromRoutine(
+      routine({
+        trigger: { type: 'cron', schedule: '0 0 9 * * *', timezone: 'UTC' },
+        steps: [
+          { type: 'agent', model: 'claude', instructions: 'File the bugs' },
+        ],
+        apps: [linear],
+        missingApps: [notion, linear],
+      }),
+      'claude'
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    // The review shows Notion unconnected; saving waits until it is.
+    expect(draft.apps).toEqual([linear, notion]);
+    expect(draftToCreateBody(draft).task).toMatchObject({
+      mcp_servers: [linear, notion],
     });
   });
 

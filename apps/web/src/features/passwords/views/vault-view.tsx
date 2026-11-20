@@ -819,12 +819,11 @@ export function VaultView(props: {
             <ListChrome>
               <ViewShell.Header>
                 <div class="flex min-w-0 flex-col gap-1">
-                  <div class="h-10 min-w-0 flex-1">
+                  <div class="flex h-10 min-w-0 flex-1 items-center gap-2">
                     <PillTabs
                       scrollable
-                      class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+                      class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
                       contentClass="px-(--mobile-chrome-gutter)"
-                      leading={<PasswordTypeDrawer {...typeControls()} />}
                       items={mobileTabs()}
                       value={mobileTab()}
                       onChange={(tab) =>
@@ -833,6 +832,7 @@ export function VaultView(props: {
                           : selectFilter(tab)
                       }
                     />
+                    <PasswordTypeDrawer {...typeControls()} />
                   </div>
                 </div>
               </ViewShell.Header>

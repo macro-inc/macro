@@ -19,7 +19,7 @@ use model_owner::{CreationPrincipal, Owner};
 use routine_program::{CodeIdentity, RoutineProgram};
 use tokio::sync::mpsc::Sender;
 
-use super::appearance::ChangeAppearance;
+use super::appearance::{AppearanceChooser, AppearanceSet, ChangeAppearance, check_pick};
 use super::code_check::{CodeCheckError, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades, UpgradeOutcome};
 use super::event_rollout::{EventRoutineRollout, EventRoutinesOff};
@@ -347,10 +347,20 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        appearance
-            .validate()
-            .map_err(ActionPolicyError::InvalidAppearance)?;
         let mut input = input;
+        // An agent's pick stands in for the default, or a template's look.
+        let appearance = match input.appearance.take() {
+            Some(pick) => {
+                check_pick(&pick)?;
+                pick
+            }
+            None => {
+                appearance
+                    .validate()
+                    .map_err(ActionPolicyError::InvalidAppearance)?;
+                appearance
+            }
+        };
         input.task = named_steps(&input.task);
         let description = description(&input.description)?;
         self.check_event_management(&input.trigger, owner_user)
@@ -414,6 +424,11 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
         let mut steps = Vec::new();
         let found = [
             description(&input.description).map(|_| ()),
+            input
+                .appearance
+                .as_ref()
+                .map_or(Ok(()), check_pick)
+                .map_err(anyhow::Error::from),
             self.check_event_management(&input.trigger, owner).await,
             self.check_conditions(&input.trigger),
             self.targets.validate_task(&input.task, owner).await,
@@ -527,6 +542,41 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades, Rol
             self.follow_parent(&updated, requester).await;
         }
         Ok(updated)
+    }
+
+    /// Store an agent's pick for `action`'s look, unless its owner chose one:
+    /// the appearance it has afterwards.
+    #[tracing::instrument(name = "routine.pick_appearance", skip_all, fields(
+        routine.id = tracing::field::Empty,
+        routine.appearance.picked = tracing::field::Empty,
+    ), err)]
+    async fn pick_appearance(
+        &self,
+        action: &ScheduledAction,
+        pick: EntityAppearance,
+        attribution: activity::Attribution,
+    ) -> Result<EntityAppearance> {
+        let id = action.id.ok_or(ActionPolicyError::NotFound)?;
+        let span = tracing::Span::current();
+        span.record("routine.id", tracing::field::display(id));
+        let set = self
+            .repo
+            .set_appearance(ChangeAppearance {
+                id,
+                appearance: pick.clone(),
+                chooser: AppearanceChooser::Agent,
+                attribution,
+                event_id: macro_uuid::generate_uuid_v7(),
+                occurred_at: Utc::now(),
+            })
+            .await?;
+        span.record("routine.appearance.picked", set.changed());
+        // The look the row holds once locked, not `action`'s: an owner's
+        // choice may have committed since the configuration was saved.
+        Ok(match set {
+            AppearanceSet::Changed { .. } => pick,
+            AppearanceSet::Kept { current } => current,
+        })
     }
 
     /// Refuse saving a routine that writes as its owner while any of its
@@ -696,6 +746,24 @@ pub(crate) async fn granted_action<R: ScheduledActionRepo, T: RequiredPermission
             Ok(action)
         }
         _ => Err(ActionPolicyError::NotFound.into()),
+    }
+}
+
+/// Who an appearance write is attributed to: the person, or the bot and the
+/// person it acts for. Nobody for an internal or anonymous request.
+fn attribution(
+    auth: &entity_access::domain::models::EntityAccessAuth,
+) -> Option<activity::Attribution> {
+    use entity_access::domain::models::EntityAccessAuth;
+    match auth {
+        EntityAccessAuth::Authenticated(user) => Some(activity::Attribution::direct(
+            activity::Actor::new_from_user(user.clone()),
+        )),
+        EntityAccessAuth::Bot(bot) => Some(activity::Attribution::new(
+            activity::Actor::new_from_bot(bot.bot_id()),
+            bot.scope().acting_user_id().cloned(),
+        )),
+        EntityAccessAuth::Internal | EntityAccessAuth::Unauthenticated => None,
     }
 }
 
@@ -1138,8 +1206,22 @@ where
         requester: Requester,
     ) -> Result<ScheduledAction> {
         let action = self.load_granted(&receipt).await?;
-        let input = input.into_configuration(&action);
-        self.replace_configuration(action, input, requester).await
+        let mut input = input.into_configuration(&action);
+        let pick = input.appearance.take();
+        if let Some(pick) = &pick {
+            check_pick(pick)?;
+        }
+        let mut updated = self.replace_configuration(action, input, requester).await?;
+        // Only an agent acting for the owner picks the look of their routine.
+        let for_owner = receipt
+            .acting_user_id()
+            .is_some_and(|user| updated.owner.as_user() == Some(user));
+        if let (Some(pick), Some(attribution), true) =
+            (pick, attribution(receipt.auth()), for_owner)
+        {
+            updated.appearance = self.pick_appearance(&updated, pick, attribution).await?;
+        }
+        Ok(updated)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -1153,25 +1235,12 @@ where
             .map_err(ActionPolicyError::InvalidAppearance)?;
         let action = self.load_granted(&receipt).await?;
         let id = action.id.ok_or(ActionPolicyError::NotFound)?;
-        let attribution = match receipt.auth() {
-            entity_access::domain::models::EntityAccessAuth::Authenticated(user) => {
-                activity::Attribution::direct(activity::Actor::new_from_user(user.clone()))
-            }
-            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
-                activity::Attribution::new(
-                    activity::Actor::new_from_bot(bot.bot_id()),
-                    bot.scope().acting_user_id().cloned(),
-                )
-            }
-            entity_access::domain::models::EntityAccessAuth::Internal
-            | entity_access::domain::models::EntityAccessAuth::Unauthenticated => {
-                return Err(ActionPolicyError::NotFound.into());
-            }
-        };
+        let attribution = attribution(receipt.auth()).ok_or(ActionPolicyError::NotFound)?;
         self.repo
             .set_appearance(ChangeAppearance {
                 id,
                 appearance: appearance.clone(),
+                chooser: AppearanceChooser::Owner,
                 attribution,
                 event_id: macro_uuid::generate_uuid_v7(),
                 occurred_at: Utc::now(),
@@ -1198,6 +1267,7 @@ where
             enabled,
             run_visibility: action.run_visibility,
             description: action.description.clone(),
+            appearance: None,
         };
         self.replace_configuration(action, input, requester).await
     }

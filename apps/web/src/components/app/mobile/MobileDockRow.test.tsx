@@ -306,6 +306,17 @@ it('returns from customization to More without navigating', async () => {
   );
 });
 
+it('keeps Tasks active while a project view is open', () => {
+  foreground.id = 'projects';
+  setIslandWidth(400);
+  render(() => <MobileDockRow />);
+  expect(
+    screen
+      .getByRole('button', { name: 'Tasks' })
+      .classList.contains('text-ink-extra-muted')
+  ).toBe(false);
+});
+
 describe('dock unread indicators', () => {
   it('reacts to the shared unread source without clearing indicators just for navigation', () => {
     unreadViews.enabled = true;

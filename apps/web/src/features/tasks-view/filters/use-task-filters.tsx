@@ -7,7 +7,9 @@ import {
   AssigneePickerStatus,
   useAssigneePicker,
 } from '@app/features/soup/assignee-picker';
+import { t } from '@app/lib/i18n';
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
+import { beginInteraction } from '@app/observability/flow';
 import { useUserId } from '@core/context/user';
 import { useContactFilterLabels } from '@core/user/use-contact-filter-options';
 import { PropertyValueIcon } from '@property/component/propertyValue';
@@ -29,6 +31,10 @@ import {
   TASK_VIEWER,
 } from './task-facets';
 import { taskPeopleSource, taskViewerOption } from './task-people-options';
+import {
+  taskProjectSource,
+  useTaskProjectLabels,
+} from './task-project-options';
 
 const AI_FILTER_STALE_MESSAGE =
   'The account or filters changed. Try the request again.';
@@ -44,12 +50,19 @@ export type TaskFilterGroupId =
   | 'priority'
   | 'assignees'
   | 'created-by'
+  | 'project'
   | 'tags'
   | 'due_date';
 
 export function useTaskFilters() {
-  const { state, setFacets, setState, savedViews, savedViewScope } =
-    useTasksView();
+  const {
+    state,
+    setFacets,
+    setState,
+    savedViews,
+    savedViewScope,
+    showProjectFilter,
+  } = useTasksView();
   const currentUserId = useUserId();
   const tagGroup = useTagFilterGroup();
   const [customRange, setCustomRange] = createSignal<TaskDateRangeDraft>();
@@ -73,6 +86,11 @@ export function useTaskFilters() {
   );
   const labels = useContactFilterLabels(selectedPeople);
   const createPeopleSource = taskPeopleSource(!!savedViews);
+  const projectOptions = useTaskProjectLabels(
+    () => state.facets.project ?? [],
+    () => true
+  );
+  const createProjectSource = taskProjectSource();
   const peopleOptions = (group: 'assignees' | 'created-by') =>
     (state.facets[group] ?? []).flatMap((id) => {
       const option =
@@ -111,7 +129,10 @@ export function useTaskFilters() {
       .filter((selected) => !options.some((option) => option.id === selected))
       .map((selected) => ({
         id: selected,
-        label: `Unavailable ${id === 'tags' ? 'tag' : 'option'}`,
+        label:
+          id === 'tags'
+            ? t('viewMenus.unavailableTag')
+            : t('viewMenus.unavailableOption'),
       })),
   ];
 
@@ -119,7 +140,7 @@ export function useTaskFilters() {
     (): ListFilterGroup<TaskFilterGroupId, string>[] => [
       {
         id: 'status',
-        label: 'Status',
+        label: t('viewMenus.status'),
         options: withUnavailable(
           'status',
           TASK_STATUS_OPTIONS.map((option) => ({
@@ -135,7 +156,7 @@ export function useTaskFilters() {
       },
       {
         id: 'priority',
-        label: 'Priority',
+        label: t('viewMenus.priority'),
         options: withUnavailable(
           'priority',
           TASK_PRIORITY_OPTIONS.map((option) => ({
@@ -151,25 +172,28 @@ export function useTaskFilters() {
       },
       {
         id: 'due_date',
-        label: 'Due date',
+        label: t('viewMenus.dueDate'),
         selectionMode: 'single',
         defaultOptionId: 'any',
         options: [
-          { id: 'any', label: 'Any due date' },
+          { id: 'any', label: t('viewMenus.anyDueDate') },
           ...TASK_DUE_DATE_BUCKETS,
-          { id: 'has_due_date', label: 'Has due date' },
+          { id: 'has_due_date', label: t('viewMenus.hasDueDate') },
           {
             id: 'range',
             label:
               state.dueDate?.type === 'range'
-                ? `Custom range (${state.dueDate.start ?? 'Any'} – ${state.dueDate.end ?? 'Any'})`
-                : 'Custom range…',
+                ? t('viewMenus.customRangeSummary', {
+                    start: state.dueDate.start ?? t('viewMenus.any'),
+                    end: state.dueDate.end ?? t('viewMenus.any'),
+                  })
+                : t('viewMenus.customRange'),
           },
         ],
       },
       {
         id: 'assignees',
-        label: 'Assignee',
+        label: t('viewMenus.assignee'),
         searchPlaceholder: assigneePicker.placeholder(),
         options: assigneeOptions(),
         footer: <AssigneePickerStatus picker={assigneePicker} />,
@@ -177,11 +201,22 @@ export function useTaskFilters() {
       },
       {
         id: 'created-by',
-        label: 'Created by',
-        searchPlaceholder: 'Search creators...',
+        label: t('viewMenus.createdBy'),
+        searchPlaceholder: t('viewMenus.searchCreators'),
         options: peopleOptions('created-by'),
         createSource: createPeopleSource,
       },
+      ...(showProjectFilter()
+        ? [
+            {
+              id: 'project' as const,
+              label: t('viewMenus.project'),
+              searchPlaceholder: t('viewMenus.searchProjects'),
+              options: projectOptions(),
+              createSource: createProjectSource,
+            },
+          ]
+        : []),
       ...(tagGroup().options.length > 0 || (state.facets.tags?.length ?? 0) > 0
         ? [
             {
@@ -218,10 +253,17 @@ export function useTaskFilters() {
       return;
     }
     const update = selected ? addUnique(optionId) : removeValue(optionId);
-    setFacets({
-      ...state.facets,
-      [groupId]: update(state.facets[groupId]),
+    const interaction = beginInteraction('tasks.filter', {
+      attributes: { 'task.filter.group': groupId },
     });
+    try {
+      setFacets({
+        ...state.facets,
+        [groupId]: update(state.facets[groupId]),
+      });
+    } finally {
+      interaction.end();
+    }
   };
 
   const activeCount = () =>

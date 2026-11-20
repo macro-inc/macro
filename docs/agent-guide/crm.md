@@ -378,7 +378,11 @@ Team lists the contacts with `Add contact`. Emails keeps the
 a viewer with no connected mailbox. Files, Tasks, and Calls list items
 *associated* with the company: its `Companies` property names the company, its
 `Contacts` property names one of the company's contacts, or it @mentions (or a
-message attaches) the company or one of those contacts. Contacts beyond the Team
+message attaches) the company or one of those contacts. Tasks and References
+also list a task whose own custom entity property (one a team or a person
+created, such as a `Contact` property) names the company or one of those
+contacts; Files and Calls do not read custom properties.
+Contacts beyond the Team
 tab's first page count, hidden contacts count only for team admins and owners,
 and an item matching several ways appears once. Files lists non-task documents
 plus attachments of emails with the company's domains. Tasks is the Tasks list
@@ -401,7 +405,8 @@ A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, and
 `Calls`: Overview pills show the email, the company (opens it) and `Last
 interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
-property or an @mention of it), not everything associated with its company;
+property, an @mention of it, or for a task a custom entity property that names
+it), not everything associated with its company;
 Files also includes attachments of emails with its address. Contacts without an
 email still list their associated non-task files; they send no email-attachment
 participant filter. Verify both an empty list and linked files on desktop and phone.
@@ -449,7 +454,15 @@ members and agents. A message's copied link is the record URL
 a CRM discussion notification, scrolls to and highlights that message. On
 desktop the record opens in Customers with the message in the pane search
 `sN.crm-record.commentId`, which the next record or list you open drops.
-Deleting a thread's first comment deletes the thread.
+Deleting a thread's first message deletes the thread.
+On phones, company Overview replaces inline Discussion with the shared newest-message
+card, avatar group, and View discussion action. Tap it to open a half-height Discussion
+sheet; drag the handle or heading to full height, back to half, or down to dismiss.
+Start a discussion opens an empty thread with keyboard focus. Typing expands to
+full height and retains that height after the keyboard closes. The Add to the
+discussion… input uses the same message composer on desktop and phone. The sheet stays in place
+while the pinned composer rises above the keyboard. The company description keeps
+its existing clamp, and desktop discussion remains inline.
 
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active
@@ -464,7 +477,9 @@ that the backdrop, Escape or `Hide navigation` dismisses.
 While the sidebar is collapsed, the split's **Close** sits before
 `Show navigation` in every CRM header, including on a pipeline, a record and
 CRM settings, and stays hidden when the split cannot close.
-The sidebar's Records and Lists sections can also collapse independently.
+The sidebar's Records, Pipelines, and Lists sections collapse independently.
+Drag their headings, or focus a Reorder control and use Up/Down, to save a
+per-account local section order. Import, Export, and Settings stay in the footer.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
 rows in a generic pipeline, in the shared records editor. They have their own identity, ownership and sharing; their

@@ -266,10 +266,13 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
-- Focus classifies an inbox only while its owner is in the rollout
-  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
+- Focus classifies an inbox only while someone whose Focus tab shows it is in the
+  rollout (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus`
+  flag): its owner, or a user it is linked to (`macro_user_links.primary_macro_id`,
+  read as `delegates` by `thread_inbox`, `inboxes_with_focus` and
+  `syncing_inboxes`), so a linked inbox follows its primary user's flag. Check it
   after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
-  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
   inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
   backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
@@ -513,6 +516,21 @@ tools — hexagonal, heavily feature-gated.
   whether a mailbox still has mail with an address leave such rows out
   (`email_db_client`'s `link_has_any_message_with`, and CRM's
   `other_address_mail.sql` and `interactions.sql`).
+- Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
+  5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
+  population share-locks its link) fails instead of holding a pooled
+  connection; a locking read runs in one too. Pre-checks that a write repeats
+  under the lock (settings access) and credential health that has not changed
+  read without the lock, so reads and Graph calls never wait on it. The
+  timeout is SQLSTATE 55P03
+  (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
+  caller retries it: lease release or expiry, message backoff, redelivery, a
+  409 for user requests. A write that records a provider call's result (the
+  draft checkpoint, a command's draft write version) retries it in-process
+  through `record_after_provider`, and a delivery the queue would dead-letter
+  (link deletion) retries in the same delivery, each a bounded number of times
+  inside its lease or visibility timeout. The purge's batches run in
+  `email_db_client` without the timeout.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -585,8 +603,8 @@ tools — hexagonal, heavily feature-gated.
   Items.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
-  answered) once its backoff is at 30 minutes, so a provider outage never
-  abandons a message.
+  answered) or a lock timeout once its backoff is at 30 minutes, so a provider
+  outage or a busy mailbox never abandons a message.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can

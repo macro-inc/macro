@@ -16,6 +16,7 @@ import {
   enableRoutineSharing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { writeClipboardData } from '@core/util/dataTransfer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { useSystemSkillsQuery } from '@queries/storage/system-skills';
@@ -27,7 +28,11 @@ import {
   createChatHistoryMetadata,
 } from './queries/history-metadata';
 import { createRoutineDetailSource } from './queries/routine-sources';
-import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
+import {
+  createRoutineConnectedApps,
+  RoutineApps,
+  RoutineConnectApp,
+} from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { createRoutineStepAuthor } from './routine-step-author';
@@ -36,6 +41,7 @@ import {
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
+import { MobileRoutineEditorHeader } from './views/mobile/routine-editor-header';
 import { RoutineDetailView } from './views/routine-detail';
 
 /** The built-in skill for composing routines (crates/system_skills). */
@@ -68,8 +74,11 @@ export function RoutineDetail(props: {
   const hasPaidAccess = useHasPaidAccess();
   const sharing = useFeatureFlag(enableRoutineSharing);
   const appearanceFlag = useFeatureFlag(enableEntityAppearance);
-  const back = () =>
-    props.onBack ? props.onBack() : openAgentsPage(layout, 'routines');
+  const back = () => {
+    if (props.onBack) props.onBack();
+    else if (isTouchDevice() && panel.handle.canGoBack()) panel.handle.goBack();
+    else openAgentsPage(layout, 'routines');
+  };
   const open = (id: string) =>
     props.onOpen
       ? props.onOpen(id)
@@ -164,6 +173,7 @@ export function RoutineDetail(props: {
       }
     >
       <RoutineDetailView
+        mobileHeader={(header) => <MobileRoutineEditorHeader {...header} />}
         source={source}
         userId={userId}
         identityIcon={
@@ -214,6 +224,7 @@ export function RoutineDetail(props: {
           ExecutionPicker: RoutineExecutionPicker,
           Triggers: RoutineTriggers,
           Apps: RoutineApps,
+          ConnectApp: RoutineConnectApp,
           createConnectedApps: createRoutineConnectedApps,
           createStepAuthor: createRoutineStepAuthor,
           createChatMetadata: createChatHistoryMetadata,

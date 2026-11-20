@@ -24,6 +24,10 @@ pub enum InboxLifecycleError {
     Changed,
     #[error("inbox lifecycle is temporarily unavailable")]
     Unavailable,
+    /// Another transaction held the inbox's rows past the lock timeout; the
+    /// same request succeeds once it finishes.
+    #[error("inbox is busy; retry the operation")]
+    Contended,
 }
 #[derive(Clone)]
 pub struct InboxActor {

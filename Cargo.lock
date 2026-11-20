@@ -375,6 +375,7 @@ dependencies = [
  "specta-typescript",
  "sqlx",
  "system_skills",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
@@ -4428,6 +4429,8 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "model-error-response",
+ "notification",
+ "rootcause",
  "serde",
  "serde_json",
  "sqlx",
@@ -4745,6 +4748,7 @@ dependencies = [
  "rustix 1.1.6",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
@@ -14629,6 +14633,7 @@ dependencies = [
  "aws-sdk-sns",
  "aws-sdk-sqs",
  "axum",
+ "channel_labels",
  "chrono",
  "database_env_vars",
  "doppler-config",
@@ -15199,6 +15204,7 @@ dependencies = [
  "tokio-retry",
  "tokio-rustls",
  "tracing",
+ "unicode-segmentation",
  "uuid",
  "workspace-hack",
 ]
@@ -18533,6 +18539,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "search_freshness_probe"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "channels",
+ "chrono",
+ "doppler-config",
+ "futures",
+ "item_filters",
+ "macro_config",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_service_urls",
+ "macro_tower_layers",
+ "messages",
+ "model",
+ "models_permissions",
+ "models_properties",
+ "models_search",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "strum 0.27.2",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
 name = "search_processing_service"
 version = "0.1.0"
 dependencies = [
@@ -20979,8 +21023,10 @@ dependencies = [
 name = "system_skills"
 version = "0.1.0"
 dependencies = [
+ "model-entity",
  "prompt",
  "routine_program",
+ "serde_json",
  "uuid",
  "workspace-hack",
 ]

@@ -64,6 +64,8 @@ mod ios_preview;
 mod ios_release_drift;
 mod ios_release_watch;
 mod native_check_label;
+mod observability_aws;
+mod observability_cluster;
 mod observability_image;
 mod path_validation;
 mod pr_ci;
@@ -138,6 +140,16 @@ fn job_mut<'a>(root: &'a mut serde_yaml::Value, id: &str) -> Result<&'a mut serd
 
 /// Every workflow we generate. Add new workflows here.
 const WORKFLOWS: &[WorkflowFile] = &[
+    WorkflowFile {
+        slug: "observability_aws",
+        file_name: "observability_aws.yml",
+        render_yaml: || render_gh_workflow(observability_aws::observability_aws)(),
+    },
+    WorkflowFile {
+        slug: "observability_cluster",
+        file_name: "observability_cluster.yml",
+        render_yaml: || render_gh_workflow(observability_cluster::observability_cluster)(),
+    },
     WorkflowFile {
         slug: "observability_image",
         file_name: "observability_image.yml",

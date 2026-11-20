@@ -498,6 +498,11 @@ export type BulkSaveEntityPropertiesInput = {
     property: Property | PropertyDefinitionDomain;
     apiValues: PropertyApiValues;
   }>;
+  /**
+   * Runs once every save is accepted locally: written to the cache and queued
+   * for the server. Without a cache it runs when the requests finish.
+   */
+  onAccepted?: () => void;
 };
 
 type GraphqlBulkMutationOptions<Context> = {
@@ -531,6 +536,8 @@ type GraphqlBulkMutationOptions<Context> = {
  * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
  * lifecycle pending until queued saves commit or permanently fail. Replayed
  * saves retain their submission payload; settlement events carry no response.
+ * A queued save can wait minutes behind older writes, so callers that lock
+ * their controls release them from the input's `onAccepted`.
  */
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
@@ -553,6 +560,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       let permanentError: Error | undefined;
 
       const pending = [];
+      let threw = false;
       const host = getGraphqlCacheHost();
       const prepareGrouped = host
         ? createGroupedPropertyPreparation(host)
@@ -586,6 +594,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
               }
               return { kind: 'result' as const, result };
             } catch (error) {
+              threw = true;
               return {
                 kind: 'error' as const,
                 error:
@@ -600,6 +609,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
           // Preserve layer ordering for relation recipes, not HTTP completion.
           await enqueued;
         }
+        // A save that threw this early was never written or queued.
+        if (!threw) input.onAccepted?.();
         for (const settled of await Promise.all(pending)) {
           if (settled.kind === 'error') {
             permanentError ??= settled.error;

@@ -512,6 +512,14 @@
       "why": "waits for `check-tauri-lockfiles`, which decides whether it runs"
     },
     {
+      "id": "observability-aws/validate",
+      "why": "validates OpenTofu through the AWS layer's separate Nix flake on CI"
+    },
+    {
+      "id": "observability-cluster/check-manifests",
+      "why": "renders Helm charts and validates manifests through the cluster's separate Nix flake on CI"
+    },
+    {
       "id": "macrod-update/macos",
       "why": "runs on another operating system"
     },
