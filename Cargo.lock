@@ -5411,6 +5411,7 @@ dependencies = [
  "user_events",
  "utoipa",
  "uuid",
+ "wiremock",
  "workspace-hack",
 ]
 
