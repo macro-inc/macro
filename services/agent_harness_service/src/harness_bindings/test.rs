@@ -482,6 +482,55 @@ async fn renewal_extends_a_lease_and_restores_a_missing_row(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn renewal_extends_leases_while_the_shared_pool_is_exhausted(pool: PgPool) {
+    let harness = insert_harness(&pool).await;
+    let shared = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(pool.connect_options().as_ref().clone())
+        .await
+        .unwrap();
+    let replica = Arc::new(PgHarnessPresence::new(shared.clone(), ReplicaId::mint()));
+    let connection = RuntimeConnectionId::generate();
+    Arc::clone(&replica)
+        .connected(
+            harness,
+            connection,
+            agent_harness::domain::ports::RuntimeAccepts::default(),
+        )
+        .await;
+    sqlx::query!(
+        r#"UPDATE harness_runtime_connection SET lease_expires_at = now() + interval '1 second'"#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Everything else in the service holds the shared pool's connections.
+    let _busy = shared.acquire().await.unwrap();
+    tokio::time::timeout(
+        Duration::from_secs(10),
+        Arc::clone(&replica).renew(vec![(harness, connection)]),
+    )
+    .await
+    .expect("the renewal does not wait for the shared pool");
+
+    let lease_left = sqlx::query_scalar!(
+        r#"
+        SELECT extract(epoch FROM lease_expires_at - now())::float8 AS "seconds!"
+        FROM harness_runtime_connection WHERE id = $1
+        "#,
+        connection.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        lease_left > 20.0,
+        "the lease was not extended: {lease_left}s left"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn simultaneous_final_closes_leave_a_harness_offline(pool: PgPool) {
     // Racing writes interleave differently each time, so give them many chances.
     for _ in 0..25 {
