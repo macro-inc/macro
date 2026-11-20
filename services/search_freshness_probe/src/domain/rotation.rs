@@ -2,7 +2,9 @@
 //! search: the new token matches, the token it replaced does not, and a
 //! deleted entity matches nothing.
 
-use super::model::{Change, Check, EntityId, EntityType, Operation, Presence, SearchQuery, Token};
+use super::model::{
+    Change, Check, CrowdedPrefix, EntityId, EntityType, Operation, Presence, SearchQuery, Token,
+};
 use super::ports::{
     Body, CreatedWrites, FixtureWrites, NoChange, PropertyWrites, Rotation, TextField, Title,
     TitleOrBody, WriteFailed,
@@ -354,6 +356,98 @@ impl<A: PropertyWrites> Rotation for PropertyValue<A> {
         if let Some(holder) = self.holder.take() {
             self.stale.push(holder.id);
         }
+        self.delete_stale().await;
+        self.api.close().await;
+    }
+}
+
+/// An earlier round's document is still there: a new one would pile up.
+#[derive(Debug, thiserror::Error)]
+#[error("{0} earlier crowded-prefix documents could not be deleted")]
+pub struct NotDeleted(usize);
+
+/// A document whose body is one word sorting late under a crowded prefix,
+/// made new every round and searched for by the prefix alone. Search that
+/// expands only the first few hundred words of a shard starting with the
+/// prefix, before any permission check, never reaches it: the exact-token
+/// rounds cannot see that, this one does. Each round first deletes the last
+/// round's document, unmeasured, and fails rather than create another while
+/// one is left.
+pub struct LatePrefixWord<A: CreatedWrites<Field = TitleOrBody>> {
+    api: A,
+    prefix: CrowdedPrefix,
+    /// The document this round made.
+    current: Option<EntityId>,
+    /// Documents of earlier rounds not deleted yet.
+    stale: Vec<EntityId>,
+}
+
+impl<A: CreatedWrites<Field = TitleOrBody>> LatePrefixWord<A> {
+    /// A rotation searching documents for `prefix`.
+    pub fn new(api: A, prefix: CrowdedPrefix) -> Self {
+        Self {
+            api,
+            prefix,
+            current: None,
+            stale: Vec::new(),
+        }
+    }
+
+    /// Deletes the earlier rounds' documents, keeping the ones that fail.
+    async fn delete_stale(&mut self) {
+        self.stale.extend(self.current.take());
+        let mut kept = Vec::new();
+        for document in std::mem::take(&mut self.stale) {
+            if let Err(error) = self.api.delete(document).await {
+                tracing::warn!(error = ?error, entity_id = %document, "the probe could not delete a crowded-prefix document");
+                kept.push(document);
+            }
+        }
+        self.stale = kept;
+    }
+}
+
+impl<A: CreatedWrites<Field = TitleOrBody>> Rotation for LatePrefixWord<A> {
+    fn entity_type(&self) -> EntityType {
+        A::ENTITY_TYPE
+    }
+
+    async fn prepare(&mut self) {
+        self.delete_stale().await;
+    }
+
+    async fn change(&mut self) -> Result<Change, NoChange> {
+        if !self.stale.is_empty() {
+            return Err(failed(Operation::CrowdedPrefix)(NotDeleted(self.stale.len())).into());
+        }
+
+        let texts = [
+            (TitleOrBody::Body, Token::after(&self.prefix)),
+            (TitleOrBody::Title, Token::random()),
+        ];
+        let id = self
+            .api
+            .create(&texts)
+            .await
+            .map_err(failed(Operation::CrowdedPrefix))?;
+        self.current = Some(id);
+
+        Ok(Change {
+            operation: Operation::CrowdedPrefix,
+            entity_id: id,
+            checks: vec![Check {
+                query: SearchQuery::Prefix {
+                    entity_type: A::ENTITY_TYPE,
+                    prefix: self.prefix.clone(),
+                    entity_id: id,
+                },
+                entity_id: id,
+                presence: Presence::Present,
+            }],
+        })
+    }
+
+    async fn clean_up(&mut self) {
         self.delete_stale().await;
         self.api.close().await;
     }

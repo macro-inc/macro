@@ -15,6 +15,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod claims;
 mod delivery_status;
+mod lock_timeouts;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";

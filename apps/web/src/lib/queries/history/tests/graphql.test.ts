@@ -5,6 +5,7 @@ import type {
   SearchCachePage,
 } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { describe, expect, it, vi } from 'vitest';
 import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 import {
@@ -29,6 +30,55 @@ function cacheHost(
 }
 
 describe('cached GraphQL history', () => {
+  it('keeps the pre-read generation on a delayed history write', async () => {
+    const read = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    const writeQuery = vi.fn(async () => ({
+      revision: INITIAL_CACHE_REVISION,
+      revisionAdvanced: false,
+      changed: [],
+      affectedOps: [],
+      reset: false,
+    }));
+    const host = {
+      async readRecordsByKeys() {
+        started.resolve();
+        await read.promise;
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          records: [
+            {
+              recordKey: 'GraphqlSoupDocument:delayed',
+              record: {
+                __typename: 'GraphqlSoupDocument',
+                name: 'Note',
+                viewedAt: null,
+              },
+            },
+          ],
+        };
+      },
+      writeQuery,
+    };
+    const generation = cacheSessionGeneration.capture();
+    const pending = stampCachedHistoryView(
+      host,
+      {
+        itemId: 'delayed',
+        itemType: 'document',
+        viewedAt: '2026-11-19T00:00:00Z',
+      },
+      async () => {}
+    );
+    await started.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    read.resolve();
+    await pending;
+    expect(writeQuery).toHaveBeenCalledWith(
+      expect.objectContaining({ generation })
+    );
+  });
+
   it('filters cached backing descriptions while retaining notes, tasks and folders', async () => {
     const entries = [
       {

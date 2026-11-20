@@ -20,7 +20,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
         &self,
         lease_id: Uuid,
     ) -> Result<Option<ProjectionLease>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
             .await
@@ -37,9 +37,12 @@ impl MailboxProjectionRepository for PgMailboxSync {
                 WHERE l.is_sync_active AND l.provider=$2::text::email_user_provider_enum
                 ORDER BY due.available_at,due.id LIMIT 1
             )
-            UPDATE email_projection_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1
+            -- Every recorded outcome deletes the entry or clears its lease, so a
+            -- lease still set here expired under a worker that stopped.
+            UPDATE email_projection_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1,
+                unfinished_claims = CASE WHEN o.lease_id IS NULL THEN 0 ELSE o.unfinished_claims + 1 END
             FROM candidate c,email_links l WHERE o.id = c.id AND l.id = o.link_id
-            RETURNING o.id,o.link_id,o.generation,o.payload,o.attempts,l.sync_generation,l.grant_generation
+            RETURNING o.id,o.link_id,o.generation,o.payload,o.attempts,o.unfinished_claims,l.sync_generation,l.grant_generation
         "#,lease_id,self.provider.as_str()).fetch_optional(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)?;
         row.map(|row| {
@@ -55,6 +58,7 @@ impl MailboxProjectionRepository for PgMailboxSync {
                     .map_err(|_| MailboxError::Persistence)?,
                 from_current_generation: row.generation == row.sync_generation,
                 attempts: row.attempts,
+                unfinished_claims: row.unfinished_claims,
             })
         })
         .transpose()
@@ -102,21 +106,28 @@ impl MailboxProjectionRepository for PgMailboxSync {
     async fn finish_projection(
         &self,
         lease: &ProjectionLease,
-        retry_after_seconds: Option<u32>,
+        retry: Option<MessageRetry>,
     ) -> Result<(), MailboxError> {
-        match retry_after_seconds {
-            None => {
-                sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
+        match retry {
+            None | Some(MessageRetry::Abandon) => {
+                let deleted = sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
                     .execute(&self.db).await.map_err(db_error)?;
+                // An abandonment is logged once, by the worker whose lease
+                // deleted the entry; one that lost its lease reports it lost.
+                if matches!(retry, Some(MessageRetry::Abandon)) && deleted.rows_affected() != 1 {
+                    return Err(MailboxError::Stale);
+                }
             }
-            Some(delay) => {
+            Some(MessageRetry::After { seconds, counted }) => {
                 sqlx::query!(
                     r#"UPDATE email_projection_outbox SET lease_id = NULL,lease_until = NULL,
-                    available_at = now() + make_interval(secs => $3)
-                    WHERE id = $1 AND lease_id = $2"#,
+                    available_at = now() + make_interval(secs => $3),
+                    attempts = attempts - CASE WHEN $4 THEN 0 ELSE 1 END
+                    WHERE id = $1 AND lease_id = $2 AND lease_until > now()"#,
                     lease.id,
                     lease.lease_id,
-                    f64::from(delay)
+                    f64::from(seconds),
+                    counted
                 )
                 .execute(&self.db)
                 .await

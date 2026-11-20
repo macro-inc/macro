@@ -8,7 +8,7 @@ impl ImapNotificationRepository for PgMailboxSync {
         mailbox: MailboxKey,
         credentials_rejected: bool,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let current=sqlx::query!("SELECT needs_reauth FROM email_links WHERE id=$1 AND provider='IMAP' AND is_sync_active AND sync_generation=$2 AND grant_generation=$3 FOR UPDATE",mailbox.link_id,mailbox.sync_generation,mailbox.grant_generation).fetch_optional(&mut *tx).await.map_err(db_error)?;
         // Delayed notifications after reconnect or disconnect are intentionally ignored.
         let Some(current) = current else {

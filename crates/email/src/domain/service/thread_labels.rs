@@ -240,8 +240,7 @@ where
         if !targets.is_empty() {
             self.email_repo
                 .enqueue_mailbox_action(link.id, actor, &action, &targets)
-                .await
-                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+                .await?;
         }
         Ok(UpdateThreadLabelsResult {
             successful_ids: targets.iter().map(|t| t.message_id).collect(),

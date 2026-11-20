@@ -6,6 +6,7 @@ import {
   type SearchDocumentWire,
   selectRecords,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import type { HistoryItemType } from '@service-storage/client';
 import {
   type GraphqlChatQuickAccessNameFragment,
@@ -192,8 +193,9 @@ export function stampCachedHistoryView(
 ): Promise<boolean> {
   const typename = HISTORY_TYPENAME_BY_ITEM_TYPE[view.itemType];
   if (!typename) return Promise.resolve(false);
+  const generation = cacheSessionGeneration.capture();
   const key = `${typename}:${view.itemId}`;
-  const run = () => stampRecord(cacheHost, typename, view, load);
+  const run = () => stampRecord(cacheHost, typename, view, load, generation);
   const stamp = (pendingStamps.get(key) ?? Promise.resolve(false)).then(
     run,
     run
@@ -208,7 +210,8 @@ async function stampRecord(
   cacheHost: Pick<CacheHost, 'readRecordsByKeys' | 'writeQuery'>,
   typename: HistoryTypename,
   view: { itemId: string; viewedAt: string },
-  load: (typename: HistoryTypename) => Promise<void>
+  load: (typename: HistoryTypename) => Promise<void>,
+  generation: string
 ): Promise<boolean> {
   let cached = await cachedViewedAt(cacheHost, typename, view.itemId);
   if (cached === undefined) {
@@ -219,6 +222,7 @@ async function stampRecord(
   if (cached !== null && Date.parse(cached) >= Date.parse(view.viewedAt))
     return true;
   await cacheHost.writeQuery({
+    generation,
     query: stringifyDocument(HistoryViewedAtCacheWriteDocument),
     operationName: 'HistoryViewedAtCacheWrite',
     data: {

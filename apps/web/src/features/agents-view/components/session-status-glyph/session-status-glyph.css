@@ -1,0 +1,14 @@
+.session-waiting-dot {
+  opacity: 0.32;
+  animation: session-waiting-orbit 1300ms steps(1, end) infinite;
+}
+
+@keyframes session-waiting-orbit {
+  0%, 100% { opacity: 1; }
+  12.5% { opacity: 0.6; }
+  25% { opacity: 0.32; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-waiting-dot { animation: none; opacity: 1; }
+}

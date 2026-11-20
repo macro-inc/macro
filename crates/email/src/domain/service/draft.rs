@@ -312,8 +312,7 @@ where
                 Some(macro_id.as_ref()),
                 expected_generation,
             )
-            .await
-            .map_err(anyhow::Error::from)?;
+            .await?;
 
         let Some(deletion) = deletion else {
             // The guarded delete matched nothing: between the read above and
@@ -672,8 +671,7 @@ where
                     input.actor.as_ref().map(|actor| actor.as_ref()),
                     input.draft_generation,
                 )
-                .await
-                .map_err(anyhow::Error::from)?;
+                .await?;
             if deleted.is_none()
                 && let Some(retained) = self
                     .email_repo

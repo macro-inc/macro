@@ -202,6 +202,17 @@ impl FocusStore for FocusPgRepository {
         let Some(row) = sqlx::query!(
             r#"
             SELECT t.id, t.link_id, t.is_signal, t.inbox_visible, el.macro_id, el.email_address,
+                   -- The other users whose Focus tab lists the inbox, as
+                   -- focus_thread_ids reads it for them: an index probe on
+                   -- macro_user_links_link_idx, sorted and deduplicated in
+                   -- `delegates` rather than once per inbox here.
+                   -- inboxes_with_focus and syncing_inboxes restate it;
+                   -- change all three.
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = t.link_id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!",
                    f.classified_message_id AS "classified_message_id?",
                    f.rule_version AS "rule_version?",
                    f.scores AS "scores?",
@@ -246,6 +257,7 @@ impl FocusStore for FocusPgRepository {
             thread_id: row.id,
             link_id: row.link_id,
             owner: MacroUserIdStr::try_from(row.macro_id)?,
+            delegates: delegates(row.link_id, row.delegates),
             owner_email: row.email_address.to_lowercase(),
             is_signal: row.is_signal,
             inbox_visible: row.inbox_visible,
@@ -476,7 +488,12 @@ impl FocusStore for FocusPgRepository {
                 FROM focus_links l
                 WHERE l.link_id IS NOT NULL
             )
-            SELECT el.id, el.macro_id
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
             FROM focus_links l
             JOIN email_links el ON el.id = l.link_id
             "#,
@@ -489,6 +506,7 @@ impl FocusStore for FocusPgRepository {
                 Ok(FocusInboxOwner {
                     link_id: row.id,
                     owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
                 })
             })
             .collect()
@@ -496,16 +514,29 @@ impl FocusStore for FocusPgRepository {
 
     #[tracing::instrument(skip(self), fields(inboxes = tracing::field::Empty), err)]
     async fn syncing_inboxes(&self) -> Result<Vec<FocusInboxOwner>, Report> {
-        // One row per connected mailbox: a small table, read whole.
-        let rows = sqlx::query!("SELECT id, macro_id FROM email_links WHERE is_sync_active")
-            .fetch_all(&self.0)
-            .await?;
+        // One row per connected mailbox: a small table, read whole, with an
+        // index probe each for the users it is linked to.
+        let rows = sqlx::query!(
+            r#"
+            SELECT el.id, el.macro_id,
+                   ARRAY(
+                       SELECT mul.primary_macro_id
+                       FROM macro_user_links mul
+                       WHERE mul.link_id = el.id AND mul.primary_macro_id <> el.macro_id
+                   ) AS "delegates!"
+            FROM email_links el
+            WHERE el.is_sync_active
+            "#,
+        )
+        .fetch_all(&self.0)
+        .await?;
         tracing::Span::current().record("inboxes", rows.len());
         rows.into_iter()
             .map(|row| {
                 Ok(FocusInboxOwner {
                     link_id: row.id,
                     owner: MacroUserIdStr::try_from(row.macro_id)?,
+                    delegates: delegates(row.id, row.delegates),
                 })
             })
             .collect()
@@ -720,6 +751,24 @@ impl FocusStore for FocusPgRepository {
             })
             .collect())
     }
+}
+
+/// The users other than its owner inbox `link_id` is linked to, sorted, each
+/// once: a user can reach an inbox through more than one account. A malformed id
+/// is left out, so one bad row never fails a read of many inboxes, and is never
+/// quoted: a Macro user id holds an address.
+fn delegates(link_id: Uuid, mut ids: Vec<String>) -> Vec<MacroUserIdStr<'static>> {
+    ids.sort_unstable();
+    ids.dedup();
+    ids.into_iter()
+        .filter_map(|id| {
+            MacroUserIdStr::try_from(id)
+                .inspect_err(
+                    |_| tracing::warn!(%link_id, "focus left out a malformed linked user id"),
+                )
+                .ok()
+        })
+        .collect()
 }
 
 #[cfg(test)]

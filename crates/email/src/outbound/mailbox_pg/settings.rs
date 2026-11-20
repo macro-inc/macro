@@ -16,13 +16,26 @@ async fn authorized(
         WHERE l.id=$1 AND l.is_sync_active AND l.disconnect_requested_at IS NULL
         AND (l.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2)) FOR UPDATE"#,link,actor.as_ref())
         .fetch_optional(tx).await.map_err(db_error)?.ok_or(EmailApiError::NotFound)?;
+    settings_mailbox(
+        link,
+        row.sync_generation,
+        row.grant_generation,
+        &row.provider,
+    )
+}
+fn settings_mailbox(
+    link: Uuid,
+    sync_generation: i64,
+    grant_generation: i64,
+    provider: &str,
+) -> Result<SettingsMailbox, MailboxError> {
     Ok(SettingsMailbox {
         key: MailboxKey {
             link_id: link,
-            sync_generation: row.sync_generation,
-            grant_generation: row.grant_generation,
+            sync_generation,
+            grant_generation,
         },
-        provider: match row.provider.as_str() {
+        provider: match provider {
             "OUTLOOK" => UserProvider::Outlook,
             "IMAP" => UserProvider::Imap,
             "GMAIL" => UserProvider::Gmail,
@@ -73,12 +86,18 @@ impl MailboxSettingsRepository for PgMailboxSync {
         actor: &MacroUserIdStr<'_>,
         link: Uuid,
     ) -> Result<SettingsMailbox, MailboxError> {
-        authorized(
-            &mut *self.db.acquire().await.map_err(db_error)?,
-            actor,
+        // Only a pre-check: every write checks again under the link lock in its
+        // own transaction, so the reads behind this never wait on that lock.
+        let row = sqlx::query!(r#"SELECT sync_generation,grant_generation,provider::text AS "provider!" FROM email_links l
+            WHERE l.id=$1 AND l.is_sync_active AND l.disconnect_requested_at IS NULL
+            AND (l.macro_id=$2 OR EXISTS(SELECT 1 FROM macro_user_links u WHERE u.link_id=l.id AND u.primary_macro_id=$2))"#,link,actor.as_ref())
+            .fetch_optional(&self.db).await.map_err(db_error)?.ok_or(EmailApiError::NotFound)?;
+        settings_mailbox(
             link,
+            row.sync_generation,
+            row.grant_generation,
+            &row.provider,
         )
-        .await
     }
     async fn store_label(
         &self,
@@ -86,7 +105,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         mailbox: SettingsMailbox,
         label: Label,
     ) -> Result<Label, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         if authorized(&mut tx, actor, mailbox.key.link_id).await?.key != mailbox.key {
             return Err(MailboxError::Stale);
         }
@@ -106,7 +125,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         mailbox: SettingsMailbox,
         name: &str,
     ) -> Result<Label, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         if authorized(&mut tx, actor, mailbox.key.link_id).await?.key != mailbox.key {
             return Err(MailboxError::Stale);
         }
@@ -146,7 +165,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         lease: &SettingsLease,
         label: Label,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         if lease.kind != "create_label"
             || label.link_id != lease.mailbox.key.link_id
@@ -166,7 +185,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         link: Uuid,
         label: Uuid,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let mailbox = authorized(&mut tx, actor, link).await?;
         let row = sqlx::query!(
             "SELECT provider_label_id FROM email_labels WHERE id=$1 AND link_id=$2 AND type='User'",
@@ -200,7 +219,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         sender: &str,
         blocked: bool,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         let mailbox = authorized(&mut tx, actor, link).await?;
         super::super::email_pg_repo::sender_policy::enqueue(&mut tx, link, sender, blocked)
             .await
@@ -293,7 +312,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         .transpose()
     }
     async fn renew_settings(&self, lease: &SettingsLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!("UPDATE email_mailbox_settings_work SET lease_until=now()+interval '3 minutes' WHERE id=$1",lease.id).execute(&mut *tx).await.map_err(db_error)?;
         tx.commit().await.map_err(db_error)
@@ -303,7 +322,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         lease: &SettingsLease,
         labels: &[Label],
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         let deleting=sqlx::query_scalar!("SELECT resource_key FROM email_mailbox_settings_work WHERE link_id=$1 AND kind='delete_label' AND completed_revision<revision",lease.mailbox.key.link_id)
             .fetch_all(&mut *tx).await.map_err(db_error)?;
@@ -328,7 +347,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         lease: &SettingsLease,
         message: &ProviderId,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         sqlx::query!(r#"INSERT INTO email_message_reconciliation(link_id,generation,provider_id,is_import) VALUES($1,$2,$3,false)
             ON CONFLICT(link_id,generation,provider_id) DO UPDATE SET revision=email_message_reconciliation.revision+1,available_at=now(),is_import=false"#,
@@ -342,7 +361,7 @@ impl MailboxSettingsRepository for PgMailboxSync {
         delay: u32,
         failure: Option<&str>,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         guard(&mut tx, lease).await?;
         if complete && lease.kind == "delete_label" {
             sqlx::query!("DELETE FROM email_message_labels m USING email_labels l WHERE m.label_id=l.id AND l.link_id=$1 AND l.provider_label_id=$2",lease.mailbox.key.link_id,lease.resource)

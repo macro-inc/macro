@@ -89,7 +89,12 @@ pub async fn lock_gmail_connection(
     Ok(())
 }
 
-fn unavailable<E: std::fmt::Debug>(error: E) -> InitializationError {
+/// A lock timeout means the inbox was busy, and connecting again succeeds.
+fn unavailable<E: Into<anyhow::Error>>(error: E) -> InitializationError {
+    let error = error.into();
+    if crate::outbound::link_lock::caused_by_lock_timeout(&error) {
+        return InitializationError::Contended;
+    }
     tracing::error!(?error, "mailbox initialization persistence failed");
     InitializationError::Unavailable
 }
@@ -197,12 +202,12 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         request: &InitializeMailbox,
         grant: &VerifiedMailboxGrant,
     ) -> Result<InitializationSnapshot, InitializationError> {
-        snapshot(
-            &mut *self.0.acquire().await.map_err(unavailable)?,
-            request,
-            grant,
-        )
-        .await
+        let mut tx = crate::outbound::link_lock::begin(&self.0)
+            .await
+            .map_err(unavailable)?;
+        let current = snapshot(&mut tx, request, grant).await?;
+        tx.commit().await.map_err(unavailable)?;
+        Ok(current)
     }
 
     async fn commit(
@@ -212,7 +217,9 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         expected: &InitializationSnapshot,
         decision: InitializationDecision,
     ) -> Result<Uuid, InitializationError> {
-        let mut tx = self.0.begin().await.map_err(unavailable)?;
+        let mut tx = crate::outbound::link_lock::begin(&self.0)
+            .await
+            .map_err(unavailable)?;
         sqlx::query!(
             "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
             format!("inbox-entitlement:{}", request.actor)

@@ -210,18 +210,18 @@ async fn wait_in_retry_queue<R, G, Q: GmailOpsRetryQueue>(
     ProcessingError::NonRetryable(waiting())
 }
 
-fn prefix_error_source(error: ProcessingError, operation_name: &str) -> ProcessingError {
+fn prefix_error_source(error: ProcessingError, operation_name: &'static str) -> ProcessingError {
     match error {
         ProcessingError::Retryable(DetailedError { reason, source }) => {
             ProcessingError::Retryable(DetailedError {
                 reason,
-                source: anyhow!("{}: {}", operation_name, source),
+                source: source.context(operation_name),
             })
         }
         ProcessingError::NonRetryable(DetailedError { reason, source }) => {
             ProcessingError::NonRetryable(DetailedError {
                 reason,
-                source: anyhow!("{}: {}", operation_name, source),
+                source: source.context(operation_name),
             })
         }
     }

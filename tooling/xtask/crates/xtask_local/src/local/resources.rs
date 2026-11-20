@@ -124,6 +124,14 @@ impl Queue {
                 (14 * 24 * 60 * 60).to_string(),
             )]
             .into(),
+            // The deployed queue's visibility timeout and delivery delay. It
+            // also deduplicates per message group, which changes nothing here:
+            // every message carries a deduplication id of its own.
+            macro_queues::EmailCrmPopulationQueue::LOCAL => [
+                (QueueAttributeName::VisibilityTimeout, "60".to_string()),
+                (QueueAttributeName::DelaySeconds, "10".to_string()),
+            ]
+            .into(),
             _ => Default::default(),
         }
     }
@@ -184,6 +192,14 @@ pub const QUEUES: &[Queue] = &[
         name: macro_queues::EmailCrmCleanupQueue::LOCAL,
         bindings: &[(
             macro_queues::EmailCrmCleanupQueue::OVERRIDE_ENV_VAR_NAME,
+            Url,
+        )],
+    },
+    Queue {
+        // Consumed by email_service's CRM population workers.
+        name: macro_queues::EmailCrmPopulationQueue::LOCAL,
+        bindings: &[(
+            macro_queues::EmailCrmPopulationQueue::OVERRIDE_ENV_VAR_NAME,
             Url,
         )],
     },

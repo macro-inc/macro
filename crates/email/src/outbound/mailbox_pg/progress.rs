@@ -38,7 +38,7 @@ impl MailboxProgressRepository for PgMailboxSync {
     }
 
     async fn backlogs(&self) -> Result<Vec<MailboxBacklog>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         sqlx::query!("SET LOCAL statement_timeout = '15s'")
             .execute(&mut *tx)
             .await

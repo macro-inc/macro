@@ -77,8 +77,9 @@ focus, and Esc returns to the row; see
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
-In splits 720px wide or narrower the list fills the split until a row opens,
-which then fills it with **Back** (left arrow) returning to the list.
+On desktop, a new split shows the list beside its empty preview, like any
+split wider than 720px. In splits 720px wide or narrower the list fills the split until a
+row opens, which then fills it with **Back** (left arrow) returning to the list.
 Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
@@ -364,16 +365,19 @@ event over GraphQL or the legacy WebSocket gateway, so they do not trigger brows
 Those rows are available on the next fetch/refetch. Signal delivery and the existing
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
 
-Discussion composers on companies, contacts, documents, tasks, and PRs use the
-shared channel/AI composer surface, 26.25px desktop corners, 15px desktop text, and
-a circular neutral Send button. Edit with AI uses the same composer treatment.
+Discussion composers on projects, companies, contacts, documents, tasks, and PRs
+use the shared channel/AI composer surface, 26.25px desktop corners, 15px desktop
+text, and a circular neutral Send button. Edit with AI uses the same composer treatment.
 Inline comments, replies, and their edits use a plain
 input without a surface background, rounded frame, or shadow. Attachment and
 formatting actions stay available.
-On mobile, open documents and tasks put their new-comment composer in the
-accessory dock above navigation, using the channel input's compact pill and
-expanded surface. New is hidden when the comment composer is available; list
-screens keep New. Users without comment permission have no comment composer.
+On phones, projects, tasks, and companies use the shared Discussion entry and
+sheet with a pinned new-comment composer. The thread shrinks around the keyboard
+without moving the sheet. Ordinary documents and tablet tasks keep their
+new-comment composer in the accessory dock above navigation, using the channel
+input's compact pill and expanded surface. New is hidden when that docked
+composer is available; list screens keep New. Users without comment permission
+have no comment composer.
 The floating Ask AI input appears only on the AI/Agents view.
 
 On touch devices, an email thread's floating action bar has Previous email and

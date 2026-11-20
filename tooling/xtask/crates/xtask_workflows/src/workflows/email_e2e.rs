@@ -270,12 +270,13 @@ fn scenarios() -> Job {
 /// [`REPORTS_KNOWN_BUGS`] holds, the search scenarios kept for known bugs.
 fn search() -> Job {
     job("Email end-to-end (search)")
-        .add_env(("EMAIL_E2E_OPENSEARCH_URL", "http://127.0.0.1:9200"))
+        .add_env(("EMAIL_E2E_OPENSEARCH_URL", steps::SEARCH_OPENSEARCH_URL))
         .add_env(("EMAIL_E2E_SCENARIOS", SEARCH))
         .add_env(("EMAIL_E2E_BUILD_INDEXER", "true"))
-        .add_step(start_opensearch())
+        // Started first, so it is up by the time the services are built.
+        .add_step(steps::start_opensearch())
         .map(prepare)
-        .add_step(create_search_indices())
+        .add_step(steps::create_search_indices())
         .add_step(run_scenarios())
         .map(|job| keep_results(job, "email-e2e-results-search"))
         .add_step(known_bugs())
@@ -427,17 +428,6 @@ pub(crate) fn kafka_service() -> Container {
              localhost:9092 > /dev/null 2>&1\" --health-interval 2s --health-start-period 60s \
              --health-timeout 10s --health-retries 20",
         )
-}
-
-/// OpenSearch for the search scenarios. Not a service container: the image
-/// is built from the local stack's Dockerfile, which adds a plugin. Started
-/// first, so it is up by the time the services are built.
-fn start_opensearch() -> Step<Run> {
-    Step::new("start opensearch").run(include_str!("scripts/email_e2e_opensearch.sh"))
-}
-
-fn create_search_indices() -> Step<Run> {
-    Step::new("create the search indices").run(include_str!("scripts/email_e2e_search_indices.sh"))
 }
 
 /// Room for every scenario's connection pools.

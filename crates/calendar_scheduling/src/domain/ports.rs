@@ -48,13 +48,14 @@ pub trait Repository: Send + Sync + 'static {
     /// Count the bookings that take a place in an event type's daily limit on
     /// `[start, end)`: live bookings starting then, and moves out of that day
     /// still waiting on the calendar's first answer, since a refusal puts them
-    /// back.
+    /// back. `exclude` leaves out the booking being moved.
     fn daily_bookings(
         &self,
         profile: Uuid,
         event_type: Uuid,
         start: DateTime<Utc>,
         end: DateTime<Utc>,
+        exclude: Option<Uuid>,
     ) -> impl Future<Output = Result<i64, Error>> + Send;
     /// Reserve host ranges atomically; enforce the daily limit and idempotency.
     fn reserve(

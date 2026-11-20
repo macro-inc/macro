@@ -301,7 +301,9 @@ function inputPrompt(value = 'Summarize updates'): HTMLTextAreaElement {
 }
 
 function openPicker(): void {
-  const trigger = screen.getByRole('button', { name: 'Agent' });
+  const trigger = screen.getByRole('button', {
+    name: 'Choose an agent or model',
+  });
   trigger.focus();
   fireEvent.keyDown(trigger, { key: 'Enter' });
 }
@@ -311,27 +313,30 @@ async function selectTarget(
 ): Promise<void> {
   openPicker();
   if (target === 'agent') {
-    fireEvent.click(screen.getByRole('menuitem', { name: /^Researcher/ }));
+    press(screen.getByRole('menuitemradio', { name: /^Researcher/ }), 'Enter');
   } else {
     let menu: HTMLElement | undefined;
     if (target === 'override') {
-      const row = screen.getByRole('menuitem', { name: /^Researcher/ });
+      press(
+        screen.getByRole('menuitemradio', { name: /^Researcher/ }),
+        'Enter'
+      );
+      const row = screen.getByRole('menuitem', { name: /^Model / });
       row.focus();
       fireEvent.keyDown(row, { key: 'ArrowRight' });
-      // Do not select the same model from the root Macro catalog.
-      menu = await screen.findByRole('menu', { name: /^Researcher/ });
-      await within(menu).findByRole('textbox', { name: 'Search models' });
+      menu = await screen.findByRole('menu', { name: /^Model / });
     }
-    const item = (menu ? within(menu) : screen).getByRole('menuitem', {
+    const item = (menu ? within(menu) : screen).getByRole('menuitemradio', {
       name: 'Custom model',
     });
     item.focus();
     fireEvent.keyDown(item, { key: 'Enter' });
   }
+  fireEvent.keyDown(document, { key: 'Escape' });
   await waitFor(() =>
     expect(
       screen
-        .getByRole('button', { name: 'Agent' })
+        .getByRole('button', { name: 'Choose an agent or model' })
         .getAttribute('aria-expanded')
     ).toBe('false')
   );
@@ -470,9 +475,10 @@ describe('routine composer execution selection', () => {
       screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Instructions' })
         .value
     ).toBe('Last keystroke');
-    expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
-      'Researcher'
-    );
+    expect(
+      screen.getByRole('button', { name: 'Choose an agent or model' })
+        .textContent
+    ).toContain('Researcher');
     vi.advanceTimersByTime(500);
     expect(loadRoutineComposerDraft()?.target).toEqual({
       kind: 'agent',
@@ -526,7 +532,9 @@ describe('routine composer execution selection', () => {
     inputPrompt();
     create();
     await vi.advanceTimersByTimeAsync(0);
-    const picker = screen.getByRole('button', { name: 'Agent' });
+    const picker = screen.getByRole('button', {
+      name: 'Choose an agent or model',
+    });
     expect(picker.closest('fieldset')?.disabled).toBe(true);
     expect(
       screen.getByRole<HTMLButtonElement>('button', { name: 'Creating…' })

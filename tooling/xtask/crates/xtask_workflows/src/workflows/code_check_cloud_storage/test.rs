@@ -417,3 +417,44 @@ fn live_query_crates_are_where_the_dating_looks() {
         );
     }
 }
+
+/// The content search target is `test = false`, and cargo's `--tests` drops it
+/// even when `--test` names it, so its step must never pass `--tests`, or a
+/// full run reports success without running it.
+#[test]
+fn the_content_search_step_runs_its_target_on_every_selection() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let stub_bin = tempfile::tempdir().unwrap();
+    let cargo = stub_bin.path().join("cargo");
+    std::fs::write(&cargo, "#!/bin/sh\necho \"$@\"\n").unwrap();
+    std::fs::set_permissions(&cargo, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    for packages in ["all", "opensearch_client search_service"] {
+        let output = std::process::Command::new("bash")
+            .args([
+                "-c",
+                "export PATH=\"$STUB_BIN:$PATH\"\nexec bash \"$STUB_SCRIPT\"",
+            ])
+            // CI's dev shell sets BASH_ENV, which puts the real cargo back in
+            // front of the stand-in.
+            .env_remove("BASH_ENV")
+            .env("STUB_BIN", stub_bin.path())
+            .env(
+                "STUB_SCRIPT",
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("src/workflows/scripts/run_tests.sh"),
+            )
+            .env("RUST_PACKAGES", packages)
+            .env("NEXTEST_RUN_OPENSEARCH_TESTS", "true")
+            .output()
+            .unwrap();
+        let command = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{packages}: {output:?}");
+        assert!(
+            command.contains("--test content_search"),
+            "{packages}: {command}"
+        );
+        assert!(!command.contains("--tests"), "{packages}: {command}");
+    }
+}
