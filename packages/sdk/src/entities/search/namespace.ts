@@ -50,23 +50,29 @@ const searchTypes: readonly SearchType[] = [
  *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
  *
+ * Every search is a heavy request that everyone else's searches queue behind. Run searches one after another, never with Promise.all or Promise.allSettled over queries or kinds, and search several kinds at once with one macro.search.all(query, {types}) rather than one per-type search each.
+ *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
  * ```typescript
  * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
- *   const outcomes = await Promise.allSettled(queries.map(async query => {
+ *   const outcomes = [];
+ *   for (const query of queries) {
  *     const evidence = [];
  *     let stoppedEarly = false;
- *     for await (const result of macro.search.all(query, {searchOn:'content'})) {
- *       if (evidence.length === 5) { stoppedEarly = true; break; }
- *       evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
- *         text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *     try {
+ *       for await (const result of macro.search.all(query, {searchOn:'content', types:['document', 'email']})) {
+ *         if (evidence.length === 5) { stoppedEarly = true; break; }
+ *         evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
+ *           text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
+ *       }
+ *       outcomes.push({query,evidence,stoppedEarly});
+ *     } catch (error) {
+ *       outcomes.push({query,evidence,error:String(error)});
  *     }
- *     return {query,evidence,stoppedEarly};
- *   }));
- *   return {data: outcomes.map((item,index) => item.status === 'fulfilled'
- *     ? item.value : {query:queries[index],error:String(item.reason)}), reviews:[]};
+ *   }
+ *   return {data: outcomes, reviews:[]};
  * }
  * ```
  * Preserve useful evidence from each query. A short sample cannot establish corpus-wide completeness or absence. Use precise terms, metadata and relevant reads before expanding breadth. Do not swallow rejected branches. Normal for/while/for-await with break and sequential dependent calls are supported.
