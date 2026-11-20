@@ -2,9 +2,15 @@
 //! HTML, or refuse. Laid out in columns, html2text padded every table row to
 //! the width of its longest cell, and it copies a table's column widths into
 //! every row, so a few kilobytes of tables once held gigabytes per message.
+//!
+//! Sanitizing a body and finding its reply parse it with html5ever, whose
+//! memory follows the nodes it builds rather than the bytes it reads, so the
+//! parse stops at a node and a depth limit.
 
 use email_utils::body_parsed::{compute_body_parsed, html_to_plaintext};
-use email_utils::body_replyless::reply_snippet;
+use email_utils::body_replyless::{compute_body_replyless, reply_snippet};
+use email_utils::bounded_html::MAX_HTML_NODES;
+use email_utils::sanitize_email_html;
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
@@ -166,4 +172,97 @@ fn deep_nesting_is_refused_cheaply() {
             html.len()
         );
     }
+}
+
+/// Bodies whose parse would build far more than the node limit, or nest
+/// past the depth limit.
+fn oversized_bodies() -> Vec<(&'static str, String)> {
+    let distinct_bold: String = (0..1_000).map(|i| format!("<b id={i}>")).collect();
+    let formatting = [
+        "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong", "tt", "u",
+    ]
+    .map(|name| format!("<{name}>").repeat(3))
+    .concat();
+    vec![
+        ("paragraphs", "<p>x</p>".repeat(MAX_HTML_NODES)),
+        ("images", "<img src=x>".repeat(2 * MAX_HTML_NODES)),
+        ("line breaks", "<br>x".repeat(MAX_HTML_NODES)),
+        // Each `<p>` closes the paragraph holding formatting elements that
+        // are still active, and the parser rebuilds them all inside the next
+        // one: 13 KB that builds a million nodes. Identical tags are kept
+        // three at a time.
+        (
+            "distinct bold",
+            format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)),
+        ),
+        (
+            "formatting",
+            format!("<p>{formatting}{}", "<p>x".repeat(60_000)),
+        ),
+        (
+            "nested bold",
+            (0..10_000).map(|i| format!("<b id={i}>")).collect(),
+        ),
+        (
+            "nested divs",
+            format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+        ),
+    ]
+}
+
+#[test]
+fn an_oversized_body_sanitizes_in_bounded_memory() {
+    for (name, html) in oversized_bodies() {
+        let mut sanitized = String::new();
+
+        let peak = peak_bytes_during(|| sanitized = sanitize_email_html(&html));
+
+        assert!(sanitized.ends_with("read the original.</p>"), "{name}");
+        // Parsed whole, the shallow ones peaked between 138 MB and 1.1 GB and
+        // the nested ones took seconds; clipped, none peaks above 82 MB.
+        assert!(
+            peak < 128 << 20,
+            "{peak} bytes to sanitize {} bytes of {name}",
+            html.len()
+        );
+    }
+}
+
+#[test]
+fn an_oversized_body_keeps_its_reply_whole_in_bounded_memory() {
+    for (name, body) in oversized_bodies() {
+        let html = format!("{body}<blockquote>Quoted</blockquote>");
+        let mut reply = None;
+
+        let peak = peak_bytes_during(|| reply = compute_body_replyless(None, Some(&html), None));
+
+        assert_eq!(reply.as_deref(), Some(html.as_str()), "{name}");
+        // Parsed whole, the shallow ones peaked between 232 MB and 1.9 GB.
+        assert!(
+            peak < 128 << 20,
+            "{peak} bytes to keep {} bytes of {name}",
+            html.len()
+        );
+    }
+}
+
+#[test]
+fn a_reply_is_found_in_bounded_memory_just_under_the_node_limit() {
+    let html = format!(
+        "{}<blockquote>Quoted</blockquote>",
+        "<br>x".repeat(MAX_HTML_NODES / 2 - 10)
+    );
+    let mut reply = None;
+
+    let peak = peak_bytes_during(|| reply = compute_body_replyless(None, Some(&html), None));
+
+    let reply = reply.expect("html");
+    assert!(reply.ends_with('x') && !reply.contains("Quoted"));
+    // Checking each cut for visible content parses it while the document is
+    // still held: about 116 MB at the limit.
+    assert!(
+        peak < 160 << 20,
+        "{peak} bytes to find the reply in {} bytes of HTML",
+        html.len()
+    );
 }

@@ -1,4 +1,75 @@
 use super::*;
+use crate::bounded_html::{MAX_HTML_DEPTH, MAX_HTML_NODES};
+
+/// Paragraphs of one letter: two nodes each.
+fn paragraphs(count: usize) -> String {
+    "<p>x</p>".repeat(count)
+}
+
+#[test]
+fn a_body_past_the_node_limit_is_clipped_with_a_notice() {
+    let html = format!("{}<p>past the limit</p>", paragraphs(MAX_HTML_NODES / 2));
+
+    let sanitized = sanitize_email_html(&html);
+
+    let kept = sanitized.matches("<p>x</p>").count();
+    assert!(
+        (MAX_HTML_NODES / 2 - 4..MAX_HTML_NODES / 2).contains(&kept),
+        "{kept}"
+    );
+    assert!(!sanitized.contains("past the limit"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn a_4_mb_newsletter_is_not_clipped() {
+    let story = r#"<tr><td style="padding:16px;color:#333"><h2 style="margin:0">Headline for this week's story</h2><p style="line-height:1.5">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. <a href="https://example.com/read?id=456">Read more</a></p><img src="https://example.com/i/123.png" width="560" alt=""></td></tr>"#;
+    let html = format!(
+        "<html><head><style>.a{{color:#333}}</style></head><body><table>{}<tr><td>Unsubscribe</td></tr></table></body></html>",
+        story.repeat((4 << 20) / story.len())
+    );
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.contains("Unsubscribe"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
+fn a_body_within_the_node_limit_is_not_clipped() {
+    let html = format!("{}<p>last</p>", paragraphs(MAX_HTML_NODES / 2 - 4));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.ends_with("<p>last</p>"));
+}
+
+#[test]
+fn a_body_nested_past_the_depth_limit_is_clipped_with_a_notice() {
+    let nested = |depth: usize, text: &str| format!("{}{text}", "<div>".repeat(depth));
+
+    let shallow = sanitize_email_html(&nested(100, "shallow"));
+    let deep = sanitize_email_html(&nested(MAX_HTML_DEPTH, "deep"));
+
+    assert!(shallow.contains("shallow") && !shallow.contains(CLIPPED_NOTICE));
+    assert!(!deep.contains("deep"));
+    assert!(deep.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
+fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
+    // A frameset document has no body, so the fragment parse is cleaned.
+    let html = format!(
+        "<frameset></frameset>{}<p>past the limit</p>",
+        paragraphs(MAX_HTML_NODES / 2)
+    );
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.contains("<p>x</p>"));
+    assert!(!sanitized.contains("past the limit"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
 
 #[test]
 fn inline_style_url_quotes_remain_escaped_after_html_round_trip() {

@@ -78,8 +78,27 @@ sender/generic-address checks.
   but html2text turns into filler cells and columns. Keep all of it when
   changing the conversion; `tests/text_conversion_memory.rs` measures the
   peak.
+- Parse email HTML with `bounded_html`, never `Html::parse_document` or
+  `parse_fragment` on a body as received. html5ever's memory follows the nodes
+  it builds, not the bytes it reads: it rebuilds every still-active
+  formatting element (`<b>`, `<font>`) inside each new paragraph, so 13 KB
+  once built a million nodes, and most tags scan its stack of open elements,
+  so deep nesting costs time squared. `bounded_html` wraps scraper's tree
+  sink, feeds the body a tag at a time and stops at `MAX_HTML_NODES` nodes or
+  `MAX_HTML_DEPTH` levels, reporting `clipped`. A byte or tag count bounds
+  neither. `sanitize_email_html` then cleans what was parsed and ends it with
+  `CLIPPED_NOTICE` (English only), since the reader shows only sanitized HTML
+  and the `.eml` download keeps the whole message; ammonia parses that
+  serialization again, which stays within the bound because it is
+  well-formed. `extract_reply_html` keeps a clipped body whole, as it does one
+  with no reply separator. Code that parses a body as received again (rather
+  than the sanitized HTML) goes through `bounded_html` too.
+  `tests/text_conversion_memory.rs` measures the peaks.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
-  sender's choice, and a deep enough message overflows the stack.
+  sender's choice, and a deep enough message overflows the stack. Reply
+  stripping still recurses once per level (`get_previous_html_recursively`),
+  so its own depth check must run before it: moving a node (misnested
+  formatting) can nest it deeper than the parse inserted it.
 
 ## Related
 
