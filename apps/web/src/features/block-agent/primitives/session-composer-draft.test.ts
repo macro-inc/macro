@@ -118,6 +118,24 @@ describe('session composer drafts', () => {
     dispose();
   });
 
+  it('gives a refused message back to the composer that sent it', () => {
+    let dispose: () => void = () => {};
+    let other: ReturnType<typeof createSessionComposerDraft> | undefined;
+    let sender: ReturnType<typeof createSessionComposerDraft> | undefined;
+    createRoot((done) => {
+      dispose = done;
+      // One session open twice in a window: a pane and a split block.
+      other = createSessionComposerDraft(() => 'session-a');
+      sender = createSessionComposerDraft(() => 'session-a');
+    });
+
+    sender?.restore('session-a', 'Run the tests');
+
+    expect(sender?.draft()).toBe('Run the tests');
+    expect(other?.draft()).toBe('');
+    dispose();
+  });
+
   it('puts a refused message back in the session it was sent to', () => {
     const [sessionId, setSessionId] = createSignal<string | undefined>(
       'session-a'

@@ -118,8 +118,10 @@ function createReceivers<Value>() {
       if (rest.length > 0) open.set(id, rest);
       else open.delete(id);
     },
-    find(id: string): Receiver<Value> | undefined {
-      return open.get(id)?.[0];
+    /** The sender while it is still open on `id`, else the newest one. */
+    find(id: string, own: Receiver<Value>): Receiver<Value> | undefined {
+      const receivers = open.get(id) ?? [];
+      return receivers.includes(own) ? own : receivers.at(-1);
     },
   };
 }
@@ -198,7 +200,9 @@ export function createSessionComposerDraft(
   const restore = (sentTo: string | undefined, message: string) => {
     // Sent before the session had an id: only this composer can hold it.
     const target =
-      sentTo === undefined ? live && receive : DRAFT_RECEIVERS.find(sentTo);
+      sentTo === undefined
+        ? live && receive
+        : DRAFT_RECEIVERS.find(sentTo, receive);
     if (target) target(message);
     else if (sentTo)
       writeDraft(sentTo, prependMessage(message, readDraft(sentTo) ?? ''));
@@ -272,7 +276,7 @@ export function createSessionAttachmentTracker(
     const target =
       sentTo === undefined
         ? live && receive
-        : ATTACHMENT_RECEIVERS.find(sentTo);
+        : ATTACHMENT_RECEIVERS.find(sentTo, receive);
     if (target) {
       target(attachments);
       return;
