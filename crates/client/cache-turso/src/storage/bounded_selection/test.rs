@@ -696,8 +696,15 @@ fn a_tie_wider_than_the_cap_falls_back_with_the_same_pages() {
                 .unwrap();
             for tie in [SortDirection::Asc, SortDirection::Desc] {
                 let mut page = query(PredicateExpr::All, direction, tie);
-                // The first page ends before the tie; the next two lie inside it.
-                for _ in 0..3 {
+                // The first page ends before the tie and is proven by the
+                // window; the next two lie inside it and fall back.
+                for number in 0..3 {
+                    assert_eq!(
+                        try_select(&storage.connection(), &page, &[])
+                            .unwrap()
+                            .is_some(),
+                        number == 0
+                    );
                     let found = hits(&storage.connection(), &page, &[]);
                     assert_eq!(found.len(), 20);
                     assert_eq!(found, reference(&storage.connection(), &page, &[]));

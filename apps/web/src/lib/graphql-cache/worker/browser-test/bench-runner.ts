@@ -184,7 +184,7 @@ async function main() {
       throw new Error(
         seededOrigin.startsWith('http')
           ? `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
-          : 'profile marker records no origin; rerun with --reseed'
+          : 'profile predates origin markers; pass a new --profile path'
       );
   }
   if (fresh) {
