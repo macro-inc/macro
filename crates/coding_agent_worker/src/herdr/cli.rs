@@ -71,19 +71,25 @@ impl HerdrError {
 
     /// herdr-core refused to type into a terminal whose output has not
     /// settled since it started. Nothing was typed, so the send can retry.
+    /// hc gives this refusal no code, only `kind: unavailable` and its
+    /// wording, so either its message or its hint is enough; the test
+    /// `only_a_settle_refusal_counts_as_still_starting` pins hc's text.
     pub(crate) fn still_starting(&self) -> bool {
         let Self::Refused { stderr, .. } = self else {
             return false;
         };
-        serde_json::from_str::<Value>(stderr)
-            .ok()
-            .is_some_and(|value| {
-                value.pointer("/error/kind").and_then(Value::as_str) == Some("unavailable")
-                    && value
-                        .pointer("/error/message")
-                        .and_then(Value::as_str)
-                        .is_some_and(|message| message.contains("is still starting"))
-            })
+        let Ok(value) = serde_json::from_str::<Value>(stderr) else {
+            return false;
+        };
+        let text = |pointer: &str| {
+            value
+                .pointer(pointer)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        };
+        text("/error/kind") == "unavailable"
+            && (text("/error/message").contains("is still starting")
+                || text("/error/hint").starts_with("nothing was typed"))
     }
 
     fn has_code(&self, pointer: &str, code: &str) -> bool {

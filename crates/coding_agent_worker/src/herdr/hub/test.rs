@@ -15,6 +15,15 @@ fn tab_names_skip_the_hidden_prompt_header() {
         title_from("  Fix <T> parsing\ncontext"),
         Some("Fix <T> parsing".to_owned())
     );
+    // The operator's own markup is part of the title.
+    assert_eq!(
+        title_from("<div> breaks in Safari"),
+        Some("<div> breaks in Safari".to_owned())
+    );
+    assert_eq!(
+        title_from("<b>Fix</b> login"),
+        Some("<b>Fix</b> login".to_owned())
+    );
 }
 
 fn owner() -> Owner {

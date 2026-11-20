@@ -360,7 +360,7 @@ impl HubState {
 
 /// The first line of a prompt, short enough for a tab label. Leading Macro
 /// elements (`<macrod-runtime>…</macrod-runtime>`, `<m-agent-context>`,
-/// mentions) are hidden from the operator, so the title starts after them; a
+/// `<m-user-mention>`) are hidden from the operator, so the title starts after them; a
 /// prompt that is nothing but such elements, or one left unclosed, has none.
 pub(crate) fn title_from(text: &str) -> Option<String> {
     let mut rest = text.trim_start();
@@ -375,14 +375,22 @@ pub(crate) fn title_from(text: &str) -> Option<String> {
     Some(title)
 }
 
-/// `<name>` for a lowercase element name, as Macro's prompt tags are.
+/// `<macrod-runtime>` or `<m-…>`: the opening tags of Macro's prompt
+/// elements, which carry no attributes. Other markup is the operator's text.
 fn opening_tag(input: &str) -> nom::IResult<&str, &str> {
     use nom::Parser as _;
+    let name = nom::branch::alt((
+        nom::bytes::complete::tag("macrod-runtime"),
+        nom::combinator::recognize((
+            nom::bytes::complete::tag("m-"),
+            nom::bytes::complete::take_while1(|character: char| {
+                character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+            }),
+        )),
+    ));
     nom::sequence::delimited(
         nom::character::complete::char('<'),
-        nom::bytes::complete::take_while1(|character: char| {
-            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
-        }),
+        name,
         nom::character::complete::char('>'),
     )
     .parse(input)
