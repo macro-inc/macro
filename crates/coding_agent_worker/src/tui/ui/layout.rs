@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Utc};
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -40,12 +42,18 @@ pub(super) fn status_style(status: &str) -> Style {
 }
 
 pub(super) fn ago(when: DateTime<Utc>) -> String {
-    let seconds = (Utc::now() - when).num_seconds().max(0);
+    let seconds = (Utc::now() - when).num_seconds().max(0).unsigned_abs();
+    format!("{} ago", span(Duration::from_secs(seconds)))
+}
+
+/// A duration in its largest whole unit: `12s`, `5m`, `3h`, `2d`.
+pub(super) fn span(duration: Duration) -> String {
+    let seconds = duration.as_secs();
     match seconds {
-        0..=59 => format!("{seconds}s ago"),
-        60..=3599 => format!("{}m ago", seconds / 60),
-        3600..=86_399 => format!("{}h ago", seconds / 3600),
-        _ => format!("{}d ago", seconds / 86_400),
+        0..=59 => format!("{seconds}s"),
+        60..=3599 => format!("{}m", seconds / 60),
+        3600..=86_399 => format!("{}h", seconds / 3600),
+        _ => format!("{}d", seconds / 86_400),
     }
 }
 

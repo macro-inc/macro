@@ -195,3 +195,37 @@ fn fatal_root_message_keeps_the_root_line() {
     );
     assert_eq!(fatal_root_message("plain failure"), "plain failure");
 }
+
+#[test]
+fn health_events_report_the_runtime_and_the_trigger_stream_apart() {
+    let reconnecting = Event::Health {
+        runtime_connected: true,
+        triggers: TriggerStreamState::from(&TriggerStreamHealth::Reconnecting {
+            attempt: 2,
+            last_error: "the server closed the stream".to_owned(),
+        }),
+    };
+    assert_eq!(
+        serde_json::to_value(&reconnecting).unwrap(),
+        serde_json::json!({
+            "event": "health",
+            "runtime_connected": true,
+            "triggers": {
+                "state": "reconnecting",
+                "attempt": 2,
+                "last_error": "the server closed the stream"
+            }
+        })
+    );
+
+    // When the last signal came is not part of the event, so a live stream's
+    // heartbeats do not each emit one.
+    let live = |last_signal| {
+        TriggerStreamState::from(&TriggerStreamHealth::Live {
+            verified: true,
+            last_signal,
+        })
+    };
+    let now = tokio::time::Instant::now();
+    assert_eq!(live(now), live(now + Duration::from_secs(20)));
+}

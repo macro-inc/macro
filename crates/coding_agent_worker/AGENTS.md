@@ -101,8 +101,18 @@ the local ACP process (Claude Code, Codex, ...), and drives native
 - `src/daemon.rs` `watch_presence`: each minute a connection has held, asks
   `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
   harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
-  header says "machine connected, service reports offline" instead of "paired,
-  machine not dialed in".
+  header says "connected, service reports offline".
+- `src/tui/health.rs` + `src/tui/ui/status.rs`: the header's second line and
+  the Overview card report four states apart: daemon (the serving task runs),
+  machine (this process holds the runtime connection; the service's flag only
+  adds a disagreement), triggers (`Daemon::trigger_stream_health`: connecting,
+  no agents bound, live with whether the service heartbeats it, reconnecting
+  with attempt and error) and viewer (the terminal, a herdr pane, or the
+  herdr-core terminal id to `hc attach`; herdr-core has no query for whether
+  the app shows a terminal as a tab, so that is not claimed).
+- `macrod service` emits a `health` event (`runtime_connected`, `triggers`
+  with a `state` tag) at start and whenever either changes; a live stream's
+  heartbeats do not emit one. Embedders ignore events they do not know.
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
   sessions, config form, logs). The theme is 24-bit RGB; every drawn frame
   passes through `ColorSupport::fit_buffer` (`src/tui/ui/color_support.rs`),
