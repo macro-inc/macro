@@ -1122,6 +1122,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                       count={Math.ceil(height() / VIRTUAL_ITEM_HEIGHT)}
                       label={t('common.loading')}
                       rowClass="h-9 sm:h-9"
+                      blank={!userMention.showsLoading()}
                     />
                   </div>
                 )}
