@@ -1,4 +1,7 @@
-use super::mutations::{IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox};
+use super::mutations::{
+    GraphSeries, INBOX, IssuedToken, NoOpenClients, OWNER, connected_mailbox, linked_mailbox,
+    mutations,
+};
 use super::*;
 use calendar_events::domain::ports::CalendarRepository;
 use calendar_events::domain::team::{CalendarTeamRepository, TeamCalendarCoverage};
@@ -8,7 +11,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_event_broker::NoopMacroEventBroker;
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
-use wiremock::matchers::query_param_is_missing;
+use wiremock::matchers::{path_regex, query_param_is_missing};
 
 type Sync = OutlookCalendarSync<
     PgCalendarRepository,
@@ -660,6 +663,62 @@ async fn a_series_missing_an_occurrence_macro_cannot_read_stays_out_of_team_read
         teammate_reads(&pool).await,
         (TeamCalendarCoverage::Unavailable, vec![], vec![]),
         "teammates would read the moved meeting's time as free"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn editing_a_series_missing_an_occurrence_keeps_it_out_of_team_reads(pool: PgPool) {
+    let (server, api) = setup().await;
+    let repo = connected_mailbox(
+        &pool,
+        &server,
+        &api,
+        json!([{"id":"AAMkCalendar","name":"Calendar","canEdit":true,"isDefaultCalendar":true}]),
+    )
+    .await;
+    on_a_team(&pool).await;
+    serve_near_window(&server, &[]).await;
+    serve_delta(&server, None, &[occurrence("AAMkDaily")], "complete").await;
+    let (master, mut instances) = upcoming_series("AAMkDaily", INBOX, true);
+    instances[2]
+        .as_object_mut()
+        .unwrap()
+        .remove("originalStart");
+    Mock::given(path_regex(r"^/v1\.0/me/(calendars/[^/]+/)?events/"))
+        .respond_with(GraphSeries(Arc::new(Mutex::new((master, instances)))))
+        .mount(&server)
+        .await;
+    sync_until_idle(&OutlookCalendarSync::new(
+        repo.clone(),
+        api.clone(),
+        IssuedToken,
+        NoOpenClients,
+    ))
+    .await;
+    assert_synced(&pool).await;
+    let event_id = sqlx::query_scalar!("SELECT id FROM calendar_events WHERE owner_id = $1", OWNER)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+    mutations(repo, api)
+        .update_event(
+            OWNER,
+            event_id,
+            None,
+            CalendarEventPatch {
+                title: Some("Standup in the new room".into()),
+                ..Default::default()
+            },
+            CalendarUpdateScope::All,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        teammate_reads(&pool).await,
+        (TeamCalendarCoverage::Unavailable, vec![], vec![]),
+        "the edit's echo still lacks the moved meeting"
     );
 }
 
