@@ -1,5 +1,5 @@
 use super::*;
-use item_filters::ast::properties::EntityRefId;
+use item_filters::ast::{calendar_event::CalendarEventLiteral, properties::EntityRefId};
 use models_pagination::Identify;
 
 fn assignee(kind: Option<PropertyEntityType>) -> PropertiesLiteral {
@@ -42,6 +42,7 @@ fn task_filter() -> EntityFilterAst {
         project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectIdSelf(
             Uuid::nil(),
         )))),
+        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil())))),
         ..EntityFilterAst::mock_empty()
     }
 }
