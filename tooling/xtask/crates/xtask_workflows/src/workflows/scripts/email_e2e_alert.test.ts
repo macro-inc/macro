@@ -430,8 +430,18 @@ describe('findings', () => {
   });
 
   test('a suite with one report and no coverage check: the specs that failed', () => {
-    assert.deepEqual(suiteFindings(report), {
-      failedTests: ['inbox.spec.ts:20 archives a thread'],
+    const marked = (title: string, line: number, status: string) => ({
+      title,
+      file: 'inbox.spec.ts',
+      line,
+      tests: [{ status, expectedStatus: 'failed' }],
+    });
+    const suites = [...report.suites, { specs: [marked('fixed defect', 40, 'unexpected'), marked('defect', 50, 'expected')] }];
+    assert.deepEqual(suiteFindings({ suites }), {
+      failedTests: [
+        'inbox.spec.ts:20 archives a thread',
+        'inbox.spec.ts:40 fixed defect (marked as a known defect, and now passes)',
+      ],
       knownBugsPassing: [],
       otherProblems: [],
     });

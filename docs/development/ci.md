@@ -98,8 +98,9 @@ last pass.
    `just email-e2e-browser <test>` for a browser test, and the
    [full-stack tier's commands](../../apps/web/tests/email-e2e/README.md#the-full-stack-tier)
    for a `full-stack-*` test.
-   For a channels test, start a stack and run
-   `just test-channels-e2e <instance> -g <test id>` from `apps/web`.
+   For a channels test, start and seed a stack and run
+   `just test-channels-e2e <instance> -g <test id>` from `apps/web`
+   ([README](../../apps/web/tests/channels-e2e/README.md)).
 3. A change broke it: fix or revert the change. It fails for a product bug
    that will not be fixed now: keep the test, asserting the right behaviour,
    and mark it as a known bug, so it stops gating. A Rust scenario gets
@@ -110,11 +111,18 @@ last pass.
    ([README](../../apps/web/tests/email-e2e/README.md)). A bug that shows
    only in some runs is also tagged `@sometimes` (browser) or named under
    `[[intermittent_bug]]` in `crates/email_e2e/coverage/waivers.toml` (Rust).
+   A channels test is marked `knownDefect()` with a row in
+   `ledger/known-defects.tsv`, or wraps the check in `failsSometimes` with a
+   row in `ledger/intermittent-defects.tsv`.
 4. Kept for a known bug and now passing: the bug is fixed, and the alert
    comes from the known-bug report, not from a gating test. Remove the
    `#[ignore]` and the `bug` line of its function in
    `crates/email_e2e/coverage/functions.toml`, or the `@known-bug` tag and
    its waiver line, so the test gates again.
+   The channels suite runs its known-defect tests in every run, so one that
+   passes fails the run and is named with the failed tests as "marked as a
+   known defect, and now passes": remove its `knownDefect()` and its row in
+   `ledger/known-defects.tsv`.
 5. "This commit passed in an earlier run" means the failure may be flaky:
    re-run the failed jobs, and treat a test that passes only on a retry as a
    defect of the test or the product.

@@ -41,6 +41,11 @@ const MAIN_PATHS: &[RepoGlob<'static>] = &[
     xtask_paths::repo_glob!("flake.lock"),
     xtask_paths::repo_glob!("tooling/seed_cli/**"),
     xtask_paths::repo_glob!("tooling/xtask/crates/xtask_local/**"),
+    xtask_paths::repo_glob!("tooling/just/**"),
+    xtask_paths::repo_glob!("infra/local/**"),
+    xtask_paths::repo_glob!("docker/**"),
+    xtask_paths::repo_glob!("justfile"),
+    xtask_paths::repo_glob!("package.json"),
     xtask_paths::repo_glob!(".github/workflows/channels_e2e.yml"),
 ];
 

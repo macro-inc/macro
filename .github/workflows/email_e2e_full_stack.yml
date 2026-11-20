@@ -571,7 +571,12 @@ jobs:
           );
         }
 
-        type PlaywrightSpec = { title: string; file: string; line: number; tests: { status: string }[] };
+        type PlaywrightSpec = {
+          title: string;
+          file: string;
+          line: number;
+          tests: { status: string; expectedStatus?: string }[];
+        };
         type PlaywrightSuite = { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] };
 
         /** `file:line title` of each spec that failed in a Playwright JSON report. */
@@ -622,12 +627,28 @@ jobs:
           };
         }
 
+        /** What a message says of a spec marked to fail (`test.fail()`) that passed. */
+        const MARKED_TO_FAIL = ' (marked as a known defect, and now passes)';
+
         /**
          * What the one Playwright report of a suite with no coverage check says failed
-         * (the channels suite's `playwright-report.json`).
+         * (the channels suite's `playwright-report.json`). Its tests for known defects
+         * run in every run, marked to fail, so one that passes fails the run: it is
+         * named with the failed tests, and said to be that.
          */
         export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
-          return { failedTests: failedSpecs(report), knownBugsPassing: [], otherProblems: [] };
+          const unexpected = (spec: PlaywrightSpec) => spec.tests.filter((test) => test.status === 'unexpected');
+          const walk = (suites: PlaywrightSuite[] = []): string[] =>
+            suites.flatMap((suite) => [
+              ...(suite.specs ?? [])
+                .filter((spec) => unexpected(spec).length > 0)
+                .map((spec) => {
+                  const marked = unexpected(spec).some((test) => test.expectedStatus === 'failed');
+                  return `${spec.file}:${spec.line} ${spec.title}${marked ? MARKED_TO_FAIL : ''}`;
+                }),
+              ...walk(suite.suites),
+            ]);
+          return { failedTests: walk(report.suites), knownBugsPassing: [], otherProblems: [] };
         }
 
         /** What the coverage report in `dir` says failed, or null when there is none. */
