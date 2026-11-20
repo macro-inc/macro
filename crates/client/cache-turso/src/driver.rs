@@ -3,8 +3,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use turso_core::{Connection, LimboError, Row, Statement, StepResult, Value};
+use turso_core::{CheckpointMode, Connection, LimboError, Row, Statement, StepResult, Value};
 
 pub(crate) type Values = Vec<Value>;
 pub(crate) type Rows = Vec<Values>;
@@ -22,6 +23,24 @@ const REMEMBERED_TEXTS: usize = 4096;
 /// Prepared copies kept per text, for a text that runs nested within itself.
 const CACHED_COPIES_PER_TEXT: usize = 2;
 
+/// WAL frames past which a deferred checkpoint is due: Turso's own automatic
+/// threshold, so moving the checkpoint off COMMIT keeps how often it runs.
+pub(crate) const CHECKPOINT_DUE_FRAMES: u64 = 1_000;
+/// WAL frames past which a commit checkpoints anyway, so a host that is never
+/// idle still bounds the WAL (and the recovery scan at the next open).
+pub(crate) const CHECKPOINT_CEILING_FRAMES: u64 = 4_000;
+
+/// What a WAL checkpoint request did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WalCheckpoint {
+    /// Whether the WAL was checkpointed and truncated.
+    pub ran: bool,
+    /// Frames in the WAL when the request looked.
+    pub wal_frames: u64,
+    /// Frames this checkpoint copied into the database file.
+    pub backfilled_frames: u64,
+}
+
 /// A connection and the statements prepared on it.
 ///
 /// Clones share one statement cache. Cached statements hold their connection,
@@ -30,6 +49,8 @@ const CACHED_COPIES_PER_TEXT: usize = 2;
 pub(crate) struct Db {
     connection: Arc<Connection>,
     statements: Option<Arc<Mutex<StatementCache>>>,
+    /// Set once the host checkpoints the WAL itself; see [`Db::defer_checkpoints`].
+    checkpoints_deferred: Arc<AtomicBool>,
 }
 
 impl Db {
@@ -38,6 +59,7 @@ impl Db {
         Self {
             connection,
             statements: Some(Arc::new(Mutex::new(StatementCache::default()))),
+            checkpoints_deferred: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -47,6 +69,7 @@ impl Db {
         Self {
             connection,
             statements: None,
+            checkpoints_deferred: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -62,6 +85,50 @@ impl Db {
         self.statements
             .as_ref()
             .map_or(0, |statements| statements.lock().unwrap().texts.len())
+    }
+
+    /// Stops Turso from checkpointing inside COMMIT. Turso otherwise backfills
+    /// the whole WAL into the database file in the COMMIT that takes it past
+    /// [`CHECKPOINT_DUE_FRAMES`], so one write in about twenty also pays for
+    /// the others. Afterwards the host runs [`Db::checkpoint_if_due`] when it
+    /// is idle, and a commit checkpoints only past [`CHECKPOINT_CEILING_FRAMES`].
+    /// This also turns off Turso's WAL restart and its checkpoint on close;
+    /// every checkpoint here truncates the WAL, which restarts it.
+    pub(crate) fn defer_checkpoints(&self) {
+        self.connection.wal_auto_actions_disable();
+        self.checkpoints_deferred.store(true, Ordering::Relaxed);
+    }
+
+    pub(crate) fn checkpoints_deferred(&self) -> bool {
+        self.checkpoints_deferred.load(Ordering::Relaxed)
+    }
+
+    /// Checkpoints and truncates the WAL when it holds at least `frames`
+    /// frames. Call it outside a transaction.
+    pub(crate) fn checkpoint_over(&self, frames: u64) -> Result<WalCheckpoint, TursoStorageError> {
+        let wal_frames = self
+            .connection
+            .wal_state()
+            .map_err(TursoStorageError::turso)?
+            .max_frame;
+        if wal_frames < frames.max(1) {
+            return Ok(WalCheckpoint {
+                ran: false,
+                wal_frames,
+                backfilled_frames: 0,
+            });
+        }
+        let result = self
+            .connection
+            .checkpoint(CheckpointMode::Truncate {
+                upper_bound_inclusive: None,
+            })
+            .map_err(TursoStorageError::turso)?;
+        Ok(WalCheckpoint {
+            ran: true,
+            wal_frames,
+            backfilled_frames: result.wal_checkpoint_backfilled,
+        })
     }
 
     /// Drops every cached statement, and with it their connection references.
@@ -485,7 +552,14 @@ fn transaction<T>(
 
     match operation() {
         Ok(value) => match execute_control(connection, "COMMIT", TestControlPhase::Commit) {
-            Ok(_) => Ok(value),
+            Ok(_) => {
+                if connection.checkpoints_deferred() {
+                    // The commit is durable; like Turso's own checkpoint after
+                    // COMMIT, a failed one leaves the WAL for the next try.
+                    let _ = connection.checkpoint_over(CHECKPOINT_CEILING_FRAMES);
+                }
+                Ok(value)
+            }
             Err(_) => {
                 let _ = execute_control(connection, "ROLLBACK", TestControlPhase::Rollback);
                 Err(TursoStorageError::reset(

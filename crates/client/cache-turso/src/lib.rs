@@ -15,6 +15,7 @@ mod key;
 pub mod query_telemetry;
 mod storage;
 
+pub use driver::WalCheckpoint;
 pub use error::{PhysicalResetReason, TursoStorageError};
 pub use storage::{
     QueuedMutationCount, STORAGE_SCHEMA_VERSION, TursoStorage, TursoStorageCloseOutcome,
