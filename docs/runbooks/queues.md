@@ -19,9 +19,15 @@ permanently, so the alert counts new arrivals, not depth.
 
 ## Backlog
 
-The oldest message in a work queue is old, or the email backfill backlog grew
-abnormally.
+The oldest message in a work queue is old, or the email backfill queue is not
+draining.
 
+- "Email backfill queue not draining" means the oldest backfill message has
+  stayed over 15 minutes old for 30 minutes: messages are waiting, not just
+  arriving. A burst of thousands of visible messages is normal on this queue
+  and drains within a minute or two when sends and deletes keep pace, so the
+  visible count alone is not a reason to act. If age keeps climbing, "Email
+  backfill queue falling behind" warns once it averages an hour.
 - Check that the consumer is running (`aws.ecs.service.running`) and not
   crashing (task stop reasons, error logs).
 - If it is running, check what it waits on. The email workers write to MacroDB

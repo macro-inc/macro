@@ -75,15 +75,27 @@ ${notify({ pages: false, environment: 'dev' })}`,
   groupbySimpleMonitor: false,
 });
 
+// DSS handlers log client mistakes at ERROR too (a 400 for a document that is
+// not a task, a 405, a 413 over the snapshot limit), and those lines carry no
+// status code; only the request's summary line has one. So the prod monitor
+// counts server-side failures only: 5xx request lines, errors outside any HTTP
+// request, and every error on the GraphQL endpoint, which answers 200 when a
+// resolver fails. Over the 30 days to 2026-11-11 this cut 28 alert cycles to
+// 18 and still fired on every server-side episode: the 2026-11-09 pool
+// timeouts, the 11-03 sync queue overflow, the 10-28 database backlog and the
+// 10-13 and 10-19 replica query cancellations.
+const DSS_SERVER_ERRORS =
+  '(@span.http.response.status_code:[500 TO 599] OR -@span.http.route:* OR @span.http.route:\\"/dss/items/soup/graphql\\")';
+
 // https://us5.datadoghq.com/monitors/1062128
-// The steady baseline is 300-450 error lines per 5 minutes since the
-// expired-JWT exclusion, so 800 is roughly double a normal window. No warning
-// threshold: one would notify all day.
+// The normal 5-minute window is under 700 server-side error lines (99th
+// percentile), so 800 is above it. No warning threshold: one would notify all
+// day.
 adopted('dss-errors-prod', {
   name: '[PROD] Increased number of errors for DSS',
   type: 'log alert',
-  query: `logs("service:cloud-storage-service env:prod status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 800`,
-  message: `Prod cloud-storage-service logged {{value}} errors in 5 minutes, not counting expired-JWT rejections.
+  query: `logs("service:cloud-storage-service env:prod status:error ${DSS_EXPIRED_JWT_EXCLUSION} ${DSS_SERVER_ERRORS}").index("*").rollup("count").last("5m") > 800`,
+  message: `Prod cloud-storage-service logged {{value}} server-side errors in 5 minutes, not counting expired-JWT rejections or client errors outside GraphQL.
 
 ${notify({ pages: false })}`,
   monitorThresholds: {
