@@ -44,8 +44,8 @@ where
             ),
         };
 
-        // A tag needs a color; one asked for without takes the palette color
-        // for its position, as a new option in the tag picker does.
+        // A tag added without a color takes the palette color for its
+        // position, as the tag picker does.
         let effective_color = match (&definition.data_type, &color) {
             (DataType::Tag, None) => Some(
                 TagColor::for_position(display_order.unsigned_abs() as usize)

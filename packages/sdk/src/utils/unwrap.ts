@@ -25,23 +25,6 @@ function errorDetail(data: unknown): string {
 }
 
 /**
- * A 422 explains a request body in the API's snake_case field names, while
- * the SDK's options are camelCase (`dataType` for `data_type`). Name the SDK
- * option for each field it mentions, so a caller fixes the option it passed.
- */
-function sdkOptionNames(detail: string): string {
-  const fields = [
-    ...new Set(detail.match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g)),
-  ];
-  if (fields.length === 0) return '';
-  const names = fields.map(
-    (field) =>
-      `\`${field}\` is \`${field.replace(/_([a-z0-9])/g, (_, letter: string) => letter.toUpperCase())}\``,
-  );
-  return ` (in SDK options, ${names.join(', ')}; read the method's reference for the shape each takes)`;
-}
-
-/**
  * A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
  * The message includes the server's explanation, such as a validation error,
  * and `data` holds the parsed error body.
@@ -52,10 +35,9 @@ export class MacroApiError extends MacroError {
     readonly data: unknown,
   ) {
     const detail = errorDetail(data);
-    const names = status === 422 ? sdkOptionNames(detail) : '';
     super(
       detail
-        ? `Macro API error ${status}: ${detail}${names}`
+        ? `Macro API error ${status}: ${detail}`
         : `Macro API error ${status}`,
     );
     this.name = 'MacroApiError';
@@ -85,6 +67,29 @@ export class MacroForbiddenError extends MacroApiError {
     super(403, data);
     this.name = 'MacroForbiddenError';
   }
+}
+
+/**
+ * `error`, with a 422's message naming the SDK option for each API field it
+ * mentions. `names` maps the snake_case fields a method's body sends to the
+ * camelCase options it took them from (`data_type` to `dataType`); only that
+ * method knows the mapping, so only it calls this, from its catch.
+ */
+export function withOptionNames(
+  error: unknown,
+  names: Readonly<Record<string, string>>,
+): unknown {
+  if (!(error instanceof MacroApiError) || error.status !== 422) return error;
+  const mentioned = Object.entries(names).filter(([field]) =>
+    new RegExp(`\\b${field}\\b`).test(error.message),
+  );
+  if (mentioned.length > 0) {
+    const pairs = mentioned.map(
+      ([field, option]) => `\`${field}\` is the \`${option}\` option`,
+    );
+    error.message += ` (${pairs.join(', ')}; read the method's reference for the shape it takes)`;
+  }
+  return error;
 }
 
 /** The API error class for an HTTP status. */
