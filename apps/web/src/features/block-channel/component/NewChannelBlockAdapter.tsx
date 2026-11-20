@@ -1,3 +1,4 @@
+import { DmScreenIsland } from '@app/features/agent-screen/dm-screen-button';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import {
   ChatWithAgentIcon,
@@ -303,6 +304,12 @@ function NewTop(props: { channelId: string }) {
               channelType={channelType()}
             />
           </HeaderIsland>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={!isActivePhoneCall()}>
+        <SplitHeaderRight>
+          {/* An agent teammate's DM: Screen opens its computer. */}
+          <DmScreenIsland channelId={props.channelId} />
         </SplitHeaderRight>
       </Show>
       {/* Hidden once the user has joined — the call surface owns the UI. */}

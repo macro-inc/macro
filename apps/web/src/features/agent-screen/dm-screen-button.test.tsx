@@ -1,7 +1,11 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DmScreenButton, useDmScreenHarnessId } from './dm-screen-button';
+import {
+  DmScreenButton,
+  DmScreenIsland,
+  useDmScreenHarnessId,
+} from './dm-screen-button';
 
 const state = vi.hoisted(() => ({
   participants: [] as string[],
@@ -26,6 +30,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
       },
     ],
   }),
+}));
+vi.mock('@core/context/channels', () => ({
+  useChannelType: () => () => 'direct_message',
+  useChannel: () => () => ({ id: 'dm-1' }),
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: state.openWithSplit }),
@@ -65,5 +73,15 @@ describe('DM Screen button', () => {
     state.participants = ['user-alice', 'user-bob'];
     render(() => <DmHeader />);
     expect(screen.queryByRole('button', { name: 'Screen' })).toBeNull();
+  });
+
+  it("shows its own header island in the touch header of a team agent teammate's DM", () => {
+    document.documentElement.dataset.touchDevice = 'true';
+    state.participants = ['user-alice', 'user-ada-agent'];
+    render(() => <DmScreenIsland channelId="dm-1" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Screen' }));
+    expect(state.openWithSplit).toHaveBeenCalledTimes(1);
+    delete document.documentElement.dataset.touchDevice;
   });
 });
