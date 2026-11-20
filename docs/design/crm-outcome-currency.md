@@ -90,7 +90,9 @@ editors and Add deal form.
 
 Declined came later, in its own migration. It adds the option after the last
 one of each tracked pipeline's Outcome field, one pipeline per transaction,
-journaled like the backfill. It takes a pipeline writer's locks with `SKIP
+journaled like the backfill, with the palette color an appended option takes
+at that position; beside options the backfill left uncolored it stays
+uncolored. It takes a pipeline writer's locks and an option append's with `SKIP
 LOCKED`, so a pipeline in use is passed by instead of failing the migration on
 a lock timeout. A pipeline it passes by, or one an older service creates during
 that rollout, keeps three options until the statement runs again; it is
