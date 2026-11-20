@@ -20,15 +20,23 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  CHANNEL_DIRECTORY_CHECKPOINT_ID,
+  CHANNEL_DIRECTORY_INPUT,
+} from '../channel/directory-lane';
 import { createChannelDirectoryBackfillFetcher } from '../channel/directory-reconcile';
 import { useContactBackfill } from '../contacts/backfill';
+import type { ContextChannel } from '../contacts/context-facts';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
+import {
+  BACKFILL_VERSION,
+  initialSoupBackfillCheckpoint,
+  loadSoupBackfillCheckpoint as loadCheckpoint,
+  type SoupBackfillCheckpoint,
+  saveSoupBackfillCheckpoint,
+} from './backfill-checkpoint';
 
-// Bump when a default backfill input or completion guarantee changes so
-// persisted cursors cannot retain an older hydration contract.
-// Restart old cursors whose core lane still included channels.
-const BACKFILL_VERSION = 19;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -88,32 +96,14 @@ export type SoupBackfillParams = {
  * chats have paged through with it.
  */
 export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
-  // Renamed from 'channels' when the channel selection gained the directory's
-  // fields: a pass completed before then wrote records the directory omits.
-  checkpointId: 'channel-directory',
+  checkpointId: CHANNEL_DIRECTORY_CHECKPOINT_ID,
   // Every pass is a full one (the channel filter has no update-time literal),
   // so a finished pass also removes the cached channels it proves stale.
   createFetchPage: createChannelDirectoryBackfillFetcher,
   refreshAll: true,
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
-  input: {
-    limit: PAGE_LIMIT,
-    expand: true,
-    sortMethod: 'VIEWED_UPDATED',
-    emailView: 'ALL',
-    filters: {
-      calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      documentFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      projectFilter: { literal: { projectIdSelf: EXCLUDED_ENTITY_ID } },
-      chatFilter: { literal: { chatId: EXCLUDED_ENTITY_ID } },
-      emailFilter: { tree: { literal: { threadId: EXCLUDED_ENTITY_ID } } },
-      channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
-      callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
-      crmCompanyFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-      foreignEntityFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
-    },
-  },
+  input: CHANNEL_DIRECTORY_INPUT,
 };
 
 /** Backfills documents, chats, and folders for Quick Access and primary views. */
@@ -283,114 +273,13 @@ export const DEFAULT_SOUP_BACKFILL_LANES = [
   AUXILIARY_SOUP_BACKFILL_LANE,
 ] as const satisfies readonly SoupBackfillParams[];
 
-export type SoupBackfillCheckpoint = {
-  userId: string;
-  /** Durable cache data generation that owns this cursor and watermark. */
-  storageGeneration: string | null;
-  nextCursor: string | null;
-  pagesFetched: number;
-  completed: boolean;
-  /** Start of the pass currently being fetched. */
-  scanStartedAt: string | null;
-  /** Safe lower bound applied to updatedAt filters on the next pass. */
-  updatedSince: string | null;
-  /** Wall-clock time when the most recent pass reached its final page. */
-  completedAt: string | null;
-};
-
-type StoredSoupBackfillCheckpoint = Omit<
-  SoupBackfillCheckpoint,
-  'storageGeneration' | 'scanStartedAt' | 'updatedSince' | 'completedAt'
-> &
-  Partial<
-    Pick<
-      SoupBackfillCheckpoint,
-      'storageGeneration' | 'scanStartedAt' | 'updatedSince' | 'completedAt'
-    >
-  >;
-
-function checkpointKey(userId: string, checkpointId: string): string {
-  return `graphql-soup-backfill:v${BACKFILL_VERSION}:${userId}:${checkpointId}`;
-}
-
-function initialCheckpoint(
-  userId: string,
-  storageGeneration: string | null = null
-): SoupBackfillCheckpoint {
-  return {
-    userId,
-    storageGeneration,
-    nextCursor: null,
-    pagesFetched: 0,
-    completed: false,
-    scanStartedAt: null,
-    updatedSince: null,
-    completedAt: null,
-  };
-}
-
-function isOptionalString(value: unknown): boolean {
-  return value === undefined || value === null || typeof value === 'string';
-}
-
-function isCheckpoint(
-  value: unknown,
-  userId: string
-): value is StoredSoupBackfillCheckpoint {
-  if (!value || typeof value !== 'object') return false;
-
-  const checkpoint = value as Partial<SoupBackfillCheckpoint>;
-  return (
-    checkpoint.userId === userId &&
-    (typeof checkpoint.nextCursor === 'string' ||
-      checkpoint.nextCursor === null) &&
-    typeof checkpoint.pagesFetched === 'number' &&
-    typeof checkpoint.completed === 'boolean' &&
-    isOptionalString(checkpoint.storageGeneration) &&
-    isOptionalString(checkpoint.scanStartedAt) &&
-    isOptionalString(checkpoint.updatedSince) &&
-    isOptionalString(checkpoint.completedAt)
-  );
-}
+export type { SoupBackfillCheckpoint };
 
 export function loadSoupBackfillCheckpoint(
   userId: string,
   checkpointId = CORE_SOUP_BACKFILL_LANE.checkpointId
 ): SoupBackfillCheckpoint {
-  try {
-    const saved = localStorage.getItem(checkpointKey(userId, checkpointId));
-    if (!saved) return initialCheckpoint(userId);
-
-    const parsed: unknown = JSON.parse(saved);
-    if (!isCheckpoint(parsed, userId)) return initialCheckpoint(userId);
-
-    return {
-      ...parsed,
-      storageGeneration: parsed.storageGeneration ?? null,
-      scanStartedAt: parsed.scanStartedAt ?? null,
-      updatedSince: parsed.updatedSince ?? null,
-      completedAt: parsed.completedAt ?? null,
-    };
-  } catch {
-    // Restarting from the beginning is safe when storage is unavailable or
-    // the saved checkpoint is malformed.
-    return initialCheckpoint(userId);
-  }
-}
-
-function saveSoupBackfillCheckpoint(
-  checkpoint: SoupBackfillCheckpoint,
-  checkpointId: string
-): void {
-  try {
-    localStorage.setItem(
-      checkpointKey(checkpoint.userId, checkpointId),
-      JSON.stringify(checkpoint)
-    );
-  } catch {
-    // A failed checkpoint write only causes already-cached pages to be fetched
-    // again after restart.
-  }
+  return loadCheckpoint(userId, checkpointId);
 }
 
 type SoupBackfillTelemetryState =
@@ -529,7 +418,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     loadSoupBackfillCheckpoint(userId, params.checkpointId)
   );
   if (checkpoint.storageGeneration !== storageGeneration) {
-    checkpoint = initialCheckpoint(userId, storageGeneration);
+    checkpoint = initialSoupBackfillCheckpoint(userId, storageGeneration);
   }
   if (params.restartOnRun) {
     checkpoint = {
@@ -550,7 +439,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     saveSoupBackfillCheckpoint(checkpoint, params.checkpointId);
   };
   const restartForGeneration = (generation: string) => {
-    checkpoint = initialCheckpoint(userId, generation);
+    checkpoint = initialSoupBackfillCheckpoint(userId, generation);
     startPass();
   };
   const createPageFetcher = () =>
@@ -750,8 +639,12 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
  * inter-page sleeps. Engine handoffs resume durable checkpoints; only loss of
  * stored cache data resets cursors so they cannot point past wiped records.
  */
-/** Runs the signed-in user's soup backfills; waits while `userId` is unknown. */
-export function useSoupBackfills(userId: Accessor<string | undefined>): void {
+/** Runs the signed-in user's soup backfills; waits while `userId` is unknown.
+ * `directoryChannels` feeds contact facts: the complete channel directory. */
+export function useSoupBackfills(
+  userId: Accessor<string | undefined>,
+  directoryChannels: Accessor<readonly ContextChannel[] | undefined>
+): void {
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );
@@ -763,7 +656,7 @@ export function useSoupBackfills(userId: Accessor<string | undefined>): void {
   const [cacheHost, setCacheHost] = createSignal<CacheHost>();
   const [cacheGeneration, setCacheGeneration] = createSignal(0);
   useContactBackfill(userId, cacheHost, cacheGeneration);
-  useContactContextPublisher(cacheHost, cacheGeneration);
+  useContactContextPublisher(cacheHost, cacheGeneration, directoryChannels);
 
   createEffect(() => {
     if (!ENABLE_GRAPHQL_BACKFILL || !isLeader()) {

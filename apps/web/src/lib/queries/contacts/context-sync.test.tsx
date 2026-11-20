@@ -7,8 +7,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { batch, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { authKeys } from '../auth/keys';
-import { channelKeys } from '../channel/keys';
 import { emailKeys } from '../email/keys';
+import type { ContextChannel } from './context-facts';
 import { useContactContextPublisher } from './use-context-publisher';
 
 let client: QueryClient;
@@ -21,12 +21,6 @@ vi.mock('../client', () => ({
 vi.mock('@core/context/user', () => ({
   useUserId: () => viewer,
   useIsAuthenticated: () => () => true,
-}));
-vi.mock('@service-storage/client', () => ({
-  storageServiceClient: {
-    getChannels: () => new Promise(() => {}),
-    getActivity: () => new Promise(() => {}),
-  },
 }));
 vi.mock('@service-email/client', () => ({
   emailClient: { getLinks: () => new Promise(() => {}) },
@@ -71,10 +65,12 @@ it('waits for all owned inputs, shares the supplied leader, publishes deltas and
   };
   const [leader, setLeader] = createSignal(false);
   const [generation, setGeneration] = createSignal(0);
+  const [channels, setChannels] = createSignal<readonly ContextChannel[]>();
   function Runner() {
     const state = useContactContextPublisher(
       () => (leader() ? host : undefined),
-      generation
+      generation,
+      channels
     );
     return <output>{state()}</output>;
   }
@@ -83,8 +79,7 @@ it('waits for all owned inputs, shares the supplied leader, publishes deltas and
       <Runner />
     </QueryClientProvider>
   ));
-  client.setQueryData(channelKeys.listChannels(viewer()).queryKey, []);
-  client.setQueryData(channelKeys.activity(viewer()).queryKey, []);
+  setChannels([]);
   await vi.advanceTimersByTimeAsync(250);
   expect(writes).toHaveLength(0);
   setLeader(true);
@@ -164,15 +159,14 @@ it('cannot relabel retained old-account rows and stops late work after ownership
       search: async () => ({ kind: 'contextPending' as const }),
     },
   };
-  client.setQueryData(channelKeys.listChannels(viewer()).queryKey, []);
-  client.setQueryData(channelKeys.activity(viewer()).queryKey, []);
   client.setQueryData(emailKeys.links(viewer()).queryKey, {
     links: [{ email_address: 'private@example.com', is_primary: false }],
   });
   function Runner() {
     useContactContextPublisher(
       () => host,
-      () => 0
+      () => 0,
+      () => []
     );
     return null;
   }
@@ -197,8 +191,6 @@ it('cannot relabel retained old-account rows and stops late work after ownership
 });
 
 it('releases its source and stays unsupported without retrying or writing', async () => {
-  client.setQueryData(channelKeys.listChannels(viewer()).queryKey, []);
-  client.setQueryData(channelKeys.activity(viewer()).queryKey, []);
   client.setQueryData(emailKeys.links(viewer()).queryKey, { links: [] });
   const context = vi.fn(async () => ({ kind: 'unsupported' as const }));
   const update = vi.fn(async () => parseCacheRevision('1'));
@@ -219,7 +211,8 @@ it('releases its source and stays unsupported without retrying or writing', asyn
   function Runner() {
     const state = useContactContextPublisher(
       () => host,
-      () => 0
+      () => 0,
+      () => []
     );
     return <output>{state()}</output>;
   }
@@ -235,8 +228,6 @@ it('releases its source and stays unsupported without retrying or writing', asyn
 });
 
 it('backs off transient failures with at most three automatic retries', async () => {
-  client.setQueryData(channelKeys.listChannels(viewer()).queryKey, []);
-  client.setQueryData(channelKeys.activity(viewer()).queryKey, []);
   client.setQueryData(emailKeys.links(viewer()).queryKey, { links: [] });
   const context = vi.fn(async () => ({ kind: 'missing' as const }));
   const update = vi.fn(async () => {
@@ -259,7 +250,8 @@ it('backs off transient failures with at most three automatic retries', async ()
   function Runner() {
     const state = useContactContextPublisher(
       () => host,
-      () => 0
+      () => 0,
+      () => []
     );
     return <output>{state()}</output>;
   }

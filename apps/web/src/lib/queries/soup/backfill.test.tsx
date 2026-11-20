@@ -124,7 +124,10 @@ const recencyTree = (signal: boolean, gte: string) => ({
 });
 
 function BackfillRunner(props: { userId: string }) {
-  useSoupBackfills(() => props.userId);
+  useSoupBackfills(
+    () => props.userId,
+    () => undefined
+  );
   return null;
 }
 
@@ -1048,7 +1051,7 @@ it('warms sender metadata before paged backfill and pauses it without identity o
   leaderMocks.createTabLeaderSignal.mockReturnValue(leader);
   mailAccounts.mockClear();
   const rendered = render(() => {
-    useSoupBackfills(user);
+    useSoupBackfills(user, () => undefined);
     return null;
   });
   try {
