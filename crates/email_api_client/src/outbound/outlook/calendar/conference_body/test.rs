@@ -70,6 +70,63 @@ fn a_teams_invitation_keeps_its_meeting_block_and_the_notes_around_it() {
     );
 }
 
+/// The Teams block as Macro's description editor exports it: each part a
+/// paragraph of its own, without the `me-email*` markers.
+fn rewritten_block() -> String {
+    let href = JOIN.replace('&', "&amp;");
+    format!(
+        "<p>Microsoft Teams meeting</p><p><a href=\"{href}\">Join the meeting now</a></p><p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p><p><a href=\"https://aka.ms/JoinTeamsMeeting\">Learn more</a> | <a href=\"https://teams.microsoft.com/meetingOptions/\">Meeting options</a></p>"
+    )
+}
+
+#[test]
+fn a_rewritten_meeting_block_leaves_and_the_notes_around_it_stay() {
+    let saved = format!(
+        "<html><body><div><p>Agenda</p></div><br>{}</body></html>",
+        teams_block()
+    );
+    let edited = format!(
+        "<p>New agenda</p>{}<p>Bring the deck</p>",
+        rewritten_block()
+    );
+
+    assert_eq!(
+        without_meeting(&edited, &saved, JOIN).unwrap(),
+        "<p>New agenda</p><p>Bring the deck</p>"
+    );
+}
+
+#[test]
+fn an_edited_description_still_marked_splits_and_one_without_the_link_stays() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+
+    assert_eq!(
+        without_meeting(&format!("<p>New agenda</p>{}", teams_block()), &saved, JOIN).unwrap(),
+        "<p>New agenda</p>"
+    );
+    assert_eq!(
+        without_meeting("<p>Only notes</p>", &saved, JOIN).unwrap(),
+        "<p>Only notes</p>"
+    );
+}
+
+#[test]
+fn the_join_link_in_the_persons_own_text_is_refused() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let href = JOIN.replace('&', "&amp;");
+    let typed_into = rewritten_block().replace(
+        "Join the meeting now</a></p>",
+        "Join the meeting now</a> early</p>",
+    );
+    let elsewhere = format!(
+        "<p>Use <a href=\"{href}\">this link</a></p><p>Notes</p>{}",
+        rewritten_block()
+    );
+
+    assert!(without_meeting(&typed_into, &saved, JOIN).is_err());
+    assert!(without_meeting(&elsewhere, &saved, JOIN).is_err());
+}
+
 #[test]
 fn only_outermost_provider_blocks_are_split_in_document_order() {
     let first = format!(

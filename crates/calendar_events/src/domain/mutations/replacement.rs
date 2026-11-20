@@ -78,6 +78,30 @@ where
     }
 }
 
+/// A replacement carries the editor's details, guests and reminders. Its
+/// conference is `remove_conference`, Outlook has no guest policy, an
+/// out-of-office event has no meeting to replace, and one occurrence has no
+/// repeat rule of its own.
+fn check_replacement_changes(
+    changes: &CalendarEventPatch,
+    recurrence_id: Option<&str>,
+) -> Result<(), CalendarMutationError> {
+    if changes.conference.is_some()
+        || changes.guest_policy.is_some()
+        || changes.out_of_office.is_some()
+    {
+        return Err(CalendarMutationError::InvalidInput(
+            "A replacement carries only the event's details, guests and reminders".into(),
+        ));
+    }
+    if recurrence_id.is_some() && changes.recurrence_lines.is_some() {
+        return Err(CalendarMutationError::InvalidInput(
+            "The repeat rule applies to all events. Replace all events to change it.".into(),
+        ));
+    }
+    Ok(())
+}
+
 impl<R, G, T, B, N> CalendarReplacementService for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository + CalendarReplacementRepository,
@@ -101,7 +125,9 @@ where
         calendar_id: Option<Uuid>,
         recurrence_id: Option<String>,
         remove_conference: bool,
+        changes: CalendarEventPatch,
     ) -> Result<CalendarReplacementView, CalendarMutationError> {
+        check_replacement_changes(&changes, recurrence_id.as_deref())?;
         let target = self
             .resolve_mutation_target(user, event_id, calendar_id)
             .await?;
@@ -120,8 +146,20 @@ where
             .await
             .map_err(internal)?
         {
-            let target = self.replacement_target(user, &active).await?;
-            return self.replacement_view(&active, &target).await;
+            // A preview nobody confirmed froze the editor's older changes, so
+            // it gives way to this one. A started operation is only resumed.
+            let started = active.next_step > 0 || active.command.is_some();
+            if started
+                || !self
+                    .repository
+                    .discard_replacement(user, active.id)
+                    .await
+                    .map_err(internal)?
+            {
+                let active = self.load_replacement(user, active.id).await?;
+                let target = self.replacement_target(user, &active).await?;
+                return self.replacement_view(&active, &target).await;
+            }
         }
         let token = self.fetch_token(&target.token_identity).await?;
         let snapshot = self
@@ -132,6 +170,7 @@ where
                 target.master_provider_event_id(),
                 recurrence_id.as_deref(),
                 remove_conference,
+                &changes,
             )
             .await
             .map_err(provider_error)?;

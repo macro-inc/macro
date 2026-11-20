@@ -124,10 +124,7 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
     if let Some(prefs) = marker(event, PREFERENCES_ID) {
         add_marker(&mut body, PREFERENCES_ID, &prefs);
     }
-    let old_join = event["onlineMeeting"]["joinUrl"]
-        .as_str()
-        .or(event["onlineMeetingUrl"].as_str());
-    if let Some(join) = old_join {
+    if let Some(join) = join_url(event) {
         if let Some(content) = body["body"]["content"].as_str() {
             body["body"]["content"] = json!(conference_body::split(content, join)?.0);
         }
@@ -148,6 +145,86 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
         body["onlineMeetingProvider"] = json!("teamsForBusiness");
     }
     Ok(body)
+}
+
+fn join_url(event: &Value) -> Option<&str> {
+    event["onlineMeeting"]["joinUrl"]
+        .as_str()
+        .or(event["onlineMeetingUrl"].as_str())
+}
+
+/// Fields an occurrence copy takes from the edited series when it still holds
+/// the saved series' value; an occurrence changed on its own keeps its own.
+const INHERITED_FIELDS: [&str; 9] = [
+    "subject",
+    "body",
+    "location",
+    "locations",
+    "attendees",
+    "sensitivity",
+    "showAs",
+    "isReminderOn",
+    "reminderMinutesBeforeStart",
+];
+
+/// Lay the editor's unsaved changes over a copy of `source`, built as an
+/// Outlook update of `source` builds its body, so the replacement sends no
+/// field that a copy or an update does not already send.
+fn apply_changes(
+    body: &mut Value,
+    source: &Value,
+    changes: &CalendarEventPatch,
+) -> Result<(), CalendarProviderError> {
+    let patch = patch_body(
+        &CalendarEventPatch {
+            description: None,
+            ..changes.clone()
+        },
+        Some(source),
+    )?;
+    let fields = body.as_object_mut().ok_or_else(invalid)?;
+    // Graph keeps `location` and `locations` in step; a new location replaces both.
+    if changes.location.is_some() {
+        fields.remove("locations");
+    }
+    for (field, value) in patch.as_object().ok_or_else(invalid)? {
+        fields.insert(field.clone(), value.clone());
+    }
+    if let Some(description) = &changes.description {
+        // The old meeting's block goes with the old meeting, as it does from
+        // the copied body.
+        let content = match join_url(source) {
+            Some(join) => conference_body::without_meeting(
+                description,
+                source["body"]["content"].as_str().unwrap_or_default(),
+                join,
+            )?,
+            None => description.clone(),
+        };
+        fields.insert(
+            "body".into(),
+            json!({"contentType":"html","content":content}),
+        );
+    }
+    Ok(())
+}
+
+/// Carry an edit of the series onto an occurrence copy that still shows the
+/// saved series' value.
+fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
+    for field in INHERITED_FIELDS {
+        if saved.get(field) == edited.get(field) || occurrence.get(field) != saved.get(field) {
+            continue;
+        }
+        match edited.get(field) {
+            Some(value) => occurrence[field] = value.clone(),
+            None => {
+                if let Some(fields) = occurrence.as_object_mut() {
+                    fields.remove(field);
+                }
+            }
+        }
+    }
 }
 
 impl OutlookApiClientRepository {
@@ -293,6 +370,7 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         master_id: &str,
         recurrence_id: Option<&str>,
         remove_conference: bool,
+        changes: &CalendarEventPatch,
     ) -> Result<ReplacementSnapshot, CalendarProviderError> {
         let api = self.calendar_scope(target)?;
         let token = AccessToken::new(token.to_owned());
@@ -309,8 +387,20 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
         }
         string(&source, "@odata.etag")?;
         let is_series = recurrence_id.is_none() && source["type"].as_str() == Some("seriesMaster");
+        // Outlook drops a series' changed and cancelled occurrences when its
+        // schedule changes, and their dates no longer follow it.
+        let keeps_occurrences =
+            is_series && changes.time.is_none() && changes.recurrence_lines.is_none();
+        let mut body = copy_body(&source, remove_conference)?;
+        if !is_series {
+            body.as_object_mut()
+                .ok_or_else(invalid)?
+                .remove("recurrence");
+        }
+        let saved = body.clone();
+        apply_changes(&mut body, &source, changes)?;
         let mut occurrences = vec![];
-        if is_series {
+        if keeps_occurrences {
             let (series, exceptions) = api
                 .replacement_exceptions(&token, target, master_id)
                 .await?;
@@ -323,9 +413,9 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
                     .await?
                     .ok_or_else(changed)?;
                 let date = occurrence_date(string(&exception, "occurrenceId")?)?;
-                occurrences.push(
-                    json!({"date":date,"source":event,"body":copy_body(&event,remove_conference)?}),
-                );
+                let mut copy = copy_body(&event, remove_conference)?;
+                inherit_changes(&mut copy, &saved, &body);
+                occurrences.push(json!({"date":date,"source":event,"body":copy}));
             }
             for cancelled in series["cancelledOccurrences"]
                 .as_array()
@@ -335,19 +425,17 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
                 occurrences.push(json!({"date":date,"cancelled":true}));
             }
         }
-        let mut body = copy_body(&source, remove_conference)?;
-        if !is_series {
-            body.as_object_mut()
-                .ok_or_else(invalid)?
-                .remove("recurrence");
-        }
         api.verify_source_version(&token, target, &source).await?;
+        let time = match &changes.time {
+            Some(time) => time.clone(),
+            None => normalize::event_time(&source)?,
+        };
         Ok(ReplacementSnapshot {
             source_id: string(&source, "id")?.into(),
             is_organizer: source["isOrganizer"].as_bool() == Some(true),
-            title: source["subject"].as_str().unwrap_or("").into(),
-            time: normalize::event_time(&source)?,
-            attendee_count: source["attendees"].as_array().map_or(0, Vec::len),
+            title: body["subject"].as_str().unwrap_or("").into(),
+            time,
+            attendee_count: body["attendees"].as_array().map_or(0, Vec::len),
             is_series,
             remove_conference,
             provider_url: safe_event_url(&source),
