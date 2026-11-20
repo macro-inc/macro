@@ -721,6 +721,17 @@ pub trait CompaniesRepository:
         include_contacts: bool,
     ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
 
+    /// The team's company for `domain` (lowercase), read like
+    /// [`Self::get_company_for_team`] without its contacts. `Ok(None)` when
+    /// the team tracks no company at the domain, or when that company is
+    /// hidden and `include_hidden` is false.
+    fn get_company_by_domain_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        include_hidden: bool,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
     /// Read the team's CRM configuration from `team_crm_settings`.
     /// A missing row yields [`CrmTeamSettings::default`].
     fn get_team_settings(
