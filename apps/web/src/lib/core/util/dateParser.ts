@@ -395,7 +395,10 @@ const TIME_OF_DAY = /\d{1,2}:\d{2}|\b\d{1,2}\s?[ap]\.?m\b/i;
  * day alone, relative to today. A chip picked in the editor is a timestamp at
  * its author's midnight with a day label, so it stays a day for every viewer.
  */
-export function formatMentionLabel(date: string, displayFormat: string): string {
+export function formatMentionLabel(
+  date: string,
+  displayFormat: string
+): string {
   const parsed = parseMentionDate(date);
   const namesTime =
     !BARE_DAY.test(date) &&

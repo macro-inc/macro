@@ -73,9 +73,9 @@ describe('formatMentionLabel', () => {
   });
 
   it('keeps a day picked at another zone’s midnight a day', () => {
-    expect(formatMentionLabel('2026-09-25T04:00:00.000Z', 'Tomorrow')).not.toMatch(
-      /\d:\d\d/
-    );
+    expect(
+      formatMentionLabel('2026-09-25T04:00:00.000Z', 'Tomorrow')
+    ).not.toMatch(/\d:\d\d/);
   });
 
   it('keeps a bare day a day whatever its label says', () => {
