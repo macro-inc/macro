@@ -75,7 +75,7 @@ pub enum SearchError {
     Busy,
     /// The account's user API keys used their search allowance
     #[error(
-        "search rate limit reached for this account's API keys; retry after {retry_after_seconds} seconds"
+        "search rate limit reached for this account's API keys; retry after {retry_after_seconds}s"
     )]
     RateLimited { retry_after_seconds: u64 },
     /// Opensearch error occurred

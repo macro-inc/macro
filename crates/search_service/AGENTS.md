@@ -97,9 +97,10 @@ per-entity-type search plus a unified search across them — mounted into
   within 500 ms lets the search run. A limited search is not logged as an
   error. The span records `search.rate_limit` (`allowed`, `limited`,
   `unavailable`), `search.rate_limit_remaining` (searches the account may
-  still send at once) and `search.rate_limit_wait_ms`. App sessions, agents, routines, services, Macro API tokens and
-  account-manager credentials never draw on it, and neither does
-  `/search/channel`, which takes no lane turn either.
+  still send at once) and `search.rate_limit_wait_ms`. App sessions,
+  agents, routines, services, Macro API tokens and account-manager
+  credentials never draw on it, and neither does `/search/channel`, which
+  takes no lane turn either.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
   blank or quotes-only one). Short queries stay bounded in the query builders, not here: a
   term under three characters matches as a whole word in document, chat, call
