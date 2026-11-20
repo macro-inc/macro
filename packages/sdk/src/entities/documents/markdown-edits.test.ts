@@ -47,8 +47,18 @@ const COMMITTED = {
     revision: 'AQIE',
     merge: 'base',
     changes: [
-      { kind: 'edited', blockId: 'p1', before: 'Ships in Q3.', after: 'Ships in Q4.' },
-      { kind: 'inserted', blockId: 'n1', afterBlockId: null, markdown: '# Top' },
+      {
+        kind: 'edited',
+        blockId: 'p1',
+        before: 'Ships in Q3.',
+        after: 'Ships in Q4.',
+      },
+      {
+        kind: 'inserted',
+        blockId: 'n1',
+        afterBlockId: null,
+        markdown: '# Top',
+      },
       { kind: 'deleted', blockId: 'v1', markdown: '<!-- keep:v1 -->' },
       { kind: 'moved', blockId: 'h1', afterBlockId: 'n1' },
     ],
@@ -129,7 +139,9 @@ describe('document.applyMarkdownEdits', () => {
           code: 'ambiguous_match',
           message: 'edit 1: old occurs 2 times',
           edit: 1,
-          candidates: [{ blockId: 'p1', occurrences: 2, markdown: 'Q3 and Q3' }],
+          candidates: [
+            { blockId: 'p1', occurrences: 2, markdown: 'Q3 and Q3' },
+          ],
         },
       },
       response: { status: 422 },

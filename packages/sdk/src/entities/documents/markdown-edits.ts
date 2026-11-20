@@ -235,10 +235,7 @@ function blockId(document: Document, block: DocumentBlock): string {
   return block.id;
 }
 
-function toWire(
-  document: Document,
-  edit: MarkdownEditOperation,
-): MarkdownEdit {
+function toWire(document: Document, edit: MarkdownEditOperation): MarkdownEdit {
   const at = (position: BlockPosition) =>
     typeof position === 'string' ? position : blockId(document, position);
   if ('replace' in edit)
