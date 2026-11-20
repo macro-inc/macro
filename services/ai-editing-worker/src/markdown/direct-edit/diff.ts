@@ -1,5 +1,4 @@
 /** What an applied (or dry-run) batch changed, block by block. */
-import { blockSteps } from '../body';
 import type { DocumentView } from './document';
 import { redactMedia } from './media';
 
@@ -14,6 +13,32 @@ export type BlockChange =
   | { kind: 'deleted'; blockId: string; markdown: string }
   | { kind: 'moved'; blockId: string; afterBlockId: string | null };
 
+/**
+ * The ids in `after` that keep their relative order from `before`: a longest
+ * increasing subsequence of their old positions, O(n log n) at any size.
+ */
+function longestKeptOrder(before: string[], after: string[]): Set<string> {
+  const position = new Map(before.map((id, i) => [id, i]));
+  const order = after.map((id) => position.get(id) ?? -1);
+  // tails[k]: index in `order` ending the best increasing run of length k + 1.
+  const tails: number[] = [];
+  const previous: number[] = [];
+  order.forEach((value, i) => {
+    let low = 0;
+    let high = tails.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (order[tails[mid]] < value) low = mid + 1;
+      else high = mid;
+    }
+    previous[i] = low > 0 ? tails[low - 1] : -1;
+    tails[low] = i;
+  });
+  const kept = new Set<string>();
+  for (let i = tails.at(-1) ?? -1; i >= 0; i = previous[i]) kept.add(after[i]);
+  return kept;
+}
+
 /** Changes from `before` to `after`, matched by block id, in `after`'s order. */
 export function blockChanges(
   before: DocumentView,
@@ -27,10 +52,8 @@ export function blockChanges(
   const keptAfter = after.blocks
     .filter((block) => beforeById.has(block.id))
     .map((block) => block.id);
-  // Blocks outside the longest common order of kept ids moved.
-  const stayed = new Set<string>();
-  for (const step of blockSteps(keptBefore, keptAfter))
-    if (step.kind === 'keep') stayed.add(keptBefore[step.current]);
+  // Blocks outside the longest run kept in their old order moved.
+  const stayed = longestKeptOrder(keptBefore, keptAfter);
 
   const changes: BlockChange[] = [];
   after.blocks.forEach((block, i) => {

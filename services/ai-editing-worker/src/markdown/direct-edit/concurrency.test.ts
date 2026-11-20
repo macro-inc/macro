@@ -356,13 +356,16 @@ describe('a person edits during the commit (merged after it)', () => {
       kind: 'delete',
       where: TARGET,
     });
-    await runDirectEdit(
+    const response = await runDirectEdit(
       DOC,
       { edits, baseRevision },
       synced,
       new AbortController().signal,
       NOOP_SPAN
     );
+    expect(response.outcome).toBe('committed');
+    const edited = await readDocument(DOC, synced.snapshot());
+    expect(edited.blocks.some((b) => b.markdown.includes(AI_NEW))).toBe(true);
     for (const update of updates) synced.doc.import(update);
     const after = await readDocument(DOC, synced.snapshot());
     expect(after.blocks.some((b) => b.markdown.includes('The target'))).toBe(
