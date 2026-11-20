@@ -18,6 +18,7 @@ import { runStep, STEP_WEIGHTS, type ActionContext, type StepKind } from './lib/
 import {
   launchBrowser,
   loadProbe,
+  onRequestFailure,
   openLane,
   probeOpenLive,
   probeRead,
@@ -28,6 +29,7 @@ import {
   type AppServer,
   type Lane,
   type ProbeResult,
+  type RequestFailure,
   type ReadSpec,
 } from './lib/browser.ts';
 import { classify, sameInstant, type Classified } from './lib/classify.ts';
@@ -72,6 +74,12 @@ const log = (line: string) => {
 const record = (file: string, value: unknown) => appendFileSync(join(out, file), `${JSON.stringify(value)}\n`);
 const unexplained = new Map<string, number>();
 const HOME_TYPES = ['documents', 'tasks', 'email', 'channels', 'agents', 'folders', 'initiatives', 'github', 'calendar'];
+
+// A read that got no answer: the browser gave up on a request (the REST and
+// GraphQL clients report it as these messages), or the probe never settled.
+const NO_ANSWER = /Network error occurred|Failed to fetch|did not settle in time/;
+const retries: Record<string, number> = {};
+onRequestFailure((failure) => record('requestfailed.jsonl', failure));
 
 const stack = stackFromEnv();
 const viteEnv = {
@@ -144,6 +152,7 @@ try {
   for (const app of apps) stopApp(app);
   if (mutant) revertMutant(newWorktree, mutant);
 }
+summary.retries = retries;
 summary.ms = Date.now() - started;
 writeFileSync(join(out, 'summary.json'), JSON.stringify(summary, null, 1));
 log(`done in ${Math.round((Date.now() - started) / 1000)}s; unexplained ${JSON.stringify(unexplainedCounts())}`);
@@ -216,7 +225,7 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
           // The third read is main's own GraphQL reader (update-time sort, which
           // main serves over GraphQL): the reference for field mappings.
           const refSpec: ReadSpec = { ...c.spec, params: { ...c.spec.params, sort_method: 'updated_at' } };
-          const results = await Promise.allSettled([probeRead(oldLane, user.macroUserId, c.spec), probeRead(newLane, user.macroUserId, c.spec), probeRead(oldLane, user.macroUserId, refSpec)]);
+          const results = await readUntilAnswered(`read ${c.id}`, [oldLane, newLane], () => Promise.allSettled([probeRead(oldLane, user.macroUserId, c.spec), probeRead(newLane, user.macroUserId, c.spec), probeRead(oldLane, user.macroUserId, refSpec)]));
           if (results[0].status === 'rejected' || results[1].status === 'rejected') {
             failed += 1;
             const reason = results.slice(0, 2).map((r) => (r.status === 'rejected' ? String(r.reason).slice(0, 300) : 'ok'));
@@ -484,7 +493,7 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             await loadProbe(lane.page);
           }));
           for (let i = 0; i < specs.length; i++) {
-            const read = await Promise.allSettled([probeRead(lanes.reload[0], user.macroUserId, specs[i]), probeRead(lanes.reload[1], user.macroUserId, specs[i])]);
+            const read = await readUntilAnswered(`reload ${JSON.stringify(at)} spec${i}`, lanes.reload, () => Promise.allSettled([probeRead(lanes.reload[0], user.macroUserId, specs[i]), probeRead(lanes.reload[1], user.macroUserId, specs[i])]));
             if (read[0].status !== 'fulfilled' || read[1].status !== 'fulfilled') {
               tallyInto(classes, [classify({ signature: 'reload:probe-error', kind: 'error', detail: JSON.stringify(at) })], 'sequences');
               continue;
@@ -573,4 +582,29 @@ function startLoad(world: World, pair: Pair, userFor: (key: string) => User): ((
       log(`load: ${JSON.stringify(counts)}`);
     },
   ];
+}
+
+/**
+ * Runs `attempt` (reads on both sides) and, while one of its reads got no
+ * answer, runs it again, at most twice. A read that got no answer says
+ * nothing about either reader: it is not compared, and every retry is
+ * recorded (retries.jsonl, summary.retries) with the requests the browser
+ * gave up on and their network error, so a reader that hangs or fails on one
+ * side only still shows, as an open difference once the retries run out.
+ */
+async function readUntilAnswered(where: string, lanes: Lane[], attempt: () => Promise<PromiseSettledResult<ProbeResult>[]>) {
+  for (let tries = 1; ; tries++) {
+    const marks = lanes.map((lane) => lane.failed.length);
+    const results = await attempt();
+    const unanswered = results.flatMap((r, i) => {
+      const message = r.status === 'rejected' ? String(r.reason) : r.value.error ? String(r.value.error) : '';
+      return NO_ANSWER.test(message) ? [{ read: i, message: message.slice(0, 160) }] : [];
+    });
+    if (!unanswered.length || tries > 2) return results;
+    const requests: RequestFailure[] = lanes.flatMap((lane, i) => lane.failed.slice(marks[i]));
+    const key = requests.length ? [...new Set(requests.map((r) => `${r.side}:${r.error}`))].sort().join('+') : `no-failed-request:${unanswered.map((u) => (u.read === 1 ? 'new' : 'old')).join('+')}`;
+    retries[key] = (retries[key] ?? 0) + 1;
+    record('retries.jsonl', { at: new Date().toISOString(), where, tries, unanswered, requests: requests.slice(0, 12) });
+    await new Promise((r) => setTimeout(r, 3000));
+  }
 }

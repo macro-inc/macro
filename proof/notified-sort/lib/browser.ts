@@ -92,12 +92,23 @@ export async function launchBrowser(): Promise<Browser> {
   });
 }
 
+/** A request the browser gave up on: no response reached the page. */
+export type RequestFailure = { at: string; side: Side; url: string; method: string; error: string };
+
+let requestFailureSink: ((failure: RequestFailure) => void) | undefined;
+/** Every lane opened after this reports its failed requests to `sink`. */
+export function onRequestFailure(sink: (failure: RequestFailure) => void) {
+  requestFailureSink = sink;
+}
+
 export type Lane = {
   side: Side;
   app: AppServer;
   context: BrowserContext;
   page: Page;
   touch: boolean;
+  /** Failed requests since the lane opened, oldest first. */
+  failed: RequestFailure[];
 };
 
 /** A signed-in page for `user` on `app`, with the probe loaded. */
@@ -131,9 +142,16 @@ export async function openLane(
     [storageKey, options.facets ? JSON.stringify({ version: 1, tab: 'signal', facets: options.facets }) : ''] as const
   );
   const page = await context.newPage();
+  const failed: RequestFailure[] = [];
+  page.on('requestfailed', (request) => {
+    const url = new URL(request.url());
+    const failure = { at: new Date().toISOString(), side: app.side, url: `${url.origin}${url.pathname}`, method: request.method(), error: request.failure()?.errorText ?? 'unknown' };
+    failed.push(failure);
+    requestFailureSink?.(failure);
+  });
   await page.goto(`${app.origin}${options.path ?? "/app/home"}`, { waitUntil: "domcontentloaded", timeout: 180_000 });
   await loadProbe(page);
-  return { side: app.side, app, context, page, touch };
+  return { side: app.side, app, context, page, touch, failed };
 }
 
 export async function loadProbe(page: Page) {
