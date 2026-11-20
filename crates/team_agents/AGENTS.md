@@ -84,18 +84,34 @@ on macrod connect for an agent's computer unless the agent already counts as
 online (one invited before reports, backfilled; its workspace never reports). Not tied to the starter agent: any
 agent runtime reports the same way.
 
+An agent may have its own email inbox (`domain::inbox`, behind
+`enable-agent-inboxes` for the acting admin): `inbox: true` on the invite
+(best effort after the purchase) or `PUT /team_agents/{agent}/inbox`.
+`InboxService` reserves one `team_agent_inboxes` row per agent whose
+`request_id` every retry reuses, calls email_service's agent mailboxes
+(`AgentMailboxes` port), and mirrors the answer (`provisioning`, `active`,
+`failed` with a reason), so listing agents makes no email call except to
+refresh one still `provisioning`. The mailbox's owner is the agent's account;
+its address lives only on the inbox. Removing the agent pauses the mailbox
+before its seat goes (email_service releases it after 30 days); `undo_invite`
+releases it. A pause or release email_service misses fails the step, so the
+removal is retried; without an inbox or a provider it is a no-op.
+
 ## Start here
 
 - `src/domain/service.rs`: invite, list, remove and enrollment issuance.
 - `src/domain/ports.rs`: what the service needs from other crates.
 - `src/domain/admission.rs`: agent admission for the vault.
+- `src/domain/inbox.rs`: the agent's email inbox lifecycle.
 
 ## Scope
 
-- Owns: agent accounts, the `team_agents` table, enrollment issuance.
+- Owns: agent accounts, the `team_agents` and `team_agent_inboxes` tables,
+  enrollment issuance.
 - Not here: the computer lifecycle and billing → `crates/hosted_runtimes`;
   membership and seats → `crates/teams`; the repo server → `crates/agent_git`;
-  the agent runtime → `packages/muppet` and its template `packages/starter-agent`.
+  the agent runtime → `packages/muppet` and its template `packages/starter-agent`;
+  the mailbox itself, its provider and the agent's email tools → email_service.
 
 ## Checks
 

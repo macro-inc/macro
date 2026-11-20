@@ -1,3 +1,5 @@
+mod inbox;
+
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -34,6 +36,7 @@ fn request() -> CreateTeamAgent {
         size: ComputerSize::Standard,
         avatar_url: None,
         voice: None,
+        inbox: false,
     }
 }
 
@@ -412,10 +415,11 @@ impl Flags {
 impl FeatureFlags for Flags {
     async fn load(&self, user: &MacroUserIdStr<'_>) -> Result<FlagSnapshot, Report> {
         let agent = user.as_ref().ends_with(AGENT_EMAIL_DOMAIN);
-        Ok(FlagSnapshot::new([(
-            AGENT_TEAMMATES_FLAG.to_owned(),
-            FlagValue::Boolean(!agent && self.0.load(Ordering::SeqCst)),
-        )]))
+        let on = !agent && self.0.load(Ordering::SeqCst);
+        Ok(FlagSnapshot::new([
+            (AGENT_TEAMMATES_FLAG.to_owned(), FlagValue::Boolean(on)),
+            (AGENT_INBOXES_FLAG.to_owned(), FlagValue::Boolean(on)),
+        ]))
     }
 }
 

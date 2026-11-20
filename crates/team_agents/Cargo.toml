@@ -45,6 +45,7 @@ notification = { path = "../notification", optional = true, default-features = f
 rootcause = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
