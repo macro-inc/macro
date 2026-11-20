@@ -336,10 +336,12 @@ the gateway `/email` prefix.
   the others `record`, which logs gate refusals at DEBUG.
 - `GET /internal/recent_messages/{user_id}` reads the user's own syncing
   inboxes straight from Gmail and Outlook (`outbound/recent_inbox.rs`), not
-  the synced mailbox, so it answers before a backfill finishes. Every call
-  spends live provider quota; Gmail reads three messages at a time to stay
-  under the gate's live cap. Don't record message content or addresses on
-  its spans.
+  the synced mailbox, so it answers before a backfill finishes: the newest
+  `limit` (at most 100), or with `days` the mail of those days (at most 30
+  days and 500 messages, with snippets on only the newest `texts`). Every
+  call spends live provider quota; Gmail reads three messages at a time to
+  stay under the gate's live cap, so a month of 500 is 501 Gmail requests.
+  Don't record message content or addresses on its spans.
 - Connecting an inbox writes its `email_links` row, which a CRM contact
   population share-locks for its whole transaction. The connect transactions
   (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)

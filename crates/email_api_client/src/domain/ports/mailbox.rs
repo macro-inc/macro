@@ -76,13 +76,15 @@ pub trait MailboxContentReader: Send + Sync + 'static {
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Option<MailboxMessage>, EmailApiError>> + Send;
 
-    /// The newest inbox messages, newest first, without attachment metadata,
+    /// Up to `limit` of the newest inbox messages, newest first, received no
+    /// earlier than `since` when it is given, without attachment metadata,
     /// for a quick look at a mailbox before it has synchronized.
     fn recent_inbox_messages(
         &self,
         token: &AccessToken,
         link_id: Uuid,
         limit: u16,
+        since: Option<DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> impl Future<Output = Result<Vec<MailboxMessage>, EmailApiError>> + Send;
 

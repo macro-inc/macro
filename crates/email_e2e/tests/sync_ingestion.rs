@@ -1514,9 +1514,10 @@ async fn outlook_thread_without_a_sender_still_reads() -> Result<(), Report> {
 }
 
 /// What the agent harness asks before it suggests routines: the newest
-/// mail of the user's inboxes, read from the provider itself, with who it
-/// is from and the start of its text. When this fails the suggestions are
-/// made from no mail at all, or from another inbox's.
+/// mail of the user's inboxes, and their month of mail, read from the
+/// provider itself, with who it is from and the start of its text. When
+/// this fails the suggestions are made from no mail at all, or from another
+/// inbox's.
 async fn newest_mail_is_read_from_the_provider(provider: Provider) -> Result<(), Report> {
     let stack = Stack::start().await?;
     let ada = stack.user("ada").await?;
@@ -1552,6 +1553,26 @@ async fn newest_mail_is_read_from_the_provider(provider: Provider) -> Result<(),
         "{recent}"
     );
     assert!(messages.len() <= 5, "{recent}");
+
+    // The month read routine suggestions make: every message of the window,
+    // the text only on the newest asked for.
+    let month = inbox
+        .get(&format!(
+            "/internal/recent_messages/{}?days=30&limit=500&texts=0",
+            urlencoding::encode(ada.macro_id())
+        ))
+        .await?
+        .ok()?;
+    let delivered = month["messages"]
+        .as_array()
+        .and_then(|messages| {
+            messages
+                .iter()
+                .find(|message| message["subject"] == "Quarterly numbers")
+        })
+        .ok_or_else(|| rootcause::report!("the delivered mail is not in the month: {month}"))?;
+    assert_eq!(delivered["from"]["email"], "grace@example.com", "{month}");
+    assert!(delivered["snippet"].is_null(), "{month}");
 
     stack.finish().await
 }

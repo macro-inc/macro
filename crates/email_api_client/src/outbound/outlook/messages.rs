@@ -279,6 +279,7 @@ impl MailboxContentReader for OutlookApiClientRepository {
         token: &AccessToken,
         link_id: Uuid,
         limit: u16,
+        since: Option<chrono::DateTime<Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
         let mut url = self.endpoint(&["me", "mailFolders", "inbox", "messages"])?;
@@ -286,6 +287,17 @@ impl MailboxContentReader for OutlookApiClientRepository {
             .append_pair("$select", RECENT_MESSAGE_FIELDS)
             .append_pair("$orderby", "receivedDateTime desc")
             .append_pair("$top", &limit.to_string());
+        // Graph orders by a filtered property only when the filter names it
+        // first, as this one does.
+        if let Some(since) = since {
+            url.query_pairs_mut().append_pair(
+                "$filter",
+                &format!(
+                    "receivedDateTime ge {}",
+                    since.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+                ),
+            );
+        }
         let page: wire::Page<wire::Message> = self.get(token, url).await?;
         page.value
             .into_iter()

@@ -1,4 +1,5 @@
 use crate::EmailServiceClient;
+use crate::get_recent_inbox_messages::InboxWindow;
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
@@ -83,4 +84,47 @@ async fn asks_for_longer_snippets_and_reads_labels() {
         .unwrap();
 
     assert_eq!(response.messages[0].labels, ["INBOX", "Billing"]);
+}
+
+#[tokio::test]
+async fn a_window_read_asks_for_its_days_and_texts() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/internal/recent_messages/macro|owner@example.com"))
+        .and(query_param("days", "30"))
+        .and(query_param("limit", "500"))
+        .and(query_param("texts", "100"))
+        .and(query_param("snippet_chars", "300"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({"messages": [{
+                "inbox": "owner@example.com",
+                "from": null,
+                "to": [],
+                "cc": [],
+                "subject": "Invoice 42",
+                "snippet": null,
+                "received_at": "2026-11-02T09:00:00Z",
+                "labels": ["INBOX"]
+            }]})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let client = EmailServiceClient::new("internal-key".to_owned(), server.uri());
+
+    let response = client
+        .get_inbox_window(
+            "macro|owner@example.com",
+            InboxWindow {
+                days: 30,
+                limit: 500,
+                texts: 100,
+                snippet_chars: 300,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.messages[0].subject.as_deref(), Some("Invoice 42"));
+    assert_eq!(response.messages[0].snippet, None);
 }

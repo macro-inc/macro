@@ -781,6 +781,7 @@ async fn recent_inbox_messages_retry_a_rejected_token_and_read_one_newest_first_
                 grant_generation: 1,
             },
             2,
+            None,
             &[inbox],
         )
         .await
@@ -1015,4 +1016,38 @@ async fn an_undecodable_response_names_where_it_failed_but_not_the_value() {
         missing,
         "permanent email provider failure: invalid Microsoft Graph response: missing field `conversationId` at ."
     );
+}
+
+#[tokio::test]
+async fn recent_inbox_messages_since_a_time_filter_on_when_they_arrived() {
+    let (server, api, token) = setup().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$orderby", "receivedDateTime desc"))
+        .and(query_param("$top", "500"))
+        .and(query_param(
+            "$filter",
+            "receivedDateTime ge 2026-10-21T09:30:00Z",
+        ))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"value":[{
+            "id":"m1", "conversationId":"c1", "parentFolderId":"inbox",
+            "subject":"Invoice 42", "isRead":false, "isDraft":false, "flag":{},
+            "receivedDateTime":"2026-10-27T09:00:00Z"
+        }]})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            500,
+            Some("2026-10-21T09:30:00Z".parse().unwrap()),
+            &[],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(messages.len(), 1);
 }

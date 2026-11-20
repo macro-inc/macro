@@ -1,10 +1,13 @@
 //! Storage and provider adapters for reading a user's newest inbox messages
 //! straight from Gmail and Outlook.
 
+use chrono::{DateTime, Utc};
 use email::domain::mailbox::{MailboxError, MailboxKey};
-use email::domain::recent_inbox::{RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader};
+use email::domain::recent_inbox::{
+    RecentInboxMailbox, RecentInboxMailboxes, RecentInboxReader, RecentRead,
+};
 use email_api_client::domain::{
-    models::{EmailApiError, MailboxAccess},
+    models::{EmailApiError, MailboxAccess, MessageWithCalendarParts},
     ports::{
         MailboxContentReader, MailboxTokenSource, ProviderRateLimiter, ScopedMailboxRepository,
     },
@@ -65,10 +68,10 @@ where
     async fn recent(
         &self,
         mailbox: &RecentInboxMailbox,
-        limit: u16,
+        read: RecentRead,
     ) -> Result<Vec<RecentInboxMessage>, EmailApiError> {
         let messages = match mailbox.provider {
-            UserProvider::Gmail => self.gmail_inbox(mailbox.key.link_id, limit).await?,
+            UserProvider::Gmail => self.gmail_inbox(mailbox.key.link_id, read).await?,
             UserProvider::Outlook => self
                 .outlook
                 .recent_inbox_messages(
@@ -77,7 +80,8 @@ where
                         sync_generation: mailbox.key.sync_generation,
                         grant_generation: mailbox.key.grant_generation,
                     },
-                    limit,
+                    read.limit,
+                    read.since,
                     &[],
                 )
                 .await?
@@ -94,16 +98,23 @@ where
 }
 
 impl<R, T, L> ProviderRecentInbox<R, T, L> {
-    /// Lists the newest inbox ids, then reads each message. A message that
-    /// fails to read is left out and counted, so one bad read keeps the rest.
-    async fn gmail_inbox(&self, link_id: Uuid, limit: u16) -> Result<Vec<Message>, EmailApiError> {
+    /// Lists the newest inbox ids, then reads each message, newest first. A
+    /// message that fails to read is left out and counted, so one bad read
+    /// keeps the rest. With `read.since`, reading stops at the first message
+    /// received before it: the list is newest first, so the rest are older.
+    async fn gmail_inbox(
+        &self,
+        link_id: Uuid,
+        read: RecentRead,
+    ) -> Result<Vec<Message>, EmailApiError> {
         let ids = self
             .gmail
-            .list_messages(link_id, u32::from(limit), &["INBOX"])
+            .list_messages(link_id, u32::from(read.limit), &["INBOX"])
             .await?;
         let reads: Vec<_> = futures::stream::iter(ids)
             .map(|id| async move { self.gmail.get_message(link_id, &id).await })
             .buffered(GMAIL_READS_PER_INBOX)
+            .take_while(|read_message| std::future::ready(!before(read_message, read.since)))
             .collect()
             .await;
 
@@ -126,6 +137,22 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
 
         Ok(messages)
     }
+}
+
+/// Whether a message read was received before `since`. A failed read, or one
+/// with no date, doesn't end the window.
+fn before<E>(
+    read: &Result<Option<MessageWithCalendarParts>, E>,
+    since: Option<DateTime<Utc>>,
+) -> bool {
+    let (Some(since), Ok(Some(message))) = (since, read) else {
+        return false;
+    };
+    message
+        .message
+        .internal_date_ts
+        .or(message.message.sent_at)
+        .is_some_and(|at| at < since)
 }
 
 fn summarize(inbox: &str, message: Message) -> RecentInboxMessage {

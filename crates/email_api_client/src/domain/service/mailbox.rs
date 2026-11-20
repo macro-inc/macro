@@ -152,12 +152,14 @@ impl<
         }
     }
 
-    /// The newest inbox messages, newest first, read straight from the
+    /// Up to `limit` of the newest inbox messages, newest first, received no
+    /// earlier than `since` when it is given, read straight from the
     /// provider, so a mailbox can be looked at before it synchronizes.
     pub async fn recent_inbox_messages(
         &self,
         mailbox: MailboxAccess,
         limit: u16,
+        since: Option<chrono::DateTime<chrono::Utc>>,
         folders: &[MailFolder],
     ) -> Result<Vec<MailboxMessage>, EmailApiError> {
         let token = self
@@ -169,7 +171,7 @@ impl<
             .await?;
         let repository = self.repository.for_mailbox(mailbox);
         match repository
-            .recent_inbox_messages(&token, mailbox.link_id, limit, folders)
+            .recent_inbox_messages(&token, mailbox.link_id, limit, since, folders)
             .await
         {
             Err(EmailApiError::AuthRequired) => {
@@ -181,7 +183,7 @@ impl<
                     )
                     .await?;
                 repository
-                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, folders)
+                    .recent_inbox_messages(&fresh, mailbox.link_id, limit, since, folders)
                     .await
             }
             result => result,

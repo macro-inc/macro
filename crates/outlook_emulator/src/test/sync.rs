@@ -353,7 +353,20 @@ mailboxes:
     let folders = folders(&api, &token).await;
 
     let recent = api
-        .recent_inbox_messages(&token, Uuid::now_v7(), 2, &folders)
+        .recent_inbox_messages(&token, Uuid::now_v7(), 2, None, &folders)
+        .await
+        .unwrap();
+
+    let subjects: Vec<_> = recent
+        .iter()
+        .map(|m| m.content.message.subject.clone().unwrap())
+        .collect();
+    assert_eq!(subjects, vec!["Newest".to_string(), "Middle".to_string()]);
+
+    // From a start time: only what arrived since, still newest first.
+    let since = "2026-11-02T09:00:00Z".parse().unwrap();
+    let recent = api
+        .recent_inbox_messages(&token, Uuid::now_v7(), 10, Some(since), &folders)
         .await
         .unwrap();
 
