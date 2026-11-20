@@ -14,7 +14,9 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
-use super::inbox::{AGENT_INBOXES_FLAG, AgentInbox, AgentInboxState, AgentInboxes, NoInboxes};
+use super::inbox::{
+    AGENT_INBOXES_FLAG, AgentInbox, AgentInboxFailure, AgentInboxState, AgentInboxes, NoInboxes,
+};
 use super::models::{
     AGENT_EMAIL_DOMAIN, AgentName, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent,
     CreatedAccount, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, PurchaseKey, TeamAgent,
@@ -651,7 +653,11 @@ where
             let inbox = match inboxes.remove(record.user_id.as_ref()) {
                 // Still being made: ask email_service, so the polling list
                 // sees it become active.
-                Some(inbox) if inbox.state == AgentInboxState::Provisioning => Some(
+                Some(inbox)
+                    if inbox.state == AgentInboxState::Provisioning
+                        || inbox.failure == Some(AgentInboxFailure::Unavailable) =>
+                {
+                    Some(
                     self.inboxes
                         .refresh(&record.user_id)
                         .await
@@ -659,7 +665,8 @@ where
                             tracing::warn!(error = ?error, "could not refresh an agent's inbox");
                         })
                         .unwrap_or(inbox),
-                ),
+                    )
+                }
                 inbox => inbox,
             };
             let mut agent = self.team_agent(record).await?;
