@@ -537,6 +537,7 @@ dependencies = [
  "rand 0.9.4",
  "reqwest 0.13.4",
  "rootcause",
+ "rustix 1.1.6",
  "serde",
  "serde_json",
  "sha2 0.10.9",
