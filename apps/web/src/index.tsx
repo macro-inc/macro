@@ -8,6 +8,7 @@ import '@fontsource-variable/playfair-display';
 // import 'solid-devtools';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { markHighlightInheritance } from '@core/util/highlightInheritance';
 import { getPlatform } from '@core/util/platform';
 import { installPlatformFetch } from '@core/util/platformFetch';
 import { recoverFromFailedLoad } from '@core/util/reloadForNewerBuild';
@@ -34,6 +35,7 @@ const renderApp = () => {
   document.documentElement.dataset.touchDevice = isTouchDevice()
     ? 'true'
     : 'false';
+  markHighlightInheritance();
 
   // Track current input modality (keyboard / mouse / touch) on the document element.
   // Used by hotkeys and other modality-aware behaviors.
