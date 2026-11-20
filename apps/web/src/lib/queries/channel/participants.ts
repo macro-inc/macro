@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
+import { sleep } from '@core/util/sleep';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import {
@@ -32,6 +33,9 @@ const REMOVE_CHANNEL_PARTICIPANTS_MUTATION_KEY = [
  * the channel's soup update arrives.
  */
 export const CHANNEL_PARTICIPANTS_MUTATION_GC_MS = 30_000;
+
+/** How long a write waits for the open readers to read the channel again. */
+const READER_REFRESH_WAIT_MS = 3_000;
 
 export type ChannelParticipantsMutationVariables = {
   channelId: string;
@@ -72,7 +76,12 @@ async function refreshChannelDetail(query: QueryRevalidation) {
   const client = getGraphqlSoupClient();
   const coordinator = channelNotificationRefresh(client);
   if (coordinator.invalidateQuery(query)) {
-    await coordinator.refresh([query]);
+    // The coordinator can hold a refresh back (a read in flight, all its
+    // slots busy, a suspended page); the write waits only so long.
+    await Promise.race([
+      coordinator.refresh([query]),
+      sleep(READER_REFRESH_WAIT_MS),
+    ]);
     return;
   }
   const result = await client
