@@ -3,8 +3,9 @@
  * golden base plus a mirror sync of internal markdown, plus comment marks,
  * which markdown cannot express.
  */
-import type { InferType } from '@loro-mirror/core';
+
 import { $createMarkNode } from '@lexical/mark';
+import type { InferType } from '@loro-mirror/core';
 import { MARKDOWN_GOLDEN } from '@macro-inc/lexical-core/markdown-golden.1';
 import type { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { rawMarkdownStateToLoroSnapshot } from '@macro-inc/lexical-core/markdown-loro-snapshot';
@@ -17,12 +18,12 @@ import {
   type LexicalNode,
 } from 'lexical';
 import { LoroDoc } from 'loro-crdt';
-import { SyncDocumentError } from '../../../sync-document';
 import {
   createEditingSession,
   loadMarkdown,
   toSnapshot,
 } from '../../../ai-editing/ai-toolkit/session';
+import { SyncDocumentError } from '../../../sync-document';
 import RICH from './rich.md';
 
 export const RICH_MD: string = RICH;
