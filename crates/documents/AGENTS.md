@@ -122,6 +122,9 @@ word docs, Illustrator/Photoshop files).
 - Add a document route: `src/domain/service.rs` (new domain method) →
   `src/inbound/axum_router.rs` → `src/domain/ports.rs` if it needs a new
   outbound capability.
+- `POST /documents/create_task` rewrites links to app items in the body into
+  mention chips (`DocumentRouterState::app_links`, `mention_utils::app_link`),
+  so an agent's pasted message or document URL links like the app's own.
 - Create tasks with explicit title pins by passing property definition IDs through `MarkdownSubtype::Task`; `MarkdownInitializationOptions` carries optional pins across the domain ports, leaving omitted pins implicit and preserving explicit empty lists.
 - Persist explicitly pinned empty fields as task-owned null assignments so every authorized task viewer can resolve them.
 - Create a document from a Notion page: `DocumentCreator::create_notion_markdown`

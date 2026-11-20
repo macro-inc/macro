@@ -48,7 +48,12 @@ pub async fn create_task_handler<
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
     let task_name = req.task_name.clone();
-    let markdown = req.markdown.clone().unwrap_or_default();
+    // Agents paste links to the message or document a task came from; the
+    // app links those with chips, so the task body does too.
+    let markdown = state
+        .app_links
+        .rewrite(req.markdown.as_deref().unwrap_or_default())
+        .into_owned();
 
     let mut metadata = NewDocumentMetadata::builder(task_name.clone());
     if let Some(project_id) = req.project_id {

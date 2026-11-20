@@ -1221,6 +1221,8 @@ fn test_state(
         )),
         document_permission_jwt_secret: "unused-jwt-secret".to_string(),
         non_user_owners,
+        app_links: mention_utils::app_link::AppLinkChips::new("https://macro.com")
+            .expect("the test app URL should parse"),
     };
     (
         state,

@@ -13,6 +13,11 @@ AI editors, lexical, and notification text.
   formatters (`PlainTextFormatter`) that turn tagged text into plain text for
   notification bodies, digests, and search.
 - `src/serialize.rs`: writes mentions as chip XML.
+- `src/app_link.rs`: `AppLinkChips` turns links to the web app's items
+  (`<app>/app/<route>/<uuid>`, bare, autolinked or as a markdown link) into the
+  document mention chip a paste of that URL makes, skipping code and existing
+  tags. Its route table mirrors the web app's `block-registry.ts`; keep them
+  in step.
 - `src/tests.rs`: round-trip parse/serialize cases.
 
 ## Scope
@@ -26,7 +31,8 @@ AI editors, lexical, and notification text.
 ## Boundaries
 
 - Depends on: `bot_id`, `channel_sender`, `macro_user_id`, `nom`.
-- Used by: `authentication_service`, `model_notifications`, `notification_service`,
+- Used by: `documents` (task bodies from `POST /documents/create_task`),
+  `document_storage_service`, `authentication_service`, `model_notifications`, `notification_service`,
   `scheduled_action`, `search_processing_service`, `slack_import_worker`,
   `slack_integration`.
 
