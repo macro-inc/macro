@@ -141,10 +141,12 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `/run/macro-agent-inbox/agent.env` (it refuses without the directory, so a
   person's computer refuses); `macro-agent-apply.path` (wanted by
   `macro-agent.target`) starts a root unit that refuses unless the role is
-  `agent`, reads and empties the inbox only as macro (`setpriv`; a symlink
-  macro plants can't make root read or write through it), caps it at 64 KiB
-  and installs it as `/var/lib/macrod/agent.env` (0600, macro); the agent's
-  own path unit then starts it.
+  `agent`, claims the staged file by renaming it and reads it only as macro
+  (`setpriv`; a symlink macro plants can't make root read or write through
+  it), refuses one over 64 KiB whole (macrod refuses to stage one), installs
+  it as `/var/lib/macrod/agent.env` (0600, macro) and removes what it
+  claimed; one staged meanwhile keeps the inbox's name and is installed
+  next. The agent's own path unit then starts it.
 - `macro-agent.service` is a system unit running as `macro`, the user
   harnessd keeps Claude's sign-in for. It binds that sign-in
   (`macro.box.harnessd.stateDirectory` + `/claude`) read-only and names it

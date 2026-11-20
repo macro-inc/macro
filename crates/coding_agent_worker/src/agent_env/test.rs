@@ -77,6 +77,17 @@ fn a_handed_agent_environment_with_an_unsafe_name_or_value_is_refused() {
     assert!(!path.exists());
 }
 
+#[test]
+fn an_environment_larger_than_a_computer_installs_is_refused() {
+    let (_dir, path) = inbox();
+    let environment = [("MACRO_API_KEY".to_owned(), "x".repeat(AGENT_ENV_MAX_BYTES))]
+        .into_iter()
+        .collect();
+
+    assert!(stage_agent_env(&path, &installed(&path), &environment).is_err());
+    assert!(!path.exists());
+}
+
 /// A person's computer has no inbox, so an environment sent to it is
 /// refused rather than written anywhere.
 #[test]

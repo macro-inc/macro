@@ -19,6 +19,11 @@ pub const AGENT_ENV_INBOX: &str = "/run/macro-agent-inbox/agent.env";
 /// Where the guest installs the staged environment; the agent reads it.
 pub const AGENT_ENV_INSTALLED: &str = "/var/lib/macrod/agent.env";
 
+/// The largest environment file the guest installs (`maxBytes` in
+/// `nix/macro-box/_agent-inbox.nix`); a larger one is refused here, before
+/// it is staged.
+pub const AGENT_ENV_MAX_BYTES: usize = 64 * 1024;
+
 /// What staging an environment did.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Staged {
@@ -39,7 +44,8 @@ pub const SETUP_TRACEPARENT_INBOX: &str = "/run/macro-agent-inbox/setup-tracepar
 /// written whole: it appears under its name only once complete, so the unit
 /// that watches for it never installs a partial file. A re-sent environment
 /// (a rotated key) replaces the staged one the same way. Refused when the
-/// inbox directory is absent: only an agent computer's guest has one.
+/// inbox directory is absent (only an agent computer's guest has one) or the
+/// file would exceed [`AGENT_ENV_MAX_BYTES`].
 pub fn stage_agent_env(
     path: &Path,
     installed: &Path,
@@ -60,6 +66,12 @@ pub fn stage_agent_env(
         .context("the agent environment names an invalid variable")?;
     let env = AgentEnv::new(values).context("the agent environment has an invalid value")?;
     let contents = env_file(&env);
+    if contents.len() > AGENT_ENV_MAX_BYTES {
+        rootcause::bail!(
+            "the agent environment is {} bytes, over the {AGENT_ENV_MAX_BYTES} a computer installs",
+            contents.len()
+        );
+    }
     let current = std::fs::read_to_string(installed)
         .ok()
         .map(zeroize::Zeroizing::new);

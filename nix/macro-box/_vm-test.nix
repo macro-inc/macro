@@ -369,9 +369,10 @@ pkgs.testers.runNixOSTest {
           agent.fail("test -e /srv/git/traceparents")
 
       with subtest("an environment staged in the inbox restarts the agent, which clones and runs"):
-          # What macrod does with ApplyAgent, as macro.
-          agent.succeed("runuser -u macro -- sh -c 'umask 077 && cat ${goodAgentEnvironment} > /run/macro-agent-inbox/agent.env'")
-          agent.wait_until_succeeds("grep -Fx 'MACRO_AGENT_NAME=\"Ada\"' /var/lib/macrod/agent.env")
+          # What macrod does with ApplyAgent, as macro: written aside, renamed in whole.
+          agent.succeed("runuser -u macro -- sh -c 'umask 077 && cat ${goodAgentEnvironment} > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
+          # The previous environment had the credentialed URL.
+          agent.wait_until_succeeds("grep -Fx 'MACRO_REPO_URL=\"http://127.0.0.1:8080/repo.git\"' /var/lib/macrod/agent.env")
           agent.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
           # Emptied just after the install.
           agent.wait_until_succeeds("test ! -s /run/macro-agent-inbox/agent.env")

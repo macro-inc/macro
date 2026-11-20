@@ -151,7 +151,7 @@ pkgs.testers.runNixOSTest {
         # Even with an inbox (made here by hand), the apply unit refuses an
         # agent environment on a person's computer.
         machine.succeed("install -d -m 0700 -o macro -g macro /run/macro-agent-inbox")
-        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.env'")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.fail("systemctl start macro-agent-apply.service")
         machine.succeed("journalctl -u macro-agent-apply.service | grep -F 'refusing an agent environment on a person computer'")
         machine.fail("test -e /var/lib/macrod/agent.env")
@@ -195,10 +195,11 @@ pkgs.testers.runNixOSTest {
         # The fake Macro sends ApplyAgent again on every reconnect, which
         # would replace what this test writes.
         machine.succeed("systemctl stop fake-macro.service")
-        # What macrod stages for ApplyAgent: the setup trace first, then the environment.
+        # What macrod stages for ApplyAgent: the setup trace first, then the
+        # environment, written aside and renamed in whole.
         trace = "00-11111111111111111111111111111111-2222222222222222-01"
         machine.succeed(f"runuser -u macro -- sh -c 'printf %s {trace} > /run/macro-agent-inbox/setup-traceparent'")
-        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.env'")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         machine.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
         machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
@@ -210,12 +211,12 @@ pkgs.testers.runNixOSTest {
         # stays in the inbox for the next delivery.
         machine.succeed("rm -f /run/macrod/agent-traceparent && mkdir /run/macrod/agent-traceparent.new")
         machine.succeed(f"runuser -u macro -- sh -c 'printf %s {trace} > /run/macro-agent-inbox/setup-traceparent'")
-        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Bea > /run/macro-agent-inbox/agent.env'")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Bea > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Bea /var/lib/macrod/agent.env")
         machine.succeed("test ! -e /run/macrod/agent-traceparent")
         machine.succeed(f"grep -x {trace} /run/macro-agent-inbox/setup-traceparent")
         machine.succeed("rmdir /run/macrod/agent-traceparent.new")
-        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.env'")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         machine.succeed(f"grep -x {trace} /run/macrod/agent-traceparent")
         machine.succeed("test ! -s /run/macro-agent-inbox/setup-traceparent")
@@ -223,10 +224,17 @@ pkgs.testers.runNixOSTest {
         # through it.
         shadow = machine.succeed("sha256sum /etc/shadow")
         machine.succeed("runuser -u macro -- ln -sfn /etc/shadow /run/macro-agent-inbox/agent.env")
-        machine.wait_until_succeeds("systemctl show macro-agent-apply.service --property=Result --value | grep -x exit-code")
+        machine.wait_until_succeeds("journalctl -u macro-agent-apply.service -o cat | grep -F \"macro cannot read its inbox's agent.env\"")
         machine.fail("test -e /var/lib/macrod/agent.env.new")
         machine.succeed("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         assert machine.succeed("sha256sum /etc/shadow") == shadow
+        machine.succeed("test ! -e /run/macro-agent-inbox/agent.env.claimed")
+        # One over 64 KiB is refused whole, not installed in part.
+        machine.succeed("runuser -u macro -- sh -c '{ echo MACRO_AGENT_NAME=Big; head -c 70000 /dev/zero | tr \"\\\\0\" x; } > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
+        machine.wait_until_succeeds("journalctl -u macro-agent-apply.service -o cat | grep -F 'refusing an agent environment over 65536 bytes'")
+        machine.succeed("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
+        machine.succeed("test ! -e /run/macro-agent-inbox/agent.env")
+        machine.succeed("test ! -e /var/lib/macrod/agent.env.new")
 
     with subtest("a cold boot of a restored computer mounts its /home at boot"):
         machine.shutdown()
