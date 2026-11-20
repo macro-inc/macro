@@ -128,6 +128,16 @@ type Channel = {
 
 type Truth = Map<string, Row[] | undefined>;
 
+/**
+ * The user ids both servers return: each parses a participant's id as
+ * `macro|<ASCII email>` and drops the row when that fails, REST at
+ * crates/channels/src/outbound/pg_channels_repo.rs:2201 and the soup read at
+ * crates/models_soup/src/comms.rs:470 (grammar: crates/macro_user_id/src/email.rs).
+ * A row the database holds under any other id is in neither answer.
+ */
+const SERVER_USER_ID =
+  /^macro\|[A-Za-z0-9!#%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#%&'*+/=?^_`{|}~-]+)*@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*$/;
+
 function readTruth(ids: string[]): Truth {
   const out: Truth = new Map(ids.map((id) => [id, undefined]));
   if (!ids.length) return out;
@@ -140,7 +150,10 @@ function readTruth(ids: string[]): Truth {
   for (const [id, rows] of Object.entries(
     JSON.parse(text) as Record<string, Row[]>
   ))
-    out.set(id, rows);
+    out.set(
+      id,
+      rows.filter((row) => SERVER_USER_ID.test(row.user_id))
+    );
   return out;
 }
 
