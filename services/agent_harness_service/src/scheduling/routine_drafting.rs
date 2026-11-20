@@ -246,11 +246,15 @@ impl Searched {
     }
 }
 
-/// A document, task or folder hit, unless it is an initiative's description,
-/// which shares its initiative's name.
+/// A document, task or folder hit, unless it is gone or an initiative's
+/// description, which shares its initiative's name.
 fn indexed_item(item: UnifiedSearchResponseItem) -> Option<(ItemKind, String, String)> {
     match item {
         UnifiedSearchResponseItem::Document(document) => {
+            document
+                .metadata
+                .as_ref()
+                .filter(|metadata| metadata.deleted_at.is_none())?;
             let kind = match document.extra.sub_type {
                 Some(DocumentSubType::Task) => ItemKind::Task,
                 Some(DocumentSubType::InitiativeDescription) => return None,
@@ -260,11 +264,17 @@ fn indexed_item(item: UnifiedSearchResponseItem) -> Option<(ItemKind, String, St
             };
             Some((kind, document.extra.id.to_string(), document.extra.name))
         }
-        UnifiedSearchResponseItem::Project(project) => Some((
-            ItemKind::Project,
-            project.extra.id.to_string(),
-            project.extra.name,
-        )),
+        UnifiedSearchResponseItem::Project(project) => {
+            project
+                .metadata
+                .as_ref()
+                .filter(|metadata| metadata.deleted_at.is_none())?;
+            Some((
+                ItemKind::Project,
+                project.extra.id.to_string(),
+                project.extra.name,
+            ))
+        }
         _ => None,
     }
 }
