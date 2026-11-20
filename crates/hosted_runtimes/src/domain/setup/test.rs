@@ -398,3 +398,43 @@ fn giving_up_on_an_agent_times_no_start() {
     );
     assert_eq!(timeline.agent_online_at, None);
 }
+
+/// The agent can report online before its hand-off's effect has finished:
+/// its start is then timed from the connection, and the late hand-off adds
+/// nothing.
+#[test]
+fn an_agent_online_before_its_hand_off_finished_still_times_its_start() {
+    let mut timeline = SetupTimeline::started(at(0));
+    timeline.advance(
+        &Phase::Running,
+        true,
+        false,
+        PaymentProgress::Settled,
+        at(4),
+    );
+
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: true,
+                delivered: false,
+            },
+            at(9)
+        ),
+        vec![PhaseTiming {
+            phase: SetupPhase::AgentStart,
+            started_at: at(4),
+            ended_at: at(9),
+        }]
+    );
+    assert_eq!(
+        timeline.advance_agent(
+            AgentProgress {
+                reported_online: false,
+                delivered: true,
+            },
+            at(10)
+        ),
+        vec![]
+    );
+}

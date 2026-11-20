@@ -144,6 +144,14 @@ pub enum Event {
     ChargeUnsettled,
 }
 
+impl Event {
+    /// Whether the event only advances the setup timeline: it changes no
+    /// state and starts nothing, but the applier must still record it.
+    pub fn only_timed(&self) -> bool {
+        matches!(self, Self::AgentDelivered)
+    }
+}
+
 /// Why a requested change does not apply in the computer's state. Only
 /// requests are rejected; observations and timers that no longer apply are
 /// ignored.

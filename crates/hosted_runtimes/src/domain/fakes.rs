@@ -464,6 +464,10 @@ impl ComputerRepo for FakeRepo {
             Ok(next) => next,
             Err(rejected) => return Ok(Some(Applied::Rejected(rejected))),
         };
+        // Like the Postgres applier: nothing changed, nothing written.
+        if state == computer.state && effects.is_empty() && !event.only_timed() {
+            return Ok(Some(Applied::Changed(Box::new(computer.clone()))));
+        }
         // Latch setup milestones like the Postgres applier.
         let (phase, connected, waiting, payment) = (
             state.phase.clone(),

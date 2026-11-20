@@ -131,7 +131,7 @@ impl PgComputerRepo {
                 return Ok(Some(Applied::Rejected(rejected)));
             }
         };
-        if state == computer.state && effects.is_empty() {
+        if state == computer.state && effects.is_empty() && !event.only_timed() {
             return Ok(Some(Applied::Changed(Box::new(computer))));
         }
         for effect in &effects {

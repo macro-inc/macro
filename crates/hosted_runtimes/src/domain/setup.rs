@@ -141,6 +141,7 @@ impl SetupTimeline {
         let mut finished = Vec::new();
         if let Some(connected_at) = self.connected_at
             && self.agent_delivered_at.is_none()
+            && self.agent_online_at.is_none()
             && agent.delivered
         {
             self.agent_delivered_at = Some(now);
@@ -150,7 +151,9 @@ impl SetupTimeline {
                 ended_at: now,
             });
         }
-        if let Some(delivered_at) = self.agent_delivered_at
+        // Online before the hand-off was recorded as finished (its effect
+        // still completing): the start is timed from the connection.
+        if let Some(delivered_at) = self.agent_delivered_at.or(self.connected_at)
             && self.agent_online_at.is_none()
             && agent.reported_online
         {
