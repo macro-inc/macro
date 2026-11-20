@@ -1,4 +1,4 @@
-//! How a coding agent finishes a pull request.
+//! How a coding agent finishes a pull request and links to code.
 //!
 //! Shared by the instructions external MCP clients receive and the internal
 //! MCP instructions coding agents receive, so both say the same thing.
@@ -13,7 +13,7 @@ pub const SESSION_BACKLINK: &str = "macro_internal.set_pull_request returns this
 
 /// How to link to lines of a file in a GitHub repository, so a reader lands
 /// on the code being discussed.
-pub const GITHUB_FILE_LINKS: &str = "When you point at code in a GitHub repository, link to the lines on GitHub: https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>#L<start>-L<end>, or #L<line> for one line. Take <owner>/<repo> from `git remote get-url origin`, <path> relative to the repository root, and <commit-sha> as the full hash from `git rev-parse HEAD` of a commit that has been pushed; line numbers are those of the file at that commit. Use a commit, not a branch name, so the link keeps showing the same lines after the branch moves; link a branch only when the reader wants its latest version. For a Markdown file add ?plain=1 before the anchor (blob/<commit-sha>/README.md?plain=1#L10), because the rendered view ignores line anchors. Link a directory as https://github.com/<owner>/<repo>/tree/<commit-sha>/<path>. Never link a local file path: the reader cannot open it.";
+pub const GITHUB_FILE_LINKS: &str = "When you point at code in a GitHub repository, link to the lines on GitHub: https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>#L<start>-L<end>, or #L<line> for one line. Take <owner>/<repo> from `git remote get-url origin` (the part after the github.com host, SSH or HTTPS, without a trailing `.git`), <path> relative to the repository root, and <commit-sha> as the full hash from `git rev-parse HEAD` of a commit that has been pushed; line numbers are those of the file at that commit. Use a commit, not a branch name, so the link keeps showing the same lines after the branch moves; link a branch only when the reader wants its latest version. For a file GitHub renders (Markdown, notebooks, CSV) add ?plain=1 before the anchor (blob/<commit-sha>/README.md?plain=1#L10), because the rendered view ignores line anchors. Link a directory as https://github.com/<owner>/<repo>/tree/<commit-sha>/<path>. Never link a local file path: the reader cannot open it.";
 
 /// The GitHub file-link section of the instructions for external MCP clients.
 pub static GITHUB_FILE_LINKS_PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
