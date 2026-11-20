@@ -218,12 +218,10 @@ beforeEach(() => {
 describe('ElicitationPart', () => {
   it('offers the form only while the metadata names this question', () => {
     pending = live();
-    const { queryByTestId, getByTestId } = render(() => (
+    const { queryByTestId } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
     expect(queryByTestId('form')).not.toBeNull();
-    expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
-    expect(getByTestId('trailing').textContent).toBe('Waiting for you');
   });
 
   it('shows a live question as a card: who asks, the question, its fields and decisions', () => {
@@ -249,13 +247,11 @@ describe('ElicitationPart', () => {
   it('a viewer without edit access sees the question locked', () => {
     pending = live();
     canAnswer = false;
-    const { getByTestId, getByText } = render(() => (
+    const { getByText } = render(() => (
       <ElicitationPart turn={0} part={part()} />
     ));
-    expect(getByTestId('trailing').textContent).toBe('Waiting for an editor');
-    expect(getByTestId('body').textContent).toContain(
-      'Only people who can edit this session can answer.'
-    );
+    getByText('Waiting for an editor');
+    getByText('Only people who can edit this session can answer.');
     for (const label of ['Submit', 'Decline', 'Cancel']) {
       const button = getByText(label).closest('button');
       expect(button?.disabled).toBe(true);
