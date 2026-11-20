@@ -190,7 +190,7 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
               onClick={() => session.stop()}
             >
               <StopIcon class="size-4" />
-              {t('agentScreen.stopSharing')}
+              {t('agentScreen.stopWatching')}
             </Button>
           </Show>
         </div>

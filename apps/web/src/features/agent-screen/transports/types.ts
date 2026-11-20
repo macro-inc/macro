@@ -115,7 +115,10 @@ export interface ScreenSession {
   sendInput(event: ScreenInputEvent): void;
   takeOver(): void;
   handBack(note: string | null): void;
-  /** Ends the share for everyone (`stop`), unlike `close`, which only leaves. */
+  /**
+   * Stop watching (`stop`): the harness ends this viewer's socket with
+   * `stopped`. v1 has no share session to end for anyone else.
+   */
   stop(): void;
   close(): void;
   /**
