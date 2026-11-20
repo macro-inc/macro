@@ -64,7 +64,7 @@ function EffortModelSubmenu(
     <Dropdown.Sub open={open()} onOpenChange={setOpen} overlap>
       <Dropdown.SubTrigger
         disabled={props.disabled}
-        class="min-h-8 gap-2"
+        class="min-h-8 shrink-0 gap-2"
         textValue={props.option.label}
         title={props.option.description ?? props.option.label}
         onKeyDown={(event) => {

@@ -69,8 +69,10 @@ export function ModelRow(props: ModelRowProps) {
     <Dropdown.Item
       closeOnSelect
       disabled={props.disabled}
+      // shrink-0: menu groups are flex columns, and a scrolling one would
+      // otherwise squeeze rows below their wrapped names.
       class={cn(
-        'min-h-8 gap-2',
+        'min-h-8 shrink-0 gap-2',
         props.selected && 'bg-ink/5 text-ink font-medium',
         props.option.locked && 'opacity-50'
       )}
