@@ -5,7 +5,7 @@ use scraper::{
     ElementRef, Html,
     node::{Node, Text},
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Refuses a body whose parse stopped at a bound of [`bounded_html`]: what
 /// it left out cannot be checked for the meeting link, and writing the rest
@@ -55,8 +55,9 @@ pub(super) fn split(content: &str, join: &str) -> Result<(String, String), Calen
 /// `me-email*` markers [`split`] finds it by, laying each of its parts out as
 /// a top-level paragraph. So the block is the run of top-level elements
 /// around the join link whose text each is the text of an element of the
-/// block in `saved`, the body Outlook holds now; textless parts (an image, a
-/// rule) belong to it only between two such elements. The person's text
+/// block in `saved`, the body Outlook holds now; an empty part belongs to it
+/// only between two such elements, and a part showing only media only when
+/// the block shows those same sources. The person's text
 /// around it stays, and a description with the link, or a part of the block,
 /// anywhere else is refused.
 pub(super) fn without_meeting(
@@ -137,12 +138,17 @@ fn replace_rewritten_block(
             .and_modify(|most| *most = (*most).max(media))
             .or_insert(media);
     }
-    let meeting_has_media = media_count(&meeting.root_element()) > 0;
+    // A part showing only media is the block's when the block shows those
+    // same sources; media the person added stays theirs.
+    let meeting_sources: HashSet<String> = media_sources(&meeting.root_element()).collect();
     let part_of = |part: &ElementRef<'_>| {
         let text = plain_text(part);
         let media = media_count(part);
+        let own_media = || media_sources(part).all(|source| meeting_sources.contains(&source));
         match meeting_texts.get(&text) {
-            _ if text.is_empty() && (media == 0 || meeting_has_media) => MeetingPart::Textless,
+            _ if text.is_empty() && media == 0 => MeetingPart::Textless,
+            _ if text.is_empty() && own_media() => MeetingPart::Meeting,
+            _ if text.is_empty() => MeetingPart::Person,
             Some(&most) if media <= most => MeetingPart::Meeting,
             Some(_) => MeetingPart::Mixed,
             None => MeetingPart::Person,
@@ -223,6 +229,23 @@ enum MeetingPart {
 const MEDIA_ELEMENTS: [&str; 9] = [
     "img", "picture", "video", "audio", "iframe", "object", "embed", "svg", "canvas",
 ];
+
+/// Where each media element under `element` loads from; one without a
+/// source counts as no source the block has.
+fn media_sources<'a>(element: &ElementRef<'a>) -> impl Iterator<Item = String> + 'a {
+    element
+        .descendants()
+        .filter_map(ElementRef::wrap)
+        .filter(|descendant| MEDIA_ELEMENTS.contains(&descendant.value().name()))
+        .map(|media| {
+            media
+                .value()
+                .attr("src")
+                .or_else(|| media.value().attr("data"))
+                .unwrap_or_default()
+                .to_owned()
+        })
+}
 
 fn media_count(element: &ElementRef<'_>) -> usize {
     element
