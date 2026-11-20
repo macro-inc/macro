@@ -1019,6 +1019,7 @@ pub async fn run() -> anyhow::Result<()> {
                 )),
             ),
             session_metadata_realtime.clone(),
+            agent_harness::outbound::session_tasks::CommsSessionTaskReferences::new(pool.clone()),
             macro_service_urls::AppServiceUrl::new()?.as_ref(),
         ),
     );

@@ -2,8 +2,9 @@
 //!
 //! Whether the owner may view a task, whether a document is a task, and which pull requests
 //! a task has belong to the `documents` crate; how a pull request is linked to a task, and
-//! which reference the webhook recognizes, belong to the `github` crate. These adapters only
-//! translate between those services and the session's ports.
+//! which reference the webhook recognizes, belong to the `github` crate; what a task's
+//! References list reads is the comms entity-mention store. These adapters only translate
+//! between those and the session's ports.
 
 use std::sync::Arc;
 
@@ -18,10 +19,15 @@ use github::domain::ports::GithubSyncRepo;
 use github::domain::service::PullRequestTaskLinkService;
 use macro_user_id::user_id::MacroUserIdStr;
 
+use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::session_task::{
-    PullRequestState, SessionTaskError, TaskDirectory, TaskDocumentId, TaskFacts, TaskPullRequest,
-    TaskPullRequestLinker,
+    PullRequestState, SessionTaskError, SessionTaskReferences, TaskDirectory, TaskDocumentId,
+    TaskFacts, TaskPullRequest, TaskPullRequestLinker,
 };
+use comms_db_client::entity_mentions::{
+    NewEntityMention, create_entity_mentions, delete_entity_mentions_by_source,
+};
+use sqlx::PgPool;
 
 #[cfg(test)]
 mod test;
@@ -207,5 +213,63 @@ impl<Repo: GithubSyncRepo> TaskPullRequestLinker for GithubTaskPullRequestLinker
             .link(GithubKey::new(owner, repo, number), short)
             .await
             .map_err(|error| SessionTaskError::Unavailable(rootcause::report!("{error}")))
+    }
+}
+
+/// The source type a session's entity mentions are stored under.
+const AGENT_SESSION_SOURCE: &str = "agent_session";
+/// The entity type tasks are stored under: a task is a document.
+const TASK_ENTITY: &str = "document";
+
+/// [`SessionTaskReferences`] over the comms entity-mention store, where a task's References
+/// list reads entries from non-message sources. The session is the entry's source, its owner
+/// the user who added it.
+pub struct CommsSessionTaskReferences {
+    pool: PgPool,
+}
+
+impl CommsSessionTaskReferences {
+    /// Write entries through `pool`.
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+impl SessionTaskReferences for CommsSessionTaskReferences {
+    #[tracing::instrument(err, skip(self, owner), fields(agent.session.id = %session, task.id = task.as_str()))]
+    async fn replace(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        task: &TaskDocumentId,
+    ) -> Result<(), SessionTaskError> {
+        let unavailable =
+            |error: anyhow::Error| SessionTaskError::Unavailable(rootcause::report!("{error:#}"));
+        let session = session.to_string();
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .map_err(|error| unavailable(error.into()))?;
+        // Session ids are uuids, so the source id alone names this session's entries.
+        delete_entity_mentions_by_source(&mut *transaction, vec![session.clone()])
+            .await
+            .map_err(unavailable)?;
+        create_entity_mentions(
+            &mut *transaction,
+            AGENT_SESSION_SOURCE,
+            &session,
+            Some(owner.as_ref()),
+            &[NewEntityMention {
+                entity_type: TASK_ENTITY.to_owned(),
+                entity_id: task.as_str().to_owned(),
+            }],
+        )
+        .await
+        .map_err(unavailable)?;
+        transaction
+            .commit()
+            .await
+            .map_err(|error| unavailable(error.into()))
     }
 }
