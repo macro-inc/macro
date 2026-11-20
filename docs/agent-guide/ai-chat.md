@@ -298,7 +298,7 @@ be hidden from its title row or reopened from the leading header control. **Chan
 unified diff with **Back to conversation**; returning preserves the unsent draft.
 
 The phone collection uses one measured floating header. Its single 20/26 heading follows the bubbles and pins below the islands while rows scroll beneath it; Archived shares the heading and inset without an extra top gap.
-The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
+The phone list shows startable custom agents as bubbles above a sticky **Conversations** heading, followed by Waiting on you, Favorites, and the remaining rows. The hamburger opens the shell's left navigation drawer with Conversations, Archived, an Agents row with New agent, and routines with their schedules and New routine. Custom agents appear only in the bubbles, not as drawer rows. Choosing a destination closes the drawer. The Agents roster and Routines list keep the hamburger when opened from this drawer; external links and other entry points retain Back. This choice follows the current history entry on Back and Forward. Archived keeps the hamburger, has no bubbles or Back button, and retains the dock and accessory composer. Conversation and archive totals appear only after all pages load. Empty views use the shared AI illustration without search or filter controls; **Start a conversation** focuses the existing composer. Tap a bubble to focus that composer with its agent selected. Long-press a row for entity actions; the quiet shared touch highlight spans the full row rather than a bright title-only button. Use the Agents composer or global create menu to start
 a conversation. Returning to the list and reopening the composer preserves the
 draft, attachments, agent, model, repository, and branch. Tap the agent/model pill to open the phone model sheet. Its search and
 Suggested models sit above Built-in and Your agents; All models opens a pushed
@@ -929,7 +929,7 @@ the shimmer.
 
 ## Routine run history
 
-On phones, the Routines list uses the shared hamburger drawer, with Search and Create Routine actions above its in-page heading and count. Opening a routine replaces them with Back,
+On phones, the Routines list uses the shared hamburger drawer when opened from the Agents drawer, and Back when opened from elsewhere. Search and Create Routine actions remain above its in-page heading and count. Opening a routine replaces them with Back,
 the routine title, save status, and its action menu. Overview and Runs tabs remain
 in the page below the islands; desktop breadcrumbs and toolbar stay unchanged.
 

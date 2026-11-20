@@ -21,7 +21,8 @@ vi.stubGlobal(
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => true,
 }));
-vi.mock('@app/components/view-shell', () => ({
+vi.mock('@app/components/view-shell', async () => ({
+  SearchBar: (await import('../../components/view-shell/SearchBar')).SearchBar,
   ViewShell: {
     TopBar: (props: { children: JSX.Element; navigation: JSX.Element }) => (
       <div>
@@ -193,6 +194,81 @@ describe('phone Agents list', () => {
     expect(
       container.querySelectorAll('[data-mobile-list-header]')
     ).toHaveLength(1);
+    expect(
+      container.querySelector('[data-mobile-list-layout]')?.parentElement
+        ?.className
+    ).toContain('flex size-full min-h-0 flex-col');
+  });
+
+  it('keeps the search trigger square and expands the field only after activation', () => {
+    render(() => <Harness hasNextPage />);
+    const trigger = screen.getByRole('button', {
+      name: 'Search conversations',
+    });
+    expect(trigger.className).toContain('w-10');
+    expect(trigger.className).toContain('h-10');
+    expect(trigger.className).toContain('px-0');
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    fireEvent.click(trigger);
+    const search = screen.getByRole('searchbox');
+    fireEvent.input(search, { target: { value: 'Session' } });
+    expect(search.getAttribute('type')).toBe('search');
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.queryByRole('searchbox')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Search conversations' })
+    ).toBeTruthy();
+  });
+
+  it('keeps active archive search reachable when the last archived row disappears', () => {
+    const [rows, setRows] = createSignal<AgentConversationEntity[]>([
+      {
+        type: 'agent_session',
+        id: 'archived',
+        status: 'acp_ready',
+        botId: 'agent',
+        name: 'Archived session',
+        ownerId: 'owner',
+      },
+    ]);
+    render(() => <Harness archived rows={rows()} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Search conversations' })
+    );
+    const search = screen.getByRole('searchbox');
+    fireEvent.input(search, { target: { value: 'missing' } });
+    setRows([]);
+    expect(screen.getByRole('searchbox')).toBe(search);
+    expect(screen.queryByText('No archived conversations')).toBeNull();
+    fireEvent.keyDown(search, { key: 'Escape' });
+    expect(screen.getByText('No archived conversations')).toBeTruthy();
+  });
+
+  it('shows the archive empty state despite retained filters and hides the search and filter controls', () => {
+    render(() => (
+      <Harness
+        archived
+        filters={{ ...EMPTY_CONVERSATION_FILTERS, status: ['unread'] }}
+      />
+    ));
+    expect(screen.getByRole('status').textContent).toContain(
+      'No archived conversations'
+    );
+    expect(
+      screen.queryByRole('button', { name: 'Search conversations' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Filter conversations' })
+    ).toBeNull();
+    expect(
+      screen.getByRole('heading', { name: 'Archived' }).parentElement
+        ?.textContent
+    ).toBe('Archived');
+    const graphic = screen
+      .getByRole('status')
+      .querySelector('.empty-state-graphic');
+    expect(graphic?.className).toContain('opacity-70');
+    expect(screen.getByRole('status').querySelector('button')).toBeNull();
   });
 
   it('shows the archived empty panel without bubbles, an action, or Back', () => {

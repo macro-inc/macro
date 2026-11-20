@@ -7,6 +7,7 @@ import { Button } from '@ui';
 
 export function MobileRoutinesListHeader(props: {
   onBack(): void;
+  fromDrawer: boolean;
   onSearch(): void;
   onCreate(): void;
 }) {
@@ -37,7 +38,11 @@ export function MobileRoutinesListHeader(props: {
         </>
       }
     >
-      <ViewSidebar.Toggle action="expand" presentation="pill" />
+      {props.fromDrawer ? (
+        <ViewSidebar.Toggle action="expand" presentation="pill" />
+      ) : (
+        <MobileHeader.Back onBack={props.onBack} />
+      )}
     </MobileHeader>
   );
 }

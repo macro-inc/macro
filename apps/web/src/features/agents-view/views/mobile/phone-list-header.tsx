@@ -1,7 +1,8 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import { PillButton } from '@components/app/mobile/PillTabs';
+import { triggerFocusInput } from '@core/directive/focusInput';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { ConversationFiltersProps } from '../../components/conversation-filters/conversation-filters';
 import { ConversationFiltersDrawer } from './filters/filters';
@@ -29,19 +30,17 @@ export function PhoneListHeader(
             when={searchOpen() || props.search}
             fallback={
               <>
-                <div class="island pointer-events-auto flex h-10 min-w-0 shrink-0 items-center gap-1 rounded-full px-3">
-                  <Button
-                    variant="ghost"
-                    size="icon-md"
-                    aria-label={t('agentWork.searchConversations')}
-                    onClick={() => {
-                      setSearchOpen(true);
-                      input?.focus();
-                    }}
-                  >
-                    <SearchIcon class="size-5" />
-                  </Button>
-                </div>
+                <PillButton
+                  active={false}
+                  iconOnly
+                  aria-label={t('agentWork.searchConversations')}
+                  onClick={() => {
+                    setSearchOpen(true);
+                    triggerFocusInput(() => input);
+                  }}
+                >
+                  <SearchIcon class="size-5" />
+                </PillButton>
                 <ConversationFiltersDrawer
                   filters={props.filters}
                   onFilterChange={props.onFilterChange}

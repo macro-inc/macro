@@ -1,17 +1,28 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Topbar } from './Topbar';
 
 vi.mock('@app/components/view-shell/ViewShell', () => ({
   ViewShell: {
-    TopBar: (props: ParentProps) => <div>{props.children}</div>,
+    TopBar: (props: ParentProps<{ navigation?: JSX.Element }>) => (
+      <div>
+        {props.navigation ?? <button>Show navigation</button>}
+        {props.children}
+      </div>
+    ),
+    TopBarIsland: (props: ParentProps) => <div>{props.children}</div>,
     TopBarTitle: (props: ParentProps) => props.children,
     TopBarActions: (props: ParentProps) => <div>{props.children}</div>,
   },
 }));
 vi.mock('@app/components/view-shell/ViewSidebar', () => ({
   ViewSidebar: { Title: (props: ParentProps) => <h1>{props.children}</h1> },
+}));
+vi.mock('@components/app/split-layout/components/SplitBackButton', () => ({
+  SplitBackButton: (props: { onBack?: () => void }) => (
+    <button onClick={props.onBack}>Back</button>
+  ),
 }));
 afterEach(cleanup);
 
@@ -43,4 +54,12 @@ it('keeps the plain heading for the new conversation page', () => {
 it('omits the heading on an untitled composer page', () => {
   render(() => <Topbar />);
   expect(screen.queryByRole('heading')).toBeNull();
+});
+
+it('places the shared Back action in the navigation slot', () => {
+  const onBack = vi.fn();
+  render(() => <Topbar title="Agents" onBack={onBack} />);
+  expect(screen.queryByRole('button', { name: 'Show navigation' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+  expect(onBack).toHaveBeenCalledOnce();
 });

@@ -1,4 +1,7 @@
-import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import {
+  runSplitBack,
+  useSplitBackInterceptor,
+} from '@components/app/split-layout/back-interceptor';
 import {
   SplitPanelContext,
   type SplitPanelContextType,
@@ -55,17 +58,34 @@ const state = vi.hoisted(() => ({
   },
   draft: { read: (): string => '', write: (_draft: string) => {} },
   navigate: { current: (_id: string) => {} },
-  replace: { current: (_next: FakeEntry['content']) => {} },
+  replace: { current: (_next: FakeEntry['content'], _source?: string) => {} },
   back: { current: () => {} },
   canGoBack: { current: (): boolean => false },
+  navigationSource: {
+    current: () => null as 'agents' | 'sidebar' | 'kommand-menu' | null,
+  },
+  navigationCause: {
+    current: () => 'fresh' as 'fresh' | 'history-back' | 'history-forward',
+  },
+  referredFrom: { current: () => null as 'sidebar' | null },
+  previousContent: { current: () => null as FakeEntry['content'] | null },
   open: {
-    current: (_next: { id: string; params?: Record<string, unknown> }) => {},
+    current: (
+      _next: { id: string; params?: Record<string, unknown> },
+      _source?: string
+    ) => {},
   },
   loads: new Map<string, (name: string) => void>(),
   mounts: [] as string[],
   pass: (props: ParentProps) => props.children,
 }));
 
+vi.mock('@app/lib/split-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@app/lib/split-router')>()),
+  useSplitRouter: () => ({
+    entry: () => ({ meta: { referredFrom: state.navigationSource.current() } }),
+  }),
+}));
 vi.mock('@app/components/view-shell', () => ({
   useViewShell: () => ({
     breakpoints: { narrow: () => false },
@@ -105,8 +125,11 @@ vi.mock('@components/app/previewTarget', () => ({
 }));
 vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({
-    openWithSplit: (next: { id: string; params?: Record<string, unknown> }) => {
-      state.open.current(next);
+    openWithSplit: (
+      next: { id: string; params?: Record<string, unknown> },
+      options?: { referredFrom?: string }
+    ) => {
+      state.open.current(next, options?.referredFrom);
       state.navigate.current(next.id);
       return { status: 'replaced' };
     },
@@ -128,10 +151,19 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
         return () => state.captors.delete(key);
       },
       setDisplayName: () => {},
-      replace: ({ next }: { next: FakeEntry['content'] }) =>
-        state.replace.current(next),
+      replace: ({
+        next,
+        referredFrom,
+      }: {
+        next: FakeEntry['content'];
+        referredFrom?: string;
+      }) => state.replace.current(next, referredFrom),
       goBack: () => state.back.current(),
       canGoBack: () => state.canGoBack.current(),
+      lastNavigationSource: () => state.navigationSource.current(),
+      lastNavigationCause: () => state.navigationCause.current(),
+      referredFrom: () => state.referredFrom.current(),
+      previousContent: () => state.previousContent.current(),
     },
   }),
 }));
@@ -253,7 +285,17 @@ vi.mock(
 );
 vi.mock('../components/Topbar', () => ({
   Topbar: (props: { onBack?: () => void }) =>
-    props.onBack ? <button onClick={props.onBack}>Page back</button> : null,
+    props.onBack ? (
+      <button
+        onClick={() =>
+          runSplitBack({ canGoBack: () => true, goBack: props.onBack! })
+        }
+      >
+        Page back
+      </button>
+    ) : (
+      <button>Show navigation</button>
+    ),
 }));
 vi.mock('../context/data-mode', () => ({
   DataModeProvider: state.pass,
@@ -367,6 +409,10 @@ beforeEach(() => {
   state.replace.current = () => {};
   state.back.current = () => {};
   state.canGoBack.current = () => false;
+  state.navigationSource.current = () => null;
+  state.navigationCause.current = () => 'fresh';
+  state.referredFrom.current = () => null;
+  state.previousContent.current = () => null;
   state.open.current = () => {};
   setComposerDraft('');
   state.loads.clear();
@@ -664,7 +710,8 @@ it('opens Conversations from the drawer on a direct Archived entry', () => {
       type: 'component',
       id: 'agents',
       params: expect.objectContaining({ agentPage: 'new' }),
-    })
+    }),
+    'agents'
   );
 });
 
@@ -728,4 +775,53 @@ it('clears one-shot composer navigation when the drawer opens Conversations', ()
   expect(entry().content.params?.focusComposer).toBeUndefined();
   expect(entry().content.params?.composerAgentId).toBeUndefined();
   expect(composer().value).toBe('Unsent draft');
+});
+
+it.each([
+  ['drawer', 'agents', 'agents', 'Show navigation'],
+  ['external sidebar', 'sidebar', 'inbox', 'Page back'],
+  ['link', null, 'agents', 'Page back'],
+] as const)(
+  'shows %s entry navigation on the phone Agents page',
+  (_entry, source, previous, action) => {
+    state.touch = true;
+    state.width = () => 390;
+    state.entry.current = () => ({
+      content: {
+        type: 'component',
+        id: 'agents',
+        params: { agentPage: 'agents' },
+      },
+    });
+    state.navigationSource.current = () => source;
+    state.previousContent.current = () => ({ type: 'component', id: previous });
+    render(() => <AgentsView />);
+    expect(screen.getByRole('button', { name: action })).toBeTruthy();
+  }
+);
+
+it('tags a drawer roster entry as sidebar navigation', () => {
+  state.touch = true;
+  state.width = () => 390;
+  state.entry.current = () => ({
+    content: { type: 'component', id: 'agents' },
+  });
+  const sources: (string | undefined)[] = [];
+  state.replace.current = (_next, source) => sources.push(source);
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Roster' }));
+  expect(sources).toEqual(['agents']);
+});
+
+it('tags a drawer routines entry as sidebar navigation', () => {
+  state.touch = true;
+  state.width = () => 390;
+  state.entry.current = () => ({
+    content: { type: 'component', id: 'agents' },
+  });
+  const sources: (string | undefined)[] = [];
+  state.open.current = (_next, source) => sources.push(source);
+  render(() => <AgentsView />);
+  fireEvent.click(screen.getByRole('button', { name: 'Routines' }));
+  expect(sources).toEqual(['agents']);
 });

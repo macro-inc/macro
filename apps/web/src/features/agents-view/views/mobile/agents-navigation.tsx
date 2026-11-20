@@ -30,65 +30,76 @@ export function PhoneAgentsNavigation(props: {
     props.onCreateRoutine();
   };
   return (
-    <ViewSidebar.Root class="bg-menu">
-      <ViewSidebar.Content class="gap-5 pt-[calc(var(--safe-top,0px)+0.5rem)]">
-        <ViewSidebar.Nav aria-label={t('agentWork.navigation')}>
-          <ViewSidebar.Item
-            active={props.activePage === 'new'}
-            onClick={() => props.onOpenPage('new')}
-          >
-            <ViewSidebar.Icon>
-              <ChatIcon />
-            </ViewSidebar.Icon>
-            <span class="min-w-0 flex-1 truncate">
-              {t('agentWork.conversations')}
-            </span>
-          </ViewSidebar.Item>
-          <ViewSidebar.Item
-            active={props.activePage === 'archived'}
-            onClick={() => props.onOpenPage('archived')}
-          >
-            <ViewSidebar.Icon>
-              <ArchiveIcon />
-            </ViewSidebar.Icon>
-            <span class="min-w-0 flex-1 truncate">
-              {t('viewMenus.archived')}
-            </span>
-            <Show when={props.archivedCount !== undefined}>
-              <span class="text-ink-extra-muted tabular-nums">
-                {props.archivedCount}
-              </span>
-            </Show>
-          </ViewSidebar.Item>
-          <div class="relative">
+    <ViewSidebar.Root aria-label={t('agentWork.navigation')}>
+      <ViewSidebar.Header>
+        <ViewSidebar.Title caret={false}>
+          {t('agentWork.agents')}
+        </ViewSidebar.Title>
+      </ViewSidebar.Header>
+      <ViewSidebar.Content>
+        <ViewSidebar.Section
+          id="agents-pages"
+          label={t('agentWork.navigation')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label={t('agentWork.navigation')}>
             <ViewSidebar.Item
-              active={props.activePage === 'agents'}
-              onClick={() => props.onOpenPage('agents')}
-              class="pr-12"
+              active={props.activePage === 'new'}
+              onClick={() => props.onOpenPage('new')}
             >
               <ViewSidebar.Icon>
-                <AgentIcon />
+                <ChatIcon />
               </ViewSidebar.Icon>
               <span class="min-w-0 flex-1 truncate">
-                {t('agentWork.agents')}
+                {t('agentWork.conversations')}
               </span>
             </ViewSidebar.Item>
-            <span class="absolute right-1 top-1/2 -translate-y-1/2">
-              <ViewSidebar.Control
-                aria-label={t('agentWork.newAgent')}
-                onClick={createAgent}
+            <ViewSidebar.Item
+              active={props.activePage === 'archived'}
+              onClick={() => props.onOpenPage('archived')}
+            >
+              <ViewSidebar.Icon>
+                <ArchiveIcon />
+              </ViewSidebar.Icon>
+              <span class="min-w-0 flex-1 truncate">
+                {t('viewMenus.archived')}
+              </span>
+              <Show when={props.archivedCount !== undefined}>
+                <span class="ml-auto text-ink-extra-muted tabular-nums">
+                  {props.archivedCount}
+                </span>
+              </Show>
+            </ViewSidebar.Item>
+            <div class="relative">
+              <ViewSidebar.Item
+                active={props.activePage === 'agents'}
+                onClick={() => props.onOpenPage('agents')}
+                class="pr-[calc(var(--sidebar-action-inset)+var(--sidebar-control-size))]"
               >
-                <PlusIcon class="size-5" />
-              </ViewSidebar.Control>
-            </span>
-          </div>
-        </ViewSidebar.Nav>
+                <ViewSidebar.Icon>
+                  <AgentIcon />
+                </ViewSidebar.Icon>
+                <span class="min-w-0 flex-1 truncate">
+                  {t('agentWork.agents')}
+                </span>
+              </ViewSidebar.Item>
+              <span class="absolute right-(--sidebar-action-inset) top-1/2 -translate-y-1/2">
+                <ViewSidebar.Control
+                  aria-label={t('agentWork.newAgent')}
+                  onClick={createAgent}
+                >
+                  <PlusIcon class="size-5" />
+                </ViewSidebar.Control>
+              </span>
+            </div>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
         <ViewSidebar.Section id="routines" label={t('agentWork.routines')}>
           <ViewSidebar.SectionHeader>
-            <div class="flex items-center justify-between px-3 text-ink-muted">
+            <ViewSidebar.Toolbar>
               <button
                 type="button"
-                class="text-left text-sm"
+                class="min-w-0 flex-1 text-left text-xs font-medium text-ink-muted"
                 onClick={() => {
                   shell.aside.collapse();
                   props.onOpenPage('routines');
@@ -100,9 +111,9 @@ export function PhoneAgentsNavigation(props: {
                 aria-label={t('agentWork.createRoutine')}
                 onClick={createRoutine}
               >
-                <PlusIcon class="size-5" />
+                <PlusIcon class="size-4" />
               </ViewSidebar.Control>
-            </div>
+            </ViewSidebar.Toolbar>
           </ViewSidebar.SectionHeader>
           <ViewSidebar.Nav aria-label={t('agentWork.routines')}>
             <For each={props.routines}>
