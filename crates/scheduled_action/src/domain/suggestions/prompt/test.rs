@@ -174,7 +174,11 @@ fn every_part_fills_in_its_whole_brief() {
             assert!(!brief.contains(placeholder), "{part:?} left {placeholder}");
         }
         assert!(brief.contains(HANDLES), "{part:?}");
-        assert!(brief.contains(LACKS), "{part:?}");
+        assert_eq!(
+            brief.contains(LACKS),
+            part != BriefPart::Picks,
+            "{part:?}: only a session that drafts weighs what the catalog lacks"
+        );
     }
 }
 
@@ -192,6 +196,7 @@ fn a_whole_session_picks_and_drafts() {
 fn a_picking_session_reads_nothing_about_writing_routines() {
     let brief = part_brief(BriefPart::Picks);
     assert!(brief.contains("you suggest catalog routines only, and draft none"));
+    assert!(brief.contains("The user sees your picks first, so be quick"));
     assert!(brief.contains("You suggest one kind:\n\nA catalog routine: "));
     assert!(!brief.contains("Prefer these."));
     assert!(!brief.contains("A routine the catalog lacks"));
