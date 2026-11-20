@@ -91,6 +91,92 @@ describe('relayHandler: Anthropic', () => {
   });
 });
 
+describe('relayHandler: brain routes', () => {
+  const brainHandler = (fetch: (request: Request) => Promise<Response>) =>
+    relayHandler({
+      targets: { storage: 'https://macro.example/dss' },
+      capability,
+      apiKey,
+      fetch,
+      equal: constantTimeEqual,
+      brain: 'https://egress.example/brain/',
+    });
+
+  test("OpenCode's and the solver's calls go on with the agent's key, nothing of the caller's auth", async () => {
+    const macro = upstream();
+    const relay = brainHandler(macro.fetch);
+    const chat = await relay(
+      new Request('http://127.0.0.1:1/brain/fireworks/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${capability}`,
+          'x-api-key': 'ignored',
+          'x-macro-user-api-key': 'ignored',
+          'content-type': 'application/json',
+        },
+        body: '{"model":"accounts/fireworks/models/kimi-k3"}',
+      })
+    );
+    const solve = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+        body: '{}',
+      })
+    );
+    expect([chat.status, solve.status]).toEqual([201, 201]);
+    const [sentChat, sentSolve] = macro.seen;
+    expect(sentChat?.url).toBe(
+      'https://egress.example/brain/fireworks/v1/chat/completions'
+    );
+    expect(sentChat?.headers.get('authorization')).toBe(`Bearer ${apiKey}`);
+    expect(sentChat?.headers.get('x-api-key')).toBeNull();
+    expect(sentChat?.headers.get('x-macro-user-api-key')).toBeNull();
+    expect(await sentChat?.text()).toBe(
+      '{"model":"accounts/fireworks/models/kimi-k3"}'
+    );
+    expect(sentSolve?.url).toBe('https://egress.example/brain/captcha/solve');
+  });
+
+  test('only the two routes, only POST, only with the capability', async () => {
+    const macro = upstream();
+    const relay = brainHandler(macro.fetch);
+    const other = await relay(
+      new Request('http://127.0.0.1:1/brain/anthropic/v1/messages', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    const climbing = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/solve/%2e%2e', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    const get = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    const wrong = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+        method: 'POST',
+        headers: { authorization: 'Bearer nope' },
+      })
+    );
+    const none = await handler(macro.fetch)(
+      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    expect([other.status, climbing.status, get.status, wrong.status, none.status]).toEqual([
+      404, 404, 405, 401, 404,
+    ]);
+    expect(macro.seen).toEqual([]);
+  });
+});
+
 describe('relayHandler', () => {
   test('forwards a call to the real host with the real key, and nothing of the caller’s auth', async () => {
     const macro = upstream();

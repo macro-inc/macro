@@ -15,6 +15,8 @@ export type Addresses = {
    * and `…/tts` under it.
    */
   readonly speech: string;
+  /** The harness's brain routes on the egress listener (`…/brain`): the CAPTCHA solver's model and solves. */
+  readonly brain: string;
 };
 
 /** The public gateway origin enrollment gives, which every route below is under. */
@@ -27,6 +29,7 @@ const egressRoute = '/agent-harness-egress';
 const speechKey = 'MACRO_SPEECH_URL';
 /** Where speech is on the egress listener, for an enrollment that names none. */
 const speechRoute = '/brain/inference';
+const brainRoute = '/brain';
 const connectionService: ServiceName = 'connection';
 
 /**
@@ -176,6 +179,7 @@ export const addresses = (
         speech === undefined || speech === ''
           ? `${egressBase}${speechRoute}`
           : trimmed(speech),
+      brain: `${egressBase}${brainRoute}`,
     },
   };
 };

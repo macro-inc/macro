@@ -124,6 +124,63 @@ const forwardAnthropic = async ({
   }
 };
 
+/**
+ * The harness's brain routes a script may use, exactly: the CAPTCHA
+ * solver's model (Kimi on Fireworks) and its solves. On the relay each is
+ * `/brain/<path>`, upstream `<brain>/<path>`, POST only.
+ */
+export const brainRoutes = [
+  'fireworks/v1/chat/completions',
+  'captcha/solve',
+] as const;
+
+const brainPrefix = 'brain';
+
+/** A request to one of `brainRoutes`, on with the agent's key as the bearer token. */
+const forwardBrain = async ({
+  request,
+  url,
+  capability,
+  apiKey,
+  brain,
+  send,
+  equal,
+}: {
+  readonly request: Request;
+  readonly url: URL;
+  readonly capability: string;
+  readonly apiKey: string;
+  readonly brain: string | undefined;
+  readonly send: (request: Request) => Promise<Response>;
+  readonly equal: (given: string, expected: string) => boolean;
+}): Promise<Response> => {
+  if (!equal(bearer(request), capability))
+    return refuse(401, 'the relay needs its capability');
+  const path = url.pathname.split('/').slice(2).join('/');
+  const route = brainRoutes.find((known) => known === path);
+  if (route === undefined || brain === undefined)
+    return refuse(404, 'the relay has no address for that path');
+  if (request.method !== 'POST')
+    return refuse(405, 'a brain route takes POST');
+  const headers = new Headers();
+  for (const [name, value] of request.headers)
+    if (!dropped.has(name) && name !== 'x-api-key' && !name.startsWith(botHeaders))
+      headers.set(name, value);
+  headers.set('authorization', `Bearer ${apiKey}`);
+  try {
+    return await send(
+      new Request(`${brain.replace(/\/+$/, '')}/${route}`, {
+        method: 'POST',
+        headers,
+        body: await request.arrayBuffer(),
+        redirect: 'manual',
+      })
+    );
+  } catch {
+    return refuse(502, "the relay couldn't reach the brain gateway");
+  }
+};
+
 export const relayHandler =
   ({
     targets,
@@ -132,6 +189,7 @@ export const relayHandler =
     fetch: send,
     equal,
     anthropic,
+    brain,
   }: {
     /** Each service's real host. */
     readonly targets: Hosts;
@@ -143,9 +201,22 @@ export const relayHandler =
     readonly equal: (given: string, expected: string) => boolean;
     /** The Anthropic gateway and its token, in Macro-credits mode. */
     readonly anthropic?: { readonly url: string; readonly token: string };
+    /** The harness's brain routes (`Addresses.brain`). */
+    readonly brain?: string;
   }) =>
   async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
+    // OpenCode presents the capability as its OpenAI key, a bearer token.
+    if (url.pathname.split('/')[1] === brainPrefix)
+      return forwardBrain({
+        request,
+        url,
+        capability,
+        apiKey,
+        brain,
+        send,
+        equal,
+      });
     // Claude Code presents its ANTHROPIC_AUTH_TOKEN, the capability, as a bearer token.
     if (url.pathname.split('/')[1] === anthropicRoute)
       return forwardAnthropic({
@@ -289,12 +360,15 @@ const loopback = '127.0.0.1';
 export const startRelay = ({
   targets,
   speech,
+  brain,
   apiKey,
   anthropic,
 }: {
   readonly targets: Hosts;
   /** The speech gateway (`Addresses.speech`), where a call's speech goes. */
   readonly speech: string;
+  /** The harness's brain routes (`Addresses.brain`). */
+  readonly brain?: string;
   readonly apiKey: string;
   readonly anthropic?: { readonly url: string; readonly token: string };
 }): Relay => {
@@ -304,6 +378,7 @@ export const startRelay = ({
     capability: token,
     apiKey,
     anthropic,
+    brain,
     // As it came: Bun decodes a compressed answer but keeps its
     // content-encoding, so the caller would decode it twice.
     fetch: (request) => fetch(request, { decompress: false }),

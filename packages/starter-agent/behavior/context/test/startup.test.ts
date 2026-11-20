@@ -254,6 +254,7 @@ describe('addresses', () => {
       value: {
         presence: 'wss://connection.internal/cg',
         speech: 'https://egress.internal/brain/inference',
+        brain: 'https://egress.internal/brain',
         hosts: {
           storage: 'https://storage.internal/dss',
           properties: 'https://storage.internal/dss',
