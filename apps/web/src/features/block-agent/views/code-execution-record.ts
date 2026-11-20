@@ -5,7 +5,6 @@ import {
   codeExecutionInput,
   codeExecutionReceipt,
   programEnded,
-  programFailures,
   programSteps,
 } from '../state/code-execution';
 import { isToolActive } from '../ui/types';
@@ -52,17 +51,6 @@ export function useCodeExecutionRecord(
       calls: record()?.calls.length ?? 0,
       ended: ended(),
     });
-  const failures = () => {
-    const saved = record();
-    return programFailures({
-      statuses: [
-        ...(saved?.activity ?? []).map((operation) => operation.status),
-        ...(saved?.calls ?? []).map((call) => call.status),
-      ],
-      ended: ended(),
-      cancelled: (saved?.status ?? receipt()?.status) === 'cancelled',
-    });
-  };
 
   return {
     receipt,
@@ -74,6 +62,5 @@ export function useCodeExecutionRecord(
     error,
     ended,
     steps,
-    failures,
   };
 }

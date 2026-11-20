@@ -117,7 +117,6 @@ vi.mock('../ui', () => ({
   ),
   ToolGroup: (props: {
     count: number;
-    failed?: number;
     live?: boolean;
     steps?: readonly { label: string; status: string }[];
     summary?: string;
@@ -125,7 +124,6 @@ vi.mock('../ui', () => ({
   }) => (
     <div
       data-count={props.count}
-      data-failed={props.failed ?? 0}
       data-live-line={String(props.live ?? false)}
       data-steps={props.steps
         ?.map((step) => `${step.label}:${step.status}`)
@@ -139,7 +137,6 @@ vi.mock('../ui', () => ({
 }));
 const programs = vi.hoisted(() => ({
   steps: {} as Record<string, number>,
-  failures: {} as Record<string, number>,
   activity: {} as Record<
     string,
     { id: number; label: string; status: string }[]
@@ -148,7 +145,6 @@ const programs = vi.hoisted(() => ({
 vi.mock('../views/code-execution-record', () => ({
   useCodeExecutionRecord: (part: () => { id: string }) => ({
     steps: () => programs.steps[part().id] ?? 0,
-    failures: () => programs.failures[part().id] ?? 0,
     record: () => {
       const activity = programs.activity[part().id];
       return activity ? { activity } : undefined;
@@ -526,21 +522,6 @@ describe('Message tool grouping', () => {
     expect(view.queryByTestId('working')).toBeNull();
   });
 
-  it('counts the failed calls of a settled run', () => {
-    const view = render(() => (
-      <Message
-        message={message([
-          tool('a'),
-          tool('b', { status: 'failed' }),
-          tool('c', { status: 'failed' }),
-          text('Done.'),
-        ])}
-        inFlight={false}
-      />
-    ));
-    expect(view.getByTestId('group').dataset.failed).toBe('2');
-  });
-
   it('keeps delegated agents visible between tool bursts', () => {
     const view = render(() => (
       <Message
@@ -746,7 +727,6 @@ describe('Message tool runs', () => {
     expect(view.getAllByTestId('group')).toHaveLength(1);
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('4');
-    expect(group.dataset.failed).toBe('1');
     expect(
       view.getAllByTestId('thought').every((row) => group.contains(row))
     ).toBe(true);
@@ -778,27 +758,6 @@ describe('Message tool runs', () => {
     expect(view.getByTestId('group').dataset.steps).toBe(
       'Read a.rs:completed|Searched documents:completed|Reading a document:running'
     );
-  });
-
-  it("counts a program's failed steps with the run's failed calls", () => {
-    programs.steps.timedOut = 1;
-    programs.failures.timedOut = 1;
-    programs.steps.partly = 3;
-    programs.failures.partly = 1;
-    const view = render(() => (
-      <Message
-        message={message([
-          program('timedOut'),
-          tool('a', { status: 'failed' }),
-          program('partly'),
-          text('Done.'),
-        ])}
-        inFlight={false}
-      />
-    ));
-    const group = view.getByTestId('group');
-    expect(group.dataset.count).toBe('5');
-    expect(group.dataset.failed).toBe('3');
   });
 
   it('opens a live run before its first call names itself', () => {

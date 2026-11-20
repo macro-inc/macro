@@ -21,7 +21,8 @@ program timing out and one operation failing. The page answers the harness's
 code-execution requests from the replay. `?speed=` divides every delay, and
 `?summary=1` also publishes the session summarizer's line for each stretch.
 `activity.browser.e2e.ts` checks that the run shows one live line and never
-opens on its own, then settles to **Used 74 tools · 2 failed**.
+opens on its own, then settles to **Used 74 tools**, with the timed-out and
+failed steps marked only inside it.
 
 For session-open performance, use a regular owned Vite frontend, an authorized
 local session and histories created through the local session API. Keep login
