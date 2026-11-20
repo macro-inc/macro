@@ -730,8 +730,9 @@ mod code_mode {
             versions.iter().any(|version| !version.has_initialize()),
             "the discover handshake must stay covered"
         );
-        // What production lists in standard mode; the test catalog stands in
-        // for it over HTTP.
+        // What production lists in standard mode (`list_tools`' ChatGPT
+        // filter): the HTTP test catalog only stands in for it, so a new
+        // filter there must be mirrored here.
         let direct_tools: BTreeSet<String> = ai_tools::tools_for(ai_tools::AiHost::Mcp)
             .toolset
             .tools

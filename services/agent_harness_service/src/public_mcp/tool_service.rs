@@ -256,8 +256,8 @@ where
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<InitializeResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
-        // `initialize` is the only message that names the client, so it is
-        // where sessions are counted per client.
+        // The handshake names the client, so sessions are counted per client
+        // here and in `discover`.
         self.analytics.record(
             user_id.clone(),
             Self::client_signals(&context.extensions),
@@ -289,12 +289,30 @@ where
         &self,
         context: rmcp::service::RequestContext<rmcp::RoleServer>,
     ) -> Result<DiscoverResult, rmcp::ErrorData> {
-        Self::authenticated_user_id(&context.extensions)?;
+        let user_id = Self::authenticated_user_id(&context.extensions)?;
+        // This revision's clients never send `initialize`; they name
+        // themselves in the request's `_meta`.
+        if let Some(client) = context.meta.client_info() {
+            self.analytics.record(
+                user_id,
+                Self::client_signals(&context.extensions),
+                McpAnalyticsEvent::Initialize {
+                    client_name: client.name,
+                    client_version: client.version,
+                    protocol_version: context
+                        .meta
+                        .protocol_version()
+                        .map(|version| version.to_string())
+                        .unwrap_or_default(),
+                },
+            );
+        }
         let mut info = self.get_info();
         info.instructions = Some(self.instructions(self.tool_mode(&context.extensions)));
         let mut result =
             DiscoverResult::from_server_info(self.supported_protocol_versions().into_owned(), info);
-        // The instructions depend on who is asking.
+        // The instructions depend on who is asking (rmcp's default too; kept
+        // explicit so it can't change under us).
         result.cache_scope = CacheScope::Private;
         Ok(result)
     }
