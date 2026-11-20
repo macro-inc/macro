@@ -175,11 +175,11 @@ test.describe('removing Teams from an Outlook meeting', () => {
         name: 'I understand this cancels the old invitation and sends a new one.',
       })
       .check();
-    await dialog.getByRole('button', { name: 'Replace event', exact: true }).click();
+    await dialog
+      .getByRole('button', { name: 'Replace event', exact: true })
+      .click();
     await expect(
-      dialog
-        .getByRole('status')
-        .filter({ hasText: 'Replacement complete' })
+      dialog.getByRole('status').filter({ hasText: 'Replacement complete' })
     ).toBeVisible();
     await dialog.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(composer).toHaveCount(0);
