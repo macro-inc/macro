@@ -206,7 +206,8 @@ tools/HTTP/GraphQL surfaces over them.
   `POST /internal/crm/teams/{team_id}/file-unfiled-contacts`
   (`domain/contact_filing.rs`, internal credentials, mounted by storage) files
   one batch of a team's `manually_created` contacts without a company (a
-  contact sync left without one is counted and skipped) by the
+  contact sync left without one, or an archived one, is counted and skipped;
+  sync never creates a company for an archived contact) by the
   same rule, under a contact edit's locks, paging by address along
   `crm_contacts_unfiled_email_idx`, and returns counts per outcome.
   It defaults to a dry run and is safe to repeat. Never call it from a worker
