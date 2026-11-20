@@ -5209,6 +5209,7 @@ dependencies = [
 name = "connection_gateway"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "agent_correlation",
  "anyhow",
  "async-trait",
@@ -5252,6 +5253,7 @@ dependencies = [
  "stream",
  "strum 0.27.2",
  "tokio",
+ "tokio-util",
  "tower 0.5.3",
  "tower-http",
  "tracing",

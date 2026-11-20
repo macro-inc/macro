@@ -53,9 +53,12 @@ pub async fn ws_handler(
 ) -> impl IntoResponse {
     let macro_user_id = authorization.authorization.user.macro_user_id.clone();
     let user_context = authorization.authorization.user.user_context.clone();
+    // Only the person's own client counts as them being around, not an API
+    // token, an agent or an internal service connecting for them.
+    let seen = authorization.authorization.user.is_human_session();
 
     ws.on_upgrade(move |socket| {
-        handle_websocket_connection(socket, ctx, config, macro_user_id, user_context)
+        handle_websocket_connection(socket, ctx, config, macro_user_id, user_context, seen)
     })
 }
 
@@ -70,6 +73,7 @@ async fn handle_websocket_connection(
     config: Arc<Config>,
     macro_user_id: MacroUserIdStr<'static>,
     user_context: UserContext,
+    seen: bool,
 ) {
     let (sink, stream) = socket.split();
     let (sender, receiver) = tokio::sync::mpsc::channel::<OutgoingMessage>(100);
@@ -112,6 +116,15 @@ async fn handle_websocket_connection(
     );
     let receiver_task =
         handle_websocket_stream(connection_context, stream, sender.clone(), grants).fuse();
+    let mark_seen = async {
+        if seen {
+            ctx.seen_recorder
+                .mark_while_open(macro_user_id.clone())
+                .await;
+        } else {
+            std::future::pending::<()>().await;
+        }
+    };
 
     tokio::select! {
         res = sender_task => {
@@ -126,6 +139,7 @@ async fn handle_websocket_connection(
                     tracing::error!(error=?err, "receiver task failed");
                 }).ok();
         }
+        () = mark_seen => {}
     }
 
     ctx.connection_manager
