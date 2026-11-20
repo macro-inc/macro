@@ -101,10 +101,13 @@ export const nameFromId = (id: string): string =>
 export const sdkChat = ({
   macro: connect,
   myName,
+  disconnected = () => {},
 }: {
   readonly macro: () => Promise<Macro>;
   /** What the agent's own messages are recorded as from. */
   readonly myName: string;
+  /** Told each time the events stream drops, before it reconnects. */
+  readonly disconnected?: (error: unknown) => void;
 }): Chat => {
   let me: Promise<string> | undefined;
   const myId = () => {
@@ -259,7 +262,7 @@ export const sdkChat = ({
           },
         });
       });
-      await macro.events.listen();
+      await macro.events.listen({ onDisconnect: disconnected });
     }),
   };
 };

@@ -2,11 +2,12 @@ import type { Woke } from '@macro-inc/muppet/core/agent';
 import { behavior } from '@macro-inc/muppet/core/behavior';
 import { isoText } from '@macro-inc/muppet/utilities/time';
 import type { ChatContext } from '../../capabilities/chat/context.ts';
-import { judge } from '../../capabilities/chat/listen.ts';
+import { judge, screenAttributes } from '../../capabilities/chat/listen.ts';
 import { replyPrompt, threadOf } from '../../capabilities/chat/prompt.ts';
 import type { chatSources } from '../sources/chat.ts';
 
 const listenLog = 'listen';
+const screenSpan = 'chat.screen';
 const replyLog = 'replies';
 const handledLog = 'handled';
 const screenHistory = 6;
@@ -20,22 +21,33 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
       (sources) => sources.messages,
       async (
         incoming,
-        { chat, history, waiting, log, relevanceScreen, config }
+        { chat, history, waiting, log, relevanceScreen, config, trace }
       ) => {
         const { channelId, channel, entry } = incoming;
-        const recent = await history.recent(channelId, screenHistory);
-        const verdict = await judge(incoming, {
-          me: await chat.me(),
-          name: config.identity.name,
-          history: recent,
-          screen: await relevanceScreen(),
-          decide: chat.decide,
-          failed: (error) =>
-            log.event(listenLog, {
-              channel,
-              message_id: entry.id,
-              decide_error: String(error),
-            }),
+        // One span per message: how long the screen took and what it decided.
+        const verdict = await trace(screenSpan, async (span) => {
+          span.set('chat.channel_id', channelId);
+          span.set('chat.message_id', entry.id);
+          const recent = await history.recent(channelId, screenHistory);
+          span.set('chat.screen.history', recent.length);
+          const judged = await judge(incoming, {
+            me: await chat.me(),
+            name: config.identity.name,
+            history: recent,
+            screen: await relevanceScreen(),
+            decide: chat.decide,
+            failed: (error) => {
+              span.set('chat.screen.retried', true);
+              return log.event(listenLog, {
+                channel,
+                message_id: entry.id,
+                decide_error: String(error),
+              });
+            },
+          });
+          for (const [key, value] of Object.entries(screenAttributes(judged)))
+            span.set(key, value);
+          return judged;
         });
         await history.record(channelId, entry);
         if (verdict.kind === 'ignored') return;

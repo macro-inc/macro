@@ -57,6 +57,28 @@ export type Verdict =
       readonly p: Probabilities;
     };
 
+/**
+ * What a `chat.screen` span records of a verdict: its kind, and each
+ * probability by the screen's question key (`addressed` for a DM or a
+ * mention, `fallback` when the screen failed). Never the message.
+ */
+export const screenAttributes = (
+  verdict: Verdict
+): Readonly<Record<string, string | number | boolean>> => ({
+  'chat.screen.verdict': verdict.kind,
+  ...(verdict.kind === 'relevant'
+    ? { 'chat.screen.mentioned': verdict.mentioned }
+    : {}),
+  ...(verdict.kind === 'ignored'
+    ? {}
+    : Object.fromEntries(
+        Object.entries(verdict.p).map(([question, p]) => [
+          `chat.screen.p.${question}`,
+          p,
+        ])
+      )),
+});
+
 /** What a DM or a mention is logged with: nobody asked the screen. */
 const addressed: Probabilities = { addressed: 1 };
 
