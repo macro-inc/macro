@@ -1300,6 +1300,38 @@ export type GuestPolicy = {
 };
 
 /**
+ * Body of every `409 Conflict` from `/email/init`; `code` says which conflict it
+ * is. Clients offer to share the inbox only for a `SHARED_INBOX_CONFLICT`.
+ */
+export type InitConflictResponse = {
+    code: 'SHARED_INBOX_CONFLICT';
+    /**
+     * The mailbox address that is already connected.
+     */
+    email_address: string;
+    /**
+     * The existing link that would be shared if the caller confirms.
+     */
+    existing_link_id: string;
+    /**
+     * The email of the macro user who first connected the mailbox.
+     */
+    existing_owner_email: string;
+} | {
+    code: 'INBOX_IDENTITY_CONFLICT';
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
+} | {
+    code: 'INBOX_CHANGED';
+    /**
+     * Human-readable explanation.
+     */
+    message: string;
+};
+
+/**
  * Structured 400 body carrying a machine-readable code. Clients branch on
  * `code` instead of parsing the human message.
  */
@@ -1817,26 +1849,6 @@ export type Settings = {
      */
     signature?: string | null;
     signature_on_replies_forwards?: boolean | null;
-};
-
-/**
- * Returned with a `409 Conflict` when a connect targets an external mailbox another
- * macro user has already connected. The client surfaces a confirmation; on confirm it
- * retries `/email/init` with `force_share=true` to promote the mailbox to a shared inbox.
- */
-export type SharedInboxConflictResponse = {
-    /**
-     * The mailbox address that is already connected.
-     */
-    email_address: string;
-    /**
-     * The existing link that would be shared if the caller confirms.
-     */
-    existing_link_id: string;
-    /**
-     * The email of the macro user who first connected the mailbox.
-     */
-    existing_owner_email: string;
 };
 
 /**
@@ -2859,7 +2871,7 @@ export type InitUserErrors = {
     400: InitErrorCodeResponse;
     401: ErrorResponse;
     402: ErrorResponse;
-    409: SharedInboxConflictResponse;
+    409: InitConflictResponse;
     429: ErrorResponse;
     500: ErrorResponse;
 };

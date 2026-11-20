@@ -8523,6 +8523,76 @@
         }
       }
     },
+    "/crm/companies/by-domain": {
+      "get": {
+        "tags": ["crm::inbound::axum_router::get_company_by_domain"],
+        "summary": "Look up the CRM company that owns a domain in the caller's team, as\n`GET /crm/companies/{company_id}` reads it, without its contacts. Returns\na null `company` when the team tracks no company at the domain. A team\nmember with CRM access gets a visible company; admins and owners also get\na hidden one.",
+        "operationId": "get_company_by_domain",
+        "parameters": [
+          {
+            "name": "domain",
+            "in": "query",
+            "description": "The company domain to resolve within the caller's team, such as\n`acme.com`.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The company for the domain, or a null company when none is visible.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCompanyByDomainResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The domain is not a bare domain like acme.com.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/crm/companies/import": {
       "post": {
         "tags": ["crm::inbound::pipeline_workflows"],
@@ -9179,7 +9249,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_team_contact"],
-        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact for the caller's team without naming a company.\nAn email at a company's own domain files the contact under the team's\ncompany for that domain, creating the company when the team has none; a\npersonal or generic provider address, a domain the team blocks, or a\nhidden company leaves the contact without a company. Any team member with\nCRM access may create one. A contact filed under a company is refused when\nthat company, or a contact without a company, already has the email as its\nprimary address, and one left without a company when another such contact\nhas it (409). The team's CRM killswitch must be on (403).",
         "operationId": "create_crm_team_contact",
         "requestBody": {
           "content": {
@@ -38917,7 +38987,7 @@
         "properties": {
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+            "description": "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
           },
           "name": {
             "type": "string",
@@ -50571,6 +50641,23 @@
           }
         }
       },
+      "GetCompanyByDomainResponse": {
+        "type": "object",
+        "description": "Response from looking up a CRM company by domain.",
+        "properties": {
+          "company": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CrmCompanyResponse",
+                "description": "The company that owns the domain, without its contacts, or `null`\nwhen the team tracks none the caller may see."
+              }
+            ]
+          }
+        }
+      },
       "GetContactByEmailResponse": {
         "type": "object",
         "description": "Response from looking up a CRM contact by email.",
@@ -61354,7 +61441,7 @@
       },
       "SetContactCompanyRequest": {
         "type": "object",
-        "description": "Link or switch a contact with a known personal-provider email.",
+        "description": "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch.",
         "required": ["companyId"],
         "properties": {
           "companyId": {

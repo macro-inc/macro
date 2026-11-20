@@ -5,8 +5,8 @@ export default {
   listLoadFailed: "Couldn't load this list.",
   listReloadHelp: 'Please try again to reload this view.',
   tryAgain: 'Try again',
-  memberAccess: 'CRM access',
-  memberAccessAlways: 'Owners and admins always have access',
+  memberAccessShort: 'CRM',
+  memberAccessAlways: 'Owners and admins always have CRM access.',
   memberAccessFor: 'CRM access for {{name}}',
   policyChange: 'Change',
   policyRules: 'Sharing rules',
@@ -199,8 +199,6 @@ export default {
   removeCompanyTitle: 'Remove company from this contact?',
   removeCompanyBody:
     'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
-  removeCompanyPermanent:
-    'Its primary email is not a personal address, so it cannot be linked to a company again from here.',
   contactCompanyLinkedByEmail:
     'Linked by an email address on this company’s domain.',
   goToCompany: 'Go to company',

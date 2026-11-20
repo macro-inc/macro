@@ -214,14 +214,14 @@ Removing an address deletes nothing; the contact's Emails tab and the email
 attachments in Files then stop covering it. Removing the primary promotes the
 oldest address left. Emails and Files cover every address of the contact.
 
+A contact without a company shows **Add company**, whatever its address.
 Contacts whose primary is a known personal-provider address, and that hold no
-address on their company's domain, can link or switch company. Their company
+address on their company's domain, can also switch company. The company
 pill opens the Tasks singleton picker; on touch, select a company then **Done**.
 Cancel keeps the original relation. **Remove company** sits in the same editor
 for every linked contact that holds no address on the company's domain; a
 contact that cannot switch gets an editor with that action alone. It asks for
-confirmation first, and says when the contact cannot be linked to a company
-again from the app (its primary is not a personal-provider address). A
+confirmation first. A
 rejected removal stays in the confirmation with its message. A contact
 with an address on its company's domain has a read-only company value, with
 the reason in its tooltip, and the one address that links it to the company
@@ -831,11 +831,12 @@ Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-ca
 actions, and the Customer / Contact picker retire immediately when access is revoked.
 Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
-In team settings, admins and owners see a CRM access switch for each member only
-while `enable-crm-member-access-changes` is enabled. Owners and admins show the
-reason they always retain access instead of a disabled switch. The access row
-sits below the existing member controls; the identity, role and seat layout stays
-the same on desktop and phones.
+In team settings, admins and owners see a **CRM** switch in each member's row,
+after the member's seat plan and role and before Remove, only while
+`enable-crm-member-access-changes` is enabled. Owner and admin rows have no
+switch; one note under the list says they always have CRM access. Rows stay one
+line where they fit; where a member's row can't keep about 140px for the name
+beside its controls (phones, narrow splits), the controls wrap below the name.
 A failed save keeps the previous state and can be retried; members do not see these controls.
 An independently shared item can remain open after revocation, but its CRM record
 breadcrumbs and task-creation preset disappear. Previews, including email mentions,

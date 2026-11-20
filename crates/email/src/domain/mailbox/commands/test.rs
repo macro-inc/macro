@@ -1,7 +1,8 @@
 use super::*;
 use crate::domain::mailbox::{
-    AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure, LOCK_NOT_AVAILABLE,
+    AFTER_PROVIDER_ATTEMPTS, AFTER_PROVIDER_RETRY_DELAY, DatabaseFailure,
 };
+use crate::domain::models::error::LOCK_NOT_AVAILABLE;
 use email_api_client::domain::models::{
     MailboxChangePage, MailboxMessage, MailboxState, MessageWriteReceipt, RoundStart, StreamToken,
 };

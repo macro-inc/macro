@@ -13,8 +13,9 @@ const isArray = Array.isArray;
 const entries = Object.entries;
 const hasOwn = Object.hasOwn;
 // Each search is heavy for the search cluster's few threads, so a program that
-// fans searches out makes every other user's search wait behind it.
-const SEARCHES_IN_FLIGHT = 2;
+// fans searches out makes every other user's search wait behind it. Four at once
+// still lets a program with dozens of searches finish inside its deadline.
+const SEARCHES_IN_FLIGHT = 4;
 // Calls of one operation that, unfinished at the deadline, read as a loop.
 const LOOP_HINT_CALLS = 50;
 function emit(frame) {
