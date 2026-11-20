@@ -21,7 +21,7 @@
  */
 import type { ApiUser } from './api';
 import { AstGen } from './ast-gen';
-import { loadProbe, type UserSession } from './browser';
+import { cacheEventsBetween, ensurePage, loadProbe, registerPage, watchCacheErrors, type CacheEvent, type UserSession } from './browser';
 import { CALLERS } from './callers';
 import { compareCaller, compareData, DATA_RULES, type Diff, PREVIEW_DROPS_NOTIFICATIONS } from './compare';
 import { login } from './login';
@@ -35,6 +35,8 @@ export const LIVE_MS = 8_000;
 export const RAW_MS = 4_000;
 const RELOAD_EVERY = 5;
 const POLL_MS = 250;
+/** How much longer a branch reader main beat is watched, to tell late from never. */
+export const LATE_MS = 30_000;
 const SETTLE = { timeoutMs: 40_000, stableMs: 500 };
 
 const PREVIEW_READERS = new Set(['qa.agentSessions', 'qa.initiatives', 'qa.skills', 'qa.snippets', 'crm.suggestions', 'slash.prs', 'email.recent']);
@@ -56,6 +58,10 @@ export type SeqFailure = {
   detail: string;
   diffs?: Diff[];
   trace?: string[];
+  /** For a missed live update: when the branch did show it (null: never, within the tail). */
+  lateMs?: number | null;
+  /** The GraphQL cache errors each page logged around the step, relative to its write. */
+  cache?: { new: string[]; old: string[] };
 };
 
 export type LiveTally = {
@@ -83,6 +89,9 @@ export type SeqResult = {
   /** Branch fresher than main, by reader and step kind: closed in the report. */
   newOnly: { seq: number; step: number; stepKind: string; reader: string; latencyMs: number }[];
   ruleHits: Record<string, number>;
+  /** Pages put back in the app, and sequences the harness broke and ran again. */
+  repairs: { where: string; error: string }[];
+  aborted: { seq: number; attempt: number; error: string; droppedFailures: number }[];
   /**
    * A reader stale on both sides after an earlier step, which this step's own
    * refresh brought up to date on main only: by reader, step and field.
@@ -95,7 +104,7 @@ export type SeqResult = {
 };
 
 export function emptySeqResult(): SeqResult {
-  return { sequences: 0, steps: 0, stepKinds: {}, writeErrors: {}, live: {}, raw: {}, reloads: 0, comparisons: 0, failures: [], newOnly: [], ruleHits: {}, incidental: {}, conflictRetries: 0, liveData: { equal: 0, bothStale: 0, branchFresher: 0, branchStaler: 0, skipped: 0, fresherBy: {}, fresherFields: {} } };
+  return { sequences: 0, steps: 0, stepKinds: {}, writeErrors: {}, live: {}, raw: {}, reloads: 0, comparisons: 0, failures: [], newOnly: [], ruleHits: {}, incidental: {}, conflictRetries: 0, repairs: [], aborted: [], liveData: { equal: 0, bothStale: 0, branchFresher: 0, branchStaler: 0, skipped: 0, fresherBy: {}, fresherFields: {} } };
 }
 
 /**
@@ -117,7 +126,9 @@ export async function openTruthPage(
   if (cookies) await context.addCookies(cookies);
   const page = await context.newPage();
   await page.route('**/i/otlp/v1/traces', (route) => route.fulfill({ status: 200, body: '{}' }));
+  watchCacheErrors(page);
   await login(page, origin, email);
+  registerPage(page, { origin, email, probePath });
   await page.waitForFunction(() => document.readyState === 'complete');
   await page.evaluate(async (p) => {
     await import(/* @vite-ignore */ p);
@@ -629,7 +640,9 @@ async function compareSides(ctx: SeqContext, readers: Reader[], o: Snap[], n: Sn
  * the cold read. Main's own staleness is not the branch's: a field is a
  * failure only where the branch is stale (or wrong) and main is not.
  */
-function liveData(ctx: SeqContext, readers: Reader[], o: Snap[], n: Snap[], truth: Snap[], prevTruth: Snap[], seq: number, step: number, stepKind: string, trace: string[]) {
+function liveData(ctx: SeqContext, readers: Reader[], o: Snap[], n: Snap[], truth: Snap[], prevTruth: Snap[], seq: number, step: number, stepKind: string, trace: string[], t0: number) {
+  const pages = ctx.session.pages;
+  const cache = () => ({ new: compactEvents(cacheEventsBetween(pages.new, t0 - 10_000, Date.now()), t0), old: compactEvents(cacheEventsBetween(pages.old, t0 - 10_000, Date.now()), t0) });
   readers.forEach((r, i) => {
     if (!o[i].settled || !n[i].settled || truth[i].timedOut || errorOf(truth[i]) || errorOf(o[i]) || errorOf(n[i])) {
       ctx.result.liveData.skipped++;
@@ -674,6 +687,7 @@ function liveData(ctx: SeqContext, readers: Reader[], o: Snap[], n: Snap[], trut
           detail: `${stepKind}: main shows this step's change in ${direct.length} fields, the branch does not (${direct.slice(0, 3).map(key).join('; ').slice(0, 300)})`,
           diffs: direct.slice(0, 10),
           trace: [...trace],
+          cache: cache(),
         });
       if (earlier.length) {
         const k = `${r.caller}|${stepKind}|${earlier.map((d) => d.path.replace(/\[[^\]]*\]/g, '[]')).sort()[0]}`;
@@ -683,6 +697,11 @@ function liveData(ctx: SeqContext, readers: Reader[], o: Snap[], n: Snap[], trut
       }
     }
   });
+}
+
+/** Cache errors relative to the step's write. */
+function compactEvents(events: CacheEvent[], t0: number) {
+  return events.map((e) => `${e.at - t0} ms: ${e.text.replace(/\s+\{.*$/, '').slice(0, 100)}`);
 }
 
 /**
@@ -706,6 +725,19 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
     if (!pending || elapsed >= bound) break;
     await Bun.sleep(POLL_MS);
   }
+  // A reader main updated within the bound and the branch did not: keep
+  // watching the branch, so the result says late (and by how much) or never.
+  const behind = readers.map((_, i) => affected[i] && at.old[i] !== undefined && at.new[i] === undefined);
+  const lateAt: (number | undefined)[] = readers.map(() => undefined);
+  while (behind.some((b, i) => b && lateAt[i] === undefined) && Date.now() - t0 < bound + LATE_MS) {
+    await Bun.sleep(POLL_MS * 2);
+    const n = await snapAll(session.pages.new, readers);
+    const elapsed = Date.now() - t0;
+    readers.forEach((r, i) => {
+      if (behind[i] && lateAt[i] === undefined && n[i].settled && JSON.stringify(view(r, n[i])) === tv[i]) lateAt[i] = elapsed;
+    });
+  }
+  const cache = { new: compactEvents(cacheEventsBetween(session.pages.new, t0 - 10_000, Date.now()), t0), old: compactEvents(cacheEventsBetween(session.pages.old, t0 - 10_000, Date.now()), t0) };
   readers.forEach((r, i) => {
     const t = tally(map, r.caller);
     if (!affected[i]) {
@@ -720,7 +752,17 @@ async function converge(ctx: SeqContext, readers: Reader[], truth: Snap[], prevT
     else if (o === undefined && n === undefined) t.neither++;
     else if (o !== undefined) {
       t.oldOnly++;
-      ctx.result.failures.push({ seq, step, kind: `${map === ctx.result.raw ? 'raw' : 'live'}:missed-update`, reader: r.caller, params: r.params, detail: `${stepKind}: main showed the change after ${o} ms, the branch not within ${bound} ms` });
+      const late = lateAt[i];
+      ctx.result.failures.push({
+        seq,
+        step,
+        kind: `${map === ctx.result.raw ? 'raw' : 'live'}:missed-update`,
+        reader: r.caller,
+        params: r.params,
+        detail: `${stepKind}: main showed the change after ${o} ms, the branch not within ${bound} ms; ${late === undefined ? `not within ${bound + LATE_MS} ms either` : `it did at ${late} ms`}`,
+        lateMs: late ?? null,
+        cache,
+      });
     } else {
       t.newOnly++;
       ctx.result.newOnly.push({ seq, step, stepKind, reader: r.caller, latencyMs: n as number });
@@ -736,8 +778,13 @@ async function reloadBoth(ctx: SeqContext, readers: Reader[]) {
   ctx.beforeReload?.();
   await Promise.all(
     (['old', 'new'] as const).map(async (side) => {
-      await session.pages[side].reload({ waitUntil: 'domcontentloaded' });
-      await loadProbe(session, side, ctx.probePaths[side]);
+      try {
+        await session.pages[side].reload({ waitUntil: 'domcontentloaded' });
+        await loadProbe(session, side, ctx.probePaths[side]);
+      } catch (error) {
+        ctx.result.repairs.push({ where: `reload ${side}`, error: String(error).slice(0, 200) });
+      }
+      if (await ensurePage(session.pages[side])) ctx.result.repairs.push({ where: `reload ${side}`, error: 'page left the app' });
     })
   );
   await Promise.all([mountAll(session.pages.old, readers, 'old'), mountAll(session.pages.new, readers, 'new')]);
@@ -792,7 +839,7 @@ export async function runSequence(ctx: SeqContext, seq: number) {
       const truth = await truthRead(ctx.truth, readers);
       await converge(ctx, readers, truth, prevTruth, step.app ? RAW_MS : LIVE_MS, step.app ? result.raw : result.live, step.kind, seq, i, t0);
       const [o, n] = await Promise.all([snapAll(session.pages.old, readers), snapAll(session.pages.new, readers)]);
-      liveData(ctx, readers, o, n, truth, prevTruthSnaps, seq, i, step.kind, trace);
+      liveData(ctx, readers, o, n, truth, prevTruthSnaps, seq, i, step.kind, trace, t0);
       prevTruth = truthViews(readers, truth);
       prevTruthSnaps = truth;
     }
@@ -841,10 +888,23 @@ export async function runSequenceLane(ctx: Omit<SeqContext, 'stage'> & { count: 
   const stage = ctx.stage ?? (await ensureStageDefinition(ctx.world.users.owner, `${ctx.world.tag}-${ctx.viewer}-${Date.now().toString(36)}`));
   const full = { ...ctx, stage } as SeqContext;
   for (let s = 0; s < ctx.count; s++) {
-    const seqRng = ctx.rng.fork(`seq-${s}`);
-    await runSequence({ ...full, rng: seqRng }, s).catch((error) => {
-      ctx.result.failures.push({ seq: s, step: -1, kind: 'harness-error', detail: String(error).slice(0, 500) });
-    });
+    for (let attempt = 0; ; attempt++) {
+      for (const page of [ctx.session.pages.old, ctx.session.pages.new, ctx.truth])
+        if (await ensurePage(page).catch(() => false)) ctx.result.repairs.push({ where: `before seq ${s}`, error: 'page left the app' });
+      const before = ctx.result.failures.length;
+      const steps = ctx.result.steps;
+      const error = await runSequence({ ...full, rng: ctx.rng.fork(`seq-${s}`) }, s).then(() => undefined, (e) => e);
+      if (!error) break;
+      // The broken attempt's comparisons ran against pages that may have
+      // left the app: drop them and run the sequence again, once.
+      const dropped = ctx.result.failures.splice(before);
+      ctx.result.steps = steps;
+      ctx.result.aborted.push({ seq: s, attempt, error: String(error).slice(0, 300), droppedFailures: dropped.length });
+      if (attempt >= 1) {
+        ctx.result.failures.push({ seq: s, step: -1, kind: 'harness-error', detail: String(error).slice(0, 500) });
+        break;
+      }
+    }
     ctx.log(`seq ${ctx.viewer}: ${s + 1}/${ctx.count} (${ctx.result.steps} steps, ${ctx.result.failures.length} failures)`);
   }
 }

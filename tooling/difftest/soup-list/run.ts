@@ -102,6 +102,8 @@ function mergeSeq(into: SeqResult, from: SeqResult) {
   into.conflictRetries += from.conflictRetries;
   into.failures.push(...from.failures);
   into.newOnly.push(...from.newOnly);
+  into.repairs.push(...from.repairs);
+  into.aborted.push(...from.aborted);
   const add = (t: Record<string, number>, f: Record<string, number>) => {
     for (const [k, v] of Object.entries(f)) t[k] = (t[k] ?? 0) + v;
   };

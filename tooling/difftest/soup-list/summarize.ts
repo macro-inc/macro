@@ -56,6 +56,17 @@ function summarize(r: Json) {
       failures: seq.failures?.length ?? 0,
       failureKinds: count(seq.failures),
       newOnly: seq.newOnly?.length ?? 0,
+      /** Missed live updates: how many the branch showed late (within the tail) and how many never. */
+      missedLive: (seq.failures ?? [])
+        .filter((x: Json) => /missed-update$/.test(x.kind))
+        .reduce((t: Json, x: Json) => {
+          const k = x.lateMs == null ? 'never' : 'late';
+          t[k] = (t[k] ?? 0) + 1;
+          if (x.cache?.new?.length) t.withCacheErrors = (t.withCacheErrors ?? 0) + 1;
+          return t;
+        }, {}),
+      repairs: seq.repairs?.length ?? 0,
+      aborted: seq.aborted?.length ?? 0,
       incidental: Object.fromEntries(Object.entries((seq.incidental ?? {}) as Record<string, Json>).map(([k, v]) => [k, v.count])),
       liveData: seq.liveData,
       writeErrors: seq.writeErrors,

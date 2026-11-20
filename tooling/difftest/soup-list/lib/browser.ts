@@ -140,15 +140,67 @@ export async function openUser(
       }
       await route.fulfill({ status: 200, body: '{}' });
     });
+    watchCacheErrors(page);
     await login(page, origins[side], email);
+    registerPage(page, { origin: origins[side], email, probePath: probePath[side] });
     session.pages[side] = page;
   }
   for (const side of ['new', 'old'] as const) await loadProbe(session, side, probePath[side]);
   return session;
 }
 
+/**
+ * Where each app page signs in and which probe it loads, so a page the app
+ * navigated away (a sign-out, a reload that never finished) can be put back.
+ */
+const pageHome = new WeakMap<Page, { origin: string; email: string; probePath: string }>();
+export function registerPage(page: Page, home: { origin: string; email: string; probePath: string }) {
+  pageHome.set(page, home);
+}
+
+/**
+ * The GraphQL cache's errors, as each page logged them: a live update the
+ * branch misses is matched against the cache resets in its page.
+ */
+export type CacheEvent = { at: number; text: string };
+const cacheEvents = new WeakMap<Page, CacheEvent[]>();
+export function watchCacheErrors(page: Page) {
+  const events: CacheEvent[] = [];
+  cacheEvents.set(page, events);
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    if (/graphql-cache|cache worker|owner epoch|physical reset|graphql_cache/.test(text)) events.push({ at: Date.now(), text: text.slice(0, 160) });
+  });
+}
+export function cacheEventsBetween(page: Page, from: number, to: number): CacheEvent[] {
+  return (cacheEvents.get(page) ?? []).filter((e) => e.at >= from && e.at <= to);
+}
+
+/** Puts a page back in the app with its probe; true if it had to. */
+export async function ensurePage(page: Page): Promise<boolean> {
+  const healthy = await page.evaluate(() => Boolean((window as any).__probe)).catch(() => false);
+  if (healthy) return false;
+  const home = pageHome.get(page);
+  if (!home) throw new Error('page has no registered home');
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await login(page, home.origin, home.email);
+      await page.waitForFunction(() => document.readyState === 'complete');
+      await importProbe(page, home.probePath);
+      return true;
+    } catch (error) {
+      if (attempt >= 2) throw error;
+      await Bun.sleep(5_000);
+    }
+  }
+}
+
 export async function loadProbe(session: UserSession, side: Side, path: string) {
-  const page = session.pages[side];
+  await importProbe(session.pages[side], path);
+}
+
+async function importProbe(page: Page, path: string) {
   await page.waitForFunction(() => document.readyState === 'complete');
   // Vite may still be serving the reload's module graph: retry the import.
   for (let attempt = 0; ; attempt++) {
