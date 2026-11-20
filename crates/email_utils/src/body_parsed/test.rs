@@ -180,3 +180,13 @@ fn a_body_past_the_size_limit_converts_only_its_start() {
     assert!(text.starts_with("opening line"));
     assert!(!text.contains("closing line"));
 }
+
+#[test]
+fn a_long_line_stays_whole() {
+    let token = "a".repeat(3_900);
+    let paragraph = "word ".repeat(1_000);
+
+    let text = html_to_plaintext(&format!("<p>{token}</p><p>{paragraph}</p>"));
+
+    assert_eq!(text, Some(format!("{token}\n{}", paragraph.trim_end())));
+}

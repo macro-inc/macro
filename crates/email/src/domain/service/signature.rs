@@ -171,8 +171,7 @@ pub(crate) fn strip_signature(body_html: &str) -> String {
 
 /// Extracts the signature's visible text for the `text/plain` MIME alternative.
 /// Uses a block-aware HTML->text conversion so inline tags (`<strong>`, `<a>`, …)
-/// stay on one line up to 1,000 characters, past which a run wraps; otherwise
-/// only block and table-cell boundaries introduce newlines.
+/// stay on one line and only block and table-cell boundaries introduce newlines.
 pub(crate) fn signature_plain_text(signature_html: &str) -> String {
     email_utils::body_parsed::html_to_plaintext(signature_html).unwrap_or_default()
 }

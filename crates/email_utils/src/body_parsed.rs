@@ -2,10 +2,11 @@ use html2text::config::Config;
 use html2text::render::PlainDecorator;
 use html2text::{Element, Handle};
 
-/// The line width html2text lays a body out at. Longer paragraphs wrap onto
-/// new lines; content that cannot fit overflows the width instead of failing
-/// the conversion.
-const TEXT_WIDTH: usize = 1_000;
+/// The line width html2text lays a body out at: wider than any line the first
+/// `MAX_HTML_BYTES` of HTML can make, so no text wraps. In raw mode nothing
+/// is padded to the width, so its size costs nothing; it stays finite because
+/// html2text adds widths up as it places a table's cells.
+const TEXT_WIDTH: usize = 4 * MAX_HTML_BYTES;
 
 /// The most table cells a body may lay out, counted as each table's rows
 /// times its widest row. html2text gives every row its own copy of its
@@ -14,9 +15,9 @@ const TEXT_WIDTH: usize = 1_000;
 const MAX_TABLE_CELLS: usize = 1_000_000;
 
 /// The deepest a body may nest quotes, lists, definitions and headings. Each
-/// level prefixes every line inside it, and once the prefixes outgrow the
-/// width the text inside wraps every few characters, so html2text's output
-/// grows with lines times depth. A body past it gets no text.
+/// level prefixes every line inside it, so html2text's output, and the copy
+/// it makes of the lines at every level, grow with lines times depth. A body
+/// past it gets no text.
 const MAX_NESTING: usize = 64;
 
 /// The most HTML a conversion reads; a longer body's text stops there.
@@ -39,8 +40,7 @@ pub fn compute_body_parsed(has_html: bool, body_replyless: &Option<String>) -> O
 
     let config = html2text::config::plain()
         .no_table_borders()
-        .link_footnotes(true)
-        .no_link_wrapping();
+        .link_footnotes(true);
 
     parse_html_to_text(text, config)
 }
@@ -72,10 +72,9 @@ pub fn compute_body_parsed_linkless(
 
 /// Convert an HTML fragment to block-aware plaintext: block elements and table
 /// cells are separated by newlines, but inline runs (`<strong>`, `<em>`, `<a>`,
-/// …) stay on one line up to 1,000 characters. Returns `None` if conversion
-/// fails or the fragment's tables or nesting are too large to convert. Suitable for
-/// building a `text/plain` MIME alternative from a small HTML snippet (e.g. a
-/// signature).
+/// …) stay on one line. Returns `None` if conversion fails or the fragment's
+/// tables or nesting are too large to convert. Suitable for building a
+/// `text/plain` MIME alternative from a small HTML snippet (e.g. a signature).
 pub fn html_to_plaintext(html: &str) -> Option<String> {
     let config = html2text::config::plain()
         .no_table_borders()
