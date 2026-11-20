@@ -9,7 +9,7 @@
 import { fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const navigate = vi.fn(() => Promise.resolve());
+const navigate = vi.fn((..._args: unknown[]) => Promise.resolve());
 const orchestrator = { name: 'orchestrator' };
 let channelNames: Record<string, string> = {};
 
