@@ -184,6 +184,20 @@ async fn a_release_left_for_the_sweep_counts_as_done_and_a_failed_pause_does_not
     let mailboxes = mailboxes(&server);
 
     mailboxes.release(&agent()).await.unwrap();
+
+    // Another operation holds the mailbox: it is releasing too.
+    server.reset().await;
+    Mock::given(method("POST"))
+        .and(path(format!("{AGENT_PATH}/release")))
+        .respond_with(refused(503, "busy"))
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path(format!("{AGENT_PATH}/pause")))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+    mailboxes.release(&agent()).await.unwrap();
     assert!(matches!(
         mailboxes.pause(&agent()).await,
         Err(MailboxError::Unavailable(_))
