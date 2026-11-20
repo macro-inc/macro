@@ -1,4 +1,12 @@
-import { createContext, onCleanup, useContext } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createRenderEffect,
+  createSignal,
+  onCleanup,
+  useContext,
+} from 'solid-js';
+import { createStore } from 'solid-js/store';
 
 /**
  * Mobile viewport values (the bottom chrome's height, the keyboard) that CSS
@@ -8,40 +16,31 @@ import { createContext, onCleanup, useContext } from 'solid-js';
  * composer line restyled the whole page (15-90 ms in WebKit).
  */
 
-type Apply = (element: HTMLElement, value: string | undefined) => void;
+const [contentInsetBottom, setContentInsetBottom] = createSignal<string>();
+// Published together; each follower tracks only the field it writes.
+const [keyboard, setKeyboard] = createStore<{
+  viewportUnit?: string;
+  height?: string;
+}>({});
 
-function createPublishedValue() {
-  const followers = new Map<HTMLElement, Apply>();
-  let current: string | undefined;
-  return {
-    publish(next: string | undefined) {
-      if (next === current) return;
-      current = next;
-      for (const [element, apply] of followers) apply(element, next);
-    },
-    /** Call while rendering (a `ref`), where `onCleanup` has an owner. */
-    follow(element: HTMLElement, apply: Apply) {
-      followers.set(element, apply);
-      apply(element, current);
-      onCleanup(() => {
-        if (followers.get(element) !== apply) return;
-        followers.delete(element);
-        apply(element, undefined);
-      });
-    },
-  };
+/**
+ * Keeps `property` in the element's inline style equal to `value`, removed
+ * while it is undefined and when the caller's owner is disposed. Call while
+ * rendering (a `ref`). A render effect, unlike `createEffect`, also runs
+ * while a Suspense boundary holds the element's content back.
+ */
+function follow(
+  element: HTMLElement,
+  property: string,
+  value: Accessor<string | undefined>
+) {
+  createRenderEffect(() => {
+    const next = value();
+    if (next === undefined) element.style.removeProperty(property);
+    else element.style.setProperty(property, next);
+  });
+  onCleanup(() => element.style.removeProperty(property));
 }
-
-const writeProperty =
-  (name: string): Apply =>
-  (element, value) => {
-    if (value === undefined) element.style.removeProperty(name);
-    else element.style.setProperty(name, value);
-  };
-
-const contentInsetBottom = createPublishedValue();
-const viewportUnit = createPublishedValue();
-const keyboardHeight = createPublishedValue();
 
 const NoContentInsetBottom = createContext(false);
 
@@ -57,21 +56,20 @@ export const NoContentInsetBottomProvider = NoContentInsetBottom.Provider;
  * `undefined` while no host is mounted.
  */
 export function publishContentInsetBottom(px: number | undefined) {
-  contentInsetBottom.publish(px === undefined ? undefined : `${px}px`);
+  setContentInsetBottom(px === undefined ? undefined : `${px}px`);
 }
-
-const writeContentInsetBottom = writeProperty('--mobile-content-inset-bottom');
 
 /**
  * A `ref` for an element whose own styles read
  * `--mobile-content-inset-bottom`, the bottom chrome's height to clear. The
  * property is registered non-inheriting (index.css), so it reaches this
  * element alone, and is unset (its `var()` fallback applies) elsewhere: a
- * child that reads it registers itself.
+ * child that reads it registers itself. Resetting the element's whole `style`
+ * attribute drops the value until the next publish.
  */
 export function followContentInsetBottom(element: HTMLElement) {
   if (useContext(NoContentInsetBottom)) return;
-  contentInsetBottom.follow(element, writeContentInsetBottom);
+  follow(element, '--mobile-content-inset-bottom', contentInsetBottom);
 }
 
 /**
@@ -82,14 +80,11 @@ export function followContentInsetBottom(element: HTMLElement) {
 export function publishKeyboardViewport(
   viewport: { dvh: string; keyboardHeight: number } | undefined
 ) {
-  viewportUnit.publish(viewport?.dvh);
-  keyboardHeight.publish(
-    viewport === undefined ? undefined : `${viewport.keyboardHeight}px`
-  );
+  setKeyboard({
+    viewportUnit: viewport?.dvh,
+    height: viewport === undefined ? undefined : `${viewport.keyboardHeight}px`,
+  });
 }
-
-const writeViewportUnit = writeProperty('--dvh');
-const writeKeyboardHeight = writeProperty('--virtual-keyboard-height');
 
 /**
  * A `ref` for an element whose styles, or its descendants' styles, read
@@ -98,8 +93,8 @@ const writeKeyboardHeight = writeProperty('--virtual-keyboard-height');
  * the app frame uses `followViewportHeight`.
  */
 export function followKeyboardViewport(element: HTMLElement) {
-  viewportUnit.follow(element, writeViewportUnit);
-  keyboardHeight.follow(element, writeKeyboardHeight);
+  follow(element, '--dvh', () => keyboard.viewportUnit);
+  follow(element, '--virtual-keyboard-height', () => keyboard.height);
 }
 
 /**
@@ -108,8 +103,8 @@ export function followKeyboardViewport(element: HTMLElement) {
  * rather than everything inside it.
  */
 export function followViewportHeight(element: HTMLElement) {
-  viewportUnit.follow(element, (target, unit) => {
-    if (unit === undefined) target.style.removeProperty('height');
-    else target.style.setProperty('height', `calc(${unit} * 100)`);
+  follow(element, 'height', () => {
+    const unit = keyboard.viewportUnit;
+    return unit === undefined ? undefined : `calc(${unit} * 100)`;
   });
 }
