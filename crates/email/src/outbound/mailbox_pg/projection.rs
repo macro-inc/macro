@@ -98,8 +98,13 @@ impl MailboxProjectionRepository for PgMailboxSync {
     ) -> Result<(), MailboxError> {
         match retry {
             None | Some(MessageRetry::Abandon) => {
-                sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
+                let deleted = sqlx::query!("DELETE FROM email_projection_outbox WHERE id = $1 AND lease_id = $2 AND lease_until > now()",lease.id,lease.lease_id)
                     .execute(&self.db).await.map_err(db_error)?;
+                // An abandonment is logged once, by the worker whose lease
+                // deleted the entry; one that lost its lease reports it lost.
+                if matches!(retry, Some(MessageRetry::Abandon)) && deleted.rows_affected() != 1 {
+                    return Err(MailboxError::Stale);
+                }
             }
             Some(MessageRetry::After { seconds, counted }) => {
                 sqlx::query!(

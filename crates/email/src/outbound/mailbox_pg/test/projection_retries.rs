@@ -241,6 +241,40 @@ async fn a_projection_whose_claims_keep_ending_unfinished_is_abandoned_unproject
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_worker_that_lost_its_lease_cannot_abandon_the_entry_a_second_time(db: PgPool) {
+    let telemetry = Telemetry::default();
+    let _guard = telemetry.install();
+    let (repo, link) = fixture(&db).await;
+    let id = queue(&db, link, 0).await;
+    for _ in 0..5 {
+        repo.claim_projection(Uuid::now_v7())
+            .await
+            .unwrap()
+            .unwrap();
+        expire_lease(&db, id).await;
+    }
+    // This worker claims the entry to give it up, then pauses past its lease.
+    let paused = repo
+        .claim_projection(Uuid::now_v7())
+        .await
+        .unwrap()
+        .unwrap();
+    expire_lease(&db, id).await;
+    let next_worker = MailboxProjectionService::new(repo.clone(), FailingRefresh::new(downstream));
+    assert!(matches!(
+        next_worker.project_once().await,
+        Err(MailboxError::ClaimsUnfinished(6))
+    ));
+
+    let late = repo
+        .finish_projection(&paused, Some(crate::domain::mailbox::MessageRetry::Abandon))
+        .await;
+
+    assert!(matches!(late, Err(MailboxError::Stale)), "{late:?}");
+    assert_eq!(telemetry.events("mailbox projection abandoned").len(), 1);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_recorded_outcome_starts_the_count_of_unfinished_claims_over(db: PgPool) {
     let (repo, link) = fixture(&db).await;
     let id = queue(&db, link, 0).await;

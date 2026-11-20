@@ -89,10 +89,12 @@ backoff, and so does one whose claims keep ending with no outcome
 (`unfinished`, a worker that stopped mid-projection, five times). Its entry
 is deleted, and a `"mailbox projection abandoned"` WARN names its `@link_id`,
 `@event_id`, `@event_kind`, attempts and `@defer_reason`. The message itself
-is already stored; search and open views keep its previous state until a
-later event for the link supersedes it, which any further change to the
-message or its thread queues. Its notification and activity event are not
-sent.
+is already stored. Giving up skips whatever effects the event had left:
+search and open views keep the message's previous state until a later event
+for the link supersedes it, which any further change to the message or its
+thread queues. Effects an earlier attempt already completed stay done, so a
+notification or activity event can have gone out before, say, its
+attachments failed; one that had not gone out is not sent.
 
 A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
 Live work is read twice more first, 30 and 60 s apart

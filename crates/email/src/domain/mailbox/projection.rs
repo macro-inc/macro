@@ -157,7 +157,8 @@ pub trait MailboxProjectionRepository: Send + Sync + 'static {
     /// Deletes an event that was delivered (`None`) or given up
     /// (`MessageRetry::Abandon`), or makes it due again after the retry's
     /// delay, giving the claim back to `attempts` when the failure is not
-    /// counted.
+    /// counted. Giving up an event this lease no longer holds is `Stale`, so
+    /// only the worker that deleted it logs the abandonment.
     fn finish_projection(
         &self,
         lease: &ProjectionLease,
