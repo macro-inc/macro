@@ -253,6 +253,7 @@ test.describe('an Outlook inbox a teammate already connected', () => {
   test('connecting it names the inbox and its owner, and Share inbox lists it as shared', async ({
     page,
     mailbox,
+    auth,
     microsoft,
   }) => {
     const bob = await mailbox.stack.user('bob@example.com');
@@ -279,6 +280,7 @@ test.describe('an Outlook inbox a teammate already connected', () => {
       [mailbox.inbox.email, team].sort()
     );
     expect(microsoft.starts.map(({ address }) => address)).toEqual([team]);
+    expect(auth.starts).toEqual([]);
     confirmed('F-005');
   });
 
@@ -289,6 +291,7 @@ test.describe('an Outlook inbox a teammate already connected', () => {
   test('an address another Microsoft account holds says so and asks nothing', async ({
     page,
     mailbox,
+    auth,
     microsoft,
   }) => {
     const bob = await mailbox.stack.user('bob@example.com');
@@ -307,12 +310,13 @@ test.describe('an Outlook inbox a teammate already connected', () => {
         'This address is connected through a different Microsoft account'
       )
     ).toBeVisible();
-    saw('STX-024');
+    saw('STX-024', 'F-006');
     await expect(
       page.getByRole('dialog').filter({ hasText: 'Share this inbox?' })
     ).toHaveCount(0);
     expect(await connectedInboxes(mailbox)).toEqual([mailbox.inbox.email]);
     expect(microsoft.starts.map(({ address }) => address)).toEqual([team]);
+    expect(auth.starts).toEqual([]);
   });
 });
 
