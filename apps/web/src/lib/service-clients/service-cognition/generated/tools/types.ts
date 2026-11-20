@@ -4896,9 +4896,15 @@ export type WebSearchTopic = 'general' | 'news';
  */
 export type ExecutionId = string;
 /**
- * What asking a job to stop did.
+ * What asking a job to stop did, as `{"outcome": ...}`.
  */
-export type JobCancel = 'requested' | 'already_settled';
+export type JobCancel =
+  | {
+      outcome: 'requested';
+    }
+  | {
+      outcome: 'already_settled';
+    };
 /**
  * Available SDK workflow guides.
  */

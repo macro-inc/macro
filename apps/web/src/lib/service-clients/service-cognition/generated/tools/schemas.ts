@@ -20774,7 +20774,10 @@ export const WebSearchResponse = z.object({
 export const CancelJob = z.object({ job_id: z.string() }).strict();
 
 export const JobCancel = z.any().superRefine((x, ctx) => {
-  const schemas = [z.literal('requested'), z.literal('already_settled')];
+  const schemas = [
+    z.object({ outcome: z.literal('requested') }),
+    z.object({ outcome: z.literal('already_settled') }),
+  ];
   const errors = schemas.reduce<z.ZodError[]>(
     (errors, schema) =>
       ((result) => (result.error ? [...errors, result.error] : errors))(

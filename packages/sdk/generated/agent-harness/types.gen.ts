@@ -2160,9 +2160,13 @@ export type IntentScore = {
 };
 
 /**
- * What asking a job to stop did.
+ * What asking a job to stop did, as `{"outcome": ...}`.
  */
-export type JobCancel = 'requested' | 'already_settled';
+export type JobCancel = {
+    outcome: 'requested';
+} | {
+    outcome: 'already_settled';
+};
 
 /**
  * A background job's facts, kept on its execution record.

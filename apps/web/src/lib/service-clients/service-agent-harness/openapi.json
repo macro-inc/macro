@@ -7213,9 +7213,29 @@
         }
       },
       "JobCancel": {
-        "type": "string",
-        "description": "What asking a job to stop did.",
-        "enum": ["requested", "already_settled"]
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["outcome"],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": ["requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["outcome"],
+            "properties": {
+              "outcome": {
+                "type": "string",
+                "enum": ["already_settled"]
+              }
+            }
+          }
+        ],
+        "description": "What asking a job to stop did, as `{\"outcome\": ...}`."
       },
       "JobInfo": {
         "type": "object",

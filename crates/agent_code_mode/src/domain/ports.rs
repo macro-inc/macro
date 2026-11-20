@@ -110,9 +110,9 @@ pub enum JobControl {
     Gone,
 }
 
-/// What asking a job to stop did.
+/// What asking a job to stop did, as `{"outcome": ...}`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, ToSchema)]
-#[serde(rename_all = "snake_case")]
+#[serde(tag = "outcome", rename_all = "snake_case")]
 pub enum JobCancel {
     /// The job will stop within a second or so.
     Requested,

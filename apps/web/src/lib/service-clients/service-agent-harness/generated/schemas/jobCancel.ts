@@ -4,14 +4,10 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { JobCancelOneOf } from './jobCancelOneOf';
+import type { JobCancelOneOfThree } from './jobCancelOneOfThree';
 
 /**
- * What asking a job to stop did.
+ * What asking a job to stop did, as `{"outcome": ...}`.
  */
-export type JobCancel = (typeof JobCancel)[keyof typeof JobCancel];
-
-// eslint-disable-next-line @typescript-eslint/no-redeclare
-export const JobCancel = {
-  requested: 'requested',
-  already_settled: 'already_settled',
-} as const;
+export type JobCancel = JobCancelOneOf | JobCancelOneOfThree;
