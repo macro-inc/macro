@@ -39,16 +39,18 @@ function TeamLogoPreview(props: {
 }) {
   return (
     <span class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-edge-muted bg-page">
+      {/* Keyed, so a late error from a replaced logo marks only that file. */}
       <Show
         when={props.fileId}
+        keyed
         fallback={<PlusIcon class="size-5 text-ink-muted" />}
       >
         {(id) => (
           <img
-            src={staticFileSizedEndpoint(id(), 'small')}
+            src={staticFileSizedEndpoint(id, 'small')}
             alt={t('settingsDock.teamLogoAlt')}
             class="size-10 object-contain"
-            onError={() => props.onError(id())}
+            onError={() => props.onError(id)}
           />
         )}
       </Show>

@@ -25,10 +25,10 @@ export const SidebarRailCreateButton = () => {
   const logoFileId = useCurrentTeamLogoFileId();
   // Keyed by file id, so a new logo gets another chance after a failed load.
   const [failedLogo, setFailedLogo] = createSignal<string>();
-  const logoUrl = () => {
+  const shownLogo = () => {
     const id = logoFileId();
     if (!id || !dockShowsTeamLogo() || failedLogo() === id) return undefined;
-    return staticFileSizedEndpoint(id, 'small');
+    return id;
   };
   return (
     <Button
@@ -50,17 +50,20 @@ export const SidebarRailCreateButton = () => {
         setCreateMenuOpen((open) => !open);
       }}
     >
+      {/* Keyed, so each image reports a failed load for its own file only,
+          never for a logo that replaced it before the error arrived. */}
       <Show
-        when={logoUrl()}
+        when={shownLogo()}
+        keyed
         fallback={<PlusIcon class="size-(--rail-icon-size)" />}
       >
-        {(url) => (
+        {(id) => (
           <img
-            src={url()}
+            src={staticFileSizedEndpoint(id, 'small')}
             alt=""
             draggable={false}
             class="pointer-events-none size-[calc(var(--rail-button-size)-0.5rem)] rounded-md object-contain"
-            onError={() => setFailedLogo(logoFileId())}
+            onError={() => setFailedLogo(id)}
           />
         )}
       </Show>
