@@ -403,6 +403,16 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         email: &str,
     ) -> impl Future<Output = Result<Option<CrmContact>, CrmError>> + Send;
 
+    /// The caller's team's company for `domain`, read like
+    /// [`CrmService::get_company_for_team`] without its contacts. The domain
+    /// is validated and normalized like a created company's. A member gets
+    /// `None` for a hidden company; admins and owners get it.
+    fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> impl Future<Output = Result<Option<CrmCompanyWithContacts>, CrmError>> + Send;
+
     /// Fetch the company addressed by `access`, hydrated with all
     /// domains, the primary domain's directory metadata, and, when
     /// `include_contacts`, the company's full contact list. The receipt's role decides whether a
@@ -1353,6 +1363,19 @@ where
             })
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
+    async fn get_company_by_domain(
+        &self,
+        access: &CrmTeamReceipt<MemberTeamRole>,
+        domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        access.check_access(&self.companies_repository).await?;
+        let domain = normalize_company_domain(domain)?;
+        self.companies_repository
+            .get_company_by_domain_for_team(&access.team_id(), &domain, access.include_hidden())
+            .await
+    }
+
     #[tracing::instrument(skip(self, access), err)]
     async fn get_company_for_team(
         &self,
@@ -1805,6 +1828,14 @@ impl CrmService for NoOpCrmService {
         _limit: u16,
     ) -> Result<Vec<CrmContact>, CrmError> {
         Ok(Vec::new())
+    }
+
+    async fn get_company_by_domain(
+        &self,
+        _access: &CrmTeamReceipt<MemberTeamRole>,
+        _domain: &str,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        Ok(None)
     }
 
     async fn get_contact_by_email(

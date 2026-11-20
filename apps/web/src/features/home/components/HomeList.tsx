@@ -353,6 +353,12 @@ export function HomeList(props: HomeListProps) {
   });
   const [collapseRow, setCollapseRow] =
     createSignal<(rowId: string) => Promise<void>>();
+  const [expandRow, setExpandRow] = createSignal<(rowId: string) => void>();
+  /** The swipe rows showing an entity; rows are keyed by occurrence. */
+  const rowIdsOf = (entityId: string) =>
+    rows().flatMap((row) =>
+      row.kind === 'entity' && row.entity.id === entityId ? [row.id] : []
+    );
 
   const actionState = toEntityActionListState({
     controller: list,
@@ -364,14 +370,14 @@ export function HomeList(props: HomeListProps) {
         if (!collapse) return;
 
         // Actions target entities; swipe rows are keyed by notification occurrence.
-        await Promise.all(
-          rows().flatMap((row) =>
-            row.kind === 'entity' && row.entity.id === entityId
-              ? [collapse(row.id)]
-              : []
-          )
-        );
+        await Promise.all(rowIdsOf(entityId).map((rowId) => collapse(rowId)));
       },
+    },
+    // Own work stays in the feed after a done; its folded row comes back.
+    expand: (entityId) => {
+      const expand = expandRow();
+      if (!expand) return;
+      for (const rowId of rowIdsOf(entityId)) expand(rowId);
     },
     onFocus: (target) => {
       if (target) {
@@ -611,6 +617,7 @@ export function HomeList(props: HomeListProps) {
           <SwipableRowProvider
             container={viewport}
             setCollapseEntity={setCollapseRow}
+            setExpandEntity={setExpandRow}
             canSwipeLeft={(rowId) => {
               const row = swipeRowsById().get(rowId);
               return row ? markDoneActionFor(row) !== undefined : false;
