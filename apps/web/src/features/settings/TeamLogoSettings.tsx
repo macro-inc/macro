@@ -23,11 +23,20 @@ import { SettingsCard, SettingsRow, SettingsSection } from './primitives';
 const TEAM_LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const TEAM_LOGO_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'gif'];
 
-/** The largest logo the backend's static file storage accepts here. */
+/**
+ * The largest logo, checked here before uploading. Matches the profile picture
+ * limit; static file storage itself sets none for this upload.
+ */
 const MAX_TEAM_LOGO_BYTES = 16 * 1000 * 1000;
 
-/** The logo, or + when there is none, at the size the dock shows it. */
-function TeamLogoPreview(props: { fileId: string | undefined }) {
+/**
+ * The logo, or + when there is none or it can't load, at the size the dock
+ * shows it.
+ */
+function TeamLogoPreview(props: {
+  fileId: string | undefined;
+  onError: (fileId: string) => void;
+}) {
   return (
     <span class="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-edge-muted bg-page">
       <Show
@@ -39,6 +48,7 @@ function TeamLogoPreview(props: { fileId: string | undefined }) {
             src={staticFileSizedEndpoint(id(), 'small')}
             alt={t('settingsDock.teamLogoAlt')}
             class="size-10 object-contain"
+            onError={() => props.onError(id())}
           />
         )}
       </Show>
@@ -56,11 +66,17 @@ export function TeamLogoSettings() {
   const isTeamAdmin = useIsTeamAdmin();
   const patchTeam = usePatchTeamMutation();
   const [uploading, setUploading] = createSignal(false);
+  // A logo whose file is gone (deleted, or never finished uploading) falls
+  // back to +, as it does on the dock, and says why.
+  const [failedLogo, setFailedLogo] = createSignal<string>();
 
   // Undefined while the team loads, so nothing claims "no team" too early.
   const team = () => (queryReadyGate(teamQuery) ? teamQuery.data : undefined);
   const hasNoTeam = () => queryReadyGate(teamQuery) && teamQuery.data === null;
-  const logoFileId = () => team()?.team.logo_file_id ?? undefined;
+  const storedLogoFileId = () => team()?.team.logo_file_id ?? undefined;
+  const logoBroken = () =>
+    storedLogoFileId() !== undefined && failedLogo() === storedLogoFileId();
+  const logoFileId = () => (logoBroken() ? undefined : storedLogoFileId());
   const canEdit = () => {
     const current = team();
     return (
@@ -122,12 +138,13 @@ export function TeamLogoSettings() {
 
   const uploadLabel = () => {
     if (uploading()) return t('settingsDock.teamLogoUploading');
-    if (logoFileId()) return t('settingsDock.teamLogoReplace');
+    if (storedLogoFileId()) return t('settingsDock.teamLogoReplace');
     return t('settingsDock.teamLogoUpload');
   };
 
   const logoDescription = () => {
     if (hasNoTeam()) return t('settingsDock.teamLogoNeedsTeam');
+    if (logoBroken()) return t('settingsDock.teamLogoBroken');
     if (team() && !canEdit()) return t('settingsDock.teamLogoAdminsOnly');
     return t('settingsDock.teamLogoDescription');
   };
@@ -148,7 +165,7 @@ export function TeamLogoSettings() {
             description={logoDescription()}
             muted={hasNoTeam()}
           >
-            <TeamLogoPreview fileId={logoFileId()} />
+            <TeamLogoPreview fileId={logoFileId()} onError={setFailedLogo} />
             <Show when={canEdit()}>
               <Button
                 variant="secondary"
@@ -158,7 +175,7 @@ export function TeamLogoSettings() {
               >
                 {uploadLabel()}
               </Button>
-              <Show when={logoFileId()}>
+              <Show when={storedLogoFileId()}>
                 <Button
                   variant="ghost"
                   size="sm"

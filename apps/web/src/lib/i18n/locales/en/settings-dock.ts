@@ -27,6 +27,8 @@ export default {
   teamLogoLabel: 'Logo',
   teamLogoDescription: 'PNG, JPEG, WebP or GIF, up to 16 MB.',
   teamLogoAdminsOnly: 'Only team admins can change the logo.',
+  teamLogoBroken:
+    'The logo couldn’t be loaded, so docks show + instead. Upload it again to fix this.',
   teamLogoNeedsTeam: 'You need to be on a team to set a team logo.',
   teamLogoAlt: 'Team logo',
   teamLogoUpload: 'Upload logo',
