@@ -13,6 +13,20 @@ import type { Generation } from './run';
 
 export type Section = 'routines' | 'feed';
 
+/** The fewest held-out people an aggregate is shown over: fewer would show one person's result. */
+export const MIN_HELDOUT_PEOPLE = 2;
+
+/**
+ * Whether a measure taken over `attempts` is an aggregate: held-out people
+ * count only two or more at a time. Each measure asks of the attempts that
+ * have it (the timed ones, the ones whose list was read), since a run where
+ * two people scored but one was timed would show that one's time.
+ */
+export function aggregate(attempts: Attempt[]): boolean {
+  const heldout = attempts.filter((attempt) => attempt.heldout);
+  return !heldout.length || new Set(heldout.map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+}
+
 export type Score = {
   score: number;
   /** Needs (routines) or planted opportunities (feed) in the answer key. */
@@ -223,10 +237,18 @@ export function summary(attempts: Attempt[]) {
   const done = scored(attempts);
   const wrong: Record<string, number> = {};
   for (const a of done) for (const [k, v] of Object.entries(a.score.wrong)) wrong[k] = (wrong[k] ?? 0) + v;
-  const first = done.map((a) => a.generation.firstMs).filter((v): v is number => v !== undefined);
-  const wall = done.map((a) => a.generation.wallMs).filter((v): v is number => v !== undefined);
-  const last = done.map((a) => a.generation.lastMs).filter((v): v is number => v !== undefined);
+  // Each measure over the attempts that have it, and none (NaN) where those hold fewer held-out people than an aggregate needs.
+  const over = (has: (a: (typeof done)[number]) => number | undefined | null) => {
+    const having = done.filter((a) => has(a) !== undefined && has(a) !== null);
+    return aggregate(having) ? having.map((a) => has(a)!) : [];
+  };
+  const first = over((a) => a.generation.firstMs);
+  const wall = over((a) => a.generation.wallMs);
+  const last = over((a) => a.generation.lastMs);
+  const qualities = over((a) => a.score.quality);
   const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
+  // A list the session never read scores as an empty one, so it can't make another person's list an aggregate.
+  const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread));
   const listErrors = done.filter((a) => a.findingError).length;
   const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
@@ -241,7 +263,7 @@ export function summary(attempts: Attempt[]) {
     bad: avg(done.map((a) => a.score.bad)),
     invented: avg(done.map((a) => a.score.invented)),
     wrongPerRun: Object.fromEntries(Object.entries(wrong).map(([k, v]) => [k, v / Math.max(1, done.length)])),
-    quality: avg(done.flatMap((a) => (a.score.quality === null ? [] : [a.score.quality]))),
+    quality: qualities.length ? avg(qualities) : NaN,
     feedRating: done.some((a) => a.score.feedRating !== undefined) ? avg(done.map((a) => a.score.feedRating ?? 0)) : undefined,
     // Routines runs scored before good suggestions were counted have none of these.
     ...(done.length && done.every((a) => a.score.goodDrafts !== undefined)
@@ -260,14 +282,14 @@ export function summary(attempts: Attempt[]) {
     // Where every judgement failed, `lists` is 0 and the shares are NaN: the report says none could be judged.
     ...(lists.length || listErrors
       ? {
-          finding: {
+          finding: listsShown ? {
             lists: lists.length,
             read: lists.filter((list) => !list.unread).length,
             errors: listErrors,
             found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
             unreal: total((list) => list.unreal) / lists.length,
             listed: total((list) => list.listed) / lists.length,
-          },
+          } : { withheld: new Set(done.filter((a) => a.heldout && a.finding && !a.finding.unread).map((a) => a.persona)).size },
         }
       : {}),
     firstMedianMs: quantile(first, 0.5),
@@ -401,8 +423,9 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
       ? `score moved ${signed(s.delta)}, within the ${s.margin.toFixed(1)} noise margin or an interval that spans 0`
       : `score moved ${signed(s.delta)}, past the ${s.margin.toFixed(1)} margin`;
   const usd = contrast(a, b, (attempt) => attempt.generation.cost.usd);
-  const timed = (attempts: Attempt[]) => attempts.filter((attempt) => attempt.generation.wallMs);
-  const median = (attempts: Attempt[]) => quantile(scored(timed(attempts)).map((attempt) => attempt.generation.wallMs!), 0.5);
+  const timed = (attempts: Attempt[]) => scored(attempts).filter((attempt) => attempt.generation.wallMs);
+  // A side's median shows only over two held-out people's times or more.
+  const median = (attempts: Attempt[]) => (aggregate(timed(attempts)) ? quantile(timed(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
   return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 

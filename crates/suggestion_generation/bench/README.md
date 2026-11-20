@@ -204,7 +204,10 @@ says which people are missing; run the same command again to write just
 those.
 
 Held-out sets live outside the repository and are reported only in
-aggregate. A set written before keys placed every catalog routine (`h2`
+aggregate: `report`, `summary`, `compare` and `noise` show a measure only
+over two held-out people or more who have it (scored in every run set side by
+side; timed, rated, or with a work list read, for those measures), and say
+why where they show none. A set written before keys placed every catalog routine (`h2`
 and earlier) can't be read by the `routines` section: write a new one. Don't open their files while tuning. Each run is recorded in the
 set's ledger; after a baseline and one candidate a set is spent and the bench
 says so: make a new one.

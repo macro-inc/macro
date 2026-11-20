@@ -1,8 +1,7 @@
 // The summary table of one or more runs: one line per run with the score and
 // its parts, then the attempts that went wrong.
 
-import { MIN_HELDOUT_PEOPLE } from './finding';
-import { type Attempt, type RunFile, scored, summary } from './score';
+import { type Attempt, MIN_HELDOUT_PEOPLE, type RunFile, scored, summary } from './score';
 
 /** Why `sides` can't be shown or set side by side: they hold held-out people, and fewer of them scored in every side than an aggregate needs to show no one's result. */
 export function withheldAcross(sides: Attempt[][]): string | undefined {
@@ -31,7 +30,7 @@ export function lines(runs: RunFile[]): string[] {
     }
     const s = summary(run.attempts);
     out.push(
-      `| ${run.section} | ${run.label} | ${run.set} | ${run.commit} | ${s.score.toFixed(1)} (${s.scoreInterval[0].toFixed(1)}–${s.scoreInterval[1].toFixed(1)}) | ${s.found.toFixed(2)} / ${s.needs.toFixed(1)} | ${s.bad.toFixed(2)} | ${s.invented.toFixed(2)} | ${s.suggestions.toFixed(1)} | ${s.quality.toFixed(2)}${s.feedRating !== undefined ? ` (feed ${s.feedRating.toFixed(1)}/10)` : ''} | ${secs(s.firstMedianMs)} | ${secs(s.lastMedianMs)} | ${secs(s.wallMedianMs)} | ${s.usd.toFixed(3)} | ${s.judgeUsd.toFixed(3)} | ${s.scored}/${s.attempts} |`,
+      `| ${run.section} | ${run.label} | ${run.set} | ${run.commit} | ${s.score.toFixed(1)} (${s.scoreInterval[0].toFixed(1)}–${s.scoreInterval[1].toFixed(1)}) | ${s.found.toFixed(2)} / ${s.needs.toFixed(1)} | ${s.bad.toFixed(2)} | ${s.invented.toFixed(2)} | ${s.suggestions.toFixed(1)} | ${Number.isFinite(s.quality) ? s.quality.toFixed(2) : '–'}${s.feedRating !== undefined ? ` (feed ${s.feedRating.toFixed(1)}/10)` : ''} | ${secs(s.firstMedianMs)} | ${secs(s.lastMedianMs)} | ${secs(s.wallMedianMs)} | ${s.usd.toFixed(3)} | ${s.judgeUsd.toFixed(3)} | ${s.scored}/${s.attempts} |`,
     );
   }
   for (const run of runs) {
@@ -44,9 +43,8 @@ export function lines(runs: RunFile[]): string[] {
     out.push('', `${run.section} (${run.label}): wrong per generation: ${wrong || 'none'}; generations not ready: ${s.failedGenerations}; bench errors: ${s.benchErrors}`);
     if (s.goodDrafts !== undefined) {
       const aimed = s.aimed !== undefined ? `; work streams some suggestion acts on ${s.aimed.toFixed(2)} of ${s.workStreams!.toFixed(1)}` : '';
-      // A held-out list score shows only over two people's lists or more, like the row above.
-      const listPeople = new Set(run.attempts.filter((a) => a.heldout && a.finding && !a.benchError).map((a) => a.persona)).size;
-      if (s.finding && run.attempts.some((a) => a.heldout) && listPeople < MIN_HELDOUT_PEOPLE) out.push(`${run.section} (${run.label}): ${listPeople} held-out people's work lists judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown`);
+      // A held-out list score shows only over two people's read lists or more, like the row above.
+      if (s.finding && 'withheld' in s.finding) out.push(`${run.section} (${run.label}): ${s.finding.withheld} held-out people's work lists read and judged, fewer than ${MIN_HELDOUT_PEOPLE}: not shown`);
       else if (s.finding && !s.finding.lists) out.push(`${run.section} (${run.label}): no work list could be judged (${s.finding.errors} failed)`);
       else if (s.finding) {
         const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';

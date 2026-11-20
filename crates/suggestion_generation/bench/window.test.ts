@@ -5,7 +5,7 @@ import { type Generation, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
 import { draftableNeeds, inInbox } from './month';
 import { lines, withheldAcross } from './report';
-import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary } from './score';
+import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, verdict } from './score';
 import { ANCHOR } from './clock';
 
 const HOUR = 60 * 60_000;
@@ -391,15 +391,37 @@ describe('the finding score of a run', () => {
     expect(withheldAcross([[attempt({})], [attempt({ persona: 'other' })]])).toBeUndefined();
   });
 
-  test('shows a held-out list score only over two people\'s lists', () => {
+  test('shows a held-out list score only over two people\'s read lists', () => {
     const heldout = (persona: string, over: Partial<Attempt> = {}) => attempt({ persona, heldout: true, ...over });
     const list = scoreWorkList(keyed(), listOf('a', 'b'), [entry(1, 's1'), entry(2, 's2')]);
+    const unread = scoreWorkList(keyed(), undefined, []);
     const run: RunFile = { section: 'routines', label: 't', set: 'h', commit: 'c', attempts: [heldout('p1', { finding: list }), heldout('p2', { findingError: 'judge' })] } as RunFile;
     const shown = lines([run]).join('\n');
-    expect(shown).toContain("1 held-out people's work lists judged, fewer than 2: not shown");
+    expect(shown).toContain("1 held-out people's work lists read and judged, fewer than 2: not shown");
     expect(shown).not.toContain('named 100%');
+    // An unread list scores as an empty one: beside it, the one read list's entries would show.
+    const beside = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: unread })] }]).join('\n');
+    expect(beside).toContain("1 held-out people's work lists read and judged, fewer than 2: not shown");
+    expect(beside).not.toContain('entries naming none');
     const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
     expect(two).toContain('named 100%');
+  });
+
+  test('shows a held-out time or quality only over two people who have one', () => {
+    const heldout = (persona: string, over: Partial<Attempt> = {}) => attempt({ persona, heldout: true, ...over });
+    const timed = (persona: string, rep = 1) =>
+      heldout(persona, { rep, generation: { ...generation([]), status: 'ready', firstMs: 7000, lastMs: 12000, wallMs: 12000 }, score: { ...failedScore(3), quality: 0.75 } });
+    const one = summary([timed('p1'), heldout('p2')]);
+    expect([one.firstMedianMs, one.lastMedianMs, one.wallMedianMs, one.quality].every(Number.isNaN)).toBe(true);
+    const row = lines([{ section: 'routines', label: 't', set: 'h', commit: 'c', attempts: [timed('p1'), heldout('p2')] } as RunFile]).join('\n');
+    expect(row).not.toContain('7s');
+    expect(row).not.toContain('0.75');
+    expect(summary([timed('p1'), timed('p2'), heldout('p3')])).toMatchObject({ firstMedianMs: 7000, lastMedianMs: 12000, wallMedianMs: 12000, quality: 0.75 });
+    const margins = { score: 1, found: 1, bad: 1 };
+    const side = [timed('p1'), timed('p1', 2), heldout('p2'), heldout('p2', { rep: 2 })];
+    expect(verdict(side, side, margins).wallRatio).toBeNaN();
+    const both = [timed('p1'), timed('p2'), heldout('p1', { rep: 2 })];
+    expect(verdict(both, both, margins).wallRatio).toBe(1);
   });
 });
 

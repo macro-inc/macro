@@ -13,7 +13,7 @@ import type { Stack } from '../../scheduled_action/bench/stack';
 import { type MailStream, type Persona, WINDOW_DAYS, asWritten, truthAt, windowMessages } from './personas';
 import { author, obj, str, strs, write } from './heldout';
 import { CACHE, type Cost, costOf, userId } from './run';
-import { quantile } from './score';
+import { MIN_HELDOUT_PEOPLE, quantile } from './score';
 
 const JUDGE_MODEL = 'anthropic/claude-opus-5-5';
 const AUTHOR = 'author@suggestions-bench.example';
@@ -126,8 +126,6 @@ ${mailText(persona, now)}
 
 export type EntryMark = { n: number; stream: string; also: string[]; why: string };
 
-/** The fewest held-out people an aggregate is shown over: fewer would show one person's result. */
-export const MIN_HELDOUT_PEOPLE = 2;
 const MARKS = obj({ entries: { type: 'array', items: obj({ n: int, stream: str, also: strs, why: str }) } });
 
 const keyText = (streams: MailStream[]) =>
