@@ -201,6 +201,34 @@ type InitConflictBody =
   | InitConflictResponse
   | { code?: undefined; email_address?: string; existing_owner_email?: string };
 
+/** The error a 409 from `init` stands for, or none for a body it doesn't know. */
+function initConflict(
+  body: InitConflictBody | null
+): { code: InitErrorCode; message: string } | undefined {
+  if (
+    body?.code === INBOX_IDENTITY_CONFLICT_CODE ||
+    body?.code === INBOX_CHANGED_CODE
+  ) {
+    return { code: body.code, message: body.message };
+  }
+  // Only a coded conflict offers to share the inbox. A server released
+  // before the codes sends a real conflict's fields with no code.
+  if (
+    body?.code === SHARED_INBOX_CONFLICT_CODE ||
+    (body && body.code === undefined && body.email_address)
+  ) {
+    return {
+      code: SHARED_INBOX_CONFLICT_CODE,
+      // The caller formats the prompt; the fields it needs ride along as JSON.
+      message: JSON.stringify({
+        emailAddress: body.email_address ?? '',
+        existingOwnerEmail: body.existing_owner_email ?? '',
+      }),
+    };
+  }
+  return undefined;
+}
+
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
  * couldn't be fetched/rehosted and would render broken for recipients. The whole
@@ -279,30 +307,10 @@ export const emailClient = {
               'A professional subscription is required to add another inbox',
           };
         if (response.status === 409) {
-          const body = (await response
-            .json()
-            .catch(() => null)) as InitConflictBody | null;
-          if (
-            body?.code === INBOX_IDENTITY_CONFLICT_CODE ||
-            body?.code === INBOX_CHANGED_CODE
-          ) {
-            return { code: body.code, message: body.message };
-          }
-          // Only a coded conflict offers to share the inbox. A server released
-          // before the codes sends a real conflict's fields with no code.
-          if (
-            body?.code === SHARED_INBOX_CONFLICT_CODE ||
-            (body && body.code === undefined && body.email_address)
-          ) {
-            return {
-              code: SHARED_INBOX_CONFLICT_CODE,
-              // The caller formats the prompt; the fields it needs ride along as JSON.
-              message: JSON.stringify({
-                emailAddress: body.email_address ?? '',
-                existingOwnerEmail: body.existing_owner_email ?? '',
-              }),
-            };
-          }
+          const conflict = initConflict(
+            (await response.json().catch(() => null)) as InitConflictBody | null
+          );
+          if (conflict) return conflict;
         }
         if (response.status === 400) {
           const body = (await response.json().catch(() => null)) as {

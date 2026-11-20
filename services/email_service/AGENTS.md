@@ -345,11 +345,16 @@ the gateway `/email` prefix.
   (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
   open with `outbound::link_lock::begin`, a 5 s `lock_timeout`, and a lock
   timeout is `InitializationError::Contended`. `/email/init` answers it 503,
-  never 409: clients read that route's 409 as a sharing conflict to confirm.
+  never 409: web clients released before the coded 409s read any 409 from
+  that route as a sharing conflict to confirm.
   `set_credential_owner` keeps waiting, because it follows the Google grant's
   relocation and a give-up would leave the shared inbox's tokens failing.
   The token-health writes (`email_db_client::links::update::{set,clear}_link_needs_reauth`)
   give up after 5 s too and are written again on the next token fetch.
+- Every 409 from `/email/init` is an `InitConflictResponse` tagged by `code`;
+  clients offer to share the inbox only for `SHARED_INBOX_CONFLICT`, whose
+  fields stay at the top level for those older clients. A new 409 outcome
+  gets its own variant, never a plain-text body.
 - To run against `crates/gmail_emulator` instead of Google, set the
   `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
   Google client sets them itself. Without
