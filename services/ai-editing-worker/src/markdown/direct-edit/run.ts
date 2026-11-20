@@ -20,8 +20,10 @@
  *    number of times with a short random backoff.
  *
  * Block ids a block without a stored id gets are positions (`index-N`); they
- * shift when someone inserts or deletes a block, so an edit naming one is a
- * conflict when the base and current block lists differ.
+ * shift when someone inserts, deletes or moves a block, so an edit naming one
+ * is a conflict when the base and current block lists differ or the block at
+ * that position changed at all. That includes a person typing in it: on such
+ * blocks a concurrent edit is a 409 the caller re-reads after, not a merge.
  *
  * A request with a `baseRevision` is safe to repeat: its AI peer id is derived
  * from the document, the base revision and the batch, so when a retry finds
@@ -210,7 +212,7 @@ const CHANGE_REFUSALS = new Set<RefusalCode>([
  * A refusal found only on the current document, where the batch planned
  * cleanly at the base: the concurrent change caused it, so it is a conflict.
  */
-function asConflict(error: unknown): unknown {
+export function asConflict(error: unknown): unknown {
   if (!(error instanceof EditRefusal) || !CHANGE_REFUSALS.has(error.code))
     return error;
   return new DirectEditConflict(

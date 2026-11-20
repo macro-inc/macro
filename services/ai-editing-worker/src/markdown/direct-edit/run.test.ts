@@ -12,6 +12,7 @@ import {
   SyncedDocument,
 } from './fixtures/build';
 import {
+  asConflict,
   checkPositionalIds,
   DirectEditConflict,
   type DirectEditRequest,
@@ -774,5 +775,15 @@ describe('second review', () => {
     expect(() =>
       checkPositionalIds([{ delete: 'index-0' }], base, reordered)
     ).not.toThrow();
+  });
+
+  it('only refusals a concurrent change can cause become conflicts', () => {
+    expect(asConflict(new EditRefusal('no_match', 'gone', 1))).toBeInstanceOf(
+      DirectEditConflict
+    );
+    for (const code of ['verify_failed', 'too_large'] as const)
+      expect(asConflict(new EditRefusal(code, 'engine'))).toBeInstanceOf(
+        EditRefusal
+      );
   });
 });
