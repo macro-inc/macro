@@ -183,6 +183,9 @@ async function eachAtMost<T>(items: T[], limit: number, work: (item: T) => Promi
 /** Seeds at once: each is a seed CLI process, and the first of a person signs them up. */
 const SEEDING = 3;
 
+/** What an attempt holds until it is judged: in a run that stopped before judging, `rejudge` judges it. */
+const UNJUDGED = 'not judged: the run stopped before judging it; `rejudge` its run file';
+
 /** Run `section` for every chosen persona, `reps` times, and write the run file as it goes. */
 async function runSection(section: Section, values: Record<string, string | undefined>): Promise<string> {
   const spec = SECTIONS[section];
@@ -237,7 +240,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     // once a rep.
     const runNow = Date.now();
     const judged: Promise<void>[] = [];
-    const unjudged: { slot: Persona; attempt: Attempt; done: () => void }[] = [];
+    const unjudged: { slot: Persona; attempt: Attempt; log: () => void }[] = [];
     for (let rep = 1; rep <= reps; rep++) {
       const now = spec.judgeLast ? runNow : Date.now();
       await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
@@ -248,25 +251,45 @@ async function runSection(section: Section, values: Record<string, string | unde
         const generation = await generate(at, slot, spec.variant, spec.trigger, now, base(slot, rep));
         const attempt: Attempt = { section, label: run.label, persona: slot.name, seat: slot.seat, heldout: slot.heldout, rep, generation, judgeUsd: 0 };
         const truth = section === 'routines' ? slot.routinesTruth!.needs : slot.feedTruth!.planted;
-        const done = () => {
+        const record = () => {
           run.attempts.push(attempt);
           save();
+        };
+        const log = () => {
           const s = attempt.score;
           console.log(
-            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, $${generation.cost.usd.toFixed(3)}`}`,
+            `${section} ${slotName(slot)} #${rep}: ${generation.buildFailed ? `build failed (scored 0): ${generation.error}` : attempt.benchError ?? `score ${s!.score.toFixed(0)} (found ${s!.found}/${s!.needs}, bad ${s!.bad}, ${s!.suggestions} suggested), ${generation.status}, ${((generation.wallMs ?? 0) / 1000).toFixed(0)}s, ${generation.cost.usd.toFixed(3)}`}`,
           );
         };
         if (generation.buildFailed) attempt.score = failedScore(truth.length);
         else if (generation.error) attempt.benchError = `generation: ${generation.error}`;
-        else if (spec.judgeLast) return void unjudged.push({ slot, attempt, done });
-        else return void judged.push(judgeAndScore(at, section, slot, attempt).then(done));
-        done();
+        else if (spec.judgeLast) {
+          // In the run file from now on, so a run that stops before judging
+          // keeps its generations for `rejudge`.
+          attempt.benchError = UNJUDGED;
+          record();
+          return void unjudged.push({ slot, attempt, log });
+        } else
+          return void judged.push(
+            judgeAndScore(at, section, slot, attempt).then(() => {
+              record();
+              log();
+            }),
+          );
+        record();
+        log();
       });
     }
     // Each persona's first judgement takes a grader first and writes the prefix the rest read.
     const firsts = unjudged.filter((item, i) => unjudged.findIndex((other) => other.slot.name === item.slot.name) === i);
-    for (const { slot, attempt, done } of [...firsts, ...unjudged.filter((item) => !firsts.includes(item))]) {
-      judged.push(judgeAndScore(at, section, slot, attempt).then(done));
+    for (const { slot, attempt, log } of [...firsts, ...unjudged.filter((item) => !firsts.includes(item))]) {
+      attempt.benchError = undefined;
+      judged.push(
+        judgeAndScore(at, section, slot, attempt).then(() => {
+          save();
+          log();
+        }),
+      );
     }
     await Promise.all(judged);
   });

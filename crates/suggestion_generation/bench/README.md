@@ -147,9 +147,10 @@ once the last rep has generated (see **Seats** below).
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
-sessions' transcripts beside it. `run` starts the stand-in if it isn't up
-and holds the stack while it runs (the drafting eval's lock), so two runs
-never share it.
+sessions' transcripts beside it. A routines attempt is written as soon as it
+has generated, marked not judged until it is, so `rejudge` can judge a run
+that stopped first. `run` starts the stand-in if it isn't up and holds the
+stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
