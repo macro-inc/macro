@@ -413,3 +413,56 @@ async fn removal_waits_for_the_machine_to_stop_the_agent_then_revokes_and_remove
     );
     assert!(service.repository.records().is_empty());
 }
+
+#[tokio::test]
+async fn a_failed_or_rolled_back_install_says_why_and_a_running_one_says_nothing() {
+    use crate::domain::models::InstallProblem;
+    use crate::domain::self_hosting::InstallFailure;
+    let (service, _, _) = self_hosted_service();
+    service.create(receipt(), own(LAPTOP)).await.unwrap();
+    let problem_after = |run_state, failure| {
+        service.installs.update(
+            |_| true,
+            |row| {
+                row.run_state = run_state;
+                row.failure = failure;
+            },
+        );
+        let service = &service;
+        async move {
+            let listed = service.list(receipt()).await.unwrap();
+            listed.agents[0].install_problem
+        }
+    };
+
+    assert_eq!(
+        problem_after(
+            InstallRunState::Failed,
+            Some(InstallFailure::IncompatibleRuntime)
+        )
+        .await,
+        Some(InstallProblem::Failed {
+            reason: InstallFailure::IncompatibleRuntime
+        })
+    );
+    assert_eq!(
+        problem_after(InstallRunState::RolledBack, Some(InstallFailure::CrashLoop)).await,
+        Some(InstallProblem::RolledBack {
+            reason: InstallFailure::CrashLoop
+        })
+    );
+    assert_eq!(problem_after(InstallRunState::Running, None).await, None);
+}
+
+#[test]
+fn an_install_problem_reads_camel_case_on_the_api() {
+    use crate::domain::models::InstallProblem;
+    use crate::domain::self_hosting::InstallFailure;
+    assert_eq!(
+        serde_json::to_value(InstallProblem::RolledBack {
+            reason: InstallFailure::BadConfiguration
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "rolledBack", "reason": "badConfiguration"})
+    );
+}

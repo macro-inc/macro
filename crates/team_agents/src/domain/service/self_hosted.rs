@@ -2,6 +2,8 @@
 //! move, removal and credential issuance for installs.
 
 use super::*;
+use crate::domain::models::InstallProblem;
+use crate::domain::self_hosting::InstallRunState;
 
 /// An issuance step failed; the cause is logged, never returned.
 fn issuance_failed(step: &'static str) -> impl FnOnce(TeamAgentError) -> AgentEnrollmentError {
@@ -117,6 +119,7 @@ where
             computer_id: None,
             harness_id: Some(harness),
             status: TeamAgentStatus::Provisioning,
+            install_problem: None,
             created_at: chrono::Utc::now(),
         })
     }
@@ -143,6 +146,7 @@ where
             computer_id: None,
             harness_id: Some(install.harness_id),
             status,
+            install_problem: install_problem(install),
             created_at: record.created_at,
         }
     }
@@ -420,5 +424,19 @@ where
             image,
             env,
         }))
+    }
+}
+
+/// What went wrong with `install`'s current generation, as the machine said.
+/// Nothing during a move or removal: what the old machine said no longer
+/// describes where the agent is going.
+fn install_problem(install: &TeammateInstallRecord) -> Option<InstallProblem> {
+    if install.checkpoint.is_some() {
+        return None;
+    }
+    match (install.run_state, install.failure) {
+        (InstallRunState::Failed, Some(reason)) => Some(InstallProblem::Failed { reason }),
+        (InstallRunState::RolledBack, Some(reason)) => Some(InstallProblem::RolledBack { reason }),
+        _ => None,
     }
 }

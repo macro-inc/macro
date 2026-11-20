@@ -594,6 +594,7 @@ where
             computer_id,
             harness_id: None,
             status,
+            install_problem: None,
             created_at: record.created_at,
         })
     }
@@ -702,6 +703,7 @@ where
             computer_id: Some(computer_id),
             harness_id: None,
             status: TeamAgentStatus::Provisioning,
+            install_problem: None,
             created_at: chrono::Utc::now(),
         })
     }

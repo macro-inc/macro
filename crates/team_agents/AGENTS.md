@@ -105,7 +105,10 @@ as above and a `team_agent_installs` row (generation 1) instead of a
 purchase, and tells agent_harness_service (`TeammateRuntimes`, internal
 `POST /internal/teammates/{harness}/changed`). `GET /team_agents/hosts` lists
 the admin's machines with eligibility. Status comes from the install's
-`run_state` (`downloading` is new) and `first_online_at`.
+`run_state` (`downloading` is new) and `first_online_at`; a `failed` or
+`rolled_back` install also answers `installProblem` (`{kind: failed |
+rolledBack, reason}`, the machine's `InstallFailure`), absent during a move or
+removal.
 
 Delivery is counted: the replica holding the machine's socket asks
 `POST /internal/team_agent_install/{harness}/{install}` with what the runtime

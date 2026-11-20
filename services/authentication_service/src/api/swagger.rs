@@ -399,6 +399,8 @@ use model::user::{
                         team_agents::domain::avatar::AgentAvatar,
                         model::user::AvatarFace,
                         team_agents::domain::models::InviteComputer,
+                        team_agents::domain::models::InstallProblem,
+                        team_agents::domain::self_hosting::InstallFailure,
                         team_agents::domain::self_hosting::TeammateHosts,
                         team_agents::domain::self_hosting::TeammateHost,
                         team_agents::domain::self_hosting::HostReport,

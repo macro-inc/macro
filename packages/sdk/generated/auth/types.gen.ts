@@ -1556,6 +1556,29 @@ export type InitOutlookLinkResponse = {
 };
 
 /**
+ * Why a machine gave up on an install's generation. Stored snake_case;
+ * camelCase on the API.
+ */
+export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported';
+
+/**
+ * What went wrong with an agent on its owner's own machine.
+ */
+export type InstallProblem = {
+    kind: 'failed';
+    /**
+     * Why.
+     */
+    reason: InstallFailure;
+} | {
+    kind: 'rolledBack';
+    /**
+     * Why.
+     */
+    reason: InstallFailure;
+};
+
+/**
  * Where an invited agent runs.
  */
 export type InviteComputer = {
@@ -2603,6 +2626,7 @@ export type TeamAgent = {
      */
     createdBy?: string | null;
     harnessId?: null | HarnessId;
+    installProblem?: null | InstallProblem;
     /**
      * What the agent is responsible for.
      */

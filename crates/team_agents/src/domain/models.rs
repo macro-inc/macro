@@ -13,7 +13,7 @@ pub use hosted_runtimes::domain::ids::ComputerId;
 pub use hosted_runtimes::domain::models::PurchaseKey;
 pub use hosted_runtimes::domain::size::ComputerSize;
 
-use super::self_hosting::{HostEligibility, InstallRunState};
+use super::self_hosting::{HostEligibility, InstallFailure, InstallRunState};
 
 /// Longest agent name, in characters.
 pub const MAX_NAME_CHARS: usize = 64;
@@ -79,8 +79,31 @@ pub struct TeamAgent {
     pub harness_id: Option<HarnessId>,
     /// Where the agent is.
     pub status: TeamAgentStatus,
+    /// What went wrong on the owner's own machine, when the machine gave up
+    /// on the agent or rolled it back to the version it ran before. Absent
+    /// otherwise, and for an agent on a Macro computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub install_problem: Option<InstallProblem>,
     /// When the agent was invited.
     pub created_at: DateTime<Utc>,
+}
+
+/// What went wrong with an agent on its owner's own machine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum InstallProblem {
+    /// The machine gave up on the agent's latest version; it doesn't run.
+    Failed {
+        /// Why.
+        reason: InstallFailure,
+    },
+    /// The latest version kept failing, so the machine runs the version the
+    /// agent ran before.
+    RolledBack {
+        /// Why.
+        reason: InstallFailure,
+    },
 }
 
 /// A team's agents.

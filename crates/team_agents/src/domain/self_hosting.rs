@@ -186,8 +186,21 @@ pub enum InstallRunState {
     Failed,
 }
 
-/// Why a machine gave up on an install's generation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::AsRefStr, strum::EnumString)]
+/// Why a machine gave up on an install's generation. Stored snake_case;
+/// camelCase on the API.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    strum::AsRefStr,
+    strum::EnumString,
+)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
 pub enum InstallFailure {
     /// The image could not be fetched.

@@ -7,6 +7,7 @@
 import type { TeamAgentComputerId } from './teamAgentComputerId';
 import type { TeamAgentCreatedBy } from './teamAgentCreatedBy';
 import type { TeamAgentHarnessId } from './teamAgentHarnessId';
+import type { TeamAgentInstallProblem } from './teamAgentInstallProblem';
 import type { TeamAgentStatus } from './teamAgentStatus';
 
 /**
@@ -21,6 +22,7 @@ export interface TeamAgent {
   /** Admin who invited the agent. */
   createdBy?: TeamAgentCreatedBy;
   harnessId?: TeamAgentHarnessId;
+  installProblem?: TeamAgentInstallProblem;
   /** What the agent is responsible for. */
   jobDescription: string;
   /** Display name. */
