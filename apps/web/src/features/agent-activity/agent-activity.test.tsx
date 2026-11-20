@@ -275,7 +275,7 @@ it('replaces a live code step with observed SDK operations and preserves uncerta
     </QueryClientProvider>
   ));
   const message = reply([
-    { id: 'code-1', label: 'Execute code', status: 'running' },
+    { id: 'code-1', label: 'Execute code', detail: null, status: 'running' },
   ]);
   message.parts = [
     { kind: 'text', text: 'Checking' },
