@@ -65,18 +65,18 @@ fn the_catalog_sells_todays_tiers_unchanged() {
 fn each_tiers_written_disks_and_units_match_what_the_fleet_derives() {
     for spec in SIZE_SPECS {
         let resources = spec.resources();
-        assert_eq!(spec.units, resources.units(), "{}", spec.id);
+        assert_eq!(spec.units, resources.units(), "{}", spec.id.as_str());
         assert_eq!(
             spec.root_disk_gib.get(),
             crate::domain::image::ROOT_DISK_GIB,
             "{}",
-            spec.id
+            spec.id.as_str()
         );
         assert_eq!(
             crate::domain::image::data_disk_gib(resources),
             Some(spec.home_disk_gib.get()),
             "{}",
-            spec.id
+            spec.id.as_str()
         );
     }
 }
@@ -85,11 +85,33 @@ fn each_tiers_written_disks_and_units_match_what_the_fleet_derives() {
 fn every_size_has_exactly_one_spec_in_catalog_order() {
     let sizes: Vec<ComputerSize> = SIZE_SPECS.iter().map(|spec| spec.size).collect();
     assert_eq!(sizes, ComputerSize::ALL);
-    for spec in SIZE_SPECS {
+}
+
+#[test]
+fn catalog_entry_ids_are_label_at_version() {
+    for valid in ["standard@2026-11", "large-2@2026.11-a", "a@1"] {
+        assert!(CatalogEntryId::try_new(valid.to_owned()).is_ok(), "{valid}");
+        assert_eq!(CatalogEntryId::from_static(valid).as_str(), valid);
+    }
+    for invalid in [
+        "",
+        "standard",
+        "@2026-11",
+        "standard@",
+        "std@2026@11",
+        "st d@1",
+        "std@1/2",
+        "std.x@1",
+    ] {
         assert!(
-            CatalogEntryId::try_new(spec.id.to_owned()).is_ok(),
-            "{}",
-            spec.id
+            CatalogEntryId::try_new(invalid.to_owned()).is_err(),
+            "{invalid}"
         );
     }
+}
+
+#[test]
+#[should_panic(expected = "catalog entry must be a label@version identity")]
+fn a_malformed_literal_identity_is_refused() {
+    let _ = CatalogEntryId::from_static(std::hint::black_box("standard"));
 }

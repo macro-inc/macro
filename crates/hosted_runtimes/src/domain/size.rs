@@ -1,5 +1,7 @@
 //! The explicit computer size catalog. Hosts count capacity in units.
 
+use std::borrow::Cow;
+
 use serde::{Deserialize, Serialize};
 
 /// A size a team can buy.
@@ -87,10 +89,10 @@ pub struct CatalogEntry {
 /// root and `/home` disks and the capacity units must agree with what the
 /// fleet derives from a recorded purchase ([`ComputerResources::units`],
 /// [`crate::domain::image::data_disk_gib`]); the size tests check that.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SizeSpec {
-    /// Versioned catalog identity recorded at purchase, `label@version`.
-    pub id: &'static str,
+    /// Versioned catalog identity recorded at purchase.
+    pub id: CatalogEntryId,
     /// The tier.
     pub size: ComputerSize,
     /// Virtual CPU count.
@@ -108,7 +110,7 @@ pub struct SizeSpec {
 /// The tiers offered for new purchases; existing rows retain their snapshot.
 pub const SIZE_SPECS: [SizeSpec; 3] = [
     SizeSpec {
-        id: "standard@2026-11",
+        id: CatalogEntryId::from_static("standard@2026-11"),
         size: ComputerSize::Standard,
         vcpus: Vcpus::new(4),
         memory_gib: MemoryGib::new(8),
@@ -117,7 +119,7 @@ pub const SIZE_SPECS: [SizeSpec; 3] = [
         units: 1,
     },
     SizeSpec {
-        id: "large@2026-11",
+        id: CatalogEntryId::from_static("large@2026-11"),
         size: ComputerSize::Large,
         vcpus: Vcpus::new(8),
         memory_gib: MemoryGib::new(16),
@@ -126,7 +128,7 @@ pub const SIZE_SPECS: [SizeSpec; 3] = [
         units: 2,
     },
     SizeSpec {
-        id: "xl@2026-11",
+        id: CatalogEntryId::from_static("xl@2026-11"),
         size: ComputerSize::Xl,
         vcpus: Vcpus::new(16),
         memory_gib: MemoryGib::new(32),
@@ -149,7 +151,7 @@ impl SizeSpec {
     /// The purchase offer for this tier.
     pub fn catalog_entry(&self) -> CatalogEntry {
         CatalogEntry {
-            id: CatalogEntryId(self.id.to_owned()),
+            id: self.id.clone(),
             size: self.size,
             resources: self.resources(),
         }
@@ -217,34 +219,59 @@ impl DiskGib {
     }
 }
 
-/// The versioned identity recorded at purchase.
+/// The versioned identity recorded at purchase, `label@version`: the label
+/// ASCII alphanumerics and `-`, the version those and `.`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "inbound", schema(value_type = String))]
 #[serde(transparent)]
-pub struct CatalogEntryId(String);
+pub struct CatalogEntryId(Cow<'static, str>);
 impl CatalogEntryId {
     /// Validate a versioned catalog entry identity.
     pub fn try_new(value: String) -> Result<Self, InvalidCatalogEntryId> {
-        let Some((label, version)) = value.split_once('@') else {
-            return Err(InvalidCatalogEntryId);
-        };
-        if label.is_empty()
-            || version.is_empty()
-            || !label
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-            || !version
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.'))
-        {
-            return Err(InvalidCatalogEntryId);
+        if is_catalog_entry_id(value.as_bytes()) {
+            Ok(Self(Cow::Owned(value)))
+        } else {
+            Err(InvalidCatalogEntryId)
         }
-        Ok(Self(value))
+    }
+    /// A literal identity, checked when the constant using it is evaluated:
+    /// an invalid literal in a `const` fails the build.
+    pub const fn from_static(value: &'static str) -> Self {
+        assert!(
+            is_catalog_entry_id(value.as_bytes()),
+            "catalog entry must be a label@version identity"
+        );
+        Self(Cow::Borrowed(value))
     }
     /// Borrow the validated catalog entry identity.
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+/// Whether `bytes` is `label@version` with a non-empty label of ASCII
+/// alphanumerics and `-` and a non-empty version of those and `.`.
+const fn is_catalog_entry_id(bytes: &[u8]) -> bool {
+    let mut index = 0;
+    while index < bytes.len() && bytes[index] != b'@' {
+        if !(bytes[index].is_ascii_alphanumeric() || bytes[index] == b'-') {
+            return false;
+        }
+        index += 1;
+    }
+    if index == 0 || index + 1 >= bytes.len() {
+        return false;
+    }
+    index += 1;
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if !(byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'.') {
+            return false;
+        }
+        index += 1;
+    }
+    true
 }
 
 /// A catalog identity must include a label and version separated by `@`.
