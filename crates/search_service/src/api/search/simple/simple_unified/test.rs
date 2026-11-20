@@ -1173,6 +1173,19 @@ async fn a_malformed_search_fails_at_once_while_its_callers_lane_is_full() {
         "{refused:?}"
     );
     assert_eq!(started.elapsed(), std::time::Duration::ZERO);
+
+    let mut crm_filtered = search_request("quarterly plan");
+    crm_filtered.filters.email_filters.crm_domains = vec!["example.com".to_string()];
+    let refused =
+        perform_unified_search(&ctx, &agent_of_caller(), None, no_paging(), crm_filtered).await;
+    assert!(
+        matches!(
+            refused,
+            Err(SearchError::UnsupportedEmailFilter("crm_domains"))
+        ),
+        "{refused:?}"
+    );
+    assert_eq!(started.elapsed(), std::time::Duration::ZERO);
 }
 
 /// A search records on its span which lane it waited in, how long, and how

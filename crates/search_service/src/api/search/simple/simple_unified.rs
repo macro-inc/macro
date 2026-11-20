@@ -1,5 +1,6 @@
 use crate::api::search::simple::filter::{
     EmailSearch, FilterVariantToSearchArgs, ScopedCalendarEventFilters, email_search,
+    reject_unsupported_email_filters,
 };
 use crate::domain::email_search::ThreadStates;
 use crate::domain::search_lanes::{LaneTurn, SearchCaller, SearchLanes};
@@ -555,10 +556,11 @@ async fn search_unified_sources(
             uuid::Uuid::parse_str(id).map_err(|_| SearchError::InvalidAgentSessionId(id.clone()))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    reject_unsupported_email_filters(&search_filters.email_filters)?;
 
-    // The request is valid as far as it can be told without reading anything,
-    // so it waits for its caller's turn only now: a malformed one fails at
-    // once instead of waiting behind the caller's other searches.
+    // Checks that read nothing have passed, so the search waits for its
+    // caller's turn only now: a malformed request fails at once instead of
+    // waiting behind the caller's other searches.
     let _turn = take_search_turn(&ctx.search_lanes, caller).await?;
     let agent_sessions = ctx
         .agent_session_search()
