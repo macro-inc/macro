@@ -375,6 +375,58 @@ describe('useChannelParticipantsQuery', () => {
     expect(ids()).toEqual(['owner']);
   });
 
+  it('rereads REST after a write that a read already in flight predates', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    let answerFirst!: (value: unknown) => void;
+    storage.getChannelParticipants
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          answerFirst = resolve;
+        })
+      )
+      .mockResolvedValue(
+        ok([
+          restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+          restRow('new', '2026-01-03T00:00:00Z'),
+        ])
+      );
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+    missChannel();
+    await vi.waitFor(() =>
+      expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1)
+    );
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+    await vi.waitFor(() => expect(add.isSuccess).toBe(true));
+    // The first read answers with the roster from before the add.
+    answerFirst(ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')]));
+    await vi.waitFor(() =>
+      expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2)
+    );
+    await vi.advanceTimersByTimeAsync(31_000);
+
+    expect(ids()).toEqual(['owner', 'new']);
+  });
+
+  it('finishes a write without waiting for the REST reread', async () => {
+    storage.getChannelParticipants
+      .mockResolvedValueOnce(
+        ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+      )
+      .mockReturnValue(new Promise(() => undefined));
+    storage.addParticipantsToChannel.mockResolvedValue(ok({}));
+    const { add, ids } = mount();
+    missChannel();
+    await waitFor(() => expect(ids()).toEqual(['owner']));
+
+    add.mutate({ channelId: 'channel-1', participants: ['new'] });
+
+    await waitFor(() => expect(add.isSuccess).toBe(true));
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(2);
+    expect(ids()).toEqual(['owner', 'new']);
+  });
+
   it('matches REST rows to the channel whatever the id letter case', async () => {
     storage.getChannelParticipants.mockResolvedValue(
       ok([

@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -77,15 +78,25 @@ async function refreshChannelDetail(query: QueryRevalidation) {
 /**
  * A reader showing REST rows (a channel the soup read leaves out, or a failed
  * read) gets no soup update for an add or remove, so it reads REST again once
- * the change succeeds rather than lose it when its overlay expires.
+ * the change succeeds rather than lose it when its overlay expires. The write
+ * does not wait for that read.
  */
 function rereadFallbackParticipants(
   _response: MessageResponse,
   { channelId }: ChannelParticipantsMutationVariables
 ) {
-  return queryClient.invalidateQueries({
-    queryKey: channelKeys.participantsFallback(channelId).queryKey,
-  });
+  fireAndForget(
+    rereadParticipantsFromRest(channelId),
+    'channel participants REST reread'
+  );
+}
+
+async function rereadParticipantsFromRest(channelId: string) {
+  const { queryKey } = channelKeys.participantsFallback(channelId);
+  // A read started before the write answers with the roster before it, and a
+  // first read with nothing cached yet would be joined rather than restarted.
+  await queryClient.cancelQueries({ queryKey });
+  await queryClient.invalidateQueries({ queryKey });
 }
 
 // Readers show these mutations over the channel's participants while they are
