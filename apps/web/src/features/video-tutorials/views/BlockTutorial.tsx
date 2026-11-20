@@ -1,4 +1,3 @@
-import { useIsHostedNavigation } from '@app/components/view-shell';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Match, Show, Switch } from 'solid-js';
 import { TUTORIALS, type Tutorial } from '../catalog';
@@ -143,10 +142,8 @@ export function TutorialSidebarItem(props: {
   tutorial: TutorialId;
   named?: boolean;
 }) {
-  // The single sidebar holds navigation only.
-  const hosted = useIsHostedNavigation();
   return (
-    <Show when={!hosted() && availableTutorial(props.tutorial)}>
+    <Show when={availableTutorial(props.tutorial)}>
       {(tutorial) => (
         <Entry tutorial={tutorial()} variant="sidebar" named={props.named} />
       )}

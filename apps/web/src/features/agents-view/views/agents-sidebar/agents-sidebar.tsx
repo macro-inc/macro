@@ -1,7 +1,6 @@
 import { createListController } from '@app/components/list';
 import {
   CollapsibleSection,
-  useIsHostedNavigation,
   useViewControlHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
@@ -67,12 +66,8 @@ export type DesktopAgentsSidebarProps = ConversationFiltersProps & {
   actions: ConversationActions;
 };
 
-/** How many recent conversations Agents lists in the single sidebar. */
-const HOSTED_RECENT_LIMIT = 10;
-
 export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
-  const hosted = useIsHostedNavigation();
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
@@ -126,8 +121,7 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
     enabled: panel.isPanelActive,
     search: {
       description: t('agentWork.searchAgentChats'),
-      // The single sidebar's list has no search field to open.
-      condition: () => !hosted() && props.activePage !== 'routines',
+      condition: () => props.activePage !== 'routines',
       run: () => {
         changeSearchOpen(true);
         return true;
@@ -154,16 +148,6 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
       )}
     </Key>
   );
-  // In the single sidebar Agents is a short list of recent conversations:
-  // waiting ones, then open pull requests, then the rest.
-  const recent = () => {
-    const waiting = listState.waiting().slice(0, HOSTED_RECENT_LIMIT);
-    const rest = [...openPullRequests(), ...listState.conversations()].slice(
-      0,
-      HOSTED_RECENT_LIMIT - waiting.length
-    );
-    return { waiting, rest };
-  };
   const emptyText = () => {
     if (props.search.trim())
       return t('agentWork.noSearchMatches', { query: props.search.trim() });
@@ -173,173 +157,140 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
 
   return (
     <MaybeSoupEntityActionDrawerManager>
-      <Show
-        when={!hosted()}
-        fallback={
-          <AgentsSidebarRoot
-            activePage={props.activePage}
-            onOpenPage={props.onOpenPage}
-          >
-            <ViewSidebar.Content class="gap-0 py-1">
+      <AgentsSidebarRoot
+        activePage={props.activePage}
+        onOpenPage={props.onOpenPage}
+      >
+        <AgentsSidebarHeader
+          search={props.search}
+          searchOpen={searchOpen() || !!props.search}
+          onSearchChange={props.onSearchChange}
+          onSearchOpenChange={changeSearchOpen}
+          inputRef={(input) => {
+            searchInput = input;
+          }}
+        />
+        <ViewSidebar.Primary>
+          <AgentCreateMenu
+            onCreate={props.onCreateAgent}
+            onRoutine={props.onCreateRoutine}
+            onConversation={() => props.onOpenPage('new')}
+          />
+        </ViewSidebar.Primary>
+        <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
+          <Show when={listState.waiting().length > 0}>
+            <section
+              class="flex min-h-0 max-h-[40%] shrink-0 flex-col"
+              aria-label={t('agentWork.waitingOnYou')}
+            >
+              <ConversationSectionHeading
+                title={t('agentWork.waitingOnYou')}
+                count={listState.waiting().length}
+                icon={<SessionStatusGlyph state="waiting" />}
+              />
               <ViewSidebar.Nav
-                aria-label={t('agentWork.conversations')}
-                aria-busy={props.loading}
+                class="min-h-0 overflow-auto"
+                onScroll={onScroll}
               >
-                {renderRows(recent().waiting, true)}
-                {renderRows(recent().rest)}
+                {renderRows(listState.waiting(), true)}
+              </ViewSidebar.Nav>
+            </section>
+          </Show>
+          <Show when={openPullRequests().length > 0}>
+            <CollapsibleSection.Root
+              open={openPullRequestsOpen()}
+              onOpenChange={setOpenPullRequestsOpen}
+              class={cn(
+                'flex min-h-0 flex-col',
+                openPullRequestsOpen() ? 'max-h-[40%]' : 'shrink-0'
+              )}
+            >
+              <CollapsibleSection.Header>
+                <CollapsibleSection.Trigger>
+                  <span>{t('agentWork.openPullRequests')}</span>
+                  <span class="text-ink-extra-muted tabular-nums">
+                    {openPullRequests().length}
+                  </span>
+                  <CollapsibleSection.Indicator />
+                </CollapsibleSection.Trigger>
+              </CollapsibleSection.Header>
+              <CollapsibleSection.Content class="flex min-h-0 flex-col">
+                <ViewSidebar.Nav
+                  class="min-h-0 overflow-auto"
+                  aria-label={t('agentWork.openPullRequestsLabel')}
+                  onScroll={onScroll}
+                >
+                  {renderRows(openPullRequests())}
+                </ViewSidebar.Nav>
+              </CollapsibleSection.Content>
+            </CollapsibleSection.Root>
+          </Show>
+          <CollapsibleSection.Root
+            open={conversationsOpen()}
+            onOpenChange={setConversationsOpen}
+            class={cn(
+              'flex min-h-0 flex-col',
+              conversationsOpen() ? 'flex-1' : 'shrink-0'
+            )}
+          >
+            <CollapsibleSection.Header>
+              <CollapsibleSection.Trigger class="flex-1">
+                <span>{t('agentWork.conversations')}</span>
+                <CollapsibleSection.Indicator />
+              </CollapsibleSection.Trigger>
+              <div class="flex shrink-0 items-center gap-0.5 pr-1">
+                <ConversationSortControl
+                  value={props.sort}
+                  onChange={props.onSortChange}
+                />
+                <ConversationFiltersControl
+                  filters={props.filters}
+                  onFilterChange={props.onFilterChange}
+                  onClearFilters={props.onClearFilters}
+                  showUnlistedRuns={props.showUnlistedRuns}
+                  onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
+                />
+              </div>
+            </CollapsibleSection.Header>
+            <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
+              <ViewSidebar.Nav
+                class="min-h-0 flex-1 shrink overflow-auto"
+                aria-label={t('agentWork.conversations')}
+                aria-busy={props.loading || props.loadingNextPage}
+                onScroll={onScroll}
+              >
+                {renderRows(listState.conversations())}
                 <Show when={props.loading && visibleCount() === 0}>
-                  <ConversationSkeleton rows={3} />
+                  <ConversationSkeleton />
                 </Show>
                 <Show when={props.error}>
                   <Button variant="ghost" size="sm" onClick={props.onRetry}>
                     {t('agentWork.retryLoading')}
                   </Button>
                 </Show>
-              </ViewSidebar.Nav>
-            </ViewSidebar.Content>
-            <AgentsSidebarFooter />
-          </AgentsSidebarRoot>
-        }
-      >
-        <AgentsSidebarRoot
-          activePage={props.activePage}
-          onOpenPage={props.onOpenPage}
-        >
-          <AgentsSidebarHeader
-            search={props.search}
-            searchOpen={searchOpen() || !!props.search}
-            onSearchChange={props.onSearchChange}
-            onSearchOpenChange={changeSearchOpen}
-            inputRef={(input) => {
-              searchInput = input;
-            }}
-          />
-          <ViewSidebar.Primary>
-            <AgentCreateMenu
-              onCreate={props.onCreateAgent}
-              onRoutine={props.onCreateRoutine}
-              onConversation={() => props.onOpenPage('new')}
-            />
-          </ViewSidebar.Primary>
-          <ViewSidebar.Content class="gap-2 overflow-hidden pt-2">
-            <Show when={listState.waiting().length > 0}>
-              <section
-                class="flex min-h-0 max-h-[40%] shrink-0 flex-col"
-                aria-label={t('agentWork.waitingOnYou')}
-              >
-                <ConversationSectionHeading
-                  title={t('agentWork.waitingOnYou')}
-                  count={listState.waiting().length}
-                  icon={<SessionStatusGlyph state="waiting" />}
-                />
-                <ViewSidebar.Nav
-                  class="min-h-0 overflow-auto"
-                  onScroll={onScroll}
+                <Show
+                  when={!props.loading && !props.error && visibleCount() === 0}
                 >
-                  {renderRows(listState.waiting(), true)}
-                </ViewSidebar.Nav>
-              </section>
-            </Show>
-            <Show when={openPullRequests().length > 0}>
-              <CollapsibleSection.Root
-                open={openPullRequestsOpen()}
-                onOpenChange={setOpenPullRequestsOpen}
-                class={cn(
-                  'flex min-h-0 flex-col',
-                  openPullRequestsOpen() ? 'max-h-[40%]' : 'shrink-0'
-                )}
-              >
-                <CollapsibleSection.Header>
-                  <CollapsibleSection.Trigger>
-                    <span>{t('agentWork.openPullRequests')}</span>
-                    <span class="text-ink-extra-muted tabular-nums">
-                      {openPullRequests().length}
-                    </span>
-                    <CollapsibleSection.Indicator />
-                  </CollapsibleSection.Trigger>
-                </CollapsibleSection.Header>
-                <CollapsibleSection.Content class="flex min-h-0 flex-col">
-                  <ViewSidebar.Nav
-                    class="min-h-0 overflow-auto"
-                    aria-label={t('agentWork.openPullRequestsLabel')}
-                    onScroll={onScroll}
-                  >
-                    {renderRows(openPullRequests())}
-                  </ViewSidebar.Nav>
-                </CollapsibleSection.Content>
-              </CollapsibleSection.Root>
-            </Show>
-            <CollapsibleSection.Root
-              open={conversationsOpen()}
-              onOpenChange={setConversationsOpen}
-              class={cn(
-                'flex min-h-0 flex-col',
-                conversationsOpen() ? 'flex-1' : 'shrink-0'
-              )}
-            >
-              <CollapsibleSection.Header>
-                <CollapsibleSection.Trigger class="flex-1">
-                  <span>{t('agentWork.conversations')}</span>
-                  <CollapsibleSection.Indicator />
-                </CollapsibleSection.Trigger>
-                <div class="flex shrink-0 items-center gap-0.5 pr-1">
-                  <ConversationSortControl
-                    value={props.sort}
-                    onChange={props.onSortChange}
-                  />
-                  <ConversationFiltersControl
-                    filters={props.filters}
-                    onFilterChange={props.onFilterChange}
-                    onClearFilters={props.onClearFilters}
-                    showUnlistedRuns={props.showUnlistedRuns}
-                    onShowUnlistedRunsChange={props.onShowUnlistedRunsChange}
-                  />
-                </div>
-              </CollapsibleSection.Header>
-              <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col">
-                <ViewSidebar.Nav
-                  class="min-h-0 flex-1 shrink overflow-auto"
-                  aria-label={t('agentWork.conversations')}
-                  aria-busy={props.loading || props.loadingNextPage}
-                  onScroll={onScroll}
-                >
-                  {renderRows(listState.conversations())}
-                  <Show when={props.loading && visibleCount() === 0}>
-                    <ConversationSkeleton />
-                  </Show>
-                  <Show when={props.error}>
-                    <Button variant="ghost" size="sm" onClick={props.onRetry}>
-                      {t('agentWork.retryLoading')}
+                  <p class="px-2 py-2 text-xs text-ink-muted">{emptyText()}</p>
+                  <Show when={activeFilterCount(props.filters) > 0}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={props.onClearFilters}
+                    >
+                      {t('viewMenus.clearFilters')}
                     </Button>
                   </Show>
-                  <Show
-                    when={
-                      !props.loading && !props.error && visibleCount() === 0
-                    }
-                  >
-                    <p class="px-2 py-2 text-xs text-ink-muted">
-                      {emptyText()}
-                    </p>
-                    <Show when={activeFilterCount(props.filters) > 0}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={props.onClearFilters}
-                      >
-                        {t('viewMenus.clearFilters')}
-                      </Button>
-                    </Show>
-                  </Show>
-                  <Show when={props.loadingNextPage}>
-                    <ConversationSkeleton rows={3} />
-                  </Show>
-                </ViewSidebar.Nav>
-              </CollapsibleSection.Content>
-            </CollapsibleSection.Root>
-          </ViewSidebar.Content>
-          <AgentsSidebarFooter />
-        </AgentsSidebarRoot>
-      </Show>
+                </Show>
+                <Show when={props.loadingNextPage}>
+                  <ConversationSkeleton rows={3} />
+                </Show>
+              </ViewSidebar.Nav>
+            </CollapsibleSection.Content>
+          </CollapsibleSection.Root>
+        </ViewSidebar.Content>
+        <AgentsSidebarFooter />
+      </AgentsSidebarRoot>
     </MaybeSoupEntityActionDrawerManager>
   );
 }

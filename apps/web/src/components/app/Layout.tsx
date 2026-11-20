@@ -1,8 +1,4 @@
 import { ViewSwitcherContext } from '@app/components/view-shell';
-import {
-  type NavigationHost,
-  NavigationHostContext,
-} from '@app/components/view-shell/navigation-host';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import Banner from '@app/features/auth/banner/Banner';
 import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
@@ -35,7 +31,6 @@ import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/Nativ
 import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
 import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -57,8 +52,7 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { attachGlobalDOMScope, registerHotkey } from '@core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
+import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -77,7 +71,6 @@ import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
-  createSignal,
   Match,
   onCleanup,
   onMount,
@@ -293,29 +286,11 @@ export function AppChrome(props: ParentProps) {
   const singleSidebarFlag = useFeatureFlag(enableSingleSidebar);
   const singleSidebar = () =>
     sidebarVisible() && singleSidebarFlag().enabled === true;
-  const [navigationSlot, setNavigationSlot] = createSignal<HTMLElement>();
-  // Collapsed, the single sidebar is the icon rail and splits keep their own
-  // navigation, as without the flag.
+  // Collapsed, the single sidebar is the icon rail again.
   const [singleSidebarCollapsed, setSingleSidebarCollapsed] =
     usePreference<boolean>('macro:pref:single-sidebar:collapsed', {
       default: false,
     });
-  const navigationHost: NavigationHost = {
-    active: () => singleSidebar() && !singleSidebarCollapsed(),
-    slot: navigationSlot,
-  };
-  registerHotkey({
-    hotkey: 'cmd+.',
-    hotkeyToken: TOKENS.sidebar.toggleSingleSidebar,
-    scopeId: 'global',
-    description: () => t('nav.collapseSidebar'),
-    condition: singleSidebar,
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      setSingleSidebarCollapsed((collapsed) => !collapsed);
-      return true;
-    },
-  });
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
@@ -401,29 +376,26 @@ export function AppChrome(props: ParentProps) {
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
-              <NavigationHostContext.Provider value={navigationHost}>
-                <Switch>
-                  <Match when={singleSidebar() && !singleSidebarCollapsed()}>
-                    <SingleSidebar
-                      setNavigationSlot={setNavigationSlot}
-                      onCollapse={() => setSingleSidebarCollapsed(true)}
-                    />
-                  </Match>
-                  <Match when={singleSidebar()}>
-                    <SidebarRail
-                      onExpand={() => setSingleSidebarCollapsed(false)}
-                    />
-                  </Match>
-                  <Match when={isSidebarVisible()}>
-                    <SidebarRail />
-                  </Match>
-                </Switch>
-                <PageContent>
-                  {/* Route loading must not detach the chrome or mobile
-                      navigation; the route draws its own loading state. */}
-                  <Suspense>{props.children}</Suspense>
-                </PageContent>
-              </NavigationHostContext.Provider>
+              <Switch>
+                <Match when={singleSidebar() && !singleSidebarCollapsed()}>
+                  <SingleSidebar
+                    onCollapse={() => setSingleSidebarCollapsed(true)}
+                  />
+                </Match>
+                <Match when={singleSidebar()}>
+                  <SidebarRail
+                    onExpand={() => setSingleSidebarCollapsed(false)}
+                  />
+                </Match>
+                <Match when={isSidebarVisible()}>
+                  <SidebarRail />
+                </Match>
+              </Switch>
+              <PageContent>
+                {/* Route loading must not detach the chrome or mobile
+                    navigation; the route draws its own loading state. */}
+                <Suspense>{props.children}</Suspense>
+              </PageContent>
             </ViewSwitcherContext.Provider>
           </SidebarPrefsProvider>
         </ItemDndProvider>

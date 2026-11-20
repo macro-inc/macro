@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
@@ -70,23 +71,20 @@ export const SearchRailButton = () => {
   );
 };
 
-/**
- * The single sidebar's search: a field-shaped button that opens Search, with
- * its shortcut. Shift+click opens it in a new split.
- */
-export const SearchFieldButton = () => {
+/** The single sidebar's Search row, with its shortcut. Shift+click opens a split. */
+export const SearchSidebarRow = () => {
   const openSearch = useOpenSearch();
   return (
-    <Button
-      variant="secondary"
-      size="md"
-      class="min-w-0 flex-1 justify-start text-ink-muted"
+    <ViewSidebar.Item
+      class="cursor-default"
       data-sidebar-next-search=""
-      onClick={(event: MouseEvent) => openSearch(event.shiftKey)}
+      onClick={(event) => openSearch(event.shiftKey)}
     >
-      <MagnifyingGlassIcon class="size-4 shrink-0" />
-      <span class="min-w-0 flex-1 truncate text-left">{t('nav.search')}</span>
+      <ViewSidebar.Icon>
+        <MagnifyingGlassIcon />
+      </ViewSidebar.Icon>
+      <span class="min-w-0 flex-1 truncate">{t('nav.search')}</span>
       <Hotkey token={TOKENS.sidebar.goTo.search} />
-    </Button>
+    </ViewSidebar.Item>
   );
 };

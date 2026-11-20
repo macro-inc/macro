@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import {
   createMenuOpen,
   setCreateMenuOpen,
@@ -7,7 +8,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
+import { Button, Hotkey } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 
 /** The rail and keyboard shortcut open the same desktop launcher. */
@@ -39,20 +40,14 @@ export const SidebarRailCreateButton = () => {
   );
 };
 
-/** The single sidebar's labelled New, opening the same launcher. */
-export const SidebarNewButton = () => {
+/** The single sidebar's New row, opening the same launcher. */
+export const NewSidebarRow = () => {
   const analytics = useAnalytics();
   const createMenuTarget = tourTarget(APP_TOUR.createMenu);
   return (
-    <Button
+    <ViewSidebar.Item
       ref={createMenuTarget}
-      variant="secondary"
-      size="md"
-      class="shrink-0"
-      tooltip={{
-        content: t('nav.create'),
-        hotkey: TOKENS.global.createCommand,
-      }}
+      class="cursor-default"
       aria-haspopup="dialog"
       aria-expanded={createMenuOpen()}
       onClick={() => {
@@ -61,8 +56,11 @@ export const SidebarNewButton = () => {
         setCreateMenuOpen((open) => !open);
       }}
     >
-      <PlusIcon class="size-4" />
-      {t('nav.new')}
-    </Button>
+      <ViewSidebar.Icon>
+        <PlusIcon />
+      </ViewSidebar.Icon>
+      <span class="min-w-0 flex-1 truncate">{t('nav.new')}</span>
+      <Hotkey token={TOKENS.global.createCommand} />
+    </ViewSidebar.Item>
   );
 };

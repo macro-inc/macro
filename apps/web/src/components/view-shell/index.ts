@@ -60,7 +60,6 @@ export {
   type ViewSwitcherProps,
   ViewSwitchTrigger,
 } from './ViewSidebar';
-export { useIsHostedNavigation } from './view-shell-context';
 export {
   type AsideLayout,
   type AsideMode,

@@ -8,7 +8,7 @@ import { FloatRegionScope } from '@components/app/mobile/float-regions/FloatRegi
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { Resize } from '@core/component/Resize';
-import { activateScopeOnFocusIn, registerHotkey } from '@core/hotkey/hotkeys';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createWritableMemo } from '@solid-primitives/memo';
@@ -33,11 +33,9 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { createFrameWidth } from './create-frame-width';
 import { createSidebarMotion } from './create-sidebar-motion';
 import { NavigationSheet } from './NavigationSheet';
-import { NavigationHostContext } from './navigation-host';
 import {
   createTouchTopBarInset,
   TopBarActions,
@@ -175,10 +173,6 @@ function Root(props: ViewShellRootProps) {
   ]);
 
   const panel = useContext(SplitPanelContext);
-  const navigationHost = useContext(NavigationHostContext);
-  // A shell nested in another keeps its own navigation; only a split's
-  // outermost workspace hands its navigation to the single sidebar.
-  const nestedShell = useContext(ViewShellContext) !== undefined;
   // A view opened beside another split starts with navigation, as any split
   // above the layout breakpoint does, then keeps that split's choice as the
   // split moves between views; only the primary split follows, and writes,
@@ -318,34 +312,14 @@ function Root(props: ViewShellRootProps) {
     !collectionLayout();
   // A list aside takes turns with Main in narrow layouts rather than
   // overlaying it, so the overlay and its open state don't apply there.
-  // Under the single sidebar no split keeps a navigation column: the active
-  // split's navigation shows in the sidebar, and a view whose aside is its
-  // list (Chat, Notifications) takes turns with Main in the whole split, as a
-  // narrow shell does, so every split keeps its content.
-  const underSingleSidebar = () =>
-    navigationHost?.active() === true &&
-    panel !== undefined &&
-    !nestedShell &&
-    !isTouchDevice();
-  const asideHosted = () =>
-    underSingleSidebar() && local.aside !== false && !local.asideList;
-  const hostSlot = () =>
-    asideHosted() && panel?.isPanelActive()
-      ? navigationHost?.slot()
-      : undefined;
   const narrowList = (): 'list' | 'main' | undefined => {
-    if (
-      !local.asideList ||
-      local.aside === false ||
-      !(atLayoutBreakpoint() || underSingleSidebar())
-    ) {
+    if (!local.asideList || local.aside === false || !atLayoutBreakpoint()) {
       return undefined;
     }
     return local.asideList.open ? 'main' : 'list';
   };
 
   const asideMode = (): AsideMode => {
-    if (asideHosted()) return 'collapsed';
     if (collectionLayout()) return sheetOpen() ? 'docked' : 'collapsed';
     const list = narrowList();
     if (list) return list === 'list' ? 'docked' : 'collapsed';
@@ -481,7 +455,6 @@ function Root(props: ViewShellRootProps) {
     narrowList,
     returnToList: () => local.asideList?.onBack(),
     chooseAsideWidth: (width) => setChosenAsideWidth(width / asideScale()),
-    hostSlot,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -489,13 +462,11 @@ function Root(props: ViewShellRootProps) {
       canCollapse: () =>
         local.asidePreferenceKey !== undefined &&
         local.aside !== false &&
-        !asideHosted() &&
         !asidePinned() &&
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
       fillsShell: () => narrowList() === 'list',
-      isHosted: asideHosted,
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {
@@ -571,9 +542,6 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <ViewShellPaneContext.Provider value="aside">
       <Switch>
-        <Match when={ws.aside.isHosted()}>
-          <HostedAside {...props} />
-        </Match>
         <Match when={ws.asideHost() === 'sheet'}>
           <NavigationSheet {...props} />
         </Match>
@@ -585,53 +553,6 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
         </Match>
       </Switch>
     </ViewShellPaneContext.Provider>
-  );
-}
-
-/**
- * Navigation shown in the single sidebar. The split keeps a collapsed column
- * so Main's panel index is unchanged; only the active split's shell renders
- * its navigation, under its app in the sidebar.
- */
-function HostedAside(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
-  const ws = useViewShellInternal();
-  const panel = useContext(SplitPanelContext);
-  return (
-    <>
-      <Resize.Panel
-        id={`${ws.id}-aside`}
-        index={0}
-        minSize={0}
-        collapsed={() => true}
-      >
-        <div class="hidden" />
-      </Resize.Panel>
-      <Show when={ws.hostSlot()} keyed>
-        {(slot) => (
-          <Portal mount={slot}>
-            <div
-              {...rest}
-              // Outside the split's DOM, focus here would not reach the
-              // split's hotkey scope, which its list keys belong to.
-              ref={(element) => {
-                if (panel)
-                  activateScopeOnFocusIn(element, panel.splitHotkeyScope);
-              }}
-              class={cn(
-                'absolute inset-0 flex min-h-0 min-w-0 flex-col',
-                local.class,
-                // The single sidebar's own surface shows through.
-                'bg-transparent'
-              )}
-              data-view-shell-aside=""
-            >
-              {local.children}
-            </div>
-          </Portal>
-        )}
-      </Show>
-    </>
   );
 }
 

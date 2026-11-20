@@ -620,28 +620,21 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
-With `enable-single-sidebar` (desktop only; on in dev), one 256px **App
-navigation** sidebar replaces the rail and every split's own sidebar. At the top
-a Search field (`/`), a labelled **New** (the create launcher) and **Collapse
-sidebar**; then the apps as labelled rows (same unread dots, counts,
-next-meeting badge, context menu and Shift-click as the rail), a **More** row,
-up to eight **Favorites**, and Help and Settings in a row at the bottom. The
-**active split's** workspace navigation (Email's inboxes, Drive's folders, Tasks'
-views, Home's list) renders under its app's row, indented to the app labels with
-a line down from the app's icon, and scrolls in the room the rows leave. There
-it drops its title, New button, suggested routines and Watch tutorial rows.
-Agents lists its ten most recent conversations (waiting, then open pull
-requests, then the rest) above its Agents, Routines and Archived links. Chat has no
-inner list: under Chat the sidebar lists **Group chats** and **Direct
-messages**, ten each, unread first then most recently active (the open one
-highlighted), and its split
-shows the conversation list until one opens, then the conversation with Back;
-Notifications works the same way. Other splits show no navigation until they
-become active. **Collapse sidebar** or `Cmd+.` folds the sidebar to the icon
-rail, and every split gets its own navigation back, as without the flag; the
-rail's top button widens it again, and the choice is saved. While the flag loads, the rail shows. Check: open Email,
-then Tasks in a second split, and click between them: the expanded app follows
-the active split, and arrow keys move through its rows.
+With `enable-single-sidebar` (desktop only; on in dev), a 256px **App
+navigation** sidebar replaces the icon rail; every app keeps its own navigation
+in its split. Top to bottom: **Collapse sidebar**, then **New** (the create
+launcher) and **Search** rows, the pinned apps (Email, Calendar, Tasks and Drive
+until changed; same unread dots, counts, next-meeting badge and open-in-split
+menu as the rail), **More…**, up to eight **Favorites**, **Recents**, and Help
+and Settings at the bottom. More… opens any app that isn't pinned and has a
+**Pin to sidebar** submenu that pins or unpins any app; a pinned row's context
+menu also has **Unpin from sidebar**. Pins are saved per user. Recents lists the
+30 most recently updated items from Home's All tab, opening where each kind of
+item opens; its **Unread only** switch filters them and is remembered.
+Collapse folds the sidebar to the icon rail, whose top button widens it again;
+the choice is saved. While the flag loads, the rail shows. Check: pin Agents
+from More… → Pin to sidebar, reload, and confirm it stays pinned; turn on Unread
+only and confirm read items leave Recents.
 
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused

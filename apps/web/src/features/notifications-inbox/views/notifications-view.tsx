@@ -464,8 +464,7 @@ export function NotificationsView(props: NotificationsViewProps) {
   // list's focused row while the preview shows it.
   let listRoot: HTMLDivElement | undefined;
   const focusList = () => {
-    // An inert list (a narrow shell showing the preview) can't take focus.
-    if (!listRoot?.isConnected || listRoot.closest('[inert]')) return false;
+    if (!listRoot?.isConnected) return false;
     listRoot.focus({ preventScroll: true });
     return true;
   };

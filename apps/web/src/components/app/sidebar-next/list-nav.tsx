@@ -40,7 +40,7 @@ export type ListNavProps = {
  * router's current entry, including the owning workspace for nested details.
  * Never infer selection from the multi-pane URL.
  */
-export function isNavItemActive(item: SidebarNextNavItem) {
+function isNavItemActive(item: SidebarNextNavItem) {
   const activeContent = globalSplitManager()?.activeSplit()?.content();
   if (!activeContent) return false;
   const expected = sidebarContent(item.id, item.params);

@@ -9,7 +9,6 @@ import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
 import type { Component, JSX } from 'solid-js';
 import {
-  children,
   createContext,
   createSignal,
   Show,
@@ -26,21 +25,18 @@ import {
   ViewSidebarCloseButton,
   ViewSidebarToggle,
 } from './ViewNavigationControls';
-import { useIsHostedNavigation, ViewShellContext } from './view-shell-context';
+import { ViewShellContext } from './view-shell-context';
 
 const SidebarViewContext = createContext<{ view: () => string | undefined }>();
 
 function Root(props: JSX.HTMLAttributes<HTMLElement> & { reorderId?: string }) {
   const [local, rest] = splitProps(props, ['children', 'class', 'reorderId']);
-  const ws = useContext(ViewShellContext);
   return (
     <SidebarViewContext.Provider value={{ view: () => local.reorderId }}>
       <aside
         {...rest}
         class={cn(
-          'flex size-full min-h-0 min-w-0 flex-col',
-          // The single sidebar's own surface shows through.
-          !ws?.aside.isHosted() && 'bg-panel',
+          'flex size-full min-h-0 min-w-0 flex-col bg-panel',
           local.class
         )}
         data-view-sidebar=""
@@ -86,12 +82,6 @@ function Header(
   // which has no header; sheets and overlays keep theirs.
   const dockedOnTouch = () =>
     isTouchDevice() && !!ws && !ws.aside.isSheet() && !ws.aside.isOverlay();
-  // In the single sidebar the app's row names the view and the split closes
-  // from its own header, so only the actions remain.
-  const hosted = () => ws?.aside.isHosted() === true;
-  // Resolved once: checking the prop and rendering it would create its
-  // components twice.
-  const actions = children(() => local.actions);
   const [open, setOpen] = createSignal(false);
   const searchOpen = () => local.searchOpen ?? open();
   let searchArea: HTMLDivElement | undefined;
@@ -116,37 +106,32 @@ function Header(
       when={!dockedOnTouch()}
       fallback={<div aria-hidden="true" class="h-(--safe-top) shrink-0" />}
     >
-      <Show when={!hosted() || local.search || actions()}>
-        <SplitHeaderContextMenu>
-          <div
-            {...rest}
-            class={cn(
-              'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
-              hosted() && 'h-8 py-0',
-              local.class
-            )}
-            data-view-sidebar-header=""
-          >
-            <div class="min-w-0 flex-1">
-              <Show when={!hosted()}>{local.children}</Show>
-            </div>
-            <div class="ml-auto flex shrink-0 items-center gap-1">
-              {actions()}
-              <Show when={!isTouchDevice() && local.search}>
-                <Control
-                  ref={searchButton}
-                  aria-label={local.searchLabel ?? 'Search'}
-                  aria-expanded={searchOpen()}
-                  onClick={toggleSearch}
-                >
-                  <SearchIcon class="size-4" />
-                </Control>
-              </Show>
-              {local.collapseControl ?? <ViewSidebarToggle action="collapse" />}
-            </div>
+      <SplitHeaderContextMenu>
+        <div
+          {...rest}
+          class={cn(
+            'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) touch:h-[calc(var(--safe-top,0px)+3rem)] touch:pb-0 touch:pt-(--safe-top) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
+            local.class
+          )}
+          data-view-sidebar-header=""
+        >
+          <div class="min-w-0 flex-1">{local.children}</div>
+          <div class="ml-auto flex shrink-0 items-center gap-1">
+            {local.actions}
+            <Show when={!isTouchDevice() && local.search}>
+              <Control
+                ref={searchButton}
+                aria-label={local.searchLabel ?? 'Search'}
+                aria-expanded={searchOpen()}
+                onClick={toggleSearch}
+              >
+                <SearchIcon class="size-4" />
+              </Control>
+            </Show>
+            {local.collapseControl ?? <ViewSidebarToggle action="collapse" />}
           </div>
-        </SplitHeaderContextMenu>
-      </Show>
+        </div>
+      </SplitHeaderContextMenu>
       <Show when={!isTouchDevice() && searchOpen()}>
         <div
           ref={searchArea}
@@ -268,31 +253,18 @@ function Title(
 }
 
 /** The shared inset between the title bar and a create action or toolbar. */
-function Primary(
-  props: JSX.HTMLAttributes<HTMLDivElement> & {
-    /** Keeps controls that are navigation (a search field) in the single
-     * sidebar, which otherwise drops this slot's create actions. */
-    keepWhenHosted?: boolean;
-  }
-) {
-  const [local, rest] = splitProps(props, [
-    'children',
-    'class',
-    'keepWhenHosted',
-  ]);
-  const hosted = useIsHostedNavigation();
+function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <Show when={local.keepWhenHosted || !hosted()}>
-      <div
-        {...rest}
-        class={cn(
-          'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
-          local.class
-        )}
-      >
-        {local.children}
-      </div>
-    </Show>
+    <div
+      {...rest}
+      class={cn(
+        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter)',
+        local.class
+      )}
+    >
+      {local.children}
+    </div>
   );
 }
 

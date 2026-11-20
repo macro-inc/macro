@@ -2,53 +2,65 @@ import { ViewSidebar } from '@app/components/view-shell';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { unreadLabel } from '@app/features/notifications-inbox/core/inbox-unread';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
-import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import {
+  navigateToSidebarView,
+  SidebarOpenInSplitMenu,
+  sidebarContent,
+} from '@components/app/app-sidebar/sidebar';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { TOKENS } from '@core/hotkey/tokens';
 import { lazyNamed } from '@core/util/lazyNamed';
 import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
-import { Button, cn } from '@ui';
-import {
-  For,
-  type JSX,
-  Match,
-  onCleanup,
-  type Setter,
-  Show,
-  Suspense,
-  Switch,
-} from 'solid-js';
+import { Button, Dropdown } from '@ui';
+import { For, Match, Show, Suspense, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { useSplitLayout } from '../split-layout/layout';
 import { unreadDescription } from '../unread-description';
 import { useNavigationUnread } from '../use-navigation-unread';
-import { SidebarNewButton } from './create-button';
+import { NewSidebarRow } from './create-button';
 import { FooterActions } from './footer-actions';
-import { isNavItemActive, useListNavAction } from './list-nav';
-import { MoreMenu } from './more-menu';
+import { useListNavAction } from './list-nav';
 import { NavGlyph } from './nav-glyph';
-import { type SidebarNextNavItem, visibleNavItems } from './nav-items';
+import {
+  isNavItemAvailable,
+  SIDEBAR_NEXT_NAV_ITEMS,
+  type SidebarNextNavItem,
+} from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
 import { ReturnToCallButton } from './return-to-call-button';
-import { SearchFieldButton } from './search-bar-button';
+import { SearchSidebarRow } from './search-bar-button';
+import { useSingleSidebarPins } from './single-sidebar-pins';
 import { useNavItemGates } from './use-nav-item-gates';
-import { useSidebarPrefs } from './use-sidebar-prefs';
 
-type AppRowProps = {
+// Both read entity lists; keep them out of the startup bundle.
+const FavoritesSection = lazyNamed(
+  () => import('./favorites-section'),
+  'FavoritesSection'
+);
+const RecentsSection = lazyNamed(
+  () => import('./recents-section'),
+  'RecentsSection'
+);
+
+type PinnedRowProps = {
   item: SidebarNextNavItem;
   unread?: boolean;
   unreadCount?: number;
   activeCall?: boolean;
   /** The next meeting's time, e.g. `Now` or `12m`. */
   badge?: string;
+  onUnpin: () => void;
 };
 
-/** One app in the single sidebar: the rail button's behavior as a labelled row. */
-function AppRow(props: AppRowProps) {
-  const { hideSidebarItem } = useSidebarPrefs();
+/** A pinned app: the rail button's behavior as a labelled row. */
+function PinnedRow(props: PinnedRowProps) {
   const nav = useListNavAction(() => props.item);
   const unreadCount = () =>
     props.unread ? unreadLabel(props.unreadCount) : undefined;
@@ -58,13 +70,13 @@ function AppRow(props: AppRowProps) {
       content={nav.content}
       triggerClass="h-auto"
       additionalActions={
-        <Show when={props.item.id !== 'home'}>
+        <>
           <MenuSeparator />
           <MenuItem
-            text={t('nav.hideFromSidebar')}
-            onClick={() => hideSidebarItem(props.item.id)}
+            text={t('nav.unpinFromSidebar')}
+            onClick={() => props.onUnpin()}
           />
-        </Show>
+        </>
       }
     >
       <ViewSidebar.Item
@@ -126,87 +138,130 @@ function AppRow(props: AppRowProps) {
   );
 }
 
-function ChannelsAppRow(props: Omit<AppRowProps, 'activeCall'>) {
+function ChannelsPinnedRow(props: Omit<PinnedRowProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
-  return <AppRow {...props} activeCall={hasActiveCall()} />;
+  return <PinnedRow {...props} activeCall={hasActiveCall()} />;
 }
 
-function CalendarAppRow(props: Omit<AppRowProps, 'badge'>) {
+function CalendarPinnedRow(props: Omit<PinnedRowProps, 'badge'>) {
   const badge = useNextMeetingBadge();
-  return <AppRow {...props} badge={badge()?.label} />;
+  return <PinnedRow {...props} badge={badge()?.label} />;
 }
 
-// Chat's sections read the channel lists; keep them out of the startup bundle.
-const ChatSections = lazyNamed(() => import('./chat-sections'), 'ChatSections');
-const FavoritesSection = lazyNamed(
-  () => import('./favorites-section'),
-  'FavoritesSection'
-);
-
 /**
- * An app's navigation under its row: starts under the app's icon, with a line
- * down from it, so the rows inside line up with the app labels. It fills the
- * room the app rows leave and scrolls inside.
+ * More…: opens any destination that isn't pinned, and pins or unpins any of
+ * them. Shift opens the destination in a new split.
  */
-function NestedNavigation(props: {
-  children: JSX.Element;
-  /** Takes the room the rows leave, for navigation that scrolls inside. */
-  fill?: boolean;
+function MoreRow(props: {
+  destinations: SidebarNextNavItem[];
+  isPinned: (id: string) => boolean;
+  setPinned: (id: string, pinned: boolean) => void;
 }) {
+  const analytics = useAnalytics();
+  const layout = useSplitLayout();
+  const unpinned = () =>
+    props.destinations.filter((item) => !props.isPinned(item.id));
+
+  // onSelect omits the event, so capture Shift from the press.
+  let shiftHeld = false;
+  const captureSplitIntent = (event: PointerEvent | KeyboardEvent) => {
+    shiftHeld = event.shiftKey;
+  };
+  const open = (item: SidebarNextNavItem) => {
+    analytics.track('sidebar_click', { view: item.id });
+    navigateToSidebarView({
+      viewId: item.id,
+      params: item.params,
+      shiftKey: shiftHeld,
+      openWithSplit: layout.openWithSplit,
+      referredFrom: 'sidebar',
+    });
+    globalSplitManager()?.returnFocus();
+  };
+
   return (
-    <div
-      class={cn(
-        'relative -mr-(--sidebar-gutter) ml-[calc(var(--sidebar-item-inset)+var(--sidebar-icon-slot)/2)] flex flex-col before:absolute before:inset-y-1 before:left-0 before:w-px before:bg-edge-muted has-[[data-single-sidebar-slot]:empty]:hidden',
-        props.fill ? 'min-h-40 flex-1 overflow-hidden' : 'shrink-0'
-      )}
-      data-single-sidebar-nested=""
-    >
-      {props.children}
-    </div>
+    <Dropdown placement="right-start" gutter={6}>
+      <Dropdown.Trigger
+        variant="ghost"
+        size="md"
+        fullWidth
+        class="cursor-default justify-start px-(--sidebar-item-inset) font-normal text-ink-muted"
+        draggable={false}
+        data-sidebar-next-item="more"
+      >
+        <span class="flex size-(--sidebar-icon-slot) items-center justify-center">
+          <DotsThreeIcon class="size-4" />
+        </span>
+        {t('nav.moreApps')}
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-[14rem]">
+        <Show when={unpinned().length > 0}>
+          <Dropdown.Group>
+            <For each={unpinned()}>
+              {(item) => (
+                <Dropdown.Item
+                  class="gap-2"
+                  onMouseEnter={() =>
+                    layout.preloadContent(sidebarContent(item.id, item.params))
+                  }
+                  onPointerDown={captureSplitIntent}
+                  onKeyDown={captureSplitIntent}
+                  onSelect={() => open(item)}
+                >
+                  <Dynamic
+                    component={item.icon}
+                    class="size-4 shrink-0 text-ink-muted"
+                  />
+                  <span class="flex-1 truncate text-ink">{item.label}</span>
+                </Dropdown.Item>
+              )}
+            </For>
+          </Dropdown.Group>
+        </Show>
+        <Dropdown.Group>
+          <Dropdown.Sub>
+            <Dropdown.SubTrigger>{t('nav.pinToSidebar')}</Dropdown.SubTrigger>
+            <Dropdown.SubContent class="min-w-[12rem]">
+              <For each={props.destinations}>
+                {(item) => (
+                  <Dropdown.CheckboxItem
+                    checked={props.isPinned(item.id)}
+                    onChange={(checked) => props.setPinned(item.id, checked)}
+                    closeOnSelect={false}
+                  >
+                    {item.label}
+                  </Dropdown.CheckboxItem>
+                )}
+              </For>
+            </Dropdown.SubContent>
+          </Dropdown.Sub>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
   );
 }
 
 /**
- * Where the active split's workspace renders its navigation (see
- * `NavigationHost`); it takes no room while the workspace has none. The
- * navigation fills it absolutely, as a docked split panel does, so the
- * workspace's own list scrolls inside.
+ * The desktop app sidebar behind `enable-single-sidebar`, in place of the icon
+ * rail: New and Search, the pinned apps, More… (everything else, and pinning),
+ * favorites, and recents. Each app keeps its own navigation in its split.
  */
-function NavigationSlot(props: { setSlot: Setter<HTMLElement | undefined> }) {
-  return (
-    <NestedNavigation fill>
-      <div
-        ref={(element) => {
-          props.setSlot(element);
-          // A slot that moves or goes away must not stay the mount point.
-          onCleanup(() =>
-            props.setSlot((current) =>
-              current === element ? undefined : current
-            )
-          );
-        }}
-        class="relative min-h-0 flex-1"
-        data-single-sidebar-slot=""
-      />
-    </NestedNavigation>
-  );
-}
-
-/**
- * The desktop app sidebar behind `enable-single-sidebar`: one column with the
- * apps as labelled rows and, under the active split's app, that workspace's
- * own navigation, in place of the icon rail beside a sidebar in every split.
- */
-export function SingleSidebar(props: {
-  /** Receives the element the active workspace's navigation renders into. */
-  setNavigationSlot: Setter<HTMLElement | undefined>;
-  onCollapse: () => void;
-}) {
+export function SingleSidebar(props: { onCollapse: () => void }) {
   const gates = useNavItemGates();
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
-  const items = () => visibleNavItems(gates());
-  const appIsActive = () => items().some(isNavItemActive);
+  const pins = useSingleSidebarPins();
+  const destinations = () =>
+    SIDEBAR_NEXT_NAV_ITEMS.filter((item) => isNavItemAvailable(item, gates()));
+  const pinned = () => {
+    const byId = new Map<string, SidebarNextNavItem>(
+      destinations().map((item) => [item.id, item])
+    );
+    return pins
+      .pins()
+      .map((id) => byId.get(id))
+      .filter((item): item is SidebarNextNavItem => item !== undefined);
+  };
 
   return (
     <aside
@@ -215,84 +270,73 @@ export function SingleSidebar(props: {
       data-ui="single-sidebar"
       class="relative flex h-full w-64 shrink-0 flex-col bg-page"
     >
-      <div class="flex shrink-0 items-center gap-1.5 px-(--sidebar-gutter) pt-2 pb-3">
-        <SearchFieldButton />
-        <SidebarNewButton />
+      <div class="flex h-10 shrink-0 items-center px-(--sidebar-gutter) pt-1">
         <Button
           variant="ghost"
           size="icon-md"
           aria-label={t('nav.collapseSidebar')}
-          tooltip={{
-            content: t('nav.collapseSidebar'),
-            hotkey: TOKENS.sidebar.toggleSingleSidebar,
-          }}
+          tooltip={{ content: t('nav.collapseSidebar') }}
           onClick={() => props.onCollapse()}
         >
           <SidebarIcon class="size-4" />
         </Button>
       </div>
 
-      <nav class="flex min-h-0 flex-1 flex-col gap-(--sidebar-row-gap) overflow-y-auto px-(--sidebar-gutter)">
-        <For each={items()}>
+      <ViewSidebar.Nav class="px-(--sidebar-gutter) pt-1">
+        <NewSidebarRow />
+        <SearchSidebarRow />
+      </ViewSidebar.Nav>
+
+      <ViewSidebar.Nav
+        aria-label={t('nav.appNavigation')}
+        class="px-(--sidebar-gutter) pt-4"
+      >
+        <For each={pinned()}>
           {(item) => {
             const rowProps = () => ({
               item,
               unread: unread.has(item.id),
               unreadCount: unread.count(item.id),
+              onUnpin: () => pins.setPinned(item.id, false),
             });
             return (
-              <>
-                <Switch fallback={<AppRow {...rowProps()} />}>
-                  <Match when={item.id === 'channels'}>
-                    <Suspense fallback={<AppRow {...rowProps()} />}>
-                      <ChannelsAppRow {...rowProps()} />
-                    </Suspense>
-                  </Match>
-                  <Match
-                    when={
-                      item.id === 'calendar' &&
-                      calendarPreferences.showNextMeetingBadge
-                    }
-                  >
-                    <Suspense fallback={<AppRow item={item} />}>
-                      <CalendarAppRow item={item} />
-                    </Suspense>
-                  </Match>
-                </Switch>
-                <Show when={isNavItemActive(item)}>
-                  {/* Chat's list fills its split; the sidebar lists its
-                      conversations instead. */}
-                  <Show
-                    when={item.id === 'channels'}
-                    fallback={
-                      <NavigationSlot setSlot={props.setNavigationSlot} />
-                    }
-                  >
-                    <NestedNavigation>
-                      <Suspense>
-                        <ChatSections />
-                      </Suspense>
-                    </NestedNavigation>
-                  </Show>
-                </Show>
-              </>
+              <Switch fallback={<PinnedRow {...rowProps()} />}>
+                <Match when={item.id === 'channels'}>
+                  <Suspense fallback={<PinnedRow {...rowProps()} />}>
+                    <ChannelsPinnedRow {...rowProps()} />
+                  </Suspense>
+                </Match>
+                <Match
+                  when={
+                    item.id === 'calendar' &&
+                    calendarPreferences.showNextMeetingBadge
+                  }
+                >
+                  <Suspense fallback={<PinnedRow {...rowProps()} />}>
+                    <CalendarPinnedRow {...rowProps()} />
+                  </Suspense>
+                </Match>
+              </Switch>
             );
           }}
         </For>
-        <MoreMenu gates={gates()} presentation="row" />
-        {/* A workspace reached from More or a link still shows its navigation. */}
-        <Show when={!appIsActive()}>
-          <NavigationSlot setSlot={props.setNavigationSlot} />
-        </Show>
+        <MoreRow
+          destinations={destinations()}
+          isPinned={pins.isPinned}
+          setPinned={pins.setPinned}
+        />
+      </ViewSidebar.Nav>
+
+      <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-(--sidebar-gutter) pb-2">
         <Suspense>
           <FavoritesSection />
         </Suspense>
-      </nav>
+        <Suspense>
+          <RecentsSection />
+        </Suspense>
+      </div>
 
-      {/* Wraps rather than clipping Settings when an update, the mobile app
-          button and a call all show at once. */}
-      <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 px-2 pt-2 pb-3">
-        <div class="min-w-0 flex-1" />
+      <div class="flex shrink-0 flex-wrap items-center justify-end gap-1 border-t border-edge-muted px-2 pt-2 pb-3">
         <ReturnToCallButton />
         <FooterActions horizontal />
       </div>
