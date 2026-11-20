@@ -245,46 +245,59 @@ function nameDifference(
   return derived ? 'derived_name' : 'name';
 }
 
+function restOrganizationId(rest: ApiChannelWithLatest): string | null {
+  return rest.org_id === null || rest.org_id === undefined
+    ? null
+    : String(rest.org_id);
+}
+
+/** Each field's kind, paired with whether the two sides disagree on it. */
+function fieldChecks(
+  rest: ApiChannelWithLatest,
+  directory: DirectoryChannel
+): Array<[DirectoryDifferenceKind, boolean]> {
+  return [
+    ['channel_type', rest.channel_type !== directory.channelType],
+    ['owner_id', rest.owner_id !== directory.ownerId],
+    ['organization_id', restOrganizationId(rest) !== directory.organizationId],
+    ['team_id', (rest.team_id ?? null) !== directory.teamId],
+    [
+      'auto_join_team',
+      (rest.auto_join_team ?? false) !== directory.autoJoinTeam,
+    ],
+    ['created_at', !sameInstant(rest.created_at, directory.createdAt)],
+    ['updated_at', !sameInstant(rest.updated_at, directory.updatedAt)],
+    ['viewed_at', !sameInstant(rest.viewed_at, directory.viewedAt)],
+    ['interacted_at', !sameInstant(rest.interacted_at, directory.interactedAt)],
+    ['is_participant', rest.is_participant !== directory.isParticipant],
+    ['participants', !sameMembers(rest, directory)],
+    [
+      'agent_dm',
+      (rest.agent_dm?.bot_id ?? null) !== (directory.agentDm?.botId ?? null),
+    ],
+    [
+      'latest_message',
+      !sameMessage(rest.latest_message, directory.latestMessage),
+    ],
+    [
+      'latest_non_thread_message',
+      !sameMessage(
+        rest.latest_non_thread_message,
+        directory.latestNonThreadMessage
+      ),
+    ],
+  ];
+}
+
 function channelDifferences(
   rest: ApiChannelWithLatest,
   directory: DirectoryChannel
 ): DirectoryDifferenceKind[] {
-  const kinds: DirectoryDifferenceKind[] = [];
+  const kinds = fieldChecks(rest, directory)
+    .filter(([, differs]) => differs)
+    .map(([kind]) => kind);
   const name = nameDifference(rest, directory);
-  if (name) kinds.push(name);
-  if (rest.channel_type !== directory.channelType) kinds.push('channel_type');
-  if (rest.owner_id !== directory.ownerId) kinds.push('owner_id');
-  const restOrganization =
-    rest.org_id === null || rest.org_id === undefined
-      ? null
-      : String(rest.org_id);
-  if (restOrganization !== directory.organizationId)
-    kinds.push('organization_id');
-  if ((rest.team_id ?? null) !== directory.teamId) kinds.push('team_id');
-  if ((rest.auto_join_team ?? false) !== directory.autoJoinTeam)
-    kinds.push('auto_join_team');
-  if (!sameInstant(rest.created_at, directory.createdAt))
-    kinds.push('created_at');
-  if (!sameInstant(rest.updated_at, directory.updatedAt))
-    kinds.push('updated_at');
-  if (!sameInstant(rest.viewed_at, directory.viewedAt)) kinds.push('viewed_at');
-  if (!sameInstant(rest.interacted_at, directory.interactedAt))
-    kinds.push('interacted_at');
-  if (rest.is_participant !== directory.isParticipant)
-    kinds.push('is_participant');
-  if (!sameMembers(rest, directory)) kinds.push('participants');
-  if ((rest.agent_dm?.bot_id ?? null) !== (directory.agentDm?.botId ?? null))
-    kinds.push('agent_dm');
-  if (!sameMessage(rest.latest_message, directory.latestMessage))
-    kinds.push('latest_message');
-  if (
-    !sameMessage(
-      rest.latest_non_thread_message,
-      directory.latestNonThreadMessage
-    )
-  )
-    kinds.push('latest_non_thread_message');
-  return kinds;
+  return name ? [name, ...kinds] : kinds;
 }
 
 /**
