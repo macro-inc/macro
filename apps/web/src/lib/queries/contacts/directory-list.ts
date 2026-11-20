@@ -26,6 +26,14 @@ const NO_TEAMMATES: ReadonlySet<string> = new Set();
 
 type WindowParameters = Parameters<typeof createContactDirectoryWindow>;
 
+type ListedPages = {
+  key: string;
+  first: IUser[];
+  later: IUser[];
+  /** Who the first page's text names, when the server answered it. */
+  named: ContactDirectoryPage['named'];
+};
+
 /** The people the viewer works with, known without the local cache. */
 type WorkingRelationships = {
   /** Latest direct-message activity per person the viewer has a DM with. */
@@ -121,15 +129,16 @@ export function createContactDirectoryList(
       options.resetKey?.(),
     ]);
   };
-  let listed:
-    | {
-        key: string;
-        first: IUser[];
-        later: IUser[];
-        /** Who the first page's text names, when the server answered it. */
-        named: ContactDirectoryPage['named'];
-      }
-    | undefined;
+  let listed: ListedPages | undefined;
+  // The server does not rank its pages. Only the first is ordered here: later
+  // pages are listed below it, and never move rows already shown.
+  const firstPage = (pages: ListedPages) =>
+    pages.named
+      ? orderServerPage(pages.first, pages.named, {
+          directMessages: options.directMessages?.() ?? NO_DIRECT_MESSAGES,
+          teammates: options.teammates?.() ?? NO_TEAMMATES,
+        })
+      : pages.first;
   const data = createMemo<ContactDirectoryPage | undefined>((shown) => {
     const page = window.data();
     const key = listKey();
@@ -172,17 +181,8 @@ export function createContactDirectoryList(
       };
     }
 
-    // The server does not rank its pages. Only the first is ordered here:
-    // later pages are listed below it, and never move rows already shown.
-    const first = listed.named
-      ? orderServerPage(listed.first, listed.named, {
-          directMessages: options.directMessages?.() ?? NO_DIRECT_MESSAGES,
-          teammates: options.teammates?.() ?? NO_TEAMMATES,
-        })
-      : listed.first;
-
     // Ranking metadata accompanies only the listed rows, newest page first.
-    const users = [...first, ...listed.later];
+    const users = [...firstPage(listed), ...listed.later];
     const ids = new Set(users.map((user) => user.id));
     const people = new Map<string, RankedPerson>();
     for (const person of [...(page.people ?? []), ...(shown?.people ?? [])]) {
