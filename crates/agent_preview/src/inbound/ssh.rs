@@ -1,11 +1,21 @@
 use crate::domain::{Lease, PreviewService, PreviewStatus, ports::Tunnel};
 use russh::server::{Auth, Config, Handler, Session};
 use std::{
-    sync::{Arc, Mutex},
+    pin::Pin,
+    sync::{Arc, Mutex, OnceLock},
+    task::{Context, Poll},
     time::Duration,
 };
-use tokio::{net::TcpListener, sync::Semaphore};
+use tokio::{
+    io::{AsyncRead, AsyncWrite, ReadBuf},
+    net::TcpListener,
+    sync::Semaphore,
+};
 use tokio_util::sync::CancellationToken;
+
+/// RFC 4253 bounds the identification line, CR LF included.
+const MAX_IDENTIFICATION: usize = 255;
+const MAX_CLIENT_SOFTWARE: usize = 64;
 
 /// Composition-root factory for the outbound tunnel capability.
 pub type TunnelFactory = Arc<dyn Fn(russh::server::Handle) -> Arc<dyn Tunnel> + Send + Sync>;
@@ -63,11 +73,18 @@ pub async fn serve(
             let _permit = permit;
             let lease = Arc::new(Mutex::new(None));
             let authenticated = CancellationToken::new();
+            let client = Arc::new(OnceLock::new());
             let handler = Connection {
                 service: service.clone(),
                 factory,
                 lease: lease.clone(),
                 authenticated: authenticated.clone(),
+                client: client.clone(),
+            };
+            let socket = Identified {
+                stream: socket,
+                line: Vec::new(),
+                client,
             };
             let running = tokio::time::timeout(
                 Duration::from_secs(10),
@@ -114,6 +131,7 @@ struct Connection {
     factory: TunnelFactory,
     lease: Arc<Mutex<Option<Arc<Lease>>>>,
     authenticated: CancellationToken,
+    client: Arc<OnceLock<String>>,
 }
 impl Handler for Connection {
     type Error = russh::Error;
@@ -121,13 +139,14 @@ impl Handler for Connection {
         if user.len() > 128 {
             return Ok(Auth::reject());
         }
-        match self.service.authenticate_ssh(user).await {
-            Ok(lease) => {
+        let client = self.client.get().map_or("unknown", String::as_str);
+        match self.service.authenticate_ssh(user, client).await {
+            Ok(Some(lease)) => {
                 *self.lease.lock().expect("connection mutex") = Some(lease);
                 self.authenticated.cancel();
                 Ok(Auth::Accept)
             }
-            Err(_) => Ok(Auth::reject()),
+            Ok(None) | Err(_) => Ok(Auth::reject()),
         }
     }
     async fn tcpip_forward(
@@ -179,6 +198,72 @@ impl Handler for Connection {
             self.service.finish(&lease, PreviewStatus::Stopped).await;
         }
         Ok(true)
+    }
+}
+
+/// Copies the client's identification line (`SSH-2.0-OpenSSH_9.6 ...`) as russh
+/// reads it. russh does not expose it before authentication, and it is the one
+/// non-identifying signal that tells our script's OpenSSH from other clients.
+struct Identified<S> {
+    stream: S,
+    line: Vec<u8>,
+    client: Arc<OnceLock<String>>,
+}
+impl<S: AsyncRead + Unpin> AsyncRead for Identified<S> {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let start = buf.filled().len();
+        let result = Pin::new(&mut self.stream).poll_read(cx, buf);
+        if self.client.get().is_none() {
+            for &byte in &buf.filled()[start..] {
+                if byte == b'\n' || self.line.len() >= MAX_IDENTIFICATION {
+                    let line = std::mem::take(&mut self.line);
+                    let _ = self.client.set(client_software(&line));
+                    break;
+                }
+                self.line.push(byte);
+            }
+        }
+        result
+    }
+}
+impl<S: AsyncWrite + Unpin> AsyncWrite for Identified<S> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.stream).poll_write(cx, buf)
+    }
+    fn poll_flush(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stream).poll_flush(cx)
+    }
+    fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.stream).poll_shutdown(cx)
+    }
+}
+
+/// The software field of `SSH-protoversion-softwareversion [comments]`, without
+/// comments, which may name a host. Bounded and printable-only for telemetry.
+fn client_software(line: &[u8]) -> String {
+    let line = String::from_utf8_lossy(line);
+    let software = line
+        .strip_prefix("SSH-")
+        .and_then(|rest| rest.split_once('-'))
+        .map(|(_, software)| software.split([' ', '\r']).next().unwrap_or_default())
+        .unwrap_or_default();
+    let software: String = software
+        .chars()
+        .filter(char::is_ascii_graphic)
+        .take(MAX_CLIENT_SOFTWARE)
+        .collect();
+    if software.is_empty() {
+        "unknown".to_owned()
+    } else {
+        software
     }
 }
 

@@ -1392,6 +1392,7 @@
     "agent_preview": [
       "crates/agent",
       "crates/agent_correlation",
+      "crates/agent_credentials",
       "crates/agent_preview",
       "crates/agent_runtime_protocol",
       "crates/ai_toolset",
@@ -1404,6 +1405,7 @@
       "crates/document_sub_type",
       "crates/dynamic_ui",
       "crates/entity_access",
+      "crates/feature_flags",
       "crates/folds/agent_fold",
       "crates/genai_telemetry",
       "crates/harness_id",
@@ -1431,6 +1433,7 @@
       "crates/prompt",
       "crates/remote_env_var",
       "crates/single_flight",
+      "crates/user_api_key",
       "crates/workspace-hack"
     ],
     "agent_runtime_protocol": [

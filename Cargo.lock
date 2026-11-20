@@ -916,6 +916,7 @@ dependencies = [
 name = "agent_preview"
 version = "0.1.0"
 dependencies = [
+ "agent_credentials",
  "agent_fold",
  "ai_toolset",
  "async-trait",
@@ -925,6 +926,7 @@ dependencies = [
  "chrono",
  "entity_access",
  "futures-util",
+ "hex",
  "http-body-util",
  "hyper 1.9.0",
  "hyper-util",

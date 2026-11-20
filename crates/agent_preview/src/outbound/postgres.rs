@@ -124,8 +124,21 @@ impl PreviewRepository for PgPreviewRepository {
         ).fetch_optional(&self.pool).await.map_err(unavailable)?.ok_or(PreviewError::Offline)?;
         record(row.metadata.0, row.replica_id, &row.status)
     }
-    #[tracing::instrument(skip_all, fields(%replica), err)]
-    async fn claim(&self, hash: [u8; 32], replica: Uuid) -> Result<StoredPreview, PreviewError> {
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            %replica,
+            claimed = tracing::field::Empty,
+            preview_id = tracing::field::Empty,
+            session_id = tracing::field::Empty,
+        ),
+        err
+    )]
+    async fn claim(
+        &self,
+        hash: [u8; 32],
+        replica: Uuid,
+    ) -> Result<Option<StoredPreview>, PreviewError> {
         let row = sqlx::query!(
             r#"WITH credential AS (
                 DELETE FROM agent_preview_credential WHERE hash = $1 AND kind = 'ssh' AND expires_at > now()
@@ -135,8 +148,21 @@ impl PreviewRepository for PgPreviewRepository {
               AND l.expires_at > now() AND EXISTS (SELECT 1 FROM agent_preview_replica WHERE id = $2 AND expires_at > now())
               RETURNING l.metadata AS "metadata: Json<StoredPreview>", l.status"#,
             hash.as_slice(), replica
-        ).fetch_optional(&self.pool).await.map_err(unavailable)?.ok_or(PreviewError::Denied)?;
-        record(row.metadata.0, Some(replica), &row.status)
+        ).fetch_optional(&self.pool).await.map_err(unavailable)?;
+        let span = tracing::Span::current();
+        span.record("claimed", row.is_some());
+        let Some(row) = row else {
+            return Ok(None);
+        };
+        span.record(
+            "preview_id",
+            tracing::field::display(&row.metadata.0.preview.id),
+        );
+        span.record(
+            "session_id",
+            tracing::field::display(&row.metadata.0.preview.agent_session_id),
+        );
+        record(row.metadata.0, Some(replica), &row.status).map(Some)
     }
     #[tracing::instrument(skip_all, fields(preview_id = %id, %replica), err)]
     async fn status(

@@ -95,7 +95,12 @@ pub trait PreviewRepository: Send + Sync {
     /// Resolve a current, unexpired preview generation.
     async fn preview(&self, id: &PreviewId) -> Result<StoredPreview, PreviewError>;
     /// Atomically consume SSH credential and claim the unowned preview for this live replica.
-    async fn claim(&self, hash: [u8; 32], replica: Uuid) -> Result<StoredPreview, PreviewError>;
+    /// `None` when no unexpired SSH credential claims a starting, unowned preview.
+    async fn claim(
+        &self,
+        hash: [u8; 32],
+        replica: Uuid,
+    ) -> Result<Option<StoredPreview>, PreviewError>;
     /// Change status only if the generation and SSH owner still match.
     async fn status(
         &self,

@@ -81,7 +81,11 @@ async fn gateway_requires_ticket_and_preserves_request_target_and_streamed_respo
         .unwrap();
     });
     let share = service.share(identity(), address.port()).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     service
         .register(&lease, "127.0.0.1", 1, Arc::new(TcpTunnel(address)))
         .unwrap();
@@ -200,7 +204,11 @@ async fn non_upgraded_stream_holds_permit_and_rechecks_viewer_permission() {
         .unwrap();
     });
     let share = service.share(identity(), address.port()).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     service
         .register(&lease, "127.0.0.1", 1, Arc::new(TcpTunnel(address)))
         .unwrap();

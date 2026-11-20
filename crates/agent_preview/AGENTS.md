@@ -27,7 +27,7 @@ on stock OpenSSH reverse forwarding.
 
 ## Boundaries
 
-- Depends on: `agent_egress` (shares the sandbox's egress credential path).
+- Depends on: `agent_credentials` (hashed user ids in telemetry).
 - Used by: `agent_harness_service` (its sole host).
 
 ## Recipes
@@ -43,6 +43,11 @@ on stock OpenSSH reverse forwarding.
 
 - Every host must heartbeat its private HTTP endpoint every 10 seconds; expired
   owners are offline after 45 seconds. Preview IDs fence replacement/cleanup.
+- The SSH port is public, so scanners and stale scripts retry constantly. A
+  refused SSH username is an `ssh.outcome` on `authenticate_ssh`, not an error;
+  `claim` consumes a token even when it refuses it, so refused tokens back off
+  per replica (`domain/service/backoff.rs`) and non-token usernames never reach
+  storage. Span `credential_id` joins a refusal to the `share` that minted it.
 - Public peers must be mutually reachable; destinations come only from the
   shared replica registry. A hop marker only prevents loops and never grants auth.
 - Queue owner-side per-preview HTTP streams for Vite module fan-out (see

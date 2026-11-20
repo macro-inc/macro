@@ -9,17 +9,45 @@ async fn ssh_credentials_have_a_safe_username_prefix_without_losing_entropy() {
     let payload = share.token.strip_prefix("preview_").unwrap();
     assert_eq!(URL_SAFE_NO_PAD.decode(payload).unwrap().len(), 32);
     // The prefix is part of the credential, not merely a client-side decoration.
-    assert!(service.authenticate_ssh(payload).await.is_err());
-    assert!(service.authenticate_ssh(&share.token).await.is_ok());
+    assert!(
+        service
+            .authenticate_ssh(payload, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        service
+            .authenticate_ssh(&share.token, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_some()
+    );
 }
 
 #[tokio::test]
 async fn ssh_credentials_are_single_use_and_forward_is_scoped() {
     let (service, _, _) = fixture(2222);
     let share = service.share(identity(), 3000).await.unwrap();
-    assert!(service.authenticate_ssh("wrong").await.is_err());
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
-    assert!(service.authenticate_ssh(&share.token).await.is_err());
+    assert!(
+        service
+            .authenticate_ssh("wrong", "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        service
+            .authenticate_ssh(&share.token, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
     let tunnel = Arc::new(TcpTunnel("127.0.0.1:1".parse().unwrap()));
     assert!(
         service
@@ -51,7 +79,11 @@ async fn ssh_credentials_are_single_use_and_forward_is_scoped() {
 async fn browser_tickets_are_host_bound_single_use_and_permissions_rechecked() {
     let (service, authority, _) = fixture(2222);
     let share = service.share(identity(), 3000).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     service.ready(&lease).await;
     let launch = service.launch(receipt(AccessLevel::View)).await.unwrap();
     assert!(
@@ -108,7 +140,13 @@ async fn expiry_stop_and_token_timeout_close_access() {
         .unwrap()
         .1
         .expires = 0;
-    assert!(service.authenticate_ssh(&share.token).await.is_err());
+    assert!(
+        service
+            .authenticate_ssh(&share.token, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
     authority
         .1
         .0
@@ -119,7 +157,21 @@ async fn expiry_stop_and_token_timeout_close_access() {
         .unwrap()
         .1
         .expires = now_ms() + 120000;
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
+    // A refused credential waits out its backoff before storage is asked again.
+    tokio::time::pause();
+    assert!(
+        service
+            .authenticate_ssh(&share.token, "OpenSSH_9.6")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    tokio::time::advance(Duration::from_secs(1)).await;
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     service.ready(&lease).await;
     let launch = service.launch(receipt(AccessLevel::View)).await.unwrap();
     authority
@@ -304,7 +356,11 @@ async fn forwarding_admission_precedes_dial_and_holds_slots_through_body() {
         .into_future(),
     );
     let share = follower.share(identity(), 3000).await.unwrap();
-    let lease = owner.authenticate_ssh(&share.token).await.unwrap();
+    let lease = owner
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     owner
         .register(&lease, "127.0.0.1", 1, Arc::new(TcpTunnel(upstream_addr)))
         .unwrap();
@@ -419,7 +475,11 @@ async fn forwarding_admission_precedes_dial_and_holds_slots_through_body() {
 async fn disconnect_retries_fenced_cleanup_after_repository_failure() {
     let (service, authority, _) = fixture(2222);
     let share = service.share(identity(), 3000).await.unwrap();
-    let lease = service.authenticate_ssh(&share.token).await.unwrap();
+    let lease = service
+        .authenticate_ssh(&share.token, "OpenSSH_9.6")
+        .await
+        .unwrap()
+        .unwrap();
     service.ready(&lease).await;
     authority.1.1.store(true, Ordering::SeqCst);
     service.finish(&lease, PreviewStatus::Offline).await;
@@ -453,7 +513,7 @@ async fn revoked_agent_claim_retains_failed_cleanup_for_retry() {
     authority.0.store(false, Ordering::SeqCst);
     authority.1.1.store(true, Ordering::SeqCst);
     assert!(matches!(
-        service.authenticate_ssh(&share.token).await,
+        service.authenticate_ssh(&share.token, "OpenSSH_9.6").await,
         Err(PreviewError::Denied)
     ));
     assert_eq!(
