@@ -63,6 +63,28 @@ where
         .await
     }
 
+    /// Lists up to `limit` identifiers of messages received at or after
+    /// `since`, newest first, carrying all requested provider labels.
+    #[tracing::instrument(skip(self), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
+    pub async fn list_messages_since(
+        &self,
+        link_id: Uuid,
+        limit: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<String>, EmailApiError> {
+        self.read_with_token(
+            link_id,
+            ApiOperationKind::ListMessages,
+            |token| async move {
+                self.repository
+                    .list_messages_since(&token, limit, label_ids, since)
+                    .await
+            },
+        )
+        .await
+    }
+
     /// Lists message identifiers belonging to one provider thread.
     #[tracing::instrument(skip(self), fields(retry_count = tracing::field::Empty, gate_in_flight = tracing::field::Empty, gate_cap = tracing::field::Empty))]
     pub async fn get_message_ids_for_thread(

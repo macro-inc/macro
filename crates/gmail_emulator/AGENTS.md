@@ -177,8 +177,9 @@ a local stack, without Google accounts.
   code exchange can be retried. A fault that names a mailbox answers after
   the request took effect.
 - Waiting is event driven (`wait_for_push_deliveries`); don't add sleep loops.
-- `q` understands only the operators listed in `src/query.rs`; `OR` and
-  parentheses match as plain words.
+- `q` understands only the operators listed in `src/query.rs`; `OR`,
+  parentheses and `after:` with anything but Unix seconds match as plain
+  words. `after:` compares the internal date, so a seed's `date` sets it.
 - An event is stored as Google's own JSON object and patched as Google
   patches: `null` removes a field, an object merges, an array replaces. An
   event id is base32hex (`0-9`, `a-v`, five characters or more); a seed that

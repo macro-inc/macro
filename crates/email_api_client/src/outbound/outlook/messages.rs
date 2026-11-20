@@ -298,11 +298,40 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 ),
             );
         }
-        let page: wire::Page<wire::Message> = self.get(token, url).await?;
-        page.value
-            .into_iter()
-            .map(|message| normalize(message, Vec::new(), link_id, folders))
-            .collect()
+        // Graph may answer a page short of `$top` with more to come: follow
+        // its pages until the limit. A message that can't be read is left
+        // out and counted, so one bad message keeps the rest.
+        let limit = usize::from(limit);
+        let mut messages = Vec::new();
+        let mut failed = 0usize;
+        loop {
+            // Each message decodes on its own, so one Graph can't describe
+            // leaves the rest of its page.
+            let page: wire::Page<serde_json::Value> = self.get(token, url).await?;
+            for message in page.value {
+                let read = serde_json::from_value::<wire::Message>(message)
+                    .map_err(|_| invalid_response("a message that does not decode"))
+                    .and_then(|message| normalize(message, Vec::new(), link_id, folders));
+                match read {
+                    Ok(message) => messages.push(message),
+                    Err(error) => {
+                        failed += 1;
+                        tracing::debug!(%link_id, error = %error, "could not read a recent Outlook message");
+                    }
+                }
+            }
+            match page.next {
+                Some(next) if messages.len() + failed < limit => {
+                    url = self.continuation(&StreamToken::new(next))?;
+                }
+                _ => break,
+            }
+        }
+        if failed > 0 {
+            tracing::warn!(%link_id, failed_message_count = failed, "left out recent Outlook messages that failed to read");
+        }
+        messages.truncate(limit);
+        Ok(messages)
     }
 
     async fn attachment(

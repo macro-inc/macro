@@ -47,11 +47,13 @@ async fn an_error_status_fails_the_call() {
         .await;
     let client = EmailServiceClient::new("internal-key".to_owned(), server.uri());
 
-    let result = client
+    let error = client
         .get_recent_inbox_messages("macro|owner@example.com", 20)
-        .await;
+        .await
+        .unwrap_err();
 
-    assert!(result.is_err());
+    // The error names no user: callers record it on their spans.
+    assert!(!format!("{error:#}").contains("owner"), "{error:#}");
 }
 
 #[tokio::test]

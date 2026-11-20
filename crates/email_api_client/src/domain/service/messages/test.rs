@@ -11,6 +11,7 @@ enum MessageCall {
     Message(Uuid, String),
     MessageLabels(String),
     Messages(u32, Vec<String>),
+    MessagesSince(u32, Vec<String>, i64),
     MessageIdsForThread(String),
     Thread(Uuid, String),
     Threads(u32, Option<String>, Vec<String>),
@@ -75,6 +76,23 @@ impl MailboxMessageClient for MessageClient {
             MessageCall::Messages(
                 limit,
                 label_ids.iter().map(|label| (*label).to_string()).collect(),
+            ),
+        ))
+    }
+
+    async fn list_messages_since(
+        &self,
+        access_token: &AccessToken,
+        limit: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<String>, EmailApiError> {
+        Err(self.record(
+            access_token,
+            MessageCall::MessagesSince(
+                limit,
+                label_ids.iter().map(|label| (*label).to_string()).collect(),
+                since.timestamp(),
             ),
         ))
     }
@@ -226,6 +244,18 @@ async fn message_reads_use_correct_operation_kinds_and_forward_parameters() {
         async |service, link_id| {
             service
                 .list_messages(link_id, 25, &["inbox", "unread"])
+                .await
+                .map(|_| ())
+        },
+    )
+    .await;
+    assert_call(
+        ApiOperationKind::ListMessages,
+        |_| MessageCall::MessagesSince(500, vec!["INBOX".into()], 1_700_000_000),
+        async |service, link_id| {
+            let since = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+            service
+                .list_messages_since(link_id, 500, &["INBOX"], since)
                 .await
                 .map(|_| ())
         },

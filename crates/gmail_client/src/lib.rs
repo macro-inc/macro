@@ -49,7 +49,7 @@ pub(crate) fn sanitize_error_body(body: &str) -> String {
 
 use crate::auth::{fetch_google_public_keys, verify_google_jwt};
 use crate::contacts::get_self_connection;
-use crate::messages::{get_message, get_message_label_ids, list_messages};
+use crate::messages::{get_message, get_message_label_ids, list_messages, list_messages_since};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
 use macro_service_urls::{GmailApiUrl, GoogleOauthCertsUrl, GooglePeopleApiUrl};
@@ -163,6 +163,20 @@ impl GmailClient {
         label_ids: &[&str],
     ) -> Result<Vec<String>, GmailApiHttpError> {
         list_messages(self, access_token, num_messages, label_ids).await
+    }
+
+    /// Lists up to `limit` ids of the messages Gmail received at or after
+    /// `since_seconds` (Unix time), newest first, carrying all of
+    /// `label_ids`, across as many list pages as that takes.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn list_messages_since(
+        &self,
+        access_token: &str,
+        limit: u32,
+        label_ids: &[&str],
+        since_seconds: i64,
+    ) -> Result<Vec<String>, GmailApiHttpError> {
+        list_messages_since(self, access_token, limit, label_ids, since_seconds).await
     }
 
     // Returns a list containing the message ids belonging to the thread.

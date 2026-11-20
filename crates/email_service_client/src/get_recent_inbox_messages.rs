@@ -87,6 +87,8 @@ impl EmailServiceClient {
         Ok(url)
     }
 
+    /// Errors leave out the URL: its path holds the user id, an email
+    /// address, and the callers' spans record their errors.
     async fn read_recent_messages(
         &self,
         url: reqwest::Url,
@@ -99,8 +101,9 @@ impl EmailServiceClient {
             .get(url)
             .headers(trace_headers)
             .send()
-            .await?
-            .error_for_status()?;
-        Ok(response.json().await?)
+            .await
+            .and_then(reqwest::Response::error_for_status)
+            .map_err(reqwest::Error::without_url)?;
+        Ok(response.json().await.map_err(reqwest::Error::without_url)?)
     }
 }

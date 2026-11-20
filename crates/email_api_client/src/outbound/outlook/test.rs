@@ -1051,3 +1051,66 @@ async fn recent_inbox_messages_since_a_time_filter_on_when_they_arrived() {
 
     assert_eq!(messages.len(), 1);
 }
+
+#[tokio::test]
+async fn recent_inbox_messages_follow_short_pages_and_leave_out_unreadable_messages() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let next = format!(
+        "{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-2",
+        server.uri()
+    );
+    // A first page short of `$top`, with one message missing a field it needs.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "3"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1"), {"id": "m2", "parentFolderId": "inbox"}],
+            "@odata.nextLink": next
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m3"), message("m4")],
+            "@odata.nextLink": format!("{}/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-3", server.uri())
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let messages = api
+        .recent_inbox_messages(
+            &token,
+            Uuid::now_v7(),
+            3,
+            Some("2026-10-21T09:30:00Z".parse().unwrap()),
+            &[],
+        )
+        .await
+        .unwrap();
+
+    // The limit is met after the second page, so the third is never asked for;
+    // the unreadable message is left out.
+    let ids: Vec<_> = messages
+        .iter()
+        .map(|message| message.content.message.provider_id.clone())
+        .collect();
+    assert_eq!(
+        ids,
+        vec![
+            Some("m1".to_owned()),
+            Some("m3".to_owned()),
+            Some("m4".to_owned())
+        ]
+    );
+}

@@ -1,7 +1,8 @@
 //! Gmail's `q` search syntax, as far as the emulator understands it:
 //! space-separated terms that must all match, `-` to negate one, quoted
 //! phrases, and the operators `rfc822msgid:`, `from:`, `to:`, `subject:`,
-//! `label:`, `is:`, `in:` and `has:attachment`. `OR`, braces and parentheses
+//! `label:`, `is:`, `in:`, `has:attachment` and `after:` with Unix seconds
+//! (received later than that second). `OR`, braces, parentheses and dates
 //! are not understood; they match as plain words.
 
 use std::collections::BTreeSet;
@@ -30,6 +31,8 @@ enum Predicate {
     /// A place such as `inbox`, `trash` or `anywhere`.
     In(String),
     HasAttachment,
+    /// Received after this Unix second.
+    After(i64),
     Text(String),
 }
 
@@ -77,6 +80,10 @@ fn term(input: &str) -> IResult<&str, Term> {
         Some("is") => Predicate::Is(lowered),
         Some("in") => Predicate::In(lowered),
         Some("has") if lowered == "attachment" => Predicate::HasAttachment,
+        Some("after") => lowered.parse::<i64>().map_or_else(
+            |_| Predicate::Text(format!("after:{lowered}")),
+            Predicate::After,
+        ),
         Some(other) => Predicate::Text(format!("{other}:{lowered}")),
         None => Predicate::Text(lowered),
     };
@@ -114,7 +121,15 @@ impl Query {
     }
 
     pub(crate) fn matches(&self, message: &StoredMessage, labels: &[Label]) -> bool {
-        self.matches_parsed(&message.parsed, &message.labels, labels)
+        self.terms.iter().all(|term| {
+            let matched = match term.predicate {
+                Predicate::After(seconds) => {
+                    message.internal_date_ms > seconds.saturating_mul(1000)
+                }
+                _ => predicate_matches(&term.predicate, &message.parsed, &message.labels, labels),
+            };
+            matched != term.negated
+        })
     }
 
     fn matches_parsed(&self, parsed: &Parsed, held: &BTreeSet<String>, labels: &[Label]) -> bool {
@@ -159,6 +174,8 @@ fn predicate_matches(
             other => held.contains(&other.to_uppercase()),
         },
         Predicate::HasAttachment => parsed.has_attachment,
+        // A filter reads a message before Gmail stores it, so it has no date yet.
+        Predicate::After(_) => true,
         Predicate::Text(needle) => parsed.search_text.contains(needle),
     }
 }

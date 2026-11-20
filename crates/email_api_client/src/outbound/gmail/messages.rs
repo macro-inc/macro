@@ -134,6 +134,24 @@ impl MailboxMessageClient for GmailApiClientRepository {
             .map_err(map_gmail_error)
     }
 
+    async fn list_messages_since(
+        &self,
+        access_token: &AccessToken,
+        limit: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<String>, EmailApiError> {
+        self.client
+            .list_messages_since(
+                access_token.expose_secret(),
+                limit,
+                label_ids,
+                since.timestamp(),
+            )
+            .await
+            .map_err(map_gmail_error)
+    }
+
     async fn get_message_ids_for_thread(
         &self,
         access_token: &AccessToken,

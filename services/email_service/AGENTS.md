@@ -340,8 +340,14 @@ the gateway `/email` prefix.
   `limit` (at most 100), or with `days` the mail of those days (at most 30
   days and 500 messages, with snippets on only the newest `texts`). Every
   call spends live provider quota; Gmail reads three messages at a time to
-  stay under the gate's live cap, so a month of 500 is 501 Gmail requests.
-  Don't record message content or addresses on its spans.
+  stay under the gate's live cap. A month of 500 is a dated list (`after:`)
+  and 500 reads, about 2,505 quota units, more than one 10-second window of
+  a mailbox's live allowance, so a window read waits out the gate's
+  refusals for up to 45 s and leaves out what is still unread then; the
+  newest-`limit` read is refused at once, as before. Outlook pages through
+  `@odata.nextLink`. Don't record message content or addresses on its
+  spans; `{user_id}` is an email address, which `macro_tower_layers`
+  keeps out of `url.path`.
 - Connecting an inbox writes its `email_links` row, which a CRM contact
   population share-locks for its whole transaction. The connect transactions
   (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)

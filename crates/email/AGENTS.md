@@ -409,7 +409,10 @@ tools — hexagonal, heavily feature-gated.
   fails is skipped. Subjects are cut to 200 characters and snippets to the
   caller's `snippet_chars` (the provider's 300 by default, at most 500, past
   the preview taken from the body) there, not in the adapters; each message
-  carries its label names.
+  carries its label names. `read_window` reads the mail of the last `days`
+  (at most 30) instead: the newest `limit` across inboxes (at most 500),
+  only those received since the window's start (an undated message is left
+  out), with snippets on only the newest `texts`.
 - `.eml` downloads go through `domain/message_source.rs`, which authorizes like
   attachment reads and fetches the provider's original RFC 822 bytes (Gmail
   `format=raw`, Graph `$value`); drafts and unsynced messages have no source.

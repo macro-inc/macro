@@ -81,6 +81,9 @@ pub struct Mail {
     pub in_reply_to: Option<String>,
     /// Attachments.
     pub attachments: Vec<MailAttachment>,
+    /// When it arrived: its `Date` header and the provider's received time.
+    /// The provider's clock when absent.
+    pub date: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// An attachment of a [`Mail`].
@@ -729,6 +732,7 @@ impl Mail {
             html: self.html.clone(),
             message_id: self.message_id.clone(),
             in_reply_to: self.in_reply_to.clone(),
+            date: self.date,
             attachments: self
                 .attachments
                 .iter()
@@ -754,6 +758,7 @@ impl Mail {
             html: self.html.clone(),
             message_id: self.message_id.clone(),
             in_reply_to: self.in_reply_to.clone(),
+            date: self.date,
             attachments: self
                 .attachments
                 .iter()

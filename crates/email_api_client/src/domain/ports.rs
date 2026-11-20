@@ -78,6 +78,16 @@ pub trait MailboxMessageClient: Send + Sync + 'static {
         label_ids: &[&str],
     ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
 
+    /// Lists up to `limit` identifiers of messages received at or after
+    /// `since`, newest first, carrying all requested provider labels.
+    fn list_messages_since(
+        &self,
+        access_token: &AccessToken,
+        limit: u32,
+        label_ids: &[&str],
+        since: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<Vec<String>, EmailApiError>> + Send;
+
     /// Lists the message identifiers belonging to a provider thread.
     fn get_message_ids_for_thread(
         &self,
@@ -428,6 +438,16 @@ impl MailboxMessageClient for NoOpMailboxClient {
         _: &AccessToken,
         _: u32,
         _: &[&str],
+    ) -> Result<Vec<String>, EmailApiError> {
+        Err(unavailable())
+    }
+
+    async fn list_messages_since(
+        &self,
+        _: &AccessToken,
+        _: u32,
+        _: &[&str],
+        _: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<String>, EmailApiError> {
         Err(unavailable())
     }

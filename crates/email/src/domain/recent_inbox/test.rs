@@ -279,38 +279,49 @@ async fn a_window_read_keeps_the_last_days_and_text_for_only_the_newest() {
         ..Reader::default()
     };
     let service = RecentInboxService::new(Mailboxes(Ok(vec![gmail, outlook])), reader);
-
-    let messages = service
-        .read_window(
-            &actor(),
+    let owner = actor();
+    let read = |limit| {
+        service.read_window(
+            &owner,
             WindowRead {
                 days: 10,
-                limit: 3,
+                limit,
                 texts: 2,
                 snippet_chars: DEFAULT_SNIPPET_CHARS,
             },
             at("2026-11-20T00:00:00Z") + Duration::hours(12),
         )
-        .await
-        .unwrap();
-
-    assert_eq!(
+    };
+    let subjects = |messages: Vec<RecentInboxMessage>| {
         messages
-            .iter()
-            .map(|message| (message.subject.as_deref(), message.snippet.as_deref()))
-            .collect::<Vec<_>>(),
+            .into_iter()
+            .map(|message| (message.subject, message.snippet))
+            .collect::<Vec<_>>()
+    };
+    let text = |subject: &str| (Some(subject.to_owned()), Some(format!("{subject} text")));
+
+    // Room for every message: only those of the window are kept.
+    assert_eq!(
+        subjects(read(10).await.unwrap()),
         vec![
-            (Some("Today"), Some("Today text")),
-            (Some("Yesterday"), Some("Yesterday text")),
-            (Some("Last week"), None),
+            text("Today"),
+            text("Yesterday"),
+            (Some("Last week".to_owned()), None),
         ]
+    );
+    // The newest across both inboxes.
+    assert_eq!(
+        subjects(read(2).await.unwrap()),
+        vec![text("Today"), text("Yesterday")]
     );
     let since = Some(at("2026-11-10T12:00:00Z"));
     assert_eq!(
         *service.reader.reads.lock().unwrap(),
         vec![
-            RecentRead { limit: 3, since },
-            RecentRead { limit: 3, since }
+            RecentRead { limit: 10, since },
+            RecentRead { limit: 10, since },
+            RecentRead { limit: 2, since },
+            RecentRead { limit: 2, since }
         ]
     );
 }

@@ -60,6 +60,68 @@ pub(crate) async fn list_messages(
         .collect())
 }
 
+/// Lists up to `limit` provider ids of messages received at or after
+/// `since_seconds` (Unix time), newest first, carrying all of `label_ids`.
+/// Follows the list's pages until `limit` ids or the last page: Gmail may
+/// answer a page short of `maxResults` with more to come.
+#[tracing::instrument(skip(client, access_token), fields(page_count = tracing::field::Empty), err)]
+pub(crate) async fn list_messages_since(
+    client: &GmailClient,
+    access_token: &str,
+    limit: u32,
+    label_ids: &[&str],
+    since_seconds: i64,
+) -> Result<Vec<String>, GmailApiHttpError> {
+    let url = format!("{}/users/me/messages", client.base_url);
+    // Gmail's `after:` takes seconds as well as dates, and compares the time Gmail received the message.
+    let query = format!("after:{}", since_seconds.saturating_sub(1));
+    let mut ids = Vec::new();
+    let mut page_token: Option<String> = None;
+    let mut pages = 0u32;
+    while ids.len() < limit as usize {
+        let remaining = limit - u32::try_from(ids.len()).unwrap_or(limit);
+        let mut query_params = vec![
+            (
+                "maxResults",
+                min(remaining, LIST_MESSAGES_BATCH_SIZE).to_string(),
+            ),
+            ("q", query.clone()),
+        ];
+        for label_id in label_ids {
+            query_params.push(("labelIds", label_id.to_string()));
+        }
+        if let Some(token) = page_token.take() {
+            query_params.push(("pageToken", token));
+        }
+        let response = client
+            .inner
+            .get(&url)
+            .bearer_auth(access_token)
+            .query(&query_params)
+            .send()
+            .await
+            .map_err(GmailApiHttpError::transport)?;
+        if !response.status().is_success() {
+            return Err(unsuccessful_response(response).await);
+        }
+        let page: ListMessagesResponse = decode_json_response(response).await?;
+        pages += 1;
+        ids.extend(
+            page.messages
+                .unwrap_or_default()
+                .into_iter()
+                .map(|message| message.id),
+        );
+        match page.next_page_token {
+            Some(token) if !token.is_empty() => page_token = Some(token),
+            _ => break,
+        }
+    }
+    ids.truncate(limit as usize);
+    tracing::Span::current().record("page_count", pages);
+    Ok(ids)
+}
+
 /// Finds a unique sent message, including messages moved into spam or trash.
 /// Ambiguous or incomplete search responses must never count as proof of absence.
 #[tracing::instrument(skip(client, access_token, message_id), err)]

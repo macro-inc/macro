@@ -204,6 +204,16 @@ impl MailboxMessageClient for FakeRepository {
         self.unavailable("list_messages")
     }
 
+    async fn list_messages_since(
+        &self,
+        _: &AccessToken,
+        _: u32,
+        _: &[&str],
+        _: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<String>, EmailApiError> {
+        self.unavailable("list_messages_since")
+    }
+
     async fn get_message_ids_for_thread(
         &self,
         _: &AccessToken,
