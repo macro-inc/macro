@@ -307,7 +307,8 @@ where
 
     /// Ends the claim's turn. Requests that arrived during the run get one
     /// new message, at the back of the mailbox's group. If it can't be sent,
-    /// the entry goes back to this claim and the message is left to be
+    /// or the settle's answer is lost, the entry goes back to this claim (a
+    /// no-op unless it was handed to `next`) and the message is left to be
     /// delivered again, so those requests are not lost.
     async fn settle(
         &self,
@@ -325,7 +326,7 @@ where
             Ok(SettledContact::Handed(hints)) => hints,
             Err(error) => {
                 tracing::warn!(error = ?error, "could not settle a CRM population");
-                return Handled::left(outcome);
+                return self.give_back(link_id, message, next, outcome).await;
             }
         };
 
@@ -338,11 +339,25 @@ where
             return Handled::done(outcome);
         };
         tracing::warn!(error = ?error, "could not queue the requests that arrived during a CRM population");
-        if let Err(restore_error) = pending
+        self.give_back(link_id, message, next, outcome).await
+    }
+
+    /// Hands the entry back from `next`, which has no message, to the claim
+    /// whose redelivery will run it.
+    async fn give_back(
+        &self,
+        link_id: Uuid,
+        message: &CrmPopulationContact,
+        next: Uuid,
+        outcome: &'static str,
+    ) -> Handled {
+        if let Err(error) = self
+            .requests
+            .pending
             .restore(link_id, &message.contact, message.claim, next)
             .await
         {
-            tracing::warn!(error = ?restore_error, "could not restore a CRM population's pending entry");
+            tracing::warn!(error = ?error, "could not restore a CRM population's pending entry");
         }
         Handled::left(outcome)
     }

@@ -293,6 +293,24 @@ async fn requests_made_during_a_run_get_one_new_message_or_wait_for_redelivery()
 }
 
 #[tokio::test]
+async fn a_settle_whose_answer_is_lost_gives_any_hand_off_back_to_the_claim() {
+    let fake = Fake::default();
+    fake.fail("settle");
+
+    let disposition = fake
+        .service()
+        .process(&delivered("buyer@example.com"), 1)
+        .await;
+
+    // The settle may have handed the entry to a claim no message carries.
+    assert_eq!(disposition, PopulationDisposition::LeaveForRedelivery);
+    let state = fake.0.lock().unwrap();
+    let (claim, _) = state.restored.expect("restored");
+    assert_eq!(claim, CLAIM);
+    assert!(state.sent.is_empty());
+}
+
+#[tokio::test]
 async fn a_gone_mailbox_or_teamless_owner_ends_the_population_with_its_entry() {
     let fake = Fake::default();
     fake.0.lock().unwrap().link = None;
