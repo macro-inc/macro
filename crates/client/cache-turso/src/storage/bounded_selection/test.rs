@@ -90,14 +90,44 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
             );
             for direction in [SortDirection::Asc, SortDirection::Desc] {
                 let query = query(predicate.clone(), direction, direction);
-                let (sql, parameters) =
-                    candidate_sql(query.as_query(), conjunction::FactSource::Authority, &[]);
+                let (sql, parameters) = candidate_sql(
+                    query.as_query(),
+                    conjunction::FactSource::Authority,
+                    &[],
+                    None,
+                    candidate_budget(query.as_query()),
+                );
                 let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
                 let rows = driver::query_prepared(&mut statement, parameters).unwrap();
                 assert_eq!(rows.len(), MIN_CANDIDATES);
                 assert!(
                     statement.metrics().vm_steps < 20_000,
                     "{count} records: {} VM steps",
+                    statement.metrics().vm_steps
+                );
+                // A continuation seeks to its position: reading on from the
+                // middle of the index costs what the first window did.
+                let middle = Position {
+                    value: i64::from(count / 2),
+                    document: match direction {
+                        SortDirection::Asc => i64::MIN,
+                        SortDirection::Desc => i64::MAX,
+                    },
+                };
+                let (sql, parameters) = candidate_sql(
+                    query.as_query(),
+                    conjunction::FactSource::Authority,
+                    &[],
+                    Some(middle),
+                    candidate_budget(query.as_query()),
+                );
+                let mut statement = driver::prepare(&storage.connection(), &sql).unwrap();
+                let rows = driver::query_prepared(&mut statement, parameters).unwrap();
+                assert_eq!(rows.len(), MIN_CANDIDATES);
+                assert_eq!(required_i64(&rows[0], 1).unwrap(), middle.value);
+                assert!(
+                    statement.metrics().vm_steps < 20_000,
+                    "{count} records, continued: {} VM steps",
                     statement.metrics().vm_steps
                 );
                 assert!(
@@ -129,7 +159,7 @@ fn dense_pages_have_a_corpus_independent_vm_budget() {
 }
 
 #[test]
-fn ties_sparse_matches_and_unrelated_scopes_fall_back_without_losing_results() {
+fn ties_sparse_matches_and_unrelated_scopes_widen_without_losing_results() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("bounded-fallback").unwrap();
         let docs = (0..200)
@@ -169,11 +199,14 @@ fn ties_sparse_matches_and_unrelated_scopes_fall_back_without_losing_results() {
                     PredicateExpr::Not(Box::new(owner("rare"))),
                     PredicateExpr::None,
                 ] {
-                    let query = query(predicate, direction, tie);
-                    assert!(
+                    let query = query(predicate.clone(), direction, tie);
+                    // Two hundred records fit a widened window, so only None,
+                    // which never speculates, takes the set-based plan.
+                    assert_eq!(
                         try_select(&storage.connection(), &query, &[])
                             .unwrap()
-                            .is_none()
+                            .is_none(),
+                        matches!(predicate, PredicateExpr::None)
                     );
                     let expected = evaluate_reference(&query, &docs)
                         .into_iter()
@@ -374,6 +407,256 @@ fn exhausted_windows_and_multi_partition_queries_match_the_original_plan() {
                 panic!("expected complete page")
             };
             assert_eq!(keys.len(), count as usize);
+        }
+    });
+}
+
+fn query_with_limit(
+    predicate: PredicateExpr,
+    direction: SortDirection,
+    tie: SortDirection,
+    limit: u16,
+) -> ValidatedIndexQuery {
+    let mut descriptor = query(predicate, direction, tie).as_query().clone();
+    descriptor.limit = limit;
+    ValidatedIndexQuery::new(descriptor).unwrap()
+}
+
+/// Owner by position: "a" on every tenth record, "rare" on every thousandth,
+/// "b" otherwise, so filters range from dense to far sparser than the cap.
+fn mixed(n: u32, timestamp: i64) -> IndexDocument {
+    let mut doc = document(n, timestamp);
+    let owner = if n.is_multiple_of(1_000) {
+        "rare"
+    } else if n.is_multiple_of(10) {
+        "a"
+    } else {
+        "b"
+    };
+    doc.exact_facts[0].value = ExactValue::utf8(owner).unwrap();
+    doc
+}
+
+#[test]
+fn sparse_filters_widen_to_a_page_and_stop_at_the_cap() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("bounded-widen").unwrap();
+        storage
+            .put_batch_with_projections(
+                Vec::new(),
+                (0..6_000)
+                    .map(|n| ProjectionMutation::Replace(mixed(n, i64::from(n))))
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            // One match in ten needs about ten times the first window.
+            let sparse = query(owner("a"), direction, direction);
+            assert!(
+                try_select(&storage.connection(), &sparse, &[])
+                    .unwrap()
+                    .is_some()
+            );
+            let page = hits(&storage.connection(), &sparse, &[]);
+            assert_eq!(page.len(), 20);
+            assert_eq!(page, reference(&storage.connection(), &sparse, &[]));
+            // Six matches in six thousand cannot fill a page inside the cap.
+            let rare = query(owner("rare"), direction, direction);
+            assert!(
+                try_select(&storage.connection(), &rare, &[])
+                    .unwrap()
+                    .is_none()
+            );
+            assert_eq!(
+                hits(&storage.connection(), &rare, &[]),
+                reference(&storage.connection(), &rare, &[])
+            );
+        }
+    });
+}
+
+#[test]
+fn next_budget_grows_by_hit_rate_within_bounds() {
+    // No hits yet: the largest step.
+    assert_eq!(next_budget(64, 0, 20), Some(64 * MAX_GROWTH));
+    // Most of a page: at least double.
+    assert_eq!(next_budget(64, 19, 20), Some(128));
+    // A page and a quarter at the observed rate: 64 * 25 / 5.
+    assert_eq!(next_budget(64, 5, 20), Some(320));
+    // Never past the cap, and nothing after it.
+    assert_eq!(next_budget(2_048, 0, 20), Some(MAX_CANDIDATES));
+    assert_eq!(next_budget(MAX_CANDIDATES, 0, 20), None);
+    // A rate that cannot fill a page within the cap falls back at once.
+    assert_eq!(next_budget(512, 1, 100), None);
+}
+
+/// Every page of every filter, limit, direction and tie order, read through
+/// the widening plan, equals the set-based plan over the same snapshot, with
+/// and without optimistic shadows that move, rescore, add and delete records.
+#[test]
+fn widened_windows_match_the_set_based_plan_on_every_page() {
+    block_on(async {
+        let docs = (0..900u32)
+            .map(|n| {
+                // Ties of three, then of thirty, so cutoffs and window ends
+                // land inside ties.
+                let timestamp = if n < 450 { n / 3 } else { 150 + n / 30 };
+                let mut doc = mixed(n, i64::from(timestamp));
+                if n % 13 == 0 {
+                    doc.partition = Token::new("other").unwrap();
+                }
+                if n % 17 == 0 {
+                    doc.profile = Profile::new(Token::new("other").unwrap());
+                }
+                if n % 19 == 0 {
+                    doc.sort_facts.clear();
+                }
+                doc
+            })
+            .collect::<Vec<_>>();
+        let predicates = [
+            PredicateExpr::All,
+            owner("a"),
+            owner("b"),
+            owner("rare"),
+            owner("missing"),
+            PredicateExpr::Not(Box::new(owner("b"))),
+            PredicateExpr::And(
+                Box::new(PredicateExpr::Not(Box::new(owner("a")))),
+                Box::new(PredicateExpr::Not(Box::new(owner("rare")))),
+            ),
+            PredicateExpr::Or(Box::new(owner("a")), Box::new(owner("rare"))),
+        ];
+        for shadowed in [false, true] {
+            let mut storage = TursoStorage::open_in_memory("bounded-sweep").unwrap();
+            storage
+                .put_batch_with_projections(
+                    Vec::new(),
+                    docs.iter()
+                        .cloned()
+                        .map(ProjectionMutation::Replace)
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            let mut excluded = Vec::new();
+            if shadowed {
+                let complete = |document| PendingOptimisticProjection {
+                    state: OptimisticProjectionState::Complete(document),
+                    uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                };
+                let mut shadows = Vec::new();
+                for n in (0..900u32).step_by(7) {
+                    shadows.push(match n % 4 {
+                        // Rescored and re-owned.
+                        0 => complete(mixed(n + 10, i64::from(n % 200))),
+                        1 => {
+                            let mut moved = mixed(n, i64::from(n / 3));
+                            moved.partition = Token::new("other").unwrap();
+                            complete(moved)
+                        }
+                        2 => PendingOptimisticProjection {
+                            state: OptimisticProjectionState::Deleted {
+                                record_key: mixed(n, 0).record_key,
+                                profile: Profile::new(Token::new("profile-v1").unwrap()),
+                                partition: Token::new("thing").unwrap(),
+                            },
+                            uncertainty: OptimisticUncertainty::Attributes(BTreeSet::new()),
+                        },
+                        _ => PendingOptimisticProjection {
+                            state: OptimisticProjectionState::Complete(mixed(n, 400)),
+                            uncertainty: OptimisticUncertainty::Attributes(
+                                [Token::new("owner").unwrap()].into(),
+                            ),
+                        },
+                    });
+                }
+                // New records only the optimistic layer holds.
+                for n in 2_000..2_200u32 {
+                    shadows.push(complete(mixed(n, i64::from(n % 500))));
+                }
+                storage
+                    .enqueue_mutation_with_shadow(queued("Sweep"), shadows)
+                    .await
+                    .unwrap();
+            }
+            for predicate in &predicates {
+                for limit in [1u16, 7, 20, 100] {
+                    for direction in [SortDirection::Asc, SortDirection::Desc] {
+                        for tie in [SortDirection::Asc, SortDirection::Desc] {
+                            let mut page =
+                                query_with_limit(predicate.clone(), direction, tie, limit);
+                            if shadowed {
+                                excluded = optimistic_query_status(&storage.connection(), &page)
+                                    .unwrap()
+                                    .uncertain_ids;
+                            }
+                            for _ in 0..8 {
+                                let actual = hits(&storage.connection(), &page, &excluded);
+                                assert_eq!(
+                                    actual,
+                                    reference(&storage.connection(), &page, &excluded),
+                                    "{predicate:?} limit {limit} {direction:?}/{tie:?} shadowed {shadowed}"
+                                );
+                                let Some((key, value)) = actual.last() else {
+                                    break;
+                                };
+                                page = page
+                                    .after(*value, PredicateRecordKey::new(key.clone()).unwrap())
+                                    .unwrap();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+/// The first window ends inside the tie that holds the page's last record, so
+/// it cannot tell which tied records belong on the page; the window must widen
+/// past the tie (or fall back) rather than return the tied records it holds.
+#[test]
+fn a_window_ending_inside_the_cutoff_tie_widens_past_it() {
+    block_on(async {
+        for direction in [SortDirection::Asc, SortDirection::Desc] {
+            let sign = match direction {
+                SortDirection::Asc => 1,
+                SortDirection::Desc => -1,
+            };
+            let docs = (0..319u32)
+                .rev()
+                .map(|n| {
+                    let value = match n {
+                        0..19 => i64::from(n),
+                        19..119 => 50,
+                        _ => 100 + i64::from(n),
+                    };
+                    document(n, sign * value)
+                })
+                .collect::<Vec<_>>();
+            let mut storage = TursoStorage::open_in_memory("bounded-cutoff-tie").unwrap();
+            storage
+                .put_batch_with_projections(
+                    Vec::new(),
+                    docs.iter()
+                        .cloned()
+                        .map(ProjectionMutation::Replace)
+                        .collect(),
+                )
+                .await
+                .unwrap();
+            for tie in [SortDirection::Asc, SortDirection::Desc] {
+                let query = query(PredicateExpr::All, direction, tie);
+                let expected = evaluate_reference(&query, &docs)
+                    .into_iter()
+                    .map(|hit| (hit.record_key.as_str().to_owned(), hit.sort_value))
+                    .collect::<Vec<_>>();
+                assert_eq!(expected.len(), 20);
+                assert_eq!(expected[19].1, sign * 50);
+                assert_eq!(hits(&storage.connection(), &query, &[]), expected);
+            }
         }
     });
 }
