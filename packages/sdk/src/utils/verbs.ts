@@ -166,10 +166,10 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     read: `
       getAttachment getAttachmentDocumentId messageOperationStatus resolveMessageOperation
       getMessage getMessageEml mailboxSettingsOperations getThread getThreadCalendarInvitations
-      getThreadReadReceipts
+      getThreadReadReceipts getAgentMailbox readAgentMailboxMessage
     `,
     listed: `
-      listContacts listBlockedSenders getScheduledMessages listEmailFilters listLabels listLinks
+      listAgentMailboxMessages listContacts listBlockedSenders getScheduledMessages listEmailFilters listLabels listLinks
       previewsInboxCursor getThreadMessagesHandler
     `,
     blocked: 'blockSender',
@@ -183,7 +183,7 @@ const methods: Record<string, Partial<Record<SdkVerb, string>>> = {
     uploaded: 'completeDraftAttachment',
     moved: 'transferDraft',
     edited: 'upsertEmailFilter updateThreadState updateThreadProject',
-    sent: 'sendMessage',
+    sent: 'sendMessage sendAgentMailboxMessage replyAgentMailboxMessage',
     labeled: 'addRemoveLabel addRemoveThreadLabel',
     archived: 'archiveThreads archiveThread',
     ran: 'threadOperations',

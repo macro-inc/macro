@@ -42,6 +42,10 @@ enforced by the ordinary backend APIs.
   `limitSearches` in code mode, whose bootstrap installs 4): every client's
   searches, every entity's search included, share it and wait in call order.
   Other processes (agent teammates, workers, npm users) set none.
+- `src/entities/agent-mailbox/`: `macro.agentMailbox`, an agent teammate's own
+  mailbox over email `/email/agent-mailbox` (`docs/design/agent-mailboxes.md`).
+  No method names a mailbox; sends and replies need `userConfirmation`, and the
+  server refuses a program's send without it.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
   (`BookingLink`), settings, booked meetings (`Booking`) and insights over calendar
   `/scheduling`. Link writes carry the user's quoted `userConfirmation`, which the
