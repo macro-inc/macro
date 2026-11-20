@@ -1,8 +1,13 @@
 //! Parses an email body with a bound on what html5ever builds. Its memory
-//! follows the nodes it builds, about a kilobyte each, not the bytes it reads:
-//! it rebuilds every formatting element still active (`<b>`, `<font>`) for
-//! each new paragraph, so a few kilobytes can build a million nodes. Its time
-//! follows nodes times depth, since most tags scan its stack of open elements.
+//! follows the nodes and attributes it builds, not the bytes it reads: it
+//! rebuilds every formatting element still active (`<b>`, `<font>`) inside
+//! each new paragraph, attributes and all, so a few kilobytes can build a
+//! million nodes, and a serialization of the tree writes each copy out. Its
+//! time follows nodes times depth, since most tags scan its stack of open
+//! elements, and nested formatting elements, which it compares pairwise.
+//!
+//! Each limit below stops the parse where the next change would pass it.
+//! Below every limit, the tree is the one [`Html::parse_document`] builds.
 
 use ego_tree::NodeId;
 use html5ever::driver::{self, Parser};

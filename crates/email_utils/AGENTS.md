@@ -80,20 +80,28 @@ sender/generic-address checks.
   peak.
 - Parse email HTML with `bounded_html`, never `Html::parse_document` or
   `parse_fragment` on a body as received. html5ever's memory follows the nodes
-  it builds, not the bytes it reads: it rebuilds every still-active
-  formatting element (`<b>`, `<font>`) inside each new paragraph, so 13 KB
-  once built a million nodes, and most tags scan its stack of open elements,
-  so deep nesting costs time squared. `bounded_html` wraps scraper's tree
-  sink, feeds the body a tag at a time and stops at `MAX_HTML_NODES` nodes or
-  `MAX_HTML_DEPTH` levels, reporting `clipped`. A byte or tag count bounds
-  neither. `sanitize_email_html` then cleans what was parsed and ends it with
-  `CLIPPED_NOTICE` (English only), since the reader shows only sanitized HTML
-  and the `.eml` download keeps the whole message; ammonia parses that
-  serialization again, which stays within the bound because it is
-  well-formed. `extract_reply_html` keeps a clipped body whole, as it does one
-  with no reply separator. Code that parses a body as received again (rather
-  than the sanitized HTML) goes through `bounded_html` too.
-  `tests/text_conversion_memory.rs` measures the peaks.
+  and attributes it builds, not the bytes it reads: it rebuilds every
+  still-active formatting element (`<b>`, `<font>`) inside each new
+  paragraph, attributes included, so 13 KB once built a million nodes. Most
+  tags scan its stack of open elements, and each new formatting element is
+  compared with every open one of the same name, so deep nesting costs time
+  squared. A byte or tag count bounds none of this. `bounded_html` wraps
+  scraper's tree sink, feeds the body a tag at a time and stops at the first
+  limit a change would pass: `MAX_HTML_NODES` (attributes count a quarter
+  node each, a text node only when it is new), `MAX_HTML_TEXT_BYTES` (text,
+  attributes and comments, each rebuilt element's attributes again),
+  `MAX_ELEMENT_ATTRIBUTES`, `MAX_FORMATTING_DEPTH` and `MAX_HTML_DEPTH`,
+  reporting `clipped`. Each limit has a case in
+  `tests/text_conversion_memory.rs`. `sanitize_email_html` then cleans what
+  was parsed and ends it with `CLIPPED_NOTICE` (English only), since the
+  reader shows only sanitized HTML and the `.eml` download keeps the whole
+  message. Ammonia parses that serialization again: the byte limit bounds
+  its size, and the formatting limit its comparisons. `extract_reply_html`
+  keeps a clipped body whole, as it does one with no reply separator. Code
+  that parses a body as received again (rather than the sanitized HTML) goes
+  through `bounded_html` too. html5ever also checks each attribute name in a
+  tag against every earlier one before anything reaches the tree; a tag with
+  150,000 attributes takes about 20 s, which is accepted.
 - Walk a parsed message with a loop, not recursion: nesting depth is the
   sender's choice, and a deep enough message overflows the stack. Reply
   stripping still recurses once per level (`get_previous_html_recursively`),
