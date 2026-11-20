@@ -269,8 +269,12 @@ async function readsPhase(pair: Pair, userFor: (key: string) => User) {
 
 /** Home never showed its list: which side, where it was, and a screenshot. */
 class DomTimeout extends Error {
-  constructor(readonly side: string, readonly detail: string) {
+  side: string;
+  detail: string;
+  constructor(side: string, detail: string) {
     super(`Home did not show on ${side}: ${detail}`);
+    this.side = side;
+    this.detail = detail;
   }
 }
 
