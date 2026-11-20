@@ -398,3 +398,63 @@ describe('another peer commits inside the worker’s load → commit window', ()
     );
   });
 });
+
+describe('a person keeps typing while the worker commits', () => {
+  /** Import one of the person's keystrokes after each of the next `times` loads. */
+  function typeOnLoads(
+    synced: SyncedDocument,
+    keystrokes: Uint8Array[],
+    times: number
+  ) {
+    let left = times;
+    const arm = () => {
+      synced.afterLoad = () => {
+        const keystroke = keystrokes.shift();
+        if (keystroke) synced.doc.import(keystroke);
+        if (--left > 0) arm();
+      };
+    };
+    arm();
+  }
+
+  it('merges the same base edit into each new revision until it lands', async () => {
+    const { synced, baseRevision, updates, edits } = await setup(
+      SCENARIOS[0].action
+    );
+    typeOnLoads(synced, updates, 4);
+
+    const response = await runDirectEdit(
+      DOC,
+      { edits, baseRevision },
+      synced,
+      new AbortController().signal,
+      NOOP_SPAN
+    );
+
+    expect(response.outcome).toBe('committed');
+    expect(synced.commits).toBe(1);
+    const after = await readDocument(DOC, synced.snapshot());
+    const markdown = after.blocks.map((b) => b.markdown).join('\n\n');
+    expect(markdown).toContain(AI_NEW);
+    expect(markdown).toContain('The target qqa paragraph');
+  });
+
+  it('gives up as busy, writing nothing, when every attempt races', async () => {
+    const { synced, baseRevision, updates, edits } = await setup(
+      SCENARIOS[0].action
+    );
+    typeOnLoads(synced, updates, updates.length);
+
+    const failure = await runDirectEdit(
+      DOC,
+      { edits, baseRevision },
+      synced,
+      new AbortController().signal,
+      NOOP_SPAN
+    ).catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(DirectEditConflict);
+    expect((failure as DirectEditConflict).reason).toBe('busy');
+    expect(synced.commits).toBe(0);
+  });
+});

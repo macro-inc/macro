@@ -23,6 +23,7 @@ import { blockMarkdown, sessionFromSnapshot } from '../body';
 import {
   applyUpdate,
   type DocumentView,
+  type OpacityCache,
   readDocument,
   textsOf,
   verifyKey,
@@ -48,6 +49,8 @@ export interface CommitOptions {
   allowDeletingContent?: boolean;
   /** The AI peer the update is written as. */
   peerId: bigint;
+  /** Shared across the request's reads; see {@link OpacityCache}. */
+  opacity?: OpacityCache;
 }
 
 export interface CommitStats {
@@ -95,12 +98,12 @@ export function checkDeletions(
     if (block.commentIds.length)
       throw new EditRefusal(
         'comment_loss',
-        `deleting block ${block.id} would delete a comment; set allow_deleting_content if that is intended`
+        `deleting block ${block.id} would delete a comment; allow deleting content if that is intended`
       );
     if (block.opaque)
       throw new EditRefusal(
         'opaque_edit',
-        `deleting block ${block.id} (content markdown cannot show) needs allow_deleting_content`
+        `deleting block ${block.id} (content markdown cannot show) needs deleting content to be allowed`
       );
   }
   if (
@@ -110,7 +113,7 @@ export function checkDeletions(
   )
     throw new EditRefusal(
       'mass_delete',
-      `the batch removes ${deleted.length} of ${view.blocks.length} blocks; set allow_deleting_content if that is intended`
+      `the batch removes ${deleted.length} of ${view.blocks.length} blocks; allow deleting content if that is intended`
     );
 }
 
@@ -154,7 +157,7 @@ export function checkCommentsKept(
   if (lost)
     throw new EditRefusal(
       'comment_loss',
-      `the edit would remove a comment from block ${lost.id}; keep the commented text, or set allow_deleting_content if that is intended`
+      `the edit would remove a comment from block ${lost.id}; keep the commented text, or allow deleting content if that is intended`
     );
 }
 
@@ -339,7 +342,7 @@ export async function commitBlocks(
       'too_large',
       'the edited document exceeds the 4 MiB size limit'
     );
-  const afterView = await readDocument(documentId, after);
+  const afterView = await readDocument(documentId, after, options.opacity);
   verifyResult(wanted, afterView);
   checkCommentsKept(view, afterView, options.allowDeletingContent ?? false);
   checkUploads(view, afterView, wanted);
