@@ -34,7 +34,7 @@ test('inline code naming a changed file opens it in Changes at its line', async 
   await expect(selected).toBeInViewport();
 });
 
-test("an absolute path in the agent's checkout opens the changed file", async ({
+test("a file:// link into the agent's checkout opens the changed file", async ({
   page,
 }) => {
   await page.getByRole('link', { name: 'the new helpers' }).click();

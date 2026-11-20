@@ -11,7 +11,7 @@ import {
   type CodeReference,
   findChangedFile,
   headBlobUrl,
-  linkCodeSpans,
+  linkCodeReferences,
   namesFile,
   parseCodeReference,
 } from './core/code-reference';
@@ -67,11 +67,11 @@ export function createCodeLinkOpener(
   };
 }
 
-/** Agent prose with inline code naming a changed file turned into links. */
+/** Agent prose with its references to changed files turned into links. */
 export function linkChangedCode(
   changes: ChangesController | undefined,
   markdown: string
 ): string {
   if (!changes?.available()) return markdown;
-  return linkCodeSpans(markdown, changes.model.files());
+  return linkCodeReferences(markdown, changes.model.files());
 }

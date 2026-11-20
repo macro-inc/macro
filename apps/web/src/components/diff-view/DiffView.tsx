@@ -185,16 +185,21 @@ function Stack(props: DiffListProps) {
     }
   };
   // Once the anchored file has settled, a line to reveal takes over: scroll
-  // its lit line in and stop holding the file header. Pierre draws lines in
-  // its shadow root and marks the lit ones; until the body has rendered there
-  // is no line yet, and a later resize tries again.
+  // it in and stop holding the file header. Pierre draws lines in its shadow
+  // root, numbered per side; until the body has rendered there is no line
+  // yet, and a later resize tries again. A line outside the diff's hunks has
+  // no row, and the file header stays.
   const revealLine = () => {
     const range = props.reveal?.();
     if (!anchoredPath || range?.path !== anchoredPath) return;
+    const otherSide =
+      range.side === 'deletions' ? 'change-addition' : 'change-deletion';
     const line = diffReveal
       .card(anchoredPath)
       ?.querySelector(DIFFS_TAG_NAME)
-      ?.shadowRoot?.querySelector('[data-selected-line]');
+      ?.shadowRoot?.querySelector(
+        `[data-line="${range.lineNumber}"]:not([data-line-type="${otherSide}"])`
+      );
     if (!line) return;
     releaseAnchor();
     line.scrollIntoView({ block: 'center', behavior: 'smooth' });

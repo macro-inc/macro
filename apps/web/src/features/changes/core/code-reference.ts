@@ -15,6 +15,9 @@ export type CodeReference = {
 };
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
+// `package.json:5` also reads as a scheme; a line number after the colon
+// makes it a file.
+const BARE_LINE_SUFFIX = /^[^:/]+:\d+(?::\d+)?(?:-\d+(?::\d+)?)?$/;
 
 // `path#L12`, `path#L12-L20`, `path#L12C3-L20C1`, `path:12`, `path:12-20`,
 // `path:12:5`. The path is lazy so the suffix, when there is one, is not
@@ -30,7 +33,7 @@ export function parseCodeReference(target: string): CodeReference | undefined {
   let text = target.trim();
   if (text.startsWith('file://')) {
     text = text.slice('file://'.length);
-  } else if (SCHEME.test(text)) {
+  } else if (SCHEME.test(text) && !BARE_LINE_SUFFIX.test(text)) {
     return undefined;
   }
   if (text === '' || text.startsWith('//') || /\s/.test(text)) return undefined;
@@ -86,6 +89,11 @@ export function findChangedFile(
   return ending.length === 1 ? ending[0] : undefined;
 }
 
+// Markdown link targets end at a parenthesis or space, which
+// `encodeURIComponent` leaves alone or encodes respectively.
+const encodeSegment = (segment: string) =>
+  encodeURIComponent(segment).replace(/\(/g, '%28').replace(/\)/g, '%29');
+
 /** The file on GitHub at the changeset's head commit, when both are known. */
 export function headBlobUrl(
   changeset: Pick<Changeset, 'repository' | 'head'> | undefined,
@@ -94,8 +102,10 @@ export function headBlobUrl(
   const repository = changeset?.repository;
   const sha = changeset?.head.sha;
   if (!repository || !sha || reference.path.startsWith('/')) return undefined;
+  // A path climbing out of a subdirectory has no known place in the repository.
+  if (reference.path.split('/').includes('..')) return undefined;
 
-  const path = reference.path.split('/').map(encodeURIComponent).join('/');
+  const path = reference.path.split('/').map(encodeSegment).join('/');
   const lines = reference.lines;
   let anchor = '';
   if (lines) {
@@ -112,28 +122,81 @@ export function codeLinkTarget(
   file: ChangedFile,
   lines: CodeReference['lines']
 ): string {
-  const path = file.path.split('/').map(encodeURIComponent).join('/');
+  const path = file.path.split('/').map(encodeSegment).join('/');
   if (!lines) return path;
   if (lines.end === lines.start) return `${path}#L${lines.start}`;
   return `${path}#L${lines.start}-L${lines.end}`;
 }
 
-const FENCE = /^\s{0,3}(`{3,}|~{3,})/;
+// A fence opens or closes at any indent and inside blockquotes (`> ```ts`).
+const FENCE = /^(?:\s*>)*\s*(`{3,}|~{3,})/;
 // One inline code span: single backticks around text with no backtick, and
 // not part of a longer backtick run.
 const INLINE_CODE = /(?<!`)`([^`\n]+)`(?!`)/g;
+// A link's text and its target: `[text](target)`.
+const LINK = /\[([^[\]]*)\]\(([^()\s]+)\)/g;
+
+function changedFileTarget(
+  text: string,
+  files: readonly ChangedFile[]
+): string | undefined {
+  const reference = parseCodeReference(text);
+  if (!reference) return undefined;
+  const file = findChangedFile(reference.path, files);
+  if (!file) return undefined;
+  // A bare word in code is more often an identifier than a file, so it
+  // links only when it is a changed file's whole path (`Makefile`).
+  const bare = !reference.path.includes('/') && !namesFile(reference);
+  if (bare && file.path !== reference.path) return undefined;
+  return codeLinkTarget(file, reference.lines);
+}
+
+type Range = { start: number; end: number };
+
+const ranges = (text: string, pattern: RegExp): Range[] =>
+  [...text.matchAll(pattern)].map((match) => ({
+    start: match.index,
+    end: match.index + match[0].length,
+  }));
+
+const within = (list: Range[], offset: number) =>
+  list.some(({ start, end }) => offset > start && offset < end);
+
+function linkLine(line: string, files: readonly ChangedFile[]): string {
+  // Links to a changed file in a form the markdown import drops
+  // (`file://…`, `package.json:5`) get the `path#L…` form it keeps.
+  // Code that shows a link is left alone.
+  const spans = ranges(line, INLINE_CODE);
+  const linked = line.replace(
+    LINK,
+    (link, text: string, target: string, offset: number) => {
+      if (within(spans, offset)) return link;
+      const canonical = changedFileTarget(target, files);
+      return canonical ? `[${text}](${canonical})` : link;
+    }
+  );
+
+  const links = ranges(linked, LINK);
+  return linked.replace(INLINE_CODE, (span, code: string, offset: number) => {
+    // Inside a link's text, or holding brackets that would end the new one.
+    if (within(links, offset)) return span;
+    if (/[[\]]/.test(code)) return span;
+    const target = changedFileTarget(code, files);
+    return target ? `[${span}](${target})` : span;
+  });
+}
 
 /**
- * Turn inline code that names a changed file into a link to it, keeping the
- * code formatting as the link text. Fenced blocks, spans already inside a
- * link's text, and spans holding brackets (which would end the link text) are
- * left as they are.
+ * Turn references to changed files in agent markdown into links the pane
+ * opens: inline code that names one becomes a link with the code as its
+ * text, and a link to one gets a target the markdown import keeps. Fenced
+ * blocks are left as they are.
  */
-export function linkCodeSpans(
+export function linkCodeReferences(
   markdown: string,
   files: readonly ChangedFile[]
 ): string {
-  if (files.length === 0 || !markdown.includes('`')) return markdown;
+  if (files.length === 0) return markdown;
 
   let fence: string | undefined;
   return markdown
@@ -150,26 +213,7 @@ export function linkCodeSpans(
         fence = opener;
         return line;
       }
-
-      return line.replace(INLINE_CODE, (span, code: string, offset: number) => {
-        const before = line[offset - 1];
-        const after = line.slice(
-          offset + span.length,
-          offset + span.length + 2
-        );
-        if (before === '[' && after === '](') return span;
-        if (/[[\]]/.test(code)) return span;
-
-        const reference = parseCodeReference(code);
-        if (!reference) return span;
-        const file = findChangedFile(reference.path, files);
-        if (!file) return span;
-        // A bare word in code is more often an identifier than a file, so it
-        // links only when it is a changed file's whole path (`Makefile`).
-        const bare = !reference.path.includes('/') && !namesFile(reference);
-        if (bare && file.path !== reference.path) return span;
-        return `[${span}](${codeLinkTarget(file, reference.lines)})`;
-      });
+      return linkLine(line, files);
     })
     .join('\n');
 }

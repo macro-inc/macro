@@ -13,6 +13,6 @@ Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an existing Chromium.
 The fixture mounts the real agent `Message` beside the Changes pane over an
 in-memory changeset, with hosted traffic blocked. It checks that inline code
 naming a changed file becomes a link that opens Changes on that file with the
-line lit and scrolled into view, that an absolute path in the agent's checkout
+line lit and scrolled into view, that a `file://` link into the agent's checkout
 opens the same changed file with its range lit, and that a link to an
 unchanged file opens on GitHub at the head commit.

@@ -2278,9 +2278,11 @@ An agent's references to changed files in its reply are links: markdown links
 file (`apps/web/src/pane.tsx:12-14`, an absolute checkout path, or a path from a
 subdirectory that only one changed file ends in). Clicking one opens the Changes
 pane, expands and scrolls to the file, lights the referenced lines on the head side
-(old side for a deleted file), and scrolls the first lit line into view. A relative
+(old side for a deleted file), and scrolls the first referenced line into view; a
+line outside the diff's hunks lights nothing and leaves the file header in view.
+`file://` links and bare names with a line (`package.json:5`) work too. A relative
 link to an unchanged file opens it on GitHub at the capture's head commit; an
-absolute one shows a toast. Bare identifiers in code (`pane`) never link, and
+absolute one, or one climbing out with `..`, shows a toast. Bare identifiers in code (`pane`) never link, and
 sessions without changes keep links as before.
 
 The Changes pane header and sidebar totals display the linked PR's `additions`

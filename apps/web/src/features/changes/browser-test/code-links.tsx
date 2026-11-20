@@ -12,7 +12,7 @@ import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 
 const REPLY = [
-  'I bumped `b` in `apps/web/src/a.ts:2` and added [the new helpers](/home/agent/macro/crates/x/src/lib.rs#L1-L2).',
+  'I bumped `b` in `apps/web/src/a.ts:2` and added [the new helpers](file:///home/agent/macro/crates/x/src/lib.rs#L1-L2).',
   'The setup notes are in [docs/guide.md](docs/guide.md#L3); `b` itself is unchanged elsewhere.',
 ].join('\n\n');
 

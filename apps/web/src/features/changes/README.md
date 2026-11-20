@@ -54,12 +54,16 @@ Another host composes the same components its own way.
 Agent replies link code into the pane (`code-links.ts`, pure parsing in
 `core/code-reference.ts`). `AgentMessage` passes `createCodeLinkOpener` to
 `AgentReplyLinks` as `openOther`, so a link that is neither a Macro mention nor
-an app route is offered to it, and `linkChangedCode` turns inline code naming a
-changed file into such a link before the prose renders. A resolved link calls
-`layout.open()` and `review.activate(path, lines)`; `review.pointed()` lights the
-lines through `DiffView.Stack`'s `selection` (a note draft or focused note wins)
-and its `reveal` scrolls them in once the file settles. Unchanged relative files
-open on GitHub at the head commit.
+an app route is offered to it. Before the prose renders, `linkChangedCode` turns
+inline code naming a changed file into such a link, and rewrites links to a
+changed file that the markdown import would drop (`file://…`, `package.json:5`)
+into the `path#L…` form. A resolved link calls `layout.open()` and
+`review.activate(path, lines)`; `review.pointed()` lights the lines through
+`DiffView.Stack`'s `selection` (a note draft or focused note wins) and its
+`reveal` scrolls the pointed line in once the file settles. A line outside the
+diff's hunks has no row, so nothing lights and the file header stays in view.
+Unchanged relative files open on GitHub at the head commit. `browser-test/`
+clicks a rendered reply through all of it.
 
 Native PR and Agents workspace hosts put their title row and content together
 inside `ChangesSplit`, so changes occupy the full height beside that row.
