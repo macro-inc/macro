@@ -1,0 +1,494 @@
+import { isAiPeer } from '@macro-inc/collaboration/collab/ai-peer';
+import { NOOP_SPAN } from '@macro-inc/observability';
+import { decodeImportBlobMeta } from 'loro-crdt';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { type DocumentView, readDocument } from './document';
+import type { DirectEdit } from './edits';
+import { EditRefusal } from './edits';
+import { RICH_COMMENTS, richSnapshot, SyncedDocument } from './fixtures/build';
+import {
+  type DirectEditRequest,
+  readMarkdownBlocks,
+  runDirectEdit,
+} from './run';
+
+const DOC = 'doc-1';
+const signal = () => new AbortController().signal;
+
+let base: Uint8Array;
+let view: DocumentView;
+
+beforeAll(async () => {
+  base = await richSnapshot();
+  view = await readDocument(DOC, base);
+});
+
+function find(v: DocumentView, needle: string) {
+  const block = v.blocks.find((b) => b.markdown.includes(needle));
+  if (!block) throw new Error(`no block containing ${needle}`);
+  return block;
+}
+
+async function run(
+  request: DirectEditRequest,
+  synced = new SyncedDocument(base)
+) {
+  const response = await runDirectEdit(
+    DOC,
+    request,
+    synced,
+    signal(),
+    NOOP_SPAN
+  );
+  return {
+    response,
+    synced,
+    after: await readDocument(DOC, synced.snapshot()),
+  };
+}
+
+async function refusal(
+  edits: DirectEdit[],
+  options: Partial<DirectEditRequest> = {}
+) {
+  const synced = new SyncedDocument(base);
+  const error = await runDirectEdit(
+    DOC,
+    { edits, ...options },
+    synced,
+    signal(),
+    NOOP_SPAN
+  ).catch((e: unknown) => e);
+  expect(synced.commits).toBe(0);
+  expect(error).toBeInstanceOf(EditRefusal);
+  return error as EditRefusal;
+}
+
+describe('the fixture', () => {
+  it('has 19 blocks, one of them opaque (a plain mark), and three comment marks', () => {
+    expect(view.blocks.length).toBe(19);
+    expect(view.blocks.filter((b) => b.opaque).map((b) => b.type)).toEqual([
+      'paragraph',
+    ]);
+    expect(new Set(view.blocks.flatMap((b) => b.commentIds))).toEqual(
+      new Set(RICH_COMMENTS.map((c) => c.id))
+    );
+  });
+
+  it('reads as blocks, the opaque one as a keep placeholder', async () => {
+    const read = await readMarkdownBlocks(
+      DOC,
+      new SyncedDocument(base),
+      signal()
+    );
+    const opaque = view.blocks.find((b) => b.opaque);
+    expect(read.blocks.length).toBe(19);
+    expect(read.blocks.find((b) => b.id === opaque.id)).toEqual({
+      id: opaque.id,
+      type: 'paragraph',
+      markdown: `<!-- keep:${opaque.id} -->`,
+      opaque: true,
+    });
+    expect(read.blocks[0]).toEqual({
+      id: view.blocks[0].id,
+      type: 'heading',
+      markdown: '# Garden Plan',
+    });
+  });
+});
+
+describe('a replace inside a block', () => {
+  it('replaces the text in place: the block keeps its id, node ids and comment mark', async () => {
+    const intro = find(view, 'Intro paragraph');
+    const { response, after } = await run({
+      edits: [{ old: 'comment target here', new: 'comment goal here' }],
+    });
+
+    expect(response.outcome).toBe('committed');
+    expect(response.merge).toBe('current');
+    expect(response.changes).toEqual([
+      {
+        kind: 'edited',
+        blockId: intro.id,
+        before: intro.markdown,
+        after: intro.markdown.replace('target', 'goal'),
+      },
+    ]);
+    const edited = after.blocks.find((b) => b.id === intro.id);
+    expect(edited.markdown).toBe(intro.markdown.replace('target', 'goal'));
+    expect(edited.nodeIds).toEqual(intro.nodeIds);
+    expect(edited.commentIds).toEqual(['cm-intro']);
+    expect(after.blocks.map((b) => b.id)).toEqual(view.blocks.map((b) => b.id));
+  });
+
+  // Every rich block kind: a needle locating it and an edit inside it.
+  const KINDS: [
+    kind: string,
+    needle: string,
+    old: string,
+    replacement: string,
+  ][] = [
+    ['heading', '# Garden Plan', 'Garden Plan', 'Garden Plans'],
+    [
+      'user mention + comment',
+      'Intro paragraph',
+      'Intro paragraph',
+      'Opening paragraph',
+    ],
+    ['group + contact mention', 'Group:', 'Group:', 'Team:'],
+    [
+      'document + date mention',
+      '<m-document-mention>',
+      ' before ',
+      ' ahead of ',
+    ],
+    ['inline format, equation, link', 'Inline math', '**bold**', '**heavy**'],
+    ['bullet list + comment', '- Tomatoes', 'Beans', 'Peas'],
+    ['ordered list', '1. Dig', 'Plant', 'Sow'],
+    ['check list', 'Buy compost', '- [ ] Buy', '- [x] Buy'],
+    ['quote', '> A quoted', 'soil', 'loam'],
+    ['table with merged cells + comment', '<m-table>', 'Chard', 'Spinach'],
+    ['image alt', '![A bed diagram]', 'A bed diagram', 'Bed layout'],
+    ['video', '<m-video>', 'tour.mp4', 'walk.mp4'],
+    ['code', '```python', 'bed * 2', 'bed * 3'],
+    ['block equation', '<m-katex-equation>', 'V = l', 'U = l'],
+    ['document card', '<m-document-card>', 'Harvest Log', 'Harvest Diary'],
+  ];
+  for (const [kind, needle, old, replacement] of KINDS)
+    it(`${kind}: keeps its id and comment marks, every other block untouched`, async () => {
+      const target = find(view, needle);
+      const { after } = await run({
+        edits: [{ block_id: target.id, old, new: replacement }],
+      });
+      const i = view.blocks.indexOf(target);
+      expect(after.blocks[i].id).toBe(target.id);
+      expect(after.blocks[i].markdown).toBe(
+        target.markdown.replace(old, replacement)
+      );
+      expect(after.blocks[i].commentIds).toEqual(target.commentIds);
+      for (const tag of target.markdown.match(/<m-[a-z-]+>/g) ?? [])
+        expect(after.blocks[i].markdown).toContain(tag);
+      view.blocks.forEach((block, j) => {
+        if (j !== i) expect(after.blocks[j]).toEqual(block);
+      });
+    });
+
+  it('bolding a word in a commented paragraph keeps the mark', async () => {
+    const intro = find(view, 'Intro paragraph');
+    const { after } = await run({
+      edits: [{ old: 'invented garden', new: 'invented **garden**' }],
+    });
+    const edited = after.blocks.find((b) => b.id === intro.id);
+    expect(edited.markdown).toContain('invented **garden** plan');
+    expect(edited.commentIds).toEqual(['cm-intro']);
+  });
+
+  it('renaming the commented list item keeps the list id and the mark', async () => {
+    const list = find(view, '- Tomatoes');
+    const { after } = await run({
+      edits: [{ old: 'Peppers', new: 'Chilies' }],
+    });
+    const edited = after.blocks.find((b) => b.id === list.id);
+    expect(edited.markdown).toBe(list.markdown.replace('Peppers', 'Chilies'));
+    expect(edited.commentIds).toEqual(['cm-list']);
+  });
+
+  it('adding a list item keeps every existing item id', async () => {
+    const list = find(view, '1. Dig');
+    const { after } = await run({
+      edits: [{ old: '3. Water', new: '3. Water\n4. Mulch' }],
+    });
+    const edited = after.blocks.find((b) => b.id === list.id);
+    expect(edited.markdown).toBe('1. Dig\n2. Plant\n3. Water\n4. Mulch');
+    for (const id of list.nodeIds) expect(edited.nodeIds).toContain(id);
+  });
+
+  it('editing the commented table cell keeps the table, its cells, spans and mark', async () => {
+    const table = find(view, '<m-table>');
+    const { after } = await run({ edits: [{ old: 'Kale', new: 'Cabbage' }] });
+    const edited = after.blocks.find((b) => b.id === table.id);
+    expect(edited.commentIds).toEqual(['cm-table']);
+    expect(edited.nodeIds.length).toBe(table.nodeIds.length);
+    expect(edited.markdown).toContain('rowspan="2"');
+    expect(edited.markdown).toContain('colspan="2"');
+  });
+
+  it('inserting a mention next to existing ones keeps the paragraph', async () => {
+    const group = find(view, 'Group:');
+    const mention =
+      ' <m-user-mention>{"userId":"macro|ann@example.com","email":"ann@example.com","displayName":"Ann Example"}</m-user-mention>';
+    const { after } = await run({
+      edits: [{ old: 'and contact', new: `and${mention} and contact` }],
+    });
+    const edited = after.blocks.find((b) => b.id === group.id);
+    expect(edited.markdown).toBe(
+      group.markdown.replace('and contact', `and${mention} and contact`)
+    );
+  });
+
+  it('retyping a paragraph as a heading rebuilds that block', async () => {
+    const closing = find(view, 'Closing paragraph');
+    const { after } = await run({
+      edits: [
+        {
+          block_id: closing.id,
+          old: 'Closing paragraph',
+          new: '## Closing paragraph',
+        },
+      ],
+    });
+    expect(after.blocks.at(-1).markdown).toBe(
+      '## Closing paragraph with a final note.'
+    );
+    expect(after.blocks.at(-1).type).toBe('heading');
+  });
+
+  it('replace_all changes every occurrence', async () => {
+    const { after } = await run({
+      edits: [{ old: 'bed', new: 'plot', replace_all: true }],
+    });
+    expect(after.blocks.some((b) => /\bbed\b/.test(b.markdown))).toBe(false);
+  });
+
+  it('an old text spanning two blocks merges them', async () => {
+    const { after } = await run({
+      edits: [
+        { old: 'final note.', new: 'final note.' },
+        { old: '---\n\nClosing', new: 'Closing' },
+      ],
+    });
+    expect(after.blocks.at(-1).markdown).toBe(
+      'Closing paragraph with a final note.'
+    );
+    expect(after.blocks.length).toBe(18);
+  });
+});
+
+describe('inserts, deletes and moves', () => {
+  it('insert at start and end, and a move, in one batch: moved block keeps its ids', async () => {
+    const quote = find(view, '> A quoted');
+    const heading = view.blocks[0];
+    const intro = find(view, 'Intro paragraph');
+    const { after, response } = await run({
+      edits: [
+        { insert_before: 'start', markdown: '# New top' },
+        { insert_after: 'end', markdown: 'Footer one.\n\nFooter two.' },
+        { move: quote.id, before: heading.id },
+        { old: 'comment target here', new: 'comment goal here' },
+      ],
+    });
+    expect(after.blocks.map((b) => b.markdown).slice(0, 3)).toEqual([
+      '# New top',
+      quote.markdown,
+      heading.markdown,
+    ]);
+    expect(after.blocks[1].id).toBe(quote.id);
+    expect(after.blocks[1].nodeIds).toEqual(quote.nodeIds);
+    expect(after.blocks.slice(-2).map((b) => b.markdown)).toEqual([
+      'Footer one.',
+      'Footer two.',
+    ]);
+    expect(after.blocks.find((b) => b.id === intro.id).commentIds).toEqual([
+      'cm-intro',
+    ]);
+    expect(response.changes.map((c) => c.kind).sort()).toEqual(
+      ['edited', 'inserted', 'inserted', 'inserted', 'moved'].sort()
+    );
+  });
+
+  it('a new block next to each kind leaves the kind untouched', async () => {
+    const table = find(view, '<m-table>');
+    const { after } = await run({
+      edits: [
+        { insert_after: table.id, markdown: 'A new neighbouring paragraph.' },
+      ],
+    });
+    const i = after.blocks.findIndex((b) => b.id === table.id);
+    expect(after.blocks[i]).toEqual(table);
+    expect(after.blocks[i + 1].markdown).toBe('A new neighbouring paragraph.');
+  });
+
+  it('deleting a plain block removes it', async () => {
+    const quote = find(view, '> A quoted');
+    const { after } = await run({ edits: [{ delete: quote.id }] });
+    expect(after.blocks.length).toBe(18);
+    expect(after.blocks.some((b) => b.id === quote.id)).toBe(false);
+  });
+
+  it('deleting a block with a comment needs allow_deleting_content', async () => {
+    const list = find(view, '- Tomatoes');
+    expect((await refusal([{ delete: list.id }])).code).toBe('comment_loss');
+    const { after } = await run({
+      edits: [{ delete: list.id }],
+      allowDeletingContent: true,
+    });
+    expect(after.blocks.some((b) => b.id === list.id)).toBe(false);
+  });
+
+  it('the opaque block can move, cannot be edited, and needs allow_deleting_content to go', async () => {
+    const opaque = view.blocks.find((b) => b.opaque);
+    const closing = find(view, 'Closing paragraph');
+    const moved = await run({
+      edits: [{ move: opaque.id, after: closing.id }],
+    });
+    expect(moved.after.blocks.at(-1).id).toBe(opaque.id);
+    expect(moved.after.blocks.at(-1).opaque).toBe(true);
+    expect(moved.after.blocks.at(-1).nodeIds).toEqual(opaque.nodeIds);
+
+    expect(
+      (
+        await refusal([
+          { block_id: opaque.id, old: `<!-- keep:${opaque.id} -->`, new: 'x' },
+        ])
+      ).code
+    ).toBe('opaque_edit');
+    expect((await refusal([{ delete: opaque.id }])).code).toBe('opaque_edit');
+    const deleted = await run({
+      edits: [{ delete: opaque.id }],
+      allowDeletingContent: true,
+    });
+    expect(deleted.after.blocks.some((b) => b.id === opaque.id)).toBe(false);
+  });
+});
+
+describe('refusals leave the document untouched', () => {
+  it('no_match suggests the nearest blocks', async () => {
+    const error = await refusal([
+      { old: 'Closing paragraph with a last note', new: 'x' },
+    ]);
+    expect(error.code).toBe('no_match');
+    expect(error.edit).toBe(1);
+    expect(error.candidates[0]).toEqual({
+      blockId: find(view, 'Closing paragraph').id,
+      occurrences: 0,
+      markdown: 'Closing paragraph with a final note.',
+    });
+  });
+
+  it('ambiguous_match lists every block it occurs in', async () => {
+    const error = await refusal([
+      { old: 'Tomatoes', new: 'x' },
+      { old: 'bed', new: 'plot' },
+    ]);
+    expect(error.code).toBe('ambiguous_match');
+    expect(error.edit).toBe(2);
+    expect(error.candidates.length).toBeGreaterThan(1);
+    expect(
+      error.candidates.reduce((n, c) => n + c.occurrences, 0)
+    ).toBeGreaterThan(1);
+  });
+
+  it('unknown_block for an id not in the document', async () => {
+    expect((await refusal([{ delete: 'nope' }])).code).toBe('unknown_block');
+    expect(
+      (await refusal([{ insert_after: 'nope', markdown: 'x' }])).code
+    ).toBe('unknown_block');
+  });
+
+  it('a later failing edit refuses the whole batch', async () => {
+    const error = await refusal([
+      { old: 'Closing paragraph', new: 'Last paragraph' },
+      { old: 'Cucumbers', new: 'y' },
+    ]);
+    expect(error.code).toBe('no_match');
+    expect(error.edit).toBe(2);
+  });
+
+  it('markup_leak for a placeholder typed into text', async () => {
+    expect(
+      (
+        await refusal([
+          {
+            old: 'Closing paragraph',
+            new: 'Closing <!-- keep:abc --> paragraph',
+          },
+        ])
+      ).code
+    ).toBe('markup_leak');
+  });
+
+  it('unparseable for malformed mention JSON', async () => {
+    expect(
+      (
+        await refusal([
+          {
+            insert_after: 'end',
+            markdown: 'Hi <m-user-mention>{"userId":}</m-user-mention>',
+          },
+        ])
+      ).code
+    ).toBe('unparseable');
+  });
+
+  it('mass_delete for most of the document', async () => {
+    const deletes = view.blocks
+      .filter((b) => !b.commentIds.length && !b.opaque)
+      .slice(0, 12)
+      .map((b) => ({ delete: b.id }));
+    expect((await refusal(deletes)).code).toBe('mass_delete');
+  });
+
+  it('empty_edit for an empty old or insert', async () => {
+    expect((await refusal([{ old: '', new: 'x' }])).code).toBe('empty_edit');
+    expect(
+      (await refusal([{ insert_after: 'end', markdown: '  ' }])).code
+    ).toBe('empty_edit');
+  });
+});
+
+describe('dry run and commits', () => {
+  it('a dry run returns the changes and writes nothing', async () => {
+    const closing = find(view, 'Closing paragraph');
+    const { response, synced } = await run({
+      edits: [{ old: 'Closing paragraph', new: 'Last paragraph' }],
+      dryRun: true,
+    });
+    expect(synced.commits).toBe(0);
+    expect(response).toEqual({
+      outcome: 'dry_run',
+      revision: synced.revision(),
+      merge: 'current',
+      changes: [
+        {
+          kind: 'edited',
+          blockId: closing.id,
+          before: 'Closing paragraph with a final note.',
+          after: 'Last paragraph with a final note.',
+        },
+      ],
+    });
+  });
+
+  it('a no-op batch writes nothing', async () => {
+    const { response, synced } = await run({
+      edits: [{ old: 'Closing paragraph', new: 'Closing paragraph' }],
+    });
+    expect(response.outcome).toBe('unchanged');
+    expect(synced.commits).toBe(0);
+  });
+
+  it('a commit is one change by one AI peer', async () => {
+    const synced = new SyncedDocument(base);
+    const before = synced.doc.oplogVersion();
+    await runDirectEdit(
+      DOC,
+      {
+        edits: [
+          { insert_before: 'start', markdown: '# New top' },
+          { old: 'Closing paragraph', new: 'Last paragraph' },
+        ],
+      },
+      synced,
+      signal(),
+      NOOP_SPAN
+    );
+    const update = synced.doc.export({ mode: 'update', from: before });
+    const meta = decodeImportBlobMeta(update, false);
+    expect(meta.changeNum).toBe(1);
+    const peers = [...synced.doc.oplogVersion().toJSON().keys()].filter(
+      (peer) => !before.toJSON().has(peer)
+    );
+    expect(peers.length).toBe(1);
+    expect(isAiPeer(BigInt(peers[0]))).toBe(true);
+  });
+});
