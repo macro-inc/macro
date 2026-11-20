@@ -16,6 +16,7 @@ use super::Capsolver;
 use crate::anthropic_gateway::brain::BrainCaller;
 use crate::captcha_gateway::solves::{CaptchaTask, Challenge, SolveLimits, SolveOutcome, Solves};
 use crate::config::CapsolverApiKey;
+use crate::solver_runs::{Claimed, LedgerError, SolveClaim, SolveLedger, SolverRunId};
 
 /// Google's and Cloudflare's published always-pass test site keys, on a page
 /// that doesn't exist: the vendor needs no real page for them.
@@ -27,6 +28,20 @@ struct NoUsage;
 
 impl UsageRecorder for NoUsage {
     fn record(&self, _event: UsageEvent) {}
+}
+
+/// Admits every solve and keeps nothing: the contract is the vendor's.
+struct EverySolve;
+
+#[async_trait::async_trait]
+impl SolveLedger for EverySolve {
+    async fn claim(&self, _: &SolveClaim) -> Result<Claimed, LedgerError> {
+        Ok(Claimed::New)
+    }
+
+    async fn finish(&self, _: Uuid, _: &SolveOutcome, _: Option<&str>) -> Result<(), LedgerError> {
+        Ok(())
+    }
 }
 
 #[tokio::test]
@@ -42,11 +57,12 @@ async fn capsolver_live_contract() {
         return;
     };
     let base_url = macro_service_urls::CapsolverApiUrl::new().unwrap();
-    let solves = Arc::new(Solves::new(
+    let solves = Solves::new(
         Some(Capsolver::new(&key, base_url.as_str()).unwrap()),
+        Arc::new(EverySolve),
         Arc::new(NoUsage),
         SolveLimits::default(),
-    ));
+    );
     let agent = BrainCaller {
         user_id: MacroUserIdStr::parse_from_str("macro|live-contract@agents.macro.invalid")
             .unwrap()
@@ -81,6 +97,7 @@ async fn capsolver_live_contract() {
         let outcome = solves
             .solve(
                 &agent,
+                SolverRunId(Uuid::now_v7()),
                 Uuid::now_v7(),
                 CaptchaTask::new(challenge).unwrap(),
                 &tracing::Span::none(),

@@ -1,17 +1,22 @@
 use std::sync::Mutex;
 
 use ai_billing::DisabledAiAdmissionService;
-use ai_usage::{UsageAmount, UsageEvent};
+use ai_usage::financial::{FinalizeInvocation, ProviderOutcome, WriteDisposition};
+use ai_usage::{FinancialFuture, TrackedInvocation, UsageAmount, UsageEvent, UsageTracking};
 use axum::{extract::Request, http::Request as HttpRequest};
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
+use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde_json::json;
+use sqlx::PgPool;
 use tower::ServiceExt;
 
 use super::*;
 use crate::anthropic_gateway::brain::{BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout};
+use crate::solver_runs::pg::PgSolverRuns;
+use crate::solver_runs::{RunLimits, RunStart};
 
-const AGENT: &str = "macro|sam-rivera-abc123@agents.macro.invalid";
+use crate::solver_runs::test::AGENT;
 const CREATOR: &str = "macro|admin@macro.com";
 const TEAM: uuid::Uuid = uuid::Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 
@@ -56,13 +61,46 @@ fn rollout(on: bool) -> BrainRollout {
     BrainRollout::new(creators, flags)
 }
 
-/// Hands each usage event to the test as it is recorded.
-struct UsageEvents(tokio::sync::mpsc::UnboundedSender<UsageEvent>);
+/// Hands each usage event and each finalized observation to the test as
+/// it is recorded.
+struct UsageEvents {
+    events: tokio::sync::mpsc::UnboundedSender<UsageEvent>,
+    tracking: Arc<Observations>,
+}
 
 impl UsageRecorder for UsageEvents {
-    fn record(&self, event: UsageEvent) {
-        self.0.send(event).unwrap();
+    fn tracking(&self) -> Option<Arc<dyn UsageTracking>> {
+        Some(self.tracking.clone())
     }
+
+    fn record(&self, event: UsageEvent) {
+        self.events.send(event).unwrap();
+    }
+}
+
+struct Observations {
+    begins: Mutex<Vec<TrackedInvocation>>,
+    finals: tokio::sync::mpsc::UnboundedSender<FinalizeInvocation>,
+}
+
+impl UsageTracking for Observations {
+    fn begin(&self, request: TrackedInvocation) -> FinancialFuture<'_, WriteDisposition> {
+        self.begins.lock().unwrap().push(request);
+        Box::pin(async { Ok(WriteDisposition::Inserted) })
+    }
+
+    fn finalize(&self, evidence: FinalizeInvocation) -> FinancialFuture<'_, WriteDisposition> {
+        self.finals.send(evidence).unwrap();
+        Box::pin(async { Ok(WriteDisposition::Inserted) })
+    }
+}
+
+/// What the gateway recorded.
+struct Recorded {
+    usage: tokio::sync::mpsc::UnboundedReceiver<UsageEvent>,
+    /// Each call's observation, finalized once its in-flight slot is back.
+    finals: tokio::sync::mpsc::UnboundedReceiver<FinalizeInvocation>,
+    tracking: Arc<Observations>,
 }
 
 /// What the fake Fireworks saw of one request.
@@ -76,16 +114,34 @@ struct SeenRequest {
 /// Answers a streaming request with [`UPSTREAM_SSE`] in small pieces and any
 /// other with [`UPSTREAM_JSON`], recording each request.
 async fn fake_fireworks() -> (String, Arc<Mutex<Vec<SeenRequest>>>) {
+    held_fireworks(None).await
+}
+
+/// Holds each answer of [`held_fireworks`] until a permit lets it through,
+/// and says when a request has arrived.
+#[derive(Clone)]
+struct Gate {
+    permits: Arc<tokio::sync::Semaphore>,
+    arrived: tokio::sync::mpsc::UnboundedSender<()>,
+}
+
+/// [`fake_fireworks`], each answer held at `gate`.
+async fn held_fireworks(gate: Option<Gate>) -> (String, Arc<Mutex<Vec<SeenRequest>>>) {
     let seen = Arc::new(Mutex::new(Vec::<SeenRequest>::new()));
     let recorded = seen.clone();
     let app = Router::new().fallback(move |request: Request| {
         let recorded = recorded.clone();
+        let gate = gate.clone();
         async move {
             let (parts, body) = request.into_parts();
             let body: Value =
                 serde_json::from_slice(&axum::body::to_bytes(body, usize::MAX).await.unwrap())
                     .unwrap();
             let streaming = body["stream"] == true;
+            if let Some(gate) = gate {
+                gate.arrived.send(()).unwrap();
+                gate.permits.acquire().await.unwrap().forget();
+            }
             recorded.lock().unwrap().push(SeenRequest {
                 path: parts.uri.path().to_owned(),
                 authorization: parts
@@ -125,41 +181,98 @@ async fn fake_fireworks() -> (String, Arc<Mutex<Vec<SeenRequest>>>) {
     (format!("http://{address}"), seen)
 }
 
-fn gateway(
-    upstream_url: &str,
-    teammates_on: bool,
-) -> (Router, tokio::sync::mpsc::UnboundedReceiver<UsageEvent>) {
-    let (events, received) = tokio::sync::mpsc::unbounded_channel();
-    let gateway = FireworksGateway::new(
-        BrainAccess {
-            brains: Arc::new(OneAgent),
-            rollout: rollout(teammates_on),
-            admission: Arc::new(DisabledAiAdmissionService),
-        },
-        Arc::new(UsageEvents(events)),
-        upstream_url,
-        "firework-key",
-    )
-    .unwrap();
-    (router(gateway), received)
+fn access(teammates_on: bool) -> BrainAccess {
+    BrainAccess {
+        brains: Arc::new(OneAgent),
+        rollout: rollout(teammates_on),
+        admission: Arc::new(DisabledAiAdmissionService),
+    }
 }
 
-fn chat_request(key: &str, body: Value) -> HttpRequest<Body> {
+fn gateway_with(
+    pool: &PgPool,
+    upstream_url: &str,
+    teammates_on: bool,
+    key: Option<&str>,
+) -> (Router, Recorded) {
+    let (events, usage) = tokio::sync::mpsc::unbounded_channel();
+    let (finals_sender, finals) = tokio::sync::mpsc::unbounded_channel();
+    let tracking = Arc::new(Observations {
+        begins: Mutex::default(),
+        finals: finals_sender,
+    });
+    let gateway = FireworksGateway::new(
+        access(teammates_on),
+        Arc::new(UsageEvents {
+            events,
+            tracking: tracking.clone(),
+        }),
+        Arc::new(PgSolverRuns::new(pool.clone(), RunLimits::default())),
+        upstream_url,
+        key,
+    )
+    .unwrap();
+    (
+        router(gateway),
+        Recorded {
+            usage,
+            finals,
+            tracking,
+        },
+    )
+}
+
+fn gateway(pool: &PgPool, upstream_url: &str, teammates_on: bool) -> (Router, Recorded) {
+    gateway_with(pool, upstream_url, teammates_on, Some("firework-key"))
+}
+
+/// The agent exists and has a live run.
+async fn run(pool: &PgPool) -> String {
+    crate::solver_runs::test::insert_agent(pool, AGENT)
+        .await
+        .unwrap();
+    let agent = MacroUserIdStr::parse_from_str(AGENT).unwrap().into_owned();
+    match PgSolverRuns::new(pool.clone(), RunLimits::default())
+        .start(&agent)
+        .await
+        .unwrap()
+    {
+        RunStart::Started { run_id, .. } => run_id.0.to_string(),
+        refused => panic!("{refused:?}"),
+    }
+}
+
+fn chat_request(key: &str, run: &str, body: Value) -> HttpRequest<Body> {
     HttpRequest::post("/brain/fireworks/v1/chat/completions")
         .header("authorization", format!("Bearer {key}"))
         .header("content-type", "application/json")
+        .header("x-macro-solver-run", run)
         .body(Body::from(body.to_string()))
         .unwrap()
 }
 
-#[tokio::test]
-async fn a_completion_is_forwarded_with_macros_key_a_default_cap_and_billed_to_the_agent() {
+async fn error_of(response: Response) -> Value {
+    serde_json::from_slice::<Value>(
+        &axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap(),
+    )
+    .unwrap()["error"]
+        .clone()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_completion_is_forwarded_with_macros_key_a_default_cap_and_billed_to_the_agent(
+    pool: PgPool,
+) {
+    let run = run(&pool).await;
     let (upstream_url, seen) = fake_fireworks().await;
-    let (app, mut usage) = gateway(&upstream_url, true);
+    let (app, mut recorded) = gateway(&pool, &upstream_url, true);
 
     let response = app
         .oneshot(chat_request(
             "mak_agent",
+            &run,
             json!({ "model": KIMI_K3, "messages": [{ "role": "user", "content": "hi" }] }),
         ))
         .await
@@ -186,7 +299,7 @@ async fn a_completion_is_forwarded_with_macros_key_a_default_cap_and_billed_to_t
             "max_tokens": 4096,
         })
     );
-    let event = usage.recv().await.unwrap();
+    let event = recorded.usage.recv().await.unwrap();
     assert_eq!(event.user.as_ref(), AGENT);
     assert_eq!(event.feature, AiFeature::AgentSession);
     assert_eq!(event.model, "kimi-k3");
@@ -199,16 +312,33 @@ async fn a_completion_is_forwarded_with_macros_key_a_default_cap_and_billed_to_t
             cache_write: 0,
         }
     );
+    // Observed under the solver run, with Fireworks' id; billed only above.
+    let observed = recorded.finals.recv().await.unwrap();
+    assert_eq!(
+        observed.provider_request_id.as_ref().map(|id| id.as_str()),
+        Some("cmpl-json")
+    );
+    assert_eq!(observed.outcome, ProviderOutcome::Succeeded);
+    // Begun before the call and again on delivery, as one invocation.
+    let begun = recorded.tracking.begins.lock().unwrap().clone();
+    assert!(begun.iter().all(|begin| *begin == begun[0]), "{begun:?}");
+    assert_eq!(begun[0].invocation_id, observed.invocation_id);
+    assert_eq!(begun[0].run_id.as_uuid().to_string(), run);
+    assert_eq!(begun[0].model.provider(), "fireworks");
+    assert_eq!(begun[0].model.model(), KIMI_K3);
+    assert_eq!(begun[0].user.as_ref(), AGENT);
 }
 
-#[tokio::test]
-async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged() {
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged(pool: PgPool) {
+    let run = run(&pool).await;
     let (upstream_url, seen) = fake_fireworks().await;
-    let (app, mut usage) = gateway(&upstream_url, true);
+    let (app, mut recorded) = gateway(&pool, &upstream_url, true);
 
     let response = app
         .oneshot(chat_request(
             "mak_agent",
+            &run,
             json!({
                 "model": KIMI_K3,
                 "messages": [],
@@ -238,7 +368,7 @@ async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged() {
             "max_completion_tokens": 100,
         })
     );
-    let event = usage.recv().await.unwrap();
+    let event = recorded.usage.recv().await.unwrap();
     assert_eq!(
         event.amount,
         UsageAmount::Tokens {
@@ -248,18 +378,25 @@ async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged() {
             cache_write: 0,
         }
     );
+    let observed = recorded.finals.recv().await.unwrap();
+    assert_eq!(
+        observed.provider_request_id.as_ref().map(|id| id.as_str()),
+        Some("cmpl-sse")
+    );
 }
 
-#[tokio::test]
-async fn other_models_paths_and_callers_are_refused_before_fireworks() {
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn other_models_paths_and_callers_are_refused_before_fireworks(pool: PgPool) {
+    let run = run(&pool).await;
     let (upstream_url, seen) = fake_fireworks().await;
-    let (app, _) = gateway(&upstream_url, true);
-    let (off, _) = gateway(&upstream_url, false);
+    let (app, _) = gateway(&pool, &upstream_url, true);
+    let (off, _) = gateway(&pool, &upstream_url, false);
 
     let other_model = app
         .clone()
         .oneshot(chat_request(
             "mak_agent",
+            &run,
             json!({ "model": "accounts/fireworks/models/deepseek-v4-pro", "messages": [] }),
         ))
         .await
@@ -278,6 +415,7 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
         .clone()
         .oneshot(chat_request(
             "mak_nobody",
+            &run,
             json!({ "model": KIMI_K3, "messages": [] }),
         ))
         .await
@@ -286,6 +424,7 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
         .clone()
         .oneshot(chat_request(
             "mak_agent",
+            &run,
             json!({ "model": KIMI_K3, "messages": [], "n": 64 }),
         ))
         .await
@@ -293,6 +432,7 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
     let teammates_off = off
         .oneshot(chat_request(
             "mak_agent",
+            &run,
             json!({ "model": KIMI_K3, "messages": [] }),
         ))
         .await
@@ -310,5 +450,152 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
     assert_eq!(many_choices.status(), StatusCode::BAD_REQUEST);
     assert_eq!(unknown_key.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(teammates_off.status(), StatusCode::FORBIDDEN);
+    assert!(seen.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_call_needs_a_live_run_of_its_own(pool: PgPool) {
+    let run = run(&pool).await;
+    let (upstream_url, seen) = fake_fireworks().await;
+    let (app, _) = gateway(&pool, &upstream_url, true);
+    let body = json!({ "model": KIMI_K3, "messages": [] });
+    let mut without_run = chat_request("mak_agent", &run, body.clone());
+    without_run.headers_mut().remove("x-macro-solver-run");
+
+    let missing = app.clone().oneshot(without_run).await.unwrap();
+    let unknown = app
+        .clone()
+        .oneshot(chat_request(
+            "mak_agent",
+            &uuid::Uuid::now_v7().to_string(),
+            body.clone(),
+        ))
+        .await
+        .unwrap();
+    sqlx::query!("UPDATE agent_captcha_runs SET expires_at = now() - interval '1 second'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let expired = app
+        .oneshot(chat_request("mak_agent", &run, body))
+        .await
+        .unwrap();
+
+    assert_eq!(missing.status(), StatusCode::FORBIDDEN);
+    assert_eq!(
+        error_of(missing).await,
+        json!({
+            "type": "permission_error",
+            "code": "solver_run_required",
+            "message": "start a solver run and send its runId as x-macro-solver-run",
+        })
+    );
+    assert_eq!(unknown.status(), StatusCode::FORBIDDEN);
+    assert_eq!(error_of(unknown).await["code"], "solver_run_required");
+    assert_eq!(expired.status(), StatusCode::FORBIDDEN);
+    assert_eq!(error_of(expired).await["code"], "solver_run_expired");
+    assert!(seen.lock().unwrap().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_run_allows_sixteen_calls(pool: PgPool) {
+    let run = run(&pool).await;
+    let (upstream_url, seen) = fake_fireworks().await;
+    let (app, mut recorded) = gateway(&pool, &upstream_url, true);
+    let body = json!({ "model": KIMI_K3, "messages": [] });
+
+    for _ in 0..16 {
+        let response = app
+            .clone()
+            .oneshot(chat_request("mak_agent", &run, body.clone()))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        // Its in-flight slot is back before it is observed.
+        recorded.finals.recv().await.unwrap();
+    }
+    let seventeenth = app
+        .oneshot(chat_request("mak_agent", &run, body))
+        .await
+        .unwrap();
+
+    assert_eq!(seventeenth.status(), StatusCode::TOO_MANY_REQUESTS);
+    let error = error_of(seventeenth).await;
+    assert_eq!(error["type"], "rate_limit_error");
+    assert_eq!(error["code"], "solver_run_exhausted");
+    assert_eq!(seen.lock().unwrap().len(), 16);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_calls_of_a_run_may_run_at_once(pool: PgPool) {
+    let run = run(&pool).await;
+    let permits = Arc::new(tokio::sync::Semaphore::new(0));
+    let (arrived, mut arrivals) = tokio::sync::mpsc::unbounded_channel();
+    let (upstream_url, seen) = held_fireworks(Some(Gate {
+        permits: permits.clone(),
+        arrived,
+    }))
+    .await;
+    let (app, mut recorded) = gateway(&pool, &upstream_url, true);
+    let body = json!({ "model": KIMI_K3, "messages": [] });
+    let call = |app: Router| {
+        let request = chat_request("mak_agent", &run, body.clone());
+        tokio::spawn(async move {
+            let response = app.oneshot(request).await.unwrap();
+            let status = response.status();
+            axum::body::to_bytes(response.into_body(), usize::MAX)
+                .await
+                .unwrap();
+            status
+        })
+    };
+
+    let first = call(app.clone());
+    let second = call(app.clone());
+    // Both are held at Fireworks, so both took their slot.
+    arrivals.recv().await.unwrap();
+    arrivals.recv().await.unwrap();
+    let third = app
+        .clone()
+        .oneshot(chat_request("mak_agent", &run, body.clone()))
+        .await
+        .unwrap();
+    permits.add_permits(1);
+    let finished = tokio::select! {
+        status = first => status.unwrap(),
+        status = second => status.unwrap(),
+    };
+    recorded.finals.recv().await.unwrap();
+    let fourth = call(app.clone());
+    permits.add_permits(2);
+    let fourth = fourth.await.unwrap();
+
+    assert_eq!(third.status(), StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(error_of(third).await["code"], "solver_run_busy");
+    assert_eq!(finished, StatusCode::OK);
+    assert_eq!(fourth, StatusCode::OK);
+    assert_eq!(seen.lock().unwrap().len(), 3);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn without_a_key_every_call_is_not_configured(pool: PgPool) {
+    let run = run(&pool).await;
+    let (upstream_url, seen) = fake_fireworks().await;
+    let (app, _) = gateway_with(&pool, &upstream_url, true, None);
+
+    let response = app
+        .oneshot(chat_request(
+            "mak_agent",
+            &run,
+            json!({ "model": KIMI_K3, "messages": [] }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    assert_eq!(error_of(response).await["type"], "not_configured");
     assert!(seen.lock().unwrap().is_empty());
 }

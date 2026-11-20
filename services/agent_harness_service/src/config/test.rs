@@ -342,13 +342,23 @@ fn agent_repo_storage_limits_and_provider_credentials_are_required() {
         "PUSHES_PER_MINUTE",
         "LIVEKIT_API_KEY",
         "LIVEKIT_API_SECRET",
-        "FIREWORK_API_KEY",
     ] {
         let mut incomplete = values();
         incomplete.as_object_mut().unwrap().remove(key);
         let error = serde_json::from_value::<Config>(incomplete).err().unwrap();
         assert!(error.to_string().contains(key), "{error}");
     }
+}
+
+#[test]
+fn the_fireworks_key_is_optional() {
+    let mut unkeyed = values();
+    unkeyed.as_object_mut().unwrap().remove("FIREWORK_API_KEY");
+    let config: Config = serde_json::from_value(unkeyed).unwrap();
+    assert_eq!(config.firework_api_key.value(), None);
+
+    let config: Config = serde_json::from_value(values()).unwrap();
+    assert_eq!(config.firework_api_key.value(), Some("firework-key"));
 }
 
 #[test]

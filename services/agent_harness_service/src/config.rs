@@ -55,9 +55,6 @@ macro_env_var::env_vars!(
     pub struct LivekitApiKey;
     /// LiveKit project secret; never leaves the speech gateway.
     pub struct LivekitApiSecret;
-    /// Fireworks key `/brain/fireworks` forwards agent teammates' Kimi K3
-    /// calls with (Doppler `shared_ai`); never leaves the gateway.
-    pub struct FireworkApiKey;
 );
 
 macro_env_var::maybe_env_vars!(
@@ -76,6 +73,11 @@ macro_env_var::maybe_env_vars!(
     /// CapSolver account key `/brain/captcha` solves with. Unset or empty:
     /// CAPTCHA solving is off and every solve answers `notConfigured`.
     pub struct CapsolverApiKey;
+    /// Fireworks key `/brain/fireworks` forwards agent teammates' Kimi K3
+    /// calls with (Doppler `shared_ai`); never leaves the gateway. Unset or
+    /// empty: every call is a 503 `not_configured` and every solver run
+    /// `notConfigured`.
+    pub struct FireworkApiKey;
 );
 
 /// The shortest idle timeout a deployment may set; see
@@ -216,7 +218,7 @@ pub struct Config {
     pub livekit_api_key: LivekitApiKey,
     /// LiveKit project secret for agent call speech.
     pub livekit_api_secret: LivekitApiSecret,
-    /// Fireworks key for agent teammates' CAPTCHA model calls.
+    /// Fireworks key for agent teammates' CAPTCHA model calls; optional.
     pub firework_api_key: FireworkApiKey,
     /// CapSolver key for agent teammates' CAPTCHA solves; optional.
     pub capsolver_api_key: CapsolverApiKey,

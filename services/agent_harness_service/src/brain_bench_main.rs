@@ -1,4 +1,4 @@
-//! Serves the brain CAPTCHA and Fireworks routes without a database; see
+//! Serves the brain CAPTCHA and Fireworks routes over a solver-run database; see
 //! [`agent_harness_service::brain_bench`].
 
 use macro_entrypoint::MacroEntrypoint;

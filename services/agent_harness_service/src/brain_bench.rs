@@ -1,11 +1,15 @@
 //! A dev server for benchmarking an agent teammate's brain routes without
-//! the harness's database: `/brain/captcha/solve` and
-//! `/brain/fireworks/v1/chat/completions` over the real router constructors
-//! and the real CapSolver and Fireworks adapters, behind a fixed bench key.
+//! the rest of the harness: `/brain/captcha/runs`, `/brain/captcha/solve` and
+//! `/brain/fireworks/v1/chat/completions` over the real router constructors,
+//! the real CapSolver and Fireworks adapters and the Postgres solver-run
+//! store, behind a fixed bench key.
 //!
+//! - `--database-url` (required): a migrated MacroDB holding the solver
+//!   runs and solves; `--agent` must be a `"User"` row in it.
 //! - `BRAIN_BENCH_KEY` (required): the one bearer key it accepts, mapped to
-//!   a fixed fake agent and team.
-//! - `FIREWORK_API_KEY` (required): forwarded to Fireworks.
+//!   `--agent` and a fixed team.
+//! - `FIREWORK_API_KEY` (optional): forwarded to Fireworks; unset or empty
+//!   makes every model call a 503 and every run `notConfigured`.
 //! - `CAPSOLVER_API_KEY` (optional): unset or empty answers `notConfigured`;
 //!   `OVERRIDE_CAPSOLVER_API_URL` points it at `capsolver_emulator`.
 //!
@@ -31,9 +35,9 @@ use crate::anthropic_gateway::brain::{
     BrainAccess, BrainAuthenticator, BrainCaller, BrainLookup, BrainRollout,
 };
 use crate::config::{CapsolverApiKey, FireworkApiKey};
-use crate::{captcha_gateway, fireworks_gateway};
+use crate::{captcha_gateway, fireworks_gateway, solver_runs};
 
-/// The agent every bench call is billed to.
+/// The agent every bench call is billed to, unless `--agent` names another.
 const BENCH_AGENT: &str = "macro|brain-bench@agents.macro.invalid";
 const BENCH_TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_0b0b);
 
@@ -48,11 +52,18 @@ struct Args {
     /// Address to serve on.
     #[arg(long, default_value = "127.0.0.1:8490")]
     listen: SocketAddr,
+    /// Postgres the solver runs and solves are kept in.
+    #[arg(long)]
+    database_url: String,
+    /// The agent (`"User"` id) every call is made and billed as.
+    #[arg(long, default_value = BENCH_AGENT)]
+    agent: String,
 }
 
 /// Accepts exactly the bench key.
 struct BenchAuthenticator {
     key: BrainBenchKey,
+    agent: MacroUserIdStr<'static>,
 }
 
 impl BrainAuthenticator for BenchAuthenticator {
@@ -60,9 +71,7 @@ impl BrainAuthenticator for BenchAuthenticator {
         let known = key == self.key.as_ref();
         Box::pin(async move {
             Ok(known.then(|| BrainCaller {
-                user_id: MacroUserIdStr::parse_from_str(BENCH_AGENT)
-                    .expect("the bench agent id parses")
-                    .into_owned(),
+                user_id: self.agent.clone(),
                 team_id: BENCH_TEAM,
             }))
         })
@@ -136,9 +145,17 @@ pub fn run() -> impl std::future::Future<Output = anyhow::Result<()>> {
 
 async fn serve() -> anyhow::Result<()> {
     let args = Args::parse();
+    let agent = MacroUserIdStr::parse_from_str(&args.agent)
+        .map_err(|error| anyhow::anyhow!("--agent is not a Macro user id: {error:?}"))?
+        .into_owned();
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(4)
+        .connect(&args.database_url)
+        .await?;
     let access = BrainAccess {
         brains: Arc::new(BenchAuthenticator {
             key: BrainBenchKey::new()?,
+            agent,
         }),
         rollout: BrainRollout::always_on(),
         admission: Arc::new(DisabledAiAdmissionService),
@@ -161,17 +178,32 @@ async fn serve() -> anyhow::Result<()> {
         capsolver = capsolver.is_some(),
         "brain bench CAPTCHA solving"
     );
+    let firework_key = FireworkApiKey::new();
+    let firework_key = firework_key
+        .as_ref()
+        .and_then(FireworkApiKey::value)
+        .map(str::trim)
+        .filter(|key| !key.is_empty());
+    let run_limits = solver_runs::RunLimits::default();
+    let runs = Arc::new(solver_runs::pg::PgSolverRuns::new(pool, run_limits));
     let captcha = captcha_gateway::CaptchaGateway::new(
         access.clone(),
         capsolver,
+        firework_key.is_some(),
         recorder.clone(),
-        captcha_gateway::SolveLimits::default(),
+        captcha_gateway::Ledgers {
+            runs: runs.clone(),
+            solves: runs.clone(),
+            run_limits,
+            solve_limits: captcha_gateway::SolveLimits::default(),
+        },
     );
     let fireworks = fireworks_gateway::FireworksGateway::new(
         access,
         recorder.clone(),
+        runs,
         fireworks_gateway::FIREWORKS_API_URL,
-        FireworkApiKey::new()?.as_ref(),
+        firework_key,
     )?;
 
     let app = captcha_gateway::router(captcha)

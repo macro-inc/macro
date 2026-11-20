@@ -55,12 +55,10 @@ impl Capsolver {
         method: &'static str,
         body: &Body,
     ) -> Result<WireResponse, SolverError> {
-        let mut headers = reqwest::header::HeaderMap::new();
-        macro_tower_layers::inject_trace_headers(&mut headers);
+        // No traceparent: our trace ids don't go to a vendor.
         let response = self
             .client
             .post(format!("{}/{method}", self.base_url))
-            .headers(headers)
             .json(body)
             .send()
             .await

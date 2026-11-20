@@ -1,31 +1,39 @@
 //! Solving one CAPTCHA for an agent teammate: the challenge it may ask
-//! about, the [`CaptchaSolver`] port, and [`Solves`], which owns idempotency,
-//! the per-agent limits, polling and usage.
+//! about, the [`CaptchaSolver`] port, and [`Solves`], which takes each solve
+//! from its solver run, records it under its `solveId` in the solves ledger
+//! (idempotency and the per-agent caps, shared by every replica), polls the
+//! vendor and bills a solved task.
 
-use std::collections::{HashMap, VecDeque};
 use std::future::Future;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
-use ai_usage::{AiFeature, UsageContext, UsageRecorder};
+use ai_usage::financial::{
+    FinalizeInvocation, InvocationId, ProviderModel, ProviderOutcome, ProviderRequestId, RunId,
+    UnresolvedReason, UsageEvidence,
+};
+use ai_usage::{AiFeature, TrackedInvocation, UsageContext, UsageRecorder};
+use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
-use tokio::sync::watch;
 use tokio::time::Instant;
 use tracing::{Instrument, Span};
 use uuid::Uuid;
 
 use crate::anthropic_gateway::brain::BrainCaller;
+use crate::solver_runs::{
+    self, BudgetLimit, Claimed, LedgerError, RunRefusal, SolveCaps, SolveClaim, SolveLedger,
+    SolverRunId,
+};
 
-/// How long a finished solve is remembered for its `solveId`.
-const REMEMBERED_FOR: Duration = Duration::from_secs(10 * 60);
-/// The span window of the hourly limit.
-const HOUR: Duration = Duration::from_secs(60 * 60);
-/// The span window of the daily limit.
-const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 /// How long CapSolver blocks a key after a burst of errors; no task is sent
 /// in that time.
 const KEY_BLOCKED_FOR: Duration = Duration::from_secs(5 * 60);
+/// How much longer than `max_wait` an unfinished solve is still in flight;
+/// past that its process died.
+const ABANDONED_GRACE: Duration = Duration::from_secs(60);
+/// The tracking journal's provider name for CapSolver tasks.
+const CAPSOLVER_PROVIDER: &str = "capsolver";
 /// Longest site key, action, cdata or `s` value accepted.
 const MAX_FIELD_CHARS: usize = 4096;
 
@@ -198,7 +206,7 @@ impl CaptchaTask {
 }
 
 /// A CAPTCHA token. Its `Debug` never shows it.
-#[derive(Clone, PartialEq, Eq, Serialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct CaptchaToken(String);
 
@@ -215,7 +223,7 @@ impl std::fmt::Debug for CaptchaToken {
 }
 
 /// CapSolver's id for a created task.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub(crate) struct TaskId(String);
 
@@ -253,7 +261,7 @@ pub(crate) enum Polled {
 }
 
 /// A vendor error, by what the caller can do about it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum VendorErrorKind {
     RateLimited,
@@ -289,17 +297,9 @@ pub(crate) trait CaptchaSolver: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Polled, SolverError>> + Send;
 }
 
-/// The per-agent cap a refused solve hit.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub(crate) enum BudgetLimit {
-    Concurrent,
-    Hourly,
-    Daily,
-}
-
-/// What `/brain/captcha/solve` answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+/// What `/brain/captcha/solve` answers; a finished one is stored as JSON
+/// and replayed for a repeated `solveId`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
     tag = "outcome",
     rename_all = "camelCase",
@@ -346,12 +346,21 @@ impl From<SolverError> for SolveOutcome {
     }
 }
 
-/// The same `solveId` was used by another agent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
-#[error("this solveId belongs to another agent")]
-pub(crate) struct SolveIdTaken;
+/// Why a solve was refused without an outcome.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum SolveRefused {
+    #[error("this solveId belongs to another agent")]
+    OtherAgent,
+    #[error("this solveId is still being solved")]
+    InProgress,
+    #[error("{}", .0.message())]
+    Run(RunRefusal),
+    #[error(transparent)]
+    Ledger(#[from] LedgerError),
+}
 
-/// Per-agent caps and the polling schedule. Every cap is per process.
+/// Per-agent caps and the polling schedule. Every cap counts the solves
+/// ledger, so it holds across replicas.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SolveLimits {
     pub(crate) concurrent: u8,
@@ -373,27 +382,15 @@ impl Default for SolveLimits {
     }
 }
 
-/// A solve under its `solveId`: in flight while `outcome` holds `None`.
-struct Remembered {
-    agent: MacroUserIdStr<'static>,
-    started: Instant,
-    outcome: watch::Receiver<Option<SolveOutcome>>,
-}
-
-/// One agent's use of the solver.
-#[derive(Default)]
-struct AgentUse {
-    in_flight: u8,
-    /// When each solve that reached the vendor started, oldest first.
-    starts: VecDeque<Instant>,
-}
-
-#[derive(Default)]
-struct SolveState {
-    solves: HashMap<Uuid, Remembered>,
-    agents: HashMap<MacroUserIdStr<'static>, AgentUse>,
-    /// The vendor blocked our key; no task goes out before this.
-    key_blocked_until: Option<Instant>,
+impl SolveLimits {
+    fn caps(self) -> SolveCaps {
+        SolveCaps {
+            concurrent: self.concurrent,
+            hourly: self.hourly,
+            daily: self.daily,
+            abandoned_after: self.max_wait + ABANDONED_GRACE,
+        }
+    }
 }
 
 /// Solves challenges for agents, once per `solveId`.
@@ -401,188 +398,182 @@ pub(crate) struct Solves<Solver> {
     /// `None` when no vendor key is configured: every solve is
     /// [`SolveOutcome::NotConfigured`].
     solver: Option<Arc<Solver>>,
+    ledger: Arc<dyn SolveLedger>,
     recorder: Arc<dyn UsageRecorder>,
     limits: SolveLimits,
-    state: Mutex<SolveState>,
+    /// The vendor blocked our key; no task goes out before this. Per
+    /// process: it saves vendor calls, it guards no budget.
+    key_blocked_until: Arc<Mutex<Option<Instant>>>,
 }
 
 impl<Solver: CaptchaSolver> Solves<Solver> {
     pub(crate) fn new(
         solver: Option<Solver>,
+        ledger: Arc<dyn SolveLedger>,
         recorder: Arc<dyn UsageRecorder>,
         limits: SolveLimits,
     ) -> Self {
         Self {
             solver: solver.map(Arc::new),
+            ledger,
             recorder,
             limits,
-            state: Mutex::new(SolveState::default()),
+            key_blocked_until: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Solve `task` for `agent`, or answer what the first request with this
-    /// `solve_id` got. The vendor work runs on its own task, so a caller that
-    /// hangs up neither cancels a solve nor skips its usage. Refusals (no
-    /// key, a cap, a blocked key) are not remembered: a retry may pass.
+    pub(crate) fn configured(&self) -> bool {
+        self.solver.is_some()
+    }
+
+    /// Solve `task` for `agent` on `run`, or answer what the first request
+    /// with this `solve_id` got. The vendor work runs on its own task, so a
+    /// caller that hangs up neither cancels a solve nor skips its usage.
+    /// Refusals (no key, a cap, a blocked key) are not recorded: a retry may
+    /// pass.
     pub(crate) async fn solve(
-        self: &Arc<Self>,
+        &self,
         agent: &BrainCaller,
+        run: SolverRunId,
         solve_id: Uuid,
         task: CaptchaTask,
         span: &Span,
-    ) -> Result<SolveOutcome, SolveIdTaken> {
-        let mut outcome = match self.admit(agent, solve_id, &task, span)? {
-            Admitted::Refused(outcome) => return Ok(outcome),
-            Admitted::Waiting(outcome) => outcome,
-        };
-
-        let finished = outcome
-            .wait_for(Option::is_some)
-            .await
-            .ok()
-            .and_then(|outcome| outcome.clone());
-        // The solve's task always sends an outcome; a dropped sender means it
-        // died, which the caller sees as the vendor being unavailable.
-        Ok(finished.unwrap_or(SolveOutcome::VendorError {
-            kind: VendorErrorKind::Unavailable,
-        }))
-    }
-
-    /// Join a remembered solve, refuse, or start a new one.
-    fn admit(
-        self: &Arc<Self>,
-        agent: &BrainCaller,
-        solve_id: Uuid,
-        task: &CaptchaTask,
-        span: &Span,
-    ) -> Result<Admitted, SolveIdTaken> {
-        let now = Instant::now();
-        let mut state = self.state();
-        state
-            .solves
-            .retain(|_, solve| now.duration_since(solve.started) < REMEMBERED_FOR);
-        if let Some(solve) = state.solves.get(&solve_id) {
-            if solve.agent != agent.user_id {
-                return Err(SolveIdTaken);
-            }
-            return Ok(Admitted::Waiting(solve.outcome.clone()));
-        }
-
+    ) -> Result<SolveOutcome, SolveRefused> {
         let Some(solver) = self.solver.clone() else {
-            return Ok(Admitted::Refused(SolveOutcome::NotConfigured));
+            return Ok(SolveOutcome::NotConfigured);
         };
-        if state.key_blocked_until.is_some_and(|until| now < until) {
-            return Ok(Admitted::Refused(SolveOutcome::VendorError {
-                kind: VendorErrorKind::KeyBlocked,
-            }));
-        }
-        let limits = self.limits;
-        let usage = state.agents.entry(agent.user_id.clone()).or_default();
-        while usage
-            .starts
-            .front()
-            .is_some_and(|start| now.duration_since(*start) >= DAY)
-        {
-            usage.starts.pop_front();
-        }
-        let last_hour = usage
-            .starts
-            .iter()
-            .filter(|start| now.duration_since(**start) < HOUR)
-            .count();
-        let limit = if usage.in_flight >= limits.concurrent {
-            Some(BudgetLimit::Concurrent)
-        } else if last_hour >= usize::from(limits.hourly) {
-            Some(BudgetLimit::Hourly)
-        } else if usage.starts.len() >= usize::from(limits.daily) {
-            Some(BudgetLimit::Daily)
-        } else {
-            None
-        };
-        if let Some(limit) = limit {
-            return Ok(Admitted::Refused(SolveOutcome::BudgetExceeded { limit }));
-        }
-
-        usage.in_flight += 1;
-        usage.starts.push_back(now);
-        let (sender, receiver) = watch::channel(None);
-        state.solves.insert(
+        let key_blocked = self
+            .key_blocked_until
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .is_some_and(|until| Instant::now() < until);
+        let claim = SolveClaim {
             solve_id,
-            Remembered {
-                agent: agent.user_id.clone(),
-                started: now,
-                outcome: receiver.clone(),
-            },
-        );
-        drop(state);
+            run,
+            agent: agent.user_id.clone(),
+            caps: self.limits.caps(),
+            key_blocked,
+        };
 
-        let solves = Arc::clone(self);
-        let agent = agent.user_id.clone();
-        let task = task.clone();
+        // Claimed, solved, recorded and billed on its own task, so a caller
+        // that hangs up never leaves a claimed solve behind.
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let ledger = Arc::clone(&self.ledger);
+        let recorder = Arc::clone(&self.recorder);
+        let limits = self.limits;
         let solve_span = span.clone();
+        let blocked_until = Arc::clone(&self.key_blocked_until);
         tokio::spawn(
             async move {
-                let outcome = run(solver.as_ref(), &task, limits, &solve_span).await;
-                solves.finish(&agent, &task, &outcome);
-                let _ = sender.send(Some(outcome));
+                let answer = match ledger.claim(&claim).await {
+                    Err(error) => Err(SolveRefused::Ledger(error)),
+                    Ok(Claimed::New) => {
+                        let (outcome, task_id) =
+                            run_task(solver.as_ref(), &task, limits, &solve_span).await;
+                        if outcome
+                            == (SolveOutcome::VendorError {
+                                kind: VendorErrorKind::KeyBlocked,
+                            })
+                        {
+                            *blocked_until.lock().unwrap_or_else(PoisonError::into_inner) =
+                                Some(Instant::now() + KEY_BLOCKED_FOR);
+                        }
+                        let _ = ledger
+                            .finish(solve_id, &outcome, task_id.as_ref().map(TaskId::as_str))
+                            .await
+                            .inspect_err(|error| {
+                                tracing::error!(error = ?error, "the solve's outcome was not recorded");
+                            });
+                        bill(recorder, &claim.agent, run, &task, &outcome).await;
+                        Ok(outcome)
+                    }
+                    Ok(Claimed::Finished(outcome)) => Ok(outcome),
+                    Ok(Claimed::InProgress) => Err(SolveRefused::InProgress),
+                    Ok(Claimed::OtherAgent) => Err(SolveRefused::OtherAgent),
+                    Ok(Claimed::BudgetExceeded(limit)) => {
+                        Ok(SolveOutcome::BudgetExceeded { limit })
+                    }
+                    Ok(Claimed::KeyBlocked) => Ok(SolveOutcome::VendorError {
+                        kind: VendorErrorKind::KeyBlocked,
+                    }),
+                    Ok(Claimed::Refused(refusal)) => Err(SolveRefused::Run(refusal)),
+                };
+                let _ = sender.send(answer);
             }
             .instrument(span.clone()),
         );
-        Ok(Admitted::Waiting(receiver))
-    }
-
-    /// Release the agent's slot and bill a solved task.
-    fn finish(&self, agent: &MacroUserIdStr<'static>, task: &CaptchaTask, outcome: &SolveOutcome) {
-        {
-            let mut state = self.state();
-            if let Some(usage) = state.agents.get_mut(agent) {
-                usage.in_flight = usage.in_flight.saturating_sub(1);
-            }
-            if *outcome
-                == (SolveOutcome::VendorError {
-                    kind: VendorErrorKind::KeyBlocked,
-                })
-            {
-                state.key_blocked_until = Some(Instant::now() + KEY_BLOCKED_FOR);
-            }
-        }
-
-        // CapSolver charges only for a solved task.
-        if let SolveOutcome::Solved { .. } = outcome {
-            self.recorder.record(
-                UsageContext::new(AiFeature::AgentSession, agent.clone())
-                    .into_provider_credits_event(task.task_type.pricing_model().to_owned(), 1),
-            );
-        }
-    }
-
-    fn state(&self) -> MutexGuard<'_, SolveState> {
-        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+        // The solve's task always sends an answer; a dropped sender means it
+        // died, which the caller sees as the vendor being unavailable.
+        receiver.await.unwrap_or(Ok(SolveOutcome::VendorError {
+            kind: VendorErrorKind::Unavailable,
+        }))
     }
 }
 
-enum Admitted {
-    Refused(SolveOutcome),
-    Waiting(watch::Receiver<Option<SolveOutcome>>),
+/// Bill a solved task (CapSolver charges only those) on the legacy recorder,
+/// which settles it, and observe it in the tracking journal under its run
+/// with CapSolver's task id. The journal has no credit dimension, so its
+/// usage is `UnsupportedDimensions`: the charge is the recorder's alone.
+async fn bill(
+    recorder: Arc<dyn UsageRecorder>,
+    agent: &MacroUserIdStr<'static>,
+    run: SolverRunId,
+    task: &CaptchaTask,
+    outcome: &SolveOutcome,
+) {
+    let SolveOutcome::Solved { task_id, .. } = outcome else {
+        return;
+    };
+    recorder.record(
+        UsageContext::new(AiFeature::AgentSession, agent.clone())
+            .into_provider_credits_event(task.task_type.pricing_model().to_owned(), 1),
+    );
+    let Some(tracking) = recorder.tracking() else {
+        return;
+    };
+    let (Ok(run_id), Ok(model)) = (
+        RunId::try_from(run.0),
+        ProviderModel::new(CAPSOLVER_PROVIDER, <&'static str>::from(task.task_type)),
+    ) else {
+        tracing::error!("the solve cannot be identified for tracking");
+        return;
+    };
+    let invocation = TrackedInvocation {
+        run_id,
+        invocation_id: InvocationId::new(),
+        user: agent.clone(),
+        feature: AiFeature::AgentSession,
+        entity: None,
+        model,
+        occurred_at: Utc::now(),
+    };
+    let evidence = FinalizeInvocation {
+        invocation_id: invocation.invocation_id,
+        occurred_at: Utc::now(),
+        provider_request_id: ProviderRequestId::new(task_id.as_str()).ok(),
+        outcome: ProviderOutcome::Succeeded,
+        usage: UsageEvidence::Missing(UnresolvedReason::UnsupportedDimensions),
+    };
+    solver_runs::track(tracking, invocation, evidence).await;
 }
 
 /// Create the task, then poll it every `poll_interval` until it is decided
 /// or `max_wait` has passed since the start. A rate limit or an outage while
 /// polling is waited out, not given up on: the task may still be solved, and
-/// charged.
-async fn run<Solver: CaptchaSolver>(
+/// charged. Answers the vendor's task id when one was created.
+async fn run_task<Solver: CaptchaSolver>(
     solver: &Solver,
     task: &CaptchaTask,
     limits: SolveLimits,
     span: &Span,
-) -> SolveOutcome {
+) -> (SolveOutcome, Option<TaskId>) {
     let deadline = Instant::now() + limits.max_wait;
     let task_id = match tokio::time::timeout_at(deadline, solver.create_task(task)).await {
-        Err(_) => return SolveOutcome::Timeout,
-        Ok(Err(error)) => return error.into(),
+        Err(_) => return (SolveOutcome::Timeout, None),
+        Ok(Err(error)) => return (error.into(), None),
         Ok(Ok(Created::Ready(task_id, solution))) => {
             span.record("captcha.task_id", task_id.as_str());
-            return solved(task_id, solution);
+            return (solved(task_id.clone(), solution), Some(task_id));
         }
         Ok(Ok(Created::Pending(task_id))) => task_id,
     };
@@ -593,7 +584,7 @@ async fn run<Solver: CaptchaSolver>(
         let next = Instant::now() + limits.poll_interval;
         if next >= deadline {
             span.record("captcha.polls", polls);
-            return SolveOutcome::Timeout;
+            return (SolveOutcome::Timeout, Some(task_id));
         }
         tokio::time::sleep_until(next).await;
 
@@ -601,13 +592,15 @@ async fn run<Solver: CaptchaSolver>(
         let polled = tokio::time::timeout_at(deadline, solver.task_result(&task_id)).await;
         span.record("captcha.polls", polls);
         match polled {
-            Err(_) => return SolveOutcome::Timeout,
+            Err(_) => return (SolveOutcome::Timeout, Some(task_id)),
             Ok(Ok(Polled::Pending)) => {}
-            Ok(Ok(Polled::Ready(solution))) => return solved(task_id, solution),
+            Ok(Ok(Polled::Ready(solution))) => {
+                return (solved(task_id.clone(), solution), Some(task_id));
+            }
             Ok(Err(SolverError::Vendor(
                 VendorErrorKind::RateLimited | VendorErrorKind::Unavailable,
             ))) => {}
-            Ok(Err(error)) => return error.into(),
+            Ok(Err(error)) => return (error.into(), Some(task_id)),
         }
     }
 }
