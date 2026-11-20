@@ -111,8 +111,9 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   reconnecting with attempt and error) and viewer (the terminal, a herdr pane,
   or a herdr-core terminal in an app tab or not, from its `herdr.space` and
   `herdr.tab` labels, re-read every 10 s since the app adopts and parks
-  terminals; "not in an app tab" names the `hc attach` target). A state the
-  panel cannot confirm is never green.
+  terminals; "not in an app tab" names the `hc attach` target, and "no
+  HC_BIN" is a herdr-core terminal macrod cannot drive). A state the panel
+  cannot confirm is never green.
 - `macrod service` emits a `health` event (`runtime_connected`, `triggers`
   with a `state` tag) at start and whenever either changes; a live stream's
   heartbeats do not emit one. Embedders ignore events they do not know.

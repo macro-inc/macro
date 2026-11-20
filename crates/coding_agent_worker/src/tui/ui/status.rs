@@ -190,5 +190,11 @@ fn viewer(viewer: &Viewer) -> Status {
             format!("hc {terminal}"),
             format!("hc terminal {terminal}; herdr-core has not said yet whether the app shows it"),
         ),
+        Viewer::NoHcBin => Status::new(
+            WARN,
+            "no HC_BIN",
+            "a herdr-core terminal without HC_BIN: macrod opens no herdr windows; \
+             update herdr-core, then restart this terminal in herdr",
+        ),
     }
 }

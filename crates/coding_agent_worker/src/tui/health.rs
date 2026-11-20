@@ -96,6 +96,9 @@ pub(crate) enum Viewer {
     Background { terminal: String },
     /// A herdr-core terminal herdr-core has not described yet.
     Unknown { terminal: String },
+    /// A herdr-core terminal started without `HC_BIN`, so macrod cannot ask
+    /// herdr-core about it and opens no herdr windows.
+    NoHcBin,
 }
 
 pub(crate) fn daemon(paired: bool, running: bool) -> DaemonHealth {
@@ -158,9 +161,12 @@ pub(crate) fn top_line(error: &str) -> &str {
 /// every [`VIEWER_CHECK_EVERY`] that lives as long as the returned handle.
 pub(crate) fn watch_viewer() -> (watch::Receiver<Viewer>, Option<AbortOnDropHandle<()>>) {
     #[cfg(unix)]
-    if let Some(session) = crate::herdr::HerdrSession::detect() {
+    if let Some(session) = match crate::herdr::HerdrSession::detect() {
+        Ok(session) => session,
+        Err(crate::herdr::HcBinMissing) => return (watch::channel(Viewer::NoHcBin).1, None),
+    } {
         let cli = session.cli();
-        let crate::herdr::HerdrSession::Core { terminal } = session else {
+        let crate::herdr::HerdrSession::Core { terminal, .. } = session else {
             return (watch::channel(Viewer::HerdrPane).1, None);
         };
         let (viewer_tx, viewer) = watch::channel(Viewer::Unknown {
