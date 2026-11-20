@@ -104,6 +104,7 @@ fn main() -> Result<(), rootcause::Report> {
                         &faker, &parsed, &identity, &entities, &tier_spec, &mut emit,
                     )?;
                 }
+                writer.flush().map_err(io)?;
                 println!("{file}: {count} ops, {:.1} MB", bytes as f64 / 1e6);
             }
             let meta = serde_json::json!({
