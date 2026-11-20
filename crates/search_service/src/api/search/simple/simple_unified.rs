@@ -389,6 +389,7 @@ fn unified_search_span(
         search.lane_outcome = tracing::field::Empty,
         search.rate_limit = tracing::field::Empty,
         search.rate_limit_remaining = tracing::field::Empty,
+        search.rate_limit_wait_ms = tracing::field::Empty,
     )
 }
 
@@ -443,7 +444,13 @@ pub(in crate::api::search) async fn perform_unified_search(
             req,
         )
         .await
-        .inspect_err(|error| tracing::error!(error = %error))
+        .inspect_err(|error| {
+            // A limited search is the allowance working, marked on the span
+            // by `search.rate_limit`, not a failure to report.
+            if !matches!(error, SearchError::RateLimited { .. }) {
+                tracing::error!(error = %error);
+            }
+        })
     }
     .instrument(span)
     .await
@@ -477,14 +484,18 @@ async fn take_search_turn(
 }
 
 /// Draw an API-key search from its account's allowance, recording on the
-/// current span how the draw ended and how many searches are left. A limited
-/// search is refused before it waits for a turn.
+/// current span how the draw ended, how many searches are left and how long
+/// the bucket took to answer. A limited search is refused before it waits for
+/// a turn.
 async fn draw_search_allowance(
     ctx: &SearchHandlerState,
     account: &MacroUserId<Lowercase<'_>>,
 ) -> Result<(), SearchError> {
+    let started = tokio::time::Instant::now();
     let draw = draw_api_key_search(ctx.api_key_search_buckets.as_ref(), account).await;
+    let waited_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
     let span = tracing::Span::current();
+    span.record("search.rate_limit_wait_ms", waited_ms);
     span.record("search.rate_limit", draw.label());
     if let Some(remaining) = draw.remaining() {
         span.record("search.rate_limit_remaining", remaining);

@@ -1450,9 +1450,10 @@ async fn only_user_api_key_searches_draw_on_the_allowance() {
     assert_eq!(bucket.takes.load(std::sync::atomic::Ordering::SeqCst), 0);
 }
 
-/// An API-key search records on its span whether it was limited and how many
-/// searches its account had left, so limited callers can be found.
-#[tokio::test]
+/// An API-key search records on its span whether it was limited, how many
+/// searches its account had left and how long the bucket took, so limited
+/// callers and a slow bucket can be found.
+#[tokio::test(start_paused = true)]
 async fn an_api_key_search_records_its_allowance_on_its_span() {
     use crate::api::search::span_capture::SpanFields;
 
@@ -1472,6 +1473,7 @@ async fn an_api_key_search_records_its_allowance_on_its_span() {
     let span = fields.of("perform_unified_search");
     assert_eq!(span["search.rate_limit"], "unavailable");
     assert!(!span.contains_key("search.rate_limit_remaining"));
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
 
     let allowed = SearchHandlerState {
         api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(
@@ -1486,6 +1488,7 @@ async fn an_api_key_search_records_its_allowance_on_its_span() {
     let span = fields.of("perform_unified_search");
     assert_eq!(span["search.rate_limit"], "allowed");
     assert_eq!(span["search.rate_limit_remaining"], "199");
+    assert_eq!(span["search.rate_limit_wait_ms"], "0");
 
     let limited = SearchHandlerState {
         api_key_search_buckets: std::sync::Arc::new(FixedBucket::answering(Some(

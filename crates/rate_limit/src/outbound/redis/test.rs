@@ -392,6 +392,40 @@ async fn a_full_bucket_banks_no_time_beyond_its_capacity() {
 }
 
 #[tokio::test]
+async fn a_full_bucket_starts_its_next_token_from_its_first_take() {
+    let client = redis_client();
+    let adapter = adapter();
+    let key = unique_key("bucket_full_restart");
+    let config = TokenBucketConfig {
+        capacity: 3,
+        refill_interval: Duration::from_secs(1),
+    };
+    let full_since = redis_now_ms(&client).await - 1_500;
+    let _: () = redis::AsyncCommands::hset_multiple(
+        &mut client.get_multiplexed_async_connection().await.unwrap(),
+        super::token_bucket_key(&key),
+        &[("tokens", 3), ("refilled_at", full_since)],
+    )
+    .await
+    .unwrap();
+
+    for _ in 0..3 {
+        TokenBucketPort::take(&adapter, key.clone(), config)
+            .await
+            .unwrap();
+    }
+
+    match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
+        TokenBucketResult::Empty { retry_after } => {
+            assert!(retry_after > Duration::from_millis(600), "{retry_after:?}");
+        }
+        TokenBucketResult::Taken { remaining } => {
+            panic!("a fourth token came from banked time, {remaining} left")
+        }
+    }
+}
+
+#[tokio::test]
 async fn concurrent_takes_never_take_more_than_the_capacity() {
     let key = unique_key("bucket_concurrent");
     let config = TokenBucketConfig {

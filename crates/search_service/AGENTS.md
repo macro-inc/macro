@@ -91,12 +91,13 @@ per-entity-type search plus a unified search across them — mounted into
   (`SearchError::RateLimited`, `Retry-After` in whole seconds) without
   waiting in the lane. The lanes bound searches in flight per process; the
   bucket bounds the rate across processes, which lanes cannot. It is a safety
-  net sized so the busiest production keys (batches of ~65-75 a minute,
-  ~22 a minute on average in Nov 2026) never reach it. A bucket that errors or
-  does not answer within 500 ms lets the search run. The span records
-  `search.rate_limit` (`allowed`, `limited`, `unavailable`) and
-  `search.rate_limit_remaining` (searches the account may still send at
-  once). App sessions, agents, routines, services, Macro API tokens and
+  net, sized from production traces so today's busiest keys, which search in
+  batches that a fixed 60-a-minute window would refuse, never reach it;
+  measure before tightening it. A bucket that errors or does not answer
+  within 500 ms lets the search run. A limited search is not logged as an
+  error. The span records `search.rate_limit` (`allowed`, `limited`,
+  `unavailable`), `search.rate_limit_remaining` (searches the account may
+  still send at once) and `search.rate_limit_wait_ms`. App sessions, agents, routines, services, Macro API tokens and
   account-manager credentials never draw on it, and neither does
   `/search/channel`, which takes no lane turn either.
 - A query is valid from one character (`terms::trimmed_query` rejects only a
