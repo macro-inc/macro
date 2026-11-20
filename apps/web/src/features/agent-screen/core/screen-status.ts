@@ -35,7 +35,6 @@ export type TicketFailure =
   | 'forbidden'
   | 'rolloutDisabled'
   | 'notFound'
-  | 'unavailable'
   | 'failed';
 
 export type NextStep =
@@ -100,7 +99,6 @@ export function afterConnectFailed(
       kind: 'show',
       status: { kind: 'ended', reason: 'notFound' },
     }))
-    .with('unavailable', () => ({ kind: 'show', status: { kind: 'asleep' } }))
     .with('failed', () => retryOrFail(attempt + 1))
     .exhaustive();
 }

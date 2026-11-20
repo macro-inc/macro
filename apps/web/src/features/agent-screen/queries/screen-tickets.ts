@@ -32,7 +32,6 @@ export async function requestScreenTicket(
       .with('FORBIDDEN', () => 'forbidden')
       .with('ROLLOUT_DISABLED', () => 'rolloutDisabled')
       .with('NOT_FOUND', () => 'notFound')
-      .with('COMPUTER_UNAVAILABLE', () => 'unavailable')
       .otherwise(() => 'failed');
     return err(failure);
   }

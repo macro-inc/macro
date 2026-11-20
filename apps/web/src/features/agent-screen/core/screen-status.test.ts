@@ -45,14 +45,10 @@ describe('afterSessionEnded', () => {
 });
 
 describe('afterConnectFailed', () => {
-  it('shows a refused ticket as denied and an unavailable computer as asleep', () => {
+  it('shows a refused ticket as denied and retries a failed one', () => {
     expect(afterConnectFailed('forbidden', 0)).toEqual({
       kind: 'show',
       status: { kind: 'denied', reason: 'cannotWatch' },
-    });
-    expect(afterConnectFailed('unavailable', 0)).toEqual({
-      kind: 'show',
-      status: { kind: 'asleep' },
     });
     expect(afterConnectFailed('failed', 1)).toEqual({
       kind: 'retry',

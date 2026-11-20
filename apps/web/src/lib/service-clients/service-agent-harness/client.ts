@@ -114,7 +114,7 @@ const providerProbeError: ErrorResponseHandler<
   return statusError(response.status);
 };
 
-type ScreenTicketErrorCode = 'ROLLOUT_DISABLED' | 'COMPUTER_UNAVAILABLE';
+type ScreenTicketErrorCode = 'ROLLOUT_DISABLED';
 
 /** The `code` the harness puts on a refused screen ticket, if any. */
 async function screenTicketBodyCode(
@@ -134,13 +134,6 @@ async function screenTicketBodyCode(
 const screenTicketError: ErrorResponseHandler<ScreenTicketErrorCode> = async (
   response
 ) => {
-  // The computer is asleep, off or unreachable.
-  if (response.status === 503) {
-    return {
-      code: 'COMPUTER_UNAVAILABLE',
-      message: 'The computer is not reachable',
-    };
-  }
   if (
     response.status === 403 &&
     (await screenTicketBodyCode(response)) === 'rollout_disabled'
