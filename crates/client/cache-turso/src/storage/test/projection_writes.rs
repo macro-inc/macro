@@ -356,8 +356,7 @@ fn delta_writes_leave_the_same_facts_as_full_rewrites() {
         let mut delta = TursoStorage::open_in_memory("delta-differential-a").unwrap();
         let mut full = TursoStorage::open_in_memory("delta-differential-b").unwrap();
         let keys = ["Thing:1", "Thing:2", "Thing:3"];
-        let mut steps = 0;
-        for _ in 0..400 {
+        for step in 0..400 {
             let key = keys[next(3) as usize];
             let mut document = authoritative_projection(key, "owner");
             document.exact_facts.clear();
@@ -373,7 +372,7 @@ fn delta_writes_leave_the_same_facts_as_full_rewrites() {
                 .into_iter()
                 .map(|(attribute, value)| predicate_index::ExactFact {
                     attribute: token(&format!("e{attribute}")),
-                    value: predicate_index::ExactValue::utf8(&format!("v{value}")).unwrap(),
+                    value: predicate_index::ExactValue::utf8(format!("v{value}")).unwrap(),
                 })
                 .collect();
             let mut integer = BTreeSet::new();
@@ -413,8 +412,7 @@ fn delta_writes_leave_the_same_facts_as_full_rewrites() {
             )
             .await
             .unwrap();
-            assert_eq!(fact_rows(&delta), fact_rows(&full), "step {steps}");
-            steps += 1;
+            assert_eq!(fact_rows(&delta), fact_rows(&full), "step {step}");
         }
         let keys = keys.map(|key| PredicateRecordKey::new(key).unwrap());
         assert_eq!(
