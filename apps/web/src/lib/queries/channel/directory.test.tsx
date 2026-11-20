@@ -460,6 +460,8 @@ type CachedDirectoryOptions = {
   pageAll?: () => Promise<readonly DirectoryChannel[]>;
   /** Ids a by-id read returns without a readable record. */
   unreadable?: readonly string[];
+  /** By-id reads answer once this settles. */
+  byIdGate?: Promise<void>;
 };
 
 const CACHE_SESSION = 'session-1';
@@ -505,6 +507,7 @@ function mountCachedDirectory(
   };
   const hydrate = vi.fn(
     async (input: GraphqlSoupInput): Promise<GraphqlSoupHydrationPage> => {
+      await options.byIdGate;
       const named = namedIds(input) ?? [];
       const found = server.filter(({ id }) => named.includes(id));
       for (const record of found)
@@ -735,7 +738,10 @@ describe('cached channel directory', () => {
   });
 
   it('keeps waiting on a channel a by-id read gave no evidence for', async () => {
-    const { cache, directory, hydrate } = mountCachedDirectory([]);
+    const network = [directoryChannel('thin')];
+    const { cache, directory, hydrate, fetchAll } = mountCachedDirectory([], {
+      fetchAll: async () => network,
+    });
     // A page that reached its limit without the channel.
     hydrate.mockImplementation(async () => ({
       nextCursor: 'more',
@@ -744,9 +750,43 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('thin'), { incomplete: true });
     completeLane('g1');
 
+    // Complete once both reads gave up, so the cache answers offline.
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    expect(hydrate).toHaveBeenCalledTimes(2);
     expect(directory.lookup('thin').status).toBe('pending');
+    // But not proven: a full read still asks the network.
+    expect(ids(await directory.readComplete())).toEqual(['thin']);
+    expect(fetchAll).toHaveBeenCalledOnce();
+  });
+
+  it('stays partial until each record that lacks a field was read by id', async () => {
+    let release!: () => void;
+    const byIdGate = new Promise<void>((done) => {
+      release = done;
+    });
+    const { cache, directory, hydrate, fetchAll } = mountCachedDirectory(
+      [channelRecord('thin')],
+      {
+        byIdGate,
+        fetchAll: async () => [directoryChannel('a'), directoryChannel('thin')],
+      }
+    );
+    cache.put(channelRecord('a'));
+    // A joined channel another query cached without every directory field.
+    cache.put(channelRecord('thin'), { incomplete: true });
+    completeLane('g1');
+
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalled());
+    expect(ids(directory.channels())).toEqual(['a']);
+    expect(directory.complete()).toBe(false);
+    expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'thin']);
+    expect(fetchAll).toHaveBeenCalledOnce();
+
+    release();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'thin']);
+    expect(ids(await directory.readComplete()).sort()).toEqual(['a', 'thin']);
+    expect(fetchAll).toHaveBeenCalledOnce();
   });
 
   it('reads every incomplete record, 500 new ones a read, past ones already read', async () => {
@@ -763,9 +803,10 @@ describe('cached channel directory', () => {
     const named = () =>
       new Set(hydrate.mock.calls.flatMap(([input]) => namedIds(input) ?? []));
 
+    // The rereads after the first answers queue the rest, and the directory
+    // is complete only once all of them answered.
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    // The rereads after the first answers queue the rest.
-    await vi.waitFor(() => expect(named().size).toBe(600));
+    expect(named().size).toBe(600);
   });
 
   it('reads every channel from the network until complete, then from the cache', async () => {

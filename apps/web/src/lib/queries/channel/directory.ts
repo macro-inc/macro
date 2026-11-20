@@ -119,12 +119,17 @@ export type ByIdOutcome = 'returned' | 'absent' | 'failed';
 export type ChannelDirectory = {
   /** The channels the viewer joined; partial until `complete`. */
   channels: Accessor<readonly DirectoryChannel[]>;
+  /** Whether `channels` lists every joined channel the directory can know
+   * of: the cached directory waits, after its lane's pass, for the by-id
+   * read of each cached record that lacks a field. A read that failed still
+   * completes it, so the cache answers offline; `readComplete` does not
+   * trust such a directory. */
   complete: Accessor<boolean>;
   /** A joined channel, `pending` while the directory cannot tell yet. A
    * pending lookup reads the channel by id. */
   lookup: (channelId: string) => ChannelLookup;
-  /** Every joined channel, read from the network when the directory is not
-   * complete yet. */
+  /** Every joined channel, read from the network unless the directory is
+   * complete and no record it holds lacks a field it could not read. */
   readComplete: () => Promise<readonly DirectoryChannel[]>;
   /** Whether filling the directory failed and stays failed until `retry`.
    * The cached directory fails only when its backfill lane gave up and the
@@ -485,13 +490,26 @@ export function createByIdReader(
   const [outcomes, setOutcomes] = createSignal<
     Readonly<Record<string, ByIdOutcome>>
   >({});
+  // Every id a read settled since the last reset, failures included: a
+  // failure forgotten for a retry stays settled.
+  const [settled, setSettled] = createSignal<Readonly<Record<string, true>>>(
+    {}
+  );
   let requested = new Set<string>();
   let attempts = new Map<string, number>();
   let controller = new AbortController();
 
   const settle = (updates: Record<string, ByIdOutcome>) => {
-    if (Object.keys(updates).length === 0) return;
+    const ids = Object.keys(updates);
+    if (ids.length === 0) return;
     setOutcomes((previous) => ({ ...previous, ...updates }));
+    const known = untrack(settled);
+    if (ids.some((id) => !known[id]))
+      setSettled((previous) => {
+        const next = { ...previous };
+        for (const id of ids) next[id] = true;
+        return next;
+      });
   };
 
   // Not a debounce: failures that keep arriving would postpone the retry of
@@ -587,6 +605,8 @@ export function createByIdReader(
 
   return {
     outcomes,
+    /** The ids a read has answered or given up on since the last reset. */
+    settled,
     /** Queues a by-id read; false when the id was already requested. Never
      * writes a signal, so a reactive read may call it. */
     request(id: string) {
@@ -602,6 +622,7 @@ export function createByIdReader(
       requested = new Set();
       attempts = new Map();
       setOutcomes({});
+      setSettled({});
     },
   };
 }
@@ -1015,17 +1036,34 @@ export function createCachedChannelDirectory(
   );
   refreshNow();
 
+  // A complete pass of the lane proves the records it wrote, not those it
+  // did not: a joined channel another query cached without every field is
+  // listed only once its by-id read lands it.
+  const completeness = createMemo((): 'partial' | 'unproven' | 'proven' => {
+    const current = state();
+    if (!current.complete) return 'partial';
+    if (fallback().status === 'loaded') return 'proven';
+    const outcomes = reader.outcomes();
+    const settled = reader.settled();
+    let unproven = false;
+    for (const id of Object.keys(current.incomplete)) {
+      if (!settled[id]) return 'partial';
+      const outcome = outcomes[id];
+      if (outcome !== 'returned' && outcome !== 'absent') unproven = true;
+    }
+    return unproven ? 'unproven' : 'proven';
+  });
+
   return {
     channels: () => view().joined,
-    complete: () => view().complete,
+    complete: () => completeness() !== 'partial',
     lookup(channelId) {
       const result = lookupChannel(view(), reader.outcomes(), channelId);
       if (result.status === 'pending') reader.request(channelId);
       return result;
     },
     async readComplete() {
-      const current = untrack(view);
-      if (current.complete) return current.joined;
+      if (untrack(completeness) === 'proven') return untrack(view).joined;
       return views.applyList(await deps.fetchAll());
     },
     failed: () => !state().complete && fallback().status === 'failed',
