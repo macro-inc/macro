@@ -152,7 +152,7 @@ describe('MacroEvents', () => {
   });
 
   test('listen() tells onDisconnect when the stream fails, and never when it is stopped', async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
       new Response('unavailable', { status: 503 })) as typeof fetch;
     const macro = new Macro({
       token: 'user-token',
