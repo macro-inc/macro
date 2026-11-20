@@ -733,6 +733,32 @@ class TokenUsage(unittest.TestCase):
         self.assertEqual(tokens["rows"][0]["status"], "matched")
         self.assertEqual(tokens["rows"][0]["calls"], [2])
 
+    def test_a_row_with_no_span_does_not_take_a_later_rows_exact_span(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(20)],
+            "spans": {"tools": {}, "model_calls": [span("claude-opus-5-5", 3, 4, 2, 1_000, 10, 7)]},
+            "usage": [
+                # Its span was lost; the next round's span ends within its window.
+                row("lost", "claude-opus-5-5", 2.5, 9, 900, 0, 5, 0.01),
+                row("own", "claude-opus-5-5", 3.99, 2, 1_000, 10, 7, 0.01),
+            ],
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual([(found["id"], found["status"]) for found in tokens["rows"]], [
+            ("lost", "billed, no span"), ("own", "matched"),
+        ])
+        self.assertEqual(tokens["calls"][0]["status"], "matched")
+
+    def test_a_model_whose_spans_report_no_usage_is_not_the_opener(self):
+        export = {
+            "session": {"id": "s"}, "frames": [prompt(0), end(10)],
+            "spans": {"tools": {}, "model_calls": [span("claude-opus-5-5", 1, 2, None, None, None, None)]},
+        }
+        tokens = token_usage.reconcile(export)
+
+        self.assertEqual(tokens["models"][0]["label"], "claude-opus-5-5")
+
     def test_a_row_matching_runs_from_two_starts_takes_the_one_nearest_it(self):
         export = {
             "session": {"id": "s"}, "frames": [prompt(0), end(20)],
