@@ -7,9 +7,11 @@
 //   writes before each section (generations read flags fresh at each start),
 //   and accepts and drops analytics.
 // - `:8081` answers `/internal/recent_messages/macro|{email}` with the
-//   persona's mailbox from `inbox/{email}.json`: the routines brief reads
-//   mail from Gmail or Outlook, which seeded mail never reaches. Every other
-//   request, and a person with no file, goes to the real email_service.
+//   persona's newest mail from `inbox/{email}.json`, and the same route
+//   asked for a window of days (`?days=`) with its month from
+//   `window/{email}.json`: the routines brief reads mail from Gmail or
+//   Outlook, which seeded mail never reaches. Every other request, and a
+//   person with no file, goes to the real email_service.
 
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -38,10 +40,22 @@ const CADDYFILE = `{
 	# check is a second matcher inside the first one's handler.
 	@recent path_regexp user ^/internal/recent_messages/macro\\|(.+)$
 	handle @recent {
-		root * /srv/inbox
-		@inbox file /{re.user.1}.json
+		root * /srv
+		@window {
+			query days=*
+			file /window/{re.user.1}.json
+		}
+		handle @window {
+			rewrite * /window/{re.user.1}.json
+			header Content-Type application/json
+			file_server
+		}
+		@inbox {
+			not query days=*
+			file /inbox/{re.user.1}.json
+		}
 		handle @inbox {
-			rewrite * /{re.user.1}.json
+			rewrite * /inbox/{re.user.1}.json
 			header Content-Type application/json
 			file_server
 		}
@@ -72,6 +86,7 @@ function docker(args: string[], allowFail = false) {
 export function startStub(instance: string) {
   const dir = stubDir(instance);
   mkdirSync(join(dir, 'inbox'), { recursive: true });
+  mkdirSync(join(dir, 'window'), { recursive: true });
   writeFileSync(join(dir, 'Caddyfile'), CADDYFILE);
   if (!existsSync(join(dir, 'flags.json'))) writeFlags(instance, {});
   const name = container(instance);
@@ -104,13 +119,16 @@ export function writeFlags(instance: string, on: Record<string, boolean>) {
   writeFileSync(join(stubDir(instance), 'flags.json'), JSON.stringify({ flags, errorsWhileComputingFlags: false }));
 }
 
-/** Serve `body` as `email`'s newest mail. */
-export function writeInbox(instance: string, email: string, body: unknown) {
-  writeFileSync(join(stubDir(instance), 'inbox', `${email}.json`), JSON.stringify(body));
+/** Serve `newest` as `email`'s newest mail, and `month` as their mail of a window of days. */
+export function writeInbox(instance: string, email: string, newest: unknown, month: unknown) {
+  // A stand-in started before the month read has no folder for it.
+  mkdirSync(join(stubDir(instance), 'window'), { recursive: true });
+  writeFileSync(join(stubDir(instance), 'inbox', `${email}.json`), JSON.stringify(newest));
+  writeFileSync(join(stubDir(instance), 'window', `${email}.json`), JSON.stringify(month));
 }
 
 export function clearInbox(instance: string, email: string) {
-  rmSync(join(stubDir(instance), 'inbox', `${email}.json`), { force: true });
+  for (const folder of ['inbox', 'window']) rmSync(join(stubDir(instance), folder, `${email}.json`), { force: true });
 }
 
 /** Ask the stand-in, from inside the network, what it serves for `path` on `port`. */

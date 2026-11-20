@@ -1,9 +1,13 @@
 // The people the bench generates suggestions for. Each persona is a folder:
 // `workspace.json` (a seed scenario without mail: users, team, projects,
-// documents, tasks, channels, calls), `inbox.json` (100 messages as a mail
-// provider lists them, labels included) and the answer keys,
-// `feed-truth.json` and `routines-truth.json`. The tune personas live in
-// `personas/`; held-out ones live outside the repository (see heldout.ts).
+// documents, tasks, channels, calls), `inbox.json` (their mail as a mail
+// provider lists it, labels included) and the answer keys,
+// `feed-truth.json` and `routines-truth.json`. Most have 100 messages; a
+// month persona (month.ts) has 30 days of mail, up to 500 messages, text
+// only for the newest 100, an owner-only workspace, no feed key, and a
+// third key, `streams-truth.json`: every stream its mail was written from.
+// The tune personas live in `personas/`; held-out ones live outside the
+// repository (see heldout.ts).
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -22,7 +26,10 @@ export type InboxMessage = {
   date: string;
   subject: string;
   labels: string[];
+  /** The body's opening; empty in a month persona's messages older than its newest 100. */
   snippet: string;
+  /** In a month persona, the stream of `streams-truth.json` it was written for. */
+  stream?: string;
 };
 
 export type Inbox = {
@@ -51,6 +58,8 @@ export type RoutineNeed = {
   drafted?: string;
   /** Sidebars it belongs in, best first. */
   surfaces: string[];
+  /** In a month persona's key, the streams whose mail shows it. */
+  streams?: string[];
 };
 /** A routine that looks plausible for this person but that they wouldn't keep. */
 export type RoutineDecoy = { id: string; what: string; why: string; catalog?: string[] };
@@ -62,6 +71,29 @@ export type RoutineDecoy = { id: string; what: string; why: string; catalog?: st
  * time; a drafted routine is the judge's call.
  */
 export type RoutinesTruth = { needs: RoutineNeed[]; decoys: RoutineDecoy[]; fine: string[]; misfit: string[] };
+
+/**
+ * One stream of a month persona's mail: `work` is recurring mail the person
+ * acts on (what a finding step should name), `noise` recurring mail they
+ * read or ignore, `thread` a one-off conversation about one matter.
+ */
+export type MailStream = {
+  id: string;
+  kind: 'work' | 'noise' | 'thread';
+  name: string;
+  senders: { name: string; email: string }[];
+  /** Messages of it in the 30 days, as written. */
+  count: number;
+  cadence: string;
+  /** What each message says. */
+  what: string;
+  /** What the person does with it, and who else handles it. */
+  action: string;
+  labels: string[];
+  /** A few of its subjects, newest first. */
+  examples: string[];
+};
+export type StreamsTruth = { streams: MailStream[] };
 
 export type Persona = {
   name: string;
@@ -76,6 +108,8 @@ export type Persona = {
   inbox: Inbox;
   feedTruth?: FeedTruth;
   routinesTruth?: RoutinesTruth;
+  /** A month persona's streams key. */
+  streamsTruth?: StreamsTruth;
 };
 
 // A held-out writer makes addresses from first names, so one may carry an
@@ -140,7 +174,8 @@ function load(dir: string, name: string, heldout: boolean): Persona {
   if (!workspace || !inbox) throw new Error(`${dir} lacks workspace.json or inbox.json`);
   const feedTruth = readJson<FeedTruth>(join(dir, 'feed-truth.json'));
   const routinesTruth = readJson<RoutinesTruth>(join(dir, 'routines-truth.json'));
-  const spelled = asciiSpellings([workspace, inbox, feedTruth, routinesTruth]);
+  const streamsTruth = readJson<StreamsTruth>(join(dir, 'streams-truth.json'));
+  const spelled = asciiSpellings([workspace, inbox, feedTruth, routinesTruth, streamsTruth]);
   return {
     name,
     seat: 1,
@@ -150,6 +185,7 @@ function load(dir: string, name: string, heldout: boolean): Persona {
     inbox: spellAddresses(inbox, spelled),
     feedTruth: spellAddresses(feedTruth, spelled),
     routinesTruth: spellAddresses(routinesTruth, spelled),
+    streamsTruth: spellAddresses(streamsTruth, spelled),
   };
 }
 
@@ -314,27 +350,52 @@ export function scenario(persona: Persona, variant: Variant, now: number): Recor
   return { ...workspace, scenario: name, emails };
 }
 
-/**
- * What email_service's `/internal/recent_messages/{user}` answers for the
- * owner at `now`, newest first: the routines brief reads the mailbox from
- * the provider, which the seed CLI never fills, so the bench's stand-in
- * serves this instead.
- */
-export function recentMessages(persona: Persona, variant: Variant, now: number) {
+/** What the routines brief reads at most of the newest mail (`INBOX_MESSAGES` in scheduled_action). */
+export const RECENT_MESSAGES = 100;
+/** The month read: messages of the last `WINDOW_DAYS` days, at most `WINDOW_MESSAGES`, text for the newest `WINDOW_TEXTS`. */
+export const WINDOW_DAYS = 30;
+export const WINDOW_MESSAGES = 500;
+export const WINDOW_TEXTS = 100;
+
+/** The owner's mail at `now` as email_service answers it, newest first, before any limit. */
+function served(persona: Persona, variant: Variant, now: number) {
   const copy = variantOf(persona, variant);
   const inbox = shiftAll(copy.inbox, shiftDays(now));
-  const messages = inbox.messages
+  return inbox.messages
     .map((message, index) => ({
       inbox: inbox.owner.email,
       from: { email: message.from.email, name: message.from.name },
       to: message.to,
       cc: message.cc,
       subject: message.subject.slice(0, 200),
-      snippet: message.snippet.slice(0, 500),
+      snippet: message.snippet.slice(0, 500) as string | null,
       received_at: new Date(now - minutesBefore(persona.inbox.messages[index]) * 60_000).toISOString(),
       labels: message.labels,
     }))
     .sort((a, b) => b.received_at.localeCompare(a.received_at));
+}
+
+/**
+ * What email_service's `/internal/recent_messages/{user}` answers for the
+ * owner at `now`, newest first: the routines brief reads the mailbox from
+ * the provider, which the seed CLI never fills, so the bench's stand-in
+ * serves this instead. It asks for the newest `RECENT_MESSAGES`.
+ */
+export function recentMessages(persona: Persona, variant: Variant, now: number) {
+  return { messages: served(persona, variant, now).slice(0, RECENT_MESSAGES) };
+}
+
+/**
+ * What the same route answers when asked for the last `WINDOW_DAYS` days:
+ * up to `WINDOW_MESSAGES` messages, newest first, with text (the snippet)
+ * only on the newest `WINDOW_TEXTS`.
+ */
+export function windowMessages(persona: Persona, variant: Variant, now: number) {
+  const since = new Date(now - WINDOW_DAYS * 24 * 60 * 60_000).toISOString();
+  const messages = served(persona, variant, now)
+    .filter((message) => message.received_at >= since)
+    .slice(0, WINDOW_MESSAGES)
+    .map((message, index) => (index < WINDOW_TEXTS ? message : { ...message, snippet: null }));
   return { messages };
 }
 
