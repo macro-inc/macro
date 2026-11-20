@@ -50,6 +50,9 @@ mod presence;
 pub mod sign_in_ahead;
 pub(crate) mod wake;
 
+#[cfg(test)]
+mod test;
+
 use default_agent::{DefaultAgentRequest, DefaultAgents};
 
 use presence::PresenceGuard;
@@ -228,12 +231,15 @@ fn resolve_deployment() -> anyhow::Result<Deployment> {
     })
 }
 
-/// `url`, unless it is this machine's loopback, which a computer can't reach
-/// (a local stack whose collector isn't wired for computers): the computer
-/// then exports no spans.
+/// `url`, unless it is this machine's loopback (`localhost`, a name under it,
+/// which RFC 6761 keeps on loopback, or a loopback address), which a computer
+/// can't reach (a local stack whose collector isn't wired for computers): the
+/// computer then exports no spans.
 fn computer_reachable(url: macro_service_urls::Url) -> Option<macro_service_urls::Url> {
     let loopback = url.host_str().is_some_and(|host| {
-        host.eq_ignore_ascii_case("localhost")
+        let host = host.to_ascii_lowercase();
+        host == "localhost"
+            || host.ends_with(".localhost")
             || host
                 .trim_matches(['[', ']'])
                 .parse::<std::net::IpAddr>()
