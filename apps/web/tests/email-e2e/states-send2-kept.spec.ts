@@ -14,10 +14,12 @@ import {
   type ThreadPreview,
   test,
 } from './harness/fixtures';
-import { notice } from './harness/send';
+import { notice, threadMessages } from './harness/send';
 import {
+  anotherDevice,
   backfilled,
   deleteElsewhere,
+  failRequestsLater,
   holdOperation,
   holdRequests,
   makeDue,
@@ -161,12 +163,12 @@ test('newer text is kept as a new draft when its draft is scheduled elsewhere', 
 });
 
 // When this fails, newer text in a composer whose draft another device sent
-// is dropped without a word (handoff sent-elsewhere-drops-newer-text): the
-// composer reads the draft as sent before it saves the text, yet does not
-// keep it, and clears itself when the save is refused.
-test('known bug: sent-elsewhere-drops-newer-text: newer text is kept as a new draft when its draft is sent elsewhere @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
+// is dropped without a word: the save of that text is refused as already
+// sent, and the composer clears itself instead of keeping the text.
+test('newer text is kept as a new draft when its draft is sent elsewhere', async ({
+  page,
+  mailbox,
+}) => {
   // Sent by another device's schedule before the composer reads it, so the
   // composer never sees it scheduled.
   const draft = await savedNewRead(page, mailbox, 'Last numbers');
@@ -176,14 +178,16 @@ test('known bug: sent-elsewhere-drops-newer-text: newer text is kept as a new dr
     await mailbox.stack.runScheduledSweep();
     await expect.poll(() => sentFromMacro(mailbox, 'Last numbers')).toBe(true);
   });
+  // The composer reads what was sent beside this device's working copies,
+  // which wait for its held writes.
+  await confirmWrites();
   await expect(
     notice(
       page,
       'This email was already sent. Your newer text was kept as a new draft and was not sent.'
     )
   ).toBeVisible();
-  saw('STC-411');
-  await confirmWrites();
+  saw('STC-411', 'F-120');
   await expect
     .poll(() => savedDraft(mailbox, { subject: 'Last numbers' }, NEWER))
     .toBeTruthy();
@@ -191,14 +195,20 @@ test('known bug: sent-elsewhere-drops-newer-text: newer text is kept as a new dr
 
 // When this fails, a composer whose save the service refuses because
 // another device's schedule already sent the draft clears itself without a
-// word (handoff sent-elsewhere-drops-newer-text): the refusal resets the
-// composer before the failed save is reported.
-test('known bug: sent-elsewhere-drops-newer-text: a save refused because the scheduled email went out says the composer was updated @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
-  // The composer reads nothing meanwhile: it learns of the send only from
-  // the refused save.
+// word.
+test('a save refused because the scheduled email went out says the composer was updated', async ({
+  page,
+  mailbox,
+}) => {
+  const failReads = await failRequestsLater(page, DRAFT_READ);
   const draft = await savedNew(page, mailbox, 'Final numbers');
+  // The composer's reads of its draft fail from here on, so it learns of the
+  // send only from the refused save. Its timer, focus or a relayed change
+  // would otherwise read the draft as scheduled or sent first now and then,
+  // and no save is refused. A read already let through as the draft is saved
+  // is answered before the schedule below: answered after it, it reads the
+  // draft as scheduled or sent, and again no save is refused.
+  await failReads();
   await scheduleElsewhere(mailbox, draft, morningIn(1));
   await makeDue(mailbox, draft);
   await mailbox.stack.runScheduledSweep();
@@ -219,7 +229,8 @@ test('known bug: sent-elsewhere-drops-newer-text: a save refused because the sch
 async function replyWithFile(
   page: Page,
   mailbox: Mailbox,
-  subject: string
+  subject: string,
+  reopen = true
 ): Promise<{ thread: ThreadPreview; draftId: string; file: Locator }> {
   await relayUploads(page);
   const { thread, draftId } = await savedReply(page, mailbox, subject);
@@ -237,7 +248,7 @@ async function replyWithFile(
     buffer: Buffer.from('The notes.'),
   });
   await stored;
-  await mailbox.open(`/app/mail/${thread.id}`);
+  if (reopen) await mailbox.open(`/app/mail/${thread.id}`);
   const file = page.getByRole('button', { name: 'Remove notes.txt' });
   await expect(file).toBeVisible();
   await replyBody(page).click();
@@ -280,29 +291,94 @@ test('newer text in a reply is kept as a new draft, without its saved files, whe
     .toBeTruthy();
 });
 
-// When this fails, newer text in a reply that waits to be saved when another
-// tab deletes the draft is saved as a new draft without a word, and the
-// composer still shows the file the new draft lacks (handoff
-// deleted-draft-sometimes-saved-silently): text kept on this device stops
-// the composer reading what became of its draft.
-test('known bug: deleted-draft-sometimes-saved-silently: newer text in a reply waiting to be saved is kept as a new draft, without its saved files, when its draft is deleted elsewhere @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
-  const { draftId, file } = await replyWithFile(page, mailbox, 'Spare pages');
-  // Held on its way, the save leaves the newer text on this device alone.
-  const saving = await holdOperation(page, 'SaveEmailDraft');
-  await page.keyboard.type(` ${NEWER}`);
-  await saving.arrived;
-  await deleteElsewhere(mailbox, draftId);
-  await returnToTab(page);
-  await saving.release();
-  await expect(
-    notice(
-      page,
-      'The draft changed elsewhere. Your newer text was kept as a new draft.'
-    )
-  ).toBeVisible();
-  saw('STC-409');
-  await expect(file).toHaveCount(0);
-  saw('STC-080');
-});
+// The stale save can reach the service before the next lifecycle read. On
+// another device the reply has only the saved file reference. The original
+// composer still has its bytes and can upload them again.
+for (const scenario of [
+  {
+    title:
+      'newer text in a reply waiting to be saved is kept as a new draft, without its saved files, when its draft is deleted elsewhere',
+    remoteOnly: true,
+    files: 0,
+  },
+  {
+    title: 'a replacement reply uploads the file it still has on this device',
+    remoteOnly: false,
+    files: 1,
+  },
+]) {
+  test(scenario.title, async ({ page: original, mailbox, browser }) => {
+    const {
+      thread,
+      draftId,
+      file: originalFile,
+    } = await replyWithFile(original, mailbox, 'Spare pages', false);
+    const other = scenario.remoteOnly
+      ? await anotherDevice(browser, mailbox)
+      : undefined;
+    const page = other?.page ?? original;
+    const threadUrl = `${mailbox.front.origin}/app/mail/${thread.id}`;
+    const file = other
+      ? page.getByRole('button', { name: 'Remove notes.txt' })
+      : originalFile;
+    try {
+      if (other) {
+        await page.goto(threadUrl);
+        await expect(file).toBeVisible();
+        await replyBody(page).click();
+      }
+
+      const saving = await holdOperation(page, 'SaveEmailDraft');
+      await page.keyboard.type(` ${NEWER}`);
+      await saving.arrived;
+      const reading = await holdRequests(page, DRAFT_READ);
+      try {
+        await deleteElsewhere(mailbox, draftId);
+        await returnToTab(page);
+        await saving.release();
+        await expect(
+          notice(
+            page,
+            'The draft changed elsewhere. Your newer text was kept as a new draft.'
+          )
+        ).toBeVisible();
+        saw('STC-409');
+        if (scenario.remoteOnly) {
+          await expect(
+            notice(
+              page,
+              'Previously saved attachments could not be copied to the new draft. Please attach those files again.'
+            )
+          ).toBeVisible();
+          saw('STC-080');
+        }
+        await expect(file).toHaveCount(scenario.files);
+        await expect
+          .poll(async () => {
+            const replacement = await savedDraft(
+              mailbox,
+              { threadId: thread.id },
+              NEWER
+            );
+            const drafts = (await threadMessages(mailbox, thread.id)).filter(
+              (message) => message.is_draft
+            );
+            return drafts.map((message) => ({
+              replacement:
+                message.db_id === replacement && message.db_id !== draftId,
+              files: message.attachments_draft?.length ?? 0,
+            }));
+          })
+          .toEqual([{ replacement: true, files: scenario.files }]);
+      } finally {
+        await reading.release();
+      }
+
+      await page.goto(threadUrl);
+      await expect(replyBody(page)).toContainText(NEWER);
+      await expect(file).toHaveCount(scenario.files);
+    } finally {
+      await other?.close();
+    }
+  });
+}

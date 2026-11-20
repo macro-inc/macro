@@ -1,5 +1,4 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
-import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import { useSessionActivity } from '@core/agent-session/session-activity';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
@@ -17,15 +16,15 @@ import { conversationState } from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
-import {
-  repositoryLabel,
-  type SessionCodeDetails,
-} from '../core/session-code-details';
+import { conversationCodeDetails } from '../queries/conversation-code-details';
 
 type Props = {
   entity: AgentSessionEntity;
   surface: 'home' | 'agents';
+  /** The row button's id, for a list that points at its focused row. */
+  domId?: string;
   active?: boolean;
+  focused?: boolean;
   unread?: boolean;
   mode?: AgentsMode;
   onOpen?: (event: MouseEvent) => void;
@@ -43,26 +42,8 @@ export function AgentSessionListItem(props: Props) {
   const failed = () => props.entity.turnState === 'failed';
   const activity = useSessionActivity(() => props.entity.id);
   const summary = () => (state() === 'working' ? activity() : undefined);
-  const details = (): SessionCodeDetails | undefined => {
-    if (mode() !== 'code') return undefined;
-    const pr = parseGithubPrUrl(props.entity.pullRequestUrl ?? '');
-    const repository =
-      repositoryLabel(props.entity.repoUrl) ??
-      (pr ? `${pr.owner}/${pr.repo}` : undefined);
-    const branch = props.entity.workingBranch ?? undefined;
-    if (!repository && !branch && !pr) return undefined;
-    return {
-      repository,
-      branch,
-      pullRequest: pr
-        ? {
-            number: pr.number,
-            url: prHtmlUrl(pr),
-            status: props.entity.pullRequestState ?? undefined,
-          }
-        : undefined,
-    };
-  };
+  const details = () =>
+    mode() === 'code' ? conversationCodeDetails(props.entity) : undefined;
 
   const hideLeading = () => props.surface === 'agents';
   const codeStatusIndicator = () =>
@@ -85,11 +66,13 @@ export function AgentSessionListItem(props: Props) {
   return (
     <AgentSessionRow
       id={props.entity.id}
+      domId={props.domId}
       title={props.entity.name || 'Untitled conversation'}
       kind={mode()}
       state={state()}
       failed={failed()}
       active={props.active}
+      focused={props.focused}
       unread={props.unread}
       hideLeading={hideLeading()}
       onOpen={props.onOpen}

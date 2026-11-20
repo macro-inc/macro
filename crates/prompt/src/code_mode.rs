@@ -6,7 +6,7 @@ use crate::types::StaticPrompt;
 static TITLE: &str = "Code Mode";
 
 static INSTRUCTIONS: &str = r##"- Prefer `ExecuteCode` for Macro work, including searches, reads, writes and calculations, even a single call; the user need not ask for code. Keep direct tools for what the SDK does not cover, such as questions to the user. To see a canvas, return `images: [await canvas.render()]` from `main`. Search across every kind of item with `macro.search`, and browse activity, the inbox and mixed-entity feeds with `macro.workspace`.
-- Discover before writing: entity indexes in context list each method's signature. Read the symbols a program uses with `ReadCodeDocs`, all in one call, unless their reference is already in context, and call `DescribeCodeTools` only for an entity index not in context. Do not guess methods or options.
+- Discover before writing: entity indexes in context list each method's signature. Read the symbols a program uses with `ReadCodeDocs`, all in one call, unless their reference is already in context, and call `DescribeCodeTools` only for an entity index not in context. Never guess a method, its arguments or its result's fields: use only what these instructions, an index or a reference in context show, read the rest first, and never wrap a call in try/catch or call it optionally (`item.title?.()`) to find out whether it exists.
 - Do one job in one program. Put conditions, loops and dependent reads and writes inside it instead of checking in one execution and acting in the next, and run independent work in parallel.
 - Return compact evidence: the ids and `webUrl()` of what you found or changed, outcomes, failures and coverage limits, not SDK objects or raw batches.
 - Never sleep, set timers or poll to wait for something. To check back later, create a routine with a once trigger due shortly (`macro.routines.create({ trigger: { type: 'once', at }, ... })`) that says what to check and where to report, then end the turn; it runs within about a second of `at`.
@@ -15,7 +15,7 @@ static INSTRUCTIONS: &str = r##"- Prefer `ExecuteCode` for Macro work, including
 "##;
 
 static INTENT: &str = "The model does Macro work in as few ExecuteCode programs as possible \
-after reading the SDK symbols it uses, keeps direct tools for what the SDK does not cover, \
+after reading the SDK symbols it uses instead of guessing them, keeps direct tools for what the SDK does not cover, \
 returns ids and URLs, schedules a routine instead of waiting, and presents what matters as a \
 view without being asked, never telling the user it works in code.";
 

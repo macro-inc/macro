@@ -45,6 +45,95 @@ afterEach(() => {
 });
 
 describe('runOperation', () => {
+  test('CRM rule activation resolves entity references and preserves the observed token', async () => {
+    const token = { kind: 'legacy', fingerprint: 'observed-state' };
+    const { macro, requests } = macroAnswering(() =>
+      Response.json({
+        audit_event_id: 'event-1',
+        effect: 'Whole-thread sharing.',
+        enabled: true,
+        mode: 'selected',
+        replayed: false,
+        revision: 1,
+        token,
+      })
+    );
+    const result = await runOperation({
+      operation: operation('crm.emailPrivacy.replaceRules'),
+      input: {
+        rules: {
+          schemaVersion: 1,
+          include: [
+            { kind: 'contact', contact: 'contact-1' },
+            { kind: 'company', company: 'company-1' },
+            { kind: 'thread', thread: 'thread-1' },
+          ],
+        },
+        options: {
+          ifPolicy: token,
+          idempotencyKey: '00000000-0000-4000-8000-000000000001',
+        },
+      },
+      macro,
+      catalog,
+      classes: handleClasses,
+      validators,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.method).toBe('PUT');
+    expect(new URL(requests[0]?.url ?? '').pathname).toBe(
+      '/crm/email-privacy/policy'
+    );
+    expect(JSON.parse(requests[0]?.body ?? '')).toEqual({
+      change: {
+        action: 'replace_rules',
+        rules: {
+          schema_version: 1,
+          include: [
+            { kind: 'contact', contact_id: 'contact-1' },
+            { kind: 'company', company_id: 'company-1' },
+            { kind: 'thread', thread_id: 'thread-1' },
+          ],
+        },
+      },
+      if_policy: token,
+      request_id: '00000000-0000-4000-8000-000000000001',
+    });
+  });
+
+  test('CRM preview replacement resolves the exact previously observed handle', async () => {
+    const token = { kind: 'legacy', fingerprint: 'observed-state' };
+    const { macro, requests } = macroAnswering(() =>
+      Response.json({
+        preview_id: 'new-preview',
+        context_id: 'context',
+        counts: {},
+        created_at: '2026-01-01T00:00:00Z',
+        expires_at: '2026-01-01T00:05:00Z',
+        scanned_threads: 0,
+        status: 'pending',
+      })
+    );
+    const result = await runOperation({
+      operation: operation('crm.emailPrivacy.previewRules'),
+      input: {
+        rules: { schemaVersion: 1, include: [] },
+        options: { ifPolicy: token, ifPreview: 'previous-preview' },
+      },
+      macro,
+      catalog,
+      classes: handleClasses,
+      validators,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(requests).toHaveLength(1);
+    expect(JSON.parse(requests[0]?.body ?? '')).toMatchObject({
+      if_policy: token,
+      if_preview_id: 'previous-preview',
+    });
+  });
+
   test.each([
     'initiative-1',
     'https://macro.com/app/initiative/initiative-1',

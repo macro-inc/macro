@@ -35,7 +35,7 @@ impl PgMailboxSync {
         lease: &CatalogLease,
         folders: &[MailFolder],
     ) -> Result<Option<ImportCompleted>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
             r#"
@@ -124,29 +124,35 @@ impl PgMailboxSync {
             .await
             .map_err(db_error)?;
         }
-        sqlx::query!(
+        let deleted = sqlx::query_scalar!(
             r#"
             UPDATE email_mailbox_folders SET deleted_at = now()
             WHERE link_id = $1 AND catalog_generation <> $2 AND deleted_at IS NULL
+            RETURNING provider_id
         "#,
             lease.mailbox.link_id,
             lease.fence
         )
-        .execute(&mut *tx)
+        .fetch_all(&mut *tx)
         .await
         .map_err(db_error)?;
+        // Only the discovery that sees a folder leave, or move in or out of
+        // Deleted Items, rechecks its stored mail. Rechecking a deleted
+        // folder's mail at every discovery would read what Graph already
+        // answered every five minutes and revive mail it gave up on.
+        let rechecked: Vec<String> = trash_changes.into_iter().chain(deleted).collect();
         sqlx::query!(r#"
             INSERT INTO email_message_reconciliation (link_id,generation,provider_id,is_import)
-            SELECT m.link_id,$2,m.provider_id,false FROM email_messages m
-            JOIN email_mailbox_folders f ON f.link_id = m.link_id AND f.provider_id = m.provider_folder_id
-            WHERE m.link_id = $1 AND (f.deleted_at IS NOT NULL OR f.provider_id=ANY($3)) AND m.provider_id IS NOT NULL
-            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now()
-        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&trash_changes).execute(&mut *tx).await.map_err(db_error)?;
-        // Stop polling folders that no longer exist; retained messages are handled
-        // by mailbox-wide reconciliation above, not cascaded from folder deletion.
+            SELECT link_id,$2,provider_id,false FROM email_messages
+            WHERE link_id = $1 AND provider_folder_id = ANY($3) AND provider_id IS NOT NULL
+            ON CONFLICT (link_id,generation,provider_id) DO UPDATE SET revision = email_message_reconciliation.revision + 1,available_at = now(),is_import = false
+        "#,lease.mailbox.link_id,lease.mailbox.sync_generation,&rechecked).execute(&mut *tx).await.map_err(db_error)?;
+        // Stop polling folders that no longer exist, and their live passes;
+        // retained messages are handled by mailbox-wide reconciliation above,
+        // not cascaded from folder deletion.
         sqlx::query!(r#"
             DELETE FROM email_sync_streams s USING email_mailbox_folders f
-            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind = 'mail_folder'
+            WHERE s.link_id = $1 AND s.generation = $2 AND s.kind IN ('mail_folder','mail_folder_live')
                 AND f.link_id = s.link_id AND f.provider_id = s.scope_id AND f.deleted_at IS NOT NULL
         "#,lease.mailbox.link_id,lease.mailbox.sync_generation).execute(&mut *tx).await.map_err(db_error)?;
         let import_completed = Self::settle_import(&mut tx, lease.mailbox).await?;

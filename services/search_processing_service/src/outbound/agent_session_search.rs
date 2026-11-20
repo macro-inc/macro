@@ -2,6 +2,7 @@
 
 use agent_fold::domain::model::Author;
 use agent_session::domain::{model::AgentSessionId, search::indexing::SearchSnapshot};
+use mention_utils::parse::{ParsedXmlText, PlainTextFormatter, XmlFormatter};
 use opensearch_client::{
     OpensearchClient,
     agent_session::{
@@ -11,7 +12,10 @@ use opensearch_client::{
 use rootcause::Report;
 use std::sync::Arc;
 
-use crate::domain::agent_session_index::AgentSessionSearchIndex;
+use crate::{
+    domain::agent_session_index::{AgentSessionSearchIndex, ProjectionVersion, ProjectionWrites},
+    parsers::message_text::with_pastes_as_content,
+};
 
 pub struct OpenSearchAgentSessionIndex(pub Arc<OpensearchClient>);
 
@@ -20,7 +24,8 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
         &self,
         snapshot: SearchSnapshot,
         index_override: Option<&str>,
-    ) -> Result<(), Report> {
+        version: ProjectionVersion,
+    ) -> Result<ProjectionWrites, Report> {
         let metadata = snapshot.metadata;
         let args = ReconcileAgentSessionArgs {
             agent_session_id: metadata.id.to_string(),
@@ -35,9 +40,7 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
             updated_at_millis: opensearch_client::date_format::EpochMillis::new(
                 metadata.updated_at.timestamp_millis(),
             )?,
-            // The session lease serializes writers; every reconciliation gets
-            // its own generation to remove obsolete children after a refold.
-            projection_generation: macro_uuid::Uuid::now_v7().to_string(),
+            version: version.get(),
             messages: snapshot
                 .messages
                 .into_iter()
@@ -51,20 +54,46 @@ impl AgentSessionSearchIndex for OpenSearchAgentSessionIndex {
                         Author::User { user_id } => user_id.as_ref().map(ToString::to_string),
                         Author::Agent => None,
                     },
-                    content: message.searchable_text(),
+                    content: shown_text(&message.searchable_text()),
                 })
                 .collect(),
         };
-        Ok(self
+        let writes = self
             .0
             .reconcile_agent_session(&args, index_override)
-            .await?)
+            .await?;
+        Ok(ProjectionWrites {
+            parent_written: writes.parent_written,
+            messages_written: writes.messages_written,
+            messages_unchanged: writes.messages_unchanged,
+            messages_deleted: writes.messages_deleted,
+        })
     }
 
-    async fn delete(&self, id: AgentSessionId, index_override: Option<&str>) -> Result<(), Report> {
+    async fn delete(
+        &self,
+        id: AgentSessionId,
+        index_override: Option<&str>,
+        version: ProjectionVersion,
+    ) -> Result<(), Report> {
         Ok(self
             .0
-            .delete_agent_session(&id.to_string(), index_override)
+            .delete_agent_session(&id.to_string(), index_override, version.get())
             .await?)
     }
 }
+
+/// A message's text with its `<m-*>` chips written as text. Links and
+/// mentions read as `PlainTextFormatter` writes them, as in agent
+/// notifications; prompts and replies are prose, not valid markup
+/// (`Vec<String>`, `a < b`), so they parse leniently, and from a tag that does
+/// not parse the text up to the next paste stays as written. A paste reads as
+/// its content.
+fn shown_text(text: &str) -> String {
+    with_pastes_as_content(text, |markup| {
+        PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(markup)).0
+    })
+}
+
+#[cfg(test)]
+mod test;

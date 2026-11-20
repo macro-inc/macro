@@ -278,6 +278,9 @@ pub struct FocusInbox {
     pub link_id: Uuid,
     /// Owner of that inbox.
     pub owner: MacroUserIdStr<'static>,
+    /// The users other than the owner the inbox is linked to, whose Focus tab
+    /// shows it too.
+    pub delegates: Vec<MacroUserIdStr<'static>>,
     /// The inbox's address, lowercased.
     pub owner_email: String,
     /// Whether the thread is in the signal inbox.
@@ -335,6 +338,18 @@ impl FocusThread {
             sent_notes: mail.sent_notes,
         }
     }
+}
+
+/// An inbox and the people whose Focus tab shows it, whose places in the
+/// rollout decide whether it is classified.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FocusInboxOwner {
+    /// The inbox.
+    pub link_id: Uuid,
+    /// Its owner.
+    pub owner: MacroUserIdStr<'static>,
+    /// The users other than the owner the inbox is linked to.
+    pub delegates: Vec<MacroUserIdStr<'static>>,
 }
 
 /// An inbox thread whose stored classification may be out of date.

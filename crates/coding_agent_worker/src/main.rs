@@ -16,6 +16,10 @@
 //! `agent_trigger.new` delivery opens a session and forwards the first prompt;
 //! `agent_trigger.existing` deliveries forward follow-up messages.
 
+// Agent teammates run only on Linux Macro computers; elsewhere `harness::apply_agent`
+// refuses the hand-off.
+#[cfg(unix)]
+mod agent_env;
 mod computer;
 mod config;
 mod daemon;
@@ -31,6 +35,7 @@ mod herdr;
 mod outbound;
 mod profiles;
 mod repository;
+mod retry_delay;
 mod runtime;
 mod self_knowledge;
 mod service;
@@ -149,7 +154,7 @@ enum Command {
     /// and claim the pre-approved pairing.
     #[cfg(unix)]
     Enroll {
-        /// `incus` (the instance's `user.macro.enrollment` key) or
+        /// `mmds` (a Firecracker microVM's `macro.enrollment` metadata) or
         /// `file:<path>`.
         #[arg(long)]
         from: enroll::EnrollmentSource,
@@ -162,7 +167,7 @@ enum Command {
         /// Agent preset id for a newly created config.
         #[arg(long, default_value = "claude-code")]
         agent: String,
-        /// Prefix for system paths (`/dev/incus`, `/etc`, `/var/lib`).
+        /// Prefix for system paths (`/etc`, `/var/lib`).
         #[arg(long, default_value = "/", hide = true)]
         root: std::path::PathBuf,
     },

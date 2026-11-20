@@ -12,6 +12,10 @@ Chat sidebar, following the standard hexagonal crate layout.
   first for the sharing/visibility rules.
 - `src/outbound/pg_channel_labels_repo.rs`: Postgres repository.
 - `src/inbound/axum_router.rs`: HTTP routes.
+- `src/outbound/section_membership.rs` (feature `notification_sections`):
+  which sections hold a channel for each notification recipient, for the
+  `notification` crate's section settings. Its scope and rule matching must
+  stay aligned with the listing in `pg_channel_labels_repo.rs`.
 
 ## Scope
 
@@ -21,8 +25,10 @@ Chat sidebar, following the standard hexagonal crate layout.
 
 ## Boundaries
 
-- Depends on: `entity_access` (ports), `macro_authorization` (feature `inbound`), `cowlike`.
-- Used by: `services/document_storage_service`, its composition root.
+- Depends on: `entity_access` (ports), `macro_authorization` (feature `inbound`), `cowlike`,
+  `notification` (feature `notification_sections`, its section settings port).
+- Used by: `services/document_storage_service`, its composition root, and
+  `services/notification_service` (section membership at ingress).
 
 ## Recipes
 

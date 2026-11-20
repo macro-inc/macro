@@ -50,6 +50,11 @@ Postgres connections and one Redis database each).
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
   New mail does not appear in an open list by itself; sync, then open.
+- The bundle has unified notifications on (`enable-unified-notifications` is
+  on in dev), so the navigation's unread marks, the Mail badge among them,
+  follow the server's count of unread notification rows, which only the
+  notification service writes: on a test's own stack they never light. Test
+  them on the full-stack tier.
 
 ## Writing a test
 
@@ -76,6 +81,10 @@ test('a reply goes out in the thread', async ({ page, mailbox }) => {
   `mailbox.providerMessages()`, `gmailRawMessage` (`harness/provider.ts`), the
   email API (`mailbox.api`), `stack.serviceRequests()`, `stack.storedObjects()`
   and, last, `stack.sql`.
+- Leave a state the services check with the provider at the provider too:
+  `lapseGrant` (`harness/ways-elsewhere.ts`) revokes the grant at the
+  emulator. Setting `needs_reauth` with `stack.sql` alone lasts only until the
+  services get a token for the inbox from a provider that still grants it.
 - Failures of what the app depends on: `stack.failNextServiceRequest`,
   `stack.refuseQueueSends`, emulator faults, and Playwright's `page.route`.
 - Mark what the test covers: `did('AL-171')` where it performs an action of
@@ -141,13 +150,17 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   instance.
 - The `full-stack-*.spec.ts` files are the functions only this tier reaches:
   connecting through the authentication service and the providers' consent
-  (including administrator approval), search, notifications, sharing a
+  (including administrator approval), search, notifications and the Mail
+  badge, sharing a
   thread with another user, a file too large to attach, mail on Home and
   in a contact's record, a reminder coming due, and the calendar
   (invitations, an event made from an email).
 - `test.use({ access: 'mail-and-calendar' })` links the mailbox with its
-  calendar too. The calendar is ready some moments after linking: wait for
-  it (`calendarReady` in `full-stack-calendar.spec.ts`) before using it.
+  calendar too. Tests that need a ready calendar use `calendarReady` in
+  `full-stack-calendar.spec.ts`. The first-sync scenario starts with an empty
+  Google grant (`seedGoogleGrant: false`), so the mail-only connection has no
+  calendar. It delays discovery on the mailbox linked with calendar access and
+  uses both actions before discovery finishes.
 - `tickReminders` (`harness/organise.ts`) runs the reminder sweep there by
   queueing it on the stack's own queue. It sweeps for every user, so a
   test asserts only on its own threads.
@@ -184,15 +197,18 @@ and `email_e2e_full_stack.rs`):
 | `Email end-to-end (full stack)`: the tier, its `@known-bug` tests and its coverage check | no | yes | yes |
 | The `@known-bug` report of the first two (non-gating) | no | yes | with `known_bugs` |
 
-- A push to `main` runs once per commit, with no waiting for later pushes. A
-  failure is a red run on that commit; nothing is reverted or blocked by it.
+- Pushes to `main` queue as the dev deploys do: one run at a time, and a newer
+  push replaces the one waiting, whose changes the next run tests with its
+  own ([CI on pull requests](../../../../docs/development/ci.md#email-end-to-end-suites)).
+  A failure is a red run on the commit it tested; nothing is reverted or
+  blocked by it.
 - Each workflow's last job, `Tell Macro Alerts`, posts to the Macro Alerts
   channel when its pushes to `main` or its sweep turn red, and when they pass
   again; never for a run by hand. What the alert says, and what to do about
   it: [CI on pull requests](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires).
 - The sweep runs `main`'s head whether or not it changed. Cron is UTC and
   does not follow daylight saving: 21:00 UTC is 4pm EST and 5pm EDT.
-- The coverage check fails the run wherever the suite runs: on every push to
+- The coverage check fails the run wherever the suite runs: on the pushes to
   `main` and in the sweep (the tier's own in the sweep). That a test for a
   known bug now passes is found by the sweep, where those tests run.
 - The browser workflow splits the suite over three machines (Playwright's
@@ -239,7 +255,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `list*`, `state`, `inbox`, `folders`, `saved-views` | the list, its views, controls and search, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
 | `organise-*`, `labels`, `reminders` | marking, moving and muting threads and senders, labels, reminders | `harness/organise.ts` |
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
-| `link*`, `connect-more`, `settings-accounts`, `notify` | connecting, reconnecting and sharing inboxes, calendars, onboarding, the Mail badge | `harness/linking.ts` |
+| `link*`, `connect-more`, `settings-accounts` | connecting, reconnecting and sharing inboxes, calendars, onboarding | `harness/linking.ts` |
 | `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |

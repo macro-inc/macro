@@ -6,13 +6,18 @@ import ArrowUp from '@icon/system/regular/arrow-up.svg';
 import Check from '@icon/system/regular/check.svg';
 import Clipboard from '@icon/system/regular/clipboard.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
+import Code from '@icon/system/regular/code.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import Image from '@icon/system/regular/image.svg';
+import Link from '@icon/system/regular/link.svg';
 import Scissors from '@icon/system/regular/scissors.svg';
+import Selection from '@icon/system/regular/selection.svg';
 import SelectionAll from '@icon/system/regular/selection-all.svg';
 import SelectionPlus from '@icon/system/regular/selection-plus.svg';
 import SelectionSlash from '@icon/system/regular/selection-slash.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
+import UploadSimple from '@icon/system/regular/upload-simple.svg';
 import { CopyFeedback } from '@ui';
 import { createCopyState } from '@ui/utils/create-copy-state';
 import {
@@ -133,6 +138,15 @@ export function MobileCanvasViewSheet(props: {
     onSnapToObjects: (enabled: boolean) => void;
     snapMode: CanvasSnapMode;
     onSnapMode: (mode: CanvasSnapMode) => void;
+    /** A drawing tool stays chosen after it has drawn. */
+    toolLocked: boolean;
+    onToolLocked: (locked: boolean) => void;
+    /**
+     * Only the pen draws, and fingers move the canvas. Absent until a pen has
+     * pressed the canvas: without one there is nothing to choose.
+     */
+    penOnly?: boolean;
+    onPenOnly: (only: boolean) => void;
   };
 }) {
   const percent = () => Math.round(props.scale * 100);
@@ -190,6 +204,20 @@ export function MobileCanvasViewSheet(props: {
                 )}
               </For>
             </MobileDrawer.Section>
+            <MobileDrawer.Section>
+              <SheetRow
+                label="Keep tool after drawing"
+                checked={editing().toolLocked}
+                onClick={() => editing().onToolLocked(!editing().toolLocked)}
+              />
+              <Show when={editing().penOnly !== undefined}>
+                <SheetRow
+                  label="Draw with pen only"
+                  checked={!!editing().penOnly}
+                  onClick={() => editing().onPenOnly(!editing().penOnly)}
+                />
+              </Show>
+            </MobileDrawer.Section>
           </>
         )}
       </Show>
@@ -217,6 +245,11 @@ export function MobileCanvasActionsSheet(props: {
   onSelectAll: () => void;
   onGroup: () => void;
   onUngroup: () => void;
+  /**
+   * Present when a long press landed on an item inside the selected group:
+   * selects that item alone, as Cmd/Ctrl-click does with a mouse.
+   */
+  onSelectInside?: () => void;
   onReorder: (operation: 'front' | 'forward' | 'backward' | 'back') => void;
   onDelete: () => void;
   /** Present with exactly one image selected. */
@@ -290,6 +323,15 @@ export function MobileCanvasActionsSheet(props: {
           disabled={!props.canUngroup}
           onClick={run(props.onUngroup)}
         />
+        <Show when={props.onSelectInside}>
+          {(onSelectInside) => (
+            <SheetRow
+              icon={Selection}
+              label="Select inside group"
+              onClick={run(onSelectInside())}
+            />
+          )}
+        </Show>
       </MobileDrawer.Section>
       <MobileDrawer.Section>
         <SheetRow
@@ -326,6 +368,34 @@ export function MobileCanvasActionsSheet(props: {
           onClick={run(props.onDelete)}
         />
       </MobileDrawer.Section>
+    </CanvasSheet>
+  );
+}
+
+/**
+ * What the Attach button offers, as a sheet: the choices of the desktop Attach
+ * menu, in its order.
+ */
+export function MobileCanvasInsertSheet(props: {
+  open: boolean;
+  onClose: () => void;
+  onMedia: () => void;
+  onUpload: () => void;
+  onReference: () => void;
+  onArtifact: () => void;
+}) {
+  return (
+    <CanvasSheet title="Attach" open={props.open} onClose={props.onClose}>
+      <div>
+        <SheetRow icon={Image} label="Media" onClick={props.onMedia} />
+        <SheetRow
+          icon={UploadSimple}
+          label="Upload media"
+          onClick={props.onUpload}
+        />
+        <SheetRow icon={Link} label="Reference" onClick={props.onReference} />
+        <SheetRow icon={Code} label="Artifact" onClick={props.onArtifact} />
+      </div>
     </CanvasSheet>
   );
 }

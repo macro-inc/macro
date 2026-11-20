@@ -93,9 +93,8 @@ for (const provider of PROVIDERS) {
 }
 
 test.describe('a scheduled reply the provider refuses', () => {
-  // Gmail only: an Outlook inbox reports the refusal in the recovery notice
-  // instead, and cancelling from under it is the known bug
-  // outlook-cancelled-failed-schedule-stays-locked (scheduled-failure.spec.ts).
+  // Gmail only: scheduled-failure.spec.ts covers the Outlook recovery notice
+  // and cancellation.
   test.use({ provider: 'GMAIL' });
   test.beforeEach(({ page }) => loadAppSteadily(page));
 
@@ -105,6 +104,8 @@ test.describe('a scheduled reply the provider refuses', () => {
     page,
     mailbox,
   }) => {
+    // The wait for the failure below takes up to a minute of its own.
+    test.setTimeout(180_000);
     await scheduleReply(page, mailbox);
     const [held] = await scheduled(mailbox);
     await injectFault(mailbox, { route: 'messages.send', error: 'forbidden' });
@@ -116,11 +117,13 @@ test.describe('a scheduled reply the provider refuses', () => {
     expect(due).toHaveLength(1);
     await mailbox.stack.runScheduledSweep();
 
+    // The open reply hears of the failure from its schedule's next read,
+    // every 30 seconds while the send time it knows is far off.
     await expect(
       page
         .getByRole('status')
         .filter({ hasText: 'Send failed before delivery' })
-    ).toBeVisible({ timeout: 30_000 });
+    ).toBeVisible({ timeout: 60_000 });
     saw('STC-057');
     await (await barButton(page, 'Restore failed scheduled draft')).click();
     did('AC-099', 'F-147');

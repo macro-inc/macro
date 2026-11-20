@@ -1,9 +1,7 @@
 import '@app/index.css';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from '@components/app/mobile/float-regions/FloatRegionHost';
-import { MobileCreateButton } from '@components/app/mobile/MobileCreateButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -12,7 +10,6 @@ import {
   ProjectsProvider,
 } from '../../context/projects-context';
 import type { ProjectDetail } from '../../core/project';
-import { AddProjectTasks } from '../../views/add-project-tasks';
 import { ProjectTasksList } from '../../views/project-tasks-list';
 
 const project: ProjectDetail = {
@@ -35,7 +32,6 @@ const readOnly = new URLSearchParams(location.search).has('readOnly');
 function Fixture() {
   mountGlobalFocusListener();
   const [creates, setCreates] = createSignal(0);
-  const [outsideCreates, setOutsideCreates] = createSignal(0);
   const [assignments, setAssignments] = createSignal(0);
   const context: ProjectsContext = {
     userId: () => 'owner',
@@ -65,32 +61,19 @@ function Fixture() {
       <main class="relative flex h-dvh min-h-0 flex-col bg-page text-ink">
         <ProjectTasksList
           projectId={project.id}
-          projectName={project.name}
+          project={project}
           onOpenTask={() => true}
           onCreateTask={
-            readOnly ? undefined : () => setCreates((count) => count + 1)
-          }
-          addTasksAction={
-            readOnly ? undefined : <AddProjectTasks project={project} />
+            readOnly
+              ? undefined
+              : () => {
+                  setCreates((count) => count + 1);
+                }
           }
         />
-        {/* The Tasks view's own floating pill (MobilePageActionRow), which
-            creates a task outside any project. */}
-        <FloatRegion region="accessory" priority={-1}>
-          <div class="flex justify-end px-(--mobile-chrome-gutter)">
-            <MobileCreateButton
-              label="Task"
-              ariaLabel="New task"
-              onClick={() => setOutsideCreates((count) => count + 1)}
-            />
-          </div>
-        </FloatRegion>
         <FloatRegionHost />
         <output hidden data-testid="creates">
           {creates()}
-        </output>
-        <output hidden data-testid="outside-creates">
-          {outsideCreates()}
         </output>
         <output hidden data-testid="assignments">
           {assignments()}

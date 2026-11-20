@@ -23,18 +23,21 @@ no I/O.
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
 - `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
-  code (text, number, boolean, choice, or a question for AI), which `main`
-  reads as `knobs.<name>`, typed from the knob but not its value;
-  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`
-  (parsed with nom); and `sentence_runs`, that sentence read with its knobs
-  as text and values, as a routine suggestion's card shows it.
+  code (text, number, boolean, choice, a question for AI, or an entity: one
+  of their items, by kind and id), which `main` reads as `knobs.<name>`,
+  typed from the knob but not its value; `sentence_slots`, the `{name}` /
+  `{?name}` slots of a step's `sentence` (parsed with nom); and
+  `sentence_runs`, that sentence read with its knobs as text and values, as a
+  routine suggestion's card shows it (none for a sentence showing an entity
+  knob, whose item's name this crate doesn't know).
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/catalog.rs` + `src/catalog/*.ts`: the routine catalog, Macro's checked
   routines: surface, title, trigger (cron without a zone), a code step and/or
-  Ask AI instructions, and authored `affects_others`, `safe_default` and
-  `template` marks. The new-routine flow offers its templates, the drafter
-  sees its code routines as worked examples, and suggestions may only pick
-  from it. The harness's real-Deno test type-checks every code step.
+  Ask AI instructions, and authored `affects_others`, `safe_default`,
+  `template`, `suggest` and `example` marks. The new-routine flow offers
+  its templates, the drafter sees the code routines marked `example` as
+  worked examples (each lengthens its prompt: run the drafting eval before
+  marking one), and suggestions may only pick from it. The harness's real-Deno test type-checks every code step.
 - `src/validate.rs`: save-time rules and `limits`, including that every
   knob fits its type and is read by the code, and every sentence slot names
   one of the step's knobs.
@@ -58,6 +61,10 @@ no I/O.
 ## Recipes
 
 - Add a limit: `limits` in `src/validate.rs` → its `ProgramError`.
+- Add, rename or remove a catalog routine: place it in each routines answer
+  key of the suggestions bench (`crates/suggestion_generation/bench/personas/*/routines-truth.json`:
+  a need's, a decoy's, `fine` or `misfit`); its `routines` section refuses to
+  run until every key places every routine.
 - Change what `main` receives: `STEP_CONTEXT` and `code_steps.md` →
   `run_context` in `scheduled_action`'s `program_runner.rs`. The version
   changes with it, so every routine's code is checked again before its next
@@ -84,6 +91,16 @@ no I/O.
 - `dangerously_operate_as_user` only changes code steps' attribution; agent
   steps keep their agent's. Only the owner sets it: drafts never carry it and
   sharing a routine as a template drops it.
+- An entity knob names one item of one of 11 kinds: the 10 the app's entity
+  picker can pick (`PICKABLE_ENTITY_TYPES` in the web app; a test there fails
+  when the two differ) plus a whole database, which no other kind may share a
+  knob with. It reaches code marked `{"$entity": {type, id}}`, which the
+  harness's Deno bootstrap turns into the SDK handle its kind's factory
+  (`EntityKind::factory`, e.g. `macro.crm.companyById`) gives, and is typed as
+  that handle (`ReturnType<Macro['crm']['companyById']>`), so a new kind needs
+  its factory in both. Its item may be unpicked (`null`, in
+  starters); validation here only checks its kind, and the scheduler checks
+  the owner can open it (`scheduled_action::domain::knob_entities`).
 - `RoutineModelId` rejects blank models while parsing, so a single agent task
   with a blank model fails `from_task` rather than validation.
 - Only a code routine that affects no one else may be `safe_default` (a

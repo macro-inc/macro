@@ -5,6 +5,7 @@ import agentNavigation from './en/agent-navigation';
 import agentSetup from './en/agent-setup';
 import agentWork from './en/agent-work';
 import appearance from './en/appearance';
+import calendarPrompt from './en/calendar-prompt';
 import calls from './en/calls';
 import channelComposer from './en/channel-composer';
 import channelLabels from './en/channel-labels';
@@ -56,6 +57,7 @@ export default {
   accountManager,
   agentSetup,
   agentWork,
+  calendarPrompt,
   calls,
   channelComposer,
   channelLabels,

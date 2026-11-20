@@ -1197,6 +1197,7 @@ export const send = {
         'a draft save fails because the scheduled email already went out',
       source: [
         'src/features/email-compose/primitives/email-composer.ts',
+        'src/features/email-compose/primitives/draft-persistence.ts',
         'src/features/email-compose/primitives/reply-composer.ts',
       ],
       flag: SCHEDULE_FLAG,
@@ -1735,6 +1736,15 @@ export const send = {
       trigger: 'the provider rejected a scheduled Outlook send when it was due',
       source: ['src/features/email-message/core/message-operation.ts'],
       providers: ['outlook'],
+    },
+    {
+      id: 'STC-983',
+      surface: 'SC-18',
+      fn: ['F-137'],
+      state:
+        'result: after the reload the sent reply appears once and its text is not offered again as a draft',
+      trigger: 'after a reply whose send response was lost is confirmed sent',
+      source: ['src/features/email-thread/queries/thread-source.ts'],
     },
   ],
 } as const satisfies Group;

@@ -132,11 +132,15 @@ function entityMentionMarkdown(entity: ChatWithAgentEntity): string {
 /** Prefixes a read-only chat's mention so the agent knows to read that chat and carry on. */
 const CONTINUE_CHAT_PREFIX = 'Continue this chat: ';
 
-export async function openChatWithAgent(entity: ChatWithAgentEntity) {
+export async function openChatWithAgent(
+  entity: ChatWithAgentEntity,
+  /** Typed after the mention, unsent, for the person to finish. */
+  request = ''
+) {
   const mention = `${entityMentionMarkdown(entity)} `;
   const input =
     entity.type === 'chat' ? `${CONTINUE_CHAT_PREFIX}${mention}` : mention;
-  return createAndOpenAgent({ input });
+  return createAndOpenAgent({ input: `${input}${request}` });
 }
 
 /** Open a new agent session with `initialInput` unsent, on `model`, told `instructions` privately. */

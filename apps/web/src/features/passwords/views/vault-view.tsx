@@ -162,6 +162,7 @@ function ItemPane(props: {
             >
               <FavoriteToggle
                 favorite={props.item.favorite}
+                pending={props.vault.favoritePending(props.item.id)}
                 onToggle={() =>
                   fireAndForget(
                     props.vault.toggleFavorite(props.item),
@@ -256,7 +257,9 @@ function ItemPane(props: {
               <Show
                 when={
                   props.vault.failure() === 'failed' ||
-                  props.vault.failure() === 'unreachable'
+                  props.vault.failure() === 'unreachable' ||
+                  props.vault.failure() === 'serviceUnavailable' ||
+                  props.vault.failure() === 'notProvisioned'
                 }
               >
                 <FailureNotice failure={props.vault.failure()} class="pt-3" />
@@ -816,12 +819,11 @@ export function VaultView(props: {
             <ListChrome>
               <ViewShell.Header>
                 <div class="flex min-w-0 flex-col gap-1">
-                  <div class="h-10 min-w-0 flex-1">
+                  <div class="flex h-10 min-w-0 flex-1 items-center gap-2">
                     <PillTabs
                       scrollable
-                      class="-ml-(--mobile-chrome-gutter) w-[calc(100%+2*var(--mobile-chrome-gutter))] max-w-none flex-none"
+                      class="-ml-(--mobile-chrome-gutter) min-w-0 flex-1"
                       contentClass="px-(--mobile-chrome-gutter)"
-                      leading={<PasswordTypeDrawer {...typeControls()} />}
                       items={mobileTabs()}
                       value={mobileTab()}
                       onChange={(tab) =>
@@ -830,6 +832,7 @@ export function VaultView(props: {
                           : selectFilter(tab)
                       }
                     />
+                    <PasswordTypeDrawer {...typeControls()} />
                   </div>
                 </div>
               </ViewShell.Header>
@@ -872,22 +875,26 @@ export function VaultView(props: {
                   </div>
                 </Match>
                 <Match when={true}>
-                  <Show when={vault.unreachable()}>
-                    <div class="flex items-center gap-2 px-4 py-2">
-                      <p
-                        role="status"
-                        class="min-w-0 flex-1 text-sm text-ink-muted"
-                      >
-                        {t('passwords.unreachable')}
-                      </p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => vault.retryConnection()}
-                      >
-                        {t('passwords.retry')}
-                      </Button>
-                    </div>
+                  <Show when={vault.connectionProblem()}>
+                    {(problem) => (
+                      <div class="flex items-center gap-2 px-4 py-2">
+                        <p
+                          role="status"
+                          class="min-w-0 flex-1 text-sm text-ink-muted"
+                        >
+                          {problem() === 'unreachable'
+                            ? t('passwords.unreachable')
+                            : t('passwords.serviceUnavailable')}
+                        </p>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => vault.retryConnection()}
+                        >
+                          {t('passwords.retry')}
+                        </Button>
+                      </div>
+                    )}
                   </Show>
                   <ItemList
                     items={vault.visibleItems()}

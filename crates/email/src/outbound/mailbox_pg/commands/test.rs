@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::domain::{models::mailbox_action::MailboxAction, ports::EmailRepo};
 use crate::outbound::mailbox_pg::test::{fixture, page, snapshot};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -14,7 +15,7 @@ async fn setup(
 ) {
     let (sync, link) = fixture(db).await;
     let stream = sync
-        .claim_stream(macro_uuid::generate_uuid_v7())
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
         .await
         .unwrap()
         .unwrap();
@@ -227,6 +228,7 @@ impl MailboxGateway for UncertainProvider {
         _: MailboxKey,
         _: &ProviderId,
         _: Option<&StreamToken>,
+        _: email_api_client::domain::models::RoundStart,
     ) -> Result<MailboxChangePage, email_api_client::domain::models::EmailApiError> {
         unreachable!()
     }
@@ -621,5 +623,38 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
             .await
             .unwrap()
             .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
+    let (sync, _) = fixture(&db).await;
+
+    let mut claim = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *claim)
+        .await
+        .unwrap();
+
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        sync.claim_command(macro_uuid::generate_uuid_v7()),
+    )
+    .await;
+    assert!(
+        matches!(
+            &blocked,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{:?}",
+        blocked.as_ref().map(|result| result.as_ref().err())
+    );
+
+    claim.rollback().await.unwrap();
+    assert!(
+        sync.claim_command(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
     );
 }

@@ -86,29 +86,63 @@ tools/HTTP/GraphQL surfaces over them.
   recognize `enabled OR selected_enabled` for compatible grant readers without
   bypassing legacy-write guards. Keep the scalar predicate, set-based ingestion
   and inlined Team reader in parity; live contact/company selectors follow
-  same-team role visibility and retain every exclusion veto. Activation remains
-  unavailable until the policy API and generation-safe backfill are ready.
+  same-team role visibility and retain every exclusion veto. Activation is gated by default-off
+  `enable-crm-selective-email-contribution`; inspection and withdrawal remain
+  available independently. Keep the flag off until all PR 5 gates pass.
   Private rule controls use the membership boundary of `/crm/email-privacy`,
   including after CRM viewing denial; resolving CRM details still needs record access.
 
+- `domain/email_rule_discovery` owns bounded live-source discovery and work
+  accounting; `outbound/email_rule_discovery.rs` supplies factual PostgreSQL
+  reads on the caller's transaction. Reuse the same core for policy validation,
+  replacement admission and Team reads. Resolve each shared source once,
+  retain member visibility, and return a complete result or a named limit error.
+  Keep small/folded strategies within the same ceilings; a direct-pair threshold
+  switches strategy rather than rejecting an otherwise bounded policy.
+  Composition roots inject this adapter through `EmailRuleDiscoveryService`;
+  the lightweight `email_discovery` feature exposes it without the full CRM
+  service. Admission must precede grants and preserve withdrawal after overflow.
+  Batch first pages for more than eight distinct live sources; charge every
+  prefetched raw row before continuing a full source. Keep the total batch within
+  the remaining allowance plus one sentinel, including duplicate and foreign-team
+  values.
+
 - Private policy storage lives in `domain/email_policy.rs` and
-  `outbound/companies_repo/email_policy/`. Initialize consent identity only via
-  `OpenEmailPolicy::Initialize`; `Existing` never creates a row and checks the
-  incarnation before idempotency lookup. The later API owns version CAS and
-  authentication. Worker checkpoints/completion must pass their captured
-  generation, never substitute the transaction's current version. Preview IDs
-  are immutable retry identities; a new ID replaces the member's slot.
+  `outbound/companies_repo/email_policy/`. Inspection must never initialize consent or move historical work. The first
+  policy mutation compares the legacy observation under locks, initializes
+  identity and transfers history atomically. `Existing` never creates a row.
+  `email_policy_api.rs` owns opaque CAS, direct activation and trusted actor audit.
+  Use empty struct variants for payload-free policy commands so serde rejects unknown fields.
+  Fingerprint explicit authority fields, never whole mailbox/member row versions
+  or sync/billing fields. A cleared same-grant reauth may preserve intent; an
+  actual revocation changes version. Recheck live eligibility before granting. Worker checkpoints/completion must pass their captured
+  generation, never substitute the transaction's current version. Preview starts
+  compare the observed policy and slot ID; exact retries reuse the retained
+  result, and replacements receive a new server-generated ID.
   Source events page raw contact/company rule references before filtering active
   revisions. Wire event insertion inside the source edit's existing transaction;
   preserve its lock order and never enqueue as a separate post-commit effect.
-  Bulk teardown must keep withdrawal available; close its first-activation race
-  with target locking/fresh reference checks before the policy API can activate.
+  Bulk teardown must keep withdrawal available: plain deletes on the no-rule
+  path, then one fresh team-reference probe/coarse event; referenced deletes
+  return IDs and recheck references in a new statement. Activation locks and
+  revalidates live targets. Never add a team privacy lock around bulk teardown.
   `domain/email_policy_work.rs` and its service own generation-bound history:
   raw contact pages of 100, sent-first passes, effect reauthorization and exact
   cursor completion. Source reconciliation uses stable retry receipts and system
   audit entries; matching edit hooks live in `email_policy/source_changes.rs`.
   Add the same transactional hook to any new address/domain/visibility writer.
+  `email_policy_preview.rs` owns count-only work: one retained owner slot,
+  stable read-only snapshot, raw pages of 100, 10,000-thread/five-minute budgets
+  and conditional completion. Previewing never initializes consent. Matching
+  edit hooks invalidate preview metadata; no mailbox index is added for counts.
   No worker initializes consent or activates selected contribution.
+
+- Company lists with at most 500 explicit IDs and policy target reads probe the
+  primary key behind `OFFSET 0` before applying team/visibility filters. Keeping a team
+  predicate inside the probe lets stale plans scan the team per ID. For target
+  locks, resolve authorized IDs first, then lock that set in ID order; a locking
+  lateral can lock foreign rows before its outer filter and sort. Larger company
+  ID sets keep their set-based join; the output page limit does not cap input IDs.
 
 - A generic pipeline has `record_type: None` and an unprotected primary column,
   which can change type or be deleted, leaving `primary_column_id` naming no
@@ -195,9 +229,18 @@ tools/HTTP/GraphQL surfaces over them.
 - Population is independent of the contributor's CRM viewing permission.
   Population takes the shared `crm-email:{team}` advisory lock, then the
   `crm-contact:{team}:{link}:{email}` lock (which `depopulate_contact` also
-  takes before its domain lock), parent team `KEY SHARE`, the mailbox scan,
-  then the domain advisory lock and entity rows. Never run the mailbox scan
-  under a domain lock: a team backfill queues every population of the domain
+  takes before its domain lock), parent team `KEY SHARE`, an unlocked admission
+  probe and mailbox scan, then fresh mailbox/member/consent guards before the
+  domain advisory lock and entity rows. Never hold the mailbox row lock through
+  the history scan: overlapping populations can starve an exclusive sync writer.
+  Recheck live mailbox, membership and captured consent generation after the scan
+  in `READ COMMITTED`; keep the privacy/contact guards across both phases so
+  exclusions and teardown cannot invalidate its results. Check the two message
+  witnesses and matched contacts by primary key after authority: changed evidence
+  returns `Contended` for an unlocked retry, never a history scan under the row
+  guard. This neither re-evaluates a witness thread's privacy rules nor freezes
+  other mailbox history. Never run the mailbox
+  scan under a domain lock: a team backfill queues every population of the domain
   behind it. Population transactions set a five-second `lock_timeout` and
   return `CrmError::Contended` so their job is deferred, not held. Privacy changes
   take the exclusive privacy lock before domain/entity locks. Keep locks through
@@ -233,6 +276,12 @@ tools/HTTP/GraphQL surfaces over them.
   preserves records and prior interaction dates, like personal blocked domains.
 - Domain exclusions affect contribution and CRM email reads, never record
   visibility. Preserve archive state on block/unblock and consent withdrawal.
+  Apply `domain/email_privacy/mailbox_domains` before every new exclusion:
+  team blocks (including company sync-off/archive) protect all members' connected
+  primary mailboxes; personal blocks protect the caller's. The adapter gathers
+  and locks mailbox facts before domain/entity locks and invokes domain policy
+  within the write transaction. Full settings report existing matches without
+  removing them; consent-only and the three eligibility readers stay independent.
 - Keep ambiguous CSV contact lookups unresolved without creating records for
   them; continue valid rows, but propagate lookup storage and authorization failures.
 
@@ -245,6 +294,10 @@ tools/HTTP/GraphQL surfaces over them.
   reads refuse (401, for a missing record too). Change both together;
   `companies_repo/test/previews.rs` compares them for every role and caller,
   including revocation and regrant on the same session and contact-page route.
+
+- Keep team/visibility filters outside the per-history-ID `LIMIT` in
+  `list_companies_for_soup.sql`, so stale team estimates cannot replace the
+  `crm_companies_id_text_idx` lookup with a team scan for every viewed record.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`, using public
@@ -265,6 +318,9 @@ tools/HTTP/GraphQL surfaces over them.
   their team and email address. Company-less contacts add no independent
   thread-access grant, but hidden ones suppress their team's
   CRM-derived grant for members; independent access grants still apply.
+  For a work address whose sole holder is a manual unfiled contact with that
+  primary address, sync refreshes the existing contact and preserves its company
+  choice. Domain company population still runs on its own.
 - Every address a contact is known by is a row in `crm_contact_emails`, stored
   trimmed and lowercased. `crm_contacts.email` is the primary address, and a
   trigger records it in that table. Find a contact by address through
@@ -281,7 +337,10 @@ tools/HTTP/GraphQL surfaces over them.
   it. A mailbox source is recorded per contact and mailbox, not per address:
   `depopulate_contact` keeps it while that mailbox still has mail with another
   of the contact's addresses (`other_address_mail.sql`), checked before the
-  domain lock like population's mailbox scan.
+  domain lock like population's mailbox scan. Mail the provider no longer has
+  (`provider_missing`, an Outlook deletion) counts nowhere: not there, not in
+  the email service's cleanup gate, not in `interactions.sql`; keep the three
+  in step, as a Gmail deletion removes the row.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

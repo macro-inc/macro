@@ -89,8 +89,8 @@ uses the normal list and filter drawer. The default is open tasks grouped by dat
 Sales Email exposes the normal read/done, attachment, calendar and tag filters. Sales
 Notes has creator/tag filters and Sales Calls has audience/tag filters. Sales Notes' creator chooser
 uses bounded contact pages in the desktop submenu and mobile drawer; Me and
-persisted/unknown selections are independent of the suggestion window. Next
-options replaces the page, and Only affects creators without clearing other
+persisted/unknown selections are independent of the suggestion pages. Further
+pages list below the earlier ones as the end scrolls into view, and Only affects creators without clearing other
 facets or the fixed CRM association. Company owner/team selectors are unchanged.
 Desktop/phone regression: `src/lib/core/internal/browser-test/list-filters.browser.e2e.ts`
 with stand-in data. Sales Email, Sales Notes and Sales Calls support
@@ -316,6 +316,9 @@ or New call. Add contact is available once the company is loaded and visible,
 including companies without a domain; contact emails may use any valid domain.
 Email-sync gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
+When email sync processes a message sent to a manual unfiled contact's work
+address, it reuses that contact and preserves the Company field. It can still
+create or update the work domain's company independently.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
 restores the default action. Search remains visible for empty lists.
@@ -375,7 +378,11 @@ Team lists the contacts with `Add contact`. Emails keeps the
 a viewer with no connected mailbox. Files, Tasks, and Calls list items
 *associated* with the company: its `Companies` property names the company, its
 `Contacts` property names one of the company's contacts, or it @mentions (or a
-message attaches) the company or one of those contacts. Contacts beyond the Team
+message attaches) the company or one of those contacts. Tasks and References
+also list a task whose own custom entity property (one a team or a person
+created, such as a `Contact` property) names the company or one of those
+contacts; Files and Calls do not read custom properties.
+Contacts beyond the Team
 tab's first page count, hidden contacts count only for team admins and owners,
 and an item matching several ways appears once. Files lists non-task documents
 plus attachments of emails with the company's domains. Tasks is the Tasks list
@@ -398,7 +405,8 @@ A contact has the same layout with `Overview`, `Emails`, `Files`, `Tasks`, and
 `Calls`: Overview pills show the email, the company (opens it) and `Last
 interacted`, followed by the contact's Pipelines cards. Its Files, Tasks, Calls,
 and References show items associated with the contact itself (its `Contacts`
-property or an @mention of it), not everything associated with its company;
+property, an @mention of it, or for a task a custom entity property that names
+it), not everything associated with its company;
 Files also includes attachments of emails with its address. Contacts without an
 email still list their associated non-task files; they send no email-attachment
 participant filter. Verify both an empty list and linked files on desktop and phone.
@@ -446,7 +454,15 @@ members and agents. A message's copied link is the record URL
 a CRM discussion notification, scrolls to and highlights that message. On
 desktop the record opens in Customers with the message in the pane search
 `sN.crm-record.commentId`, which the next record or list you open drops.
-Deleting a thread's first comment deletes the thread.
+Deleting a thread's first message deletes the thread.
+On phones, company Overview replaces inline Discussion with the shared newest-message
+card, avatar group, and View discussion action. Tap it to open a half-height Discussion
+sheet; drag the handle or heading to full height, back to half, or down to dismiss.
+Start a discussion opens an empty thread with keyboard focus. Typing expands to
+full height and retains that height after the keyboard closes. The Add to the
+discussion… input uses the same message composer on desktop and phone. The sheet stays in place
+while the pinned composer rises above the keyboard. The company description keeps
+its existing clamp, and desktop discussion remains inline.
 
 Company selection actions **Set owner** and **Set revenue** remain available
 while team deal-stage definitions are loading. **Set stage** waits for the active
@@ -461,7 +477,9 @@ that the backdrop, Escape or `Hide navigation` dismisses.
 While the sidebar is collapsed, the split's **Close** sits before
 `Show navigation` in every CRM header, including on a pipeline, a record and
 CRM settings, and stays hidden when the split cannot close.
-The sidebar's Records and Lists sections can also collapse independently.
+The sidebar's Records, Pipelines, and Lists sections collapse independently.
+Drag their headings, or focus a Reorder control and use Up/Down, to save a
+per-account local section order. Import, Export, and Settings stay in the footer.
 
 **Pipelines** in the CRM sidebar hold company or contact entries, or free-form
 rows in a generic pipeline, in the shared records editor. They have their own identity, ownership and sharing; their
@@ -671,6 +689,27 @@ are in CRM settings and **Email contribution settings** on a company. A
 changed or reconnecting mailbox requires a fresh review; a disconnected mailbox
 cannot opt in.
 
+When selective contribution is enabled, **Sharing rules** sits below **Your
+email contribution** and above the blacklists and excluded threads. **Edit JSON**,
+**Preview counts**, and **History** open separate settings pages, including inside
+the phone settings sheet. Opening these pages never initializes consent.
+**Save and share** validates the JSON first and shows server validation problems,
+limit refusals and warnings inline; valid canonical rules replace the active
+policy. There is no separate Validate button or visual rule builder. Contact and
+company rules follow current records; company rules include current company
+domains only, so add people with contact rules. A matching rule shares the whole
+thread, including past and future messages, subject to exclusions.
+
+After a conflict, the draft stays visible and saving is disabled. **View current
+rules** loads the current policy for comparison; explicitly acknowledge that
+review before making a new save decision. Preview reads do not start work:
+**Run preview** explicitly starts it. Complete counts describe one snapshot;
+partial/running counts are lower bounds, and stale or unverified counts are
+hidden. History attributes changes to the verified member or their agent and
+opens immutable saved JSON separately. With the selective gate off, all-mail
+members retain the existing controls; selected contributors can still inspect
+rules/history and withdraw with the single **Stop sharing my emails** action.
+
 Any member can add a team domain; only team admins/owners can remove one.
 Personal domains affect only that member's mailbox. Domains include subdomains;
 a blocked participant in To/Cc/Bcc or the sender excludes the whole thread.
@@ -689,16 +728,27 @@ company. A selected company with email sync disabled suppresses interaction and
 source updates while preserving the manual record. Both paths require the
 mailbox owner's exact-primary contribution consent and eligible stored history.
 Manual add-email and company link/switch remain available without consent and
-never enable sync or enroll a mailbox. In the contact company picker, Next
-options (or PageDown on desktop) appends later browse or search pages to the
-visible companies. The control shows loading and page failures with retry, and
-disappears at the end of the results. Selecting a company keeps singleton
+never enable sync or enroll a mailbox. In the contact company picker, later browse or
+search pages append to the visible companies as the end scrolls into view (or
+with PageDown on desktop). A failed page shows Retry options and waits for it. Selecting a company keeps singleton
 replacement and the separate Go to action unchanged. Vendor, brand and bulk-sender filters still
 apply. Turning the filter back on stops future
 capture without deleting contacts. The existing admin **Blocked domains**
 controls use the same team exclusions as the privacy dialog. Blocking or
 unblocking never archives or restores records. A partially failed multi-domain
 change retains successful blocks and offers **Retry failed domains**.
+
+Blocking a domain equal to or above an affected connected primary mailbox's
+domain is refused. Team exclusions protect every member's primary mailbox;
+personal exclusions protect your own. The reason appears below the input,
+which keeps the typed domain for correction. Company-domain reasons explain
+that colleagues on the mailbox's own domain are already excluded from CRM;
+personal-provider reasons explain only that the block would hide all of the
+mailbox's email. Existing matching entries show the same note beside the entry
+and retain **Remove** with its usual permissions. Nothing is removed automatically.
+Company email-sharing off and archive also refuse the same whole-mailbox exclusion.
+Verify both scopes, an exact and parent domain, an allowed child or unrelated
+domain, and removal of an existing warned entry at desktop and phone widths.
 
 Contacts without a company add no CRM thread-access grant. Archiving one
 suppresses its team's CRM-derived grant; independent ownership, delegation,

@@ -229,9 +229,10 @@ impl WorkExecutor for Dispatcher {
                 // uncovered window is the sub-millisecond gap between the
                 // websocket's 101 and the server's `on_upgrade` attach. If
                 // that race ever bites, failing the delivery is the right
-                // answer. SSE has no redelivery; a later `agent_trigger.existing`
-                // or a 409 on a repeat create (session already exists) is how
-                // a follow-up lands on the same session.
+                // answer. The stream resumes after the event it delivered,
+                // so this one is not redelivered; a later
+                // `agent_trigger.existing` or a 409 on a repeat create (session
+                // already exists) is how a follow-up lands on the same session.
                 self.api
                     .prompt(session, &sender, &content, message_id, context)
                     .await?;

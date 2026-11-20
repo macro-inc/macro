@@ -17,7 +17,7 @@ import EmailIcon from '@icon/system/regular/envelope-simple.svg';
 import DocumentIcon from '@icon/system/regular/file-text.svg';
 import TaskIcon from '@icon/system/regular/list-checks.svg';
 import PhoneIcon from '@icon/system/regular/phone.svg';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { MobileCreateButton } from './MobileCreateButton';
 import {
   MobileCreateMenu,
@@ -45,6 +45,7 @@ const NEW_ITEM_LABELS: Partial<Record<MobileNavViewId, TranslationKey>> = {
   channels: 'mobile.newMessage',
   documents: 'mobile.newDocument',
   tasks: 'mobile.newTask',
+  projects: 'viewMenus.newProject',
   companies: 'mobile.newCompany',
 };
 
@@ -134,25 +135,22 @@ export function MobilePageCreateButton() {
 
   return (
     <Show when={foregroundView() !== 'agents' && !virtualKeyboardVisible()}>
-      <Show
-        when={foregroundView() === 'home'}
+      <Switch
         fallback={
-          <Show
-            when={foregroundView() === 'calendar'}
-            fallback={
-              <MobileCreateButton
-                ariaLabel={actionAriaLabel()}
-                label={action().label}
-                onClick={() => action().onSelect()}
-              />
-            }
-          >
-            <MobileCreateMenu items={calendarActions()} />
-          </Show>
+          <MobileCreateButton
+            ariaLabel={actionAriaLabel()}
+            label={action().label}
+            onClick={() => action().onSelect()}
+          />
         }
       >
-        <MobileCreateMenu items={quickActions()} />
-      </Show>
+        <Match when={foregroundView() === 'home'}>
+          <MobileCreateMenu items={quickActions()} />
+        </Match>
+        <Match when={foregroundView() === 'calendar'}>
+          <MobileCreateMenu items={calendarActions()} />
+        </Match>
+      </Switch>
     </Show>
   );
 }
