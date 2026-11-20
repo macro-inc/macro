@@ -16,6 +16,7 @@ import {
   type NavItemGates,
   type SidebarNextMenuItem,
 } from './nav-items';
+import { useRailPlacement } from './use-sidebar-prefs';
 
 export type MoreMenuProps = {
   gates: NavItemGates;
@@ -46,6 +47,7 @@ export function MoreMenu(props: MoreMenuProps) {
   const [customizeSidebarOpen, setCustomizeSidebarOpen] = createSignal(false);
   const analytics = useAnalytics();
   const layout = useSplitLayout();
+  const placement = useRailPlacement();
   const preloadItem = (item: SidebarNextMenuItem) =>
     layout.preloadContent(sidebarContent(item.id, item.params));
   const hiddenItems = () => moreMenuItems(props.gates);
@@ -58,17 +60,20 @@ export function MoreMenu(props: MoreMenuProps) {
 
   return (
     <>
-      <Dropdown placement="right-start" gutter={6}>
+      <Dropdown placement={placement.aligned('start')} gutter={6}>
         <Dropdown.Trigger
           aria-label={t('nav.more')}
           variant="ghost"
           size="icon-md"
-          class="size-10 shrink-0 cursor-default rounded-xl"
-          tooltip={{ content: t('nav.moreOptions'), placement: 'right' }}
+          class="size-(--rail-button) shrink-0 cursor-default rounded-xl"
+          tooltip={{
+            content: t('nav.moreOptions'),
+            placement: placement.facing(),
+          }}
           draggable={false}
           data-sidebar-next-item="more"
         >
-          <DotsThreeIcon class="size-5" />
+          <DotsThreeIcon class="size-(--rail-glyph)" />
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-[14rem]">
           <Show when={hiddenItems().length > 0}>

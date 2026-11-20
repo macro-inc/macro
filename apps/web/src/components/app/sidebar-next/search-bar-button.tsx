@@ -7,11 +7,13 @@ import { TOKENS } from '@core/hotkey/tokens';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button } from '@ui';
 import { useSplitLayout } from '../split-layout/layout';
+import { useRailPlacement } from './use-sidebar-prefs';
 
 /** Opens Search from the compact rail; Shift+click opens it in a new split. */
 export const SearchRailButton = () => {
   const analytics = useAnalytics();
   const { openWithSplit } = useSplitLayout();
+  const placement = useRailPlacement();
 
   const openSearch = (newSplit: boolean) => {
     analytics.track('sidebar_click', { view: 'search' });
@@ -51,14 +53,14 @@ export const SearchRailButton = () => {
       variant="ghost"
       tooltip={{
         content: t('nav.search'),
-        placement: 'right',
+        placement: placement.facing(),
         hotkey: TOKENS.sidebar.goTo.search,
       }}
       data-sidebar-next-search=""
-      class="size-10 rounded-xl"
+      class="size-(--rail-button) rounded-xl"
       onClick={(event: MouseEvent) => openSearch(event.shiftKey)}
     >
-      <MagnifyingGlassIcon class="size-5" />
+      <MagnifyingGlassIcon class="size-(--rail-glyph)" />
     </Button>
   );
 };

@@ -16,7 +16,7 @@ import {
   useDragDropContext,
   useSortableContext,
 } from '@thisbeyond/solid-dnd';
-import { Button, Checkbox, cn, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Checkbox, cn, Dialog, Panel, Tabs, Tooltip } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -24,7 +24,11 @@ import {
   type NavItemGates,
   type SidebarNextNavItem,
 } from './nav-items';
-import { useSidebarPrefs } from './use-sidebar-prefs';
+import {
+  type RailPosition,
+  type RailSize,
+  useSidebarPrefs,
+} from './use-sidebar-prefs';
 
 function useNavReorderMode(): 'drag' | 'buttons' {
   const canDrag =
@@ -180,8 +184,50 @@ function CustomizeNavRow(props: {
   );
 }
 
+/** Where the rail docks and how large it is, like a desktop taskbar. */
+function RailLayoutSettings() {
+  const { prefs, setRailPosition, setRailSize } = useSidebarPrefs();
+
+  const positions = (): { value: RailPosition; label: string }[] => [
+    { value: 'left', label: t('nav.sidebarPositionLeft') },
+    { value: 'right', label: t('nav.sidebarPositionRight') },
+    { value: 'top', label: t('nav.sidebarPositionTop') },
+    { value: 'bottom', label: t('nav.sidebarPositionBottom') },
+  ];
+  const sizes = (): { value: RailSize; label: string }[] => [
+    { value: 'large', label: t('nav.sidebarSizeLarge') },
+    { value: 'small', label: t('nav.sidebarSizeSmall') },
+  ];
+
+  return (
+    <div class="flex flex-col gap-2 px-2 pb-3">
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-sm text-ink">{t('nav.sidebarPosition')}</span>
+        <Tabs
+          aria-label={t('nav.sidebarPosition')}
+          size="sm"
+          options={positions()}
+          value={prefs().position}
+          onChange={setRailPosition}
+        />
+      </div>
+      <div class="flex items-center justify-between gap-3">
+        <span class="text-sm text-ink">{t('nav.sidebarSize')}</span>
+        <Tabs
+          aria-label={t('nav.sidebarSize')}
+          size="sm"
+          options={sizes()}
+          value={prefs().size}
+          onChange={setRailSize}
+        />
+      </div>
+    </div>
+  );
+}
+
 /**
- * Center modal for showing/hiding and reordering outer sidebar items.
+ * Center modal for the rail's position and size, and for showing/hiding and
+ * reordering outer sidebar items.
  * Opened from the More menu's "Customize sidebar" action.
  */
 export function CustomizeSidebarModal(props: {
@@ -228,6 +274,7 @@ export function CustomizeSidebarModal(props: {
         </Panel.Header>
 
         <Panel.Body scroll class="p-2">
+          <RailLayoutSettings />
           <Dialog.Description class="px-2 pb-2 text-sm text-ink-muted">
             {t('nav.customizeSidebarDescription')}
           </Dialog.Description>

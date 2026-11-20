@@ -12,24 +12,51 @@ export const DEFAULT_HIDDEN_IDS = [
   'activity',
 ] as const;
 
+/** The window edge the rail docks to. */
+export type RailPosition = 'left' | 'right' | 'top' | 'bottom';
+const RAIL_POSITIONS: readonly RailPosition[] = [
+  'left',
+  'right',
+  'top',
+  'bottom',
+];
+
+/** Large is the original 56px rail; small is narrower with smaller glyphs. */
+export type RailSize = 'large' | 'small';
+const RAIL_SIZES: readonly RailSize[] = ['large', 'small'];
+
 export type SidebarPrefs = {
   /** Item ids hidden from the outer rail. Home is never included. */
   hidden: Set<string>;
   /** Custom rail order. Missing ids fall back to the default catalog order. */
   order: string[];
+  position: RailPosition;
+  size: RailSize;
 };
 
 type StoredPrefs = {
   version?: 1 | 2;
   hidden?: string[];
   order?: string[];
+  position?: string;
+  size?: string;
 };
 
 function defaultPrefs(): SidebarPrefs {
   return {
     hidden: new Set(DEFAULT_HIDDEN_IDS),
     order: [],
+    position: 'left',
+    size: 'large',
   };
+}
+
+function parsePosition(value: string | undefined): RailPosition {
+  return RAIL_POSITIONS.find((position) => position === value) ?? 'left';
+}
+
+function parseSize(value: string | undefined): RailSize {
+  return RAIL_SIZES.find((size) => size === value) ?? 'large';
 }
 
 function loadPrefs(): SidebarPrefs {
@@ -49,6 +76,8 @@ function loadPrefs(): SidebarPrefs {
       return {
         hidden: new Set(hidden),
         order: Array.isArray(parsed.order) ? parsed.order : [],
+        position: parsePosition(parsed.position),
+        size: parseSize(parsed.size),
       };
     }
 
@@ -60,7 +89,7 @@ function loadPrefs(): SidebarPrefs {
         const pinnedSet = new Set(pinned as string[]);
         const hidden = DEFAULT_HIDDEN_IDS.filter((id) => !pinnedSet.has(id));
         localStorage.removeItem(LEGACY_PINNED_KEY);
-        const prefs = { hidden: new Set(hidden), order: [] as string[] };
+        const prefs = { ...defaultPrefs(), hidden: new Set<string>(hidden) };
         savePrefs(prefs);
         return prefs;
       }
@@ -77,6 +106,8 @@ function savePrefs(prefs: SidebarPrefs): void {
       version: 2,
       hidden: [...prefs.hidden].filter((id) => id !== 'home'),
       order: prefs.order,
+      position: prefs.position,
+      size: prefs.size,
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
   } catch {
@@ -152,10 +183,45 @@ export const [SidebarPrefsProvider, useSidebarPrefs] =
       updatePrefs((current) => ({ ...current, order: nextOrder }));
     }
 
+    /** Dock the rail to another window edge. */
+    function setRailPosition(position: RailPosition): void {
+      if (prefs().position === position) return;
+      updatePrefs((current) => ({ ...current, position }));
+    }
+
+    function setRailSize(size: RailSize): void {
+      if (prefs().size === size) return;
+      updatePrefs((current) => ({ ...current, size }));
+    }
+
     return {
       prefs,
+      setRailPosition,
+      setRailSize,
       hideSidebarItem,
       setSidebarItemVisible,
       reorderSidebarItems,
     };
   });
+
+/** The page-facing side of each docked rail: where its tooltips and menus open. */
+const RAIL_FACING = {
+  left: 'right',
+  right: 'left',
+  top: 'bottom',
+  bottom: 'top',
+} as const satisfies Record<RailPosition, RailPosition>;
+
+/**
+ * Placement for a rail control's tooltip or popover, opening towards the page
+ * whichever edge the rail is docked to. `align` keeps a menu's start or end
+ * edge flush with its trigger.
+ */
+export function useRailPlacement() {
+  const { prefs } = useSidebarPrefs();
+  const facing = () => RAIL_FACING[prefs().position];
+  return {
+    facing,
+    aligned: (align: 'start' | 'end') => `${facing()}-${align}` as const,
+  };
+}

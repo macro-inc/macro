@@ -202,4 +202,64 @@ describe('sidebar customization drag sorting', () => {
       JSON.parse(localStorage.getItem('macro:sidebar:prefs')!).hidden
     ).toEqual(['reviews']);
   });
+
+  it('docks the rail to the chosen edge and size, keeping them across reloads', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ version: 2, hidden: ['reviews'], order: ['tasks'] })
+    );
+    const mount = () =>
+      render(() => (
+        <SidebarPrefsProvider>
+          <Modal />
+        </SidebarPrefsProvider>
+      ));
+    mount();
+    const left = await screen.findByRole<HTMLInputElement>('radio', {
+      name: 'Left',
+    });
+    expect(left.checked).toBe(true);
+    expect(
+      screen.getByRole<HTMLInputElement>('radio', { name: 'Large' }).checked
+    ).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Bottom' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Small' }));
+    cleanup();
+    mount();
+
+    expect(
+      (await screen.findByRole<HTMLInputElement>('radio', { name: 'Bottom' }))
+        .checked
+    ).toBe(true);
+    expect(
+      screen.getByRole<HTMLInputElement>('radio', { name: 'Small' }).checked
+    ).toBe(true);
+    const stored = JSON.parse(localStorage.getItem('macro:sidebar:prefs')!);
+    expect(stored).toMatchObject({
+      position: 'bottom',
+      size: 'small',
+      hidden: ['reviews'],
+      order: ['tasks'],
+    });
+  });
+
+  it('falls back to the left, large rail for an unknown saved position', async () => {
+    localStorage.setItem(
+      'macro:sidebar:prefs',
+      JSON.stringify({ version: 2, position: 'diagonal', size: 'huge' })
+    );
+    render(() => (
+      <SidebarPrefsProvider>
+        <Modal />
+      </SidebarPrefsProvider>
+    ));
+    expect(
+      (await screen.findByRole<HTMLInputElement>('radio', { name: 'Left' }))
+        .checked
+    ).toBe(true);
+    expect(
+      screen.getByRole<HTMLInputElement>('radio', { name: 'Large' }).checked
+    ).toBe(true);
+  });
 });

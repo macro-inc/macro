@@ -69,6 +69,14 @@ export default {
   moveItemDown: 'Move {{label}} down',
   dragToReorder: 'Drag to reorder',
   reorderItem: 'Reorder {{label}}',
+  sidebarPosition: 'Position',
+  sidebarPositionLeft: 'Left',
+  sidebarPositionRight: 'Right',
+  sidebarPositionTop: 'Top',
+  sidebarPositionBottom: 'Bottom',
+  sidebarSize: 'Size',
+  sidebarSizeLarge: 'Large',
+  sidebarSizeSmall: 'Small',
 
   // App update
   updateAvailable: 'Update available',

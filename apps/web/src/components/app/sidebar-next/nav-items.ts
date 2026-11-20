@@ -248,7 +248,7 @@ export type NavItemGates = {
   showExternal: boolean;
   showPasswords: boolean;
   /** User preferences for which items are shown and in what order. */
-  prefs: SidebarPrefs;
+  prefs: Pick<SidebarPrefs, 'hidden' | 'order'>;
 };
 
 /** Whether a feature-gated item is available for this account. */

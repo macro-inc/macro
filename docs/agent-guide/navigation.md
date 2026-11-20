@@ -620,6 +620,14 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
+**More → Customize sidebar** also sets where the rail docks (**Position**:
+Left, Right, Top, Bottom; Left by default) and its **Size** (Large, the
+original 56px rail, or Small, 44px with smaller glyphs). On the top or bottom
+edge the rail is a row and its app list scrolls sideways; tooltips and menus
+open towards the page from any edge. Both choices are desktop-only, save with
+the rest of the rail preferences, and survive reload; the boot shell in
+`index.html` paints the rail on the saved edge before the app loads.
+
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and

@@ -5,7 +5,9 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { For, Match, Suspense, Switch } from 'solid-js';
+import { cn } from '@ui';
+import { For, Match, type ParentProps, Show, Suspense, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -16,6 +18,32 @@ import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
 import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
+import {
+  type RailPosition,
+  type RailSize,
+  useSidebarPrefs,
+} from './use-sidebar-prefs';
+
+/**
+ * Rail buttons size themselves from these, so one setting resizes every
+ * button and glyph. `--rail-scale` shrinks the few glyphs drawn at fixed pixel
+ * geometry (the settings avatar cutout, the update ring).
+ */
+const RAIL_METRICS = {
+  large: {
+    '--rail-button': '2.5rem',
+    '--rail-glyph': '1.25rem',
+    '--rail-scale': '1',
+  },
+  small: {
+    '--rail-button': '2rem',
+    '--rail-glyph': '1rem',
+    '--rail-scale': '0.8',
+  },
+} as const satisfies Record<RailSize, Record<string, string>>;
+
+const isHorizontal = (position: RailPosition) =>
+  position === 'top' || position === 'bottom';
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
@@ -28,10 +56,12 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
 }
 
 /**
- * The app sidebar: a single always-narrow column of 40px icon buttons, labels
- * in tooltips.
+ * The app sidebar: a single narrow strip of icon buttons, labels in tooltips,
+ * docked to the window edge and at the size the rail preferences choose. On
+ * the top or bottom edge it runs as a row; menus and tooltips always open
+ * towards the page.
  *
- * Always narrow by design — there is no slim mode or hover-peek overlay.
+ * There is no hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
  * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
  * separately. Each button's tooltip carries its shortcut, and after `g` is
@@ -43,6 +73,8 @@ export const SidebarRail = () => {
   const layout = useSplitLayout();
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
+  const { prefs } = useSidebarPrefs();
+  const horizontal = () => isHorizontal(prefs().position);
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -61,13 +93,37 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden bg-page px-2 pb-3 pt-2"
+      data-rail-position={prefs().position}
+      data-rail-size={prefs().size}
+      style={RAIL_METRICS[prefs().size]}
+      class={cn(
+        'relative flex shrink-0 items-center gap-1 overflow-hidden bg-page',
+        horizontal() ? 'w-full flex-row' : 'h-full flex-col',
+        // Large keeps the original 56px strip; small is 44px.
+        horizontal() && prefs().size === 'large' && 'h-14 px-2 py-1',
+        horizontal() && prefs().size === 'small' && 'h-11 px-1.5 py-0.5',
+        !horizontal() && prefs().size === 'large' && 'w-14 px-2 pb-3 pt-2',
+        !horizontal() && prefs().size === 'small' && 'w-11 px-1.5 pb-2 pt-1.5'
+      )}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />
 
-      <nav class="min-h-0 overflow-y-auto pt-4">
-        <ul class="flex flex-col items-center gap-1">
+      {/* The scroller clips at its padding edge, so the padding on the cross
+          axis leaves room for unread badges that overhang a button. */}
+      <nav
+        class={cn(
+          horizontal()
+            ? 'flex min-w-0 items-center self-stretch overflow-x-auto overflow-y-hidden py-1 pl-4'
+            : 'min-h-0 overflow-y-auto pt-4'
+        )}
+      >
+        <ul
+          class={cn(
+            'flex items-center gap-1',
+            horizontal() ? 'flex-row' : 'flex-col'
+          )}
+        >
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
@@ -116,10 +172,39 @@ export const SidebarRail = () => {
 
       <MoreMenu gates={gates()} />
 
-      <div class="min-h-0 flex-1" />
+      <div class="min-h-0 min-w-0 flex-1" />
 
       <ReturnToCallButton />
       <FooterActions />
     </div>
   );
 };
+
+/**
+ * The app frame beside the rail: docks the rail to the edge its preferences
+ * name and lets the page fill the rest. `data-rail-edge` lets the page's own
+ * inset drop the gutter on the rail's side.
+ */
+export function RailFrame(props: ParentProps<{ showRail: boolean }>) {
+  const { prefs } = useSidebarPrefs();
+  return (
+    <div
+      data-rail-edge={props.showRail ? prefs().position : undefined}
+      // The rail comes first; reversing the axis puts it on the far edge.
+      class={cn(
+        'flex min-h-0 min-w-0 flex-1',
+        match(prefs().position)
+          .with('left', () => 'flex-row')
+          .with('right', () => 'flex-row-reverse')
+          .with('top', () => 'flex-col')
+          .with('bottom', () => 'flex-col-reverse')
+          .exhaustive()
+      )}
+    >
+      <Show when={props.showRail}>
+        <SidebarRail />
+      </Show>
+      {props.children}
+    </div>
+  );
+}
