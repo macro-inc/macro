@@ -911,9 +911,12 @@ export function createCachedChannelDirectory(
   /** Notes each record this read found changed or removed since the last,
    * while the fallback runs. A record that now lacks a field is not a
    * change: it keeps what was seen of it. */
-  const observe = (read: ChannelDirectoryRead) => {
+  const observe = (
+    read: ChannelDirectoryRead,
+    records: () => Map<string, DirectoryChannel>
+  ) => {
     if (!observed || !changes) return;
-    const next = recordsById(read);
+    const next = records();
     for (const [id, channel] of next) {
       const before = observed.get(id);
       if (before !== channel && !deepEqual(before, channel))
@@ -943,12 +946,14 @@ export function createCachedChannelDirectory(
 
   /** Writes each recorded view again over a cached record older than it,
    * once per record read. */
-  const restampOlderRecords = (read: ChannelDirectoryRead) => {
+  const restampOlderRecords = (
+    records: () => Map<string, DirectoryChannel>
+  ) => {
     const stamps = Object.entries(untrack(views.stamps));
     if (stamps.length === 0) return;
-    const records = recordsById(read);
+    const byId = records();
     for (const [id, viewedAt] of stamps) {
-      const record = records.get(id);
+      const record = byId.get(id);
       if (!record || !isLaterView(record.viewedAt, viewedAt)) continue;
       if (restamped.has(record)) continue;
       restamped.add(record);
@@ -958,8 +963,14 @@ export function createCachedChannelDirectory(
 
   const publish = (read: ChannelDirectoryRead) => {
     lastRead = read;
-    observe(read);
-    restampOlderRecords(read);
+    // Built once, and only when one of them needs it.
+    let byId: Map<string, DirectoryChannel> | undefined;
+    const records = () => {
+      byId ??= recordsById(read);
+      return byId;
+    };
+    observe(read, records);
+    restampOlderRecords(records);
     // A finished pass reconciled the cache: it answers alone again.
     if (lane.complete) stopFallback();
     render();
