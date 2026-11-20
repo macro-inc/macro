@@ -32,6 +32,7 @@ export const entityDirectories: readonly string[] = [
   'ui',
   'external-chat',
   'whatsapp',
+  'agent-mailbox',
   'crm',
   'crm-email-privacy',
   'databases',

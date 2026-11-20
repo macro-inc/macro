@@ -16,6 +16,7 @@ import {
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
+import { agentMailboxKms } from './agent_mailbox_kms';
 import { EmailAttachmentsBucket } from './attachments-bucket';
 import { EmailFocusWorker } from './focus_worker';
 import { EmailPubSubWorkers } from './pubsub_workers';
@@ -424,6 +425,13 @@ const containerEnvVars = [
     value: stack,
   },
 ];
+
+/** Set by hand in Doppler as AGENT_MAILBOX_KMS_KEY_ID after a deploy. */
+export const agentMailboxKmsAlias = agentMailboxKms({
+  role: emailServiceRole,
+  stack,
+  tags,
+});
 
 const dopplerEcsEnvironment = new DopplerEcsEnvironment(pulumi.getProject(), {
   tags,

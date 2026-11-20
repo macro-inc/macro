@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET state = 'releasing', paused_at = NULL, updated_at = $3\n            WHERE id = $1 AND state = 'paused' AND paused_at < $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "762ece29fe3aa6a22e60f89e499c7604533408322dd266443d5e75abed2d7eaa"
+}

@@ -14,6 +14,7 @@
 
 use std::path::PathBuf;
 
+pub mod agent_mailbox_fake_vendor;
 pub mod allocator;
 pub mod arch;
 pub mod build;

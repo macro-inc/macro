@@ -1,0 +1,109 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_mailboxes\n            SET lease_token = $2, lease_expires_at = $4\n            WHERE id = $1\n              AND state <> 'released'\n              AND (lease_token IS NULL OR lease_expires_at < $3)\n            RETURNING id, request_id, user_id, provider, requested_local_part, display_name,\n                      provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                      grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "request_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "provider",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "requested_local_part",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider_mailbox_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "grant_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "grant_key_ciphertext",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 10,
+        "name": "grant_kms_key_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "grant_encryption_version",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 12,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "last_error",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "paused_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "28849a1fadccf2fdb9b77e9e3a52567d65a217be5f47fc598aa2a1cd5626a641"
+}

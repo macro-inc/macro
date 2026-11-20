@@ -539,6 +539,9 @@ fn remount(
     if sidecars.model_emulator {
         up.arg(super::model_emulator::SERVICE);
     }
+    if sidecars.agent_mailbox_fake_vendor {
+        up.arg(super::agent_mailbox_fake_vendor::SERVICE);
+    }
     stage.run("Remounting Rust services", &mut up)?;
     write_state(
         instance,

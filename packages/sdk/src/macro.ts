@@ -1,6 +1,7 @@
 import type { MacroOpts } from './config';
 import { AccountManagerNamespace } from './entities/account-managers/namespace';
 import { ActivityNamespace } from './entities/activity/namespace';
+import { AgentMailboxNamespace } from './entities/agent-mailbox/namespace';
 import { AgentSessionNamespace } from './entities/agent-sessions/namespace';
 import { AgentNamespace } from './entities/agents/namespace';
 import { AiNamespace } from './entities/ai/namespace';
@@ -218,6 +219,9 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   /** The current user's WhatsApp account and chat list; add chats from it. */
   readonly whatsapp: WhatsAppNamespace;
 
+  /** An agent teammate's own mailbox: its address, messages, sends and replies. */
+  readonly agentMailbox: AgentMailboxNamespace;
+
   readonly chats: ChatNamespace;
 
   readonly crm: CrmNamespace;
@@ -324,6 +328,7 @@ export class Macro<T extends MacroOpts = MacroOpts> {
     this.channels = new ChannelNamespace(client);
     this.externalChats = new ExternalChatsNamespace(client);
     this.whatsapp = new WhatsAppNamespace(client);
+    this.agentMailbox = new AgentMailboxNamespace(client);
     this.chats = new ChatNamespace(client);
     this.crm = new CrmNamespace(client);
     this.databases = new DatabaseNamespace(client);
@@ -379,6 +384,14 @@ export class Macro<T extends MacroOpts = MacroOpts> {
   }
 }
 
+export {
+  AgentMailMessage,
+  type AgentMailReplyOptions,
+} from './entities/agent-mailbox/message';
+export type {
+  AgentMailPage,
+  AgentMailSendOptions,
+} from './entities/agent-mailbox/namespace';
 export {
   type AgentActivity,
   type AgentActivityOptions,

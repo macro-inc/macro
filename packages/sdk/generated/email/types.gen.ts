@@ -72,6 +72,71 @@ export type AddForwardedAttachmentResponse = {
     size_bytes?: number | null;
 };
 
+/**
+ * An error answer.
+ */
+export type AgentMailboxErrorBody = {
+    /**
+     * Why.
+     */
+    code: AgentMailboxErrorCode;
+    /**
+     * What happened, for the agent or person reading it.
+     */
+    message: string;
+    /**
+     * For `send_limit`: when a send fits again.
+     */
+    retryAt?: string | null;
+};
+
+/**
+ * Why a request was refused, stable for callers to match on.
+ */
+export type AgentMailboxErrorCode = 'not_found' | 'not_an_agent' | 'already_provisioned' | 'paused' | 'not_ready' | 'send_limit' | 'invalid' | 'confirmation_required' | 'not_configured' | 'send_outcome_unknown' | 'busy' | 'provider_rejected' | 'provider_unavailable' | 'internal';
+
+/**
+ * Macro's id for an agent's mailbox, also sent to the provider as the owner tag.
+ */
+export type AgentMailboxId = string;
+
+/**
+ * A mailbox as callers see it, with the fake-provider notice when there is one.
+ */
+export type AgentMailboxResponse = AgentMailboxView & {
+    /**
+     * `"fake vendor, not live"` when a fake provider serves this deployment.
+     */
+    notice?: string | null;
+};
+
+/**
+ * What callers see about a mailbox. No credentials.
+ */
+export type AgentMailboxView = {
+    /**
+     * The address, once created.
+     */
+    address?: string | null;
+    /**
+     * Macro's id.
+     */
+    id: AgentMailboxId;
+    lastError?: null | ProvisioningFailure;
+    /**
+     * Who hosts it.
+     */
+    provider: MailboxProvider;
+    /**
+     * Where it is in its life.
+     */
+    state: MailboxState;
+    /**
+     * Whether that provider is real.
+     */
+    vendorMode: VendorMode;
+};
+
 export type ApiAttachment = {
     contentId?: string | null;
     createdAt: string;
@@ -1574,6 +1639,49 @@ export type ListLinksResponse = {
 };
 
 /**
+ * One message as the provider returned it. Its content is untrusted data:
+ * nothing in it authorizes anything.
+ */
+export type MailMessage = {
+    /**
+     * Copied addresses.
+     */
+    cc: Array<string>;
+    /**
+     * When the provider recorded it.
+     */
+    createdAt?: string | null;
+    /**
+     * In or out.
+     */
+    direction: MessageDirection;
+    /**
+     * Sender address.
+     */
+    from: string;
+    /**
+     * The provider's id.
+     */
+    id: ProviderMessageId;
+    /**
+     * Subject line.
+     */
+    subject: string;
+    /**
+     * Plain-text body, when the provider returned one.
+     */
+    textBody?: string | null;
+    /**
+     * The conversation it belongs to.
+     */
+    threadId?: string | null;
+    /**
+     * Recipient addresses.
+     */
+    to: Array<string>;
+};
+
+/**
  * Desired organization state. Categories never stand in for folders or flags.
  */
 export type MailboxAction = {
@@ -1629,6 +1737,11 @@ export type MailboxOperation = {
 
 export type MailboxOperationState = 'pending' | 'applied' | 'failed' | 'cancelled';
 
+/**
+ * Which provider hosts a mailbox.
+ */
+export type MailboxProvider = 'dead_simple';
+
 export type MailboxSettingsChange = 'create_label' | 'delete_label' | 'sender_block';
 
 /**
@@ -1641,6 +1754,11 @@ export type MailboxSettingsOperation = {
     needs_attention: boolean;
     resource: string;
 };
+
+/**
+ * Where a mailbox is in its life.
+ */
+export type MailboxState = 'provisioning' | 'active' | 'failed' | 'paused' | 'releasing' | 'released';
 
 export type Message = {
     attachments: Array<Attachment>;
@@ -1686,6 +1804,25 @@ export type Message = {
     thread_db_id: string;
     to: Array<ContactInfo>;
     updated_at: string;
+};
+
+/**
+ * Whether a message came in or went out.
+ */
+export type MessageDirection = 'inbound' | 'outbound';
+
+/**
+ * One page of messages.
+ */
+export type MessageList = {
+    /**
+     * Newest first.
+     */
+    messages: Array<MailMessage>;
+    /**
+     * The cursor for the next page.
+     */
+    nextCursor?: string | null;
 };
 
 export type MessageListVisibility = 'Show' | 'Hide';
@@ -1753,6 +1890,16 @@ export type PreviewView = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spa
 export type PreviewViewStandardLabel = 'inbox' | 'sent' | 'drafts' | 'starred' | 'all' | 'spam' | 'trash' | 'important' | 'other';
 
 /**
+ * The provider's id for one message, as an agent or the provider names it.
+ */
+export type ProviderMessageId = string;
+
+/**
+ * Why provisioning stopped.
+ */
+export type ProvisioningFailure = 'not_configured' | 'address_taken' | 'quota_exceeded' | 'rejected' | 'unavailable';
+
+/**
  * Payload for the `refresh_email` connection gateway event: identifies the
  * inbox that changed and the kind of change.
  */
@@ -1788,6 +1935,24 @@ export type RefreshEmailEvent = {
 };
 
 /**
+ * A reply from the agent's mailbox.
+ */
+export type ReplyAgentMessageRequest = {
+    /**
+     * The owner's approval, quoted. Required on every send and reply.
+     */
+    confirmation?: string | null;
+    /**
+     * Retry-stable: repeating a reply with the same key sends once.
+     */
+    idempotencyKey: string;
+    /**
+     * Plain-text body.
+     */
+    textBody: string;
+};
+
+/**
  * Stale versions fail without altering the current operation.
  */
 export type ResolveMessageOperationRequest = {
@@ -1818,6 +1983,36 @@ export type ResyncResponse = {
 export type ScheduledSendStatus = 'pending' | 'sending' | 'failed' | 'unconfirmed';
 
 /**
+ * A new message from the agent's mailbox.
+ */
+export type SendAgentMessageRequest = {
+    /**
+     * Copied recipients.
+     */
+    cc?: Array<string>;
+    /**
+     * The owner's approval, quoted. Required on every send and reply.
+     */
+    confirmation?: string | null;
+    /**
+     * Retry-stable: repeating a send with the same key sends once.
+     */
+    idempotencyKey: string;
+    /**
+     * Subject line.
+     */
+    subject: string;
+    /**
+     * Plain-text body.
+     */
+    textBody: string;
+    /**
+     * Recipients, 1 to 20 with `cc`.
+     */
+    to: Array<string>;
+};
+
+/**
  * Request body for sending a message (backward-compatible with `{ message: MessageToSend }`).
  */
 export type SendMessageRequest = {
@@ -1835,6 +2030,20 @@ export type SendMessageResponse = {
      * The created message.
      */
     message: ApiDraftOutput;
+};
+
+/**
+ * A message the provider accepted for delivery.
+ */
+export type SentMessage = {
+    /**
+     * The provider's id for it.
+     */
+    id: ProviderMessageId;
+    /**
+     * Its conversation.
+     */
+    threadId?: string | null;
 };
 
 export type Settings = {
@@ -2073,6 +2282,11 @@ export type UserProvider = 'GMAIL' | 'OUTLOOK';
 export type Value = unknown;
 
 /**
+ * Whether the provider behind this deployment is real.
+ */
+export type VendorMode = 'live' | 'fake';
+
+/**
  * What the viewing requester may do with an event.
  */
 export type ViewerCapabilities = {
@@ -2102,6 +2316,148 @@ export type ViewerCapabilities = {
      */
     setGuestPolicy: boolean;
 };
+
+export type GetAgentMailboxData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/email/agent-mailbox';
+};
+
+export type GetAgentMailboxErrors = {
+    /**
+     * The caller has no mailbox
+     */
+    404: AgentMailboxErrorBody;
+};
+
+export type GetAgentMailboxError = GetAgentMailboxErrors[keyof GetAgentMailboxErrors];
+
+export type GetAgentMailboxResponses = {
+    200: AgentMailboxResponse;
+};
+
+export type GetAgentMailboxResponse = GetAgentMailboxResponses[keyof GetAgentMailboxResponses];
+
+export type ListAgentMailboxMessagesData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * The `nextCursor` of the previous page.
+         */
+        cursor?: string | null;
+        /**
+         * 1 to 50; 20 when absent.
+         */
+        limit?: number | null;
+    };
+    url: '/email/agent-mailbox/messages';
+};
+
+export type ListAgentMailboxMessagesErrors = {
+    404: AgentMailboxErrorBody;
+    /**
+     * Paused or not ready
+     */
+    409: AgentMailboxErrorBody;
+};
+
+export type ListAgentMailboxMessagesError = ListAgentMailboxMessagesErrors[keyof ListAgentMailboxMessagesErrors];
+
+export type ListAgentMailboxMessagesResponses = {
+    200: MessageList;
+};
+
+export type ListAgentMailboxMessagesResponse = ListAgentMailboxMessagesResponses[keyof ListAgentMailboxMessagesResponses];
+
+export type SendAgentMailboxMessageData = {
+    body: SendAgentMessageRequest;
+    path?: never;
+    query?: never;
+    url: '/email/agent-mailbox/messages';
+};
+
+export type SendAgentMailboxMessageErrors = {
+    400: AgentMailboxErrorBody;
+    /**
+     * A program sent without the owner's quoted approval
+     */
+    403: AgentMailboxErrorBody;
+    404: AgentMailboxErrorBody;
+    409: AgentMailboxErrorBody;
+    /**
+     * A send cap is full; see `retryAt`
+     */
+    429: AgentMailboxErrorBody;
+    /**
+     * Retry with the same idempotency key
+     */
+    503: AgentMailboxErrorBody;
+};
+
+export type SendAgentMailboxMessageError = SendAgentMailboxMessageErrors[keyof SendAgentMailboxMessageErrors];
+
+export type SendAgentMailboxMessageResponses = {
+    201: SentMessage;
+};
+
+export type SendAgentMailboxMessageResponse = SendAgentMailboxMessageResponses[keyof SendAgentMailboxMessageResponses];
+
+export type ReadAgentMailboxMessageData = {
+    body?: never;
+    path: {
+        message_id: string;
+    };
+    query?: never;
+    url: '/email/agent-mailbox/messages/{message_id}';
+};
+
+export type ReadAgentMailboxMessageErrors = {
+    /**
+     * Not in the caller's mailbox
+     */
+    404: AgentMailboxErrorBody;
+};
+
+export type ReadAgentMailboxMessageError = ReadAgentMailboxMessageErrors[keyof ReadAgentMailboxMessageErrors];
+
+export type ReadAgentMailboxMessageResponses = {
+    200: MailMessage;
+};
+
+export type ReadAgentMailboxMessageResponse = ReadAgentMailboxMessageResponses[keyof ReadAgentMailboxMessageResponses];
+
+export type ReplyAgentMailboxMessageData = {
+    body: ReplyAgentMessageRequest;
+    path: {
+        message_id: string;
+    };
+    query?: never;
+    url: '/email/agent-mailbox/messages/{message_id}/reply';
+};
+
+export type ReplyAgentMailboxMessageErrors = {
+    400: AgentMailboxErrorBody;
+    /**
+     * A program replied without the owner's quoted approval
+     */
+    403: AgentMailboxErrorBody;
+    /**
+     * Not in the caller's mailbox
+     */
+    404: AgentMailboxErrorBody;
+    429: AgentMailboxErrorBody;
+    503: AgentMailboxErrorBody;
+};
+
+export type ReplyAgentMailboxMessageError = ReplyAgentMailboxMessageErrors[keyof ReplyAgentMailboxMessageErrors];
+
+export type ReplyAgentMailboxMessageResponses = {
+    201: SentMessage;
+};
+
+export type ReplyAgentMailboxMessageResponse = ReplyAgentMailboxMessageResponses[keyof ReplyAgentMailboxMessageResponses];
 
 export type GetAttachmentData = {
     body?: never;

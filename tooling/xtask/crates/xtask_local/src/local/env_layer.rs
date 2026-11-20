@@ -229,6 +229,12 @@ pub fn resolve(
         env.extend(super::model_emulator::env());
     }
 
+    // A local stack with no real deadsimple.email key runs the fake vendor
+    // for agent mailboxes, decided on the same final env.
+    if super::agent_mailbox_fake_vendor::stands_in(mode, &env) {
+        env.extend(super::agent_mailbox_fake_vendor::env());
+    }
+
     // Remote-AWS modes (dev): pin ENVIRONMENT/project, strip any leaked local
     // endpoints, and resolve the developer's real AWS credentials (incl. session
     // token) over the dev_personal placeholders — the process-env layer can't add

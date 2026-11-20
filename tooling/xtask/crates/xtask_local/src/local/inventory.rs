@@ -9,6 +9,7 @@
 //! unrepresentable (`host_port: None` == portless worker).
 
 use super::Mode;
+use super::agent_mailbox_fake_vendor;
 use super::google_emulator;
 use super::instance::Port;
 use super::microsoft_emulator;
@@ -216,6 +217,19 @@ pub const RUST_SERVICES: &[RustService] = &[
         compose_name: model_emulator::SERVICE,
         cargo_bin: "model_emulator",
         package: "model_emulator",
+        host_port: None,
+        path_prefix: None,
+        is_websocket: false,
+        modes: &[],
+        opt_in: false,
+    },
+    RustService {
+        // Not a service of ours: the fake deadsimple.email API, shipped into
+        // /app/out for its sidecar (a bespoke gen_compose block, hence no
+        // modes) that stands in for the provider on a stack with no key.
+        compose_name: agent_mailbox_fake_vendor::SERVICE,
+        cargo_bin: "agent_mailbox_fake_vendor",
+        package: "agent_mailbox_fake_vendor",
         host_port: None,
         path_prefix: None,
         is_websocket: false,
