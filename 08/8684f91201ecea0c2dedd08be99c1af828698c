@@ -1,0 +1,54 @@
+apps/web/src/features/meetings/core/incoming-channel-calls.ts
+  s_32cf564cb23845::t_c7ae34102824f7 1-4,7
+docs/agent-guide/calendar.md
+  s_32cf564cb23845::t_3b8d5d3ff85e74 484,486
+apps/web/src/lib/i18n/locales/en/calls.ts
+  s_32cf564cb23845::t_c7ae34102824f7 65,67-75
+apps/web/src/features/meetings/components/incoming-call-stack.tsx
+  s_32cf564cb23845::t_df34d0c719bf2b 4,32-34,39-40,96,99,112,114
+  s_32cf564cb23845::t_d4ce21ad48cf5c 78-79
+  s_32cf564cb23845::t_ab2a52bcc84ea1 1-3,5-31,35-38,41-77,80-95,97-98,100-111,113,115-123
+apps/web/src/features/meetings/views/incoming-channel-call-notification.tsx
+  s_32cf564cb23845::t_df34d0c719bf2b 14,57
+apps/web/src/features/meetings/views/incoming-call-notifications.tsx
+  s_024592623b7afc::t_095700b710a730 125,139-141,143,145-146,148-151,153-154,156-157,161-162,204
+  s_32cf564cb23845::t_493c1e351aa52e 2,7,9,11,14-18,22-35,38-40,53-98,103-105,107,109-112,117,123-124,132-138,142,144,147,152,155,163,170-203
+apps/web/src/features/meetings/incoming-channel-calls.ts
+  s_32cf564cb23845::t_0b2e82e3f0fc76 6,32-33,35
+apps/web/src/features/meetings/components/incoming-call-notification.tsx
+  s_024592623b7afc::t_f5aff8d6dc4e03 35
+  s_32cf564cb23845::t_ab61f26eaf2599 4,8-10,16,20-24,33-34,46,49,55-60,62
+apps/web/src/features/meetings/views/incoming-channel-call-notification.test.tsx
+  s_32cf564cb23845::t_0b2e82e3f0fc76 35
+apps/web/src/features/meetings/incoming-channel-calls.test.ts
+  s_32cf564cb23845::t_0b2e82e3f0fc76 122
+docs/agent-guide/calls.md
+  s_32cf564cb23845::t_3b8d5d3ff85e74 295,299-317
+apps/web/src/features/meetings/components/incoming-call-stack.test.tsx
+  s_32cf564cb23845::t_5bf7f9a8152461 1-7,13-92
+  s_32cf564cb23845::t_ebcb5481664236 8-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "088684f91201ecea0c2dedd08be99c1af828698c",
+  "prompts": {},
+  "sessions": {
+    "s_024592623b7afc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ff44e640-d545-4448-b666-9917880bbb24",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

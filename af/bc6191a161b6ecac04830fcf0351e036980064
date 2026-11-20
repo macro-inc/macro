@@ -1,0 +1,30 @@
+docs/agent-guide/calls.md
+  s_4821ed6186a157::t_398ae79ae169bb 304
+  s_1711859434edf0::t_a3ddc0450f2eb9 296-299,305
+apps/web/src/features/meetings/components/incoming-call-notification.tsx
+  s_1711859434edf0::t_8a09e6cf055512 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "afbc6191a161b6ecac04830fcf0351e036980064",
+  "prompts": {},
+  "sessions": {
+    "s_1711859434edf0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "affb1b3c-2888-4df9-9c75-75b5728fe0c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4821ed6186a157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c737a06-e5a5-44ed-aacc-7b4e274b8358",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

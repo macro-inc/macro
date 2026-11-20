@@ -1,0 +1,27 @@
+apps/web/src/features/meetings/incoming-meeting-invitations.tsx
+  s_32cf564cb23845::t_727a5a23ffba3b 10,13,16,28,100-101,103-104
+  s_32cf564cb23845::t_7b94bc74db1bc4 55-56,102
+rules/ast-grep/tsx-no-device-composition.yml
+  s_32cf564cb23845::t_a0c5f00cb1afd3 51
+apps/web/src/features/meetings/views/mobile/incoming-call-card.tsx
+  s_32cf564cb23845::t_4c5fa65db299d7 1-98
+apps/web/src/features/meetings/views/mobile/incoming-call-notifications.tsx
+  s_32cf564cb23845::t_4c5fa65db299d7 1-20,22-52
+  s_32cf564cb23845::t_a0c5f00cb1afd3 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "38454b7f3db2046d11ea73eb4a018f0e5160ac9d",
+  "prompts": {},
+  "sessions": {
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

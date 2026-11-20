@@ -1,0 +1,19 @@
+apps/web/src/features/meetings/incoming-meeting-invitations.tsx
+  s_32cf564cb23845::t_a6b3e616c39d72 56-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "35364d5b4eb01d01cab191e7317d575e1b054e1a",
+  "prompts": {},
+  "sessions": {
+    "s_32cf564cb23845": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b9e86da-1f97-4032-b2cc-611e6ee15a78",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}

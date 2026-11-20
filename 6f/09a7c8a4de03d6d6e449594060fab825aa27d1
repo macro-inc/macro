@@ -1,0 +1,34 @@
+apps/web/src/features/meetings/components/incoming-call-notification.tsx
+  s_4821ed6186a157::t_1c54767129c636 54
+apps/web/src/features/meetings/views/incoming-call-notifications.tsx
+  s_4821ed6186a157::t_1c54767129c636 25-31,33-53,55-109
+  s_4821ed6186a157::t_6b590c0b7f3392 110
+apps/web/src/features/meetings/incoming-meeting-invitations.tsx
+  s_1711859434edf0::t_f8354c08137036 8,18-22,75,101-133
+docs/agent-guide/calls.md
+  s_4821ed6186a157::t_36df0b872a7be8 308-310
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6f09a7c8a4de03d6d6e449594060fab825aa27d1",
+  "prompts": {},
+  "sessions": {
+    "s_1711859434edf0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "affb1b3c-2888-4df9-9c75-75b5728fe0c4",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_4821ed6186a157": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9c737a06-e5a5-44ed-aacc-7b4e274b8358",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
