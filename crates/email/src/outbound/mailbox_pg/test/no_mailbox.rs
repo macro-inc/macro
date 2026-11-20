@@ -393,3 +393,36 @@ async fn a_discovery_that_lost_its_lease_does_not_mark_the_link(db: PgPool) {
     ));
     assert!(!marked(&db, link).await);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_mark_behind_a_share_locked_link_fails_fast_then_marks(db: PgPool) {
+    let link = connected(&db).await;
+    let repo = PgMailboxSync::new(db.clone());
+    let lease = repo
+        .claim_catalog(macro_uuid::generate_uuid_v7())
+        .await
+        .unwrap()
+        .unwrap();
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.mark_no_mailbox(&lease),
+    )
+    .await
+    .expect("the mark waited past its lock timeout");
+    assert!(
+        matches!(&blocked, Err(error) if error.is_lock_timeout()),
+        "{blocked:?}"
+    );
+    assert!(!marked(&db, link).await);
+    population.rollback().await.unwrap();
+
+    repo.mark_no_mailbox(&lease).await.unwrap();
+    assert!(marked(&db, link).await);
+}

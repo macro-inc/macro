@@ -199,6 +199,7 @@ impl PgMailboxSync {
         &self,
         lease: &CatalogLease,
     ) -> Result<u32, MailboxError> {
+        let mut tx = self.begin().await.map_err(db_error)?;
         let marked_seconds = sqlx::query_scalar!(
             r#"
             UPDATE email_links l SET mailbox_unavailable_at = COALESCE(l.mailbox_unavailable_at, now()),
@@ -216,10 +217,11 @@ impl PgMailboxSync {
             lease.lease_id,
             lease.fence
         )
-        .fetch_optional(&self.db)
+        .fetch_optional(&mut *tx)
         .await
         .map_err(db_error)?
         .ok_or(MailboxError::Stale)?;
+        tx.commit().await.map_err(db_error)?;
         Ok(u32::try_from(marked_seconds.max(0)).unwrap_or(u32::MAX))
     }
 
