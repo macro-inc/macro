@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import ArrowsLeftRightIcon from '@icon/system/regular/arrows-left-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import ImageIcon from '@icon/system/regular/image.svg';
@@ -209,7 +210,14 @@ export function TeamAgentMenu(props: TeamAgentMenuProps): JSX.Element {
     });
   };
   return (
-    <Show when={props.onChangePicture || props.onChangeVoice || props.onRemove}>
+    <Show
+      when={
+        props.onChangePicture ||
+        props.onChangeVoice ||
+        props.onMove ||
+        props.onRemove
+      }
+    >
       <Dropdown placement="bottom-end">
         <MenuTrigger
           name={props.name}
@@ -241,6 +249,16 @@ export function TeamAgentMenu(props: TeamAgentMenuProps): JSX.Element {
                 <Dropdown.Item onSelect={() => changeVoice()()}>
                   <WaveformIcon class="size-4" />
                   {t('teamAgents.changeVoice')}
+                </Dropdown.Item>
+              </Dropdown.Group>
+            )}
+          </Show>
+          <Show when={props.onMove}>
+            {(move) => (
+              <Dropdown.Group>
+                <Dropdown.Item onSelect={() => move()()}>
+                  <ArrowsLeftRightIcon class="size-4" />
+                  {t('teammateHosts.moveToComputer')}
                 </Dropdown.Item>
               </Dropdown.Group>
             )}

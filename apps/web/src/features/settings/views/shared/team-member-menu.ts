@@ -45,6 +45,8 @@ export type TeamAgentMenuProps = {
    */
   onChangePicture?: (opener: HTMLButtonElement | undefined) => void;
   onChangeVoice?: () => void;
+  /** Moves it to another of its owner's machines; only for an agent on one. */
+  onMove?: () => void;
   onRemove?: () => void;
 };
 

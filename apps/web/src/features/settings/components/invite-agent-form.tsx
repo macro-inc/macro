@@ -50,6 +50,10 @@ function refusalText(reason: AddRefusal): string {
     .with('unavailable', () => t('teamAgents.computerUnavailable'))
     .with('in_progress', () => t('teamAgents.inviteInProgress'))
     .with('repository', () => t('teamAgents.repositoryFailed'))
+    .with('host_not_eligible', () => t('teammateHosts.hostNotEligible'))
+    .with('self_hosted_not_enabled', () =>
+      t('teammateHosts.selfHostedNotEnabled')
+    )
     .with('unknown', () => t('teamAgents.failed'))
     .exhaustive();
 }
@@ -94,7 +98,7 @@ export function InviteAgentForm(props: {
     onSelect: (host: AgentHost) => void;
   }) => JSX.Element;
   /** Under the list while one of the inviter's computers is picked. */
-  hostNotice?: (host: AgentHost) => JSX.Element;
+  hostNotice?: (host: AgentHost, name: string) => JSX.Element;
   /** Add with one of the inviter's computers picked: nothing is bought. */
   onSubmitHost?: (invite: HostInvite) => void;
   /**
@@ -413,6 +417,16 @@ export function InviteAgentForm(props: {
                 {t('teamAgents.notStarted', { name: trimmedName() })}
               </FailureNotice>
             </Match>
+            <Match when={props.state.kind === 'host_failed' && host()}>
+              {(picked) => (
+                <FailureNotice>
+                  {t('teammateHosts.hostFailed', {
+                    name: trimmedName(),
+                    host: picked().name,
+                  })}
+                </FailureNotice>
+              )}
+            </Match>
             <Match when={props.state.kind === 'refunded'}>
               <FailureNotice>
                 {t('teamAgents.refunded', { name: trimmedName() })}
@@ -429,7 +443,12 @@ export function InviteAgentForm(props: {
           </Switch>
           {/* What running on the inviter's computer means, while one is picked. */}
           <Show when={props.hostNotice && host()}>
-            {(picked) => props.hostNotice?.(picked())}
+            {(picked) =>
+              props.hostNotice?.(
+                picked(),
+                trimmedName() || t('teamAgents.agent')
+              )
+            }
           </Show>
         </div>
       }

@@ -152,7 +152,12 @@ async function inviteTeamAgent(
   signal?: AbortSignal
 ) {
   span.setAttr('team.id', vars.teamId);
-  span.setAttr('computer.size', vars.request.size);
+  const computer = vars.request.computer;
+  span.setAttr(
+    'computer.kind',
+    computer?.kind ?? (vars.request.size ? 'new' : 'unknown')
+  );
+  if (vars.request.size) span.setAttr('computer.size', vars.request.size);
   if (vars.request.voice) span.setAttr('voice.model', vars.request.voice);
   try {
     const agent = await throwOnErr(() =>

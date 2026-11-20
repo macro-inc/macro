@@ -9,6 +9,7 @@ function statusLabel(status: TeamAgentStatus): string {
   return (
     match(status)
       .with('provisioning', () => t('teamAgents.statusProvisioning'))
+      .with('downloading', () => t('teammateHosts.statusDownloading'))
       .with('starting', () => t('teamAgents.statusStarting'))
       .with('running', () => t('teamAgents.statusRunning'))
       .with('paused', () => t('teamAgents.statusPaused'))
@@ -28,6 +29,7 @@ function dotState(
     .with('failed', 'unhealthy', () => 'attention' as const)
     .with(
       'provisioning',
+      'downloading',
       'starting',
       'paused',
       'released',

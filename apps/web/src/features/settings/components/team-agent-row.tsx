@@ -14,6 +14,8 @@ export function TeamAgentRow(props: {
   agent: TeamAgent;
   /** Its ⋯; left out for viewers who can't change anything. */
   menu?: JSX.Element;
+  /** Which of its owner's machines it runs on, if it runs on one. */
+  runsOn?: JSX.Element;
   /** Which Claude its computer runs on, for viewers who manage it. */
   claude?: JSX.Element;
   /** The step its computer's setup is on, while it is being set up. */
@@ -41,6 +43,7 @@ export function TeamAgentRow(props: {
           <div class="text-xs text-ink-muted truncate">
             {props.agent.jobDescription}
           </div>
+          {props.runsOn}
           {/* Its summary line, where a person's role and plan are. */}
           <div class="flex">
             <TeamAgentStatusLabel status={props.agent.status} />

@@ -32,6 +32,8 @@ export default {
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
   addOn: 'Add {{name}} on {{host}}',
+  /** An agent on a machine the viewer didn't pair, so its name isn't theirs to read. */
+  ownersComputer: "its owner's computer",
   buyAComputer: 'Buy a computer',
   yourComputers: 'Your computers',
   adding: 'Adding {{name}}…',

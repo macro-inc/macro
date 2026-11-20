@@ -22,7 +22,14 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => mocks.flag(),
+  // Agents on the inviter's own machines are their own feature, off here.
+  useFeatureFlag: (flag: { key?: string }) => () =>
+    flag?.key === 'enable-self-hosted-teammates'
+      ? { loading: false, enabled: false }
+      : mocks.flag(),
+}));
+vi.mock('@queries/team-agents/hosts', () => ({
+  useTeammateHostsQuery: () => ({ isSuccess: false, isError: false }),
 }));
 vi.mock('@queries/harnesses/harnesses', () => ({
   useHarnessesQuery: () => ({

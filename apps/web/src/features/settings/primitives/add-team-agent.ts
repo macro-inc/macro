@@ -17,6 +17,7 @@ import {
   addedAgentProgress,
   addRefusal,
 } from '../core/team-agent-add';
+import type { HostInvite } from '../core/team-agent-draft';
 import { retryTeamAgentComputer } from './team-agent-status';
 
 /** The agent's progress, or `undefined` when the list couldn't be read. */
@@ -76,6 +77,12 @@ export function useAddTeamAgent(options: {
         setState({ kind: 'refunded' });
       })
       .with('failed', () => {
+        // On the inviter's own computer nothing was bought: no refund, no
+        // second try on the same purchase.
+        if (agent.harnessId) {
+          setState({ kind: 'host_failed', agent });
+          return;
+        }
         // The second failure is undone on the server: charge and computer.
         if (attempt > 1 || !agent.computerId) {
           setPurchaseKey(crypto.randomUUID());
@@ -87,14 +94,20 @@ export function useAddTeamAgent(options: {
       .exhaustive();
   };
 
-  const add = async (request: CreateTeamAgent, size: ComputerSize) => {
+  /**
+   * Sends the invite and waits for the agent. `size` is the size bought, for
+   * a full host to name; left out when the agent runs on the inviter's own
+   * computer.
+   */
+  const invite = async (request: CreateTeamAgent, size?: ComputerSize) => {
     if (disposed || state().kind === 'adding') return;
     const teamId = options.teamId();
     operation = { session: queryAccountSession(), teamId };
     setState({ kind: 'adding' });
     await Telemetry.span('team-agent.add', async (span) => {
       span.setAttr('team.id', teamId);
-      span.setAttr('computer.size', request.size);
+      span.setAttr('computer.kind', size ? 'new' : 'own');
+      if (size) span.setAttr('computer.size', size);
       span.setAttr('add.attempt', 1);
       let agent: TeamAgent;
       try {
@@ -107,10 +120,13 @@ export function useAddTeamAgent(options: {
         setState(
           match(refused)
             .returnType<AddAgentState>()
-            .with({ kind: 'no_room' }, () => ({
-              kind: 'no_room',
-              size,
-            }))
+            .with(
+              { kind: 'no_room' },
+              (): AddAgentState =>
+                size
+                  ? { kind: 'no_room', size }
+                  : { kind: 'refused', reason: 'unavailable' }
+            )
             .otherwise((other) => other)
         );
         return;
@@ -170,7 +186,15 @@ export function useAddTeamAgent(options: {
       if (current === 'no_room' || current === 'refused')
         setState({ kind: 'editing' });
     },
-    add,
+    /** Buy `size` and run the agent on it. */
+    add: (request: CreateTeamAgent, size: ComputerSize) =>
+      invite(request, size),
+    /** Run the agent on one of the inviter's own computers: nothing is bought. */
+    addOnHost: ({ harnessId, ...request }: HostInvite) =>
+      invite({
+        ...request,
+        computer: { kind: 'own', harness_id: harnessId },
+      }),
     retry,
   };
 }

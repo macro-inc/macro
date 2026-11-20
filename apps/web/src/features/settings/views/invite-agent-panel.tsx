@@ -1,12 +1,17 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_AGENT_FACES } from '@core/constant/featureFlags';
+import {
+  ENABLE_AGENT_FACES,
+  enableSelfHostedTeammates,
+} from '@core/constant/featureFlags';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   currentQueryAccount,
   isCurrentQueryAccount,
 } from '@queries/auth/account-scope';
 import { useComputerOffersQuery } from '@queries/computers/computers';
+import { useTeammateHostsQuery } from '@queries/team-agents/hosts';
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { FaceSlot } from '../../agent-faces/face-slot';
 import { createFaceDraft } from '../../agent-faces/primitives/create-face-draft';
@@ -15,7 +20,9 @@ import {
   openAgentDirectMessage,
   openBilling,
 } from '../../notifications/computer-setup-toast';
+import { AgentHostChoices } from '../components/agent-host-choices';
 import { InviteAgentForm } from '../components/invite-agent-form';
+import { TeammateTrustWarning } from '../components/teammate-host-picker';
 import { useAddTeamAgent } from '../primitives/add-team-agent';
 
 /**
@@ -31,6 +38,10 @@ export function InviteAgentPanel(props: {
   onInvited: () => void;
 }) {
   const offers = useComputerOffersQuery(() => true);
+  // The inviter's own machines, beside the sizes to buy.
+  const selfHosted = useFeatureFlag(enableSelfHostedTeammates);
+  const ownMachines = () => !selfHosted().loading && selfHosted().enabled;
+  const hosts = useTeammateHostsQuery(() => props.teamId, ownMachines);
   // A new random face each time the panel opens.
   const face = createFaceDraft();
   // One upload per face, however often Add is pressed.
@@ -73,6 +84,33 @@ export function InviteAgentPanel(props: {
         fireAndForget(add.retry(agent), 'team-agent.add')
       }
       onEdit={add.edit}
+      hosts={
+        ownMachines()
+          ? (choice) => (
+              <>
+                <p class="text-xs text-ink-muted">
+                  {t('teammateHosts.egressNote')}
+                </p>
+                <AgentHostChoices
+                  hosts={hosts.isSuccess ? hosts.data.hosts : undefined}
+                  failed={hosts.isError}
+                  onRetry={() =>
+                    fireAndForget(hosts.refetch(), 'team-agent.hosts')
+                  }
+                  selected={choice.selected()}
+                  onSelect={choice.onSelect}
+                  disabled={add.state().kind === 'adding'}
+                />
+              </>
+            )
+          : undefined
+      }
+      hostNotice={(host, name) => (
+        <TeammateTrustWarning host={host.name} name={name} />
+      )}
+      onSubmitHost={(invite) =>
+        fireAndForget(add.addOnHost(invite), 'team-agent.add')
+      }
       avatar={
         ENABLE_AGENT_FACES
           ? (initial) => (

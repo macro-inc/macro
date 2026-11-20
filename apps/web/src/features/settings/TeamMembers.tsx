@@ -7,6 +7,7 @@ import {
   ENABLE_AGENT_FACES,
   enableAgentTeammates,
   enableCrmMemberAccessChanges,
+  enableSelfHostedTeammates,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -36,6 +37,7 @@ import {
   useToggleAutoJoinDomainMutation,
   useToggleNonAdminInvitesMutation,
 } from '@queries/team/teams';
+import { useTeammateHostsQuery } from '@queries/team-agents/hosts';
 import {
   useRemoveTeamAgentMutation,
   useTeamAgentsQuery,
@@ -61,10 +63,13 @@ import {
   type AgentPictureSelection,
 } from './components/agent-picture-dialog';
 import { AgentVoiceDialog } from './components/agent-voice-dialog';
+import { MoveTeammateDialog } from './components/move-teammate-dialog';
 import { TeamAgentRow } from './components/team-agent-row';
 import { TeamInviteRow } from './components/team-invite-row';
 import { TeamMemberRow } from './components/team-member-row';
+import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
+import { ownMachineRemoveBody } from './core/teammate-host';
 import {
   SettingsCard,
   SettingsPage,
@@ -211,6 +216,25 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const canChangeVoice = () => agentsOn() && isAdminOrOwner();
   // Pictures, too.
   const canChangePicture = () => ENABLE_AGENT_FACES && canChangeVoice();
+  // Agents on an admin's own machine: which machine, and moving them.
+  const selfHostedFlag = useFeatureFlag(enableSelfHostedTeammates);
+  const selfHosted = () =>
+    agentsOn() && !selfHostedFlag().loading && selfHostedFlag().enabled;
+  const hostsQuery = useTeammateHostsQuery(
+    () => props.team.id,
+    () => selfHosted() && agents().some((agent) => !!agent.harnessId)
+  );
+  /** The name of the machine an agent runs on, if it runs on one of ours. */
+  const hostName = (agent: TeamAgent) => {
+    const harnessId = agent.harnessId;
+    if (!harnessId) return undefined;
+    const hosts = hostsQuery.isSuccess ? hostsQuery.data.hosts : [];
+    return (
+      hosts.find((host) => host.harnessId === harnessId)?.name ??
+      t('teamAgents.ownersComputer')
+    );
+  };
+  const [moveAgent, setMoveAgent] = createSignal<TeamAgent>();
   const [voiceAgent, setVoiceAgent] = createSignal<TeamAgent>();
   const [pictureAgent, setPictureAgent] = createSignal<AgentPictureSelection>();
   // Losing access closes the dialogs for good, not until access returns.
@@ -218,6 +242,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
     if (canChangeVoice()) return;
     setVoiceAgent(undefined);
     setPictureAgent(undefined);
+    setMoveAgent(undefined);
   });
 
   const members = createMemo(() => {
@@ -572,6 +597,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
                               ? () => setVoiceAgent(agent)
                               : undefined
                           }
+                          onMove={
+                            selfHosted() && isAdminOrOwner() && agent.harnessId
+                              ? () => setMoveAgent(agent)
+                              : undefined
+                          }
                           onRemove={
                             isAdminOrOwner()
                               ? () => setAgentToRemove(agent)
@@ -592,10 +622,26 @@ export function TeamMembers(props: { team: TeamSummary }) {
                           : undefined
                       }
                       retrying={retryAgent.pending()}
+                      runsOn={
+                        <Show when={selfHosted() && hostName(agent)}>
+                          {(host) => <TeammateRunsOn host={host()} />}
+                        </Show>
+                      }
                       claude={
-                        isAdminOrOwner() ? (
-                          <TeamAgentClaude agent={agent} />
-                        ) : undefined
+                        <Show when={isAdminOrOwner()}>
+                          <Show
+                            when={selfHosted() && hostName(agent)}
+                            fallback={<TeamAgentClaude agent={agent} />}
+                          >
+                            {(host) => (
+                              <p class="text-xs text-ink-muted">
+                                {t('teammateHosts.ownClaudeHint', {
+                                  host: host(),
+                                })}
+                              </p>
+                            )}
+                          </Show>
+                        </Show>
                       }
                     />
                   )}
@@ -706,7 +752,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
         confirmLabel={t('teamAgents.removeConfirm')}
         pending={removeAgentMutation.isPending}
         onConfirm={handleRemoveAgent}
-        body={t('teamAgents.removeBody')}
+        body={(() => {
+          const agent = agentToRemove();
+          const host = agent && selfHosted() ? hostName(agent) : undefined;
+          return host ? ownMachineRemoveBody(host) : t('teamAgents.removeBody');
+        })()}
       />
       <ConfirmDialog
         open={!!showCancelInviteModal()}
@@ -728,6 +778,11 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <AgentPictureDialog
         selection={canChangePicture() ? pictureAgent() : undefined}
         onClose={() => setPictureAgent(undefined)}
+      />
+      <MoveTeammateDialog
+        teamId={props.team.id}
+        agent={selfHosted() && isAdminOrOwner() ? moveAgent() : undefined}
+        onClose={() => setMoveAgent(undefined)}
       />
       <AgentVoiceDialog
         teamId={props.team.id}
