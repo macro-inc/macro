@@ -77,8 +77,9 @@ focus, and Esc returns to the row; see
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
-In splits 720px wide or narrower the list fills the split until a row opens,
-which then fills it with **Back** (left arrow) returning to the list.
+On desktop, a new split shows the list beside its empty preview, like any
+split wider than 720px. In splits 720px wide or narrower the list fills the split until a
+row opens, which then fills it with **Back** (left arrow) returning to the list.
 Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused

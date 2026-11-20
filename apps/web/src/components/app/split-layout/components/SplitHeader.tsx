@@ -13,14 +13,12 @@ import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import CollapseIcon from '@icon/system/regular/arrows-in.svg';
 import ExpandIcon from '@icon/system/regular/arrows-out.svg';
 import CaretDown from '@icon/system/regular/caret-down.svg';
-import CaretLeft from '@icon/system/regular/caret-left.svg';
 import CaretUp from '@icon/system/regular/caret-up.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
@@ -40,17 +38,15 @@ import {
   type PriorityCollapseController,
   PriorityCollapseOverflowSensor,
 } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
-import { runSplitBack } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
-import {
-  projectBackFallback,
-  projectLocation,
-  runProjectBack,
-} from '../project-back-navigation';
+import { projectLocation } from '../project-back-navigation';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
+import { SplitBackButton, splitBackFallback } from './SplitBackButton';
 import { SplitHeaderContextMenu } from './SplitHeaderContextMenu';
+
+export { SplitBackButton } from './SplitBackButton';
 
 function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   | {
@@ -116,47 +112,6 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
         (entity) => ({ type: entity.type, id: entity.id })
       )
       .exhaustive()
-  );
-}
-
-function splitBackFallback(content: SplitContent): SplitContent | undefined {
-  if (content.type === 'agent' || (isTouchDevice() && content.type === 'chat'))
-    return { type: 'component', id: 'agents' };
-  if (isTouchDevice()) return projectBackFallback(content);
-}
-
-export function SplitBackButton() {
-  const context = useContext(SplitPanelContext);
-  if (!context) return null;
-  const fallback = () => splitBackFallback(context.handle.content());
-  const canGoBack = () => context.handle.canGoBack() || Boolean(fallback());
-  return (
-    <Button
-      variant="ghost"
-      aria-label={t('splitMenu.goBack')}
-      tooltip={{ content: t('splitMenu.goBack'), hotkey: TOKENS.split.go.back }}
-      size="icon-sm"
-      class="p-1 touch:active:bg-transparent"
-      disabled={!canGoBack()}
-      onClick={() =>
-        runSplitBack({
-          canGoBack,
-          goBack: () => {
-            const project = projectLocation(context.handle.content());
-            if (isMobile() && project && project.kind !== 'list') {
-              runProjectBack(context.handle);
-              return;
-            }
-            if (!context.handle.canGoBack()) {
-              const next = fallback();
-              if (next) context.handle.replace({ next, mergeHistory: true });
-            } else context.handle.goBack();
-          },
-        })
-      }
-    >
-      <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-    </Button>
   );
 }
 

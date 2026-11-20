@@ -292,9 +292,6 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                 .collect()
         };
         span.record("gone", gone.len());
-        if !gone.is_empty() {
-            span.record("gone_sample", gone_sample(&gone).as_str());
-        }
 
         if !gone.is_empty() {
             let chat_ids: Vec<String> = gone
@@ -303,21 +300,34 @@ impl<I: ChatMessageIndex, R: ChatRows> DeletedChatMessageRepair<I, R> {
                 .collect::<HashSet<_>>()
                 .into_iter()
                 .collect();
-            // Only a span field reads this, so replica lag is harmless and a
-            // failed lookup leaves the field unset instead of stopping the page.
-            match self.replica.existing_chats(&chat_ids).await {
-                Ok(chats) => {
-                    span.record(
-                        "gone_with_chat",
-                        gone.iter()
-                            .filter(|message| !chats.contains(&message.chat_id))
-                            .count(),
-                    );
-                }
+            // Only the span and the log read this, so replica lag is harmless
+            // and a failed lookup leaves it unset instead of stopping the page.
+            let gone_with_chat = match self.replica.existing_chats(&chat_ids).await {
+                Ok(chats) => Some(
+                    gone.iter()
+                        .filter(|message| !chats.contains(&message.chat_id))
+                        .count(),
+                ),
                 Err(error) => {
                     tracing::warn!(error = ?error, "could not look up the chats of gone messages");
+                    None
                 }
+            };
+            let sample = gone_sample(&gone);
+            span.record("gone_sample", sample.as_str());
+            if let Some(gone_with_chat) = gone_with_chat {
+                span.record("gone_with_chat", gone_with_chat);
             }
+            // Traces keep few of these pages, so the sample is also logged, to
+            // check a dry run's finds against `ChatMessage` from the logs.
+            tracing::info!(
+                job_id = job_id.map(tracing::field::display),
+                dry_run,
+                gone = gone.len(),
+                gone_with_chat,
+                gone_sample = sample.as_str(),
+                "chat message repair page found messages whose row is gone"
+            );
         }
 
         let delete = if dry_run || gone.is_empty() {

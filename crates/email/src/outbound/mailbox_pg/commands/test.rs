@@ -625,3 +625,36 @@ async fn unresumable_commands_are_not_reported_as_pending(db: PgPool) {
             .is_empty()
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_claim_behind_a_stuck_claim_lock_fails_fast(db: PgPool) {
+    let (sync, _) = fixture(&db).await;
+
+    let mut claim = db.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended('email.outlook.mutation-claims',0))")
+        .fetch_one(&mut *claim)
+        .await
+        .unwrap();
+
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        sync.claim_command(macro_uuid::generate_uuid_v7()),
+    )
+    .await;
+    assert!(
+        matches!(
+            &blocked,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{:?}",
+        blocked.as_ref().map(|result| result.as_ref().err())
+    );
+
+    claim.rollback().await.unwrap();
+    assert!(
+        sync.claim_command(macro_uuid::generate_uuid_v7())
+            .await
+            .unwrap()
+            .is_none()
+    );
+}

@@ -130,6 +130,12 @@ impl MailboxError {
             failure => Self::Database(failure),
         }
     }
+
+    /// Whether a database call gave up waiting for a lock (see
+    /// [`DatabaseFailure::is_lock_timeout`]).
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Database(failure) if failure.is_lock_timeout())
+    }
 }
 
 /// What failed underneath a database call. The database's own message is
@@ -157,6 +163,17 @@ impl std::fmt::Display for DatabaseFailure {
             Self::Decode => f.write_str("decode failed"),
             Self::Other => f.write_str("driver error"),
         }
+    }
+}
+
+/// The SQLSTATE of a statement that gave up waiting for a lock.
+pub const LOCK_NOT_AVAILABLE: &str = "55P03";
+
+impl DatabaseFailure {
+    /// Whether the statement gave up waiting for a lock. The rows were busy,
+    /// not wrong, so the same work succeeds once their holder finishes.
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Sqlstate(code) if code == LOCK_NOT_AVAILABLE)
     }
 }
 
@@ -807,6 +824,43 @@ where
     }
 }
 
+/// Attempts a write that records a provider call's result gets while its
+/// mailbox stays locked, and the wait between them. With each attempt's 5 s
+/// lock timeout they take about 80 s, inside one 3 minute lease even before it
+/// is renewed.
+pub(crate) const AFTER_PROVIDER_ATTEMPTS: u32 = 6;
+pub(crate) const AFTER_PROVIDER_RETRY_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Retries `write` while it times out on a lock. A later attempt reads the
+/// provider's new state as already applied, or as another client's change,
+/// so what the call changed has to be recorded now. Each attempt opens its
+/// own transaction, so no connection is held between attempts.
+pub(crate) async fn record_after_provider<F, W>(
+    unit: &'static str,
+    mut write: F,
+) -> Result<(), MailboxError>
+where
+    F: FnMut() -> W,
+    W: Future<Output = Result<(), MailboxError>>,
+{
+    let mut attempt = 1;
+    loop {
+        match write().await {
+            Err(error) if attempt < AFTER_PROVIDER_ATTEMPTS && error.is_lock_timeout() => {
+                tracing::debug!(
+                    unit,
+                    attempt,
+                    "write after a provider call waits for its mailbox to be free"
+                );
+                tokio::time::sleep(AFTER_PROVIDER_RETRY_DELAY).await;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Due import messages a mailbox may have before its folders' import rounds
 /// stop reading pages: two pages. Gmail's backfill lists its next page
 /// behind the threads it queued; this keeps an Outlook walk about as far
@@ -841,7 +895,9 @@ const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
 /// answered) says nothing about the message either: during an outage every
 /// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest. Data the database
+/// stops counting once the backoff is at its longest. A lock the database
+/// could not grant in time is the same: another transaction held the
+/// mailbox's rows, which says nothing about the message. Data the database
 /// refuses is refused the same way again, so it stops as an outright refusal
 /// does; the few tries let a refusal that briefly hit valid data (a deploy
 /// in progress) clear.
@@ -866,7 +922,12 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
-        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+        _ if error.is_lock_timeout()
+            || matches!(
+                error,
+                MailboxError::Provider(EmailApiError::Transient { .. })
+            ) =>
+        {
             let seconds = backoff_seconds(attempts);
             MessageRetry::After {
                 seconds,
