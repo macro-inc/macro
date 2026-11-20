@@ -17,7 +17,7 @@ use std::time::Duration;
 use axum::{
     Json, Router,
     body::Bytes,
-    extract::State,
+    extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::post,
@@ -88,6 +88,7 @@ impl<Solver: CaptchaSolver> CaptchaGateway<Solver> {
 pub(crate) fn router<Solver: CaptchaSolver>(gateway: CaptchaGateway<Solver>) -> Router {
     Router::new()
         .route("/brain/captcha/runs", post(start_run::<Solver>))
+        .route("/brain/captcha/runs/{run_id}/end", post(end_run::<Solver>))
         .route("/brain/captcha/solve", post(solve::<Solver>))
         .with_state(Arc::new(gateway))
         .layer(
@@ -274,6 +275,67 @@ impl RunAnswer {
             Self::NotConfigured => "not_configured",
         }
     }
+}
+
+/// `POST /brain/captcha/runs/{run_id}/end`: the solver tool is done with its
+/// run, so the agent may start the next one at once. Idempotent: an ended,
+/// expired or unknown run, or another agent's, answers the same and changes
+/// nothing.
+async fn end_run<Solver: CaptchaSolver>(
+    State(gateway): State<Arc<CaptchaGateway<Solver>>>,
+    Path(run_id): Path<Uuid>,
+    headers: HeaderMap,
+) -> Response {
+    let span = tracing::info_span!(
+        "captcha_gateway.end_run",
+        captcha.run_id = %run_id,
+        captcha.outcome = Empty,
+        agent.user.id = Empty,
+        agent.team.id = Empty,
+        http.response.status_code = Empty,
+        otel.status_code = Empty,
+    );
+    let brain = match gateway
+        .access
+        .authorize(&headers)
+        .instrument(span.clone())
+        .await
+    {
+        Ok(brain) => brain,
+        Err(status) => {
+            return refusal(
+                &span,
+                status,
+                "unauthorized",
+                None,
+                "the agent may not solve CAPTCHAs",
+            );
+        }
+    };
+    span.record(
+        "agent.user.id",
+        agent_credentials::telemetry_id(brain.user_id.as_ref()),
+    );
+    span.record("agent.team.id", tracing::field::display(brain.team_id));
+
+    if let Err(error) = gateway
+        .runs
+        .end(SolverRunId(run_id), &brain.user_id)
+        .instrument(span.clone())
+        .await
+    {
+        tracing::error!(parent: &span, error = ?error, "the solver run could not be ended");
+        return refusal(
+            &span,
+            StatusCode::SERVICE_UNAVAILABLE,
+            "unavailable",
+            Some("unavailable"),
+            "the solver run could not be ended; it ends when it expires",
+        );
+    }
+    span.record("captcha.outcome", "ended");
+    span.record("http.response.status_code", 200);
+    Json(serde_json::json!({ "outcome": "ended" })).into_response()
 }
 
 async fn start_run<Solver: CaptchaSolver>(

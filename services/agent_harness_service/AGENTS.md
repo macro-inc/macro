@@ -87,7 +87,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/solver_runs.rs` + `src/solver_runs/pg.rs`: the budget of an agent
   teammate's CAPTCHA run, in Postgres (`agent_captcha_runs`,
   `agent_captcha_solves`) so it holds across replicas and deploys. A run
-  (`POST /brain/captcha/runs`) lives 6 minutes and allows 16 Fireworks calls,
+  (`POST /brain/captcha/runs`, ended early by `POST /brain/captcha/runs/{id}/end` or when its last solve finishes; expiry is the backstop) lives 6 minutes and allows 16 Fireworks calls,
   2 of them in flight, and 2 solves; an agent has at most 1 unexpired run and
   starts at most 20 an hour and 100 a day (`budgetExceeded`), so the per-run
   call cap is also the calls-per-hour bound (20 × 16), and the in-flight cap

@@ -99,6 +99,11 @@ test.skipIf(!available)(
     });
     const runs = fixture.seen.filter(({ path }) => path === '/brain/captcha/runs');
     expect(runs.length).toBe(1);
+    expect(
+      fixture.seen.filter(
+        ({ path }) => path === `/brain/captcha/runs/${standInRunId}/end`
+      ).length
+    ).toBe(1);
     const solves = fixture.seen.filter(({ path }) => path === '/brain/captcha/solve');
     expect(solves.map(({ run }) => run)).toEqual([standInRunId]);
     expect(solves.map(({ authorization }) => authorization)).toEqual([

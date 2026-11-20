@@ -10,7 +10,7 @@ import {
   agentTelemetryId,
   telemetryEnvironment,
 } from '../../context/telemetry.ts';
-import { startRun } from './brain.ts';
+import { endRun, startRun } from './brain.ts';
 import type { Recorded } from './mcp.ts';
 import { openCodeArgv, openCodeEnvironment } from './opencode.ts';
 import { findChallenge, type Outcome } from './solve.ts';
@@ -186,7 +186,14 @@ export const solveCaptcha = (
         startRun({ relay: await needs.relay(), fetch: needs.captcha.fetch })
       );
       if (run.outcome !== 'started') return await answer(run);
-      return await answer(await runSolver(needs, run.runId));
+      try {
+        return await answer(await runSolver(needs, run.runId));
+      } finally {
+        // A failure to end it only delays the next run until the run expires.
+        await needs.trace('captcha.end_run', async () =>
+          endRun({ relay: await needs.relay(), fetch: needs.captcha.fetch }, run.runId)
+        );
+      }
     } finally {
       await needs.captcha.driving.release(leaseId);
     }

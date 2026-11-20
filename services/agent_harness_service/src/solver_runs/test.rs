@@ -326,3 +326,55 @@ async fn a_solve_its_process_left_unfinished_stops_counting(pool: PgPool) -> any
     assert_eq!(runs.claim(&claim(2, run, &who)).await?, Claimed::New);
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_ended_run_frees_the_agent_for_the_next_one(pool: PgPool) -> anyhow::Result<()> {
+    insert_agent(&pool, AGENT).await?;
+    insert_agent(&pool, OTHER_AGENT).await?;
+    let who = agent(AGENT);
+    let runs = PgSolverRuns::new(pool.clone(), RunLimits::default());
+    let run = started(&runs, &who).await;
+
+    // Another agent can't end it.
+    runs.end(run, &agent(OTHER_AGENT)).await?;
+    assert_eq!(
+        runs.start(&who).await?,
+        RunStart::BudgetExceeded(BudgetLimit::Concurrent)
+    );
+
+    runs.end(run, &who).await?;
+    runs.end(run, &who).await?;
+    assert_eq!(
+        runs.take_model_call(run, &who).await?,
+        Err(RunRefusal::Expired)
+    );
+    assert_eq!(
+        runs.claim(&claim(1, run, &who)).await?,
+        Claimed::Refused(RunRefusal::Exhausted)
+    );
+    started(&runs, &who).await;
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_runs_last_solve_ends_it(pool: PgPool) -> anyhow::Result<()> {
+    insert_agent(&pool, AGENT).await?;
+    let who = agent(AGENT);
+    let runs = PgSolverRuns::new(pool.clone(), RunLimits::default());
+    let run = started(&runs, &who).await;
+
+    assert_eq!(runs.claim(&claim(1, run, &who)).await?, Claimed::New);
+    runs.finish(Uuid::from_u128(1), &SolveOutcome::Unsolvable, None)
+        .await?;
+    // One solve left: the run goes on.
+    assert_eq!(
+        runs.start(&who).await?,
+        RunStart::BudgetExceeded(BudgetLimit::Concurrent)
+    );
+
+    assert_eq!(runs.claim(&claim(2, run, &who)).await?, Claimed::New);
+    runs.finish(Uuid::from_u128(2), &SolveOutcome::Timeout, None)
+        .await?;
+    started(&runs, &who).await;
+    Ok(())
+}

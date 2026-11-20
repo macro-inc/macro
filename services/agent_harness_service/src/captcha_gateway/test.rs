@@ -971,3 +971,41 @@ async fn telemetry_records_the_host_and_outcome_but_never_the_token_site_key_or_
         assert!(!recorded.contains(secret), "{secret} in {recorded}");
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_solves_back_to_back_each_get_a_run(pool: PgPool) {
+    let _callsites = agents(&pool).await;
+    let emulator = CapsolverEmulator::start().await.unwrap();
+    let (app, _) = gateway_on(&pool, &emulator, FAST);
+
+    let mut outcomes = Vec::new();
+    for solve in 1..=2_u128 {
+        let run = start_run(&app, "mak_agent").await;
+        let (_, solved) = answer(
+            &app,
+            solve_request(
+                "mak_agent",
+                &run,
+                json!({
+                    "solveId": Uuid::from_u128(solve),
+                    "challenge": { "kind": "turnstile", "pageUrl": "https://example.com/", "siteKey": "key" },
+                }),
+            ),
+        )
+        .await;
+        outcomes.push(solved["outcome"].clone());
+        let (status, ended) = answer(
+            &app,
+            Request::post(format!("/brain/captcha/runs/{run}/end"))
+                .header("authorization", "Bearer mak_agent")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(ended, json!({ "outcome": "ended" }));
+    }
+
+    assert_eq!(outcomes, vec![json!("solved"), json!("solved")]);
+    assert_eq!(emulator.created_tasks().len(), 2);
+}

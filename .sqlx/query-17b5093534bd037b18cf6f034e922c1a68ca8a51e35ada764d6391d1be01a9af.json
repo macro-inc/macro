@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, expires_at <= now() AS \"expired!\", model_calls_used,\n                  model_calls_in_flight, solves_used\n           FROM agent_captcha_runs WHERE id = $1",
+  "query": "SELECT user_id, expires_at <= now() AS \"expired!\", ended_at IS NOT NULL AS \"ended!\",\n                  model_calls_used, model_calls_in_flight, solves_used\n           FROM agent_captcha_runs WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,16 +15,21 @@
       },
       {
         "ordinal": 2,
+        "name": "ended!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
         "name": "model_calls_used",
         "type_info": "Int4"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "model_calls_in_flight",
         "type_info": "Int4"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "solves_used",
         "type_info": "Int4"
       }
@@ -37,10 +42,11 @@
     "nullable": [
       false,
       null,
+      null,
       false,
       false,
       false
     ]
   },
-  "hash": "0bfbdfa73360f7859a01ee8b8049d9c38aa50b3e536dfd46012c750d7164e397"
+  "hash": "17b5093534bd037b18cf6f034e922c1a68ca8a51e35ada764d6391d1be01a9af"
 }

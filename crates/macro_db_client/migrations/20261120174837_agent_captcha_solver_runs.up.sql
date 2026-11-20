@@ -8,6 +8,9 @@ CREATE TABLE agent_captcha_runs (
     user_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     expires_at TIMESTAMPTZ NOT NULL,
+    -- Set when the run is over (its tool ended it, or its last solve finished):
+    -- an ended run is spent, and no longer counts as live. Expiry is the backstop.
+    ended_at TIMESTAMPTZ,
     model_calls_used INTEGER NOT NULL DEFAULT 0 CHECK (model_calls_used >= 0),
     model_calls_in_flight INTEGER NOT NULL DEFAULT 0 CHECK (model_calls_in_flight >= 0),
     solves_used INTEGER NOT NULL DEFAULT 0 CHECK (solves_used >= 0)

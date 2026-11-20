@@ -137,6 +137,16 @@ describe('relayHandler: brain routes', () => {
     expect([chat.status, run.status, solve.status]).toEqual([201, 201, 201]);
     const [sentChat, sentRun, sentSolve] = macro.seen;
     expect(sentRun?.url).toBe('https://egress.example/brain/captcha/runs');
+    const end = await relay(
+      new Request(
+        'http://127.0.0.1:1/brain/captcha/runs/01a1fa00-0000-7000-8000-00000000c0de/end',
+        { method: 'POST', headers: { authorization: `Bearer ${capability}` }, body: '{}' }
+      )
+    );
+    expect(end.status).toBe(201);
+    expect(macro.seen.at(-1)?.url).toBe(
+      'https://egress.example/brain/captcha/runs/01a1fa00-0000-7000-8000-00000000c0de/end'
+    );
     expect(sentSolve?.headers.get('x-macro-solver-run')).toBe('run-1');
     expect(sentChat?.url).toBe(
       'https://egress.example/brain/fireworks/v1/chat/completions'
@@ -159,6 +169,13 @@ describe('relayHandler: brain routes', () => {
         headers: { authorization: `Bearer ${capability}` },
       })
     );
+    const otherEnd = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/runs/not-a-run/end', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${capability}` },
+      })
+    );
+    expect(otherEnd.status).toBe(404);
     const climbing = await relay(
       new Request('http://127.0.0.1:1/brain/captcha/solve/%2e%2e', {
         method: 'POST',

@@ -131,9 +131,10 @@ const forwardAnthropic = async ({
  * `/brain/<path>`, upstream `<brain>/<path>`, POST only.
  */
 export const brainRoutes = [
-  'fireworks/v1/chat/completions',
-  'captcha/runs',
-  'captcha/solve',
+  /^fireworks\/v1\/chat\/completions$/,
+  /^captcha\/runs$/,
+  /^captcha\/runs\/[0-9a-f-]{36}\/end$/,
+  /^captcha\/solve$/,
 ] as const;
 
 const brainPrefix = 'brain';
@@ -159,7 +160,7 @@ const forwardBrain = async ({
   if (!equal(bearer(request), capability))
     return refuse(401, 'the relay needs its capability');
   const path = url.pathname.split('/').slice(2).join('/');
-  const route = brainRoutes.find((known) => known === path);
+  const route = brainRoutes.some((known) => known.test(path)) ? path : undefined;
   if (route === undefined || brain === undefined)
     return refuse(404, 'the relay has no address for that path');
   if (request.method !== 'POST')

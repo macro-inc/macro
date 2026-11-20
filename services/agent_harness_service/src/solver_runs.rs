@@ -10,7 +10,9 @@
 //! [`RunLimits::concurrent`] unexpired runs and starts at most
 //! [`RunLimits::hourly`] an hour and [`RunLimits::daily`] a day, so the
 //! per-run call cap is also the calls-per-hour bound (runs an hour × calls a
-//! run).
+//! run). A run ends when its tool ends it (`POST /brain/captcha/runs/{id}/end`)
+//! or its last solve finishes; expiry is only the backstop for a run whose
+//! process died.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -128,7 +130,7 @@ impl RunRefusal {
     pub(crate) fn message(self) -> &'static str {
         match self {
             Self::Required => "start a solver run and send its runId as x-macro-solver-run",
-            Self::Expired => "the solver run has expired; start another",
+            Self::Expired => "the solver run has ended or expired; start another",
             Self::Exhausted => "the solver run has used up its budget",
             Self::Busy => "too many model calls of this solver run are running",
         }
@@ -154,6 +156,14 @@ pub(crate) trait SolverRuns: Send + Sync {
         run: SolverRunId,
         agent: &MacroUserIdStr<'static>,
     ) -> Result<Result<(), RunRefusal>, LedgerError>;
+
+    /// End `agent`'s `run`: it is spent, and no longer counts as live. Ending
+    /// one that is over already, or isn't the agent's, changes nothing.
+    async fn end(
+        &self,
+        run: SolverRunId,
+        agent: &MacroUserIdStr<'static>,
+    ) -> Result<(), LedgerError>;
 
     /// Give back the in-flight slot of a finished model call.
     async fn release_model_call(&self, run: SolverRunId) -> Result<(), LedgerError>;
@@ -206,7 +216,8 @@ pub(crate) trait SolveLedger: Send + Sync {
     /// run, all under one per-agent lock.
     async fn claim(&self, claim: &SolveClaim) -> Result<Claimed, LedgerError>;
 
-    /// Record a solve's answer and CapSolver task.
+    /// Record a solve's answer and CapSolver task. When it was its run's last
+    /// solve and none of the run's solves is still running, the run ends.
     async fn finish(
         &self,
         solve_id: Uuid,

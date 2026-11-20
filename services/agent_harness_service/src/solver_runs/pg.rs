@@ -44,6 +44,8 @@ async fn lock_agent(
 }
 
 /// Why `run` can't be spent, read after the conditional update refused it.
+/// A run past its expiry is expired; one that ended early is used up when
+/// `used_up` says so, and over otherwise.
 async fn refusal(
     executor: impl sqlx::PgExecutor<'_>,
     run: SolverRunId,
@@ -51,8 +53,8 @@ async fn refusal(
     used_up: impl FnOnce(i32, i32, i32) -> RunRefusal,
 ) -> Result<RunRefusal, LedgerError> {
     let row = sqlx::query!(
-        r#"SELECT user_id, expires_at <= now() AS "expired!", model_calls_used,
-                  model_calls_in_flight, solves_used
+        r#"SELECT user_id, expires_at <= now() AS "expired!", ended_at IS NOT NULL AS "ended!",
+                  model_calls_used, model_calls_in_flight, solves_used
            FROM agent_captcha_runs WHERE id = $1"#,
         run.0
     )
@@ -63,11 +65,16 @@ async fn refusal(
             if row.expired {
                 RunRefusal::Expired
             } else {
-                used_up(
+                let refused = used_up(
                     row.model_calls_used,
                     row.model_calls_in_flight,
                     row.solves_used,
-                )
+                );
+                if row.ended && refused != RunRefusal::Exhausted {
+                    RunRefusal::Expired
+                } else {
+                    refused
+                }
             }
         }
         _ => RunRefusal::Required,
@@ -80,7 +87,7 @@ impl SolverRuns for PgSolverRuns {
         let mut tx = self.pool.begin().await?;
         lock_agent(&mut tx, agent).await?;
         let counts = sqlx::query!(
-            r#"SELECT count(*) FILTER (WHERE expires_at > now()) AS "live!",
+            r#"SELECT count(*) FILTER (WHERE expires_at > now() AND ended_at IS NULL) AS "live!",
                       count(*) FILTER (WHERE created_at > now() - interval '1 hour') AS "hourly!",
                       count(*) AS "daily!"
                FROM agent_captcha_runs
@@ -126,7 +133,7 @@ impl SolverRuns for PgSolverRuns {
             r#"UPDATE agent_captcha_runs
                SET model_calls_used = model_calls_used + 1,
                    model_calls_in_flight = model_calls_in_flight + 1
-               WHERE id = $1 AND user_id = $2 AND expires_at > now()
+               WHERE id = $1 AND user_id = $2 AND expires_at > now() AND ended_at IS NULL
                  AND model_calls_used < $3 AND model_calls_in_flight < $4
                RETURNING id"#,
             run.0,
@@ -149,6 +156,22 @@ impl SolverRuns for PgSolverRuns {
         })
         .await
         .map(Err)
+    }
+
+    async fn end(
+        &self,
+        run: SolverRunId,
+        agent: &MacroUserIdStr<'static>,
+    ) -> Result<(), LedgerError> {
+        sqlx::query!(
+            r#"UPDATE agent_captcha_runs SET ended_at = now()
+               WHERE id = $1 AND user_id = $2 AND ended_at IS NULL"#,
+            run.0,
+            agent.as_ref(),
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     async fn release_model_call(&self, run: SolverRunId) -> Result<(), LedgerError> {
@@ -198,7 +221,8 @@ impl SolveLedger for PgSolverRuns {
 
         let taken = sqlx::query_scalar!(
             r#"UPDATE agent_captcha_runs SET solves_used = solves_used + 1
-               WHERE id = $1 AND user_id = $2 AND expires_at > now() AND solves_used < $3
+               WHERE id = $1 AND user_id = $2 AND expires_at > now() AND ended_at IS NULL
+                 AND solves_used < $3
                RETURNING id"#,
             claim.run.0,
             agent,
@@ -266,6 +290,7 @@ impl SolveLedger for PgSolverRuns {
         outcome: &SolveOutcome,
         task_id: Option<&str>,
     ) -> Result<(), LedgerError> {
+        let mut tx = self.pool.begin().await?;
         sqlx::query!(
             r#"UPDATE agent_captcha_solves SET finished_at = now(), outcome = $2, task_id = $3
                WHERE solve_id = $1"#,
@@ -273,8 +298,24 @@ impl SolveLedger for PgSolverRuns {
             Json(outcome) as _,
             task_id,
         )
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
+        // The run's last solve is in: the run is over, whether or not its
+        // tool says so, and the agent may start the next one at once.
+        sqlx::query!(
+            r#"UPDATE agent_captcha_runs AS run SET ended_at = now()
+               WHERE run.id = (SELECT run_id FROM agent_captcha_solves WHERE solve_id = $1)
+                 AND run.ended_at IS NULL AND run.solves_used >= $2
+                 AND NOT EXISTS (
+                     SELECT 1 FROM agent_captcha_solves AS solve
+                     WHERE solve.run_id = run.id AND solve.finished_at IS NULL
+                 )"#,
+            solve_id,
+            i32::from(self.limits.solves),
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
         Ok(())
     }
 }

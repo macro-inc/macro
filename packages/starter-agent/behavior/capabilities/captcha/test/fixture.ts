@@ -115,6 +115,8 @@ export const startFixture = ({
         run: request.headers.get('x-macro-solver-run'),
         body,
       });
+      if (/^\/brain\/captcha\/runs\/[^/]+\/end$/.test(pathname))
+        return Response.json({ outcome: 'ended' });
       if (pathname === '/brain/captcha/runs')
         return Response.json({
           outcome: 'started',
