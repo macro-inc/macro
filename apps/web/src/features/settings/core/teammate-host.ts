@@ -29,6 +29,9 @@ export function hostUnavailableReason(host: TeammateHost): string | undefined {
       .with('innerSandboxUnavailable', () =>
         t('teammateHosts.hostInnerSandbox')
       )
+      .with('networkIsolationUnavailable', () =>
+        t('teammateHosts.hostNetworkIsolation')
+      )
       // A reason a newer server adds still reads as unavailable.
       .with(P.nullish, () => t('teammateHosts.hostNotEligible'))
       .exhaustive()

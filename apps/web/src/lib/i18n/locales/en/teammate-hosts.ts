@@ -25,6 +25,7 @@ export default {
   hostBelowFloorDisk: 'Needs at least 20 GB free',
   hostInnerSandbox:
     "This computer's security settings block the agent's sandbox",
+  hostNetworkIsolation: "Can't lock down an agent's network on this machine",
   hostEngine: '{{engine}} {{version}}',
   hostRootless: 'rootless',
   trustTitle: 'Anyone with admin on {{host}} can act as {{name}}',

@@ -624,6 +624,7 @@ What each problem says to the owner:
 | `unsupportedPlatform` | *There's no teammate runtime for this computer's system yet.* |
 | `belowFloor {cpus, memory, disk}` | *This computer needs at least 2 CPUs / 8 GB of memory / 20 GB free.* |
 | `innerSandboxUnavailable` | *This computer's security settings block the teammate's sandbox.* |
+| `networkIsolationUnavailable` | *Can't lock down an agent's network on this machine.* No engine on it could apply and verify the agent's network rules, so it gets no install rather than an open network. |
 | (no report: older macrod) | *Update macrod to host teammates.* |
 | (offline) | *Offline.* |
 

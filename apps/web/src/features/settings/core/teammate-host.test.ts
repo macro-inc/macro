@@ -47,6 +47,16 @@ describe('teammate hosts', () => {
     ).toBe('Install Podman or Docker to host agents here');
   });
 
+  it('says a machine that cannot lock down an agent network is unavailable', () => {
+    expect(
+      hostUnavailableReason(
+        host({
+          eligibility: { ok: false, reason: 'networkIsolationUnavailable' },
+        })
+      )
+    ).toBe("Can't lock down an agent's network on this machine");
+  });
+
   it('labels the engine with its version and whether it is rootless', () => {
     expect(hostEngineLabel(host({}))).toBe('Podman 5.2.0 · rootless');
     expect(hostEngineLabel(host({ report: null }))).toBeUndefined();
