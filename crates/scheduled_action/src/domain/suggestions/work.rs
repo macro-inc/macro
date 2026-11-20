@@ -203,6 +203,20 @@ impl WorkList {
         })
     }
 
+    /// The first `streams` streams dealt into at most `shares` lists, in
+    /// turn, so each share starts with a stream the person would most regret
+    /// missing; none when the list has no stream.
+    pub fn shares(&self, shares: usize, streams: usize) -> Vec<Self> {
+        let kept = &self.streams[..self.streams.len().min(streams)];
+        let count = shares.min(kept.len());
+        (0..count)
+            .map(|share| Self {
+                person: self.person.clone(),
+                streams: kept.iter().skip(share).step_by(count).cloned().collect(),
+            })
+            .collect()
+    }
+
     /// The list as a session reads it: one JSON value.
     pub fn to_brief(&self) -> String {
         serde_json::to_string(self).unwrap_or_default()

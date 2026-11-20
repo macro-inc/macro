@@ -915,7 +915,7 @@ pub async fn build<Ingress: notification::domain::service::NotificationIngress>(
     // mail through email_service, which reads it from the provider. With
     // `routine-suggestions-find-work` on, onboarding first finds the work in
     // the person's month of mail in one model call, recorded with the
-    // drafting session's usage.
+    // first drafting session's usage.
     let generations = Arc::new(PgGenerationRepo::new(db.clone()));
     let plans: Arc<dyn suggestion_generation::domain::ports::Plans> = Arc::new(EntitlementPlans(
         ai_billing::composition::pg_entitlement_source(db.clone()),

@@ -37,7 +37,8 @@ event with its `trigger`:
 In the log event, `ready` means every routines session kept a suggestion,
 `partial` that some did not (only when a layout splits the surfaces across
 sessions, or the picking and drafting sessions of an onboarding that finds the
-work), `failed` that none did (after a retry at onboarding), and
+work, where a drafting session whose streams the catalog already covers rightly
+keeps none), `failed` that none did (after a retry at onboarding), and
 `cancelled` that the process shut down first. A nightly run that finds
 nothing missing is `failed` by this measure, so the generation metrics and
 the alert below count onboarding runs only.
@@ -66,7 +67,8 @@ only. It notifies; it does not page.
   sessions had little to suggest from. Look for `could not read the inbox to
   suggest routines` warnings and email-service health.
 - `routine.find_work` spans that end `failed` or `timed_out` (120 s) leave the
-  drafting session to the newest mail alone. Its `routine.suggestions.read_month`
+  one drafting session to the newest mail alone, in place of up to three
+  drafting from shares of the streams found. Its `routine.suggestions.read_month`
   child times the mail read (`.messages`) and `routine.suggestions.list_work`
   the model call; check email-service health for the first and the model
   provider for the second.

@@ -267,7 +267,14 @@ impl RoutineSuggestionApi for FakeRoutines {
         let part = match part {
             BriefPart::Whole => String::new(),
             BriefPart::Picks => "picks ".to_owned(),
-            BriefPart::Drafts(Some(work)) => format!("drafts {} ", work.streams.len()),
+            BriefPart::Drafts(Some(work)) => {
+                let numbers: Vec<&str> = work
+                    .streams
+                    .iter()
+                    .map(|stream| stream.name.trim_start_matches("Stream "))
+                    .collect();
+                format!("drafts {} ", numbers.join(","))
+            }
             BriefPart::Drafts(None) => "drafts none ".to_owned(),
         };
         Ok(format!("routines {} {part}{surfaces:?}", trigger.as_ref()))
@@ -1264,8 +1271,9 @@ async fn onboarding_runs_one_suggestions_session_and_a_routines_session_per_grou
 }
 
 /// An onboarding that finds the work first runs a session that picks from
-/// the catalog at once, and one that drafts from the work found, as the
-/// session the work was found for.
+/// the catalog at once, and sessions that draft from the work found, each
+/// from its share of the streams, the first as the session the work was
+/// found for.
 #[tokio::test(start_paused = true)]
 async fn an_onboarding_that_finds_the_work_picks_and_drafts_in_sessions_of_their_own() {
     let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(6)));
@@ -1276,24 +1284,46 @@ async fn an_onboarding_that_finds_the_work_picks_and_drafts_in_sessions_of_their
     assert_eq!(
         prompts,
         [
-            format!("routines onboarding drafts 6 {all}"),
+            format!("routines onboarding drafts 0,3 {all}"),
+            format!("routines onboarding drafts 1,4 {all}"),
+            format!("routines onboarding drafts 2,5 {all}"),
             format!("routines onboarding picks {all}"),
             "suggestions onboarding".to_owned(),
         ]
     );
     let found_for = h.routines.found_for.lock().unwrap().clone();
     assert_eq!(found_for.len(), 1);
-    let drafting = h
+    let routines = h
         .repo
         .sessions()
         .into_iter()
         .filter(|session| session.kind == SessionKind::Routines)
         .map(|session| session.id)
         .collect::<Vec<_>>();
-    assert_eq!(drafting.len(), 2);
-    assert!(drafting.contains(&found_for[0]));
-    assert_eq!(h.reports()[0].sessions, 2);
+    assert_eq!(routines.len(), 1 + MAX_DRAFT_SESSIONS);
+    assert!(routines.contains(&found_for[0]));
+    assert_eq!(h.reports()[0].sessions, 1 + MAX_DRAFT_SESSIONS);
     assert_eq!(h.repo.only().status, GenerationStatus::Ready);
+}
+
+/// A long list is drafted for only as far as its first streams.
+#[tokio::test(start_paused = true)]
+async fn only_the_first_streams_found_are_drafted_for() {
+    let h = build_finding(true, true, finishes, Some(true), Some(Finding::Found(20)));
+    h.onboard().await.unwrap();
+    let mut drafts: Vec<String> = h
+        .prompts()
+        .into_iter()
+        .filter_map(|prompt| {
+            prompt
+                .strip_prefix("routines onboarding drafts ")
+                .and_then(|rest| rest.split(' ').next())
+                .map(str::to_owned)
+        })
+        .collect();
+    drafts.sort();
+    assert_eq!(drafts, ["0,3,6,9", "1,4,7,10", "2,5,8,11"]);
+    assert_eq!(MAX_DRAFTED_STREAMS, 12);
 }
 
 /// Work that can't be found, or isn't found in time, leaves drafting to the
@@ -1334,21 +1364,29 @@ async fn without_the_work_found_the_drafting_session_reads_the_newest_mail() {
 }
 
 /// A drafting session that suggested nothing is retried once, from the same
-/// work, which is found only once.
+/// share of the work, which is found only once.
 #[tokio::test(start_paused = true)]
 async fn a_drafting_session_retried_drafts_from_the_same_work() {
     let second_try: Script = |brief, attempt| {
-        let changes = u32::from(!brief.contains(" drafts ") || attempt == 2);
+        let changes = u32::from(!brief.contains(" drafts 1 ") || attempt == 2);
         ends(RoutineActionStatus::Succeeded, changes)
     };
     let h = build_finding(true, true, second_try, Some(true), Some(Finding::Found(3)));
     h.onboard().await.unwrap();
-    let drafts = h
+    let mut drafts: Vec<String> = h
         .prompts()
         .into_iter()
-        .filter(|prompt| prompt.starts_with("routines onboarding drafts 3 "))
+        .filter(|prompt| prompt.starts_with("routines onboarding drafts "))
+        .collect();
+    drafts.sort();
+    drafts.dedup();
+    assert_eq!(drafts.len(), 3);
+    let retried = h
+        .prompts()
+        .into_iter()
+        .filter(|prompt| prompt.starts_with("routines onboarding drafts 1 "))
         .count();
-    assert_eq!(drafts, 2);
+    assert_eq!(retried, 2);
     assert_eq!(h.routines.found_for.lock().unwrap().len(), 1);
     assert_eq!(h.reports()[0].retries, 1);
 }

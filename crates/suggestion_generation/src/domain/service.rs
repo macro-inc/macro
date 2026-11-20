@@ -53,7 +53,8 @@ use super::generation::{
     Admission, GenerationEvent, GenerationOverview, SessionResult, admit, conclude,
 };
 use super::model::{
-    GenerationAgent, GenerationError, NewGeneration, SessionLayout, StaleSession, StartOutcome,
+    GenerationAgent, GenerationError, MAX_DRAFT_SESSIONS, MAX_DRAFTED_STREAMS, NewGeneration,
+    SessionLayout, StaleSession, StartOutcome,
 };
 use super::night;
 use super::nightly::{NightlyDecision, NightlyOutcome, Plan, decide, needs_plan};
@@ -66,8 +67,7 @@ mod test;
 /// The longest an onboarding routines session runs: the person is waiting.
 pub const ONBOARDING_ROUTINES_TIMEOUT: Duration = Duration::from_secs(240);
 /// Longest finding the work in a person's month of mail may take at
-/// onboarding; their drafting session goes on from their newest mail alone
-/// after.
+/// onboarding; one session drafts from their newest mail alone after.
 pub const FIND_WORK_TIMEOUT: Duration = Duration::from_secs(120);
 /// The longest a nightly or manual routines session runs: it reviews what
 /// it suggested before, too.
@@ -949,9 +949,11 @@ where
     /// At onboarding, one routines session per layout group (one for every
     /// surface unless `with_layout` split them), and one that suggested
     /// nothing is retried once; otherwise one session for every surface.
-    /// An onboarding that finds the work first instead runs two sessions for
-    /// every surface: one that picks from the catalog at once, and one that
-    /// drafts once the work in the person's month of mail is found. Each
+    /// An onboarding that finds the work first instead runs a session for
+    /// every surface that picks from the catalog at once and, once the work
+    /// in the person's month of mail is found, up to
+    /// [`MAX_DRAFT_SESSIONS`] that draft, each from its share of the
+    /// streams (one from their newest mail when none are found). Each
     /// group's end, and whether it was retried.
     async fn routine_sessions(&self, run: &Run, stop: Stop<'_>) -> Vec<GroupEnded> {
         let single = SessionLayout::single();
@@ -959,19 +961,30 @@ where
             let surfaces = &single.sessions()[0];
             let picks = self.routine_group(run, surfaces, BriefPart::Picks, None, stop);
             let drafts = async {
-                let session = AgentSessionId::new();
-                let work = self.find_work(run, session, stop).await;
-                self.routine_group(
-                    run,
-                    surfaces,
-                    BriefPart::Drafts(work.as_ref()),
-                    Some(session),
-                    stop,
-                )
-                .await
+                let first = AgentSessionId::new();
+                let shares = self
+                    .find_work(run, first, stop)
+                    .await
+                    .map(|work| work.shares(MAX_DRAFT_SESSIONS, MAX_DRAFTED_STREAMS))
+                    .unwrap_or_default();
+                if shares.is_empty() {
+                    let ended = self
+                        .routine_group(run, surfaces, BriefPart::Drafts(None), Some(first), stop)
+                        .await;
+                    return vec![ended];
+                }
+                // The first share drafts as the session the work was found
+                // for, whose usage holds the finding call's.
+                let groups = shares.iter().enumerate().map(|(n, share)| {
+                    let session = (n == 0).then_some(first);
+                    self.routine_group(run, surfaces, BriefPart::Drafts(Some(share)), session, stop)
+                });
+                futures::future::join_all(groups).await
             };
             let (picks, drafts) = tokio::join!(picks, drafts);
-            return vec![picks, drafts];
+            let mut groups = vec![picks];
+            groups.extend(drafts);
+            return groups;
         }
         let layout = match run.trigger {
             GenerationTrigger::Onboarding => &self.layout,

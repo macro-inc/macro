@@ -90,6 +90,49 @@ fn an_answer_is_bounded_before_a_session_reads_it() {
 }
 
 #[test]
+fn a_list_is_dealt_into_shares_of_its_first_streams() {
+    let list = |count: usize| WorkList {
+        person: "A baker".to_owned(),
+        streams: (0..count)
+            .map(|i| serde_json::from_value(stream(&format!("{i}"))).unwrap())
+            .collect(),
+    };
+    let names = |shares: Vec<WorkList>| -> Vec<Vec<String>> {
+        shares
+            .into_iter()
+            .map(|share| {
+                assert_eq!(share.person, "A baker");
+                share
+                    .streams
+                    .into_iter()
+                    .map(|stream| stream.name)
+                    .collect()
+            })
+            .collect()
+    };
+    let owned = |shares: &[&[&str]]| -> Vec<Vec<String>> {
+        shares
+            .iter()
+            .map(|share| share.iter().map(|name| (*name).to_owned()).collect())
+            .collect()
+    };
+    assert_eq!(
+        names(list(7).shares(3, 12)),
+        owned(&[&["0", "3", "6"], &["1", "4"], &["2", "5"]])
+    );
+    assert_eq!(
+        names(list(20).shares(3, 12)),
+        owned(&[
+            &["0", "3", "6", "9"],
+            &["1", "4", "7", "10"],
+            &["2", "5", "8", "11"]
+        ])
+    );
+    assert_eq!(names(list(2).shares(3, 12)), owned(&[&["0"], &["1"]]));
+    assert!(list(0).shares(3, 12).is_empty());
+}
+
+#[test]
 fn an_answer_missing_a_field_is_refused() {
     let mut streams = vec![stream("Orders")];
     streams[0].as_object_mut().unwrap().remove("action");
