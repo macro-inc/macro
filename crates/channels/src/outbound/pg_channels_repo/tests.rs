@@ -309,6 +309,72 @@ async fn is_participant_filter_inside_not_widens_candidates(pool: Pool<Postgres>
     assert!(!channels[0].is_participant);
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_by_id_read_that_mentions_participation_returns_every_channel_the_user_can_open(
+    pool: Pool<Postgres>,
+) {
+    const PRIVATE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c91);
+    sqlx::query!(
+        r#"INSERT INTO comms_channels (id, name, channel_type, owner_id, created_at, updated_at)
+           VALUES ($1, 'private', 'private', $2, '2024-01-01', '2024-01-01')"#,
+        PRIVATE,
+        USER_B,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO comms_channel_participants (channel_id, user_id, role, joined_at)
+           VALUES ($1, $2, 'owner', '2024-01-01')"#,
+        PRIVATE,
+        USER_B,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let repo = repo(pool);
+    // user-d is in no channel and on Team B: they can open the public
+    // channels and Team B's channel, not Team A's or the private one.
+    let named = [CH1, CH2, TEAM_A_AUTO_ACTIVE, TEAM_B_AUTO, PRIVATE]
+        .into_iter()
+        .map(|id| Expr::val(ChannelLiteral::ChannelId(id)))
+        .reduce(Expr::or)
+        .unwrap();
+    let either_participation = Expr::or(
+        Expr::val(ChannelLiteral::IsParticipant(true)),
+        Expr::val(ChannelLiteral::IsParticipant(false)),
+    );
+
+    let opened = repo
+        .get_user_channels_with_participants(channels_params(
+            NON_MEMBER,
+            Some(Arc::new(Expr::and(
+                named.clone(),
+                either_participation.clone(),
+            ))),
+        ))
+        .await
+        .unwrap();
+    let opened_ids: HashSet<Uuid> = opened.iter().map(|c| c.channel.id).collect();
+    assert_eq!(opened_ids, HashSet::from([CH1, CH2, TEAM_B_AUTO]));
+    assert!(opened.iter().all(|c| !c.is_participant));
+
+    // Reads that name ids without mentioning participation (favorites, CRM
+    // associations) stay bounded by membership, and so do lists.
+    assert!(
+        channel_ids_matching(&repo, NON_MEMBER, named)
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        channel_ids_matching(&repo, NON_MEMBER, either_participation).await,
+        HashSet::from([TEAM_B_AUTO])
+    );
+}
+
 fn channel_state(state: item_filters::NotificationState) -> Expr<ChannelLiteral> {
     Expr::val(ChannelLiteral::NotificationState(state))
 }
@@ -486,9 +552,8 @@ async fn channel_list_unseen_or_seen_stays_on_joined_channels(
 
     // The sidebar Inbox presets send `channelDone: false` without a
     // participation literal, so the candidates are joined channels only.
-    let sql = super::build_channel_list_query(&Some(Arc::new(not_done.clone())))
-        .sql()
-        .to_owned();
+    let (_, builder) = super::build_channel_list_query(&Some(Arc::new(not_done.clone())));
+    let sql = builder.sql().to_owned();
     assert!(!sql.contains("team_user"), "{sql}");
 
     // c12 has an unseen notification but left-user left it; c21 has only a
@@ -2993,9 +3058,8 @@ fn home_unread_channel_list_reads_notifications_once() {
         channel_state,
         Expr::val(ChannelLiteral::IsParticipant(true)),
     );
-    let sql = super::build_channel_list_query(&Some(Arc::new(filter)))
-        .sql()
-        .to_owned();
+    let (_, builder) = super::build_channel_list_query(&Some(Arc::new(filter)));
+    let sql = builder.sql().to_owned();
     assert_eq!(sql.matches("FROM user_notification").count(), 1, "{sql}");
     assert!(!sql.contains("JOIN notification"), "{sql}");
     assert!(!sql.contains("team_user"), "{sql}");
