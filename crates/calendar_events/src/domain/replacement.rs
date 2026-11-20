@@ -19,7 +19,7 @@ pub struct ReplacementSnapshot {
     pub time: EventTime,
     /// Number of guests receiving a fresh invitation.
     pub attendee_count: usize,
-    /// Whether this replaces an entire recurring series.
+    /// Whether the replacement is a recurring series.
     pub is_series: bool,
     /// Whether the replacement omits the provider conference.
     pub remove_conference: bool,
@@ -102,7 +102,7 @@ pub struct CalendarReplacementView {
     pub time: EventTime,
     /// Guest count for cancellation and reinvitation confirmation.
     pub attendee_count: usize,
-    /// Entire recurring series, including exceptions, is replaced.
+    /// The replacement is a recurring series.
     pub is_series: bool,
     /// The provider conference is removed.
     pub remove_conference: bool,

@@ -2,6 +2,7 @@
 use super::*;
 use calendar_events::domain::replacement::*;
 use chrono::{DateTime, Duration, NaiveDate};
+use std::collections::HashSet;
 
 const STEP_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarReplacementStep";
@@ -155,12 +156,12 @@ fn join_url(event: &Value) -> Option<&str> {
 
 /// Fields an occurrence copy takes from the edited series when it still holds
 /// the saved series' value; an occurrence changed on its own keeps its own.
-const INHERITED_FIELDS: [&str; 9] = [
+/// Guests are carried as the series' additions and removals instead.
+const INHERITED_FIELDS: [&str; 8] = [
     "subject",
     "body",
     "location",
     "locations",
-    "attendees",
     "sensitivity",
     "showAs",
     "isReminderOn",
@@ -175,9 +176,18 @@ fn apply_changes(
     source: &Value,
     changes: &CalendarEventPatch,
 ) -> Result<(), CalendarProviderError> {
+    // A series starts its repeat rule on its first occurrence, so a series
+    // that moves takes its saved rule again from the new start.
+    let recurrence_lines = match (&changes.recurrence_lines, &changes.time) {
+        (None, Some(_)) if !body["recurrence"].is_null() => {
+            Some(recurrence::from_graph(source).map_err(|_| invalid())?)
+        }
+        (lines, _) => lines.clone(),
+    };
     let patch = patch_body(
         &CalendarEventPatch {
             description: None,
+            recurrence_lines,
             ..changes.clone()
         },
         Some(source),
@@ -209,9 +219,41 @@ fn apply_changes(
     Ok(())
 }
 
-/// Carry an edit of the series onto an occurrence copy that still shows the
-/// saved series' value.
+fn guest_address(guest: &Value) -> Option<String> {
+    guest["emailAddress"]["address"]
+        .as_str()
+        .map(str::to_lowercase)
+}
+
+/// Carry an edit of the series onto an occurrence copy: a field the copy
+/// still shows at the saved series' value takes the edit, and the series'
+/// added and removed guests are added to and removed from every copy.
 fn inherit_changes(occurrence: &mut Value, saved: &Value, edited: &Value) {
+    let addresses = |series: &Value| -> HashSet<String> {
+        series["attendees"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(guest_address)
+            .collect()
+    };
+    let (before, after) = (addresses(saved), addresses(edited));
+    if before != after
+        && let Some(guests) = occurrence["attendees"].as_array_mut()
+    {
+        guests.retain(|guest| {
+            guest_address(guest)
+                .is_none_or(|address| after.contains(&address) || !before.contains(&address))
+        });
+        let present: HashSet<String> = guests.iter().filter_map(guest_address).collect();
+        for guest in edited["attendees"].as_array().into_iter().flatten() {
+            if guest_address(guest)
+                .is_some_and(|address| !before.contains(&address) && !present.contains(&address))
+            {
+                guests.push(guest.clone());
+            }
+        }
+    }
     for field in INHERITED_FIELDS {
         if saved.get(field) == edited.get(field) || occurrence.get(field) != saved.get(field) {
             continue;
@@ -436,7 +478,7 @@ impl CalendarReplacementProvider for OutlookApiClientRepository {
             title: body["subject"].as_str().unwrap_or("").into(),
             time,
             attendee_count: body["attendees"].as_array().map_or(0, Vec::len),
-            is_series,
+            is_series: !body["recurrence"].is_null(),
             remove_conference,
             provider_url: safe_event_url(&source),
             payload: json!({"source":source,"body":body}),

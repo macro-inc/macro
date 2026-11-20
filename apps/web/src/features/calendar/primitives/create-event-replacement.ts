@@ -23,14 +23,31 @@ export function createEventReplacement(source: EventReplacementSource) {
     );
   };
 
+  /**
+   * Prepares the latest request. One that a newer request or a close
+   * superseded while it was out is discarded, and the latest is prepared in
+   * its place, so the preview always carries the edits as they are now.
+   */
   async function prepare() {
-    if (pending() || !request) return;
+    if (pending()) return;
     setPending(true);
     setError(undefined);
     try {
-      const next = await source.prepare(request);
-      setPreview(next);
-      setConfirmationAttempted(next.status !== 'needs_confirmation');
+      for (;;) {
+        const sent = request;
+        if (!sent || !open()) return;
+        const next = await source.prepare(sent);
+        if (
+          (sent !== request || !open()) &&
+          next.status === 'needs_confirmation'
+        ) {
+          await source.discard(next.operationId);
+          continue;
+        }
+        setPreview(next);
+        setConfirmationAttempted(next.status !== 'needs_confirmation');
+        return;
+      }
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -47,6 +64,10 @@ export function createEventReplacement(source: EventReplacementSource) {
    */
   async function start(next: EventReplacementRequest) {
     setOpen(true);
+    // A confirmation Outlook refused leaves the operation unconfirmed again;
+    // only the provider's answer says whether it is still to be resumed.
+    if (confirmationAttempted() && preview()?.status === 'needs_confirmation')
+      await check();
     if (resumes()) return;
     request = next;
     setPreview(undefined);

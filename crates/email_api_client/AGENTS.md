@@ -151,12 +151,15 @@ Outlook (Microsoft Graph) outbound adapters.
   each `div`'s ancestors: that reads an ancestor's classes once per `div`
   inside it, seconds of CPU for a body within the parse bounds. Macro's
   description editor drops the `me-email*` markers, laying the block out as
-  plain paragraphs, so a replacement carrying an edited description
-  (`without_meeting`) removes the top-level run around the join link whose
-  texts match the saved block's, and refuses one with the link anywhere else.
+  plain paragraphs and the line breaks Graph puts between tags, so a
+  replacement carrying an edited description (`without_meeting`) removes the
+  top-level run around the join link whose texts, ignoring whitespace, match
+  the saved block's (textless parts only between them), and refuses one with
+  the link or a part of the block anywhere else.
 - A replacement lays the editor's unsaved changes over the copied event
   with the same `patch_body` an Outlook update sends, so its create body holds
-  no field the copy or an update does not already send.
+  no field the copy or an update does not already send. A series that moves
+  takes its saved repeat rule again from the new start.
 - The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
   `recurrence.rs`) fails with `Rejected`, which names the Graph property
   path (`recurrence.range.endDate`, `instances.start.dateTime`), built only

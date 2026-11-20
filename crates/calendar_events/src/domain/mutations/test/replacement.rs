@@ -445,7 +445,7 @@ async fn an_unconfirmed_preview_gives_way_to_newer_changes_and_a_started_one_res
     assert_eq!(*provider.calls.lock().unwrap(), vec!["inspect", "inspect"]);
 }
 #[tokio::test]
-async fn replacement_changes_refuse_a_conference_and_an_occurrence_repeat_rule() {
+async fn replacement_changes_refuse_a_conference_an_occurrence_repeat_rule_and_a_reversed_time() {
     let (service, _, provider, event) = fixture(FakeProviderBehavior::Echo);
     let conference = CalendarEventPatch {
         conference: Some(ConferenceChange::MicrosoftTeams),
@@ -471,6 +471,20 @@ async fn replacement_changes_refuse_a_conference_and_an_occurrence_repeat_rule()
                 true,
                 repeat
             )
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    let reversed = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-02T18:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-02T17:00:00Z".parse().unwrap(),
+            time_zone: None,
+        }),
+        ..CalendarEventPatch::default()
+    };
+    assert!(matches!(
+        service
+            .prepare_replacement("owner", event, None, None, true, reversed)
             .await,
         Err(CalendarMutationError::InvalidInput(_))
     ));

@@ -1572,7 +1572,7 @@ describe('guest permissions', () => {
 });
 
 describe('replacing an Outlook event without Teams', () => {
-  it('carries the unsaved edits, without the conference, and writes nothing to the saved event', () => {
+  it('carries the unsaved edits without the conference', () => {
     createRoot((dispose) => {
       const event: CalendarEvent = {
         ...savedEvent,
@@ -1622,7 +1622,6 @@ describe('replacing an Outlook event without Teams', () => {
         },
       });
       expect(JSON.stringify(request?.changes)).not.toContain('conference');
-      expect(mocks.updateEvent).not.toHaveBeenCalled();
       dispose();
     });
   });

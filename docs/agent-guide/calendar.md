@@ -1576,7 +1576,8 @@ unsaved changes (title, time, description, location, guests, reminders, repeat
 rule) without Teams; nothing is saved to the old event. It replaces this occurrence
 or all events as the editor's `Apply changes to` choice says. A time or repeat change
 on the whole series drops its changed and cancelled occurrences, as Outlook does;
-otherwise occurrences still showing the series' value take the edit. Check the
+otherwise occurrences still showing the series' value take the edit, and guests
+added or removed on the series are added to or removed from every occurrence. Check the
 cancellation/reinvitation acknowledgement before `Replace event`. The old
 invitation is cancelled after the replacement is prepared; guests receive a new
 invitation and must respond again. Closing the dialog before confirming discards

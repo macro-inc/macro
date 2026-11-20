@@ -52,8 +52,10 @@ pub(super) fn split(content: &str, join: &str) -> Result<(String, String), Calen
 /// `me-email*` markers [`split`] finds it by, laying each of its parts out as
 /// a top-level paragraph. So the block is the run of top-level elements
 /// around the join link whose text each is the text of an element of the
-/// block in `saved`, the body the event was opened with; the person's text
-/// around it stays, and a description with the link anywhere else is refused.
+/// block in `saved`, the body Outlook holds now; textless parts (an image, a
+/// rule) belong to it only between two such elements. The person's text
+/// around it stays, and a description with the link, or a part of the block,
+/// anywhere else is refused.
 pub(super) fn without_meeting(
     edited: &str,
     saved: &str,
@@ -82,9 +84,15 @@ pub(super) fn without_meeting(
         .map(|element| plain_text(&element))
         .filter(|text| !text.is_empty())
         .collect();
-    let in_meeting = |part: &ElementRef<'_>| {
+    let part_of = |part: &ElementRef<'_>| {
         let text = plain_text(part);
-        text.is_empty() || meeting_texts.contains(&text)
+        if text.is_empty() {
+            MeetingPart::Textless
+        } else if meeting_texts.contains(&text) {
+            MeetingPart::Meeting
+        } else {
+            MeetingPart::Person
+        }
     };
 
     let mut document = parsed.html;
@@ -96,15 +104,29 @@ pub(super) fn without_meeting(
     let link = parts
         .iter()
         .position(|part| links_to(part, join))
-        .filter(|&link| in_meeting(&parts[link]))
+        .filter(|&link| part_of(&parts[link]) == MeetingPart::Meeting)
         .ok_or_else(not_separable)?;
     let mut first = link;
-    while first > 0 && in_meeting(&parts[first - 1]) {
-        first -= 1;
+    for index in (0..link).rev() {
+        match part_of(&parts[index]) {
+            MeetingPart::Meeting => first = index,
+            MeetingPart::Textless => {}
+            MeetingPart::Person => break,
+        }
     }
     let mut last = link;
-    while last + 1 < parts.len() && in_meeting(&parts[last + 1]) {
-        last += 1;
+    for (index, part) in parts.iter().enumerate().skip(link + 1) {
+        match part_of(part) {
+            MeetingPart::Meeting => last = index,
+            MeetingPart::Textless => {}
+            MeetingPart::Person => break,
+        }
+    }
+    let left_over = parts.iter().enumerate().any(|(index, part)| {
+        !(first..=last).contains(&index) && part_of(part) == MeetingPart::Meeting
+    });
+    if left_over {
+        return Err(not_separable());
     }
     let removed: Vec<_> = parts[first..=last].iter().map(|part| part.id()).collect();
     for id in removed {
@@ -121,21 +143,29 @@ pub(super) fn without_meeting(
     Ok(description)
 }
 
+/// Whose a top-level part of an edited description is.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum MeetingPart {
+    Meeting,
+    Person,
+    Textless,
+}
+
 fn not_separable() -> CalendarProviderError {
     unsupported(
         "This meeting's online details cannot be separated safely. Edit or replace the event in Outlook to preserve your description.",
     )
 }
 
-/// An element's text with its whitespace collapsed, as a rewrite of its
-/// markup keeps it.
+/// An element's text without whitespace. Graph's bodies put line breaks
+/// between tags that a rewrite of the markup drops, so only the other
+/// characters compare.
 fn plain_text(element: &ElementRef<'_>) -> String {
     element
         .text()
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
+        .flat_map(str::chars)
+        .filter(|character| !character.is_whitespace())
+        .collect()
 }
 
 fn links_to(element: &ElementRef<'_>, join: &str) -> bool {

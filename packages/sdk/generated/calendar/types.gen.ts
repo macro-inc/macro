@@ -1014,7 +1014,7 @@ export type CalendarReplacementView = {
     completedSteps: number;
     event?: null | CalendarEvent;
     /**
-     * Entire recurring series, including exceptions, is replaced.
+     * The replacement is a recurring series.
      */
     isSeries: boolean;
     /**

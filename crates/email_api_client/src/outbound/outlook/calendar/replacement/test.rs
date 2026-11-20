@@ -642,3 +642,70 @@ async fn occurrences_showing_the_series_value_take_its_edit_and_changed_ones_kee
         snapshot.payload["body"]["attendees"]
     );
 }
+
+#[test]
+fn series_guest_changes_reach_every_occurrence_even_with_its_own_list() {
+    let guest = |address: &str| json!({"emailAddress":{"address":address},"type":"required"});
+    let saved = json!({"attendees":[guest("ada@example.com"), guest("x@example.com")]});
+    let edited = json!({"attendees":[guest("ada@example.com"), guest("new@example.com")]});
+    let mut own_list = json!({"attendees":[guest("X@example.com"), guest("grace@example.com")]});
+
+    inherit_changes(&mut own_list, &saved, &edited);
+
+    assert_eq!(
+        own_list["attendees"],
+        json!([guest("grace@example.com"), guest("new@example.com")])
+    );
+}
+
+#[tokio::test]
+async fn a_series_moved_to_another_day_starts_its_repeat_rule_there() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/master"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(series("master")))
+        .mount(&server)
+        .await;
+    let changes = CalendarEventPatch {
+        time: Some(EventTime::Timed {
+            starts_at: "2026-11-05T15:00:00Z".parse().unwrap(),
+            ends_at: "2026-11-05T16:00:00Z".parse().unwrap(),
+            time_zone: Some("America/New_York".into()),
+        }),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "master", None, true, &changes)
+        .await
+        .unwrap();
+
+    let recurrence = &snapshot.payload["body"]["recurrence"];
+    assert_eq!(recurrence["range"]["startDate"], "2026-11-05");
+    assert_eq!(recurrence["pattern"]["type"], "daily");
+    assert!(snapshot.is_series);
+}
+
+#[tokio::test]
+async fn the_preview_names_a_series_by_what_the_replacement_repeats() {
+    let (server, api) = setup().await;
+    let target = target();
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/calendars/calendar/events/old"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(teams_meeting("old")))
+        .mount(&server)
+        .await;
+    let changes = CalendarEventPatch {
+        recurrence_lines: Some(vec!["RRULE:FREQ=WEEKLY;BYDAY=MO".into()]),
+        ..CalendarEventPatch::default()
+    };
+
+    let snapshot = api
+        .inspect_replacement("token", &target, "old", None, true, &changes)
+        .await
+        .unwrap();
+
+    assert!(snapshot.is_series);
+    assert_eq!(snapshot.write_count(), 2);
+}

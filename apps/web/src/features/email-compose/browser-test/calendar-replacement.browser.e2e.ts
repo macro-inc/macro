@@ -29,14 +29,17 @@ async function confirmAndRecover(page: Page) {
   await confirm.click();
   await expect(page.getByRole('alert')).toContainText('interrupted');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
+  // Reopening asks how the confirmed operation is doing instead of
+  // preparing another.
   await page
     .getByRole('button', { name: 'Replace event…', exact: true })
     .click();
-  await page.getByRole('button', { name: 'Check progress' }).click();
-  await expect(page.getByRole('dialog').getByRole('status')).toContainText(
-    'Replacement complete'
-  );
-  // Reopening resumes the confirmed operation instead of preparing another.
+  await expect(
+    page
+      .getByRole('dialog')
+      .getByRole('status')
+      .filter({ hasText: 'Replacement complete' })
+  ).toBeVisible();
   await expect(page.getByTestId('replacement-actions')).toHaveText(
     'preview:Weekly review, moved,confirm:saved-operation,check:saved-operation'
   );

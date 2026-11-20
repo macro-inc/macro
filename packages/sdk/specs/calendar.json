@@ -2904,7 +2904,7 @@
           },
           "isSeries": {
             "type": "boolean",
-            "description": "Entire recurring series, including exceptions, is replaced."
+            "description": "The replacement is a recurring series."
           },
           "operationId": {
             "type": "string",

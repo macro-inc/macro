@@ -128,6 +128,37 @@ fn the_join_link_in_the_persons_own_text_is_refused() {
 }
 
 #[test]
+fn line_breaks_graph_puts_between_tags_do_not_keep_meeting_details() {
+    let href = JOIN.replace('&', "&amp;");
+    // Graph's own layout of the block: line breaks between every tag.
+    let block = format!(
+        "<div class=\"me-email-text\">\r\n<div><span>Microsoft Teams meeting</span></div>\r\n<div><a href=\"{href}\">Join the meeting now</a></div>\r\n<div><span>Meeting ID: <span>123 456 789 0</span>\r\n<br>\r\nPasscode: <span>abc123</span></span></div>\r\n</div>"
+    );
+    let saved = format!("<p>Agenda</p>\r\n{block}");
+    let edited = format!(
+        "<p><img src=\"https://example.com/diagram.png\"></p><p>New agenda</p>{}",
+        "<p>Microsoft Teams meeting</p><p><a href=\"HREF\">Join the meeting now</a></p><p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p>"
+            .replace("HREF", &href)
+    );
+
+    assert_eq!(
+        without_meeting(&edited, &saved, JOIN).unwrap(),
+        "<p><img src=\"https://example.com/diagram.png\"></p><p>New agenda</p>"
+    );
+}
+
+#[test]
+fn meeting_details_left_apart_from_the_block_are_refused() {
+    let saved = format!("<p>Agenda</p>{}", teams_block());
+    let edited = format!(
+        "<p>Meeting ID: 123 456 789 0<br>Passcode: abc123</p><p>Notes</p>{}",
+        rewritten_block()
+    );
+
+    assert!(without_meeting(&edited, &saved, JOIN).is_err());
+}
+
+#[test]
 fn only_outermost_provider_blocks_are_split_in_document_order() {
     let first = format!(
         "<div class=\"me-email-text\"><a href=\"{}\">Join</a><div class=\"me-email-inner\">PIN 1</div></div>",

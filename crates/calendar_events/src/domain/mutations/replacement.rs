@@ -99,6 +99,15 @@ fn check_replacement_changes(
             "The repeat rule applies to all events. Replace all events to change it.".into(),
         ));
     }
+    if let Some(time) = &changes.time {
+        validate_time(time)?;
+    }
+    if let Some(attendees) = &changes.attendees {
+        validate_attendee_emails(attendees.iter().map(|attendee| &attendee.email))?;
+    }
+    if let Some(reminders) = &changes.reminders {
+        validate_reminders(reminders)?;
+    }
     Ok(())
 }
 
@@ -149,14 +158,21 @@ where
             // A preview nobody confirmed froze the editor's older changes, so
             // it gives way to this one. A started operation is only resumed.
             let started = active.next_step > 0 || active.command.is_some();
-            if started
-                || !self
+            let discarded = !started
+                && self
                     .repository
                     .discard_replacement(user, active.id)
                     .await
+                    .map_err(internal)?;
+            // A discard that found nothing lost to a confirmation or to the
+            // client's own discard; only an operation still there is resumed.
+            if !discarded
+                && let Some(active) = self
+                    .repository
+                    .active_replacement(user, target.calendar_id, target.master_provider_event_id())
+                    .await
                     .map_err(internal)?
             {
-                let active = self.load_replacement(user, active.id).await?;
                 let target = self.replacement_target(user, &active).await?;
                 return self.replacement_view(&active, &target).await;
             }
