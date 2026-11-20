@@ -103,7 +103,7 @@ fn runtime(health: RuntimeHealth) -> Status {
         RuntimeHealth::Unreachable => Status::new(
             WARN,
             "unreachable",
-            "not connected - the service does not know this harness",
+            "not connected - the service does not know this harness, or has not answered",
         ),
         RuntimeHealth::Disconnected => {
             Status::new(ERR, "disconnected", "not connected - the daemon is stopped")
@@ -138,7 +138,7 @@ fn triggers(health: &TriggerHealth) -> Status {
             format!("open {}", span(*quiet)),
             format!(
                 "open - this service sends no heartbeats, so only the connection is known up; \
-                 last event {} ago",
+                 last event (or the open) {} ago",
                 span(*quiet)
             ),
         ),

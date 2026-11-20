@@ -204,7 +204,6 @@ impl App {
     }
 
     /// (Re)start the serving core on the current config and credential.
-
     pub(crate) async fn restart_daemon(&mut self) -> bool {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;

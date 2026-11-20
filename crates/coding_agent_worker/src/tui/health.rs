@@ -129,9 +129,15 @@ pub(crate) fn triggers(stream: Option<&TriggerStreamHealth>, now: Instant) -> Tr
             last_error,
         } => TriggerHealth::Reconnecting {
             attempt: *attempt,
-            last_error: last_error.clone(),
+            last_error: top_line(last_error).to_owned(),
         },
     }
+}
+
+/// The first line of an error report, which can span several: a status line
+/// and an event field hold one line.
+pub(crate) fn top_line(error: &str) -> &str {
+    error.lines().next().unwrap_or_default()
 }
 
 /// Where this terminal runs.

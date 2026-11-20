@@ -118,7 +118,7 @@ impl From<&TriggerStreamHealth> for TriggerStreamState {
                 last_error,
             } => Self::Reconnecting {
                 attempt: *attempt,
-                last_error: last_error.clone(),
+                last_error: crate::tui::health::top_line(last_error).to_owned(),
             },
         }
     }
@@ -171,6 +171,10 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
     // A live stream republishes on every event and heartbeat; only a change
     // of what the event says is emitted.
     let mut reported = None;
+    // An interval, not a sleep per turn: state changes arriving faster than
+    // the watch must not keep deferring the dead-daemon check.
+    let mut watch_daemon = tokio::time::interval(DAEMON_WATCH);
+    watch_daemon.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         let health = (
             *runtime.borrow_and_update(),
@@ -188,7 +192,7 @@ pub async fn run(options: ServiceOptions) -> rootcause::Result<()> {
             () = &mut shutdown => break,
             Ok(()) = runtime.changed() => {}
             Ok(()) = triggers.changed() => {}
-            () = tokio::time::sleep(DAEMON_WATCH) => {
+            _ = watch_daemon.tick() => {
                 if !daemon.is_running() {
                     daemon.stop().await;
                     rootcause::bail!("the serving core stopped unexpectedly");
