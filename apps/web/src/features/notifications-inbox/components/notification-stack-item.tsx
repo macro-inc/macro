@@ -58,6 +58,7 @@ export function NotificationStackItem(props: NotificationStackItemProps) {
       role="row"
       aria-selected={props.highlighted}
       data-stack-item=""
+      data-press-surface
       class={cn(
         'group/stack-item relative w-full min-w-0 flex-1',
         // A tap leaves the item focused, which mustn't look chosen on a phone.
