@@ -369,6 +369,46 @@ async fn javascript_logs_result_and_cleanup() {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn an_error_stack_names_the_program_line_but_no_scratch_path_or_bundle() {
+    let (root, service) = setup(Limits::default()).await;
+    // A misspelled option makes the SDK throw before any request.
+    let source = r#"
+export async function main({macro}) {
+  try {
+    await macro.properties.create({displayName: 'Hours', dataType: {type: 'number'}, scpoe: 'team'});
+  } catch (error) {
+    console.log(error);
+    return {stack: error.stack};
+  }
+}
+"#;
+    let (events, outcome) = run(&service, source, 5000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    let stack = value["stack"].as_str().unwrap();
+    let logged = events
+        .iter()
+        .find_map(|event| match &event.kind {
+            EventKind::Log { message, .. } => Some(message.as_str()),
+            _ => None,
+        })
+        .unwrap();
+    let scratch = root.path().to_str().unwrap();
+    for text in [stack, logged] {
+        assert!(text.contains("does not take `scpoe`"), "{text}");
+        assert!(text.contains("at <Macro SDK>"), "{text}");
+        assert!(text.contains("main.ts:4:"), "{text}");
+        assert!(!text.contains(scratch), "{text}");
+        assert!(!text.contains("sdk.mjs"), "{text}");
+        assert!(!text.contains("bootstrap.mjs"), "{text}");
+        assert!(!text.contains("file://"), "{text}");
+    }
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn links_point_at_the_deployment_web_app() {
     let (_root, service) = setup(Limits::default()).await;
     let environment = RunEnvironment {

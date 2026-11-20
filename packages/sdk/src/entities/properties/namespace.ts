@@ -35,7 +35,7 @@ export { PropertyDefinition, PropertyOption };
  * the entity handles ({@link PropertiedEntity.properties}, `setProperty`,
  * `deleteProperty`).
  *
- * @routing Use when the request is about an item's custom properties or tags themselves, such as defining a property, creating or editing a tag, or bulk-setting options; not creating or updating a task, deal, event or row, whose own methods set their fields.
+ * @routing Use when defining custom properties or tags: adding a custom field to tasks or documents (hours spent, a priority), creating or editing a tag, or bulk-setting options; not setting a field an item already has, which its own methods do, or CRM pipeline fields.
  */
 export class PropertiesNamespace {
   constructor(private readonly client: MacroClient) {}

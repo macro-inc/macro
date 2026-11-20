@@ -572,8 +572,13 @@ const SUGGESTIONS: usize = 3;
 /// nothing is near.
 fn suggest(symbol: &str) -> Option<SymbolSuggestion> {
     let wanted = symbol.to_ascii_lowercase();
-    // A plural, a dropped letter or a wrong case is near; a different word is not.
-    let near = (wanted.len() / 5).max(2);
+    // A plural, a dropped letter or a wrong case is near; a different word is
+    // not, and in a short name two edits already make one.
+    let near = if wanted.len() < 6 {
+        1
+    } else {
+        (wanted.len() / 5).max(2)
+    };
     let mut close: Vec<(usize, &'static str)> = GENERATED
         .symbols
         .keys()
