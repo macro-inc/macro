@@ -2,6 +2,7 @@ use super::*;
 use pollster::block_on;
 
 mod authority;
+mod bench;
 mod calendar;
 mod people;
 mod soup;

@@ -11,6 +11,7 @@ import { createWorkerCacheHost } from '../../host/worker-host';
 import type { CacheHost } from '../../host/types';
 import { captureContactWriteScope } from '../../people/sync';
 import type { EntityFilterCacheArgs } from '../../protocol';
+import mailTabs from './bench-mail-tabs.json';
 import type {
   CacheTelemetryObservation,
   CacheTelemetryRecorderLike,
@@ -201,6 +202,17 @@ function inboxArgs(
   };
 }
 
+/** A Mail tab's list read as the app sends it (the fixture's own test keeps it so). */
+function tabArgs(input: (typeof mailTabs)[keyof typeof mailTabs]): EntityFilterCacheArgs {
+  return {
+    filters: input.filters,
+    sortMethod: input.sortMethod,
+    sortDirection: input.sortDirection,
+    limit: input.limit,
+    mail: { view: input.emailView },
+  } as EntityFilterCacheArgs;
+}
+
 function coreArgs(limit: number): EntityFilterCacheArgs {
   return {
     // Documents, projects, chats and channels: the kinds the cache projects.
@@ -231,6 +243,12 @@ async function readPass(threads: string[], homeVariables: unknown) {
     return value;
   };
 
+  for (const [tab, input] of Object.entries(mailTabs)) {
+    const page = await step(`mail.tab.${tab}.filter`, () =>
+      target.entityFilter(tabArgs(input))
+    );
+    if (page.kind !== 'mail-page') throw new Error(JSON.stringify(page));
+  }
   const inbox = await step('mail.inbox.filter', () =>
     target.entityFilter(inboxArgs(50))
   );
