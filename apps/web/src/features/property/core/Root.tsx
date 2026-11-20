@@ -56,6 +56,8 @@ type PendingValue = {
   value: PropertyApiValues;
   propertyDefinitionId: string;
   base?: Property;
+  /** `base`'s value when the save succeeded; a store source changes in place. */
+  baseValue?: string;
 };
 
 /**
@@ -92,7 +94,9 @@ export function Root(props: PropertyRootProps) {
     const current = pending();
     return current &&
       current.propertyDefinitionId === local.property.propertyDefinitionId &&
-      (current.base === undefined || current.base === local.property)
+      (current.base === undefined ||
+        (current.base === local.property &&
+          current.baseValue === JSON.stringify(local.property.value)))
       ? withApiValues(local.property, current.value)
       : local.property;
   });
@@ -120,7 +124,13 @@ export function Root(props: PropertyRootProps) {
     );
     try {
       await onSave(saved, value);
-      if (pending() === entry) setPending({ ...entry, base: local.property });
+      if (pending() === entry) {
+        setPending({
+          ...entry,
+          base: local.property,
+          baseValue: JSON.stringify(local.property.value),
+        });
+      }
     } catch (error) {
       if (pending() === entry) {
         setPending(undefined);
