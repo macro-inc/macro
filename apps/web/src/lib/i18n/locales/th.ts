@@ -103,7 +103,6 @@ export default {
     close: 'ปิด',
     delete: 'ลบ',
     rename: 'เปลี่ยนชื่อ',
-    more: 'เพิ่มเติม',
     search: 'ค้นหา',
     settings: 'การตั้งค่า',
   },

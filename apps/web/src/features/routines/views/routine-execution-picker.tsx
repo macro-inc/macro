@@ -1,4 +1,3 @@
-import { buttonClasses } from '@ui';
 import {
   type Accessor,
   ErrorBoundary,
@@ -10,7 +9,7 @@ import {
   MACRO_PERSONA_ID,
   type RosterAgent,
 } from '../../agents-view/core/roster';
-import { AgentPicker } from '../../agents-view/views/AgentPicker';
+import { AgentModelPicker } from '../../agents-view/views/agent-model-picker';
 import type { RoutineTarget } from '../core/routine-target';
 
 export type RoutineExecutionPickerProps = {
@@ -122,13 +121,7 @@ export function RoutineExecutionPickerView(props: Props): JSX.Element {
       aria-label="Routine model or agent"
       class="min-w-0 max-w-full"
     >
-      <AgentPicker
-        showModelLabel
-        triggerClass={buttonClasses({
-          variant: 'secondary',
-          size: 'sm',
-          class: 'max-w-full',
-        })}
+      <AgentModelPicker
         agents={props.roster}
         selected={selected()}
         modelOverride={model()}

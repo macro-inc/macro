@@ -1,5 +1,6 @@
 import { createChannelDetail } from '@app/features/channels-view/primitives/create-channel-detail';
 import { createChannelDetailSource } from '@app/features/channels-view/queries/channel-detail-source';
+import { CombinedError } from '@urql/core';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { refreshActiveGraphqlSoupQueries } from '../../soup/graphql/active-queries';
@@ -42,6 +43,20 @@ function Harness() {
     await reply(allowed);
     await pending;
   };
+  // A resolver failure answers 200 with an uncoded error on user.soup.
+  const failOnServer = async () => {
+    transport.results.clear();
+    const pending = refreshActiveGraphqlSoupQueries();
+    const request = await transport.requests.next();
+    request.respond(
+      undefined,
+      new CombinedError({
+        graphQLErrors: [{ message: 'A comms error has occured' }],
+      })
+    );
+    await transport.results.next();
+    await pending;
+  };
   const run = (action: () => Promise<unknown>) => async () => {
     try {
       await action();
@@ -59,6 +74,8 @@ function Harness() {
       </p>
       <nav>
         <button onClick={run(() => reply(true))}>Server allows opening</button>
+        <button onClick={run(failOnServer)}>Server fails</button>
+        <button onClick={run(() => reply(true))}>Server retry succeeds</button>
         <button onClick={run(() => transport.cache(channelPage()))}>
           Cache empty
         </button>

@@ -129,7 +129,9 @@ Opening the editor must not blank or remount the surrounding app.
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,
 or send notifications. They create entity-history entries without entering
-broader activity feeds. Copies and template instances retain the appearance.
+broader activity feeds. Copies and template instances retain the appearance,
+except that an agent creating or changing a routine may pick its look; it never
+replaces a look the owner chose.
 
 ## Responsive workspace navigation
 

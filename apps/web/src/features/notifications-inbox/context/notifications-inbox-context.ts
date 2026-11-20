@@ -20,6 +20,8 @@ export type NotificationInboxRow = InboxRow<InboxRowContent>;
 /** Which rows a feed shows; with no row types it shows and reads nothing. */
 export type InboxScope = {
   rowTypes: readonly InboxRowType[];
+  /** No category selection: include kinds this client does not yet know. */
+  allKinds?: boolean;
   /**
    * Only unread rows. The server filters, so pages and live changes cover
    * unread rows alone.

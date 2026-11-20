@@ -1384,6 +1384,14 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
         &self,
         stalled_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Turn calendar off for Google accounts whose current grant lacks
+    /// Macro's calendar capability, as a grant that loses it does: the
+    /// account is disabled and its local copy removed, and a new grant
+    /// re-imports it. Returns how many accounts were turned off.
+    fn disable_google_accounts_without_calendar_capability(
+        &self,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 
 /// Durable lifecycle and lease operations for calendar backfill jobs.
@@ -1433,6 +1441,15 @@ pub trait CalendarBackfillRepository: Send + Sync + 'static {
         disposition: CalendarBackfillFailureDisposition,
         message: &str,
     ) -> impl Future<Output = Result<CalendarBackfillFailureOutcome, Report>> + Send;
+
+    /// Release the lease of a round Macro's own request admission stopped,
+    /// returning the job to pending with its round start kept and recording
+    /// no failure on the job or the account: nothing reached Google.
+    fn defer_google_backfill(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Dispatch use cases driven by the calendar reminder queue worker.

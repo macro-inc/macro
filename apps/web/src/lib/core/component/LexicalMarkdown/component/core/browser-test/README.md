@@ -26,7 +26,10 @@ Screenshots from the verified fixture: [desktop](proof/desktop.png) and
 `links.browser.e2e.ts` mounts the production Markdown parser, renderer, composer,
 and link menu over the original App Store message. It checks pointer/keyboard
 navigation, encoded URLs, Markdown punctuation, literal code, and Remove link →
-save → reopen on desktop, tablet touch, and phone touch. Network requests outside
+save → reopen on desktop, tablet touch, and phone touch. It also checks that a
+saved link whose URL a link may not open (see `isAllowedLinkUrl` in
+`packages/lexical-core`) stays text in the renderer, the composer and a resave,
+and that clicking or tapping it opens nothing. Network requests outside
 the local fixture are intercepted. Run just this case by adding
 `links.browser.e2e.ts` to the command above.
 

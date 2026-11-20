@@ -9,6 +9,10 @@ pub mod email_privacy;
 #[cfg(feature = "ports")]
 pub mod email_rules;
 
+/// Bounded live-rule discovery shared by authoring and email reads.
+#[cfg(feature = "ports")]
+pub mod email_rule_discovery;
+
 /// Consent-generation storage for policy APIs and background work.
 #[cfg(feature = "ports")]
 pub mod email_policy;

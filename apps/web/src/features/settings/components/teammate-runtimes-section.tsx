@@ -11,7 +11,7 @@ import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard } from '../primitives';
 import { RuntimeName } from './connected-runtimes-section';
-import { RuntimeOptions } from './runtime-options';
+import { canChangeRuntimeOptions, RuntimeOptions } from './runtime-options';
 
 /** A Macro computer belongs to its team and is listed under Macro computers. */
 function ownerId(harness: RegisteredHarness): string | undefined {
@@ -125,7 +125,9 @@ function TeammateRuntimeRow(props: {
         <Show when={canAsk()}>
           <RuntimeAccessAction harnessId={props.harness.id} />
         </Show>
-        <RuntimeOptions harness={props.harness} />
+        <Show when={canChangeRuntimeOptions(props.harness)}>
+          <RuntimeOptions harness={props.harness} />
+        </Show>
         <Show when={props.canRemove}>
           <ConnectAction
             label="Remove"

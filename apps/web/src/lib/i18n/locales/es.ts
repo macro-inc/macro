@@ -104,7 +104,6 @@ export default {
     close: 'Cerrar',
     delete: 'Eliminar',
     rename: 'Cambiar nombre',
-    more: 'Más',
     search: 'Buscar',
     settings: 'Configuración',
   },

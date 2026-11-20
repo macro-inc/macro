@@ -3,14 +3,15 @@
 ## What it is
 
 Shared icon and tag-palette color editing for routines, ordinary Markdown,
-snippets, task projects (initiatives), forms, and databases.
+snippets, task projects (initiatives), forms, databases, and saved views.
 
 ## Start here
 
-- `entity-appearance.tsx`: lazy editor launcher and header-only trigger.
+- `entity-appearance.tsx`: lazy editor launcher and header-only trigger, which draws the entity's type icon or the icon its host passes (a routine passes the icon its page shows).
 - `appearance-menu.tsx`: device entry for desktop `views/appearance-menu.tsx` and touch `views/mobile/appearance-menu.tsx`.
 - `core/appearance.ts`: eligibility and appearance comparisons.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
+- `types.ts`: appearance targets, including saved definitions without adding them to the Soup entity union.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks through `makePersistedState` and schema-validated storage.
 - `core/catalog.ts`: picker projections of `@macro-inc/entity-icons`; curate names and nouns in `packages/entity-icons/sections.json`.
@@ -62,3 +63,4 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
 - Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.
+- Preserve saved-view bookmark defaults and use the owner-only saved-view API; keep filter revisions/timestamps unchanged and patch the normalized definition, not Soup or previews.

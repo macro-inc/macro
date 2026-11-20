@@ -9,7 +9,10 @@ import { isTransientRequestError } from '@core/util/request-error';
 import { useTeamMembers } from '@queries/team/members';
 import { type Accessor, createMemo } from 'solid-js';
 import { contactCommandItems, mergeCommandPeople } from '../contact-items';
-import { rankCommandSearchItems } from '../rank-command-search-items';
+import {
+  listOutsidePeopleLast,
+  rankCommandSearchItems,
+} from '../rank-command-search-items';
 import type { CategoryFilter } from '../types';
 import type { CommandContactSource, CommandMenuItem } from '../useCommandItems';
 
@@ -25,7 +28,8 @@ const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   dms: ['dm'],
   documents: ['note', 'document', 'snippet', 'project', 'database', 'form'],
   tasks: ['task'],
-  chats: ['chat'],
+  // Agent sessions are the Agents tab's rows; legacy AI chats stay listed.
+  chats: ['agent_session', 'chat'],
   projects: ['initiative'],
   people: ['person'],
 };
@@ -153,7 +157,11 @@ export function useEntitySearch(
     items: T[],
     queryText: string
   ): T[] => {
-    if (!queryText.trim()) return items.filter(showInRecencyList);
+    if (!queryText.trim())
+      return listOutsidePeopleLast(items.filter(showInRecencyList), {
+        teammateIds: teammateIds(),
+        viewerId: people.viewerId(),
+      });
     return rankCommandSearchItems(items, queryText, {
       preserveAdditionalEntityMatches:
         quickAccess.usesRecordSelection() || quickAccess.usesSearchProjection(),

@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH c AS MATERIALIZED (\n                SELECT id, team_id, channel_type::text AS channel_type,\n                       lower(coalesce(name, '')) AS lname\n                FROM comms_channels WHERE id = $1\n            ),\n            team_hits AS MATERIALIZED (\n                SELECT lc.label_id AS id\n                FROM c JOIN channel_label_channel lc\n                  ON lc.scope_key = 'team:' || c.team_id::text AND lc.channel_id = c.id\n                WHERE c.channel_type = 'team'\n                UNION ALL\n                SELECT l.id\n                FROM c JOIN channel_label l ON l.scope_key = 'team:' || c.team_id::text\n                WHERE c.channel_type = 'team' AND l.name_contains IS NOT NULL\n                  AND strpos(c.lname, lower(l.name_contains)) > 0\n            )\n            SELECT r.user_id AS \"user_id!\",\n                (SELECT channel_type FROM c) AS channel_type,\n                ARRAY(\n                    SELECT th.id FROM team_hits th\n                    WHERE (SELECT tu.team_id FROM team_user tu WHERE tu.user_id = r.user_id)\n                          = (SELECT team_id FROM c)\n                    UNION ALL\n                    SELECT personal.id FROM (\n                        SELECT lc.label_id AS id FROM channel_label_channel lc, c\n                        WHERE lc.scope_key = 'user:' || r.user_id AND lc.channel_id = c.id\n                        UNION ALL\n                        SELECT l.id FROM channel_label l, c\n                        WHERE l.scope_key = 'user:' || r.user_id\n                          AND l.name_contains IS NOT NULL\n                          AND strpos(c.lname, lower(l.name_contains)) > 0\n                    ) personal, c\n                    WHERE c.channel_type IN ('team', 'public', 'private')\n                      AND EXISTS (\n                          SELECT 1 FROM comms_channel_participants p\n                          WHERE p.channel_id = c.id AND p.user_id = r.user_id\n                            AND p.left_at IS NULL)\n                ) AS \"label_ids!\",\n                EXISTS (\n                    SELECT 1 FROM favorite f, c\n                    WHERE f.user_id = r.user_id AND f.entity_type = 'channel'\n                      AND f.entity_id = c.id::text\n                ) AS \"favorite!\"\n            FROM unnest($2::text[]) AS r(user_id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "label_ids!",
+        "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 3,
+        "name": "favorite!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a954b77bf1d5e0cb49bdc676f584134d6406ac3b2a1023f85bf04a60e96fa72f"
+}
