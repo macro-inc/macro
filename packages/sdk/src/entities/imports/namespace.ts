@@ -88,16 +88,16 @@ export interface NotionPageImport {
  *   review.reference()]`. The card fills in as planning goes; don't wait for
  *   it or poll `status()`. Tell the user the plan's counts as they are, and
  *   end by asking "Should I kick it off?".
- * - Nothing is written until the review is approved. If the user says yes,
- *   start it in a later program with
- *   `macro.imports.notion.start(execution.session().reviews.byId(id))`, which
- *   returns the import's report to return as `data`; while the plan is still
- *   being made it is refused, so say it isn't ready yet.
+ * - Nothing is written until a person approves the review; a program can't.
+ *   If the user says yes, submit it with the `DecideReview` tool (after
+ *   `GetReview` for its revision), not from code. While the plan is still
+ *   being made it is refused, so say it isn't ready yet. The write starts in
+ *   the background, so a `ready` report right after means it is starting.
  * - To check progress later, call `status()`; never `plan()` again, which
  *   replaces the plan.
  * - `cancel()` stops planning or writing; what was imported stays. A plan
- *   that is `ready` but not started is dropped by dismissing its review
- *   (`execution.session().reviews.byId(id).dismissAll()`), not by `cancel()`.
+ *   that is `ready` but not started is dropped by dismissing its review (on
+ *   its card, or `DecideReview` with a dismiss decision), not by `cancel()`.
  *
  * ## Single items and the ledger
  *

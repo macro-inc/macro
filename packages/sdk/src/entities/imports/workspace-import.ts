@@ -5,7 +5,6 @@ import type {
 } from '../../../generated/cognition/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
-import type { SessionReview } from '../agent-sessions/review';
 
 /** Workspaces imported through a reviewed plan. */
 export type WorkspaceImportSource = ImportReviewSource;
@@ -39,8 +38,9 @@ export interface NotionPlanOptions extends WorkspacePlanOptions {
 }
 
 /**
- * The user's import of one connected workspace: plan it, present the plan as
- * an import review, and the write starts when the review is approved.
+ * The user's import of one connected workspace: plan it and present the plan
+ * as an import review. The write starts only when a person approves that
+ * review, on its card or through `DecideReview`; a program never can.
  */
 export abstract class WorkspaceImport {
   constructor(
@@ -65,26 +65,6 @@ export abstract class WorkspaceImport {
     options: WorkspacePlanOptions = {},
   ): Promise<WorkspaceImportReport> {
     return this.requestPlan({ sharing: options.sharing });
-  }
-
-  /**
-   * Start writing the plan the import review presents, once the user said
-   * yes: approves the review, with any changes they made on its card, and
-   * reports where the import stands. Approving moves the import to
-   * `importing` before it returns, so the report shows the write under way.
-   * Refused while the plan is still being made.
-   * @write
-   * @openworld
-   */
-  async start(review: SessionReview): Promise<WorkspaceImportReport> {
-    const [item] = await review.items();
-    const draft = item?.draft;
-    if (!draft || !('source' in draft) || draft.source !== this.source)
-      throw new Error(
-        `review ${review.id} does not present a ${this.source} import`,
-      );
-    await review.submitAll();
-    return this.status();
   }
 
   /**

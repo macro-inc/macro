@@ -342,8 +342,9 @@ the existing gateway prefixes.
 
 - `macro.imports` plans, reports and cancels workspace imports through the
   per-source `/import/workspaces/{source}` routes; the older Notion-only
-  report/cancel routes stay app-only in coverage skips. `start(review)` checks the
-  review presents that source's plan and submits it; there is no start route.
+  report/cancel routes stay app-only in coverage skips. There is no `start`: the
+  review route refuses every program run (`is_program_run`), so only a person
+  approves an import review, on its card or through `DecideReview`.
 
 - `AgentSession.activity()` and invocation handles iterate durable agent-correlated history lazily; session visibility controls the feed.
 
