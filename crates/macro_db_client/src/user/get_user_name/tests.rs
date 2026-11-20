@@ -225,21 +225,35 @@ async fn address_book_names_are_read_through_the_viewers_mailboxes(
     )
     .execute(&pool)
     .await?;
-    let requested = vec!["macro|no_profile_name@example.com".to_string()];
+    // EXPLAIN of the statement itself plans it for the values bound to it,
+    // whatever the plan mode. Only a prepared statement gets a generic plan.
+    let mut connection = pool.acquire().await?;
+    sqlx::raw_sql(&format!(
+        "PREPARE names_with_email (text, text[]) AS {NAMES_WITH_EMAIL_SQL}"
+    ))
+    .execute(&mut *connection)
+    .await?;
 
-    for plan_cache_mode in ["force_custom_plan", "force_generic_plan"] {
-        let mut connection = pool.acquire().await?;
+    for (plan_cache_mode, viewer_in_plan) in [
+        ("force_custom_plan", "'macro|user_profile_1@macro.com'"),
+        ("force_generic_plan", "$1"),
+    ] {
         sqlx::raw_sql(&format!("SET plan_cache_mode = {plan_cache_mode}"))
             .execute(&mut *connection)
             .await?;
-        let plan: Vec<String> =
-            sqlx::query_scalar(&format!("EXPLAIN (COSTS OFF) {NAMES_WITH_EMAIL_SQL}"))
-                .bind("macro|user_profile_1@macro.com")
-                .bind(&requested)
-                .fetch_all(&mut *connection)
-                .await?;
+        let plan: Vec<String> = sqlx::query_scalar(
+            "EXPLAIN (COSTS OFF) EXECUTE names_with_email \
+             ('macro|user_profile_1@macro.com', ARRAY['macro|no_profile_name@example.com'])",
+        )
+        .persistent(false)
+        .fetch_all(&mut *connection)
+        .await?;
         let plan_text = plan.join("\n");
 
+        assert!(
+            plan_text.contains(&format!("macro_id = {viewer_in_plan}")),
+            "the plan is a {plan_cache_mode} one:\n{plan_text}"
+        );
         assert!(
             plan_text
                 .contains("Index Scan using contacts_link_id_email_address_idx on email_contacts")
