@@ -501,3 +501,39 @@ fn the_web_apps_table_opens_items_and_keeps_side_effects_closed() {
         assert_eq!(route_of(closed), None, "{closed}");
     }
 }
+
+/// No tab waits on a background job, even while its owner's turn runs.
+#[tokio::test]
+async fn a_background_job_never_sends_a_command() {
+    let execution = ExecutionId::mint();
+    let now = chrono::Utc::now();
+    let gateway = Gateway::with(1);
+    let service = UiCommandService::new(
+        UiCommandPorts {
+            store: Arc::new(Store(ExecutionRecord {
+                job: Some(crate::domain::JobInfo {
+                    title: "Scanning inbox".into(),
+                    started_at: now,
+                    deadline: now + chrono::TimeDelta::minutes(10),
+                }),
+                ..record(execution, Uuid::from_u128(TURN))
+            })),
+            active: Arc::new(Active(Some(Uuid::from_u128(TURN)))),
+            turns: Arc::new(Turn(Some(typed_in_tab()))),
+            budgets: Arc::new(Budgets::default()),
+            delivery: gateway.clone(),
+        },
+        NavigableRoutes::from_json(ROUTES).unwrap(),
+    );
+    let harness = Harness {
+        service,
+        gateway,
+        execution,
+    };
+
+    assert!(matches!(
+        harness.open_as(owner(), DOC).await,
+        Err(CodeModeError::Invalid(_))
+    ));
+    assert!(harness.gateway.frames().is_empty());
+}

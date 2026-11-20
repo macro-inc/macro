@@ -235,6 +235,15 @@ impl ExecutionCredentials for RunCredentials {
     ) -> Result<IssuedRun, CodeModeError> {
         let actor = approve_run(self.gate.as_ref(), identity, source, &cancel).await?;
         let scope = scope_of(self.scopes.as_ref(), identity.session.as_uuid()).await?;
+        // A background job that did not declare it sends can't send: its
+        // credential lasts minutes and no one watches the job's calls.
+        let scope = match identity.lifetime {
+            agent_code_mode::domain::RunLifetime::Job { sends: false, .. } => {
+                scope.or(Some(SessionScope::NoSend))
+            }
+            agent_code_mode::domain::RunLifetime::Job { sends: true, .. }
+            | agent_code_mode::domain::RunLifetime::Foreground => scope,
+        };
         let correlation = self
             .correlations
             .create(
@@ -253,7 +262,7 @@ impl ExecutionCredentials for RunCredentials {
         // by its process, which is killed when the job settles.
         let lifetime = match identity.lifetime {
             agent_code_mode::domain::RunLifetime::Foreground => 60,
-            agent_code_mode::domain::RunLifetime::Job { deadline } => {
+            agent_code_mode::domain::RunLifetime::Job { deadline, .. } => {
                 usize::try_from((deadline - chrono::Utc::now()).num_seconds()).unwrap_or(0) + 60
             }
         };

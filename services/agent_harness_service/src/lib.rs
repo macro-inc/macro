@@ -2804,6 +2804,11 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     service_shutdown.cancel();
+    // Background jobs settle as interrupted first, while the HTTP server
+    // their SDK calls reach still answers and before any long drain, and
+    // before their executor stops under them.
+    job_sweep.abort();
+    code_mode_jobs.shutdown_jobs().await;
     computer_tasks.close();
     computer_tasks.wait().await;
     scheduling_runtime.stop();
@@ -2832,9 +2837,6 @@ pub async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    // Jobs settle as interrupted before their executor stops under them.
-    code_mode_jobs.shutdown_jobs().await;
-    job_sweep.abort();
     if let Some((sessions, public, routines, _, jobs)) = &code_runner {
         tokio::join!(
             sessions.shutdown(),

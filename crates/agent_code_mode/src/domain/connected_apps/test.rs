@@ -339,3 +339,79 @@ async fn a_search_ranks_tools_across_apps_and_reports_apps_it_could_not_read() {
         vec!["Internal wiki"]
     );
 }
+
+/// A background job reaches the apps after its turn ended and while someone
+/// else's turn runs, as the owner who launched it; it can't discover or add
+/// apps, which wait on a turn's gate.
+#[tokio::test]
+async fn a_running_job_reaches_apps_past_its_turn_as_its_owner() {
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
+    let execution = ExecutionId::mint();
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com")
+        .unwrap()
+        .into_owned();
+    let launch_turn = macro_uuid::Uuid::from_u128(1);
+    let now = chrono::Utc::now();
+    let record = ExecutionRecord {
+        execution_id: execution,
+        acting_as: Some(ToolActor::Owner),
+        turn_id: Some(launch_turn),
+        source: "export async function main() {}".into(),
+        status: ExecutionStatus::Running,
+        result: None,
+        error: None,
+        calls: Vec::new(),
+        activity: Vec::new(),
+        activity_truncated: false,
+        job: Some(crate::domain::JobInfo {
+            title: "Scanning inbox".into(),
+            started_at: now,
+            deadline: now + chrono::TimeDelta::minutes(10),
+        }),
+    };
+    let apps = Arc::new(Apps::default());
+    // A later turn, prompted by someone else (the fake's requester), runs.
+    let service = ConnectedAppService::new(
+        Arc::new(Store(Mutex::new(Some(record)))),
+        Arc::new(Turns(Some(macro_uuid::Uuid::from_u128(2)))),
+        apps.clone(),
+    );
+    let access_as = |user: &MacroUserIdStr<'static>| {
+        EntityAccessReceipt::<EditAccessLevel>::dangerously_assert_authenticated_user(
+            user.clone(),
+            &session.to_string(),
+            EntityType::AgentSession,
+        )
+    };
+
+    let listed = service
+        .apps(&access_as(&owner), &owner, execution)
+        .await
+        .unwrap();
+    assert_eq!(listed.len(), 2);
+    assert_eq!(
+        *apps.0.lock().unwrap(),
+        [(session, "macro|owner@example.com".to_owned())]
+    );
+
+    let asker = MacroUserIdStr::parse_from_str("macro|asker@example.com")
+        .unwrap()
+        .into_owned();
+    assert!(matches!(
+        service.apps(&access_as(&asker), &asker, execution).await,
+        Err(CodeModeError::Forbidden)
+    ));
+    assert!(matches!(
+        service
+            .discover(
+                &access_as(&owner),
+                &owner,
+                execution,
+                DiscoveryRequest::Search {
+                    query: "Notion".into()
+                },
+            )
+            .await,
+        Err(CodeModeError::Invalid(_))
+    ));
+}

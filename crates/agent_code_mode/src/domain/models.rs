@@ -8,7 +8,17 @@ use utoipa::ToSchema;
 
 /// Caller-selected UUID persisted in tool input before execution begins.
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema, ToSchema, specta::Type,
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    Serialize,
+    Deserialize,
+    JsonSchema,
+    ToSchema,
+    specta::Type,
 )]
 #[serde(transparent)]
 pub struct ExecutionId(
@@ -67,6 +77,9 @@ pub enum RunLifetime {
     Job {
         /// When the job stops at the latest.
         deadline: chrono::DateTime<chrono::Utc>,
+        /// Whether the launch declared that the job sends (email, messages);
+        /// otherwise its credential is limited to the no-send scope.
+        sends: bool,
     },
 }
 
@@ -117,7 +130,7 @@ impl ExecutionStatus {
 }
 
 /// A real inner call, recorded by trusted dispatch for the existing renderers.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordedToolCall {
     /// Stable, execution-scoped component identity.
@@ -152,7 +165,7 @@ pub enum RecordedCallStatus {
 
 /// Durable source and final outcome, with historical bridge calls when present.
 /// The full journal is not included in the model's tool result.
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionRecord {
     /// Execution identity.
@@ -321,7 +334,7 @@ pub enum CodeModeError {
 }
 
 /// A bounded SDK operation observed during execution; not an authorization or write receipt.
-#[derive(Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionActivity {
     /// Request identity within the execution.

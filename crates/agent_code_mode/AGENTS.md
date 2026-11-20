@@ -42,7 +42,7 @@ stacks. Process isolation belongs to
   `enable-background-code-jobs`); elsewhere it runs in the foreground and
   the receipt's `ranInForeground` says why. The launch type-checks and
   mints a credential lasting the job's deadline (`RunLifetime::Job`, 10
-  minutes plus margin), returns a running receipt with `job`, and runs on
+  minutes plus margin; the no-send scope unless `background.sends`), returns a running receipt with `job`, and runs on
   the `JobRuntime`'s own executor (4 slots a replica) on a `TaskTracker`,
   without `watch_turn`: its row (`JobStore::control`, every second), its
   session being archived or gone, a local cancel or shutdown stop it.

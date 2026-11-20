@@ -240,7 +240,7 @@ impl JobStore for PgJobStore {
             FROM agent_code_execution
             WHERE agent_session_id = $1 AND job_deadline IS NOT NULL
                 AND (job_settled_at IS NULL OR job_settled_at >= $2)
-            ORDER BY id DESC
+            ORDER BY job_settled_at IS NULL DESC, job_deadline DESC
             LIMIT $3"#,
             session.as_uuid(),
             settled_since,

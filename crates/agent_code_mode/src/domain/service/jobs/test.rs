@@ -368,6 +368,7 @@ fn check_routine() -> ExecuteRequest {
 fn background(title: &str) -> Option<BackgroundRequest> {
     Some(BackgroundRequest {
         title: title.into(),
+        sends: false,
     })
 }
 
@@ -419,8 +420,8 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
     assert_eq!(record.activity.len(), 1);
     let lifetimes = harness.credentials.lifetimes.lock().unwrap().clone();
     assert!(
-        matches!(lifetimes[..], [RunLifetime::Job { deadline }] if deadline == record.job.unwrap().deadline),
-        "the credential lasts as long as the job: {lifetimes:?}"
+        matches!(lifetimes[..], [RunLifetime::Job { deadline, sends: false }] if deadline == record.job.unwrap().deadline),
+        "the credential lasts as long as the job and cannot send: {lifetimes:?}"
     );
 }
 

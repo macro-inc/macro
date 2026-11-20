@@ -2,22 +2,28 @@ import { t } from '@app/lib/i18n';
 import { Button } from '@ui/components/Button';
 import { Show } from 'solid-js';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
-
-/** Scroll a job's card into view; it stays where the agent started it. */
-function revealJob(jobId: string) {
-  document
-    .querySelector(`[data-background-job="${CSS.escape(jobId)}"]`)
-    ?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-}
+import { useJobReveal } from '../context/job-reveal';
 
 /**
  * "N running" above the composer while background jobs run in this session;
- * it takes the person to the oldest running job's card.
+ * it brings the oldest running job's card into view. A job whose settle frame
+ * was lost still stops counting once its durable `job.settled` event is in.
  */
 export function BackgroundJobsChip() {
   const session = useOptionalAgentSession();
-  const running = () =>
-    session?.metadata()?.jobs.filter((job) => job.status === 'running') ?? [];
+  const reveal = useJobReveal();
+  const running = () => {
+    const metadata = session?.metadata();
+    if (!metadata) return [];
+    const settled = new Set(
+      metadata.notifications
+        .filter((event) => event.kind === 'job.settled')
+        .map((event) => event.subjectId)
+    );
+    return metadata.jobs.filter(
+      (job) => job.status === 'running' && !settled.has(job.jobId)
+    );
+  };
   return (
     <Show when={running()[0]}>
       {(first) => (
@@ -25,7 +31,7 @@ export function BackgroundJobsChip() {
           <Button
             variant="secondary"
             size="xs"
-            onClick={() => revealJob(first().jobId)}
+            onClick={() => reveal?.reveal(first().jobId)}
           >
             {t('agentJobs.running', { count: running().length })}
           </Button>

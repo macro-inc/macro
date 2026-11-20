@@ -47,6 +47,7 @@ import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSessionReadMarker } from './AgentSessionReadMarker';
 import { ArchivedSessionFooter } from './ArchivedSessionFooter';
 import { useAgentSessionHeader } from './agent-session-header';
+import { JobRevealProvider } from '../context/job-reveal';
 import { BackgroundJobsChip } from './BackgroundJobsChip';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
@@ -285,10 +286,12 @@ export default function BlockAgent() {
           <FloatRegion region="dock" priority={10} />
           <AgentSessionProvider blockId={id()} onSessionId={adoptSessionId}>
             <AgentChangesProvider>
-              <AgentBlockContent
-                active={split?.isPanelActive() ?? false}
-                notificationSource={notificationSource}
-              />
+              <JobRevealProvider>
+                <AgentBlockContent
+                  active={split?.isPanelActive() ?? false}
+                  notificationSource={notificationSource}
+                />
+              </JobRevealProvider>
             </AgentChangesProvider>
           </AgentSessionProvider>
         </>

@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use agent_runtime_protocol::domain::job::{
-    BackgroundJobSummary, JobSettlement, JobStatus, JobUpdatedNotification,
+    BackgroundJobSummary, JobSettlement, JobUpdatedNotification,
 };
 use agent_runtime_protocol::domain::notification::NotificationEvent;
 use agent_session::domain::notifications::{PendingNotification, ProduceNotification};
@@ -35,10 +35,12 @@ pub const JOB_CAPS: JobCaps = JobCaps {
 };
 /// Jobs one replica runs at once; the rest wait for a slot.
 const JOB_SLOTS: usize = 4;
-/// How often a running job reads its row and its session.
+/// How often a running job reads its row (a cancel from another replica).
 const WATCH_EVERY: Duration = Duration::from_secs(1);
-/// How often a running job saves its activity.
-const SAVE_EVERY: Duration = Duration::from_millis(250);
+/// Every how many row reads it also checks its session is still open.
+const SESSION_EVERY: u32 = 5;
+/// How often a running job saves its activity; its card polls every 2 s.
+const SAVE_EVERY: Duration = Duration::from_secs(1);
 /// Longest title a job may have.
 const MAX_TITLE_CHARS: usize = 80;
 /// Largest result a `job.settled` event carries; the event itself is
@@ -103,7 +105,7 @@ impl Jobs {
             slots: Arc::new(Semaphore::new(JOB_SLOTS)),
             tasks: TaskTracker::new(),
             shutdown: CancellationToken::new(),
-            local: Mutex::default(),
+            local: Arc::default(),
         }
     }
 
@@ -126,6 +128,7 @@ impl Jobs {
         mut identity: ExecutionIdentity,
         request: &ExecuteRequest,
         background: BackgroundRequest,
+        turn: CancellationToken,
     ) -> Result<Launch, CodeModeError> {
         let span = tracing::Span::current();
         let title = background.title.trim().to_owned();
@@ -147,7 +150,10 @@ impl Jobs {
         let now = chrono::Utc::now();
         let deadline = now
             + chrono::TimeDelta::from_std(JOB_LIMIT).map_err(|_| CodeModeError::Unavailable)?;
-        identity.lifetime = RunLifetime::Job { deadline };
+        identity.lifetime = RunLifetime::Job {
+            deadline,
+            sends: background.sends,
+        };
         let mut record = ExecutionRecord {
             execution_id: identity.execution,
             acting_as: Some(identity.acting_as),
@@ -203,7 +209,7 @@ impl Jobs {
         // turn, so they settle quietly: the agent reads them in the receipt.
         let executor = &self.runtime.executor;
         if let Err(outcome) = executor
-            .check_program(request, SESSION_PROGRAM, CancellationToken::new())
+            .check_program(request, SESSION_PROGRAM, turn.clone())
             .await
         {
             (record.status, record.result, record.error) = settle_unrun(outcome, Reviews::Allowed);
@@ -214,7 +220,7 @@ impl Jobs {
         let issued = match service
             .inner
             .credentials
-            .issue(&identity, &request.source, CancellationToken::new())
+            .issue(&identity, &request.source, turn.clone())
             .await
         {
             Ok(issued) => issued,
@@ -226,6 +232,15 @@ impl Jobs {
                 return Err(error);
             }
         };
+        // Stop during the launch stops it; once spawned, only the job's own
+        // cancel does.
+        if turn.is_cancelled() {
+            record.status = ExecutionStatus::Cancelled;
+            record.error = Some("Execution cancelled before it started.".into());
+            store.settle(identity.session, &record, None).await?;
+            span.record("outcome", "cancelled");
+            return Ok(Launch::Started(receipt(&record)));
+        }
         let stop = self.shutdown.child_token();
         if let Ok(mut local) = self.local.lock() {
             local.insert(record.execution_id, stop.clone());
@@ -273,7 +288,7 @@ impl Jobs {
 
     /// Ask a job to stop: at once when it runs here, and through its row
     /// for the replica that runs it.
-    #[tracing::instrument(name = "agent.job.cancel", skip(self), fields(job_id = %job, agent_session_id = %session), err)]
+    #[tracing::instrument(name = "agent.job.cancel", skip_all, fields(job_id = %job, agent_session_id = %session), err)]
     pub(super) async fn cancel(
         &self,
         session: AgentSessionId,
@@ -445,6 +460,7 @@ impl JobRun {
     ) -> Result<tokio::sync::OwnedSemaphorePermit, Stop> {
         let wait = async {
             let mut watch = tokio::time::interval(WATCH_EVERY);
+            let mut watched = 0_u32;
             watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
             let acquire = Arc::clone(&self.slots).acquire_owned();
             tokio::pin!(acquire);
@@ -456,7 +472,8 @@ impl JobRun {
                     () = tokio::time::sleep_until(deadline) => return Err(Stop::Ended),
                     permit = &mut acquire => return permit.map_err(|_| Stop::Interrupted),
                     _ = watch.tick() => {
-                        if let Some(stop) = self.watch().await {
+                        watched = watched.wrapping_add(1);
+                        if let Some(stop) = self.watch(watched).await {
                             return Err(stop);
                         }
                     }
@@ -487,6 +504,7 @@ impl JobRun {
         tokio::pin!(execution);
         let mut watch = tokio::time::interval(WATCH_EVERY);
         watch.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+        let mut watched = 0_u32;
         let mut save_tick = tokio::time::interval(SAVE_EVERY);
         let mut dirty = false;
         let mut progress_open = true;
@@ -503,8 +521,9 @@ impl JobRun {
                     cancel.cancel();
                 }
                 _ = watch.tick(), if stop == Stop::Ended => {
-                    if let Some(watched) = self.watch().await {
-                        stop = watched;
+                    watched = watched.wrapping_add(1);
+                    if let Some(found) = self.watch(watched).await {
+                        stop = found;
                         cancel.cancel();
                     }
                 }
@@ -542,8 +561,9 @@ impl JobRun {
         self.store.save_activity(self.session, &self.record).await
     }
 
-    /// Read the job's row and its session: whether to stop, and why.
-    async fn watch(&self) -> Option<Stop> {
+    /// Read the job's row, and on every [`SESSION_EVERY`]th read its
+    /// session: whether to stop, and why.
+    async fn watch(&self, read: u32) -> Option<Stop> {
         match self
             .store
             .control(self.session, self.record.execution_id)
@@ -556,6 +576,9 @@ impl JobRun {
                 tracing::warn!(?error, "could not read a background job's row");
                 return None;
             }
+        }
+        if read % SESSION_EVERY != 1 {
+            return None;
         }
         match self.sessions.open(self.session).await {
             Ok(true) => None,

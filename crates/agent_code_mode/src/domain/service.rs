@@ -63,6 +63,13 @@ pub struct BackgroundRequest {
         description = "A short title shown on the job's card, e.g. \"Checking routine\", at most 80 characters."
     )]
     pub title: String,
+    /// Whether the program sends anything (email, channel messages) itself;
+    /// without it the job's credential can't send, only draft reviews.
+    #[serde(default)]
+    #[schemars(
+        description = "Set true only when the program itself sends email or messages; otherwise the job can read, write and draft reviews but not send."
+    )]
+    pub sends: bool,
 }
 
 struct Inner {
@@ -218,7 +225,7 @@ impl CodeModeService {
             environment,
             acting_user,
         } = match self
-            .0
+            .inner
             .credentials
             .issue(&identity, &request.source, cancel.clone())
             .await
@@ -559,7 +566,8 @@ impl SessionCodeMode for CodeModeService {
                 lifetime: RunLifetime::Foreground,
             };
             match &self.jobs {
-                Some(jobs) => match jobs.launch(self, identity, &request, background).await? {
+                Some(jobs) => match jobs.launch(self, identity, &request, background, cancel.clone())
+                    .await? {
                     jobs::Launch::Started(receipt) => return Ok(receipt),
                     jobs::Launch::Foreground(reason) => ran_in_foreground = Some(reason),
                 },

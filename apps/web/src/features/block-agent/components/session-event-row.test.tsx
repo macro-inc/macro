@@ -240,3 +240,40 @@ it('reports a settled import from its counts, never its error text', () => {
   expect(status.textContent).not.toContain('Secret roadmap');
   expect(status.classList.contains('text-failure')).toBe(true);
 });
+
+it('names a settled background job by its title and how it ended', () => {
+  const view = render(() => (
+    <>
+      <SessionEventRow
+        event={{
+          ...base,
+          id: 'done',
+          kind: 'job.settled',
+          payload: {
+            jobId: 'job-1',
+            title: 'Checking routine',
+            status: 'done',
+            result: { data: 'passed' },
+          },
+        }}
+      />
+      <SessionEventRow
+        event={{
+          ...base,
+          id: 'interrupted',
+          kind: 'job.settled',
+          payload: {
+            jobId: 'job-2',
+            title: 'Scanning inbox',
+            status: 'interrupted',
+            error: 'Background job interrupted',
+          },
+        }}
+      />
+    </>
+  ));
+  const rows = view.getAllByRole('status');
+  expect(rows[0].textContent).toContain('Checking routine finished');
+  expect(rows[1].textContent).toContain('Scanning inbox was interrupted');
+  expect(view.queryByRole('button')).toBeNull();
+});
