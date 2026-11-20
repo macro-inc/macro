@@ -1,0 +1,283 @@
+import type { CacheHost } from '@graphql-cache/host/types';
+import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
+import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createChannelDirectoryBackfillFetcher } from './directory-reconcile';
+import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
+
+const telemetry = vi.hoisted(() => ({ error: vi.fn() }));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    error: telemetry.error,
+    span: async (
+      _name: string,
+      operation: (span: { setAttr: () => void }) => Promise<unknown>
+    ) => operation({ setAttr: () => {} }),
+  },
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: vi.fn(),
+  hydrateGraphqlSoup: vi.fn(),
+}));
+
+const LANE = {
+  limit: 100,
+  expand: true,
+  sortMethod: 'VIEWED_UPDATED' as const,
+  filters: { documentFilter: { literal: { id: 'nil' } } },
+};
+const FIRST: GraphqlSoupInput = { initial: LANE };
+
+type Page = { nextCursor: string | null; entityIds?: string[] };
+
+function reconcileHost(cachedIds: string[], viewer = 'viewer') {
+  const cache = fakeChannelCache();
+  for (const id of cachedIds) cache.put(channelRecord(id));
+  let generation = 'g1';
+  return {
+    cache,
+    setGeneration(next: string) {
+      generation = next;
+    },
+    host: {
+      ...cache.host,
+      currentStorageGeneration: vi.fn(async () => generation),
+      readQuery: vi.fn(async () => ({
+        kind: 'hit' as const,
+        data: { user: { id: viewer } },
+      })),
+      deleteRecords: vi.fn<CacheHost['deleteRecords']>(async () => ({
+        revision: INITIAL_CACHE_REVISION,
+        affectedOps: [],
+      })),
+    },
+  };
+}
+
+/** Lane pages in order, then by-id reads answered from `readable`. */
+function server(lanePages: Page[], readable: string[] = []) {
+  const pages = [...lanePages];
+  return vi.fn(async (input: GraphqlSoupInput): Promise<Page> => {
+    const filter = input.initial?.filters?.channelFilter;
+    if (filter) {
+      const asked = JSON.stringify(filter).match(/"channelId":"([^"]+)"/g);
+      const ids = (asked ?? []).map((part) => part.split('"')[3]);
+      return {
+        nextCursor: null,
+        entityIds: ids.filter((id) => readable.includes(id)),
+      };
+    }
+    const page = pages.shift();
+    if (!page) throw new Error('no more lane pages');
+    return page;
+  });
+}
+
+async function runPass(
+  fetchPage: Awaited<ReturnType<typeof createChannelDirectoryBackfillFetcher>>,
+  inputs: GraphqlSoupInput[]
+) {
+  for (const input of inputs) await fetchPage(input);
+}
+
+const deleted = (host: { deleteRecords: ReturnType<typeof vi.fn> }) =>
+  host.deleteRecords.mock.calls.flatMap(([keys]) => keys as string[]);
+
+describe('channel directory reconciliation', () => {
+  beforeEach(() => telemetry.error.mockReset());
+
+  it('deletes only the cached channels the server no longer returns by id', async () => {
+    const { host } = reconcileHost(['joined', 'unjoined', 'removed']);
+    const fetch = server(
+      [
+        { nextCursor: 'next', entityIds: ['joined'] },
+        { nextCursor: null, entityIds: [] },
+      ],
+      ['unjoined']
+    );
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await runPass(fetchPage, [
+      FIRST,
+      { continuation: { cursor: 'next', expand: true } },
+    ]);
+
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+    const byId = fetch.mock.calls[2]?.[0];
+    expect(byId).toMatchObject({
+      initial: {
+        ...LANE,
+        limit: 2,
+        filters: {
+          ...LANE.filters,
+          channelFilter: {
+            and: {
+              right: {
+                or: {
+                  left: { literal: { isParticipant: true } },
+                  right: { literal: { isParticipant: false } },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('reads candidates by id in batches of a hundred', async () => {
+    const ids = Array.from({ length: 250 }, (_, index) => `c${index}`);
+    const { host } = reconcileHost(ids);
+    const fetch = server([{ nextCursor: null, entityIds: [] }], ids);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    const batches = fetch.mock.calls
+      .slice(1)
+      .map(([input]) => input.initial?.limit);
+    expect(batches).toEqual([100, 100, 50]);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing after a resumed pass', async () => {
+    const { host } = reconcileHost(['removed']);
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage({ continuation: { cursor: 'saved', expand: true } });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when a lane page did not list its channels', async () => {
+    const { host } = reconcileHost(['removed']);
+    const fetch = server([
+      { nextCursor: 'next' },
+      { nextCursor: null, entityIds: [] },
+    ]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await runPass(fetchPage, [
+      FIRST,
+      { continuation: { cursor: 'next', expand: true } },
+    ]);
+
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing from a cache that belongs to another viewer', async () => {
+    const { host } = reconcileHost(['removed'], 'someone-else');
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when the storage generation changed during the pass', async () => {
+    const harness = reconcileHost(['removed']);
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      harness.host,
+      fetch
+    );
+
+    harness.setGeneration('g2');
+    await fetchPage(FIRST);
+
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(harness.host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('deletes nothing when a by-id read does not finish in one page', async () => {
+    const { host } = reconcileHost(['removed']);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({ nextCursor: null, entityIds: [] })
+      .mockResolvedValueOnce({ nextCursor: 'more', entityIds: [] });
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+  });
+
+  it('still returns the final page when a by-id read fails', async () => {
+    const { host } = reconcileHost(['removed']);
+    const final = { nextCursor: null, entityIds: [] };
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(final)
+      .mockRejectedValueOnce(new Error('network'));
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await expect(fetchPage(FIRST)).resolves.toBe(final);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(telemetry.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('pages without reconciling when the cache cannot be read', async () => {
+    const { host } = reconcileHost(['removed']);
+    host.search.mockRejectedValueOnce(new Error('engine gone'));
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+
+    await fetchPage(FIRST);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(telemetry.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('pages without reconciling when the device cache is off', async () => {
+    const fetch = server([{ nextCursor: null, entityIds: [] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      undefined,
+      fetch
+    );
+
+    await expect(fetchPage(FIRST)).resolves.toEqual({
+      nextCursor: null,
+      entityIds: [],
+    });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});

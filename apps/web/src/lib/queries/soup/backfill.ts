@@ -20,6 +20,7 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { createChannelDirectoryBackfillFetcher } from '../channel/directory-reconcile';
 import { useContactBackfill } from '../contacts/backfill';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
 import { useMailAccountsQuery } from '../email/mail-accounts';
@@ -90,6 +91,10 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   // Renamed from 'channels' when the channel selection gained the directory's
   // fields: a pass completed before then wrote records the directory omits.
   checkpointId: 'channel-directory',
+  // Every pass is a full one (the channel filter has no update-time literal),
+  // so a finished pass also removes the cached channels it proves stale.
+  createFetchPage: createChannelDirectoryBackfillFetcher,
+  refreshAll: true,
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
   input: {
