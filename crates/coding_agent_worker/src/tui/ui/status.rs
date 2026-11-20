@@ -8,6 +8,9 @@ use super::layout::{field, span};
 use super::theme::{DIM, ERR, OK, WARN};
 use crate::tui::health::{DaemonHealth, Health, RuntimeHealth, TriggerHealth, Viewer};
 
+#[cfg(test)]
+mod test;
+
 struct Status {
     color: Color,
     word: String,
@@ -38,15 +41,22 @@ impl Status {
 }
 
 /// The header's status line: each state as a dot, its name and a word.
-pub(super) fn header_line(health: &Health, pid: u32) -> Line<'static> {
-    let mut spans = vec![Span::raw(" ")];
-    for (name, _, status) in statuses(health, pid) {
-        spans.push(Span::styled(status.dot(), Style::new().fg(status.color)));
-        spans.push(Span::styled(format!(" {name} "), Style::new().fg(DIM)));
-        spans.push(Span::styled(status.word.clone(), status.text_style()));
-        spans.push(Span::raw("  "));
-    }
-    Line::from(spans)
+/// The header's status rows: daemon and machine, then triggers and viewer,
+/// so each state stays visible in an 80-column terminal.
+pub(super) fn header_lines(health: &Health, pid: u32) -> Vec<Line<'static>> {
+    statuses(health, pid)
+        .chunks(2)
+        .map(|row| {
+            let mut spans = vec![Span::raw(" ")];
+            for (name, _, status) in row {
+                spans.push(Span::styled(status.dot(), Style::new().fg(status.color)));
+                spans.push(Span::styled(format!(" {name} "), Style::new().fg(DIM)));
+                spans.push(Span::styled(status.word.clone(), status.text_style()));
+                spans.push(Span::raw("  "));
+            }
+            Line::from(spans)
+        })
+        .collect()
 }
 
 /// The Overview card's rows, one per state.
@@ -152,7 +162,7 @@ fn triggers(health: &TriggerHealth) -> Status {
             last_error,
         } => Status::new(
             WARN,
-            format!("reconnecting, attempt {attempt}"),
+            format!("reconnecting #{attempt}"),
             format!("reconnecting (attempt {attempt}): {last_error}"),
         ),
         TriggerHealth::Stopped => Status::new(ERR, "stopped", "stopped with the daemon"),

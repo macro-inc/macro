@@ -4,7 +4,7 @@ use ratatui::style::{Modifier, Style, Stylize as _};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Tabs};
 
-use super::status::header_line;
+use super::status::header_lines;
 use super::theme::{ACCENT, DIM, ERR, OK, THEME};
 use crate::tui::app::{App, Mode, Tab};
 
@@ -29,7 +29,12 @@ pub(super) fn render_header(frame: &mut Frame, app: &App, area: Rect) {
         .border_type(BorderType::Rounded)
         .border_style(Style::new().fg(THEME.border));
     frame.render_widget(
-        Paragraph::new(vec![title, header_line(&app.health(), app.pid)]).block(block),
+        Paragraph::new(
+            std::iter::once(title)
+                .chain(header_lines(&app.health(), app.pid))
+                .collect::<Vec<_>>(),
+        )
+        .block(block),
         area,
     );
 }

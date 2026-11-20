@@ -102,7 +102,8 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `GET /harnesses/me` with `RUNTIME_CONNECTED_HEADER`. A service that reads the
   harness offline logs `harness_presence_disagreement`, macrod warns, and the TUI
   header says "connected, service reports offline".
-- `src/tui/health.rs` + `src/tui/ui/status.rs`: the header's second line and
+- `src/tui/health.rs` + `src/tui/ui/status.rs`: the header's two status rows
+  (daemon and machine, then triggers and viewer, so all fit 80 columns) and
   the Overview card report four states apart: daemon (the serving task runs),
   machine (this process holds the runtime connection; the service's flag only
   adds a disagreement, either way), triggers (`Daemon::trigger_stream_health`:
