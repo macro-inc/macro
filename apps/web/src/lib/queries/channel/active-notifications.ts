@@ -1,4 +1,6 @@
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { TRACE_PARENT_CONTEXT_KEY } from '@app/lib/urql-solid/trace-parent-exchange';
+import { useFlowTrace } from '@app/observability/flow';
 import {
   ChannelActiveNotificationsDocument,
   type ChannelActiveNotificationsQuery,
@@ -7,12 +9,13 @@ import {
   getGraphqlSoupClient,
   mapGraphqlNotification,
 } from '@service-storage/graphql-soup';
-import { type Accessor, onCleanup } from 'solid-js';
+import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import {
   registerActiveGraphqlSoupQuery,
   registerGraphqlSoupRevalidations,
 } from '../soup/graphql/active-queries';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
+import { createReadTrace } from './active-notifications-trace';
 import { registerChannelNotificationRefresh } from './register-notification-refresh';
 
 /**
@@ -34,10 +37,16 @@ export function createChannelActiveNotificationsQuery(
     input: buildGraphqlEntitySoupInput('CHANNEL', channelId)!,
     limit: CHANNEL_ACTIVE_NOTIFICATION_LIMIT,
   };
+  const read = createReadTrace({
+    channelId,
+    limit: CHANNEL_ACTIVE_NOTIFICATION_LIMIT,
+    flow: useFlowTrace(),
+  });
   const query = createUrqlQuery(() => ({
     query: ChannelActiveNotificationsDocument,
     client: getGraphqlSoupClient(),
     variables,
+    context: { [TRACE_PARENT_CONTEXT_KEY]: read.context },
     enabled: enabled(),
     requestPolicy: 'cache-and-network',
     select: selectActiveNotifications(channelId),
@@ -56,6 +65,19 @@ export function createChannelActiveNotificationsQuery(
         : [],
     },
   }));
+  createEffect(
+    on(
+      () => query.isFetching,
+      (fetching) => {
+        if (fetching) return;
+        read.finish({
+          count: query.isSuccess ? (query.data ?? []).length : undefined,
+          error: query.error,
+        });
+      }
+    )
+  );
+  onCleanup(() => read.finish({ cancelled: true }));
   onCleanup(registerActiveGraphqlSoupQuery({ isEnabled: enabled, refresh }));
   onCleanup(
     registerGraphqlSoupRevalidations(
