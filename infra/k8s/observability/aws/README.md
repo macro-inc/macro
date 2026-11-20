@@ -182,16 +182,20 @@ repository (`settings.cluster.adminRole`, `adminTag`):
 
 Only IAM users qualify, not roles or federated sessions: a role session can
 carry tags set by whoever assumed it, while a user's tags change only through
-`iam:TagUser`, which only IAM admins have. An IAM admin grants and revokes
-access by tagging:
+`iam:TagUser`. That makes `iam:TagUser` the right to become cluster admin:
+keep it to IAM admins, and never grant it on a user's own ARN. An IAM admin
+grants and revokes access by tagging:
 
 ```sh
 aws iam tag-user --user-name <user> --tags Key=observability-eks,Value=admin
 aws iam untag-user --user-name <user> --tag-keys observability-eks
 ```
 
-Untagging stops new sessions; one already open lasts up to its hour. To end
-those at once, use "Revoke active sessions" on the role in the IAM console.
+Untagging stops new sessions; one already open keeps working until it
+expires, within the hour. IAM's "Revoke active sessions" doesn't end it: EKS
+checks the caller with `sts:GetCallerIdentity`, which no deny policy blocks.
+To cut every admin off at once, delete the role's access policy association
+(`aws eks disassociate-access-policy`); the next apply restores it.
 
 The user's own IAM policy must also allow `sts:AssumeRole` on the role
 (`AdministratorAccess` does), and its address must be in
@@ -203,7 +207,9 @@ The user's own IAM policy must also allow `sts:AssumeRole` on the role
   `kubectl` assumes the role on every call.
 - **People**: a profile in `~/.aws/config` that assumes the role with MFA,
   and `update-kubeconfig` with that profile instead of `--role-arn`. The CLI
-  asks for the code when its cached session runs out:
+  asks for the code when its cached session runs out. Unset any exported
+  `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` and `AWS_SESSION_TOKEN` first:
+  they override the profile, and `kubectl` then gets your user, not the role.
   ```ini
   [profile observability-eks]
   source_profile = <your profile>
