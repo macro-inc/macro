@@ -31,7 +31,8 @@ pub trait ContactsRepository: Send + Sync + 'static {
 /// idempotent and reports only the rows it added, so a repeat reports nothing.
 pub trait ContactListRepository: Send + Sync + 'static {
     /// Add every user and every peer to each other's `interacted` list,
-    /// skipping self-pairs. Returns the added (owner, contact) pairs.
+    /// skipping self-pairs and ids with no profile (a deleted account).
+    /// Returns the added (owner, contact) pairs.
     fn record_interactions(
         &self,
         users: &[MacroUserIdStr<'static>],
@@ -49,8 +50,18 @@ pub trait ContactListRepository: Send + Sync + 'static {
         contacts: &[MacroUserIdStr<'static>],
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
 
+    /// Add `contact` to `owner`'s `invited` list, skipping a self-invite.
+    /// Directed: the contact's directory is unchanged. Returns whether the row
+    /// was added.
+    fn record_invite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        contact: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<bool, Report>> + Send;
+
     /// Remove the user's own lists and every list entry naming them. Returns
-    /// the other owners who lost them.
+    /// the other owners who lost them. Fails while the user's profile still
+    /// exists, so the deletion is retried once nothing can add them back.
     fn delete_user_lists(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -266,6 +277,14 @@ pub trait ContactsService: Send + Sync + 'static {
     fn add_contact_nodes(
         &self,
         nodes: ContactsNodes,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Records a referral invite: `invitee` joins `inviter`'s `invited` list,
+    /// and only the inviter is told to re-read them.
+    fn invite_contact(
+        &self,
+        inviter: MacroUserIdStr<'static>,
+        invitee: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 

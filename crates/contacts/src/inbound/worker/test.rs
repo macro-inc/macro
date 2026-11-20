@@ -51,6 +51,15 @@ impl ContactListRepository for CountingRepository {
         Ok(Vec::new())
     }
 
+    async fn record_invite(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _contact: &MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        Ok(false)
+    }
+
     async fn delete_user_lists(
         &self,
         _user: &MacroUserIdStr<'static>,

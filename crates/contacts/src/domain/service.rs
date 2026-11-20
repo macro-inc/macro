@@ -196,6 +196,35 @@ impl<R: ContactsRepository + ContactListRepository, N: ContactsNotifier> Contact
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
     }
+
+    /// Writes the legacy edge, so the old read path stays complete, then the
+    /// directed `invited` row. The legacy write goes first for the same reason
+    /// as inbox contacts: a retry after it fails still finds the row missing
+    /// and notifies.
+    #[tracing::instrument(
+        name = "contacts.invite",
+        skip_all,
+        fields(added = tracing::field::Empty),
+        err
+    )]
+    async fn invite_contact(
+        &self,
+        inviter: MacroUserIdStr<'static>,
+        invitee: MacroUserIdStr<'static>,
+    ) -> Result<(), Report> {
+        self.repository
+            .create_connections(vec![(inviter.copied(), invitee.copied())])
+            .await?;
+
+        let added = self.repository.record_invite(&inviter, &invitee).await?;
+        tracing::Span::current().record("added", added);
+        if !added {
+            return Ok(());
+        }
+        self.notifier
+            .invalidate_contacts_for_users(vec![ContactsInvalidation::new(inviter, vec![invitee])])
+            .await
+    }
 }
 
 impl<R: ContactsPageRepository, N: ContactsNotifier> ContactsPageService

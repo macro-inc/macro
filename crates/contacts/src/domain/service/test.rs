@@ -47,6 +47,14 @@ impl ContactListRepository for RecordingRepository {
         Ok(Vec::new())
     }
 
+    async fn record_invite(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        _contact: &MacroUserIdStr<'static>,
+    ) -> Result<bool, rootcause::Report> {
+        Ok(false)
+    }
+
     async fn delete_user_lists(
         &self,
         _user: &MacroUserIdStr<'static>,
