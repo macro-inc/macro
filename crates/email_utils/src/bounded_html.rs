@@ -16,6 +16,8 @@ use html5ever::tree_builder::{ElementFlags, NodeOrText, QuirksMode, TreeSink};
 use html5ever::{Attribute, ExpandedName, LocalName, Namespace, QualName};
 use scraper::{Html, Node};
 use std::borrow::Cow;
+use std::collections::HashMap;
+use std::hash::{BuildHasher, RandomState};
 
 /// The most nodes (elements, runs of text and comments) a parse builds.
 /// Attributes count too, [`ATTRIBUTES_PER_NODE`] to a node: the parser
@@ -37,10 +39,37 @@ pub const MAX_HTML_TEXT_BYTES: usize = 16 << 20;
 pub const MAX_ELEMENT_ATTRIBUTES: usize = 1_000;
 
 /// The most formatting elements (`<b>`, `<font>`…) a parse nests inside one
-/// another. The parser compares each new formatting element with every
-/// active one of the same name, sorting both attribute lists, and ammonia's
-/// parse of the serialization does it again for each rebuilt one.
+/// another, counting at most [`IDENTICAL_FORMATTING_COPIES`] of any one tag.
+/// The parser compares each new formatting element with every active one of
+/// the same name, sorting both attribute lists, and ammonia's parse of the
+/// serialization does it again for each rebuilt one.
 pub const MAX_FORMATTING_DEPTH: usize = 32;
+
+/// How many copies of one tag, name and attributes alike, html5ever keeps
+/// among its active formatting elements; it drops older ones.
+const IDENTICAL_FORMATTING_COPIES: usize = 3;
+
+/// The elements html5ever keeps in its list of active formatting elements and
+/// rebuilds.
+fn is_formatting(name: &QualName) -> bool {
+    &*name.ns == HTML_NAMESPACE
+        && matches!(
+            &*name.local,
+            "a" | "b"
+                | "big"
+                | "code"
+                | "em"
+                | "font"
+                | "i"
+                | "nobr"
+                | "s"
+                | "small"
+                | "strike"
+                | "strong"
+                | "tt"
+                | "u"
+        )
+}
 
 /// The deepest a parse nests a node.
 pub const MAX_HTML_DEPTH: usize = 512;
@@ -103,6 +132,10 @@ struct BoundedSink {
     html: Html,
     nodes: usize,
     text_bytes: usize,
+    /// Each formatting element's tag, hashed without regard to attribute
+    /// order, so identical tags are found without comparing attributes.
+    formatting_tags: HashMap<NodeId, u64>,
+    hasher: RandomState,
     clipped: bool,
 }
 
@@ -112,8 +145,17 @@ impl BoundedSink {
             html,
             nodes: 0,
             text_bytes: 0,
+            formatting_tags: HashMap::new(),
+            hasher: RandomState::new(),
             clipped: false,
         }
+    }
+
+    fn tag_hash(&self, name: &QualName, attrs: &[Attribute]) -> u64 {
+        let attributes = attrs.iter().fold(0u64, |sum, attr| {
+            sum.wrapping_add(self.hasher.hash_one((&attr.name, &*attr.value)))
+        });
+        self.hasher.hash_one((name, attrs.len(), attributes))
     }
 
     fn count_node(&mut self) {
@@ -159,10 +201,12 @@ impl BoundedSink {
             match child {
                 // An element was counted when it was created.
                 NodeOrText::AppendNode(child) => {
-                    let (depth, formatting_depth) = self.depth_of(parent);
-                    if depth >= MAX_HTML_DEPTH
-                        || (self.is_formatting(*child) && formatting_depth >= MAX_FORMATTING_DEPTH)
-                    {
+                    let too_deep = self.depth_of(parent) >= MAX_HTML_DEPTH;
+                    let too_much_formatting =
+                        self.formatting_tags.get(child).is_some_and(|&child| {
+                            self.active_formatting_with(parent, child) > MAX_FORMATTING_DEPTH
+                        });
+                    if too_deep || too_much_formatting {
                         self.clipped = true;
                     }
                 }
@@ -182,46 +226,42 @@ impl BoundedSink {
         !self.clipped
     }
 
-    /// How many nodes, `node` among them, hold a child of `node`, and how
-    /// many of those are formatting elements, up to [`MAX_HTML_DEPTH`].
-    fn depth_of(&self, node: NodeId) -> (usize, usize) {
-        let Some(node) = self.html.tree.get(node) else {
-            return (0, 0);
-        };
-        std::iter::once(node)
-            .chain(node.ancestors())
-            .take(MAX_HTML_DEPTH)
-            .fold((0, 0), |(depth, formatting), ancestor| {
-                (
-                    depth + 1,
-                    formatting + usize::from(self.is_formatting(ancestor.id())),
-                )
-            })
+    /// How many nodes, `node` among them, hold a child of `node`, up to
+    /// [`MAX_HTML_DEPTH`].
+    fn depth_of(&self, node: NodeId) -> usize {
+        self.html.tree.get(node).map_or(0, |node| {
+            std::iter::once(node)
+                .chain(node.ancestors())
+                .take(MAX_HTML_DEPTH)
+                .count()
+        })
     }
 
-    /// The elements html5ever keeps in its list of active formatting
-    /// elements and rebuilds.
-    fn is_formatting(&self, node: NodeId) -> bool {
-        let Some(Node::Element(element)) = self.html.tree.get(node).map(|node| node.value()) else {
-            return false;
+    /// About how many elements html5ever's list of active formatting
+    /// elements holds once a formatting element with tag hash `child` goes
+    /// into `parent`: the formatting elements holding it, with at most
+    /// [`IDENTICAL_FORMATTING_COPIES`] of any one tag, as html5ever drops
+    /// older copies of a tag it already holds that many of.
+    fn active_formatting_with(&self, parent: NodeId, child: u64) -> usize {
+        let Some(parent) = self.html.tree.get(parent) else {
+            return 1;
         };
-        &*element.name.ns == HTML_NAMESPACE
-            && matches!(
-                &*element.name.local,
-                "a" | "b"
-                    | "big"
-                    | "code"
-                    | "em"
-                    | "font"
-                    | "i"
-                    | "nobr"
-                    | "s"
-                    | "small"
-                    | "strike"
-                    | "strong"
-                    | "tt"
-                    | "u"
-            )
+        let mut tags: Vec<(u64, usize)> = vec![(child, 1)];
+        let holders = std::iter::once(parent)
+            .chain(parent.ancestors())
+            .take(MAX_HTML_DEPTH);
+        for tag in holders.filter_map(|holder| self.formatting_tags.get(&holder.id())) {
+            let distinct = tags.len();
+            match tags.iter_mut().find(|(seen, _)| seen == tag) {
+                Some((_, copies)) => *copies += 1,
+                // Past the bound already, however the rest count.
+                None if distinct > MAX_FORMATTING_DEPTH => break,
+                None => tags.push((*tag, 1)),
+            }
+        }
+        tags.iter()
+            .map(|(_, copies)| (*copies).min(IDENTICAL_FORMATTING_COPIES))
+            .sum()
     }
 
     fn parent_of(&self, node: NodeId) -> Option<NodeId> {
@@ -280,7 +320,12 @@ impl TreeSink for BoundedSink {
     ) -> NodeId {
         self.count_node();
         self.count_attributes(&attrs, attrs.len());
-        self.html.create_element(name, attrs, flags)
+        let tag = is_formatting(&name).then(|| self.tag_hash(&name, &attrs));
+        let element = self.html.create_element(name, attrs, flags);
+        if let Some(tag) = tag {
+            self.formatting_tags.insert(element, tag);
+        }
+        element
     }
 
     fn create_comment(&mut self, text: StrTendril) -> NodeId {

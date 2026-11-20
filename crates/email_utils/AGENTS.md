@@ -90,7 +90,8 @@ sender/generic-address checks.
   limit a change would pass: `MAX_HTML_NODES` (attributes count a quarter
   node each, a text node only when it is new), `MAX_HTML_TEXT_BYTES` (text,
   attributes and comments, each rebuilt element's attributes again),
-  `MAX_ELEMENT_ATTRIBUTES`, `MAX_FORMATTING_DEPTH` and `MAX_HTML_DEPTH`,
+  `MAX_ELEMENT_ATTRIBUTES`, `MAX_FORMATTING_DEPTH` (at most three copies of
+  an identical tag count, as html5ever keeps no more) and `MAX_HTML_DEPTH`,
   reporting `clipped`. Each limit has a case in
   `tests/text_conversion_memory.rs`. `sanitize_email_html` then cleans what
   was parsed and ends it with `CLIPPED_NOTICE` (English only), since the

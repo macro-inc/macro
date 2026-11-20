@@ -81,6 +81,20 @@ fn formatting_nested_past_its_limit_is_clipped_with_a_notice() {
 }
 
 #[test]
+fn unclosed_identical_formatting_tags_are_not_clipped() {
+    // Old mail often opens a font per line and never closes it; html5ever
+    // keeps only three copies of an identical tag, so they cost little.
+    let lines: String = (0..200)
+        .map(|i| format!("<font face=\"Arial\">Line {i}<br>\r\n"))
+        .collect();
+
+    let sanitized = sanitize_email_html(&lines);
+
+    assert!(sanitized.contains("Line 199"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
 fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
     // A frameset document has no body, so the fragment parse is cleaned.
     let html = format!(
