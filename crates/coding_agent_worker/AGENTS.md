@@ -104,10 +104,12 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   `~/.macrod/profiles/logs/<profile>.log` for a profile (`src/log_file.rs`, shared with the
   update log; 0600, rotated at 10 MB to `.1`). Each run logs `macrod started`
   (version, pid, config, handoff), the daemon's harness id, and why it ended:
-  quit, input closed, update restart, error, panic, SIGHUP or SIGTERM. A
+  quit, input closed, update restart, error, SIGHUP or SIGTERM. A panic is
+  logged as `macrod panicked`; in a spawned task the process keeps running. A
   `macrod started` with no exit line before it means the previous process was
   killed (SIGKILL, OOM). The file uses the Logs tab's filter (`RUST_LOG`,
-  default `info`), so `RUST_LOG=trace` saves agent traffic too.
+  default `info`); `RUST_LOG=trace` adds per-message ACP traces (direction
+  and size only).
 - `src/outbound/stream.rs`: the owner, bound-agent and presence lookups and
   the event stream's response head each get `ANSWER_TIMEOUT` (10 s), so a
   stalled request fails instead of holding up trigger processing. A failed

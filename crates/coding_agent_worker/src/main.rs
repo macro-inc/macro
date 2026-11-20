@@ -533,6 +533,9 @@ fn log_terminating_signals() {
         tokio::spawn(async move {
             if received.recv().await.is_some() {
                 tracing::warn!(signal = name, "macrod stopping on a signal");
+                // Leave the operator's terminal usable: the panel's raw mode
+                // and alternate screen would outlive the process.
+                ratatui::restore();
                 std::process::exit(128 + kind.as_raw_value());
             }
         });
