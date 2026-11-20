@@ -186,34 +186,41 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
     let quoted_titles: String = (0..5)
         .map(|i| format!("<b id={i} title='{}'>", "\"".repeat(4_000)))
         .collect();
+    // Each body with the number of `x`s in its text.
     let shallow = [
         // Each `<p>` closes the paragraph holding the bold tags, and html5ever
         // rebuilds them all inside the next: 13 KB that built a million nodes
         // and took 2.5 GB to convert.
-        format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)),
-        format!("<p>{formatting}{}", "<p>x".repeat(60_000)),
-        format!("<p>{quoted_titles}{}", "<p>x".repeat(50_000)),
+        (format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)), 1_000),
+        (format!("<p>{formatting}{}", "<p>x".repeat(60_000)), 60_000),
+        (
+            format!("<p>{quoted_titles}{}", "<p>x".repeat(50_000)),
+            50_000,
+        ),
         // Each `</p>` scans the open elements for a paragraph: 28 s to parse.
-        format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+        (
+            format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+            0,
+        ),
         // Three identical bold tags rebuilt per paragraph stay within the
         // sanitizer's node limit, but took html2text 457 MB.
-        format!("<p><b><b><b>{}", "<p>x".repeat(49_000)),
+        (format!("<p><b><b><b>{}", "<p>x".repeat(49_000)), 49_000),
     ];
     // html2text parses `<noscript>` with scripting off and `<select>` with a
     // newer html5ever, so a check that read them otherwise let these through
     // at full cost. Scripting off, `<noscript>` holds the same markup; inside
     // `<select>` the bounded parse keeps only the text, and html2text reads
-    // that tree, so it converts cheaply.
-    let refused = shallow.iter().map(|body| (body.clone(), true)).chain(
+    // that tree, so it converts cheaply to the body's `x`s, run together.
+    let refused = shallow.iter().map(|(body, _)| (body.clone(), None)).chain(
         shallow
             .iter()
-            .map(|body| (format!("<noscript>{body}</noscript>"), true)),
+            .map(|(body, _)| (format!("<noscript>{body}</noscript>"), None)),
     );
     let selects = shallow
         .iter()
-        .map(|body| (format!("<select>{body}"), false));
+        .map(|(body, xs)| (format!("<select>{body}"), Some(*xs)));
 
-    for (html, refuses) in refused.chain(selects) {
+    for (html, expected_xs) in refused.chain(selects) {
         let body = Some(html.clone());
         let mut texts = (Some(String::new()), Some(String::new()));
         let started = std::time::Instant::now();
@@ -222,15 +229,12 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
             texts = (html_to_plaintext(&html), compute_body_parsed(true, &body));
         });
 
-        if refuses {
-            assert_eq!(texts, (None, None));
-        } else {
-            // Only each body's text survives: its `x`s, run together.
-            let (Some(plain), Some(parsed)) = texts else {
-                panic!("no text for {} bytes in a <select>", html.len());
-            };
-            assert!(plain.chars().all(|c| c == 'x'), "{plain:.80}");
-            assert_eq!(plain, parsed);
+        match expected_xs {
+            None => assert_eq!(texts, (None, None)),
+            Some(xs) => {
+                let expected = Some("x".repeat(xs));
+                assert_eq!(texts, (expected.clone(), expected));
+            }
         }
         assert!(
             peak < 32 << 20,
