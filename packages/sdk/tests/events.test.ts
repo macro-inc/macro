@@ -209,6 +209,27 @@ describe('MacroEvents', () => {
     }
   });
 
+  test('listen() tells onDisconnect when the server ends the stream', async () => {
+    globalThis.fetch = (async (_input: RequestInfo | URL) =>
+      new Response(sseBody(created), {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      })) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const ended = Promise.withResolvers<unknown>();
+    macro.events.on('document.created', () => {});
+    const stop = await macro.events.listen({
+      onDisconnect: (error) => ended.resolve(error),
+    });
+    const error = await ended.promise;
+    stop();
+
+    expect(String(error)).toContain('event stream ended');
+  });
+
   test('listen() throws when there are no filters or handlers', async () => {
     const macro = new Macro({
       token: 'user-token',

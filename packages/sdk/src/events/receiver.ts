@@ -42,8 +42,8 @@ export interface ListenOptions {
   signal?: AbortSignal;
   /**
    * Told each time the stream drops or fails to connect, before it is
-   * retried; never when the stream is stopped. Events published until it
-   * reconnects are missed.
+   * retried, and when the server ends it (which is not retried); never when
+   * the stream is stopped. Events published until it reconnects are missed.
    */
   onDisconnect?: (error: unknown) => void;
 }
@@ -185,6 +185,9 @@ export class MacroEvents {
         for await (const data of stream) {
           await this.dispatchEvent(data);
         }
+        // The server ended the stream: a drop too, which is not retried.
+        if (!controller.signal.aborted)
+          opts.onDisconnect?.(new MacroError('event stream ended'));
       } catch {
         if (controller.signal.aborted) return;
         throw new MacroError('event stream failed');
