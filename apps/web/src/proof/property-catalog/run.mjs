@@ -19,7 +19,9 @@ const CONFIG = {
   seqs: Number(E.SEQS ?? 200), // stateful sequences, split across lanes
   steps: Number(E.STEPS ?? 20), // writes per sequence
   lanes: Number(E.LANES ?? 4), // independent account pairs run at once
-  rotate: Number(E.ROTATE ?? 10), // sequences per account pair before new accounts
+  // Sequences per account pair before new accounts. The local auth service lets
+  // one address create 50 users an hour, so pairs are reused this long.
+  rotate: Number(E.ROTATE ?? 25),
   readsPerStep: Number(E.READS_PER_STEP ?? 3), // random raw read cases per step
   sweep: E.SWEEP !== '0', // all 112 listing keys + every option id per account pair
   volume: Number(E.VOLUME ?? 2500), // definitions in the volume account (0: skip)
@@ -295,10 +297,19 @@ async function login(email) {
       await page.getByText('Continue with email').first().click({ timeout: 180000 });
       await page.getByPlaceholder(/company\.com$/).fill(email);
       await page.getByRole('button', { name: 'Continue', exact: true }).click();
-      await page.waitForURL(/\/app\/(home|onboarding|component|welcome\/)/, { timeout: 90000 });
-      break;
+      const outcome = await Promise.race([
+        page.waitForURL(/\/app\/(home|onboarding|component|welcome\/)/, { timeout: 90000 }).then(() => 'in', () => 'timeout'),
+        page.getByText('unable to create user').waitFor({ timeout: 90000 }).then(() => 'refused', () => 'timeout'),
+      ]);
+      if (outcome === 'in') break;
+      if (outcome === 'timeout') throw new Error('Timeout: no sign-in after 90 s');
+      // Signup rate limit: wait for the hour to roll over, then try again.
+      R.loginWaits = (R.loginWaits ?? 0) + 1;
+      if (attempt >= 20) throw new Error(`signup still refused after ${attempt} waits`);
+      log(`signup refused for ${email.split('@')[0]} (rate limit); waiting 5 min`);
+      await sleep(300000);
     } catch (e) {
-      if (attempt >= 2) throw e;
+      if (attempt >= 20 || !/Timeout/.test(String(e.message))) throw e;
       log(`login retry ${email.split('@')[0]}: ${String(e.message).slice(0, 120)}`);
     }
   }
