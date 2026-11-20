@@ -34,11 +34,13 @@ async fn publication_keeps_captured_identity_and_a_recovery_signal_until_complet
     let (id, generation) = schedule(&repo, team).await?;
     let queue = TestQueue::start().await?;
     drain(&pool, &queue.sqs).await?;
-    let messages = queue.messages();
-    assert_eq!(messages.len(), 1);
-    let BackfillOperation::PopulateCrmPolicy(payload) = &messages[0].backfill_operation else {
-        panic!("modern envelope required")
-    };
+    assert!(
+        queue.messages().is_empty(),
+        "history pages leave the backfill queue"
+    );
+    let pages = queue.history_pages();
+    assert_eq!(pages.len(), 1);
+    let payload = &pages[0];
     assert_eq!(payload.team_id, team);
     assert_eq!(payload.link_id, link);
     assert_eq!(payload.macro_id.as_ref(), USER);
@@ -48,7 +50,7 @@ async fn publication_keeps_captured_identity_and_a_recovery_signal_until_complet
     assert_eq!(pending(&pool).await?, 1);
     assert!(sqlx::query_scalar!(r#"SELECT requested_at>now() AS "deferred!" FROM crm_email_backfill_outbox WHERE team_id=$1 AND user_id=$2"#,team,USER).fetch_one(&pool).await?);
     drain(&pool, &queue.sqs).await?;
-    assert_eq!(queue.messages().len(), 1, "no busy re-publication");
+    assert_eq!(queue.history_pages().len(), 1, "no busy re-publication");
     // Deterministic lost-delivery recovery, without wall-clock sleeps.
     sqlx::query!(
         "UPDATE crm_email_backfill_outbox SET requested_at=now() WHERE team_id=$1 AND user_id=$2",
@@ -58,11 +60,9 @@ async fn publication_keeps_captured_identity_and_a_recovery_signal_until_complet
     .execute(&pool)
     .await?;
     drain(&pool, &queue.sqs).await?;
-    assert_eq!(queue.messages().len(), 2);
-    assert_eq!(
-        queue.messages()[0].backfill_operation,
-        queue.messages()[1].backfill_operation
-    );
+    let pages = queue.history_pages();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(pages[0], pages[1]);
     Ok(())
 }
 
@@ -90,10 +90,8 @@ async fn stale_same_lifetime_work_is_delivered_for_durable_transfer_and_old_ack_
     }
     let queue = TestQueue::start().await?;
     drain(&pool, &queue.sqs).await?;
-    let messages = queue.messages();
-    let BackfillOperation::PopulateCrmPolicy(payload) = &messages[0].backfill_operation else {
-        panic!("captured policy required")
-    };
+    let pages = queue.history_pages();
+    let payload = &pages[0];
     assert_eq!(payload.work_id, old);
     assert_eq!(payload.policy_version, generation.policy_version);
     let (replacement, _) = schedule(&repo, team).await?;
@@ -130,6 +128,7 @@ async fn legacy_outbox_cannot_acquire_an_initialized_lifetime(pool: PgPool) -> a
     let queue = TestQueue::start().await?;
     drain(&pool, &queue.sqs).await?;
     assert!(queue.messages().is_empty());
+    assert!(queue.history_pages().is_empty());
     assert_eq!(pending(&pool).await?, 0);
     assert_eq!(
         sqlx::query_scalar!(

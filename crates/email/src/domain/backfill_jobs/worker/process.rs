@@ -90,12 +90,7 @@ where
             };
             seed::seed_sent_contact(ctx, scope, &link).await
         }
-        BackfillOperation::PopulateCrmContact(scope) => {
-            let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
-                return Ok(());
-            };
-            crm::populate_crm_contact(ctx, &link, &scope.payload).await
-        }
+        BackfillOperation::PopulateCrmContact(scope) => crm::forward_crm_contact(ctx, scope).await,
         BackfillOperation::DepopulateCrmContact(scope) => {
             let Some(link) = fetch_link_if_present(ctx, scope.link_id).await? else {
                 return Ok(());
@@ -103,7 +98,7 @@ where
             crm::depopulate_crm_contact(ctx, &link, &scope.payload).await
         }
         BackfillOperation::PopulateCrmPolicy(payload) => {
-            crm_policy::populate_policy_page(ctx, payload).await
+            crm::forward_crm_policy_page(ctx, payload).await
         }
         BackfillOperation::PopulateCrmForUser(payload) => {
             crm::populate_crm_for_user(ctx, payload).await

@@ -168,6 +168,14 @@ impl BackfillOutboxPublisher for Fake {
         self.0.lock().unwrap().messages.push(message);
         Ok(())
     }
+    async fn publish_crm_policy_page(&self, page: PopulateCrmPolicyPayload) -> anyhow::Result<()> {
+        assert!(self.0.lock().unwrap().active, "row lock held across send");
+        self.call("publish_policy_page")?;
+        self.0.lock().unwrap().messages.push(BackfillPubsubMessage {
+            backfill_operation: BackfillOperation::PopulateCrmPolicy(page),
+        });
+        Ok(())
+    }
     fn adopt(&self, _: &tracing::Span, parent: Option<&str>) {
         self.call("adopt").unwrap();
         self.0
@@ -316,6 +324,30 @@ async fn each_drain_preserves_the_fifty_row_batch_cap() {
         assert_eq!(f.0.lock().unwrap().rows.len(), 1);
         assert_eq!(f.0.lock().unwrap().messages.len(), 50);
     }
+}
+#[tokio::test]
+async fn modern_crm_history_pages_go_to_the_population_queue() {
+    let f = queued(Row::Crm(CrmOutboxRow {
+        link_id: Some(Uuid::from_u128(3)),
+        consent_incarnation: Some(Uuid::from_u128(4)),
+        policy_version: Some(7),
+        work_id: Some(Uuid::from_u128(5)),
+        team_id: Uuid::from_u128(1),
+        user_id: "macro|owner@example.com".into(),
+        traceparent: None,
+    }));
+    f.0.lock().unwrap().enabled = true;
+    drain_crm(&f, &f).await.unwrap();
+    assert!(f.calls().contains(&"publish_policy_page"));
+    assert!(!f.calls().contains(&"publish"));
+    let s = f.0.lock().unwrap();
+    let BackfillOperation::PopulateCrmPolicy(page) = &s.messages[0].backfill_operation else {
+        panic!("history page")
+    };
+    assert_eq!(
+        (page.link_id, page.work_id, page.policy_version),
+        (Uuid::from_u128(3), Uuid::from_u128(5), 7)
+    );
 }
 #[tokio::test]
 async fn crm_restores_trace_checks_consent_then_sends_deletes_and_commits() {

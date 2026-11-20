@@ -80,6 +80,8 @@ pub(crate) fn context(
     _notifications_enabled: bool,
 ) -> BackfillContext {
     use crate::outbound::backfill_jobs::worker::*;
+    let crm_population =
+        crate::outbound::crm_population::requests(redis_client.clone(), sqs_client.clone());
     let effects = BackfillWorkerEffects {
         invitation_extractor: crate::composition::workers::invitation_extractor(
             db.clone(),
@@ -103,7 +105,7 @@ pub(crate) fn context(
                 jobs: crate::outbound::backfill_jobs::PgBackfillJobs(db),
             },
             gmail: GmailBackfill(email_api),
-            queue: BackfillSqs(sqs_client),
+            queue: BackfillSqs(sqs_client, crm_population),
             effects,
             crm: BackfillWorkerCrm(crm_service),
             contacts_sync: cfg!(feature = "contacts_sync"),

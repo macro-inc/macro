@@ -4,7 +4,10 @@ use axum::{Json, Router, extract::State, http::StatusCode};
 use crm::domain::email_privacy::{EmailPrivacyChange, EmailPrivacyRepository};
 use crm::outbound::companies_repo::CompaniesRepositoryImpl;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
-use models_email::email::service::backfill::{BackfillOperation, BackfillPubsubMessage};
+use models_email::email::service::backfill::{
+    BackfillOperation, BackfillPubsubMessage, PopulateCrmPolicyPayload,
+};
+use models_email::email::service::crm_population::CrmPopulationMessage;
 use serde_json::{Value, json};
 use sqlx::PgPool;
 use sqs_client::SQS;
@@ -46,17 +49,39 @@ impl TestQueue {
             .retry_config(aws_sdk_sqs::config::retry::RetryConfig::disabled())
             .build();
         let sqs = SQS::new(aws_sdk_sqs::Client::from_conf(config))
-            .email_backfill_queue(&format!("{endpoint}/queue"));
+            .email_backfill_queue(&format!("{endpoint}/queue"))
+            .email_crm_population_queue(&format!("{endpoint}/population"));
         Ok(Self { sqs, state, server })
     }
 
+    /// Messages sent to the backfill queue.
     fn messages(&self) -> Vec<BackfillPubsubMessage> {
         self.state
             .requests
             .lock()
             .unwrap()
             .iter()
-            .map(|body| serde_json::from_str(body["MessageBody"].as_str().unwrap()).unwrap())
+            .filter_map(|body| body["MessageBody"].as_str())
+            .map(|body| serde_json::from_str(body).unwrap())
+            .collect()
+    }
+
+    /// History pages sent to the CRM population queue.
+    fn history_pages(&self) -> Vec<PopulateCrmPolicyPayload> {
+        self.state
+            .requests
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|body| body["Entries"].as_array().cloned())
+            .flatten()
+            .map(|entry| {
+                let body = entry["MessageBody"].as_str().unwrap();
+                match serde_json::from_str(body).unwrap() {
+                    CrmPopulationMessage::PolicyPage(page) => page,
+                    CrmPopulationMessage::Contact(_) => panic!("history page"),
+                }
+            })
             .collect()
     }
 }
@@ -71,15 +96,18 @@ async fn send_message(
     State(state): State<Arc<QueueState>>,
     body: bytes::Bytes,
 ) -> (StatusCode, Json<Value>) {
-    state
-        .requests
-        .lock()
-        .unwrap()
-        .push(serde_json::from_slice(&body).unwrap());
+    let request: Value = serde_json::from_slice(&body).unwrap();
+    let batch = request.get("Entries").is_some();
+    state.requests.lock().unwrap().push(request);
     if state.fail.load(Ordering::SeqCst) {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             Json(json!({"__type": "InternalError", "message": "queue unavailable"})),
+        )
+    } else if batch {
+        (
+            StatusCode::OK,
+            Json(json!({"Successful": [], "Failed": []})),
         )
     } else {
         (

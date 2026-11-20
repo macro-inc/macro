@@ -321,7 +321,7 @@ async fn thread_crm_fanout_precedes_write_and_its_failure_releases_without_writi
         }];
         f.0.lock().unwrap().import.thread = Ok(vec![m]);
         if fail {
-            f.fail("enqueue");
+            f.fail("request_crm");
         }
         let outcome = svc.process(&thread(false)).await;
         if fail {
@@ -329,12 +329,13 @@ async fn thread_crm_fanout_precedes_write_and_its_failure_releases_without_writi
             assert_eq!(f.calls().last(), Some(&"release"));
             assert!(!f.calls().contains(&"insert_thread"));
         } else {
+            // Asked once before the write, and again once it committed.
             assert!(matches!(outcome, BackfillDisposition::DoneDelete));
             let c = f.calls();
-            assert!(
-                c.iter().position(|x| *x == "enqueue").unwrap()
-                    < c.iter().position(|x| *x == "insert_thread").unwrap()
-            );
+            let insert = c.iter().position(|x| *x == "insert_thread").unwrap();
+            assert!(c.iter().position(|x| *x == "request_crm").unwrap() < insert);
+            assert!(c.iter().rposition(|x| *x == "request_crm").unwrap() > insert);
+            assert_eq!(f.0.lock().unwrap().crm_requests.len(), 2);
         }
     }
 }
@@ -561,7 +562,7 @@ async fn committed_single_message_sends_contacts_before_completion_and_keeps_que
         photo_url: None,
     }];
     f.0.lock().unwrap().provider = Ok(Some(m));
-    f.fail("enqueue");
+    f.fail("request_crm");
     failure(
         svc.process(&message()).await,
         true,
@@ -570,7 +571,7 @@ async fn committed_single_message_sends_contacts_before_completion_and_keeps_que
     let c = f.calls();
     assert!(
         c.iter().position(|x| *x == "release").unwrap()
-            < c.iter().position(|x| *x == "enqueue").unwrap()
+            < c.iter().position(|x| *x == "request_crm").unwrap()
     );
     assert!(!c.contains(&"completed_message"));
 }
@@ -607,12 +608,10 @@ async fn crm_direction_guards_choose_sent_recipients_and_received_sender_in_orde
             .unwrap();
         let s = f.0.lock().unwrap();
         let emails = s
-            .sent
+            .crm_requests
             .iter()
-            .map(|(msg, _)| match &msg.backfill_operation {
-                BackfillOperation::PopulateCrmContact(p) => p.payload.contact_email.as_str(),
-                _ => panic!("contact"),
-            })
+            .flat_map(|(_, contacts)| contacts)
+            .map(|contact| contact.contact_email.as_str())
             .collect::<Vec<_>>();
         assert_eq!(
             emails,

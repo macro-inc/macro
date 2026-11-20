@@ -1,7 +1,8 @@
 use super::email_api_error::map_email_api_error;
-use super::message::{enqueue_crm_contacts, save_invitations};
+use super::message::{crm_message_requests, request_crm_populations, save_invitations};
 use super::metadata::map_db_error;
 use super::*;
+use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::InboxSyncPreparation;
 use email_api_client::domain::models::{CalendarPart, MessageWithCalendarParts};
 use models_email::service::{backfill::*, link, message::Message, pubsub::ProcessingError};
@@ -209,11 +210,11 @@ async fn prepare_messages<E: InboxSyncPreparation>(
     (messages, calendar_parts)
 }
 
-/// Enqueues the CRM contact updates of every message in the thread. This runs
+/// Asks for the CRM populations of every message in the thread. This runs
 /// just before the thread is written, while a failure can still be retried:
 /// after the commit a retry would skip the thread. It runs once a write slot is
 /// held, so an operation deferred for a busy slot doesn't repeat it each time.
-/// The rare duplicate from a retried write is harmless.
+/// The rare duplicate from a retried write merges into the pending request.
 async fn enqueue_threads_crm_contacts<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
     link: &link::Link,
@@ -226,10 +227,14 @@ where
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    for message in messages {
-        enqueue_crm_contacts(ctx, link, message).await?;
-    }
-    Ok(())
+    request_crm_populations(ctx, link.id, threads_crm_requests(link, messages)).await
+}
+
+fn threads_crm_requests(link: &link::Link, messages: &[Message]) -> Vec<PopulateCrmContactPayload> {
+    messages
+        .iter()
+        .flat_map(|message| crm_message_requests(link, message))
+        .collect()
 }
 
 /// Finishes a thread whose messages are committed.
@@ -256,6 +261,15 @@ where
     C: BackfillCrm,
 {
     let thread_provider_id = &scope.payload.thread_provider_id;
+    // Ask again now that the messages are committed: a population that ran
+    // before the commit found none of them. Usually the request made before
+    // the write is still queued and absorbs this one.
+    let requests = threads_crm_requests(link, messages);
+    if !requests.is_empty()
+        && let Err(error) = ctx.queue.request_crm_population(link.id, requests).await
+    {
+        tracing::warn!(error = ?error.into_original(), %thread_provider_id, "Skipped re-requesting a backfilled thread's CRM populations");
+    }
     for SkippedBackfillMessage { index, error } in skipped {
         tracing::warn!(
             error = ?error,

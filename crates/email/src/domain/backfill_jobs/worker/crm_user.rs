@@ -1,12 +1,14 @@
 use super::*;
 use crate::domain::mailbox::connection::ConnectionSourceError;
-use crate::domain::mailbox::inbox_sync::enqueue_crm_contacts;
+use crate::domain::mailbox::inbox_sync::crm_contact_requests;
 use models_email::service::{
     backfill::*,
     pubsub::{DetailedError, FailureReason, ProcessingError},
 };
 /// Fans out historical contacts only for the user's explicitly consented
 /// primary mailbox. Consent and exclusions are rechecked by each contact job.
+/// Requests go out in batches, so a large mailbox's history never needs one
+/// message per contact at once.
 ///
 /// Stale requests after withdrawal, account switching, or team removal no-op.
 #[tracing::instrument(skip_all, err, fields(team_id, link_id))]
@@ -80,20 +82,10 @@ where
             })
         })?;
 
-    enqueue_crm_contacts(
+    request_history(
+        ctx,
         mailbox.link_id,
-        &self_email,
-        sent_recipients,
-        true,
-        |mut message| async {
-            if let BackfillOperation::PopulateCrmContact(scope) = &mut message.backfill_operation {
-                scope.payload.live_mail = false;
-            }
-            ctx.queue
-                .enqueue(message)
-                .await
-                .map_err(ConnectionSourceError::into_original)
-        },
+        crm_contact_requests(&self_email, sent_recipients, true, false),
     )
     .await?;
 
@@ -110,20 +102,32 @@ where
             })
         })?;
 
-    enqueue_crm_contacts(
+    request_history(
+        ctx,
         mailbox.link_id,
-        &self_email,
-        received_senders,
-        false,
-        |mut message| async {
-            if let BackfillOperation::PopulateCrmContact(scope) = &mut message.backfill_operation {
-                scope.payload.live_mail = false;
-            }
-            ctx.queue
-                .enqueue(message)
-                .await
-                .map_err(ConnectionSourceError::into_original)
-        },
+        crm_contact_requests(&self_email, received_senders, false, false),
     )
     .await
+}
+
+/// Contacts per population request, so a mailbox's history goes out in
+/// bounded batches.
+const HISTORY_REQUEST_BATCH: usize = 500;
+
+async fn request_history<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
+    link_id: uuid::Uuid,
+    requests: Vec<PopulateCrmContactPayload>,
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+{
+    for batch in requests.chunks(HISTORY_REQUEST_BATCH) {
+        super::message::request_crm_populations(ctx, link_id, batch.to_vec()).await?;
+    }
+    Ok(())
 }

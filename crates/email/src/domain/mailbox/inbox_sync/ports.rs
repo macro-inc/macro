@@ -172,6 +172,12 @@ pub trait InboxSyncQueue: Send + Sync + 'static {
         &self,
         message: InboxSyncPubsubMessage,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Ask for CRM populations of the mailbox's correspondents.
+    fn request_crm_population(
+        &self,
+        link_id: Uuid,
+        contacts: Vec<models_email::service::backfill::PopulateCrmContactPayload>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// The frontend refresh corresponding to a committed provider update.

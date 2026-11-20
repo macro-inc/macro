@@ -114,6 +114,11 @@ pub trait BackfillOutboxPublisher: Send + Sync {
         &self,
         message: BackfillPubsubMessage,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
+    /// Send one page of durable CRM email history to the population queue.
+    fn publish_crm_policy_page(
+        &self,
+        page: PopulateCrmPolicyPayload,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
     /// Restore the persisted parent onto the publication span.
     fn adopt(&self, span: &tracing::Span, traceparent: Option<&str>);
 }
@@ -207,7 +212,9 @@ pub async fn drain_crm<R: BackfillOutboxRepository, Q: BackfillOutboxPublisher>(
             let enabled = tx.enabled(&row).await?;
             if enabled {
                 let macro_id = MacroUserIdStr::try_from(row.user_id.clone())?;
-                let operation = match (
+                // Modern history pages run on the population queue; the legacy
+                // fan-out only lists contacts and stays on the backfill queue.
+                match (
                     row.link_id,
                     row.consent_incarnation,
                     row.policy_version,
@@ -218,25 +225,27 @@ pub async fn drain_crm<R: BackfillOutboxRepository, Q: BackfillOutboxPublisher>(
                         Some(consent_incarnation),
                         Some(policy_version),
                         Some(work_id),
-                    ) => BackfillOperation::PopulateCrmPolicy(PopulateCrmPolicyPayload {
-                        team_id: row.team_id,
-                        macro_id,
-                        link_id,
-                        work_id,
-                        consent_incarnation,
-                        policy_version,
-                    }),
-                    (None, None, None, None) => {
-                        BackfillOperation::PopulateCrmForUser(PopulateCrmForUserPayload {
+                    ) => {
+                        sqs.publish_crm_policy_page(PopulateCrmPolicyPayload {
+                            team_id: row.team_id,
                             macro_id,
+                            link_id,
+                            work_id,
+                            consent_incarnation,
+                            policy_version,
                         })
+                        .await?
+                    }
+                    (None, None, None, None) => {
+                        sqs.publish(BackfillPubsubMessage {
+                            backfill_operation: BackfillOperation::PopulateCrmForUser(
+                                PopulateCrmForUserPayload { macro_id },
+                            ),
+                        })
+                        .await?
                     }
                     _ => anyhow::bail!("partial CRM history generation"),
-                };
-                sqs.publish(BackfillPubsubMessage {
-                    backfill_operation: operation,
-                })
-                .await?;
+                }
                 tx.published(&row).await?;
             } else {
                 tx.delete(&row).await?;

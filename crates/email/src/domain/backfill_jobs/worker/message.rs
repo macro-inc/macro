@@ -3,7 +3,7 @@ use super::metadata::map_db_error;
 use super::*;
 use crate::domain::mailbox::connection::ConnectionSourceError;
 use crate::domain::mailbox::inbox_sync::{
-    CrmContactRecipient, enqueue_crm_contacts as enqueue_normalized_contacts, resync_snapshot,
+    CrmContactRecipient, crm_contact_requests, resync_snapshot,
 };
 use email_api_client::domain::models::CalendarPart;
 use models_email::service::{
@@ -112,7 +112,7 @@ pub(super) async fn save_invitations<R, G, Q, E, C>(
     }
 }
 
-/// Enqueues the CRM contact updates a backfill message implies. Needs no
+/// Asks for the CRM populations a backfill message implies. Needs no
 /// database row, so it can run before the message is written.
 pub(super) async fn enqueue_crm_contacts<R, G, Q, E, C>(
     ctx: &BackfillService<R, G, Q, E, C>,
@@ -126,62 +126,73 @@ where
     E: BackfillEffects,
     C: BackfillCrm,
 {
-    // Fan out a PopulateCrmContact job per address involved in the
-    // message — every non-draft message contributes, in both
-    // directions. Sent: enumerate to/cc/bcc (recipients the team
-    // emailed). Received: enumerate `from` (external sender). The
-    // consumer branches on `is_sent` to decide whether a new
-    // `crm_companies` row may be inserted — received-direction
-    // populates only ever touch already-tracked companies.
-    //
-    // Drafts are skipped: their from = the user, their to/cc/bcc may
-    // not be finalized, and they don't represent real correspondence.
-    //
-    // ON CONFLICT DO NOTHING on the consumer side keeps duplicate
-    // enqueues (e.g. retried backfill_message attempts) harmless. The
-    // display name from the gmail header is threaded through so the
-    // consumer doesn't have to re-query email_contacts.
-    // `internal_date_ts` is passed as `message_at`; `contact_id` is
-    // `None` here because we already carry `message_at` and the
-    // contact row may not exist yet at producer time.
-    if !message.is_draft {
-        let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        // Single message → single timestamp covers both endpoints. The
-        // consumer's stored-value merge converges as more messages come
-        // in. `Utc::now()` fallback when Gmail returned no
-        // internal_date_ts.
-        let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
-        let recipients: Vec<CrmContactRecipient> = if message.is_sent {
-            message
-                .to
-                .iter()
-                .chain(&message.cc)
-                .chain(&message.bcc)
-                .map(|c| (c.email.clone(), c.name.clone(), at, at))
-                .collect()
-        } else {
-            message
-                .from
-                .iter()
-                .map(|c| (c.email.clone(), c.name.clone(), at, at))
-                .collect()
-        };
-        if !recipients.is_empty() {
-            enqueue_normalized_contacts(
-                link.id,
-                &self_email,
-                recipients,
-                message.is_sent,
-                |message| async {
-                    ctx.queue
-                        .enqueue(message)
-                        .await
-                        .map_err(ConnectionSourceError::into_original)
-                },
-            )
-            .await?;
-        }
-    }
+    request_crm_populations(ctx, link.id, crm_message_requests(link, message)).await
+}
 
-    Ok(())
+/// Asks for CRM populations, as a retryable failure if they can't be queued.
+pub(super) async fn request_crm_populations<R, G, Q, E, C>(
+    ctx: &BackfillService<R, G, Q, E, C>,
+    link_id: uuid::Uuid,
+    requests: Vec<PopulateCrmContactPayload>,
+) -> Result<(), ProcessingError>
+where
+    R: BackfillRepository,
+    G: BackfillGmail,
+    Q: BackfillQueue,
+    E: BackfillEffects,
+    C: BackfillCrm,
+{
+    if requests.is_empty() {
+        return Ok(());
+    }
+    ctx.queue
+        .request_crm_population(link_id, requests)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e
+                    .into_original()
+                    .context("Failed to request CRM contact populations"),
+            })
+        })
+}
+
+/// The CRM populations one message implies.
+///
+/// Every non-draft message contributes, in both directions. Sent: to/cc/bcc
+/// (recipients the team emailed). Received: `from` (external sender). The
+/// consumer branches on `is_sent` to decide whether a new `crm_companies` row
+/// may be inserted; received-direction populates only ever touch
+/// already-tracked companies.
+///
+/// Drafts are skipped: their from = the user, their to/cc/bcc may not be
+/// finalized, and they don't represent real correspondence. A single message
+/// has one timestamp for both endpoints, `Utc::now()` when Gmail returned no
+/// `internal_date_ts`; the population merges it into the stored values.
+pub(super) fn crm_message_requests(
+    link: &link::Link,
+    message: &Message,
+) -> Vec<PopulateCrmContactPayload> {
+    if message.is_draft {
+        return Vec::new();
+    }
+    let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+    let at = message.internal_date_ts.unwrap_or_else(chrono::Utc::now);
+    let recipients: Vec<CrmContactRecipient> = if message.is_sent {
+        message
+            .to
+            .iter()
+            .chain(&message.cc)
+            .chain(&message.bcc)
+            .map(|c| (c.email.clone(), c.name.clone(), at, at))
+            .collect()
+    } else {
+        message
+            .from
+            .iter()
+            .map(|c| (c.email.clone(), c.name.clone(), at, at))
+            .collect()
+    };
+    crm_contact_requests(&self_email, recipients, message.is_sent, true)
 }

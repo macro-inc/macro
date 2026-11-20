@@ -6,7 +6,6 @@ mod counters;
 mod crm;
 mod crm_contact;
 mod crm_contact_delete;
-mod crm_policy;
 mod crm_user;
 mod crm_user_delete;
 mod deferral;

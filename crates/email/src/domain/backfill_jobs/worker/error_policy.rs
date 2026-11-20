@@ -210,7 +210,7 @@ pub async fn handle_retryable_error(
         BackfillOperation::PopulateCrmContact(scope) => {
             tracing::warn!(
                 link_id = %scope.link_id,
-                "Retryable error populating CRM contact"
+                "Retryable error forwarding a CRM contact population"
             )
         }
         BackfillOperation::DepopulateCrmContact(scope) => {
