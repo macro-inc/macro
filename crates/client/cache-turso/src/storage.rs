@@ -30,7 +30,7 @@ use predicate_index::{
     Profile, RangeBound, RecordKey as PredicateRecordKey, SortDirection, Token,
     ValidatedIndexQuery,
 };
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
 use turso_core::{Connection, Numeric, Value};
@@ -920,6 +920,68 @@ impl TursoStorage {
 impl Storage for TursoStorage {
     type Error = TursoStorageError;
 
+    async fn projection_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.require_healthy()?;
+        let mut keys = Vec::new();
+        driver::query_each(
+            &self.connection(),
+            if after_id.is_some() {
+                "SELECT record_key FROM index_documents WHERE record_key > ?1 AND record_key < ?2 ORDER BY record_key LIMIT ?3"
+            } else {
+                "SELECT record_key FROM index_documents WHERE record_key >= ?1 AND record_key < ?2 ORDER BY record_key LIMIT ?3"
+            },
+            vec![
+                text(&format!("{typename}:{}", after_id.unwrap_or_default())),
+                text(&format!("{typename};")),
+                Value::from_i64(limit.min(500) as i64),
+            ],
+            |row| {
+                let Some(Value::Text(key)) = row.get_values().next() else {
+                    return Err(invariant());
+                };
+                keys.push(EntityKey(key.to_string().into()));
+                Ok(())
+            },
+        )?;
+        Ok(keys)
+    }
+
+    async fn record_keys(
+        &self,
+        typename: &str,
+        after_id: Option<&str>,
+        limit: usize,
+    ) -> Result<Vec<EntityKey<'static>>, Self::Error> {
+        self.require_healthy()?;
+        let mut keys = Vec::new();
+        driver::query_each(
+            &self.connection(),
+            if after_id.is_some() {
+                "SELECT id FROM records WHERE __typename = ?1 AND id > ?2 ORDER BY id LIMIT ?3"
+            } else {
+                "SELECT id FROM records WHERE __typename = ?1 AND id >= ?2 ORDER BY id LIMIT ?3"
+            },
+            vec![
+                text(typename),
+                text(after_id.unwrap_or_default()),
+                Value::from_i64(limit.min(500) as i64),
+            ],
+            |row| {
+                let Some(Value::Text(id)) = row.get_values().next() else {
+                    return Err(invariant());
+                };
+                keys.push(EntityKey(format!("{typename}:{id}").into()));
+                Ok(())
+            },
+        )?;
+        Ok(keys)
+    }
+
     async fn scan_contact_records(
         &self,
         after: Option<&str>,
@@ -1307,6 +1369,43 @@ impl Storage for TursoStorage {
         let connection = self.connection();
         let result = driver::read_transaction(&connection, || {
             load_optimistic_projections(&connection, keys)
+        });
+        self.latch_result(result)
+    }
+
+    async fn replace_optimistic_layers(
+        &mut self,
+        layers: &[(MutationId, PersistedOptimisticLayer)],
+        affected_projection_keys: &[predicate_index::RecordKey],
+        projections: &[predicate_index::EffectiveOptimisticProjection],
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let connection = self.connection();
+        let result = driver::write_transaction(&connection, || {
+            for (id, layer) in layers {
+                let id = mutation_id_to_sql(*id)?;
+                driver::execute(
+                    &connection,
+                    "UPDATE optimistic_layers SET optimistic_data_json = ?2, normalized_updates = ?3 WHERE mutation_id = ?1",
+                    vec![
+                        Value::from_i64(id),
+                        text(&layer.optimistic_data_json),
+                        Value::from_blob(encode_record_updates(&layer.normalized_updates)),
+                    ],
+                )?;
+            }
+            for key in affected_projection_keys {
+                delete_optimistic_projection(&connection, key)?;
+            }
+            for projection in projections {
+                insert_optimistic_projection(
+                    &connection,
+                    mutation_id_to_sql(projection.owner)?,
+                    projection.state.clone(),
+                    projection.uncertainty.clone(),
+                )?;
+            }
+            Ok(())
         });
         self.latch_result(result)
     }
@@ -2108,24 +2207,41 @@ fn write_projection_mutations(
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect::<Vec<_>>();
-    let previous = load_projection_states(connection, &keys)?;
-    let mut states = keys
-        .iter()
-        .cloned()
-        .zip(previous.iter().cloned())
-        .filter_map(|(key, state)| state.map(|state| (key, state)))
-        .collect::<HashMap<_, _>>();
-
-    apply_authoritative_projection_mutations(&mut states, &mutations);
-    // Fold child contributions in order, then persist only changed final states.
-    // Refreshing unchanged authority must not delete/reinsert every index fact
-    // while the native engine lock blocks foreground reads and mutations.
-    for (key, previous) in keys.iter().zip(previous) {
-        let next = states.get(key);
-        if next != previous.as_ref() {
-            write_projection_state(connection, key, next)?;
-        }
+    if keys.is_empty() {
+        return Ok(());
     }
+    let states = if mutations
+        .iter()
+        .all(|mutation| matches!(mutation, ProjectionMutation::Delete(_)))
+    {
+        // Retirement deletes whole projection families. Their final state is
+        // known without reconstructing every old document and fact first.
+        let mut delete = driver::prepare(connection, INDEX_DOCUMENT_DELETE)?;
+        for key in &keys {
+            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+            if !(0..=1).contains(&changed) {
+                return Err(invariant());
+            }
+        }
+        HashMap::new()
+    } else {
+        let previous = load_projection_states(connection, &keys)?;
+        let mut states = keys
+            .iter()
+            .cloned()
+            .zip(previous.iter().cloned())
+            .filter_map(|(key, state)| state.map(|state| (key, state)))
+            .collect::<HashMap<_, _>>();
+        apply_authoritative_projection_mutations(&mut states, &mutations);
+        // Unchanged refreshes must not rewrite all facts while holding the lock.
+        for (key, previous) in keys.iter().zip(previous) {
+            let next = states.get(key);
+            if next != previous.as_ref() {
+                write_projection_state(connection, key, next)?;
+            }
+        }
+        states
+    };
     if !keys.is_empty() {
         // Network snapshots and realtime writes must rebase pending member edits
         // in the same transaction, not leave a shadow based on older authority.
@@ -2140,17 +2256,38 @@ fn write_projection_mutations(
                 Ok((row.id, source))
             })
             .collect::<Result<Vec<_>, TursoStorageError>>()?;
-        let layers = sources
-            .iter()
-            .map(
-                |(owner, source)| cache_core::predicate::ProjectionMutationLayer {
-                    owner: *owner,
-                    mutations: &source.projection_mutations,
-                },
-            )
-            .collect::<Vec<_>>();
+        // Index each pending contribution once per batch. A large retirement
+        // page must not scan the whole queue again for each deleted key.
+        let mut by_key: HashMap<_, BTreeMap<_, Vec<_>>> = HashMap::new();
+        for (owner, source) in sources {
+            for mutation in source.projection_mutations {
+                if keys.binary_search(mutation.record_key()).is_ok() {
+                    by_key
+                        .entry(mutation.record_key().clone())
+                        .or_default()
+                        .entry(owner)
+                        .or_default()
+                        .push(mutation);
+                }
+            }
+        }
+        let mut delete = driver::prepare(connection, OPTIMISTIC_INDEX_DOCUMENT_DELETE)?;
         for key in keys {
-            delete_optimistic_projection(connection, &key)?;
+            let changed = driver::execute_prepared(&mut delete, vec![text(key.as_str())])?;
+            if !(0..=1).contains(&changed) {
+                return Err(invariant());
+            }
+            let layers = by_key
+                .get(&key)
+                .into_iter()
+                .flat_map(|owners| owners.iter())
+                .map(
+                    |(owner, mutations)| cache_core::predicate::ProjectionMutationLayer {
+                        owner: *owner,
+                        mutations,
+                    },
+                )
+                .collect::<Vec<_>>();
             if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
                 &key,
                 states.get(&key),

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_entity AS entity\n            SET metadata = jsonb_set(entity.metadata, '{personalFolderId}', to_jsonb($3::text))\n            WHERE entity.id = $1 AND (SELECT entity.user_id OFFSET 0) = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "00cd78bc3f6e10df7be17d2b4e264ac204e30c6f057957bac33eeab056a4694c"
+}

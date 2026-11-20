@@ -354,6 +354,7 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
         }
     });
 
+    let colors = ui::ColorSupport::detect();
     let mut terminal = ratatui::init();
     let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableBracketedPaste);
     // Under herdr-core the window reports the session's state itself.
@@ -362,7 +363,10 @@ pub async fn run_herdr_pane(socket: &Path, session: &str) -> rootcause::Result<(
     let mut view = PaneView::new(session);
     let mut ticker = tokio::time::interval(TICK);
     let outcome = loop {
-        if let Err(error) = terminal.draw(|frame| ui::render_herdr_pane(frame, &view)) {
+        if let Err(error) = terminal.draw(|frame| {
+            ui::render_herdr_pane(frame, &view);
+            colors.fit_buffer(frame.buffer_mut());
+        }) {
             break Err(error);
         }
         tokio::select! {

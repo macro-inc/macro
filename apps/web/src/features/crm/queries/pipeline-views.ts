@@ -1,3 +1,4 @@
+import { captureQueryAuthorization } from '@app/lib/urql-solid/authorization';
 import type { DatabaseOp } from '@core/database-sql/generated/types';
 import { throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
@@ -147,16 +148,19 @@ export function createPipelineViews(
   });
 
   /** A batch adding a column and then changing `view`. */
-  const withColumn = (view: DatabaseView, ops: DatabaseOp[]) =>
-    inOrder(view.id, () =>
+  const withColumn = (view: DatabaseView, ops: DatabaseOp[]) => {
+    const canCache = captureQueryAuthorization();
+    return inOrder(view.id, () =>
       apply(ops)
         .andThen(lastView)
         .map((stored) => {
+          if (!canCache()) return;
           upsert(stored);
           // The new column arrives with the table read.
           deps.client.invalidateQueries({ queryKey: key });
         })
     );
+  };
 
   return {
     /**
@@ -168,6 +172,7 @@ export function createPipelineViews(
       input: NewView,
       columns: readonly DatabaseViewColumn[]
     ) {
+      const canCache = captureQueryAuthorization();
       const viewId = uuidv7();
       const created = (layout: DatabaseView['layout']): DatabaseOp[] => [
         {
@@ -210,12 +215,13 @@ export function createPipelineViews(
         .exhaustive(() => created({ kind: 'table', columns: [] }));
       return inOrder(listKey, () => apply(ops).andThen(lastView)).map(
         (view) => {
-          upsert(view);
+          if (canCache()) upsert(view);
           return view;
         }
       );
     },
     update(view: DatabaseView, change: ViewChange) {
+      const canCache = captureQueryAuthorization();
       patchViews((views) =>
         views.map((existing) =>
           existing.id === view.id ? { ...existing, ...change } : existing
@@ -230,7 +236,9 @@ export function createPipelineViews(
             change: { kind: 'update', ...change },
           },
         ]).andThen(lastView)
-      ).map(upsert);
+      ).map((stored) => {
+        if (canCache()) upsert(stored);
+      });
     },
     /** Lay a view out as a board grouped by a new Status column, in one batch. */
     showAsBoardWithStatusColumn(
@@ -272,6 +280,7 @@ export function createPipelineViews(
       view: DatabaseView,
       move: CardMove
     ): ResultAsync<CardMoved, DatabaseOpFailure> {
+      const canCache = captureQueryAuthorization();
       const positionsKey = crmKeys.pipelinePositions(
         pipeline.id,
         view.id
@@ -313,9 +322,10 @@ export function createPipelineViews(
         return ResultAsync.fromSafePromise(
           deps.client.cancelQueries({ queryKey: positionsKey })
         ).map(() => {
-          deps.client.setQueryData<CardPosition[]>(positionsKey, (current) =>
-            withPositions(current ?? [], moved.positions)
-          );
+          if (canCache())
+            deps.client.setQueryData<CardPosition[]>(positionsKey, (current) =>
+              withPositions(current ?? [], moved.positions)
+            );
           return moved;
         });
       });

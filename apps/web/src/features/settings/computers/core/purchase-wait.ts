@@ -30,7 +30,7 @@ export function boughtComputerProgress(
         'starting',
         () => 'waiting'
       )
-      .with('ready', 'stopping', 'stopped', () => 'ready')
+      .with('ready', 'unhealthy', 'stopping', 'stopped', () => 'ready')
       .with('failed', 'needs_attention', () => 'failed')
       .with('released', () => 'gone')
       // A status a newer server sends keeps waiting, into the slow path.

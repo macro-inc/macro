@@ -47,6 +47,7 @@ opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
+nom = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 rootcause = { workspace = true }
