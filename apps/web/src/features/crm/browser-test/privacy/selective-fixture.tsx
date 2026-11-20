@@ -7,7 +7,9 @@ import { SettingsPage } from '@app/features/settings/primitives';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { queryClient } from '@queries/client';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { queryClient, queryPersistence } from '@queries/client';
+import { crmProtectedQueryKey } from '@queries/crm-cache-scope';
 import { previewKeys } from '@queries/preview/keys';
 import { Button } from '@ui';
 import { createSignal, Show, Suspense } from 'solid-js';
@@ -33,9 +35,25 @@ const groups = SETTINGS_TAB_GROUPS.filter(
 );
 export function SelectiveSettingsFixture() {
   const [open, setOpen] = createSignal(true);
+  const [retired, setRetired] = createSignal(false);
   const params = new URLSearchParams(location.search);
   const content = () => (
     <Suspense fallback={<ListSkeleton.Bar class="m-6 h-4 w-32" />}>
+      <Show when={params.has('retirement')}>
+        <Button
+          onClick={async () => {
+            setRetired(false);
+            await cacheSessionGeneration.transition(async () => {
+              await queryClient.cancelQueries();
+              await queryPersistence.retire(crmProtectedQueryKey);
+            });
+            await queryClient.refetchQueries({ type: 'active' });
+            setRetired(true);
+          }}
+        >
+          Retire CRM cache
+        </Button>
+      </Show>
       <CrmEmailPrivacySettings
         renderOverview={(body) => (
           <SettingsPage
@@ -61,6 +79,9 @@ export function SelectiveSettingsFixture() {
       </output>
       <output hidden data-testid="last-change">
         {lastChange()}
+      </output>
+      <output hidden data-testid="retirement-complete">
+        {String(retired())}
       </output>
       <Show
         when={!isTouchDevice()}

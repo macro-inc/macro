@@ -27,14 +27,12 @@ The read is saved in the background; a failed request restores the dot so openin
 it again can retry. Marking read does not mark the notification done.
 
 Records lists Sales Tasks, Sales Email, Sales Notes and Sales Calls beside Companies
-and People. CRM supplies its task-composer preset, and creating any task shows the
-Customer / Contact pill. Global task creation uses the standard
+and People. Members with CRM access receive its task-composer preset and the
+Customer / Contact pill when creating tasks. Global task creation uses the standard
 composer; record-level New task still associates the new task with that record.
-With it on, the activity and contextual composer behavior below applies.
 Task creation opens immediately from the focused pane's registered preset,
 without fetching record details. Contact company prefills use already-loaded
-details. If CRM's flag is still loading, CRM supplies no preset. Later flag,
-focus or record changes do not reset an open composer; reopen to use the new
+details. Focus or record changes do not reset an open composer; reopen to use the new
 context. If an embedded record shows a loading error, global task creation still
 targets the selected record until you close its details.
 
@@ -681,8 +679,16 @@ list, pipeline, or record, and highlights its sidebar item. The back arrow
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
+Proven denial closes these in-workspace settings and hides their sidebar entry;
+individually shared pipelines remain reachable. Members without CRM access keep
+their email contribution controls in **Settings > CRM**. Revoke access while that
+separate settings page is open: **Stages** and **Email sync** disappear while
+contribution settings remain usable, including the owner’s excluded-thread list
+and email mentions. Open an excluded thread and remove its exclusion while CRM
+access is denied; no CRM record data is required. Restoring access returns
+Stages and Email sync.
 
-CRM is available without contributing email. The banner **Your emails aren’t
+CRM access does not require contributing email. The banner **Your emails aren’t
 contributing to CRM** opens **Review and opt in**. The dialog shows the exact
 connected primary mailbox, **Team blacklist**, and **My blacklist** before
 **Share my emails with CRM**. Opt-in shares full content from all available
@@ -810,24 +816,68 @@ existing interaction dates remain; later population recomputes dates from
 eligible history. Labels and folders are not supported yet.
 
 Members denied CRM viewing can still manage their own mailbox consent and
-thread exceptions. Viewing access does not authorize changes to another
-member's contribution.
+exclude or restore their own threads from the email header and the excluded-thread
+list in CRM settings. The list uses owner-scoped email references, so a member can
+open and remove an exclusion without fetching CRM record, company, or contact data.
+Viewing access does not authorize changes to another member's contribution.
 
-## Member access API
+## Member access
 
 Existing and new members start with CRM access. An admin or owner can patch a
 team with `member_crm_access: { user_id, enabled }`; ordinary members cannot
 change this setting, and admins and owners cannot be denied. Mailbox contribution
-consent stays unchanged. Preference mutations return 503 while the deployment
+consent stays unchanged. Denied members have no Customers entry in desktop navigation,
+Go To hotkeys, or the mobile dock. Company/contact search, Quick Access, user-card
+actions, and the Customer / Contact picker retire immediately when access is revoked.
+Preference mutations return 503 while the deployment
 rollout is disabled; existing access checks continue to enforce stored denials.
+In team settings, admins and owners see a CRM access switch for each member only
+while `enable-crm-member-access-changes` is enabled. Owners and admins show the
+reason they always retain access instead of a disabled switch. The access row
+sits below the existing member controls; the identity, role and seat layout stays
+the same on desktop and phones.
+A failed save keeps the previous state and can be retried; members do not see these controls.
+An independently shared item can remain open after revocation, but its CRM record
+breadcrumbs and task-creation preset disappear. Previews, including email mentions,
+drop retired snapshots when the cache generation changes. A CRM deep
+link shows a loading skeleton while its first proof is pending, then the existing
+retry state if verification fails. **Try again** or reconnecting retries the proof.
+Only a proven denial shows the access-denied screen or closes CRM dialogs; a
+transient proof failure retains the last proven state. Access restored while a
+window still shows a recorded denial reopens it without a reload, whichever
+window verified the change; a denial the cache could not record clears at that
+window's next successful check. **Settings → CRM** keeps Stages and Email sync
+while the check is pending or has failed, with **Try again** after a failure;
+only a proven denial removes them. Network failures back off
+once before a second attempt with a shorter timeout; stale generations retry
+once, while terminal proof errors do not retry automatically.
 `GET /crm/member-access` reports current access even
 when record routes return access denied. Clients holding CRM caches may request
 the storage retirement hint with `x-macro-crm-access-signal: 1`; its three-second
 server memoization never applies to record checks or this fresh endpoint. The
-next opted-in request after expiry observes the change (or a missing hint that
-requires a fresh proof); idle/offline clients have no fixed retirement deadline.
-Settings controls and retirement of already-cached client content follow
-separately.
+next opted-in request after expiry can signal the change, but the server may omit
+the hint when its lookup times out or admission is limited. Idle/offline clients
+have no fixed retirement deadline. The client sends that opt-in for storage requests
+except the fresh authority endpoint. Changed hints, CRM access-denied responses,
+boot, focus and reconnect trigger a background proof. Ordinary requests, response
+frames and cached reads never wait for it. A transient failure retains the last
+proven policy, so offline caches remain available until a proven access change.
+Missing hints alone do not change the policy. The first
+allowed or team-less proof preserves existing offline content. A proven denial
+or team-scope change performs conservative cleanup of mixed mail/database snapshots, so independent
+content removed by that cleanup needs an authorized refresh before it is
+available offline again. Every read and subscription frame retains its original
+session generation and is discarded if access changes while it is in flight;
+active queries refetch once after local retirement. Native webviews and browser
+tabs share the same generation comparison at the cache owner. A completed write
+keeps its actual status and payload for the same login, but its old cache effects
+are discarded after retirement. Queued writes still settle their identity and
+draft journal without restoring the retired response. Company/contact create forms close after a successful
+write even if the later proof fails; revocation closes the record view without
+reporting the completed creation as failed or offering a duplicate retry.
+When verifying revocation, explicitly trigger a fresh proof and wait for local
+retirement to finish before checking that protected cached content disappeared;
+an ordinary request without a hint is not evidence that proof or retirement ran.
 
 After denial, company/contact routes and contact pages, CRM lists, search, CRM
 activity, references, and CRM-derived email thread grants require current access
@@ -836,8 +886,21 @@ Whole-team pipeline grants no longer apply. Individually or channel-shared
 pipelines retain their own values and opaque company/contact IDs, but resolving
 record names or opening records requires separate CRM access. Text previously
 copied into a pipeline cell remains visible as pipeline content.
+The denied records screen keeps navigation to these pipelines available on
+desktop and phone, including when access is revoked while a record is open.
+An open pipeline record's denied state retains the desktop navigation control,
+so a collapsed sidebar can be reopened to return to the shared pipeline.
+Independently shared pipeline items retain their normal detail headers.
+A saved list route stays selected through denial and regrant.
 
 Delivered CRM discussion notifications retain their text, and a queued one can
 still arrive under the existing notification policy. Opening the record requires
 current access. Exercise denial and regrant through direct API and agent requests
-as well as the UI once the client follow-up is installed.
+as well as the UI. At desktop and phone widths, open records and an individually
+shared pipeline before denial, trigger fresh proof in each view and wait for local
+retirement, then verify record access is denied while the pipeline's own values
+remain visible. Check
+Quick Access, email, references, and structured agent activity for stale results.
+Regrant and verify fresh results return. Offline authored drafts and unrelated
+documents must survive this transition. Native verification requires a binary
+containing the permission commands, not only an updated web bundle.
