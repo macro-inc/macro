@@ -19,7 +19,7 @@ approval, with the steps under [First apply](#first-apply).
 | `modules/pod-identity.nix` | One role per service account (below), bound with Pod Identity. |
 | `modules/buckets.nix` | Buckets `macro-observability-k8s-{loki,tempo,mimir}`, configured as the host's buckets. Loki and Tempo use theirs while the cluster is tested and move to the host's at the switch; Mimir keeps its own. |
 | `modules/rds.nix` | Grafana's Postgres 17, db.t4g.micro, Multi-AZ, 20 GiB gp3, reachable only from the cluster security group; its RDS-managed password rotates once a year (first Sunday of January, 05:00–06:00 UTC) instead of every 7 days. |
-| `modules/edge.nix` | IP target groups `obs-k8s-grafana` and `obs-k8s-otlp` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.` and `otlp.macro-internal.com` (priorities 10 and 11). |
+| `modules/edge.nix` | IP target groups `obs-k8s-grafana`, `obs-k8s-otlp` and `obs-k8s-argocd` and the security group rules ALB → pods on port 8080. At the switch (`settings.switched`), listener rules for `grafana.`, `otlp.` and `argo.macro-internal.com` (priorities 10, 11 and 12). `argo.` is new, not the stack's (`own`), so this layer also makes its alias record and a DNS-validated certificate added to the stack's listener by SNI. |
 | `modules/alarms.nix` | At the switch (`settings.switched`), per target group: no healthy target, and target 5xx, to the stack's alarm topic. |
 | `modules/outputs.nix` | Names and ARNs the cluster layer needs; `nix run .#tofu -- main output`. |
 
@@ -37,7 +37,9 @@ stack's tagged buckets) and, for the Mimir backfill, the host's instance role
 OpenTofu only adds resources next to them: route table associations, one
 egress rule on the ALB's security group, which, like the stack's own
 `observability-alb-to-host` rule, Pulumi does not manage inline, and at the
-switch two listener rules (priorities 10 and 11; Pulumi has 1 and 2), plus,
+switch the listener rules (priorities 10 to 12; Pulumi has 1 and 2) and, for
+`argo.macro-internal.com`, a DNS record, its certificate's validation record
+and a listener certificate, plus,
 while `mimirBackfill.enable` is on, a statement in Mimir's bucket policy for
 the host's role. Before the switch nothing in this layer changes how the
 host is served. The Loki and Tempo roles may read and write the host's
