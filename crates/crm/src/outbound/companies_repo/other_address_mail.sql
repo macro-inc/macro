@@ -1,6 +1,6 @@
 -- Whether mailbox $1 has a message, sent to or received from, any of the
 -- addresses in $2. Mirrors the per-address gate the email service runs
--- before a teardown.
+-- before a teardown, which also leaves out mail the provider no longer has.
 SELECT EXISTS (
     SELECT 1
     FROM email_contacts ec
@@ -12,11 +12,13 @@ SELECT EXISTS (
               FROM email_message_recipients r
               JOIN email_messages m ON m.id = r.message_id
               WHERE r.contact_id = ec.id AND m.link_id = $1 AND m.is_sent
+                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
           )
           OR EXISTS (
               SELECT 1
               FROM email_messages m
               WHERE m.from_contact_id = ec.id AND m.link_id = $1 AND NOT m.is_sent
+                AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
           )
       )
 ) AS "exists!"

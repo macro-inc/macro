@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE in_progress_user_link\n            SET linked_email = $1,\n                granted_google_scopes = $2,\n                identity_link_created = $4\n            WHERE id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "09c4ed2d01f4927c9acccfa3a9440c4e9ad01a639af9bb7f0d04b10d4af726a1"
+}

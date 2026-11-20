@@ -36,8 +36,8 @@ fn test_build_bool_query_join_shape_multi_term_and() -> anyhow::Result<()> {
             expected_term
         );
     };
-    term_match(&must[0], "foo", "match_phrase_prefix");
-    term_match(&must[1], "bar", "match_phrase_prefix");
+    term_match(&must[0], "foo", "match_bool_prefix");
+    term_match(&must[1], "bar", "match_bool_prefix");
 
     Ok(())
 }
@@ -178,7 +178,7 @@ fn test_build_bool_query_name_mode_matches_document_name() -> anyhow::Result<()>
     let must = json["bool"]["must"].as_array().expect("must array");
     assert_eq!(must.len(), 1, "name mode emits one title clause: {must:?}");
     assert_eq!(
-        must[0]["match_phrase_prefix"]["document_name"]["query"],
+        must[0]["match_bool_prefix"]["document_name"]["query"],
         "report"
     );
     assert!(
@@ -215,7 +215,7 @@ fn test_build_bool_query_name_content_mode_matches_either() -> anyhow::Result<()
     assert!(
         should
             .iter()
-            .any(|c| c["match_phrase_prefix"]["document_name"]["query"] == "report"),
+            .any(|c| c["match_bool_prefix"]["document_name"]["query"] == "report"),
         "missing document_name branch: {should:?}"
     );
     // …the other matches child content via has_child.
@@ -645,7 +645,7 @@ fn dynamic_matching_requires_most_significant_terms_in_one_passage() -> anyhow::
         {"match_phrase": {"content": "quarterly"}},
         {"match_phrase": {"content": "revenue"}},
         {"match_phrase": {"content": "forecast"}},
-        {"match_phrase_prefix": {"content": {"query": "dash", "max_expansions": 256}}},
+        {"match_bool_prefix": {"content": {"query": "dash"}}},
     ]);
     assert_eq!(has_child["query"]["bool"]["should"], expected_terms);
     assert_eq!(has_child["query"]["bool"]["minimum_should_match"], 3);
@@ -679,7 +679,7 @@ fn dynamic_matching_counts_a_repeated_term_once_and_keeps_phrases() -> anyhow::R
         serde_json::json!([
             {"match_phrase": {"content": "deal review"}},
             {"match_phrase": {"content": "Acme"}},
-            {"match_phrase_prefix": {"content": {"query": "notes", "max_expansions": 256}}},
+            {"match_bool_prefix": {"content": {"query": "notes"}}},
         ])
     );
     assert_eq!(passage["minimum_should_match"], 2);
@@ -755,7 +755,7 @@ fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow
         serde_json::json!([
             {"match_phrase": {"content": "revenue"}},
             {"match_phrase": {"content": "q3"}},
-            {"match_phrase_prefix": {"content": {"query": "for", "max_expansions": 256}}},
+            {"match_bool_prefix": {"content": {"query": "for"}}},
         ])
     );
     // An exact search has no word in progress, and neither has a stopword too
@@ -775,4 +775,94 @@ fn dynamic_matching_keeps_a_last_term_that_may_be_a_word_in_progress() -> anyhow
         ])
     );
     Ok(())
+}
+
+/// A content prefix finds every word it starts, however many other words share
+/// it. `match_phrase_prefix` kept only the first 256 expansions of a segment,
+/// so a word sorting after them never matched. Uses only a uniquely named
+/// scratch index; never changes application indices.
+#[tokio::test]
+#[ignore = "requires local OpenSearch at http://localhost:9200"]
+async fn a_content_prefix_matches_words_past_the_first_256_that_share_it() {
+    use crate::OpensearchClient;
+    use opensearch::{
+        BulkParts, SearchParts,
+        http::request::JsonBody,
+        indices::{IndicesDeleteParts, IndicesForcemergeParts},
+    };
+
+    let client =
+        OpensearchClient::new("http://localhost:9200".into(), "".into(), "".into()).unwrap();
+    let index = format!("document-prefix-test-{}", uuid::Uuid::now_v7());
+    client
+        .ensure_index_exists(
+            &index,
+            serde_json::json!({
+                "settings": {"number_of_shards": 1, "number_of_replicas": 0},
+                "mappings": {"dynamic": "false", "properties": {
+                    "entity_id": {"type": "keyword"},
+                    "owner_id": {"type": "keyword"},
+                    "document_name": {"type": "text"},
+                    "content": {"type": "text", "analyzer": "standard"},
+                    "document_relation": {"type": "join", "relations": {"document": "chunk"}}
+                }}
+            }),
+        )
+        .await
+        .unwrap();
+
+    let result: anyhow::Result<()> = async {
+        // 300 other words start with `zeb` and sort before `zebrafinch`, in
+        // another owner's document, so a capped expansion never reaches it.
+        let mut body: Vec<JsonBody<serde_json::Value>> = Vec::new();
+        for (document_id, owner_id, words) in [
+            ("doc-other", "macro|other@example.com", (0..300).map(|n| format!("zeb{n:03}")).collect::<Vec<_>>()),
+            ("doc-mine", "macro|viewer@example.com", vec!["the zebrafinch report".to_string()]),
+        ] {
+            body.push(serde_json::json!({"index": {"_id": document_id, "routing": document_id}}).into());
+            body.push(serde_json::json!({"entity_id": document_id, "owner_id": owner_id,
+                "document_name": "notes", "document_relation": "document"}).into());
+            for (chunk, content) in words.iter().enumerate() {
+                body.push(serde_json::json!({"index": {"_id": format!("{document_id}:{chunk}"), "routing": document_id}}).into());
+                body.push(serde_json::json!({"entity_id": document_id, "node_id": chunk.to_string(), "content": content,
+                    "document_relation": {"name": "chunk", "parent": document_id}}).into());
+            }
+        }
+        client.inner.bulk(BulkParts::Index(&index)).refresh(opensearch::params::Refresh::True)
+            .body(body).send().await?.error_for_status_code()?;
+        // One segment, so the per-segment expansion cap sees every `zeb` word.
+        client.inner.indices().forcemerge(IndicesForcemergeParts::Index(&[&index]))
+            .max_num_segments(1).send().await?.error_for_status_code()?;
+
+        let builder = DocumentQueryBuilder::new(vec!["zeb".to_string()])
+            .match_type("partial")
+            .user_id("macro|viewer@example.com");
+        let mut query = builder.build_bool_query()?.build().to_json();
+        // Only redirect the production index constraint to our isolated scratch index.
+        let filters = query["bool"]["filter"].as_array_mut().unwrap();
+        let index_filter = filters.iter_mut().find(|filter| filter["term"]["_index"].is_string()).unwrap();
+        index_filter["term"]["_index"] = serde_json::json!(index);
+
+        let response: serde_json::Value = client.inner.search(SearchParts::Index(&[&index]))
+            .body(serde_json::json!({"query": query}))
+            .send().await?.error_for_status_code()?.json().await?;
+        let hits = response["hits"]["hits"].as_array().unwrap();
+        assert_eq!(hits.len(), 1, "{response}");
+        assert_eq!(hits[0]["_id"], "doc-mine");
+        let chunk = &hits[0]["inner_hits"]["term_0"]["hits"]["hits"][0];
+        assert_eq!(chunk["_source"]["node_id"], "0");
+        assert_eq!(
+            chunk["highlight"]["content"][0],
+            "the <macro_em>zebrafinch</macro_em> report"
+        );
+        Ok(())
+    }.await;
+    client
+        .inner
+        .indices()
+        .delete(IndicesDeleteParts::Index(&[&index]))
+        .send()
+        .await
+        .unwrap();
+    result.unwrap();
 }

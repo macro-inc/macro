@@ -4,8 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ViewAppearance } from './viewAppearance';
 
 export interface View {
+  appearance?: ViewAppearance;
   /** It is an explicit choice that the structure of the view configuration
 is up to the frontend. The structure and composition of view configuration
 is still very much in flux. */

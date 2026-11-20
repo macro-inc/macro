@@ -67,9 +67,10 @@ pub enum Metric {
     DueDateOutputTokens,
     /// What due dates cost, at the stored price of the harness's model.
     DueDateCostUsd,
-    /// Inboxes whose owner is in the rollout, per look (sample).
+    /// Inboxes in the rollout (their owner or a user they are linked to has
+    /// the flag), per look (sample).
     EnrolledInboxes,
-    /// Owners whose place in the rollout a look could not read.
+    /// Inboxes whose place in the rollout a look could not read.
     EnrollmentUnknown,
     /// From an email event's publish to its thread's classification (sample).
     EventToClassifiedSeconds,

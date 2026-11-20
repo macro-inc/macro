@@ -53,8 +53,9 @@ pub(crate) fn focus_env(
             "OVERRIDE_AGENT_HARNESS_SERVICE_URL",
             stand_ins.harness_url(),
         ),
-        // The worker classifies an inbox only while its owner has the
-        // Focus flag, which it reads from PostHog's definitions.
+        // The worker classifies an inbox only while its owner, or a user it
+        // is linked to, has the Focus flag, which it reads from PostHog's
+        // definitions.
         ("POSTHOG_HOST", stand_ins.flags_url()),
         (
             "POSTHOG_API_KEY",

@@ -1,0 +1,93 @@
+// Host and per-computer metrics of a Firecracker host, written to Macro's
+// Prometheus. Nothing here runs in a guest: a computer's numbers are its
+// VM's cgroup under the host agent's unit, read on the host.
+//
+// @HOST@, @ENVIRONMENT@ and @REMOTE_WRITE_URL@ are filled in by
+// firecracker-host.nix.
+
+prometheus.exporter.unix "host" {
+	// ksmd: memory KSM shares. pressure (PSI) and meminfo (swap, zram) are on
+	// by default.
+	enable_collectors  = ["ksmd"]
+	disable_collectors = ["textfile"]
+}
+
+prometheus.scrape "host" {
+	targets         = prometheus.exporter.unix.host.targets
+	job_name        = "firecracker-host/host"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.remote_write.macro.receiver]
+}
+
+// One cgroup per VM at <unit>/vms/c-<computer id without dashes>, under the
+// parent that holds every VM together. A series without `computer_id` is the
+// parent's. `diskIO` has no series until the agent turns the `io` controller
+// on for these cgroups.
+prometheus.exporter.cadvisor "computers" {
+	raw_cgroup_prefix_allowlist = ["/system.slice/firecracker-host.service/vms"]
+	docker_only                 = false
+	store_container_labels      = false
+	enabled_metrics             = ["cpu", "memory", "diskIO", "process"]
+}
+
+prometheus.scrape "computers" {
+	targets         = prometheus.exporter.cadvisor.computers.targets
+	job_name        = "firecracker-host/computers"
+	scrape_interval = "30s"
+	forward_to      = [prometheus.relabel.computers.receiver]
+}
+
+prometheus.relabel "computers" {
+	forward_to = [prometheus.remote_write.macro.receiver]
+
+	// Only every VM together (the parent) and each computer's VM: cAdvisor
+	// also reports the cgroups above them, and the golden build's VM is not
+	// a computer.
+	rule {
+		source_labels = ["id"]
+		regex         = "/system\\.slice/firecracker-host\\.service/vms(/c-[0-9a-f]{32})?"
+		action        = "keep"
+	}
+
+	// The computer's id, as the control plane writes it.
+	rule {
+		source_labels = ["id"]
+		regex         = ".*/vms/c-([0-9a-f]{8})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{4})([0-9a-f]{12})"
+		replacement   = "$1-$2-$3-$4-$5"
+		target_label  = "computer_id"
+	}
+
+	// The path says nothing the computer id does not.
+	rule {
+		regex  = "id|name|image"
+		action = "labeldrop"
+	}
+}
+
+prometheus.remote_write "macro" {
+	external_labels = {
+		host                   = "@HOST@",
+		deployment_environment = "@ENVIRONMENT@",
+	}
+
+	endpoint {
+		url = "@REMOTE_WRITE_URL@"
+
+		basic_auth {
+			username      = "metrics"
+			password_file = sys.env("CREDENTIALS_DIRECTORY") + "/remote-write-password"
+		}
+
+		queue_config {
+			max_shards           = 2
+			capacity             = 2500
+			max_samples_per_send = 1000
+		}
+	}
+
+	// A host cut off from the metrics stack keeps an hour of samples.
+	wal {
+		min_keepalive_time = "5m"
+		max_keepalive_time = "1h"
+	}
+}

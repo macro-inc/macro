@@ -40,6 +40,7 @@ impl IntoResponse for UpsertScheduledError {
             EmailErr::MessageDeliveryConflict(_) | EmailErr::InvalidScheduleTime => {
                 StatusCode::BAD_REQUEST
             }
+            EmailErr::Contended => StatusCode::CONFLICT,
             _ => {
                 tracing::error!(error=?error, "schedule transition failed");
                 StatusCode::INTERNAL_SERVER_ERROR
@@ -94,7 +95,7 @@ pub struct UpsertScheduledResponse {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, authorization, headers, link), err)]
+#[tracing::instrument(skip(ctx, authorization, headers, link, request), err)]
 pub async fn handler(
     Query(precondition): Query<DraftEditPrecondition>,
     State(ctx): State<ApiContext>,

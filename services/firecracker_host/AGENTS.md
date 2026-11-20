@@ -9,7 +9,8 @@ and serves `crates/firecracker_host_api` over mTLS to the control plane's
 
 ## How it works
 
-Create = reflink the golden's rootfs, grow/reuse `/home`, take a netns slot,
+Create = take a spare disk set or `zfs clone` the golden's latest snapshot
+(rootfs plus an empty `/home` of every sold size; XFS: reflinks), grow, take a netns slot,
 jailer, `snapshot/load` (paused, `clock_realtime`), PATCH both drives (new
 sizes), PUT MMDS (identity + enrollment), resume, kick `macro-restore` over
 vsock. Power actions follow `domain::power::plan`. One record per computer
@@ -42,7 +43,11 @@ mesh: pre-copy while it runs, then a final round after `release`), then
   host limits' squeeze window (one `memory.reclaim` at a time). "Idle" for
   the squeeze is the agent's, from guest CPU; "idle" for hibernation relief
   is the control plane's (`crates/hosted_runtimes` overcommit), from
-  sessions and activity it sees. The control plane sets the window.
+  sessions and activity it sees. The control plane sets the window. The
+  only swap is zram (the NixOS module's `zramSwap`): any swap that can reach
+  a disk (a non-zram device, zram with a writeback device, or an unreadable
+  `/proc/swaps`) fails the swap health check, stops the squeeze, and sets the
+  VMs' parent `memory.swap.max` to 0 until it is gone (each upkeep pass).
 - `src/domain/metrics.rs`: metric names and attributes, a contract with the
   monitors in `infra/stacks/monitoring`.
 - `src/domain/service.rs`: operations, locking, idempotency; `service/host.rs`
@@ -50,9 +55,12 @@ mesh: pre-copy while it runs, then a final round after `release`), then
 - `src/outbound/jails.rs`: jailer, chroot, Firecracker calls; `jails/machines.rs`: the `Machines` port; `jails/golden_build.rs`: golden builds.
 - `src/outbound/network.rs`: netns slots and nftables.
 - `src/outbound/layout.rs`: what lives where on the durable disk.
-- `src/domain/ports.rs` `Disks`: the storage seam (XFS reflink files in
-  `outbound/disks.rs`; a ZFS implementation returns `DriveBacking::BlockDevice`
-  zvols, which the jail turns into device nodes owned by the VM user).
+- `src/domain/ports.rs` `Disks`: the storage seam; `outbound/disks.rs`
+  implements it over ZFS datasets (default) or XFS reflinks.
+- `src/outbound/file_clone.rs`: the only block cloning (ZFS BRT) left:
+  hibernation's Diff memory, hibernation publish and golden builds (see the
+  architecture doc, **Storage**). It runs on the blocking pool; never call
+  `copy_file_range` or other whole-file work on an async worker.
 
 ## Gotchas
 
@@ -72,6 +80,12 @@ mesh: pre-copy while it runs, then a final round after `release`), then
 - A hibernation is published with one rename before the VM ends; a
   hibernation present while the VM ran on is stale and gets discarded.
 
+- A computer's `usage` is its VM's cgroup, read on request; `swapBytes` is
+  what the zram squeeze moved out (optional on the wire: an agent older than
+  the field sends none, and the control plane then keeps no reading rather
+  than a low one). The control plane keeps it per minute for
+  the graphs in Settings, and Alloy on the host reads the same cgroups for
+  Grafana; neither needs anything in the guest.
 - `GET /v1/host` reports `agentVersion` from `FIRECRACKER_HOST_COMMIT` at
   build time (`main.rs` `AGENT_VERSION`); the Nix package
   (`nix/tauri-desktop.nix`, `firecracker-host`) sets it to the flake's rev.

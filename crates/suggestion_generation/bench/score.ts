@@ -42,7 +42,7 @@ export type Attempt = {
   routineMarks?: RoutineMark[];
   feedMarks?: FeedMarks;
   judgeUsd: number;
-  /** The bench failed, not the build: seeding, the stack or the judge. Left out of scores. */
+  /** The bench failed, not the build (seeding, the stack or the judge), or the attempt waits to be judged. Left out of scores. */
   benchError?: string;
   score?: Score;
 };
@@ -58,6 +58,13 @@ export type RunFile = {
   /** Copies of each persona and rounds of them; absent in runs from before seats (1 and 3). */
   seats?: number;
   reps?: number;
+  /** The judge its marks come from (`JUDGE` in judge.ts); absent in runs judged before it was recorded. */
+  judge?: string;
+  /**
+   * Each persona's `personaDigest` as its generations read it, so a rejudge
+   * reads the same; absent in runs from before it was recorded.
+   */
+  personas?: Record<string, string>;
   flags: Record<string, boolean>;
   attempts: Attempt[];
 };

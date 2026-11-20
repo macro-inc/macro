@@ -52,6 +52,9 @@ DMs, and the shared message store other domains discuss things on.
 - `ShareWithChannel` exposes agent sessions and omits legacy chat targets; the domain retains historical entity support.
   `POST /channels/{channel_id}/shares` is its HTTP twin (the SDK's `shareWithChannel(channel)` on every shareable handle, through `packages/sdk/src/entities/channels/share.ts`); both take `ChannelShareEntityType` from `domain/models.rs`.
 - The channel read tools return `senderName` beside `senderId`: the name the app shows (imported author, bot, call guest, or the person's profile name from `get_user_display_names`). One lookup per call; a failed lookup omits names instead of failing the read.
+- `EditChannelMessage` and `DeleteChannelMessage` act as the tool's bot only on
+  a message that bot posted for the caller (`Message::posted_by_bot_for`), and
+  as the caller otherwise; see the receipt rule in `crates/messages/AGENTS.md`.
 
 ## Checks
 
@@ -65,6 +68,9 @@ DMs, and the shared message store other domains discuss things on.
   channel whose `team_id` matches their membership. Membership in a channel or
   the channel creator's team never grants deletion authority on its own. Both
   REST deletion and permanent entity deletion call this policy.
+  It reads the active members before the delete removes them, and
+  `channel.deleted` carries them so `soup_realtime` can drop the channel from
+  their open lists.
 
 - `match_channel_names.sql` starts from the viewer's memberships and looks
   every channel, participant, person and bot up by key behind `OFFSET 0`

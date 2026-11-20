@@ -1,5 +1,6 @@
 import { useMaybeBlockId } from '@core/block';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -7,7 +8,12 @@ import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
+import { queryReadyGate } from '@queries/gate';
+import {
+  isPropertyNameReserved,
+  useCreatePropertyDefinitionMutation,
+  useListPropertiesQuery,
+} from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { CreatePropertyScope } from '@service-properties/generated/schemas/createPropertyScope';
@@ -15,6 +21,7 @@ import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import {
   addCtrlJKMenuNavigation,
   Button,
@@ -32,8 +39,10 @@ import {
   createSignal,
   Index,
   type JSX,
+  Match,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 import { useMaybePropertiesContext } from '../../context/PropertiesContext';
 import {
@@ -42,7 +51,11 @@ import {
   parseEntityType,
   usePropertyNameFocus,
 } from '../../utils';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import {
+  builtInPropertyNamed,
+  builtInPropertySuggestion,
+} from '../../utils/builtInSuggestion';
+import { builtInNameMessage, ERROR_MESSAGES } from '../../utils/errorHandling';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<
@@ -164,6 +177,25 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
   );
 };
 
+function definitionOf(item: PropertyDefinitionResponse): PropertyDefinition {
+  return 'definition' in item ? item.definition : item;
+}
+
+/** A note under the name field, aligned with the form's inputs. */
+function NameNote(props: { children: JSX.Element }) {
+  return (
+    <div class="flex gap-5 px-4 pb-3">
+      <div class="w-22 shrink-0" />
+      <div
+        role="status"
+        class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-md bg-accent-bg px-3 py-2 text-sm text-ink"
+      >
+        {props.children}
+      </div>
+    </div>
+  );
+}
+
 interface CreatePropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -175,6 +207,11 @@ interface CreatePropertyModalProps {
   initialName?: string;
   entityId?: string;
   entityType?: EntityType;
+  /**
+   * Leaves creation for a built-in property. The dialog offers it when the
+   * typed name duplicates that property, and stays open while it settles.
+   */
+  onUseBuiltIn?: (propertyDefinitionId: string) => void | Promise<void>;
 }
 
 export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
@@ -198,6 +235,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     Array<{ id: string; value: number | ''; display_order: number }>
   >([]);
   const [error, setError] = createSignal<string | null>(null);
+  const [isSwitchingToBuiltIn, setIsSwitchingToBuiltIn] = createSignal(false);
 
   const addMutation = useAddEntityPropertyMutation();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -227,10 +265,47 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         props.onClose();
       }
     },
-    onError: () => {
-      setError(ERROR_MESSAGES.PROPERTY_CREATE);
+    onError: (error, variables) => {
+      setError(
+        isPropertyNameReserved(error)
+          ? builtInNameMessage(variables.body.display_name)
+          : ERROR_MESSAGES.PROPERTY_CREATE
+      );
     },
   });
+
+  // The server refuses a property that reuses a built-in property's name.
+  const builtInDefinitionsQuery = useListPropertiesQuery(
+    () => ({ scope: 'system', includeOptions: false }),
+    () => props.isOpen
+  );
+  const reservedBuiltIn = createMemo(() =>
+    queryReadyGate(builtInDefinitionsQuery)
+      ? builtInPropertyNamed(
+          newPropertyName(),
+          builtInDefinitionsQuery.data.map(definitionOf)
+        )
+      : undefined
+  );
+  // A built-in property is offered only where it applies to this entity.
+  // Without an entity type the query below shares its key with the one above,
+  // so its cached answer would list every built-in property.
+  const offersBuiltIns = () =>
+    props.onUseBuiltIn !== undefined && entityType() !== undefined;
+  const usableBuiltInsQuery = useListPropertiesQuery(
+    () => ({
+      scope: 'system',
+      includeOptions: false,
+      forEntityType: entityType(),
+    }),
+    () => props.isOpen && offersBuiltIns()
+  );
+  const canUseBuiltIn = (propertyDefinitionId: string) =>
+    offersBuiltIns() &&
+    queryReadyGate(usableBuiltInsQuery) &&
+    usableBuiltInsQuery.data.some(
+      (item) => definitionOf(item).id === propertyDefinitionId
+    );
 
   createEffect(() => {
     if (props.isOpen) {
@@ -524,9 +599,27 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
   );
 
   const pending = () =>
-    createPropertyMutation.isPending || addMutation.isPending;
+    createPropertyMutation.isPending ||
+    addMutation.isPending ||
+    isSwitchingToBuiltIn();
 
-  const canSubmit = () => newPropertyName().trim().length > 0 && !pending();
+  const builtInSuggestion = createMemo(() =>
+    builtInPropertySuggestion(newPropertyName())
+  );
+  // Only an unrestricted entity property can hold a company or a contact.
+  const selectedTypeLinksCrmRecords = () => selectedDataType() === 'entity';
+
+  const switchToBuiltIn = async (propertyDefinitionId: string) => {
+    setIsSwitchingToBuiltIn(true);
+    try {
+      await props.onUseBuiltIn?.(propertyDefinitionId);
+    } finally {
+      setIsSwitchingToBuiltIn(false);
+    }
+  };
+
+  const canSubmit = () =>
+    newPropertyName().trim().length > 0 && !pending() && !reservedBuiltIn();
 
   const close = () => {
     if (pending()) return;
@@ -595,6 +688,64 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                 class={inputClass}
               />
             </EditorRow>
+
+            <Switch>
+              <Match when={reservedBuiltIn()}>
+                {(builtIn) => (
+                  <NameNote>
+                    <p>{builtInNameMessage(builtIn().display_name)}</p>
+                    <Show when={canUseBuiltIn(builtIn().id)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending()}
+                        onClick={() =>
+                          fireAndForget(
+                            switchToBuiltIn(builtIn().id),
+                            'property-create'
+                          )
+                        }
+                      >
+                        Use {builtIn().display_name}
+                      </Button>
+                    </Show>
+                  </NameNote>
+                )}
+              </Match>
+              <Match when={builtInSuggestion()}>
+                {(suggestion) => (
+                  <NameNote>
+                    <p>
+                      The built-in {suggestion().name} property already links
+                      items to CRM {suggestion().records}, and they show on each{' '}
+                      {suggestion().record}’s record.
+                      <Show when={!selectedTypeLinksCrmRecords()}>
+                        {' '}
+                        The {selectedDataTypeOption().label} type can’t link to
+                        CRM records.
+                      </Show>
+                    </p>
+                    <Show
+                      when={canUseBuiltIn(suggestion().propertyDefinitionId)}
+                    >
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending()}
+                        onClick={() =>
+                          fireAndForget(
+                            switchToBuiltIn(suggestion().propertyDefinitionId),
+                            'property-create'
+                          )
+                        }
+                      >
+                        Use {suggestion().name}
+                      </Button>
+                    </Show>
+                  </NameNote>
+                )}
+              </Match>
+            </Switch>
 
             <EditorRow label="Type">
               <Select<DataTypeOption>

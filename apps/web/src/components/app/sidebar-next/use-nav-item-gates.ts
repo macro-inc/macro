@@ -1,4 +1,5 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { useNewHomeMode } from '@app/features/new-home/use-new-home-mode';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
 import { useSuggestionsFlag } from '@app/features/suggestions/use-suggestions-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -9,6 +10,7 @@ import {
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { useCurrentTeamQuery } from '@queries/team/teams';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
 import { useSidebarPrefs } from './use-sidebar-prefs';
@@ -20,6 +22,7 @@ import { useSidebarPrefs } from './use-sidebar-prefs';
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
   const notifications = useUnifiedNotificationsFlag();
+  const homeMode = useNewHomeMode();
   const suggestions = useSuggestionsFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
@@ -30,7 +33,9 @@ export function useNavItemGates(): Accessor<NavItemGates> {
 
   return createMemo(() => ({
     showNotifications: notifications(),
+    homeMode: homeMode(),
     showForYou: suggestions(),
+    showCustomers: crmAccessAllowed(),
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),

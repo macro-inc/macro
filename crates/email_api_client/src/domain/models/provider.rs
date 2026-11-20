@@ -127,6 +127,21 @@ impl MailFolder {
     }
 }
 
+/// What a mailbox's folder discovery found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MailFolderCatalog {
+    /// The mailbox's folders, with their roles resolved.
+    Folders(Vec<MailFolder>),
+    /// The provider answered 404 to the mailbox's Inbox, which every mailbox
+    /// has: the account has no mailbox the provider will serve (for
+    /// Microsoft, no Exchange Online licence, an inactive mailbox, or one
+    /// hosted on premises).
+    NoMailbox {
+        /// The provider's error code for the 404, when it gave one.
+        error_code: Option<String>,
+    },
+}
+
 /// Provider-supplied attention evidence; user policy has higher precedence.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -233,6 +248,19 @@ pub struct MailboxChangePage {
     pub position: StreamPosition,
     /// The `FolderChangeReader::READER_REVISION` that read the page.
     pub reader_revision: i16,
+}
+
+/// Which messages a folder's delta round lists, and in what order. Only a
+/// round's first request takes it: the provider carries it in the round's
+/// continuation and checkpoint links.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RoundStart {
+    /// Every message in the folder, in the provider's order.
+    Unordered,
+    /// Every message in the folder, most recently received first.
+    NewestFirst,
+    /// Only messages received at or after this time.
+    ReceivedSince(DateTime<Utc>),
 }
 
 /// An opaque continuation/checkpoint which must be validated by its adapter.

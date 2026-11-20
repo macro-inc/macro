@@ -1,6 +1,7 @@
 use super::*;
 use pollster::block_on;
 
+mod authority;
 mod calendar;
 mod people;
 mod soup;

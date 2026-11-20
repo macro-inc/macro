@@ -112,3 +112,47 @@ async fn nothing_paid_means_nothing_refunded_but_the_item_still_comes_off() {
     assert!(service.billing.items.lock().unwrap().is_empty());
     assert_eq!(state(&service).refund, None);
 }
+
+#[tokio::test]
+async fn an_agent_coming_online_completes_its_computers_setup() {
+    let repo = FakeRepo::default();
+    let mut starting = computer(
+        COMPUTER,
+        Phase::Running,
+        BillingState::Active {
+            subscription_item: item("si_1"),
+        },
+    );
+    starting.state.awaiting_agent = true;
+    repo.computers.lock().unwrap().insert(COMPUTER, starting);
+    let service = service_with(repo, FakeBilling::default());
+
+    service.agent_online(TEAM, COMPUTER).await.unwrap();
+
+    let computers = service.repo.computers.lock().unwrap();
+    assert!(!computers[&COMPUTER].state.awaiting_agent);
+    assert_eq!(computers[&COMPUTER].setup_completed_at, Some(now()));
+}
+
+#[tokio::test]
+async fn an_agent_online_again_keeps_the_first_setup_time() {
+    let repo = FakeRepo::default();
+    let earlier = now() - chrono::Duration::hours(1);
+    let mut set_up = computer(
+        COMPUTER,
+        Phase::Running,
+        BillingState::Active {
+            subscription_item: item("si_1"),
+        },
+    );
+    set_up.setup_completed_at = Some(earlier);
+    repo.computers.lock().unwrap().insert(COMPUTER, set_up);
+    let service = service_with(repo, FakeBilling::default());
+
+    service.agent_online(TEAM, COMPUTER).await.unwrap();
+
+    assert_eq!(
+        service.repo.computers.lock().unwrap()[&COMPUTER].setup_completed_at,
+        Some(earlier)
+    );
+}

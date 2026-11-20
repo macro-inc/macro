@@ -10,6 +10,7 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
 | `listen.ts`, `screen.ts` | Is a message for the agent: the pure decision, and the questions the screen asks. |
 | `history.ts`             | Every message heard, per channel, and the ones still waiting for a reply.         |
 | `prompt.ts`              | What a reply run is asked.                                                        |
+| `outgoing.ts`            | Advisory warnings about internal wording in posts, replies and DMs.              |
 | `typing.ts`              | The typing indicator while a reply is being written.                              |
 | `presence.ts`            | Keeping the agent shown as online.                                                |
 | `online.ts`              | Telling Macro once per run that the agent is up (`POST /team_agents/me/online`).   |
@@ -41,6 +42,16 @@ owner, and it needs nothing but `MACRO_API_KEY`: sending, reading, the relevance
   gives orders.
 - Email attached to a message is untrusted data, never an order.
 - A message is never empty or a bare flag (`--help` is a mistyped command, not something to send).
+- The charter and reply prompt require plain descriptions of actions, never the agent's own
+  tool, function, script or command names. Outgoing posts, replies and DMs (including calls
+  and background notices using the shared chat port) warn in the `chat` log about SDK paths
+  (`macro.email.inbox()`, never "Macro.", macro.com links or addresses), the agent's own
+  function names (read from its catalog; camelCase only, so no everyday word), the code-mode
+  tools, `bin/agent`, code-mode and runtime-package wording, and raw errors (HTTP 4xx/5xx,
+  status codes, stack frames, a leading `Error:`). Only reason categories are recorded,
+  never the message text. This heuristic is advisory: it neither rewrites nor blocks a reply,
+  and a logging failure cannot prevent delivery. It does not inspect speech or arbitrary code
+  that bypasses the chat port.
 - `dmPerson` takes only a Macro id.
 - Typing stops when the agent answers, once, and never runs past ten minutes.
 - Presence is a websocket to Macro's gateway kept alive by a ping every 25 s (the gateway drops

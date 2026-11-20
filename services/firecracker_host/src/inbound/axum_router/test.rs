@@ -5,7 +5,7 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::{TimeZone, Utc};
 use firecracker_host_api::client::HostClient;
-use firecracker_host_api::exec::{ExecRequest, Frame, read_frame, write_frame};
+use firecracker_host_api::exec::{ExecRequest, Frame, MAX_FRAME_BYTES, read_frame, write_frame};
 use firecracker_host_api::{
     Action, Computer, ComputerId, ComputerResources, ComputerRole, ControlPlaneId, CreateComputer,
     EnrollmentDocument, EnrollmentGeneration, ErrorCode, GoldenImage, GoldenKey, GoldenState,
@@ -14,7 +14,7 @@ use firecracker_host_api::{
 use tower::ServiceExt;
 use uuid::Uuid;
 
-use super::{HostRouterState, host_router};
+use super::{HostRouterState, host_router, stamp_trace_id};
 use crate::domain::ports::HostOperations;
 use crate::domain::power::NotApplicable;
 use crate::domain::service::HostError;
@@ -368,6 +368,7 @@ async fn the_client_and_the_router_agree_on_every_route() {
                 gid: 0,
                 env: BTreeMap::new(),
                 cwd: "/".to_owned(),
+                trace_id: None,
             },
         )
         .await
@@ -389,6 +390,7 @@ async fn the_client_and_the_router_agree_on_every_route() {
                 gid: 0,
                 env: BTreeMap::new(),
                 cwd: "/".to_owned(),
+                trace_id: None,
             },
         )
         .await
@@ -398,4 +400,31 @@ async fn the_client_and_the_router_agree_on_every_route() {
         client.computer(computer_id()).await.unwrap_err().code(),
         Some(ErrorCode::NotFound)
     );
+}
+
+#[test]
+fn a_start_frame_gets_the_trace_id_only_while_it_stays_within_the_frame_limit() {
+    const TRACE_ID: &str = "11111111111111111111111111111111";
+    let request = |padding: usize| ExecRequest {
+        argv: vec!["a".repeat(padding)],
+        uid: 0,
+        gid: 0,
+        env: BTreeMap::new(),
+        cwd: "/".to_owned(),
+        trace_id: None,
+    };
+    let encoded_length =
+        |request: &ExecRequest| Frame::Start(request.clone()).encode().unwrap().len();
+
+    let mut small = request(1);
+    stamp_trace_id(&mut small, Some(TRACE_ID.to_owned()));
+    assert_eq!(small.trace_id.as_deref(), Some(TRACE_ID));
+
+    // A client's start frame exactly at the limit, which the WebSocket admits.
+    let padding = MAX_FRAME_BYTES as usize - encoded_length(&request(0));
+    let mut full = request(padding);
+    assert_eq!(encoded_length(&full), MAX_FRAME_BYTES as usize);
+    stamp_trace_id(&mut full, Some(TRACE_ID.to_owned()));
+    assert_eq!(full.trace_id, None);
+    assert_eq!(encoded_length(&full), MAX_FRAME_BYTES as usize);
 }

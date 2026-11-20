@@ -67,3 +67,104 @@ async fn old_credential_failures_cannot_revoke_a_reconnected_mailbox(db: sqlx::P
     );
     assert_eq!(sqlx::query_scalar!("SELECT count(*) FROM email_projection_outbox WHERE link_id = $1 AND payload->>'kind' = 'reauthorization_required' ",link).fetch_one(&db).await.unwrap(),Some(0));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn health_behind_a_share_locked_link_fails_fast_as_a_transient_token_error(db: sqlx::PgPool) {
+    let (repo, link) = super::super::test::fixture(&db).await;
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    let recorded = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.record(
+            MailboxAccess {
+                sync_generation: 1,
+                link_id: link,
+                grant_generation: 1,
+            },
+            CredentialHealth::ReauthorizationRequired,
+        ),
+    )
+    .await;
+    assert!(
+        matches!(
+            &recorded,
+            Ok(Err(TokenError::Transient { message })) if message.ends_with("sqlstate 55P03")
+        ),
+        "{recorded:?}"
+    );
+    population.rollback().await.unwrap();
+    assert!(
+        !sqlx::query_scalar!("SELECT needs_reauth FROM email_links WHERE id = $1", link)
+            .fetch_one(&db)
+            .await
+            .unwrap()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn health_already_stored_is_reported_without_waiting_on_the_link(db: sqlx::PgPool) {
+    let (repo, link) = super::super::test::fixture(&db).await;
+    let mailbox = MailboxAccess {
+        sync_generation: 1,
+        link_id: link,
+        grant_generation: 1,
+    };
+    repo.record(
+        mailbox,
+        CredentialHealth::Available(vec!["Mail.Read".into()]),
+    )
+    .await
+    .unwrap();
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    // Every Graph call's token fetch reports this; it must not queue.
+    let unchanged = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.record(
+            mailbox,
+            CredentialHealth::Available(vec!["Mail.Read".into()]),
+        ),
+    )
+    .await;
+    assert!(matches!(unchanged, Ok(Ok(()))), "{unchanged:?}");
+
+    // New scopes are a change, which waits on the link and times out.
+    let changed = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.record(
+            mailbox,
+            CredentialHealth::Available(vec!["Mail.Read".into(), "Mail.Send".into()]),
+        ),
+    )
+    .await;
+    assert!(
+        matches!(
+            &changed,
+            Ok(Err(TokenError::Transient { message })) if message.ends_with("sqlstate 55P03")
+        ),
+        "{changed:?}"
+    );
+    population.rollback().await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT granted_scopes FROM email_link_microsoft_scopes WHERE link_id = $1",
+            link
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        vec!["Mail.Read".to_string()]
+    );
+}

@@ -205,7 +205,8 @@ export type AppEvents = {
   /**
    * An entity was opened in a split (md, task, pdf, chat, email, channel,
    * canvas, code, project, company, contact, ...). Fired from BlockLoader on
-   * successful load; nested blocks and preview-panel peeks are excluded.
+   * successful load, including blocks a preview panel shows (Home, Agents,
+   * notifications); nested blocks are excluded.
    * Route-owned detail views fire it themselves: documents from
    * FileDetailLoadGate, channels from ChannelDetail, calls and PRs from their
    * detail views. Blocks without an open history row fire it only when they
@@ -283,6 +284,9 @@ export type AppEvents = {
       | 'shared_inbox_conflict'
       | 'payment_required'
       | 'no_gmail_grant'
+      | 'inbox_being_removed'
+      | 'identity_conflict'
+      | 'changed'
       | 'gmail_not_granted'
       | 'failed'
       | 'exception'

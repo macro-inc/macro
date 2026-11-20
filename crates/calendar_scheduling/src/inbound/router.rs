@@ -466,7 +466,7 @@ pub async fn insights<R: Repository, C: Calendars, D: Directory, A: MacroAuthori
     ))
 }
 /// Approve, cancel, record attendance for, or reschedule one booking.
-#[utoipa::path(post, path = "/scheduling/bookings/{id}/change", operation_id = "change_booking", params(("id" = Uuid, Path, description = "Booking identity")), request_body = BookingChange, responses((status = 200, body = BookingResponse), (status = 400), (status = 403), (status = 404), (status = 409)), tag = "scheduling")]
+#[utoipa::path(post, path = "/scheduling/bookings/{id}/change", operation_id = "change_booking", params(("id" = Uuid, Path, description = "Booking identity")), request_body = BookingChange, responses((status = 200, body = BookingResponse), (status = 400), (status = 403), (status = 404), (status = 409), (status = 422, description = "The host's calendar refused the reschedule; the booking keeps its original time")), tag = "scheduling")]
 pub async fn change<R: Repository, C: Calendars, D: Directory, A: MacroAuthorizationService>(
     State(s): State<RouterState<R, C, D, A>>,
     user: MacroAuthorizationExtractor<A, UserOrInternal>,

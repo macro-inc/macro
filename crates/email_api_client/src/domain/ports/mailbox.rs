@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::domain::models::{
     AccessToken, EmailApiError, MailFolder, MailboxAccess, MailboxChangePage, MailboxMessage,
-    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, StreamToken,
+    MailboxSubscription, MessageAction, MessageWriteReceipt, ProviderId, RoundStart, StreamToken,
     SubmissionOutcome,
 };
 
@@ -60,11 +60,12 @@ pub trait MailboxContentReader: Send + Sync + 'static {
     ) -> impl Future<
         Output = Result<Option<crate::domain::models::MailboxOrganization>, EmailApiError>,
     > + Send;
-    /// Enumerate the physical folder hierarchy with resolved semantic roles.
+    /// Enumerate the physical folder hierarchy with resolved semantic roles,
+    /// or report that the account has no mailbox the provider will serve.
     fn folders(
         &self,
         token: &AccessToken,
-    ) -> impl Future<Output = Result<Vec<MailFolder>, EmailApiError>> + Send;
+    ) -> impl Future<Output = Result<crate::domain::models::MailFolderCatalog, EmailApiError>> + Send;
 
     /// Fetch a current message snapshot. Missing means absent now, not permanently deleted.
     fn message(
@@ -109,11 +110,14 @@ pub trait FolderChangeReader: Send + Sync + 'static {
     /// whose round started at an older one is due a re-import.
     const READER_REVISION: i16;
     /// Return one page. The caller must commit work atomically with its position.
+    /// Without a position the page is a new round's first, and `start` says
+    /// what the round lists; with one, the position carries it.
     fn folder_changes(
         &self,
         token: &AccessToken,
         folder: &ProviderId,
         position: Option<&StreamToken>,
+        start: RoundStart,
     ) -> impl Future<Output = Result<MailboxChangePage, EmailApiError>> + Send;
 }
 

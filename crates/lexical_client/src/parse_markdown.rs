@@ -24,9 +24,19 @@ struct LexicalResponse {
     data: Vec<LexicalResponseItem>,
 }
 
+/// Options for creating a Lexical markdown snapshot.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct MarkdownSnapshotOptions {
+    /// Property definition IDs to pin; `None` preserves implicit editor defaults.
+    pub initial_pins: Option<Vec<String>>,
+}
+
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    initial_pins: Option<&'a [String]>,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -483,6 +493,36 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
+/// An answer from the lexical service other than `200 OK`. Its message is the
+/// answer's body.
+#[derive(Debug)]
+pub struct UnexpectedResponse {
+    status: reqwest::StatusCode,
+    body: String,
+}
+
+/// The message the lexical service answers with when the sync service holds
+/// no copy of a document.
+const DOCUMENT_NOT_FOUND: &str = "Document not found";
+
+impl UnexpectedResponse {
+    /// Whether the lexical service answered that the sync service holds no
+    /// copy of the document, as opposed to a 404 from a route or gateway.
+    pub fn is_document_not_found(&self) -> bool {
+        self.status == reqwest::StatusCode::NOT_FOUND
+            && serde_json::from_str::<serde_json::Value>(&self.body)
+                .is_ok_and(|body| body["message"] == DOCUMENT_NOT_FOUND)
+    }
+}
+
+impl std::fmt::Display for UnexpectedResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.body)
+    }
+}
+
+impl std::error::Error for UnexpectedResponse {}
+
 pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     if response.status() == reqwest::StatusCode::OK {
         return Ok(response);
@@ -490,7 +530,7 @@ pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwes
     let status = response.status();
     let body = response.text().await?;
     tracing::error!(body=%body, status=%status, "unexpected response from lexical service");
-    anyhow::bail!(body);
+    Err(UnexpectedResponse { status, body }.into())
 }
 
 impl LexicalClient {
@@ -581,12 +621,19 @@ impl LexicalClient {
     }
 
     #[tracing::instrument(skip(self, markdown), err)]
-    pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
+    pub async fn markdown_to_loro_snapshot(
+        &self,
+        markdown: &str,
+        options: MarkdownSnapshotOptions,
+    ) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&MarkdownSnapshotRequest { markdown })
+                .json(&MarkdownSnapshotRequest {
+                    markdown,
+                    initial_pins: options.initial_pins.as_deref(),
+                })
                 .send()
                 .await?,
         )
