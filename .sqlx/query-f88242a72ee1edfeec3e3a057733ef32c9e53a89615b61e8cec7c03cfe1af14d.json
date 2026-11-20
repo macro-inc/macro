@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)\n        SELECT $1::uuid, $2::varchar, $3::varchar, $4::varchar, $5::varchar, $6::varchar\n        WHERE NOT EXISTS (\n            SELECT 1 FROM comms_entity_mentions\n            WHERE source_entity_type = $2::varchar\n              AND source_entity_id = $3::varchar\n              AND entity_type = $4::varchar\n              AND entity_id = $5::varchar\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f88242a72ee1edfeec3e3a057733ef32c9e53a89615b61e8cec7c03cfe1af14d"
+}

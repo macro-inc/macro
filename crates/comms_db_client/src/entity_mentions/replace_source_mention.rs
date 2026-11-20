@@ -42,13 +42,13 @@ pub async fn replace_source_mention(
     sqlx::query!(
         r#"
         INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)
-        SELECT $1, $2, $3, $4, $5, $6
+        SELECT $1::uuid, $2::varchar, $3::varchar, $4::varchar, $5::varchar, $6::varchar
         WHERE NOT EXISTS (
             SELECT 1 FROM comms_entity_mentions
-            WHERE source_entity_type = $2
-              AND source_entity_id = $3
-              AND entity_type = $4
-              AND entity_id = $5
+            WHERE source_entity_type = $2::varchar
+              AND source_entity_id = $3::varchar
+              AND entity_type = $4::varchar
+              AND entity_id = $5::varchar
         )
         "#,
         macro_uuid::generate_uuid_v7(),
