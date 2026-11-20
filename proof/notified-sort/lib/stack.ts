@@ -11,6 +11,8 @@ export type Stack = {
   databaseUrl: string;
   redisUrl: string;
   sqsUrl: string;
+  /** The run_local instance; its Redis is reached through its container (no redis-cli on the host). */
+  instance: string;
 };
 
 export function stackFromEnv(): Stack {
@@ -24,6 +26,7 @@ export function stackFromEnv(): Stack {
     databaseUrl: need('PROOF_DATABASE_URL'),
     redisUrl: need('PROOF_REDIS_URL'),
     sqsUrl: need('PROOF_SQS_URL'),
+    instance: need('PROOF_INSTANCE'),
   };
 }
 
@@ -115,14 +118,15 @@ export async function call<T = unknown>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
-async function clearSignUpCounters(stack: Stack) {
-  await run('redis-cli', ['-u', stack.redisUrl, '--scan', '--pattern', '*sign*up*']).then(
-    async ({ stdout }) => {
-      const keys = stdout.split('\n').filter(Boolean);
-      if (keys.length) await run('redis-cli', ['-u', stack.redisUrl, 'DEL', ...keys]);
-    },
-    () => undefined
-  );
+const redisCli = (stack: Stack, args: string[]) => run('docker', ['exec', `macro-${stack.instance}-redis-1`, 'redis-cli', ...args]);
+
+/** Clears the local stack's sign-up throttles (per email, and 50 accounts an hour per IP). */
+export async function clearSignUpCounters(stack: Stack) {
+  for (const pattern of ['*sign*up*', 'rtl_create_user_hourly:*']) {
+    const { stdout } = await redisCli(stack, ['--scan', '--pattern', pattern]);
+    const keys = stdout.split('\n').filter(Boolean);
+    if (keys.length) await redisCli(stack, ['DEL', ...keys]);
+  }
 }
 
 /** Passwordless sign-in, as the email end-to-end harness does it. */

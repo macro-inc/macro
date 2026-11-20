@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { sqlNotifyStatement, uuidV7 } from './notify.ts';
 import { Rng } from './rng.ts';
-import { execFileSql, signIn, type Stack, type User } from './stack.ts';
+import { clearSignUpCounters, execFileSql, signIn, type Stack, type User } from './stack.ts';
 import { buildWorld, type Entity, type World } from './world.ts';
 
 const run = promisify(execFile);
@@ -36,10 +36,15 @@ export async function seedWorld(
   const world = buildWorld({ seed: options.seed, lanes: options.lanes, sizes: options.sizes, outDir: options.outDir });
   if (options.reuse) return { world, users: await signInAll(stack, world) };
   options.log(`seed ${options.seed}: applying ${world.scenarioFile}`);
-  await run('just', ['seed-scenario', '--instance', options.instance, 'apply', '--file', world.scenarioFile], {
+  // Each user's FusionAuth account is created here; the stack throttles
+  // account creation per IP, and a refused account can never sign in.
+  await clearSignUpCounters(stack);
+  const applied = await run('just', ['seed-scenario', '--instance', options.instance, 'apply', '--file', world.scenarioFile], {
     cwd: options.repo,
     maxBuffer: 64 * 1024 * 1024,
   });
+  const refused = applied.stdout.split('\n').filter((line) => /FusionAuth (account creation failed|unreachable)/.test(line));
+  if (refused.length) throw new Error(`seed ${options.seed}: ${refused.join('; ')}`);
   const extra = join(options.outDir, `${world.scenario}.extra.sql`);
   writeFileSync(extra, `BEGIN;\n${world.extraSql}COMMIT;\n`);
   await execFileSql(stack, extra);
