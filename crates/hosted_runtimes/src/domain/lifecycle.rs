@@ -600,7 +600,13 @@ pub fn transition(
         }
 
         Event::MacrodConnectedWithoutAgentHandOff => {
-            if !state.awaiting_agent || gave_up(&state.phase) {
+            // A give-up this connection would end still can't hand the agent
+            // over: it fails for the macrod instead of recovering.
+            let would_recover = gave_up(&state.phase)
+                && state
+                    .failure
+                    .is_some_and(|failure| failure.ended_by(SignOfLife::MacrodConnected));
+            if !state.awaiting_agent || (gave_up(&state.phase) && !would_recover) {
                 return transition(state, &Event::MacrodConnected, context);
             }
             give_up(

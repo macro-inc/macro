@@ -165,3 +165,27 @@ fn a_computer_turned_off_stays_failed_when_macrod_connects() {
 
     assert!(matches!(after.phase, Phase::Crashed { retry: None, .. }));
 }
+
+/// A macrod that can't take an agent is no recovery for an agent's computer:
+/// handing it the agent would only miss the deadline again and release it.
+#[test]
+fn a_macrod_that_cannot_take_an_agent_fails_the_give_up_it_would_have_ended() {
+    let (failed, _) = apply(&agent_setting_up(), power_refused());
+
+    let (after, effects) = apply(&failed, Event::MacrodConnectedWithoutAgentHandOff);
+
+    assert!(matches!(after.phase, Phase::Crashed { retry: None, .. }));
+    assert_eq!(after.failure, Some(Failure::AgentUnsupported));
+    assert!(!effects.contains(&Effect::DeliverAgent));
+    assert_eq!(after.first_start_failures, failed.first_start_failures);
+}
+
+#[test]
+fn a_macrod_that_cannot_take_an_agent_still_recovers_a_person_computer() {
+    let (failed, _) = apply(&billed(Phase::Running), power_refused());
+
+    let (after, _) = apply(&failed, Event::MacrodConnectedWithoutAgentHandOff);
+
+    assert_eq!(after.phase, Phase::Running);
+    assert_eq!(after.failure, None);
+}
