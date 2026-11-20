@@ -24,6 +24,7 @@ const OUTLOOK_SYNC_CONTEXT: ServiceContext = ServiceContext::new("outlook-mailbo
 /// How often a flag is read.
 const REFRESH: Duration = Duration::from_secs(60);
 
+/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
 const DEFAULT_POSTHOG_HOST: &str = "https://us.i.posthog.com";
 
 /// The PostHog client the flags are read with, or `None` without a project

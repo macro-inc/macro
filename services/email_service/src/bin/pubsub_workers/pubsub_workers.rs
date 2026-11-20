@@ -26,8 +26,6 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// PostHog's US ingestion origin, used when `POSTHOG_HOST` is unset.
-
 fn compose_email_api(
     db: PgPool,
     subscription_topic: String,
