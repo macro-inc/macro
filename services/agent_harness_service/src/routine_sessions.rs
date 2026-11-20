@@ -13,10 +13,10 @@ use bots::domain::models::AgentMcpServer;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
-use pipedream_mcp::domain::models::{ConnectionProvider, PipedreamConnection};
+use pipedream_mcp::domain::models::PipedreamConnection;
 use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
+use pipedream_mcp::domain::service::{connect_only, dispatchable};
 use scheduled_action::domain::ports::DraftApps;
-use tracing::Instrument as _;
 
 use crate::external_session_requests::BrokerExternalSessionRequests;
 
@@ -50,10 +50,8 @@ where
     routine_sessions_router(RoutineSessionsState::new(Arc::new(service), authorization))
 }
 
-/// A user's Pipedream connections, counted as connected the way connector
-/// dispatch (`ConnectorBackends`) counts them: enabled rows; a Macro Connect
-/// grant only where Connect is configured; and a Pipedream grant only for a
-/// user not on Connect alone, whose Pipedream grants dispatch refuses.
+/// A user's Pipedream connections, counted as connected only where connector
+/// dispatch serves them ([`dispatchable`]).
 pub struct PipedreamConnectedApps<Connections, Connect> {
     connections: Connections,
     /// The connector backends dispatch uses, where Macro Connect is
@@ -75,42 +73,16 @@ where
         }
     }
 
-    /// Whether `user` is on Macro Connect alone. The rollout can wait on
-    /// PostHog when its answer isn't cached, so the wait has its own span.
-    async fn connect_only(&self, user: &MacroUserIdStr<'static>) -> bool {
-        let Some(connect) = &self.connect else {
-            return false;
-        };
-        let span = tracing::info_span!(
-            "pipedream.connect_only",
-            pipedream.connect_only = tracing::field::Empty
-        );
-        let connect_only = connect.connect_only(user).instrument(span.clone()).await;
-        span.record("pipedream.connect_only", connect_only);
-        connect_only
-    }
-
-    /// `user`'s connections a session can use.
+    /// `user`'s connections a session can use: those dispatch serves.
     async fn usable(
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> anyhow::Result<Vec<PipedreamConnection>> {
-        let connect_configured = self.connect.is_some();
-        let connect_only = self.connect_only(user).await;
-        Ok(self
-            .connections
-            .list(user)
-            .await
-            .map_err(|error| anyhow::anyhow!("could not list Pipedream connections: {error:?}"))?
-            .into_iter()
-            .filter(|connection| {
-                connection.enabled
-                    && match connection.provider {
-                        ConnectionProvider::Connect => connect_configured,
-                        ConnectionProvider::Pipedream => !connect_only,
-                    }
-            })
-            .collect())
+        let connections =
+            self.connections.list(user).await.map_err(|error| {
+                anyhow::anyhow!("could not list Pipedream connections: {error:?}")
+            })?;
+        Ok(dispatchable(self.connect.as_deref(), user, connections).await)
     }
 }
 
@@ -165,7 +137,7 @@ where
         owner: &MacroUserIdStr<'static>,
         apps: Vec<AgentMcpServer>,
     ) -> anyhow::Result<Vec<AgentMcpServer>> {
-        let connect_only = self.connect_only(owner).await;
+        let connect_only = connect_only(self.connect.as_deref(), owner).await;
         let served_by = self.connect.as_ref().filter(|_| connect_only);
         let mut requirable = Vec::with_capacity(apps.len());
         for app in apps {

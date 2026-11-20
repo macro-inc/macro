@@ -40,6 +40,10 @@ listings, and calls all go through Connect, with no Pipedream fallback.
 - `src/domain/service/connect.rs`: `start_connect_session` and
   `complete_connect_connection` record Connect connections; the router only
   calls them for users on Connect alone (`MacroConnect::connect_only`).
+  `dispatchable` is the one filter for which stored connections dispatch
+  serves; every lister of a user's usable connections (session egress,
+  routines) calls it with the dispatching backends rather than re-deriving
+  the rule.
 
 ## Scope
 

@@ -54,7 +54,8 @@ between the sandbox and the rest of the product.
 External runtimes receive the session's configured MCP selection when binding,
 including enabled owner connections and custom servers under `OwnerConnections`.
 Those connections are only the ones connector dispatch serves
-(`EgressProvisioner::with_macro_connect`): no Pipedream grant for an owner on
+(`pipedream_mcp::domain::service::dispatchable`, over the dispatching
+backends `EgressProvisioner::new` takes): no Pipedream grant for an owner on
 Macro Connect alone, and no Connect grant where Connect isn't configured.
 Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
 authorized natively is advertised as that custom server instead of its slug;

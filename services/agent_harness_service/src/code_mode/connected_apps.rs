@@ -26,7 +26,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::{AddServerError, AddedBy};
 use mcp_client::inbound::toolset::{ConnectMcpServer, ConnectMcpServerResponse};
-use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays};
+use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
 use pipedream_mcp::domain::service::discovery::DiscoveryRequest;
 use pipedream_mcp::inbound::toolset::DiscoverConnectorsResponse;
 use serde_json::{Value, json};
@@ -35,9 +35,9 @@ use std::sync::Arc;
 /// Most `tools/list` pages read for one app.
 const MAX_TOOL_PAGES: usize = 20;
 
-pub struct SessionConnectedApps<Egress, Connections, Servers, Sessions> {
+pub struct SessionConnectedApps<Egress, Connections, Servers, Connect, Sessions> {
     pub egress: Arc<Egress>,
-    pub provisioner: EgressProvisioner<Connections, Servers>,
+    pub provisioner: EgressProvisioner<Connections, Servers, Connect>,
     pub sessions: Sessions,
     /// The gate native tools pass, so discovery and adding a server wait for
     /// the owner exactly as `DiscoverConnectors` and `ConnectMcpServer` do.
@@ -54,12 +54,13 @@ struct Settled {
     apps: Vec<ConnectedApp>,
 }
 
-impl<Egress, Connections, Servers, Sessions>
-    SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, Connections, Servers, Connect, Sessions>
+    SessionConnectedApps<Egress, Connections, Servers, Connect, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
     Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
+    Connect: MacroConnect,
     Sessions: AgentSessionRepo,
 {
     async fn settle(&self, usage: &ConnectedAppUse) -> Result<Settled, CodeModeError> {
@@ -142,12 +143,13 @@ where
 }
 
 #[async_trait]
-impl<Egress, Connections, Servers, Sessions> ConnectedAppTools
-    for SessionConnectedApps<Egress, Connections, Servers, Sessions>
+impl<Egress, Connections, Servers, Connect, Sessions> ConnectedAppTools
+    for SessionConnectedApps<Egress, Connections, Servers, Connect, Sessions>
 where
     Egress: SessionMcpExchange + 'static,
     Connections: ConnectionStore + ConnectorOverlays + 'static,
     Servers: McpServerStore + 'static,
+    Connect: MacroConnect,
     Sessions: AgentSessionRepo + 'static,
 {
     async fn accounts(&self, session: AgentSessionId) -> Result<SessionAccounts, CodeModeError> {

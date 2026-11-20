@@ -271,3 +271,28 @@ async fn without_connect_no_app_routes_through_it() {
     assert_eq!(backends.app_for_slug("linear").await.unwrap(), None);
     assert!(!backends.is_connected(&user(), "linear").await.unwrap());
 }
+
+/// The listers' filter ([`dispatchable`]) keeps exactly the records dispatch
+/// serves, for every way the backends are set up; `None` stands for the
+/// backends where Connect isn't configured.
+#[tokio::test]
+async fn dispatchable_keeps_exactly_the_records_dispatch_serves() {
+    use crate::domain::service::dispatchable;
+
+    let user = user();
+    for (backends, connect) in [
+        (rolled_out(true), true),
+        (rolled_out(false), true),
+        (backends(Some(connect(true))), true),
+        (backends(None), false),
+    ] {
+        for provider in [ConnectionProvider::Pipedream, ConnectionProvider::Connect] {
+            let served = backends.upstream(&record(provider)).await.is_ok();
+            let kept = dispatchable(connect.then_some(&backends), &user, vec![record(provider)])
+                .await
+                .len()
+                == 1;
+            assert_eq!(kept, served, "{provider:?}, connect configured: {connect}");
+        }
+    }
+}

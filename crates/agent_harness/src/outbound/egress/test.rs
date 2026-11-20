@@ -128,6 +128,7 @@ async fn lists_enabled_app_slugs_verbatim() {
             connection("Not A Slug!", true),
         ])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -156,6 +157,7 @@ async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connection("linear", true)])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -201,6 +203,7 @@ async fn a_selected_list_is_advertised_regardless_of_connections() {
             connection("linear", false),
         ])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -244,6 +247,7 @@ async fn an_empty_selection_offers_nothing_of_the_owners() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connection("datadog", true)])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -286,6 +290,7 @@ async fn lists_the_owners_enabled_custom_servers_by_key() {
             custom_server("https://wiki.example.com/mcp", "Internal wiki", true),
             custom_server("https://old.example.com/mcp", "Retired", false),
         ])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -330,6 +335,7 @@ async fn a_selected_list_carries_none_of_the_owners_custom_servers() {
             "Internal wiki",
             true,
         )])),
+        no_connect(),
         "https://egress.macro.com",
     );
 
@@ -513,6 +519,7 @@ fn external_runtime_uses_host_reachable_urls_with_the_existing_session_credentia
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "http://agent-harness-service:8102",
     )
     .with_external_base_url(Some("http://localhost:28102/".into()));
@@ -554,6 +561,7 @@ async fn native_provider_wins_without_hiding_other_hosted_apps() {
             connection("slack_v2", true),
         ])),
         Arc::new(FixedServers(vec![native])),
+        no_connect(),
         "https://egress.macro.com",
     );
     let provisioned = provisioner
@@ -600,6 +608,7 @@ async fn a_selected_overlaid_app_is_advertised_as_its_native_server_once_connect
         let provisioner = EgressProvisioner::new(
             Arc::new(FixedConnections(vec![connection("sentry", true)])),
             Arc::new(FixedServers(servers)),
+            no_connect(),
             "https://egress.macro.com",
         );
         let provisioned = provisioner
@@ -628,6 +637,61 @@ async fn a_selected_overlaid_app_is_advertised_as_its_native_server_once_connect
     }
 }
 
+/// Macro Connect, configured: whether the owner is on it alone, or `None`
+/// where asking would be a bug.
+struct Connect {
+    only: Option<bool>,
+}
+
+impl MacroConnect for Connect {
+    async fn connect_only(&self, _user_id: &MacroUserIdStr<'static>) -> bool {
+        self.only
+            .expect("the rollout was asked without an enabled Pipedream grant")
+    }
+
+    async fn app_for_slug(
+        &self,
+        _app_slug: &str,
+    ) -> anyhow::Result<Option<pipedream_mcp::domain::models::ConnectApp>> {
+        unreachable!("provisioning reads the stored grants")
+    }
+
+    async fn create_connect_session(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app: &pipedream_mcp::domain::models::ConnectApp,
+    ) -> anyhow::Result<String> {
+        unreachable!("provisioning starts no connect session")
+    }
+
+    async fn is_connected(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_id: &str,
+    ) -> anyhow::Result<bool> {
+        unreachable!("provisioning reads the stored grants")
+    }
+
+    async fn delete_connection(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _app_id: &str,
+    ) -> anyhow::Result<()> {
+        unreachable!("provisioning never deletes")
+    }
+}
+
+/// Macro Connect isn't configured.
+fn no_connect() -> Option<Arc<Connect>> {
+    None
+}
+
+/// Macro Connect is configured, with the owner on it alone or not; `None`
+/// fails the test if the rollout is asked.
+fn connect(only: Option<bool>) -> Option<Arc<Connect>> {
+    Some(Arc::new(Connect { only }))
+}
+
 fn connect_connection(app_slug: &str) -> pipedream_mcp::domain::models::PipedreamConnection {
     pipedream_mcp::domain::models::PipedreamConnection {
         provider: pipedream_mcp::domain::models::ConnectionProvider::Connect,
@@ -636,12 +700,8 @@ fn connect_connection(app_slug: &str) -> pipedream_mcp::domain::models::Pipedrea
     }
 }
 
-fn rollout(on: bool) -> pipedream_mcp::domain::ports::ConnectRollout {
-    Arc::new(move |_user| Box::pin(async move { on }))
-}
-
 async fn advertised_slugs(
-    provisioner: &EgressProvisioner<FixedConnections, FixedServers>,
+    provisioner: &EgressProvisioner<FixedConnections, FixedServers, Connect>,
 ) -> Vec<String> {
     let (slugs, _custom) = provisioner
         .advertised_all(
@@ -664,9 +724,9 @@ async fn an_owner_on_connect_alone_is_not_offered_their_pipedream_grants() {
             connect_connection("linear"),
         ])),
         Arc::new(FixedServers(vec![])),
+        connect(Some(true)),
         "https://egress.macro.com",
-    )
-    .with_macro_connect(true, Some(rollout(true)));
+    );
 
     assert_eq!(advertised_slugs(&provisioner).await, ["linear"]);
 }
@@ -680,9 +740,9 @@ async fn an_owner_off_the_rollout_is_offered_both_kinds_of_grant() {
             connect_connection("linear"),
         ])),
         Arc::new(FixedServers(vec![])),
+        connect(Some(false)),
         "https://egress.macro.com",
-    )
-    .with_macro_connect(true, Some(rollout(false)));
+    );
 
     assert_eq!(advertised_slugs(&provisioner).await, ["notion", "linear"]);
 }
@@ -697,28 +757,11 @@ async fn connect_grants_are_not_offered_where_connect_is_not_configured() {
             connect_connection("linear"),
         ])),
         Arc::new(FixedServers(vec![])),
+        no_connect(),
         "https://egress.macro.com",
-    )
-    .with_macro_connect(false, None);
+    );
 
     assert_eq!(advertised_slugs(&provisioner).await, ["notion"]);
-}
-
-/// With Connect configured but no rollout, nobody is on Connect alone, so
-/// Pipedream grants stay offered.
-#[tokio::test]
-async fn without_a_rollout_pipedream_grants_are_offered() {
-    let provisioner = EgressProvisioner::new(
-        Arc::new(FixedConnections(vec![
-            connection("notion", true),
-            connect_connection("linear"),
-        ])),
-        Arc::new(FixedServers(vec![])),
-        "https://egress.macro.com",
-    )
-    .with_macro_connect(true, None);
-
-    assert_eq!(advertised_slugs(&provisioner).await, ["notion", "linear"]);
 }
 
 /// The rollout can wait on PostHog, so an owner holding only Connect grants
@@ -728,13 +771,25 @@ async fn the_rollout_is_not_asked_without_a_pipedream_grant() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connect_connection("linear")])),
         Arc::new(FixedServers(vec![])),
+        connect(None),
         "https://egress.macro.com",
-    )
-    .with_macro_connect(
-        true,
-        Some(Arc::new(|_user| {
-            Box::pin(async { panic!("the rollout was asked without a Pipedream grant") })
-        })),
+    );
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["linear"]);
+}
+
+/// Nor does an owner whose only Pipedream grants are turned off, which no
+/// session is offered either way.
+#[tokio::test]
+async fn the_rollout_is_not_asked_for_disabled_pipedream_grants() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("notion", false),
+            connect_connection("linear"),
+        ])),
+        Arc::new(FixedServers(vec![])),
+        connect(None),
+        "https://egress.macro.com",
     );
 
     assert_eq!(advertised_slugs(&provisioner).await, ["linear"]);

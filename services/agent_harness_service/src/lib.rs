@@ -568,14 +568,12 @@ pub async fn run() -> anyhow::Result<()> {
             None => backends,
         }
     };
-    // Routines count the grants these same backends dispatch, so they ask
-    // them who is on Connect alone and which apps Connect serves; `None`
-    // where Connect isn't configured.
-    let routine_connect = connect
+    // Sessions and routines are offered only the grants these same backends
+    // dispatch, so they ask them who is on Connect alone and which apps
+    // Connect serves; `None` where Connect isn't configured.
+    let dispatch_connect = connect
         .clone()
         .map(|connect| Arc::new(backends(Some(connect))));
-    // Sessions are offered only the grants these backends will serve.
-    let macro_connect_configured = connect.is_some();
     let connectors = backends(connect);
 
     // Session egress reaches only public addresses, except on a local stack
@@ -824,7 +822,7 @@ pub async fn run() -> anyhow::Result<()> {
             config.document_storage_service_auth_key.clone(),
             macro_service_urls::DocumentStorageServiceUrl::new()?.to_string(),
         ),
-        routine_connect.clone(),
+        dispatch_connect.clone(),
     )
     .await?;
     let scheduling_router = scheduling_runtime.router.clone();
@@ -935,9 +933,9 @@ pub async fn run() -> anyhow::Result<()> {
             provisioner: EgressProvisioner::new(
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
+                dispatch_connect.clone(),
                 egress_base_url.clone(),
-            )
-            .with_macro_connect(macro_connect_configured, connect_rollout.clone()),
+            ),
             sessions: session_repo.clone(),
             gate: owner_tool_gate.clone(),
             connectors: tool_context.connector_tool_context.clone(),
@@ -1650,9 +1648,9 @@ pub async fn run() -> anyhow::Result<()> {
             EgressProvisioner::new(
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
+                dispatch_connect.clone(),
                 egress_base_url,
             )
-            .with_macro_connect(macro_connect_configured, connect_rollout.clone())
             .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
@@ -2005,7 +2003,7 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         routine_sessions::PipedreamConnectedApps::new(
             PgConnectionRepo::new(pool.clone()),
-            routine_connect.clone(),
+            dispatch_connect.clone(),
         ),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
@@ -2032,7 +2030,7 @@ pub async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps::new(
                 PgConnectionRepo::new(pool.clone()),
-                routine_connect.clone(),
+                dispatch_connect.clone(),
             ),
         ),
         session_repo.clone(),

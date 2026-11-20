@@ -15,10 +15,9 @@ use agent_egress::domain::model::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_client::domain::ports::McpServerStore;
-use pipedream_mcp::domain::models::{ConnectionProvider, PipedreamConnection};
-use pipedream_mcp::domain::ports::{ConnectRollout, ConnectionStore, ConnectorOverlays};
+use pipedream_mcp::domain::ports::{ConnectionStore, ConnectorOverlays, MacroConnect};
+use pipedream_mcp::domain::service::dispatchable;
 use std::sync::Arc;
-use tracing::Instrument;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{ProvisionedEgress, SandboxEgress};
@@ -29,91 +28,39 @@ use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 mod test;
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections, Servers> {
+pub struct EgressProvisioner<Connections, Servers, Connect> {
     connections: Arc<Connections>,
     custom_servers: Arc<Servers>,
+    /// The connector backends dispatch uses, where Macro Connect is
+    /// configured, so a session is offered only the grants they serve.
+    connect: Option<Arc<Connect>>,
     base_url: String,
     external_base_url: Option<String>,
-    /// How connector dispatch is set up, when known; see
-    /// [`EgressProvisioner::with_macro_connect`].
-    macro_connect: Option<MacroConnectDispatch>,
 }
 
-/// What connector dispatch (`pipedream_mcp`'s `ConnectorBackends`) serves:
-/// a Macro Connect grant only where Connect is configured, and a Pipedream
-/// grant only for an owner not on Connect alone.
-struct MacroConnectDispatch {
-    configured: bool,
-    rollout: Option<ConnectRollout>,
-}
-
-impl<Connections, Servers> EgressProvisioner<Connections, Servers>
+impl<Connections, Servers, Connect> EgressProvisioner<Connections, Servers, Connect>
 where
     Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
+    Connect: MacroConnect,
 {
     /// Build the provisioner over the Pipedream connection store, the custom
-    /// MCP server store, and the egress proxy's public address.
+    /// MCP server store, the connector backends that dispatch the owner's
+    /// connections (`None` where Macro Connect isn't configured), and the
+    /// egress proxy's public address.
     pub fn new(
         connections: Arc<Connections>,
         custom_servers: Arc<Servers>,
+        connect: Option<Arc<Connect>>,
         base_url: impl Into<String>,
     ) -> Self {
         Self {
             connections,
             custom_servers,
+            connect,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
             external_base_url: None,
-            macro_connect: None,
         }
-    }
-
-    /// Advertise only the connections connector dispatch will serve, given
-    /// whether Macro Connect is `configured` and the `rollout` that puts an
-    /// owner on Connect alone. Pass what the dispatching `ConnectorBackends`
-    /// was built with. Without this, every enabled connection is advertised.
-    pub fn with_macro_connect(mut self, configured: bool, rollout: Option<ConnectRollout>) -> Self {
-        self.macro_connect = Some(MacroConnectDispatch {
-            configured,
-            rollout,
-        });
-        self
-    }
-
-    /// The `connections` dispatch will serve for `owner`. The rollout can wait
-    /// on PostHog, so it is asked only when a Pipedream grant depends on it.
-    async fn dispatchable(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        connections: Vec<PipedreamConnection>,
-    ) -> Vec<PipedreamConnection> {
-        let Some(dispatch) = &self.macro_connect else {
-            return connections;
-        };
-        let connect_only = match &dispatch.rollout {
-            Some(rollout)
-                if dispatch.configured
-                    && connections
-                        .iter()
-                        .any(|record| record.provider == ConnectionProvider::Pipedream) =>
-            {
-                let span = tracing::info_span!(
-                    "pipedream.connect_only",
-                    pipedream.connect_only = tracing::field::Empty
-                );
-                let connect_only = rollout(owner.clone()).instrument(span.clone()).await;
-                span.record("pipedream.connect_only", connect_only);
-                connect_only
-            }
-            _ => false,
-        };
-        connections
-            .into_iter()
-            .filter(|record| match record.provider {
-                ConnectionProvider::Connect => dispatch.configured,
-                ConnectionProvider::Pipedream => !connect_only,
-            })
-            .collect()
     }
 
     /// Override only the address advertised to external runtimes, such as host macrod in a local stack.
@@ -168,7 +115,7 @@ where
                 "could not list Pipedream connections: {error:?}"
             ))
         })?;
-        let pipedream = self.dispatchable(owner, pipedream).await;
+        let pipedream = dispatchable(self.connect.as_deref(), owner, pipedream).await;
         let (native, pipedream) = mcp_select::select_connections(native, pipedream);
         Ok((
             pipedream
@@ -186,10 +133,12 @@ where
     }
 }
 
-impl<Connections, Servers> SandboxEgressProvisioner for EgressProvisioner<Connections, Servers>
+impl<Connections, Servers, Connect> SandboxEgressProvisioner
+    for EgressProvisioner<Connections, Servers, Connect>
 where
     Connections: ConnectionStore + ConnectorOverlays,
     Servers: McpServerStore,
+    Connect: MacroConnect,
 {
     fn external_mcp_servers(
         &self,
