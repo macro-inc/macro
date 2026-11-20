@@ -22,6 +22,7 @@ import emailThread from './en/email-thread';
 import emailViews from './en/email-views';
 import entityActions from './en/entity-actions';
 import entityIcons from './en/entity-icons';
+import home from './en/home';
 import importJobs from './en/import-jobs';
 import localRuntime from './en/local-runtime';
 import markdownEditor from './en/markdown-editor';
@@ -43,6 +44,7 @@ import subRoutines from './en/sub-routines';
 import suggestions from './en/suggestions';
 import tabs from './en/tabs';
 import teamAgents from './en/team-agents';
+import teamMembers from './en/team-members';
 import tutorials from './en/tutorials';
 import viewMenus from './en/view-menus';
 
@@ -75,6 +77,7 @@ export default {
   emailViews,
   entityActions,
   entityIcons,
+  home,
   importJobs,
   suggestions,
   localRuntime,
@@ -96,6 +99,7 @@ export default {
   subRoutines,
   tabs,
   teamAgents,
+  teamMembers,
   tutorials,
   viewMenus,
 };

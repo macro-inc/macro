@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nWITH owned AS MATERIALIZED (\n    SELECT entity.id FROM import_entity AS entity\n    WHERE entity.id = $2 AND (SELECT entity.user_id OFFSET 0) = $1\n), removed AS (\n    DELETE FROM import_entity_written AS written USING owned\n    WHERE written.import_id = owned.id AND written.kind = 'task_notice'\n    RETURNING written.import_id\n)\nSELECT EXISTS (SELECT 1 FROM owned) AS \"owned!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a15ba4e66d40684db804de4b1b0be8ee2313a2b81315ec08603e35c350653d81"
+}

@@ -1,0 +1,126 @@
+apiVersion: v1
+data:
+  config.yaml: |
+
+    analytics:
+      reporting_enabled: false
+    auth_enabled: false
+    bloom_build:
+      builder:
+        planner_address: ""
+      enabled: false
+    bloom_gateway:
+      client:
+        addresses: ""
+      enabled: false
+    common:
+      compactor_grpc_address: 'loki.observability.svc.cluster.local:9095'
+      path_prefix: /var/loki
+      replication_factor: 3
+      storage:
+        s3:
+          bucketnames: observability-logs-2be9169
+          insecure: false
+          region: us-east-2
+          s3forcepathstyle: false
+    compactor:
+      delete_request_store: s3
+      retention_enabled: true
+    frontend:
+      scheduler_address: ""
+      tail_proxy_url: ""
+    frontend_worker:
+      scheduler_address: ""
+    index_gateway:
+      mode: simple
+    ingester:
+      wal:
+        flush_on_shutdown: true
+    limits_config:
+      allow_structured_metadata: true
+      discover_log_levels: true
+      ingestion_burst_size_mb: 16
+      ingestion_rate_mb: 8
+      max_cache_freshness_per_query: 10m
+      max_query_parallelism: 4
+      max_query_series: 2000
+      query_timeout: 300s
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      retention_period: 720h
+      volume_enabled: true
+    memberlist:
+      abort_if_cluster_join_fails: true
+      advertise_port: 7946
+      bind_port: 7946
+      join_members:
+      - loki-memberlist.observability.svc.cluster.local
+      max_join_backoff: 1m
+      max_join_retries: 10
+      min_join_backoff: 1s
+      rejoin_interval: 90s
+    pattern_ingester:
+      enabled: true
+    querier:
+      max_concurrent: 4
+    query_range:
+      align_queries_with_step: true
+    ruler:
+      storage:
+        s3:
+          bucketnames: observability-logs-2be9169
+          insecure: false
+          region: us-east-2
+          s3forcepathstyle: false
+        type: s3
+      wal:
+        dir: /var/loki/ruler-wal
+    runtime_config:
+      file: /etc/loki/runtime-config/runtime-config.yaml
+    schema_config:
+      configs:
+      - from: "2024-01-01"
+        index:
+          period: 24h
+          prefix: index_
+        object_store: s3
+        schema: v13
+        store: tsdb
+    server:
+      graceful_shutdown_timeout: 5s
+      grpc_listen_port: 9095
+      grpc_server_max_concurrent_streams: 1000
+      grpc_server_max_recv_msg_size: 104857600
+      grpc_server_max_send_msg_size: 104857600
+      grpc_server_min_time_between_pings: 10s
+      grpc_server_ping_without_stream_allowed: true
+      http_listen_port: 3100
+      http_server_idle_timeout: 30s
+      http_server_read_timeout: 10m0s
+      http_server_write_timeout: 10m0s
+      log_level: info
+    storage_config:
+      bloom_shipper:
+        working_directory: /var/loki/data/bloomshipper
+      boltdb_shipper:
+        index_gateway_client:
+          server_address: ""
+      hedging:
+        at: 250ms
+        max_per_second: 20
+        up_to: 3
+      tsdb_shipper:
+        index_gateway_client:
+          server_address: ""
+      use_thanos_objstore: false
+    tracing:
+      enabled: false
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/instance: loki
+    app.kubernetes.io/name: loki
+    app.kubernetes.io/version: 3.7.10
+    helm.sh/chart: loki-21.2.3
+  name: loki
+  namespace: observability

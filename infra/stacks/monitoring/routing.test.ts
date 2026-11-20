@@ -220,7 +220,9 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'routine-suggestions-failures',
     'search-dropped-events',
     'search-email-backlog',
+    'search-email-indexer-silent',
     'search-email-near-retention',
+    'search-failed-bulk-items',
     'search-indexer-silent',
     'search-live-backlog',
     'search-near-retention',
@@ -374,6 +376,7 @@ test('a heartbeat uses one missing-data mode', () => {
   const heartbeats = monitors().filter((r) => r.inputs.notifyNoData === true);
   expect(heartbeats.map((r) => r.name).sort()).toEqual([
     'firecracker-host-unhealthy',
+    'search-email-indexer-silent',
     'search-indexer-silent',
   ]);
   for (const resource of heartbeats) {
@@ -382,8 +385,10 @@ test('a heartbeat uses one missing-data mode', () => {
       onMissingData: resource.inputs.onMissingData,
     }).toEqual({ name: resource.name, onMissingData: undefined });
   }
-  const silent = heartbeats.find((r) => r.name === 'search-indexer-silent');
-  expect(silent?.inputs.noDataTimeframe).toBe(10);
+  for (const name of ['search-indexer-silent', 'search-email-indexer-silent']) {
+    const silent = heartbeats.find((r) => r.name === name);
+    expect(silent?.inputs.noDataTimeframe).toBe(10);
+  }
 });
 
 test('Firecracker restore percentiles use an enabled distribution of successful snapshot launches', () => {
@@ -435,4 +440,14 @@ test('the probe judges rotation rounds per type, the crowded prefix apart and fa
   expect(query('search-probe-failing')).toContain(
     'by {entity_type,operation}.as_count()'
   );
+});
+
+test('failed bulk items alert only when they last, on complete buckets', () => {
+  const failed = monitors().find((r) => r.name === 'search-failed-bulk-items');
+  expect(failed?.inputs.query).toBe(
+    'min(last_30m):default_zero(sum:search.index.failed_bulk_items{env:prod,service:search-processing-service} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300 > 0'
+  );
+  // An unfinished 5-minute bucket reads as none; the delay keeps the alert
+  // from recovering every 5 minutes.
+  expect(failed?.inputs.evaluationDelay).toBe(420);
 });

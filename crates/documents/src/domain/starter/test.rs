@@ -35,6 +35,7 @@ fn documents() -> Vec<(Uuid, NewMarkdownTextDocument)> {
                                 option_id: INITIAL_PRIORITY,
                             },
                         }]),
+                        pinned_property_definition_ids: None,
                         share_with_team: false,
                         team_id: None,
                     },

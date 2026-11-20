@@ -13,6 +13,16 @@ const propertyValue = z.discriminatedUnion('valueType', [
       .nullable(),
   }),
   z.object({
+    valueType: z.literal('DATE_RANGE'),
+    value: z
+      .object({
+        allDay: z.boolean(),
+        start: z.iso.datetime().transform((value) => new Date(value)),
+        end: z.iso.datetime().transform((value) => new Date(value)),
+      })
+      .nullable(),
+  }),
+  z.object({
     valueType: z.literal('SELECT_STRING'),
     values: z.array(z.string()).nullable(),
   }),
@@ -51,8 +61,60 @@ const editorState = z.object({
   }),
 });
 
+const templateContents = z.object({
+  title: z.string().optional(),
+  shareWithTeam: z.boolean().optional(),
+  propertyIds: z.array(z.string()),
+  propertyDefaults: z.record(z.string(), propertyValue),
+  descriptionMarkdown: z.string(),
+});
+
+const savedTemplate = z.object({
+  id: z.string(),
+  name: z.string(),
+  teamId: z.string().nullable(),
+  revision: z.number(),
+  contents: templateContents,
+});
+
+const templateSelection = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({
+    kind: z.literal('new'),
+    creationId: z.string().uuid(),
+    name: z.string(),
+    teamId: z.string().nullable(),
+  }),
+  z.object({ kind: z.literal('saved'), template: savedTemplate }),
+  z.object({
+    kind: z.literal('editing'),
+    template: savedTemplate,
+    name: z.string(),
+  }),
+]);
+
 export const taskComposerDraftSchema = z.object({
   title: z.string(),
+  shareWithTeam: z.boolean().optional(),
+  templateSelection: templateSelection.optional(),
+  templateEditor: z
+    .object({
+      selection: z.discriminatedUnion('kind', [
+        templateSelection.options[1],
+        templateSelection.options[3],
+      ]),
+      contents: templateContents,
+      request: z
+        .object({
+          creationId: z.uuid(),
+          name: z.string(),
+          teamId: z.string().nullable(),
+          contents: templateContents,
+        })
+        .optional(),
+    })
+    .optional(),
+  templateBaseline: templateContents.optional(),
   content: z.string(),
   editorState: editorState.optional().catch(undefined),
   propertyValues: z.record(z.string(), propertyValue),

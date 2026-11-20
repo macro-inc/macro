@@ -6,11 +6,9 @@ import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
 import {
-  createEffect,
   createSignal,
   ErrorBoundary,
   type JSX,
-  onCleanup,
   Show,
   Suspense,
 } from 'solid-js';
@@ -53,25 +51,6 @@ export function ToastRegion() {
   const [mobileTransientStack, setMobileTransientStack] =
     createSignal<HTMLDivElement>();
   const mobileTransientSize = createElementSize(mobileTransientStack);
-  const [desktopStack, setDesktopStack] = createSignal<HTMLDivElement>();
-  const desktopStackSize = createElementSize(desktopStack);
-
-  // Publishes how far the desktop stack reaches up from the window's bottom
-  // edge as `--desktop-toast-inset-bottom` on <html>, 0 while it shows
-  // nothing, so a control in a view's bottom-right corner can sit above it.
-  // Empty regions collapse, so the height tracks what is actually visible.
-  createEffect(() => {
-    const height = desktopStackSize.height ?? 0;
-    document.documentElement.style.setProperty(
-      '--desktop-toast-inset-bottom',
-      height > 0 ? `calc(${height}px + 1.25rem)` : '0px'
-    );
-  });
-  onCleanup(() =>
-    document.documentElement.style.removeProperty(
-      '--desktop-toast-inset-bottom'
-    )
-  );
 
   return (
     <Portal>
@@ -79,10 +58,7 @@ export function ToastRegion() {
         Desktop stack, bottom-right. Persistent prompts get their own region
         capped at one visible card. Ordinary notices form an expandable three-card stack. Background imports, upload progress, then background work, sit nearest the corner.
       */}
-      <div
-        ref={setDesktopStack}
-        class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4"
-      >
+      <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
           class="macro-toast-region"
           regionId="reminder-region"

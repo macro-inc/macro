@@ -18,9 +18,9 @@ impl IntoResponse for DeleteDraftError {
     fn into_response(self) -> Response {
         let status = match &self.0 {
             EmailErr::Unauthorized => StatusCode::FORBIDDEN,
-            EmailErr::MessageAlreadySent(_) | EmailErr::MessageDeliveryConflict(_) => {
-                StatusCode::CONFLICT
-            }
+            EmailErr::MessageAlreadySent(_)
+            | EmailErr::MessageDeliveryConflict(_)
+            | EmailErr::Contended => StatusCode::CONFLICT,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (

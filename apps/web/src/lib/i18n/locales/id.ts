@@ -516,6 +516,9 @@ export default {
       other: '{{count}} item dihapus',
     },
     toastDeleteFailed: 'Gagal menghapus',
+    toastPropertySet: {
+      other: '{{property}} disetel untuk {{count}} item',
+    },
     toastAddedToFavorites: 'Ditambahkan ke favorit',
     toastAddedCountToFavorites: {
       other: '{{count}} item ditambahkan ke favorit',
