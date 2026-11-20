@@ -2391,9 +2391,10 @@ must stay hidden; subsequent live messages must still appear.
 - The composer clears on Send. A send that fails or is refused (a network
   failure, the queue full, or an external agent with no runtime it may run on)
   puts the message back in the composer with its attached files, ahead of
-  anything typed since, with the caret left at the end; if the session was
-  closed or switched meanwhile, it goes into that session's saved draft
-  without replacing text typed there since. Any pending bubble it
+  anything typed since, with the caret left at the end. It always lands in
+  the session it was sent to: in the composer open on that session, even one
+  reopened while the send was out, or else in that session's saved draft,
+  never replacing text typed there since. Any pending bubble it
   showed is retracted, so a resend appears once. A no-runtime refusal is
   explained in the transcript; any other failure shows "The message could not
   be sent".

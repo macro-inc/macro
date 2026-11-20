@@ -84,6 +84,40 @@ describe('session composer drafts', () => {
     );
   });
 
+  it('puts a refused message into the composer open on its session now', () => {
+    let sent: ReturnType<typeof createSessionComposerDraft> | undefined;
+    let sentFiles:
+      | ReturnType<typeof createSessionAttachmentTracker>
+      | undefined;
+    withRoot(() => {
+      sent = createSessionComposerDraft(() => 'session-a');
+      sentFiles = createSessionAttachmentTracker(() => 'session-a');
+    });
+    let dispose: () => void = () => {};
+    let reopened: ReturnType<typeof createSessionComposerDraft> | undefined;
+    let reopenedFiles:
+      | ReturnType<typeof createSessionAttachmentTracker>
+      | undefined;
+    createRoot((done) => {
+      dispose = done;
+      reopened = createSessionComposerDraft(() => 'session-a');
+      reopenedFiles = createSessionAttachmentTracker(() => 'session-a');
+    });
+    reopened?.setDraft('Typed after reopening');
+
+    sent?.restore('session-a', 'Run the tests');
+    sentFiles?.restore('session-a', [note]);
+    // The open composer's next keystroke must not drop it again.
+    reopened?.setDraft(`${reopened.draft()}!`);
+
+    expect(reopened?.draft()).toBe('Run the tests\n\nTyped after reopening!');
+    expect(reopenedFiles?.attachments()).toEqual([note]);
+    expect(localStorage.getItem(agentSessionDraftKey('session-a'))).toBe(
+      JSON.stringify('Run the tests\n\nTyped after reopening!')
+    );
+    dispose();
+  });
+
   it('puts a refused message back in the session it was sent to', () => {
     const [sessionId, setSessionId] = createSignal<string | undefined>(
       'session-a'

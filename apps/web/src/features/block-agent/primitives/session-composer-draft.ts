@@ -98,6 +98,51 @@ function writeAttachments(
   );
 }
 
+/** Takes a refused message's text or files into one open composer. */
+type Receiver<Value> = (value: Value) => void;
+
+/**
+ * The composers open on each session. A refusal can land after the composer
+ * that sent it is gone; it must reach the one open on that session now, which
+ * would otherwise overwrite storage with its own state on the next keystroke.
+ */
+function createReceivers<Value>() {
+  const open = new Map<string, Receiver<Value>[]>();
+  return {
+    add(id: string | undefined, receive: Receiver<Value>) {
+      if (id) open.set(id, [...(open.get(id) ?? []), receive]);
+    },
+    remove(id: string | undefined, receive: Receiver<Value>) {
+      if (!id) return;
+      const rest = (open.get(id) ?? []).filter((each) => each !== receive);
+      if (rest.length > 0) open.set(id, rest);
+      else open.delete(id);
+    },
+    find(id: string): Receiver<Value> | undefined {
+      return open.get(id)?.[0];
+    },
+  };
+}
+
+const DRAFT_RECEIVERS = createReceivers<string>();
+const ATTACHMENT_RECEIVERS = createReceivers<InputAttachmentData[]>();
+
+function prependMessage(message: string, current: string) {
+  return [message, current]
+    .filter((part) => part.trim().length > 0)
+    .join('\n\n');
+}
+
+function addMissing(
+  attachments: InputAttachmentData[],
+  current: InputAttachmentData[]
+) {
+  const missing = attachments.filter(
+    (attachment) => !current.some((kept) => kept.id === attachment.id)
+  );
+  return missing.length > 0 ? [...missing, ...current] : undefined;
+}
+
 /** Text waiting to be sent into this session. */
 export function createSessionComposerDraft(
   sessionId: Accessor<string | undefined>,
@@ -114,6 +159,14 @@ export function createSessionComposerDraft(
     setText(value);
     writeDraft(currentId, value);
   };
+  const receive = (message: string) =>
+    setDraft(prependMessage(message, untrack(text)));
+  let live = true;
+  DRAFT_RECEIVERS.add(currentId, receive);
+  onCleanup(() => {
+    live = false;
+    DRAFT_RECEIVERS.remove(currentId, receive);
+  });
 
   createEffect(
     on(
@@ -122,6 +175,8 @@ export function createSessionComposerDraft(
         if (id === currentId) return;
         const value = untrack(text);
         if (currentId) writeDraft(currentId, '');
+        DRAFT_RECEIVERS.remove(currentId, receive);
+        DRAFT_RECEIVERS.add(id, receive);
         currentId = id;
         if (!id) return;
         if (value) {
@@ -135,26 +190,18 @@ export function createSessionComposerDraft(
     )
   );
 
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-
   /**
-   * Put a message the agent refused back in front of what is there now. It
-   * goes to the session it was sent to: into this composer while it still
-   * shows that session, else into that session's saved draft, so text typed
-   * in a composer opened since is kept.
+   * Put a message the agent refused back in front of what is there now, in
+   * the session it was sent to: into a composer open on that session (this
+   * one, or one opened since), else into that session's saved draft.
    */
   const restore = (sentTo: string | undefined, message: string) => {
-    // Sent before the session had an id: it can only be this composer's.
-    const live = !disposed && (sentTo === undefined || sentTo === currentId);
-    const current = live ? untrack(text) : (readDraft(sentTo) ?? '');
-    const merged = [message, current]
-      .filter((part) => part.trim().length > 0)
-      .join('\n\n');
-    if (live) setDraft(merged);
-    else writeDraft(sentTo, merged);
+    // Sent before the session had an id: only this composer can hold it.
+    const target =
+      sentTo === undefined ? live && receive : DRAFT_RECEIVERS.find(sentTo);
+    if (target) target(message);
+    else if (sentTo)
+      writeDraft(sentTo, prependMessage(message, readDraft(sentTo) ?? ''));
   };
 
   return { draft: text, setDraft, restore };
@@ -179,6 +226,18 @@ export function createSessionAttachmentTracker(
   let currentId = startingId;
 
   const persist = () => writeAttachments(currentId, tracker.attachments());
+  const receive = (attachments: InputAttachmentData[]) => {
+    const merged = addMissing(attachments, untrack(tracker.attachments));
+    if (!merged) return;
+    tracker.setAttachments(merged);
+    persist();
+  };
+  let live = true;
+  ATTACHMENT_RECEIVERS.add(currentId, receive);
+  onCleanup(() => {
+    live = false;
+    ATTACHMENT_RECEIVERS.remove(currentId, receive);
+  });
 
   createEffect(
     on(
@@ -187,6 +246,8 @@ export function createSessionAttachmentTracker(
         if (id === currentId) return;
         const current = untrack(tracker.attachments);
         if (currentId) writeAttachments(currentId, []);
+        ATTACHMENT_RECEIVERS.remove(currentId, receive);
+        ATTACHMENT_RECEIVERS.add(id, receive);
         currentId = id;
         if (!id) return;
         if (current.some((attachment) => !attachment.pending)) {
@@ -200,31 +261,25 @@ export function createSessionAttachmentTracker(
     )
   );
 
-  let disposed = false;
-  onCleanup(() => {
-    disposed = true;
-  });
-
   /**
    * Give a refused message's files back to the session it was sent to,
-   * beside any attached since, the same way `restore` does for its text.
+   * beside any attached since, the same way the draft's `restore` does.
    */
   const restore = (
     sentTo: string | undefined,
     attachments: InputAttachmentData[]
   ) => {
-    const live = !disposed && (sentTo === undefined || sentTo === currentId);
-    const current = live
-      ? untrack(tracker.attachments)
-      : readAttachments(sentTo);
-    const missing = attachments.filter(
-      (attachment) => !current.some((kept) => kept.id === attachment.id)
-    );
-    if (missing.length === 0) return;
-    if (live) {
-      tracker.setAttachments([...missing, ...current]);
-      persist();
-    } else writeAttachments(sentTo, [...missing, ...current]);
+    const target =
+      sentTo === undefined
+        ? live && receive
+        : ATTACHMENT_RECEIVERS.find(sentTo);
+    if (target) {
+      target(attachments);
+      return;
+    }
+    if (!sentTo) return;
+    const merged = addMissing(attachments, readAttachments(sentTo));
+    if (merged) writeAttachments(sentTo, merged);
   };
 
   return {
