@@ -4,6 +4,21 @@ import { UserIcon } from '@core/component/UserIcon';
 import { type JSX, Show } from 'solid-js';
 
 /**
+ * Text that may be an email address, which a narrow row wraps before its
+ * `@` rather than anywhere in the domain.
+ */
+function AddressBreak(props: { text: string }) {
+  const at = () => props.text.indexOf('@');
+  return (
+    <Show when={at() > 0} fallback={props.text}>
+      {props.text.slice(0, at())}
+      <wbr />
+      {props.text.slice(at())}
+    </Show>
+  );
+}
+
+/**
  * A person in Team › Members, laid out like a Machines row: their picture,
  * name and email, one muted line with their role and seat plan, and a ⋯ that
  * holds what the viewer can change. Every width shows the same row; on
@@ -33,7 +48,7 @@ export function TeamMemberRow(props: {
             data-member-name
             class="truncate text-sm font-medium text-ink @max-[480px]:whitespace-normal @max-[480px]:break-words"
           >
-            {props.name}
+            <AddressBreak text={props.name} />
             {props.isCurrentUser && (
               <span class="font-normal text-ink-muted">
                 {' '}
@@ -50,7 +65,7 @@ export function TeamMemberRow(props: {
             data-member-email
             class="truncate text-xs text-ink-muted @max-[480px]:whitespace-normal @max-[480px]:break-words"
           >
-            {props.email}
+            <AddressBreak text={props.email ?? ''} />
           </div>
         </Show>
         <div data-member-summary class="text-xs text-ink-muted">
