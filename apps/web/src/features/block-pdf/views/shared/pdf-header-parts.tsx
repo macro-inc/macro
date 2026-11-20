@@ -105,7 +105,7 @@ export function usePdfHeaderTools() {
       action: () => printFile(),
     },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -115,7 +115,7 @@ export function usePdfHeaderTools() {
     ...(fileType === 'docx'
       ? [
           {
-            group: 'file',
+            group: 'share-export',
             get label() {
               return t('entityActions.downloadAsDocx');
             },
@@ -128,6 +128,7 @@ export function usePdfHeaderTools() {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
@@ -140,7 +141,7 @@ export function usePdfHeaderTools() {
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

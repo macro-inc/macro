@@ -1,5 +1,8 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import type { SplitFileMenuActionGroups } from '@components/app/split-layout/context';
+import {
+  getSplitFileMenuActionSections,
+  type SplitFileMenuActionGroups,
+} from '@components/app/split-layout/context';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -20,21 +23,21 @@ export function SpreadsheetDraftMenu(props: {
 }) {
   const panel = useSplitPanelOrThrow();
   const groups = createMemo<SplitFileMenuActionGroups>(() => ({
-    entity: [],
-    sender: [],
-    macro: [{ label: 'Ask Macro', icon: Sparkle, action: props.onAsk }],
-    notifications: [],
-    sharing: [{ label: 'Share', icon: Share, action: props.onShare }],
-    file: props.onRename
+    open: [],
+    'most-used': [
+      { label: 'Ask Macro', icon: Sparkle, action: props.onAsk },
+      { label: 'Share', icon: Share, action: props.onShare },
+    ],
+    copy: [],
+    'share-export': [],
+    state: [],
+    info: [],
+    modify: props.onRename
       ? [{ label: 'Rename', icon: Rename, action: props.onRename }]
       : [],
     delete: [],
   }));
-  const actions = () => [
-    ...groups().macro,
-    ...groups().sharing,
-    ...groups().file,
-  ];
+  const sections = () => getSplitFileMenuActionSections(groups());
   panel.setTitleFileMenuTrigger(() => () => props.onOpenChange(true));
   createEffect(on(groups, (value) => panel.setTitleFileMenuActions(value)));
   onCleanup(() => {
@@ -56,26 +59,30 @@ export function SpreadsheetDraftMenu(props: {
             <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dropdown.Trigger>
           <Dropdown.Content class="w-64">
-            <Dropdown.Group>
-              <For each={actions()}>
-                {(action) => (
-                  <Dropdown.Item
-                    onSelect={() => {
-                      fireAndForget(
-                        action.action?.(),
-                        'spreadsheet-draft-menu'
-                      );
-                      props.onOpenChange(false);
-                    }}
-                  >
-                    <span class="size-4 shrink-0 [&>svg]:size-full">
-                      <Dynamic component={action.icon} />
-                    </span>
-                    {action.label}
-                  </Dropdown.Item>
-                )}
-              </For>
-            </Dropdown.Group>
+            <For each={sections()}>
+              {(section) => (
+                <Dropdown.Group>
+                  <For each={section.actions}>
+                    {(action) => (
+                      <Dropdown.Item
+                        onSelect={() => {
+                          fireAndForget(
+                            action.action?.(),
+                            'spreadsheet-draft-menu'
+                          );
+                          props.onOpenChange(false);
+                        }}
+                      >
+                        <span class="size-4 shrink-0 [&>svg]:size-full">
+                          <Dynamic component={action.icon} />
+                        </span>
+                        {action.label}
+                      </Dropdown.Item>
+                    )}
+                  </For>
+                </Dropdown.Group>
+              )}
+            </For>
           </Dropdown.Content>
         </Dropdown>
       }
@@ -92,27 +99,31 @@ export function SpreadsheetDraftMenu(props: {
           <MobileDrawer.Content aria-label="File actions">
             <MobileDrawer.Handle />
             <MobileDrawer.ScrollBody>
-              <MobileDrawer.Section>
-                <For each={actions()}>
-                  {(action) => (
-                    <MobileDrawer.Item
-                      type="button"
-                      onClick={() => {
-                        fireAndForget(
-                          action.action?.(),
-                          'spreadsheet-draft-menu'
-                        );
-                        props.onOpenChange(false);
-                      }}
-                    >
-                      <span class="size-4 shrink-0 [&>svg]:size-full">
-                        <Dynamic component={action.icon} />
-                      </span>
-                      {action.label}
-                    </MobileDrawer.Item>
-                  )}
-                </For>
-              </MobileDrawer.Section>
+              <For each={sections()}>
+                {(section) => (
+                  <MobileDrawer.Section class="mb-3">
+                    <For each={section.actions}>
+                      {(action) => (
+                        <MobileDrawer.Item
+                          type="button"
+                          onClick={() => {
+                            fireAndForget(
+                              action.action?.(),
+                              'spreadsheet-draft-menu'
+                            );
+                            props.onOpenChange(false);
+                          }}
+                        >
+                          <span class="size-4 shrink-0 [&>svg]:size-full">
+                            <Dynamic component={action.icon} />
+                          </span>
+                          {action.label}
+                        </MobileDrawer.Item>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                )}
+              </For>
             </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>

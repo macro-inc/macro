@@ -98,10 +98,10 @@ describe('project actions dropdown', () => {
     await openMenu();
     expect(entries()).toEqual([
       'Open in new split',
-      'Rename',
+      'Share',
       'Copy Link',
       'Copy ID',
-      'Share',
+      'Rename',
       'Delete',
     ]);
   });
@@ -167,9 +167,9 @@ describe('project actions dropdown', () => {
     await openMenu();
     expect(entries()).toEqual([
       'Open in new split',
+      'Share',
       'Copy Link',
       'Copy ID',
-      'Share',
     ]);
   });
 });

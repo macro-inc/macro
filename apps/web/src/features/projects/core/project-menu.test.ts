@@ -13,8 +13,9 @@ describe('projectMenuGroups', () => {
   it('offers every action to a single owned project', () => {
     expect(projectMenuGroups([{ access: 'owner' }], surface)).toEqual([
       ['open-in-split'],
+      ['share'],
+      ['copy-link', 'copy-id'],
       ['rename', 'status', 'priority'],
-      ['copy-link', 'copy-id', 'share'],
       ['delete'],
     ]);
   });
@@ -22,8 +23,9 @@ describe('projectMenuGroups', () => {
   it('lets editors change but not delete a project', () => {
     expect(projectMenuGroups([{ access: 'edit' }], surface)).toEqual([
       ['open-in-split'],
+      ['share'],
+      ['copy-link', 'copy-id'],
       ['rename', 'status', 'priority'],
-      ['copy-link', 'copy-id', 'share'],
     ]);
   });
 
@@ -32,7 +34,8 @@ describe('projectMenuGroups', () => {
     (access) => {
       expect(projectMenuGroups([{ access }], surface)).toEqual([
         ['open-in-split'],
-        ['copy-link', 'copy-id', 'share'],
+        ['share'],
+        ['copy-link', 'copy-id'],
       ]);
     }
   );
@@ -49,11 +52,27 @@ describe('projectMenuGroups', () => {
     ).toEqual([]);
   });
 
+  it('keeps appearance with edits after copy when the host offers it', () => {
+    expect(
+      projectMenuGroups([{ access: 'owner' }], {
+        ...surface,
+        appearance: true,
+      })
+    ).toEqual([
+      ['open-in-split'],
+      ['share'],
+      ['copy-link', 'copy-id'],
+      ['rename', 'change-icon', 'status', 'priority'],
+      ['delete'],
+    ]);
+  });
+
   it('offers a new tab beside a new split for one project', () => {
     const tabs = { ...surface, tabs: true };
     expect(projectMenuGroups([{ access: 'view' }], tabs)).toEqual([
       ['open-in-split', 'open-in-tab'],
-      ['copy-link', 'copy-id', 'share'],
+      ['share'],
+      ['copy-link', 'copy-id'],
     ]);
     expect(
       projectMenuGroups([{ access: 'view' }, { access: 'view' }], tabs)
@@ -77,8 +96,8 @@ describe('projectMenuGroups', () => {
     expect(
       projectMenuGroups([{ access: 'edit' }], { ...limited, priority: true })
     ).toEqual([
-      ['rename', 'priority'],
       ['copy-link', 'copy-id'],
+      ['rename', 'priority'],
     ]);
   });
 });

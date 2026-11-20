@@ -32,9 +32,9 @@ describe('layer context menu', () => {
     const menu = layerMenu(facts());
     expect(labels(menu)).toEqual([
       'Copy',
+      'Copy as PNG',
       'Paste here',
       'Paste to replace',
-      'Copy as PNG',
       'Bring to front',
       'Bring forward',
       'Send backward',
@@ -43,17 +43,19 @@ describe('layer context menu', () => {
       'Frame selection',
       'Add auto layout',
       'Create component',
-      'Hide',
-      'Lock',
       'Flip horizontal',
       'Flip vertical',
       'Rename',
+      'Hide',
+      'Lock',
       'Delete',
     ]);
     expect(item(menu, 'Bring to front')?.shortcut).toBe('⌥⌘]');
     expect(item(menu, 'Paste here')?.disabled).toBe(true);
     expect(menu[0]).not.toBe('separator');
     expect(menu.at(-1)).not.toBe('separator');
+    expect(menu.at(-2)).toBe('separator');
+    expect(menu.filter((entry) => entry === 'separator')).toHaveLength(8);
   });
 
   it('adapts to what is selected', () => {
@@ -90,11 +92,9 @@ describe('layer context menu', () => {
   });
 
   it('offers only viewing actions when read-only', () => {
-    expect(labels(layerMenu(facts({ canEdit: false })))).toEqual([
-      'Copy',
-      'Copy as PNG',
-      'Zoom to selection',
-    ]);
+    const menu = layerMenu(facts({ canEdit: false }));
+    expect(menu.at(-1)).not.toBe('separator');
+    expect(labels(menu)).toEqual(['Zoom to selection', 'Copy', 'Copy as PNG']);
   });
 });
 

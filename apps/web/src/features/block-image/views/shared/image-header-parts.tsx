@@ -49,7 +49,7 @@ export function useImageHeaderTools() {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -67,6 +67,7 @@ export function useImageHeaderTools() {
   });
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () => openChatWithAgent(chatEntity()),
@@ -80,7 +81,7 @@ export function useImageHeaderTools() {
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

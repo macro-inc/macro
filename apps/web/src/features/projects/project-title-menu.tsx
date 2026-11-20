@@ -123,7 +123,7 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
   };
   const optionTool = (propertyId: string, label: string): BlockTool => ({
     label,
-    group: 'file',
+    group: 'modify',
     action: () => {},
     icon: propertyId === SYSTEM_PROPERTY_IDS.STATUS ? StatusIcon : PriorityIcon,
     condition: () =>
@@ -143,6 +143,7 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
     openInNewSplit: {
       label: () => t('entityActions.openInNewSplit'),
       icon: SquaresFourIcon,
+      group: 'open',
       action: () =>
         openProject(layout, props.project.id, {
           section: props.section,
@@ -153,7 +154,7 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
     rename: {
       label: () => t('entityActions.rename'),
       icon: RenameIcon,
-      group: 'file',
+      group: 'modify',
       action: () => {
         openDialog(
           RenameDialog,
@@ -177,7 +178,7 @@ export function ProjectTitleMenu(props: ProjectTitleMenuProps) {
     share: {
       label: () => t('entityActions.share'),
       icon: ShareIcon,
-      group: 'sharing',
+      group: 'most-used',
       action: props.onShare,
     },
     remove: {

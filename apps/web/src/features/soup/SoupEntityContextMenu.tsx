@@ -50,7 +50,7 @@ interface SoupEntityContextMenuProps {
   as?: 'div';
   onOpenChange?: (open: boolean) => void;
   /**
-   * View-specific items appended after the entity actions, separated from
+   * View-specific Modify items placed before later sections, separated from
    * them. Desktop only: the mobile long-press drawer shows the actions alone.
    */
   extraItems?: JSX.Element;

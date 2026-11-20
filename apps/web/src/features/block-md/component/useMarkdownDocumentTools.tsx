@@ -87,7 +87,7 @@ export function useMarkdownDocumentTools() {
     ...(isTask
       ? ([
           {
-            group: 'sharing' as const,
+            group: 'copy' as const,
             label: 'Copy Branch Name',
             icon: GitBranch,
             action: copyBranchName,
@@ -98,7 +98,7 @@ export function useMarkdownDocumentTools() {
     ...(isDocument
       ? ([
           {
-            group: 'sharing' as const,
+            group: 'copy' as const,
             label: 'Copy as markdown',
             icon: Copy,
             action: copyAsMarkdown,
@@ -107,7 +107,7 @@ export function useMarkdownDocumentTools() {
         ] satisfies FileOperation[])
       : []),
     {
-      group: 'file',
+      group: 'share-export',
       label: 'Download',
       icon: Download,
       action: downloadAsMarkdownText,
@@ -118,7 +118,7 @@ export function useMarkdownDocumentTools() {
   // Every document action by name. Each view lists the ones its menu offers.
   const actions = {
     history: {
-      group: 'file',
+      group: 'info',
       label: 'History',
       icon: ClockCounterClockwise,
       condition: () => isFeatureEnabled(enableHistoryComponent),
@@ -127,6 +127,7 @@ export function useMarkdownDocumentTools() {
         element()?.querySelector<HTMLElement>('[data-history-close]') ?? null,
     },
     wideMode: {
+      group: 'state',
       label: () =>
         markdownWideMode()
           ? t('entityActions.turnOffWideMode')
@@ -139,6 +140,7 @@ export function useMarkdownDocumentTools() {
       action: () => setMarkdownWideMode((wide) => !wide),
     },
     askMacro: {
+      group: 'most-used',
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
@@ -151,7 +153,7 @@ export function useMarkdownDocumentTools() {
       children: dispatchAgentActions.all,
     },
     share: {
-      group: 'sharing',
+      group: 'most-used',
       label: 'Share',
       icon: IconLink,
       action: openShare,

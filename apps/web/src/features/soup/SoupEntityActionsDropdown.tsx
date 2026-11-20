@@ -8,6 +8,7 @@ import { Dropdown } from '@ui';
 import { Hotkey } from '@ui/components/Hotkey';
 import { type ComponentProps, createSignal, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import type { SoupEntityActionItem } from './createSoupEntityActions';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 import { createSoupEntityMenuPickers } from './SoupEntityMenuPickers';
 
@@ -15,8 +16,9 @@ type SoupEntityActionsDropdownProps = {
   entity: EntityData;
   list: EntityActionListState;
   viewContext: EntityActionViewContext;
-  /** Host-specific items appended after the entity actions. */
+  /** Host-specific JSX items placed before Delete. */
   extraItems?: JSX.Element;
+  extraActions?: readonly SoupEntityActionItem[];
   placement?: ComponentProps<typeof Dropdown>['placement'];
   triggerProps?: ComponentProps<typeof Dropdown.Trigger>;
   contentClass?: string;
@@ -75,6 +77,7 @@ export function SoupEntityActionsDropdown(
               viewContext={props.viewContext}
               onActionComplete={() => setOpen(false)}
               item={DropdownActionItem}
+              menu="dropdown"
               copyItem={DropdownCopyActionItem}
               separator={() => (
                 <Dropdown.Separator class="my-1.5 h-px border-0 bg-edge-muted" />
@@ -82,6 +85,7 @@ export function SoupEntityActionsDropdown(
               onSetProject={pickers.openProjectPicker}
               onEditTags={pickers.openTagPicker()}
               extraItems={props.extraItems}
+              extraActions={props.extraActions}
             />
           </Dropdown.Group>
         </Dropdown.Content>

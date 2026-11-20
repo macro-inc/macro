@@ -24,6 +24,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
+  type MessageMenuActionId,
+  messageMenuGroups,
+} from '../core/message-menu';
+import {
   getRenderedMessageReplyText,
   getSelectedMessageText,
 } from './browser-selection';
@@ -39,17 +43,8 @@ import { Timestamp } from './Timestamp';
 
 const QUICK_REACTION_EMOJIS = ['❤️', '👍', '😂'] as const;
 
-type ActionId =
-  | 'reply'
-  | 'copy-link'
-  | 'copy-message-text'
-  | 'create-task'
-  | 'chat'
-  | 'edit'
-  | 'delete';
-
 type ActionItem = {
-  id: ActionId;
+  id: MessageMenuActionId;
   label: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>> | string;
   onClick?: MessageActionHandler;
@@ -177,9 +172,8 @@ function ActionMenuContent(props: ActionMenuProps) {
     },
   ];
 
-  const visibleCompose = composeActions.filter((item) => item.onClick);
-  const visibleOther = otherActions.filter((item) => item.onClick);
-  const visibleActions = [...visibleCompose, ...visibleOther];
+  const actionGroups = messageMenuGroups([...composeActions, ...otherActions]);
+  const visibleActions = actionGroups.flatMap((group) => group.items);
 
   return (
     <Show when={hasReactAction() || visibleActions.length > 0}>
@@ -237,87 +231,84 @@ function ActionMenuContent(props: ActionMenuProps) {
             </Show>
           </Show>
 
-          <Show when={visibleCompose.length > 0}>
-            <Toolbar.Group>
-              <For each={visibleCompose}>
-                {(action) => (
-                  <ActionButton
-                    action={action}
-                    onClick={(event) => {
-                      fireAndForget(
-                        action.onClick?.({ message: message(), event }),
-                        'channel-message-actions'
-                      );
-                    }}
-                  />
-                )}
-              </For>
-            </Toolbar.Group>
-          </Show>
-          <Show when={visibleCompose.length > 0 && visibleOther.length > 0}>
-            <Toolbar.Divider />
-          </Show>
-          <Show when={visibleOther.length > 0}>
-            <Toolbar.Group>
-              <For each={visibleOther}>
-                {(action) => (
-                  <ActionButton
-                    action={action}
-                    onPointerDown={(event) => {
-                      if (action.id !== 'reply') return;
-                      selectedReplyText = getSelectedMessageText(
-                        event.currentTarget,
-                        message().id
-                      );
-                      renderedReplyText = getRenderedMessageReplyText(
-                        event.currentTarget,
-                        message().id
-                      );
-                    }}
-                    onClick={(event) => {
-                      if (
-                        action.id === 'copy-link' ||
-                        action.id === 'copy-message-text'
-                      ) {
-                        return action.onClick?.({
-                          message: message(),
-                          event,
-                          silent: true,
-                        });
-                      }
-                      const selectedText =
-                        action.id === 'reply'
-                          ? (selectedReplyText ??
-                            getSelectedMessageText(
-                              event.currentTarget,
-                              message().id
-                            ))
-                          : undefined;
-                      selectedReplyText = undefined;
-                      const renderedText =
-                        action.id === 'reply'
-                          ? (renderedReplyText ??
-                            getRenderedMessageReplyText(
-                              event.currentTarget,
-                              message().id
-                            ))
-                          : undefined;
-                      renderedReplyText = undefined;
-                      fireAndForget(
-                        action.onClick?.({
-                          message: message(),
-                          event,
-                          selectedText,
-                          renderedText,
-                        }),
-                        'channel-message-actions'
-                      );
-                    }}
-                  />
-                )}
-              </For>
-            </Toolbar.Group>
-          </Show>
+          <For each={actionGroups}>
+            {(group, index) => (
+              <>
+                <Show when={index() > 0}>
+                  <Toolbar.Divider />
+                </Show>
+                <Toolbar.Group>
+                  <For each={group.items}>
+                    {(action) => (
+                      <ActionButton
+                        action={action}
+                        onPointerDown={(event) => {
+                          if (action.id !== 'reply') return;
+                          selectedReplyText = getSelectedMessageText(
+                            event.currentTarget,
+                            message().id
+                          );
+                          renderedReplyText = getRenderedMessageReplyText(
+                            event.currentTarget,
+                            message().id
+                          );
+                        }}
+                        onClick={(event) => {
+                          if (
+                            action.id === 'copy-link' ||
+                            action.id === 'copy-message-text'
+                          ) {
+                            return action.onClick?.({
+                              message: message(),
+                              event,
+                              silent: true,
+                            });
+                          }
+                          if (
+                            action.id === 'create-task' ||
+                            action.id === 'chat'
+                          ) {
+                            fireAndForget(
+                              action.onClick?.({ message: message(), event }),
+                              'channel-message-actions'
+                            );
+                            return;
+                          }
+                          const selectedText =
+                            action.id === 'reply'
+                              ? (selectedReplyText ??
+                                getSelectedMessageText(
+                                  event.currentTarget,
+                                  message().id
+                                ))
+                              : undefined;
+                          selectedReplyText = undefined;
+                          const renderedText =
+                            action.id === 'reply'
+                              ? (renderedReplyText ??
+                                getRenderedMessageReplyText(
+                                  event.currentTarget,
+                                  message().id
+                                ))
+                              : undefined;
+                          renderedReplyText = undefined;
+                          fireAndForget(
+                            action.onClick?.({
+                              message: message(),
+                              event,
+                              selectedText,
+                              renderedText,
+                            }),
+                            'channel-message-actions'
+                          );
+                        }}
+                      />
+                    )}
+                  </For>
+                </Toolbar.Group>
+              </>
+            )}
+          </For>
         </Toolbar>
       </HoverActions>
     </Show>

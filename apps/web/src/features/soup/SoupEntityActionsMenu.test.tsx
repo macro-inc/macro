@@ -3,6 +3,7 @@ import type {
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
+import type { EntityData } from '@entity';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
@@ -17,6 +18,7 @@ type TestGroup = {
     id: string;
     label: string;
     onClick: () => void;
+    copy?: boolean;
     menuItem?: Component;
   }[];
 };
@@ -74,13 +76,18 @@ const viewContext: EntityActionViewContext = {
   senderBucket: undefined,
 };
 
-const renderMenu = (extraItems?: () => JSX.Element) =>
+const renderMenu = (
+  extraItems?: () => JSX.Element,
+  extraActions?: { id: string; label: string; onClick: () => void }[],
+  entity?: EntityData
+) =>
   render(() => (
     <SoupEntityActionsMenu
-      entities={[]}
+      entities={entity ? [entity] : []}
       list={{} as EntityActionListState}
       viewContext={viewContext}
       extraItems={extraItems?.()}
+      extraActions={extraActions}
     />
   ));
 
@@ -198,6 +205,7 @@ describe('SoupEntityActionsMenu separators', () => {
   });
 
   it('separates extra items that do render', () => {
+    actions.groups[1].id = 'delete';
     const view = renderMenu(() => (
       <Show when={true}>
         <button type="button">Move to label</button>
@@ -205,7 +213,28 @@ describe('SoupEntityActionsMenu separators', () => {
     ));
 
     expect(view.container.querySelectorAll('hr')).toHaveLength(2);
-    expect(view.container.textContent).toBe('FavoriteDeleteMove to label');
+    expect(view.container.textContent).toBe('FavoriteMove to labelDelete');
+  });
+
+  it('groups typed host actions before Delete', () => {
+    actions.groups = [group('Favorite'), group('Delete')];
+    actions.groups[0].items[0].id = 'favorite';
+    actions.groups[1].items[0].id = 'delete';
+    const view = renderMenu(
+      undefined,
+      [{ id: 'ask-macro', label: 'Ask Macro', onClick: () => {} }],
+      { type: 'channel', id: 'channel' } as EntityData
+    );
+    expect(view.container.textContent).toBe('FavoriteAsk MacroDelete');
+  });
+
+  it('places JSX contributions with Modify before State and Delete', () => {
+    actions.groups = [group('Rename'), group('Mute'), group('Delete')];
+    actions.groups[0].id = 'modify';
+    actions.groups[1].id = 'state';
+    actions.groups[2].id = 'delete';
+    const view = renderMenu(() => <button type="button">Move to label</button>);
+    expect(view.container.textContent).toBe('RenameMove to labelMuteDelete');
   });
 
   it('leads with extra items alone when the entity has no actions', () => {
@@ -215,6 +244,49 @@ describe('SoupEntityActionsMenu separators', () => {
     expect(view.container.querySelectorAll('hr')).toHaveLength(0);
     expect(view.container.textContent).toBe('Move to label');
   });
+});
+
+it('keeps host renderers and callbacks when inserting actions before Delete', () => {
+  const copy = vi.fn(() => false);
+  const remove = vi.fn();
+  actions.groups = [
+    {
+      id: 'copy',
+      items: [
+        { id: 'copy-link', label: 'Copy link', copy: true, onClick: copy },
+      ],
+    },
+    {
+      id: 'delete',
+      items: [{ id: 'delete', label: 'Delete', onClick: remove }],
+    },
+  ];
+  const view = render(() => (
+    <SoupEntityActionsMenu
+      entities={[]}
+      list={{} as EntityActionListState}
+      viewContext={viewContext}
+      extraItems={<button type="button">Host action</button>}
+      item={(props) => (
+        <button type="button" data-testid="host-item" onClick={props.onClick}>
+          {props.text}
+        </button>
+      )}
+      copyItem={(props) => (
+        <button type="button" data-testid="host-copy" onClick={props.onCopy}>
+          {props.text}
+        </button>
+      )}
+      separator={() => <hr data-testid="host-separator" />}
+    />
+  ));
+
+  expect(view.container.textContent).toBe('Copy linkHost actionDelete');
+  expect(screen.getAllByTestId('host-separator')).toHaveLength(2);
+  fireEvent.click(screen.getByTestId('host-copy'));
+  expect(copy).toHaveBeenCalledOnce();
+  fireEvent.click(screen.getByTestId('host-item'));
+  expect(remove).toHaveBeenCalledOnce();
 });
 
 describe('shared notification mute choices', () => {

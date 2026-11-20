@@ -40,11 +40,11 @@ through the SDK's `githubPullRequests`. On touch screens the header's actions wr
 onto their own row below the breadcrumb when it leaves no room for them.
 The **Share** button has a **Copy Share Link** button beside it, like other
 items. The "…" menu beside the PR title (in the Reviews breadcrumb, the standalone
-`/app/pr/<id>` page, and PR previews) holds the same changes as the split button,
-with **Merge** only once its checks pass, plus **Reopen pull request** for a
-closed unmerged PR; then **Copy Link** (the Macro link), **Copy ID**, **Copy
-GitHub link**, **Open on GitHub**, and **Copy branch name** when the head branch
-is stored.
+`/app/pr/<id>` page, and PR previews) groups **Open on GitHub** first; then
+**Copy Link** (the Macro link), **Copy ID**, **Copy GitHub link**, and **Copy
+branch name** when the head branch is stored. Available state changes follow:
+**Merge** only after checks pass, **Reopen pull request** when closed and
+unmerged, **Convert to draft** for non-drafts, and **Close pull request**.
 The metadata pills beneath the PR title include linked agent sessions, using the
 agent sparkle icon. A single session shows its name; several sessions show a
 count chip opening a session list. Selecting a session opens it, with Shift-click

@@ -103,12 +103,13 @@ export function FileSplitHeader(props: {
 
   const tools: BlockTool[] = [
     {
+      group: 'most-used',
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => fireAndForget(openChatWithAgent(chatEntity()), 'file'),
     },
     {
-      group: 'sharing',
+      group: 'most-used',
       label: 'Share',
       icon: IconShared,
       action: openShare,
@@ -126,7 +127,7 @@ export function FileSplitHeader(props: {
       ...(download && !downloadInHeader()
         ? [
             {
-              group: 'file' as const,
+              group: 'share-export' as const,
               label: 'Download',
               icon: Download,
               action: () => fireAndForget(download.start(), 'file-download'),

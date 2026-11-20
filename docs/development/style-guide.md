@@ -36,6 +36,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`web/architecture.md`](../../.agents/rules/web/architecture.md) | FE | `apps/web`, `packages` |
 | [`web/libraries.md`](../../.agents/rules/web/libraries.md) | FE 35–46 | `apps/web`, `packages` |
 | [`web/ui.md`](../../.agents/rules/web/ui.md) | FE | `.tsx` |
+| [`web/menu-order.md`](../../.agents/rules/web/menu-order.md) | | Action menus and phone sheets: shared semantic groups, ordered entity lists, destructive actions last |
 | [`web/design-system.md`](../../.agents/rules/web/design-system.md) | FE 60–68 | `apps/web` `.tsx`: control roles, header layout, selected state, overlay surfaces, loading skeletons |
 | [`web/mobile.md`](../../.agents/rules/web/mobile.md) | FE 70 | `apps/web` UI and CSS on touch and phones, separate desktop and mobile views |
 | [`web/ui-primitives.md`](../../.agents/rules/web/ui-primitives.md) | | `apps/web/src/components/ui` |

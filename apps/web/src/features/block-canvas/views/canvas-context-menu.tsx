@@ -47,14 +47,15 @@ export function CanvasContextMenu(props: {
         }}
       >
         <MenuItem
-          text="Cut"
-          icon={Scissors}
-          hotkeyToken={TOKENS.canvas.cut}
-          disabled={!selected()}
-          onClick={() =>
-            fireAndForget(props.clipboard.cut(), 'canvas-clipboard')
-          }
+          text="Select all"
+          icon={SelectionAll}
+          hotkeyToken={TOKENS.canvas.selectAll}
+          onClick={() => {
+            props.state.chooseTool('select');
+            props.state.editor.execute(selectAllCommand, undefined);
+          }}
         />
+        <MenuSeparator />
         <MenuItem
           text="Copy"
           icon={Copy}
@@ -62,6 +63,26 @@ export function CanvasContextMenu(props: {
           disabled={!selected()}
           onClick={() =>
             fireAndForget(props.clipboard.copy(), 'canvas-clipboard')
+          }
+        />
+        <Show when={props.imageActions}>
+          {(actions) => (
+            <MenuItem
+              text="Copy image"
+              icon={Copy}
+              disabled={actions().disabled}
+              onClick={() => actions().onCopy()}
+            />
+          )}
+        </Show>
+        <MenuSeparator />
+        <MenuItem
+          text="Cut"
+          icon={Scissors}
+          hotkeyToken={TOKENS.canvas.cut}
+          disabled={!selected()}
+          onClick={() =>
+            fireAndForget(props.clipboard.cut(), 'canvas-clipboard')
           }
         />
         <MenuItem
@@ -88,25 +109,6 @@ export function CanvasContextMenu(props: {
           onClick={props.state.duplicate}
         />
         <MenuSeparator />
-        <Show when={props.imageActions}>
-          {(actions) => (
-            <>
-              <MenuItem
-                text="Copy image"
-                icon={Copy}
-                disabled={actions().disabled}
-                onClick={() => actions().onCopy()}
-              />
-              <MenuItem
-                text="Save image"
-                icon={DownloadSimple}
-                disabled={actions().disabled}
-                onClick={() => actions().onSave()}
-              />
-              <MenuSeparator />
-            </>
-          )}
-        </Show>
         <MenuItem
           text="Group"
           icon={SelectionPlus}
@@ -151,18 +153,23 @@ export function CanvasContextMenu(props: {
           </ContextMenuContent>
         </ContextMenu.Sub>
         <MenuSeparator />
-        <MenuItem
-          text="Select all"
-          icon={SelectionAll}
-          hotkeyToken={TOKENS.canvas.selectAll}
-          onClick={() => {
-            props.state.chooseTool('select');
-            props.state.editor.execute(selectAllCommand, undefined);
-          }}
-        />
+        <Show when={props.imageActions}>
+          {(actions) => (
+            <>
+              <MenuItem
+                text="Save image"
+                icon={DownloadSimple}
+                disabled={actions().disabled}
+                onClick={() => actions().onSave()}
+              />
+              <MenuSeparator />
+            </>
+          )}
+        </Show>
         <MenuItem
           text="Delete"
           icon={Trash}
+          class="text-failure-ink"
           hotkeyToken={TOKENS.canvas.delete}
           disabled={!selected()}
           onClick={props.state.editor.deleteSelection}

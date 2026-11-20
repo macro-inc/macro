@@ -9,6 +9,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
   CopyMenuItem,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -363,15 +364,13 @@ export function ProjectMenuDropdown(props: ProjectMenuProps) {
         <DotsThreeIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted">
-        <Dropdown.Group>
-          <ProjectMenuItems {...props} />
-        </Dropdown.Group>
+        <ProjectMenuItems {...props} dropdown />
       </Dropdown.Content>
     </Dropdown>
   );
 }
 
-function ProjectMenuItems(props: ProjectMenuProps) {
+function ProjectMenuItems(props: ProjectMenuProps & { dropdown?: boolean }) {
   // Freeze action targets per opening; keep available actions reactive.
   const rows = props.targets();
   const entries = () => projectMenuEntries(props, rows);
@@ -382,59 +381,63 @@ function ProjectMenuItems(props: ProjectMenuProps) {
           <Show when={index() > 0}>
             <MenuSeparator />
           </Show>
-          <For each={group}>
-            {(entry) =>
-              match(entry)
-                .with({ kind: 'action' }, (action) => (
-                  <Show
-                    when={action.id === 'change-icon' && rows[0]}
-                    fallback={
-                      <Dynamic
-                        component={action.copy ? CopyMenuItem : MenuItem}
-                        text={action.label}
-                        icon={action.icon}
-                        shortcut={action.shortcut}
-                        disabled={action.disabled}
-                        class={
-                          action.destructive ? 'text-failure-ink' : undefined
-                        }
-                        onClick={action.run}
-                        onCopy={async () => (await action.run()) !== false}
-                      />
-                    }
-                  >
-                    {(row) => (
-                      <EntityAppearanceMenu entity={initiativeEntity(row())} />
-                    )}
-                  </Show>
-                ))
-                .with({ kind: 'options' }, (entry) => (
-                  <ContextMenu.Sub>
-                    <SubTrigger text={entry.label} icon={entry.icon} />
-                    <ContextMenuContent
-                      submenu
-                      class="min-w-48 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
+          <Dynamic component={props.dropdown ? Dropdown.Group : MenuGroup}>
+            <For each={group}>
+              {(entry) =>
+                match(entry)
+                  .with({ kind: 'action' }, (action) => (
+                    <Show
+                      when={action.id === 'change-icon' && rows[0]}
+                      fallback={
+                        <Dynamic
+                          component={action.copy ? CopyMenuItem : MenuItem}
+                          text={action.label}
+                          icon={action.icon}
+                          shortcut={action.shortcut}
+                          disabled={action.disabled}
+                          class={
+                            action.destructive ? 'text-failure-ink' : undefined
+                          }
+                          onClick={action.run}
+                          onCopy={async () => (await action.run()) !== false}
+                        />
+                      }
                     >
-                      <For each={entry.options}>
-                        {(option) => (
-                          <MenuItem
-                            text={option.label}
-                            icon={(icon) => (
-                              <PropertyValueIcon
-                                optionId={option.id}
-                                class={icon.class}
-                              />
-                            )}
-                            onClick={() => entry.choose(option.id)}
-                          />
-                        )}
-                      </For>
-                    </ContextMenuContent>
-                  </ContextMenu.Sub>
-                ))
-                .exhaustive()
-            }
-          </For>
+                      {(row) => (
+                        <EntityAppearanceMenu
+                          entity={initiativeEntity(row())}
+                        />
+                      )}
+                    </Show>
+                  ))
+                  .with({ kind: 'options' }, (entry) => (
+                    <ContextMenu.Sub>
+                      <SubTrigger text={entry.label} icon={entry.icon} />
+                      <ContextMenuContent
+                        submenu
+                        class="min-w-48 max-w-[min(22rem,calc(100vw-1rem))] text-xs text-ink-muted"
+                      >
+                        <For each={entry.options}>
+                          {(option) => (
+                            <MenuItem
+                              text={option.label}
+                              icon={(icon) => (
+                                <PropertyValueIcon
+                                  optionId={option.id}
+                                  class={icon.class}
+                                />
+                              )}
+                              onClick={() => entry.choose(option.id)}
+                            />
+                          )}
+                        </For>
+                      </ContextMenuContent>
+                    </ContextMenu.Sub>
+                  ))
+                  .exhaustive()
+              }
+            </For>
+          </Dynamic>
         </>
       )}
     </For>

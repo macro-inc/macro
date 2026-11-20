@@ -384,12 +384,12 @@ describe('project row context menu', () => {
     expect(view.collection.list.focus.key()).toBe(view.rowKey('launch'));
     expect(entries()).toEqual([
       'Open in new split',
+      'Share',
+      'Copy Link',
+      'Copy ID',
       'Rename',
       'Set status',
       'Set priority',
-      'Copy Link',
-      'Copy ID',
-      'Share',
       'Delete',
     ]);
   });
@@ -399,9 +399,9 @@ describe('project row context menu', () => {
     await openMenu('Launch');
     expect(entries()).toEqual([
       'Open in new split',
+      'Share',
       'Copy Link',
       'Copy ID',
-      'Share',
     ]);
   });
 
@@ -508,13 +508,13 @@ describe('project row context menu', () => {
     expect(
       [...drawer.querySelectorAll('button')].map((item) => item.textContent)
     ).toEqual([
+      'Share',
+      'Copy Link',
+      'Copy ID',
       'Rename',
       'Status: Not Started',
       'Status: Completed',
       'Priority: High',
-      'Copy Link',
-      'Copy ID',
-      'Share',
       'Delete',
     ]);
     fireEvent.click(screen.getByRole('button', { name: 'Copy ID' }));

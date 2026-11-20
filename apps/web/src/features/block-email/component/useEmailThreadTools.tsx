@@ -247,7 +247,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
   };
 
   const shareTool: BlockTool = {
-    group: 'sharing',
+    group: 'share-export',
     label: 'Share',
     icon: IconShared,
     action: openShare,
@@ -260,6 +260,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
 
   const actions = {
     markDone: {
+      group: 'most-used',
       label: 'Mark Done',
       icon: CheckCircleIcon,
       action: toggleMarkDone,
@@ -267,6 +268,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.entity.action.markDone,
     },
     markNotDone: {
+      group: 'most-used',
       label: 'Mark Not Done',
       icon: ArrowCounterClockwise,
       action: toggleMarkDone,
@@ -275,6 +277,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.entity.action.markNotDone,
     },
     markUnread: {
+      group: 'most-used',
       label: 'Mark Unread',
       icon: EnvelopeIcon,
       action: toggleMarkUnread,
@@ -282,6 +285,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.entity.action.markUnread,
     },
     markRead: {
+      group: 'most-used',
       label: 'Mark Read',
       icon: EnvelopeOpenIcon,
       action: toggleMarkUnread,
@@ -289,6 +293,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.entity.action.markRead,
     },
     askMacro: {
+      group: 'modify',
       label: 'Ask Macro',
       icon: ChatWithAgentIcon,
       action: () => {
@@ -322,7 +327,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
     },
     share: shareTool,
     moveToFolder: {
-      group: 'file',
+      group: 'modify',
       label: 'Move to folder',
       icon: FolderIcon,
       action: moveToFolder,
@@ -332,7 +337,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       },
     },
     downloadEml: {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.downloadEml');
       },
@@ -349,7 +354,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       hotkeyToken: TOKENS.email.trash,
     },
     senderToSignal: {
-      group: 'sender',
+      group: 'state',
       label: 'Sender → Signal',
       icon: SignalIcon,
       action: () => emailCtx.markSenderSignal(),
@@ -359,7 +364,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         senderBucket() !== 'signal',
     },
     senderToNoise: {
-      group: 'sender',
+      group: 'state',
       label: 'Sender → Noise',
       icon: NoiseIcon,
       action: () => emailCtx.markSenderNoise(),
@@ -369,7 +374,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
         senderBucket() !== 'noise',
     },
     excludeFromCrm: {
-      group: 'sharing',
+      group: 'state',
       get label() {
         return crmPrivacy.label();
       },
@@ -381,7 +386,7 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       condition: crmPrivacy.visible,
     },
     blockSender: {
-      group: 'sender',
+      group: 'state',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),

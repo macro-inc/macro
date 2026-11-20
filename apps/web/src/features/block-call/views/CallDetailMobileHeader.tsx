@@ -96,7 +96,7 @@ export function CallDetailMobileHeader(props: {
                   icon: ShareIcon,
                   action: openShare,
                   focusTarget: getShareDrawerRecipientInput,
-                  group: 'sharing',
+                  group: 'most-used',
                 },
               ]}
             />

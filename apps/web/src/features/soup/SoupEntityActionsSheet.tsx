@@ -6,24 +6,23 @@ import { ProjectAssignmentDialog } from '@app/features/projects/projects';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { getShareDrawerRecipientInput } from '@core/component/TopBar/ShareButton';
 import { triggerFocusInput } from '@core/directive/focusInput';
-import type { EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import { Button } from '@ui';
 import { type ComponentProps, createSignal, type JSX, Show } from 'solid-js';
+import { groupSoupEntityActions } from './core/group-soup-entity-actions';
 import {
   createSoupEntityActions,
+  type SoupEntityActionItem,
   viewedProjectIdFromContent,
 } from './createSoupEntityActions';
-import {
-  SoupEntityActionDrawer,
-  type SoupEntityDrawerAction,
-} from './SoupEntityActionDrawer';
+import { SoupEntityActionDrawer } from './SoupEntityActionDrawer';
 
 type SoupEntityActionsSheetProps = {
   entity: EntityData;
   list: EntityActionListState;
   viewContext: EntityActionViewContext;
-  /** Host-specific actions, in their own group after the entity actions. */
-  extraActions?: readonly SoupEntityDrawerAction[];
+  /** Host-specific actions grouped with the entity actions. */
+  extraActions?: readonly SoupEntityActionItem[];
   /** Host content above the actions, such as a detail's view choices. */
   leading?: (close: () => void) => JSX.Element;
   triggerProps?: ComponentProps<typeof Button>;
@@ -54,10 +53,14 @@ export function SoupEntityActionsSheet(props: SoupEntityActionsSheetProps) {
         setProjectTasks([props.entity.id]);
       },
     });
-    const extra = props.extraActions ?? [];
-    return extra.length > 0
-      ? [...entityGroups, { items: extra }]
-      : entityGroups;
+    return groupSoupEntityActions(
+      [
+        ...entityGroups.flatMap((group) => group.items),
+        ...(props.extraActions ?? []),
+      ],
+      props.entity,
+      isTaskEntity(props.entity)
+    );
   };
 
   return (

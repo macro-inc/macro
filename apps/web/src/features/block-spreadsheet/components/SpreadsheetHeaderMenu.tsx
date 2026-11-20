@@ -1,23 +1,9 @@
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import type { JSX } from 'solid-js';
-import { Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
+import { type HeaderMenuAction, headerMenuEntries } from '../core/header-menu';
 
-export type HeaderAction =
-  | 'cut'
-  | 'copy'
-  | 'paste'
-  | 'paste-values'
-  | 'clear-values'
-  | 'insert-before'
-  | 'insert-after'
-  | 'delete'
-  | 'hide'
-  | 'unhide'
-  | 'resize'
-  | 'autofit'
-  | 'sort-asc'
-  | 'sort-desc';
+export type HeaderAction = HeaderMenuAction;
 export function SpreadsheetHeaderMenu(props: {
   axis: 'row' | 'column';
   count: number;
@@ -31,8 +17,41 @@ export function SpreadsheetHeaderMenu(props: {
   let pending: HeaderAction | undefined;
   const label = () =>
     `${props.count} ${props.axis}${props.count === 1 ? '' : 's'}`;
+  const text = (action: HeaderAction): string => {
+    switch (action) {
+      case 'copy':
+        return 'Copy';
+      case 'cut':
+        return 'Cut';
+      case 'paste':
+        return 'Paste';
+      case 'paste-values':
+        return 'Paste values only';
+      case 'insert-before':
+        return `Insert ${label()} ${props.axis === 'row' ? 'above' : 'left'}`;
+      case 'insert-after':
+        return `Insert ${label()} ${props.axis === 'row' ? 'below' : 'right'}`;
+      case 'clear-values':
+        return `Clear ${label()}`;
+      case 'resize':
+        return `Resize ${label()}…`;
+      case 'autofit':
+        return 'Fit to data';
+      case 'sort-asc':
+        return 'Sort sheet A to Z';
+      case 'sort-desc':
+        return 'Sort sheet Z to A';
+      case 'hide':
+        return `Hide ${label()}`;
+      case 'unhide':
+        return `Unhide all ${props.axis}s`;
+      case 'delete':
+        return `Delete ${label()}`;
+    }
+  };
   const item = (text: string, action: HeaderAction, writable = true) => (
     <MenuItem
+      class={action === 'delete' ? 'text-failure-ink' : undefined}
       text={text}
       disabled={
         (writable && props.readonly) ||
@@ -77,35 +96,28 @@ export function SpreadsheetHeaderMenu(props: {
             });
           }}
         >
-          {item('Cut', 'cut')}
-          {item('Copy', 'copy', false)}
-          {item('Paste', 'paste')}
-          {item('Paste values only', 'paste-values')}
-          <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
-          {item(
-            `Insert ${label()} ${props.axis === 'row' ? 'above' : 'left'}`,
-            'insert-before'
-          )}
-          {item(
-            `Insert ${label()} ${props.axis === 'row' ? 'below' : 'right'}`,
-            'insert-after'
-          )}
-          <Show when={!props.canChangeStructure && !props.readonly}>
-            <div class="max-w-64 px-3 py-1 text-xs text-ink-muted">
-              Reconnect to insert or delete rows or columns.
-            </div>
-          </Show>
-          {item(`Delete ${label()}`, 'delete')}
-          {item(`Clear ${label()}`, 'clear-values')}
-          {item(`Hide ${label()}`, 'hide')}
-          {item(`Unhide all ${props.axis}s`, 'unhide')}
-          {item(`Resize ${label()}…`, 'resize')}
-          {item('Fit to data', 'autofit')}
-          <Show when={props.axis === 'column'}>
-            <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
-            {item('Sort sheet A to Z', 'sort-asc')}
-            {item('Sort sheet Z to A', 'sort-desc')}
-          </Show>
+          <For each={headerMenuEntries(props.axis)}>
+            {(entry) =>
+              entry === 'separator' ? (
+                <ContextMenu.Separator class="my-1 border-t border-edge-muted" />
+              ) : (
+                <>
+                  {item(text(entry), entry, entry !== 'copy')}
+                  <Show
+                    when={
+                      entry === 'insert-after' &&
+                      !props.canChangeStructure &&
+                      !props.readonly
+                    }
+                  >
+                    <div class="max-w-64 px-3 py-1 text-xs text-ink-muted">
+                      Reconnect to insert or delete rows or columns.
+                    </div>
+                  </Show>
+                </>
+              )
+            }
+          </For>
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>

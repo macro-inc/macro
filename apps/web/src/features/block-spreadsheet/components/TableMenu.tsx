@@ -153,6 +153,12 @@ export function TableMenu(props: {
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
             <Dropdown.Group>
+              <Dropdown.Item closeOnSelect onSelect={props.onConvertToRange}>
+                <SelectionAll class="size-4" />
+                Convert to range
+              </Dropdown.Item>
+            </Dropdown.Group>
+            <Dropdown.Group>
               <Dropdown.Item closeOnSelect onSelect={props.onGroupBy}>
                 <Rows class="size-4" />
                 Group by view…
@@ -165,10 +171,6 @@ export function TableMenu(props: {
               </Show>
             </Dropdown.Group>
             <Dropdown.Group>
-              <Dropdown.Item closeOnSelect onSelect={props.onConvertToRange}>
-                <SelectionAll class="size-4" />
-                Convert to range
-              </Dropdown.Item>
               <Dropdown.Item
                 closeOnSelect
                 class="text-failure-ink"

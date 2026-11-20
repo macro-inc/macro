@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest';
-import { timelineRecordActions } from './timeline-record-menu';
+import {
+  timelineRecordActionGroups,
+  timelineRecordActions,
+} from './timeline-record-menu';
 
 it('offers a viewer only Open record', () => {
   expect(
@@ -52,4 +55,25 @@ it('leaves the dates alone when the range column cannot be written', () => {
       groupWritable: true,
     })
   ).toEqual(['open', 'rename', 'move', 'duplicate', 'delete']);
+});
+
+it('groups available record actions with Delete isolated', () => {
+  const actions = timelineRecordActions({
+    canEdit: true,
+    dated: true,
+    rangeWritable: true,
+    titleWritable: true,
+    groupWritable: true,
+  });
+  expect(timelineRecordActionGroups(actions, true)).toEqual([
+    ['open'],
+    ['edit-range', 'rename', 'move', 'remove-dates', 'duplicate'],
+    ['delete'],
+  ]);
+  expect(timelineRecordActionGroups(actions, false)).toEqual([
+    ['open'],
+    ['edit-range', 'rename', 'remove-dates', 'duplicate'],
+    ['delete'],
+  ]);
+  expect(timelineRecordActionGroups(['open'], false)).toEqual([['open']]);
 });

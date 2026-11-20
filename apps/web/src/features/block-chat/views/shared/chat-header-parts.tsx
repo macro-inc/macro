@@ -53,7 +53,7 @@ export function useChatHeaderTools(props: ChatHeaderProps) {
   ];
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: openShare,

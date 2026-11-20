@@ -14,22 +14,23 @@ const DESKTOP: RoutineMenuSurface = {
 };
 
 describe('routine menu groups', () => {
-  it('offers its owner opening, running, copying, links and delete', () => {
+  it('offers its owner opening, execution, copying, edits, state and delete', () => {
     expect(
       routineMenuGroups({ editable: true, enabled: true }, DESKTOP)
     ).toEqual([
       ['open-in-split', 'open-in-tab'],
-      ['run-now', 'turn-off'],
+      ['run-now', 'share'],
+      ['copy-link', 'copy-id'],
       ['duplicate'],
-      ['copy-link', 'copy-id', 'share'],
+      ['turn-off'],
       ['delete'],
     ]);
   });
 
-  it('turns a paused routine on', () => {
+  it('turns a paused routine on in State', () => {
     expect(
-      routineMenuGroups({ editable: true, enabled: false }, DESKTOP)[1]
-    ).toEqual(['run-now', 'turn-on']);
+      routineMenuGroups({ editable: true, enabled: false }, DESKTOP)[4]
+    ).toEqual(['turn-on']);
   });
 
   it('keeps a sub-routine as the owner’s own', () => {
@@ -37,7 +38,7 @@ describe('routine menu groups', () => {
       routineMenuGroups(
         { editable: true, enabled: true },
         { ...DESKTOP, nested: true }
-      )[2]
+      )[3]
     ).toEqual(['duplicate', 'keep']);
   });
 
@@ -48,9 +49,10 @@ describe('routine menu groups', () => {
         { nested: false, splits: false, tabs: false, share: false }
       )
     ).toEqual([
-      ['run-now', 'turn-off'],
-      ['duplicate'],
+      ['run-now'],
       ['copy-link', 'copy-id'],
+      ['duplicate'],
+      ['turn-off'],
       ['delete'],
     ]);
   });

@@ -1,3 +1,7 @@
+import {
+  groupMenuItems,
+  type MenuGroup,
+} from '../../../lib/core/menu/group-menu-items';
 import type { RoutineRow } from './types';
 
 /** Entries of a routine row's context menu. */
@@ -23,31 +27,32 @@ export type RoutineMenuSurface = {
   share: boolean;
 };
 
-/**
- * The entries a row offers, in separator-delimited groups: opening, running,
- * copying, links, then delete. Routines run as their owner, so everyone else
- * gets only opening and links.
- */
+/** The permitted entries in semantic action order, shared by desktop and phone. */
 export function routineMenuGroups(
   row: Pick<RoutineRow, 'editable' | 'enabled'>,
   surface: RoutineMenuSurface
 ): RoutineMenuItem[][] {
   const owned = row.editable;
-  const groups: RoutineMenuItem[][] = [
-    [
-      ...(surface.splits ? (['open-in-split'] as const) : []),
-      ...(surface.tabs ? (['open-in-tab'] as const) : []),
-    ],
-    owned ? ['run-now', row.enabled ? 'turn-off' : 'turn-on'] : [],
-    owned ? ['duplicate', ...(surface.nested ? (['keep'] as const) : [])] : [],
-    [
-      'copy-link',
-      'copy-id',
-      ...(owned && surface.share ? (['share'] as const) : []),
-    ],
-    owned ? ['delete'] : [],
+  const items: RoutineMenuItem[] = [
+    ...(surface.splits ? (['open-in-split'] as const) : []),
+    ...(surface.tabs ? (['open-in-tab'] as const) : []),
+    ...(owned ? (['run-now'] as const) : []),
+    ...(owned && surface.share ? (['share'] as const) : []),
+    'copy-link',
+    'copy-id',
+    ...(owned ? (['duplicate'] as const) : []),
+    ...(owned && surface.nested ? (['keep'] as const) : []),
+    ...(owned ? ([row.enabled ? 'turn-off' : 'turn-on'] as const) : []),
+    ...(owned ? (['delete'] as const) : []),
   ];
-  return groups.filter((group) => group.length > 0);
+  return groupMenuItems(items, (item): MenuGroup => {
+    if (item === 'open-in-split' || item === 'open-in-tab') return 'open';
+    if (item === 'run-now' || item === 'share') return 'most-used';
+    if (item === 'copy-link' || item === 'copy-id') return 'copy';
+    if (item === 'duplicate' || item === 'keep') return 'modify';
+    if (item === 'delete') return 'delete';
+    return 'state';
+  }).map((group) => group.items);
 }
 
 /**

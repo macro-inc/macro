@@ -31,7 +31,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
     { op: 'copy' },
     { op: 'moveToProject' },
     {
-      group: 'file',
+      group: 'share-export',
       get label() {
         return t('entityActions.download');
       },
@@ -57,6 +57,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
   ];
 
   const askMacro: BlockTool = {
+    group: 'most-used',
     label: () => t('entityActions.askMacro'),
     icon: ChatWithAgentIcon,
     action: () =>
@@ -70,7 +71,7 @@ export function spreadsheetHeaderTools(props: SpreadsheetHeaderProps) {
   };
 
   const share: BlockTool = {
-    group: 'sharing',
+    group: 'most-used',
     label: () => t('entityActions.share'),
     icon: IconShared,
     action: props.openShare,

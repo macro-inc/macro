@@ -11,7 +11,7 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
-import type { EntityData } from '@entity';
+import { type EntityData, isTaskEntity } from '@entity';
 import { NotificationMuteMenu } from '@notifications/components/NotificationMuteMenu';
 import { NotificationSettingsMenu } from '@notifications/components/NotificationSettingsMenu';
 import { Key } from '@solid-primitives/keyed';
@@ -24,8 +24,10 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { groupSoupEntityActions } from './core/group-soup-entity-actions';
 import {
   createSoupEntityActions,
+  type SoupEntityActionItem,
   viewedProjectIdFromContent,
 } from './createSoupEntityActions';
 
@@ -35,6 +37,7 @@ interface SoupEntityActionsMenuProps {
   item?: Component<ComponentProps<typeof MenuItem>>;
   copyItem?: Component<ComponentProps<typeof CopyMenuItem>>;
   separator?: Component;
+  menu?: 'dropdown';
   viewContext: EntityActionViewContext;
   /**
    * Closes the host menu when an embedded picker (`menuItem`) is done with
@@ -45,8 +48,9 @@ interface SoupEntityActionsMenuProps {
   onActionComplete?: () => void;
   onEditTags?: () => void;
   onSetProject?: () => void;
-  /** Host-specific items shown after the entity actions. */
+  /** Host-specific JSX items shown before Delete as Modify contributions. */
   extraItems?: JSX.Element;
+  extraActions?: readonly SoupEntityActionItem[];
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
   /** Where the view moves after an action that removes the row. */
@@ -74,7 +78,7 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
 
   const groups = createMemo(() => {
     const content = panel.handle.content();
-    return buildActionGroups(props.list, props.entities, {
+    const entityGroups = buildActionGroups(props.list, props.entities, {
       viewContext: props.viewContext,
       viewedProjectId:
         props.viewedProjectId ?? viewedProjectIdFromContent(content),
@@ -83,6 +87,26 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
       splitHandle: panel.handle,
       createActionNavigationHandler: props.createActionNavigationHandler,
     });
+    if (!props.extraActions?.length) return entityGroups;
+    return groupSoupEntityActions(
+      [...entityGroups.flatMap((group) => group.items), ...props.extraActions],
+      props.entities.length === 1 ? props.entities[0] : undefined,
+      props.entities.length === 1 && isTaskEntity(props.entities[0])
+    );
+  });
+
+  const displayedGroups = createMemo(() => {
+    const ordered = groups();
+    if (!hasExtraItems()) return ordered;
+    const laterIndex = ordered.findIndex((group) =>
+      ['share-export', 'state', 'info', 'delete'].includes(group.id)
+    );
+    const index = laterIndex < 0 ? ordered.length : laterIndex;
+    return [
+      ...ordered.slice(0, index),
+      { id: 'host-modify', items: [] },
+      ...ordered.slice(index),
+    ];
   });
 
   // Async so an item that throws is reported like one that rejects, and
@@ -92,93 +116,90 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
   };
 
   return (
-    <>
-      <Key each={groups()} by="id">
-        {(group, groupIndex) => (
-          <>
-            <Show when={groupIndex() > 0}>
-              <Separator />
-            </Show>
-            <Key each={group().items} by="id">
-              {(action) => {
-                return (
-                  <Show
-                    when={action().notificationSettingsMenu}
-                    fallback={
-                      <Show
-                        when={action().menuItem}
-                        fallback={
-                          <Show
-                            when={action().muteMenu}
-                            fallback={
-                              <Show
-                                when={action().copy}
-                                fallback={
-                                  <Item
-                                    text={action().label}
-                                    icon={action().icon}
-                                    hotkeyToken={action().hotkeyToken}
-                                    shortcut={action().shortcut}
-                                    disabled={action().disabled}
-                                    onClick={() =>
-                                      fireAndForget(
-                                        runAction(action().onClick),
-                                        'entity-actions'
-                                      )
-                                    }
-                                    class={
-                                      action().destructive
-                                        ? 'text-failure-ink'
-                                        : undefined
-                                    }
-                                  />
-                                }
-                              >
-                                <CopyItem
+    <Key each={displayedGroups()} by="id">
+      {(group, groupIndex) => (
+        <>
+          <Show when={groupIndex() > 0}>
+            <Separator />
+          </Show>
+          <Show when={group().id === 'host-modify'}>{extraItems()}</Show>
+          <Key each={group().items} by="id">
+            {(action) => {
+              return (
+                <Show
+                  when={action().notificationSettingsMenu}
+                  fallback={
+                    <Show
+                      when={action().menuItem}
+                      fallback={
+                        <Show
+                          when={action().muteMenu}
+                          fallback={
+                            <Show
+                              when={action().copy}
+                              fallback={
+                                <Item
                                   text={action().label}
                                   icon={action().icon}
                                   hotkeyToken={action().hotkeyToken}
                                   shortcut={action().shortcut}
                                   disabled={action().disabled}
-                                  onCopy={async () =>
-                                    (await action().onClick()) !== false
+                                  onClick={() =>
+                                    fireAndForget(
+                                      runAction(action().onClick),
+                                      'entity-actions'
+                                    )
+                                  }
+                                  class={
+                                    action().destructive
+                                      ? 'text-failure-ink'
+                                      : undefined
                                   }
                                 />
-                              </Show>
-                            }
-                          >
-                            <NotificationMuteMenu {...action().muteMenu!} />
-                          </Show>
-                        }
-                      >
-                        {(component) => (
-                          <Dynamic
-                            component={component()}
-                            onActionComplete={props.onActionComplete}
+                              }
+                            >
+                              <CopyItem
+                                text={action().label}
+                                icon={action().icon}
+                                hotkeyToken={action().hotkeyToken}
+                                shortcut={action().shortcut}
+                                disabled={action().disabled}
+                                onCopy={async () =>
+                                  (await action().onClick()) !== false
+                                }
+                              />
+                            </Show>
+                          }
+                        >
+                          <NotificationMuteMenu
+                            {...action().muteMenu!}
+                            menu={props.menu}
                           />
-                        )}
-                      </Show>
-                    }
-                  >
-                    {(menu) => (
-                      <NotificationSettingsMenu
-                        {...menu()}
-                        onActionComplete={props.onActionComplete}
-                      />
-                    )}
-                  </Show>
-                );
-              }}
-            </Key>
-          </>
-        )}
-      </Key>
-      <Show when={hasExtraItems()}>
-        <Show when={groups().length > 0}>
-          <Separator />
-        </Show>
-        {extraItems()}
-      </Show>
-    </>
+                        </Show>
+                      }
+                    >
+                      {(component) => (
+                        <Dynamic
+                          component={component()}
+                          onActionComplete={props.onActionComplete}
+                        />
+                      )}
+                    </Show>
+                  }
+                >
+                  {(menu) => (
+                    <NotificationSettingsMenu
+                      {...menu()}
+                      menu={props.menu}
+                      onActionComplete={props.onActionComplete}
+                    />
+                  )}
+                </Show>
+              );
+            }}
+          </Key>
+        </>
+      )}
+    </Key>
   );
 };

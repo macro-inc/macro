@@ -40,6 +40,7 @@ import {
   itemToBlockName,
   resolveBlockAlias,
 } from '@core/constant/allBlocks';
+import { referenceMenuGroups } from '@core/menu/reference-menu';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -86,6 +87,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  For,
   Match,
   onCleanup,
   Show,
@@ -875,77 +877,103 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
-          <Dropdown.Group>
-            <Show when={props.previewInfo?.showPreview}>
-              <Dropdown.Item
-                onSelect={() => props.previewInfo?.handlePreviewToggle()}
-              >
-                <MacroEmbed class="size-4" />
-                {props.previewInfo?.isPreviewable
-                  ? 'Convert to Embed'
-                  : 'Convert to Card View'}
-              </Dropdown.Item>
-            </Show>
-            <Show when={props.convertToText}>
-              <Dropdown.Item
-                onSelect={() => props.convertToText?.(documentLink())}
-              >
-                <TextTIcon class="size-4" />
-                Convert to Plain Text
-              </Dropdown.Item>
-            </Show>
-            <Show when={props.collapseInfo?.isCollapsable}>
-              <Dropdown.Item onSelect={handleToggleCollapse}>
-                <Show
-                  when={props.collapseInfo?.isCollapsed}
-                  fallback={<CollapseInlinePreview class="size-4" />}
-                >
-                  <ExpandInlinePreview class="size-4" />
-                </Show>
-                {props.collapseInfo?.isCollapsed
-                  ? 'Expand Reference'
-                  : 'Collapse Reference'}
-              </Dropdown.Item>
-            </Show>
-            <Show when={canOpenInChat()}>
-              <Dropdown.Item onSelect={handleOpenInChat}>
-                <SparkleIcon class="size-4" />
-                Ask Macro
-              </Dropdown.Item>
-            </Show>
-            <Dropdown.CopyItem
-              icon={<LinkIcon class="size-4" />}
-              onCopy={handleCopy}
-            >
-              Copy Link
-            </Dropdown.CopyItem>
-            <Show when={props.documentInfo.type === 'task'}>
-              <Dropdown.CopyItem
-                icon={<GitBranchIcon class="size-4" />}
-                onCopy={handleCopyBranchName}
-              >
-                Copy Branch Name
-              </Dropdown.CopyItem>
-            </Show>
-            <Show when={isOpenable() && !isSplitAlreadyOpen()}>
-              <Dropdown.Item
-                onSelect={() =>
-                  fireAndForget(openInNewSplit(), 'document-preview')
-                }
-              >
-                <SplitIcon class="size-4" />
-                Open in New Split
-              </Dropdown.Item>
-            </Show>
-          </Dropdown.Group>
-          <Show when={props.delete}>
-            <Dropdown.Group>
-              <Dropdown.Item onSelect={() => props.delete?.()}>
-                <TrashSimple class="size-4" />
-                Delete
-              </Dropdown.Item>
-            </Dropdown.Group>
-          </Show>
+          <For
+            each={referenceMenuGroups({
+              host: 'preview',
+              openInNewSplit: isOpenable() && !isSplitAlreadyOpen(),
+              askMacro: canOpenInChat(),
+              copyBranchName: props.documentInfo.type === 'task',
+              convertPreview: !!props.previewInfo?.showPreview,
+              convertToText: !!props.convertToText,
+              collapse: !!props.collapseInfo?.isCollapsable,
+              delete: !!props.delete,
+            })}
+          >
+            {(group) => (
+              <Dropdown.Group>
+                <For each={group.items}>
+                  {(action) => (
+                    <Switch>
+                      <Match when={action === 'open-new-split'}>
+                        <Dropdown.Item
+                          onSelect={() =>
+                            fireAndForget(openInNewSplit(), 'document-preview')
+                          }
+                        >
+                          <SplitIcon class="size-4" />
+                          Open in New Split
+                        </Dropdown.Item>
+                      </Match>
+                      <Match when={action === 'ask-macro'}>
+                        <Dropdown.Item onSelect={handleOpenInChat}>
+                          <SparkleIcon class="size-4" />
+                          Ask Macro
+                        </Dropdown.Item>
+                      </Match>
+                      <Match when={action === 'copy-link'}>
+                        <Dropdown.CopyItem
+                          icon={<LinkIcon class="size-4" />}
+                          onCopy={handleCopy}
+                        >
+                          Copy Link
+                        </Dropdown.CopyItem>
+                      </Match>
+                      <Match when={action === 'copy-branch-name'}>
+                        <Dropdown.CopyItem
+                          icon={<GitBranchIcon class="size-4" />}
+                          onCopy={handleCopyBranchName}
+                        >
+                          Copy Branch Name
+                        </Dropdown.CopyItem>
+                      </Match>
+                      <Match when={action === 'convert-preview'}>
+                        <Dropdown.Item
+                          onSelect={() =>
+                            props.previewInfo?.handlePreviewToggle()
+                          }
+                        >
+                          <MacroEmbed class="size-4" />
+                          {props.previewInfo?.isPreviewable
+                            ? 'Convert to Embed'
+                            : 'Convert to Card View'}
+                        </Dropdown.Item>
+                      </Match>
+                      <Match when={action === 'convert-text'}>
+                        <Dropdown.Item
+                          onSelect={() => props.convertToText?.(documentLink())}
+                        >
+                          <TextTIcon class="size-4" />
+                          Convert to Plain Text
+                        </Dropdown.Item>
+                      </Match>
+                      <Match when={action === 'collapse'}>
+                        <Dropdown.Item onSelect={handleToggleCollapse}>
+                          <Show
+                            when={props.collapseInfo?.isCollapsed}
+                            fallback={<CollapseInlinePreview class="size-4" />}
+                          >
+                            <ExpandInlinePreview class="size-4" />
+                          </Show>
+                          {props.collapseInfo?.isCollapsed
+                            ? 'Expand Reference'
+                            : 'Collapse Reference'}
+                        </Dropdown.Item>
+                      </Match>
+                      <Match when={action === 'delete'}>
+                        <Dropdown.Item
+                          class="text-failure-ink"
+                          onSelect={() => props.delete?.()}
+                        >
+                          <TrashSimple class="size-4" />
+                          Delete
+                        </Dropdown.Item>
+                      </Match>
+                    </Switch>
+                  )}
+                </For>
+              </Dropdown.Group>
+            )}
+          </For>
         </Dropdown.Content>
       </Dropdown>
     </Item.Actions>

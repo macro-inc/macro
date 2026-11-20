@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Accessor } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
-import { SplitFileMenu } from './SplitFileMenu';
+import { type FileOperation, SplitFileMenu } from './SplitFileMenu';
 
 const mocks = vi.hoisted(() => ({
   touch: true,
@@ -86,26 +86,30 @@ const Icon = () => <svg />;
 // headers pass them, as a JSX array literal that is rebuilt on every read.
 const channelTools = (): BlockTool[] => [
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Rename',
     icon: Icon,
     action: mocks.rename,
   },
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Set channel picture',
     icon: Icon,
     action: mocks.setPicture,
   },
   {
-    group: 'file',
+    group: 'modify',
     label: () => 'Remove channel picture',
     icon: Icon,
     action: mocks.removePicture,
   },
 ];
 
-const renderMenu = (entity?: EntityData) => {
+const renderMenu = (
+  ops: FileOperation[] = [],
+  permissions = Permissions.OWNER,
+  entity?: EntityData
+) => {
   let openMenu: Accessor<(() => void) | undefined> = () => undefined;
   const panel = {
     setTitleFileMenuTrigger: (value: Accessor<() => void> | undefined) => {
@@ -119,11 +123,11 @@ const renderMenu = (entity?: EntityData) => {
         id="channel"
         itemType="channel"
         name="General"
-        ops={[]}
+        ops={ops}
         tools={channelTools()}
         entityKind="channel"
+        permissions={permissions}
         entity={entity}
-        permissions={Permissions.OWNER}
       />
     </SplitPanelContext.Provider>
   ));
@@ -146,6 +150,8 @@ const MENU_ROWS = [
 ];
 
 beforeEach(() => {
+  mocks.canMute = false;
+  mocks.settingsMenu.mockReset();
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -194,6 +200,36 @@ describe('SplitFileMenu tools', () => {
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((item) => item.textContent?.trim())).toEqual(MENU_ROWS);
   });
+
+  it('keeps a custom semantic ID distinct from the built-in rename row', async () => {
+    const customRename = vi.fn();
+    const custom = Object.freeze({
+      id: 'rename',
+      label: 'Custom rename',
+      icon: Icon,
+      group: 'modify' as const,
+      action: customRename,
+    });
+    const menu = renderMenu([{ op: 'rename' }, custom]);
+    menu.open();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Custom rename' })
+    );
+    expect(customRename).toHaveBeenCalledOnce();
+  });
+
+  it.each([Permissions.CAN_VIEW, Permissions.OWNER])(
+    'retains the owner-only delete gate for %s',
+    async (permissions) => {
+      const menu = renderMenu([{ op: 'delete' }], permissions);
+      menu.open();
+      await screen.findByRole('dialog');
+      const deleteAction = screen.queryByRole('button', {
+        name: 'entityActions.delete',
+      });
+      expect(Boolean(deleteAction)).toBe(permissions === Permissions.OWNER);
+    }
+  );
 });
 
 describe('SplitFileMenu notification actions', () => {
@@ -206,27 +242,65 @@ describe('SplitFileMenu notification actions', () => {
     const groups = mocks.titleActions.mock.lastCall?.[0] as
       | Record<string, { id?: string }[]>
       | undefined;
-    return {
-      macro: groups?.macro.map(({ id }) => id),
-      notifications: groups?.notifications.map(({ id }) => id),
-    };
+    return groups?.state.map(({ id }) => id);
   };
 
-  it('puts Mute and Notification Settings in a section of their own', () => {
+  it('keeps Mute and Notification Settings together in State', () => {
     mocks.canMute = true;
     mocks.settingsMenu.mockReturnValue({});
-    renderMenu(channel);
+    renderMenu([], Permissions.OWNER, channel);
 
-    expect(sectionIds()).toEqual({
-      macro: [],
-      notifications: ['mute', 'notification-settings'],
-    });
+    expect(sectionIds()).toEqual(['mute', 'notification-settings']);
   });
 
-  it('keeps Mute with the platform actions without Notification Settings', () => {
-    mocks.canMute = true;
-    renderMenu(channel);
+  it('opens notification settings in the phone drawer and applies a preset', async () => {
+    const onPreset = vi.fn();
+    mocks.settingsMenu.mockReturnValue({
+      preset: 'all',
+      enabled: new Set(),
+      targetName: 'General',
+      onPreset,
+      onSetKinds: vi.fn(),
+    });
+    const menu = renderMenu([], Permissions.OWNER, channel);
+    menu.open();
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /channelSections.notificationSettings/,
+      })
+    );
+    const choices = await screen.findAllByRole('radio');
+    fireEvent.click(choices[choices.length - 1]);
+    expect(onPreset).toHaveBeenCalledExactlyOnceWith('nothing');
+  });
 
-    expect(sectionIds()).toEqual({ macro: ['mute'], notifications: [] });
+  it('opens notification settings in the desktop dropdown and applies a preset', async () => {
+    mocks.touch = false;
+    const onPreset = vi.fn();
+    mocks.settingsMenu.mockReturnValue({
+      preset: 'all',
+      enabled: new Set(),
+      targetName: 'General',
+      onPreset,
+      onSetKinds: vi.fn(),
+    });
+    const menu = renderMenu([], Permissions.OWNER, channel);
+    menu.open();
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', {
+        name: /channelSections.notificationSettings/,
+      }),
+      { key: 'ArrowRight' }
+    );
+    const choices = await screen.findAllByRole('menuitemradio');
+    fireEvent.keyDown(choices[choices.length - 1], { key: 'Enter' });
+    expect(onPreset).toHaveBeenCalledExactlyOnceWith('nothing');
+  });
+
+  it('keeps Mute in State without Notification Settings', () => {
+    mocks.canMute = true;
+    renderMenu([], Permissions.OWNER, channel);
+
+    expect(sectionIds()).toEqual(['mute']);
   });
 });

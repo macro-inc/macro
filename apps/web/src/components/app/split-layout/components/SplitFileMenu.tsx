@@ -18,7 +18,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import type { BlockTool } from '@components/app/block-tool';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import {
   type BlockAlias,
   type BlockName,
@@ -43,12 +42,8 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildEntityData, type EntityData } from '@entity';
 import BellSimple from '@icon/system/regular/bell-simple.svg';
 import BellSlash from '@icon/system/regular/bell-slash.svg';
-import CaretDown from '@icon/system/regular/caret-down.svg';
-import CaretRight from '@icon/system/regular/caret-right.svg';
-import Check from '@icon/system/regular/check.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
-import DotsThree from '@icon/system/regular/dots-three.svg';
 import FolderIcon from '@icon/system/regular/folder.svg';
 import Link from '@icon/system/regular/link.svg';
 import PaintBrush from '@icon/system/regular/paint-brush.svg';
@@ -56,44 +51,31 @@ import Rename from '@icon/system/regular/pencil-line.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
 import Trash from '@icon/system/regular/trash-simple.svg';
-import {
-  NotificationMuteMenu,
-  NotificationMutePage,
-} from '@notifications/components/NotificationMuteMenu';
-import {
-  NotificationSettingsMenu,
-  NotificationSettingsPage,
-  NotificationSettingsSummary,
-} from '@notifications/components/NotificationSettingsMenu';
 import { useChannelNotificationSettings } from '@notifications/primitives/create-channel-notification-settings';
 
 import type { ItemType } from '@service-storage/itemType';
-import { Key } from '@solid-primitives/keyed';
-import { CopyButton, cn, Dropdown, Hotkey } from '@ui';
 import {
   type Component,
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
-  Match,
   onCleanup,
   Show,
-  Switch,
   useContext,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import {
-  getSplitFileMenuActionSections,
   type SplitFileMenuAction,
   type SplitFileMenuActionGroup,
   type SplitFileMenuActionGroups,
   SplitPanelContext,
 } from '../context';
+import { fileMenuGroups } from '../core/file-menu-groups';
 import { useSplitLayout } from '../layout';
 import { returnSplitToRecentListView } from '../layoutUtils';
+
+import { DesktopFileMenu, MobileFileMenu } from './SplitFileMenuRenderers';
 
 export type FileOperationName = 'delete' | 'rename' | 'copy' | 'moveToProject';
 
@@ -101,8 +83,10 @@ export type DefaultFileOperation = {
   op: FileOperationName;
 };
 
-export type CustomFileOperation = {
-  id?: string;
+export type CustomFileOperation = Pick<
+  SplitFileMenuAction,
+  'id' | 'orderKey'
+> & {
   label: string;
   icon: Component;
   action?: () => void | Promise<unknown>;
@@ -135,434 +119,6 @@ export type SplitFileMenuViews = {
   value: string;
   onSelect: (value: string) => void;
 };
-
-function SplitMenuItemContent(
-  props: Pick<
-    SplitFileMenuAction,
-    'hotkeyToken' | 'icon' | 'label' | 'disabledReason'
-  > & {
-    showHotkey?: boolean;
-  }
-) {
-  return (
-    <>
-      <Show when={props.icon}>
-        {(icon) => (
-          <Dynamic
-            component={icon() as Component<JSX.SvgSVGAttributes<SVGSVGElement>>}
-            class="size-4 shrink-0"
-          />
-        )}
-      </Show>
-      <div class="min-w-0 flex-1">
-        <div class="truncate">{props.label}</div>
-        <Show when={props.disabledReason}>
-          <div class="text-xs text-ink-muted">{props.disabledReason}</div>
-        </Show>
-      </div>
-      <Show when={props.showHotkey !== false && props.hotkeyToken}>
-        <Hotkey
-          token={props.hotkeyToken}
-          class="ml-4 shrink-0"
-          theme="subtle"
-          showPlus
-        />
-      </Show>
-    </>
-  );
-}
-
-type SplitFileMenuRenderProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  triggerClass?: string;
-  triggerLabel?: string;
-  groups: SplitFileMenuActionGroups;
-};
-
-function DesktopRender(props: SplitFileMenuRenderProps) {
-  const sections = () => getSplitFileMenuActionSections(props.groups);
-
-  const item = (action: () => SplitFileMenuAction) => {
-    const children = () => action().children?.filter(Boolean) ?? [];
-    const content = () => (
-      <SplitMenuItemContent
-        label={action().label}
-        icon={action().icon}
-        hotkeyToken={action().hotkeyToken}
-      />
-    );
-    return (
-      <Switch>
-        <Match when={action().menuItem}>
-          {(component) => (
-            <Dynamic
-              component={component()}
-              onActionComplete={() => props.onOpenChange(false)}
-            />
-          )}
-        </Match>
-        <Match when={action().muteMenu}>
-          {(menu) => (
-            <NotificationMuteMenu
-              {...menu()}
-              onActionComplete={() => props.onOpenChange(false)}
-            />
-          )}
-        </Match>
-        <Match when={action().notificationSettingsMenu}>
-          {(menu) => (
-            <NotificationSettingsMenu
-              {...menu()}
-              onActionComplete={() => props.onOpenChange(false)}
-            />
-          )}
-        </Match>
-        <Match when={action().copy}>
-          <Dropdown.CopyItem
-            icon={<Dynamic component={action().icon ?? Copy} class="size-4" />}
-            onCopy={async () => (await action().action?.()) !== false}
-          >
-            <SplitMenuItemContent
-              label={action().label}
-              hotkeyToken={action().hotkeyToken}
-            />
-          </Dropdown.CopyItem>
-        </Match>
-        <Match when={children().length > 0}>
-          <Dropdown.Sub>
-            <Dropdown.SubTrigger>
-              {content()}
-              <CaretRight class="size-3.5 shrink-0" />
-            </Dropdown.SubTrigger>
-            <Dropdown.SubContent>
-              <Dropdown.Group>
-                <Key each={children()} by={(child) => child.id ?? child.label}>
-                  {item}
-                </Key>
-              </Dropdown.Group>
-            </Dropdown.SubContent>
-          </Dropdown.Sub>
-        </Match>
-        <Match when={true}>
-          <Dropdown.Item
-            disabledReason={action().disabledReason}
-            onSelect={() => {
-              fireAndForget(action().action?.(), 'split-file-menu');
-              props.onOpenChange(false);
-            }}
-          >
-            {content()}
-          </Dropdown.Item>
-        </Match>
-      </Switch>
-    );
-  };
-
-  return (
-    <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
-      <Dropdown.Trigger
-        class={cn(props.triggerClass)}
-        aria-label={props.triggerLabel ?? t('splitMenu.fileActions')}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]">
-        <Key each={sections()} by="key">
-          {(section) => (
-            <Dropdown.Group>
-              <Key
-                each={section().actions}
-                by={(action) => action.id ?? action.label}
-              >
-                {item}
-              </Key>
-            </Dropdown.Group>
-          )}
-        </Key>
-      </Dropdown.Content>
-    </Dropdown>
-  );
-}
-
-function MobileRender(
-  props: SplitFileMenuRenderProps & { views?: SplitFileMenuViews }
-) {
-  const [expandedSubmenu, setExpandedSubmenu] = createSignal<string | number>();
-  const sections = () => getSplitFileMenuActionSections(props.groups);
-  // A drill-in page that replaces the actions: mute choices or settings.
-  const [page, setPage] = createSignal<'mute' | 'settings'>();
-  const actions = () => sections().flatMap((section) => section.actions);
-  const muteMenu = () =>
-    page() === 'mute'
-      ? actions().find((action) => action.muteMenu)?.muteMenu
-      : undefined;
-  const settingsMenu = () =>
-    page() === 'settings'
-      ? actions().find((action) => action.notificationSettingsMenu)
-          ?.notificationSettingsMenu
-      : undefined;
-  const close = () => {
-    setPage(undefined);
-    props.onOpenChange(false);
-  };
-
-  const item = (
-    action: () => SplitFileMenuAction,
-    nested = false,
-    key: string | number = action().id ?? 0
-  ) => {
-    if (action().muteMenu) {
-      return (
-        <MobileDrawer.Item
-          disabled={action().muteMenu?.disabled}
-          onClick={() => {
-            if (action().muteMenu?.muted) {
-              action().muteMenu?.onMute(false);
-              close();
-            } else setPage('mute');
-          }}
-        >
-          <Dynamic
-            component={action().muteMenu?.muted ? BellSimple : BellSlash}
-            class="size-4 shrink-0"
-          />
-          {action().muteMenu?.muted
-            ? action().muteMenu?.unmuteLabel
-            : action().muteMenu?.label}
-          <Show when={!action().muteMenu?.muted}>
-            <CaretRight class="size-3.5" />
-          </Show>
-        </MobileDrawer.Item>
-      );
-    }
-    if (action().notificationSettingsMenu) {
-      return (
-        <MobileDrawer.Item
-          disabled={action().notificationSettingsMenu?.disabled}
-          onClick={() => setPage('settings')}
-        >
-          <BellSimple class="size-4 shrink-0" />
-          {action().label}
-          <Show when={action().notificationSettingsMenu}>
-            {(menu) => <NotificationSettingsSummary preset={menu().preset} />}
-          </Show>
-          <CaretRight class="size-3.5 shrink-0" />
-        </MobileDrawer.Item>
-      );
-    }
-    const children = () => action().children?.filter(Boolean) ?? [];
-    const expanded = () => expandedSubmenu() === key;
-
-    if (action().copy)
-      return (
-        <CopyButton
-          as={MobileDrawer.Item}
-          class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
-          onClick={() => action().action?.()}
-          icon={<Dynamic component={action().icon ?? Copy} class="size-4" />}
-        >
-          <SplitMenuItemContent label={action().label} showHotkey={false} />
-        </CopyButton>
-      );
-
-    return (
-      <Show
-        when={children().length > 0}
-        fallback={
-          <MobileDrawer.Item
-            type="button"
-            disabled={!!action().disabledReason}
-            class={cn(
-              nested ? 'pl-9 pr-4' : 'px-4',
-              action().danger && 'text-failure'
-            )}
-            onClick={(e) => {
-              fireAndForget(action().action?.(e), 'split-file-menu');
-              props.onOpenChange(false);
-            }}
-          >
-            <SplitMenuItemContent
-              label={action().label}
-              icon={action().icon}
-              hotkeyToken={action().hotkeyToken}
-              showHotkey={false}
-              disabledReason={action().disabledReason}
-            />
-          </MobileDrawer.Item>
-        }
-      >
-        <div class="w-full">
-          <MobileDrawer.Item
-            type="button"
-            class={cn(nested ? 'pl-9 pr-4' : 'px-4')}
-            onClick={() => {
-              setExpandedSubmenu(expanded() ? undefined : key);
-            }}
-          >
-            <SplitMenuItemContent
-              label={action().label}
-              icon={action().icon}
-              hotkeyToken={action().hotkeyToken}
-              showHotkey={false}
-            />
-            <Dynamic
-              component={expanded() ? CaretDown : CaretRight}
-              class="size-3.5 shrink-0"
-            />
-          </MobileDrawer.Item>
-          <Show when={expanded()}>
-            <div class="pt-1">
-              <For each={children().map((child, index) => child.id ?? index)}>
-                {(childKey) =>
-                  item(
-                    () =>
-                      children().find(
-                        (child, index) => (child.id ?? index) === childKey
-                      )!,
-                    true,
-                    childKey
-                  )
-                }
-              </For>
-            </div>
-          </Show>
-        </div>
-      </Show>
-    );
-  };
-
-  return (
-    <MobileDrawer
-      side="bottom"
-      open={props.open}
-      onOpenChange={(open) => {
-        if (!open) setPage(undefined);
-        props.onOpenChange(open);
-      }}
-      preventScroll={false}
-      preventScrollbarShift={false}
-    >
-      <MobileDrawer.Portal>
-        <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label={t('splitMenu.fileActions')}>
-          <MobileDrawer.Handle />
-          <MobileDrawer.ScrollBody>
-            <Show
-              when={page()}
-              fallback={
-                <>
-                  <Show when={props.views}>
-                    {(views) => (
-                      <>
-                        <MobileDrawer.Label id="split-file-menu-views-label">
-                          {views().title}
-                        </MobileDrawer.Label>
-                        <MobileDrawer.Section
-                          role="radiogroup"
-                          aria-labelledby="split-file-menu-views-label"
-                          class="flex flex-col shrink-0 mb-3"
-                        >
-                          <For each={views().options}>
-                            {(option) => (
-                              <MobileDrawer.Item
-                                type="button"
-                                role="radio"
-                                aria-checked={views().value === option.value}
-                                onClick={() => {
-                                  views().onSelect(option.value);
-                                  props.onOpenChange(false);
-                                }}
-                              >
-                                <SplitMenuItemContent
-                                  icon={option.icon}
-                                  label={option.label}
-                                  showHotkey={false}
-                                />
-                                <Show when={views().value === option.value}>
-                                  <Check class="size-3.5 text-accent shrink-0" />
-                                </Show>
-                              </MobileDrawer.Item>
-                            )}
-                          </For>
-                        </MobileDrawer.Section>
-                        {/* With a views group leading the drawer, title the action
-                      sections to set the two apart. */}
-                        <Show when={sections().length > 0}>
-                          <MobileDrawer.Label>
-                            {t('entityActions.actions')}
-                          </MobileDrawer.Label>
-                        </Show>
-                      </>
-                    )}
-                  </Show>
-                  <For each={sections().map((section) => section.key)}>
-                    {(key, index) => {
-                      const actions = () =>
-                        sections().find((section) => section.key === key)!
-                          .actions;
-                      return (
-                        <>
-                          <Show when={index() > 0}>
-                            <div class="mt-3" />
-                          </Show>
-                          <MobileDrawer.Section class="flex flex-col shrink-0">
-                            <For
-                              each={actions().map(
-                                (action, index) => action.id ?? index
-                              )}
-                            >
-                              {(id) =>
-                                item(
-                                  () =>
-                                    actions().find(
-                                      (action, index) =>
-                                        (action.id ?? index) === id
-                                    )!,
-                                  false,
-                                  id
-                                )
-                              }
-                            </For>
-                          </MobileDrawer.Section>
-                        </>
-                      );
-                    }}
-                  </For>
-                </>
-              }
-            >
-              <Show
-                when={settingsMenu()}
-                fallback={
-                  <Show when={muteMenu()}>
-                    {(menu) => (
-                      <NotificationMutePage
-                        {...menu()}
-                        onBack={() => setPage(undefined)}
-                        onActionComplete={close}
-                      />
-                    )}
-                  </Show>
-                }
-              >
-                {(menu) => (
-                  <NotificationSettingsPage
-                    {...menu()}
-                    onBack={() => setPage(undefined)}
-                    onActionComplete={close}
-                  />
-                )}
-              </Show>
-            </Show>
-          </MobileDrawer.ScrollBody>
-        </MobileDrawer.Content>
-      </MobileDrawer.Portal>
-    </MobileDrawer>
-  );
-}
 
 export type SplitFileMenuProps = {
   onEmailReminderSaved?: () => void | Promise<void>;
@@ -644,10 +200,14 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       {(entity) => <EntityAppearanceMenu entity={entity()} />}
     </Show>
   );
-  const tagMenuItem = (menu: { onActionComplete?: () => void }) => (
+  const tagMenuItem = (menu: {
+    onActionComplete?: () => void;
+    menu?: 'dropdown';
+  }) => (
     <Show when={menuEntity()}>
       {(entity) => (
         <EntityTagSubmenu
+          menu={menu.menu}
           entity={entity()}
           onActionComplete={menu.onActionComplete}
         />
@@ -671,7 +231,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return {
       label: t('appearance.title'),
       icon: PaintBrush,
-      group: 'file',
+      group: 'modify',
       id: 'appearance',
       menuItem: appearanceMenuItem,
       action: () => {
@@ -696,7 +256,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.favorite);
       },
-      group: 'macro' as const,
+      group: 'most-used' as const,
     };
   };
 
@@ -710,15 +270,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       label: t('channelSections.notificationSettings'),
       icon: BellSimple,
       notificationSettingsMenu: menu,
-      group: 'notifications' as const,
+      group: 'state' as const,
     };
   };
 
   const muteOp = (): SplitFileMenuAction | undefined => {
     const entity = menuEntity();
     if (!entity || !muteAction.canExecute(entity)) return undefined;
-    // With Notification Settings, Mute joins it in a section of its own.
-    const hasSettings = notificationSettingsMenuFor(channelSettings, [entity]);
     const muted = muteAction.isMuted(entity);
     const muteMenu = muteAction.menu([entity]);
     return {
@@ -732,7 +290,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.mute);
       },
-      group: hasSettings ? ('notifications' as const) : ('macro' as const),
+      group: 'state' as const,
     };
   };
 
@@ -758,7 +316,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.createReminder);
       },
-      group: 'macro' as const,
+      group: 'most-used' as const,
     };
   };
 
@@ -778,7 +336,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.tags);
       },
-      group: 'macro' as const,
+      group: 'modify' as const,
     };
   };
 
@@ -799,7 +357,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       get hotkeyToken() {
         return activeHotkeyToken(TOKENS.entity.action.copyLink);
       },
-      group: 'sharing' as const,
+      group: 'copy' as const,
     };
   };
 
@@ -812,7 +370,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     get hotkeyToken() {
       return activeHotkeyToken(TOKENS.entity.action.copyEntityId);
     },
-    group: 'sharing' as const,
+    group: 'copy' as const,
   });
 
   createEffect(() => {
@@ -832,6 +390,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('delete', () => {
               if (!ownsMenuEntity()) return null;
               return {
+                orderKey: 'delete',
                 label: t('entityActions.delete'),
                 action: () => {
                   const entity = menuEntity();
@@ -859,6 +418,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
             .with('rename', () => {
               if (!ownsMenuEntity()) return null;
               return {
+                orderKey: 'rename',
                 label: t('entityActions.rename'),
                 action: () => {
                   const entity = menuEntity();
@@ -877,12 +437,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                 get hotkeyToken() {
                   return activeHotkeyToken(TOKENS.entity.action.rename);
                 },
-                group: 'file' as const,
+                group: 'modify' as const,
               };
             })
             .with('copy', () => {
               if (!canDuplicateItemType(props.itemType)) return null;
               return {
+                orderKey: 'duplicate',
                 label: t('entityActions.duplicate'),
                 action: async () => {
                   const res = await itemOperations.copyItem({
@@ -904,12 +465,13 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   }
                 },
                 icon: Copy,
-                group: 'file' as const,
+                group: 'modify' as const,
               };
             })
             .with('moveToProject', () => {
               if (!ownsMenuEntity()) return null;
               return {
+                orderKey: 'move-to-folder',
                 label: t('entityActions.moveToFolder'),
                 action: () => {
                   const entity = menuEntity();
@@ -927,7 +489,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                 get hotkeyToken() {
                   return activeHotkeyToken(TOKENS.entity.action.moveToFolder);
                 },
-                group: 'file' as const,
+                group: 'modify' as const,
               };
             })
             .exhaustive();
@@ -938,12 +500,18 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       .map((op, index): SplitFileMenuAction | null => {
         if (!op) return null;
         // Preserve live getters (notably hotkey availability) when assigning a key.
-        const action: SplitFileMenuAction = Object.defineProperties(
+        return Object.defineProperties(
           { label: op.label },
-          Object.getOwnPropertyDescriptors(op)
+          {
+            ...Object.getOwnPropertyDescriptors(op),
+            // Define identity while cloning: a caller can freeze its descriptor.
+            id: { value: `operation-${index}`, enumerable: true },
+            orderKey: {
+              get: () => op.orderKey ?? op.id,
+              enumerable: true,
+            },
+          }
         );
-        action.id = op.id ?? `operation-${index}`;
-        return action;
       })
       .filter((op) => !!op);
     const appearance = appearanceOp();
@@ -969,7 +537,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
               id: 'add-to-project',
               label: t('entityActions.addToProject'),
               icon: ProjectIcon,
-              group: 'file' as const,
+              group: 'modify' as const,
               action: () => {
                 setOpen(false);
                 setAssigningProject(true);
@@ -1014,24 +582,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     }))
   );
 
-  const actionGroups = createMemo<SplitFileMenuActionGroups>(() => {
-    const groups: SplitFileMenuActionGroups = {
-      entity: [],
-      sender: [],
-      sharing: [],
-      macro: [],
-      notifications: [],
-      file: [],
-      delete: [],
-    };
-    for (const tool of tools()) {
-      groups[tool.group ?? 'entity'].push(tool);
-    }
-    for (const op of ops()) {
-      groups[op.group ?? 'entity'].push(op);
-    }
-    return groups;
-  });
+  const actionGroups = createMemo<SplitFileMenuActionGroups>(() =>
+    fileMenuGroups(tools(), ops())
+  );
 
   createEffect(() => {
     ctx.setTitleFileMenuActions(actionGroups());
@@ -1044,7 +597,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       <Show
         when={isTouchDevice()}
         fallback={
-          <DesktopRender
+          <DesktopFileMenu
             open={open()}
             onOpenChange={setOpen}
             triggerClass={props.buttonClass}
@@ -1053,7 +606,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           />
         }
       >
-        <MobileRender
+        <MobileFileMenu
           open={open()}
           onOpenChange={setOpen}
           triggerClass={props.buttonClass}

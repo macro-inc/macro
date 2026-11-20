@@ -43,6 +43,18 @@ it('disables protected schema actions while keeping rename and movement availabl
   const deletion = await screen.findByRole('menuitem', {
     name: 'Delete column',
   });
+  expect(
+    screen.getAllByRole('menuitem').map((item) => item.textContent?.trim())
+  ).toEqual([
+    'Rename column',
+    'Move left',
+    'Move right',
+    'Change type',
+    'Sort ascending',
+    'Sort descending',
+    'This column cannot be deleted',
+    'Delete column',
+  ]);
   expect(deletion.getAttribute('aria-disabled')).toBe('true');
   expect(
     screen

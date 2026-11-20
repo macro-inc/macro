@@ -1,4 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { MENU_GROUP_ORDER, type MenuGroup } from '@core/menu/group-menu-items';
 import type { NotificationMuteMenuProps } from '@notifications/components/NotificationMuteMenu';
 import type { NotificationSettingsMenuProps } from '@notifications/components/NotificationSettingsMenu';
 import type { NullableSize } from '@solid-primitives/resize-observer';
@@ -28,6 +29,8 @@ export type SplitBottomPanelRegistration = {
 export type SplitFileMenuAction = {
   /** Stable identity for a row while its metadata changes. */
   id?: string;
+  /** Semantic order is separate from the unique rendered row identity. */
+  orderKey?: string;
   label: string | JSX.Element;
   disabledReason?: string;
   icon?: Component;
@@ -40,38 +43,19 @@ export type SplitFileMenuAction = {
   muteMenu?: NotificationMuteMenuProps;
   notificationSettingsMenu?: NotificationSettingsMenuProps;
   /** Desktop-only composed item, such as an entity picker submenu. */
-  menuItem?: Component<{ onActionComplete?: () => void }>;
+  menuItem?: Component<{ onActionComplete?: () => void; menu?: 'dropdown' }>;
   /** Only set when the token's shortcut is executable from the split. */
   hotkeyToken?: HotkeyToken;
   group?: SplitFileMenuActionGroup;
 };
 
-/** Menu sections, in render order. */
-export type SplitFileMenuActionGroups = {
-  /** Actions specific to the block's entity type, e.g. email's Mark done. */
-  entity: SplitFileMenuAction[];
-  /** Email sender actions. */
-  sender: SplitFileMenuAction[];
-  /** Share, Copy Link, Copy ID, and friends. */
-  sharing: SplitFileMenuAction[];
-  /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
-  macro: SplitFileMenuAction[];
-  /** Mute and Notification Settings, together when a channel has both. */
-  notifications: SplitFileMenuAction[];
-  /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
-  file: SplitFileMenuAction[];
-  /** Destructive actions, always last. */
-  delete: SplitFileMenuAction[];
-};
+/** Shared action sections used by the title menu and phone header. */
+export type SplitFileMenuActionGroups = Record<
+  MenuGroup,
+  SplitFileMenuAction[]
+>;
 
-/**
- * Menu section an action renders in. Untagged tools and ops default to the
- * entity section — a block's own actions are entity-specific unless said
- * otherwise; a `group` tag moves an action to another section (Share and
- * Download live with their injected siblings, email keeps sender actions
- * right below its entity actions).
- */
-export type SplitFileMenuActionGroup = keyof SplitFileMenuActionGroups;
+export type SplitFileMenuActionGroup = MenuGroup;
 
 export type SplitFileMenuActionSection = {
   key: keyof SplitFileMenuActionGroups;
@@ -81,15 +65,10 @@ export type SplitFileMenuActionSection = {
 export function getSplitFileMenuActionSections(
   groups: SplitFileMenuActionGroups
 ): SplitFileMenuActionSection[] {
-  const sections: SplitFileMenuActionSection[] = [
-    { key: 'entity', actions: groups.entity },
-    { key: 'sender', actions: groups.sender },
-    { key: 'sharing', actions: groups.sharing },
-    { key: 'macro', actions: groups.macro },
-    { key: 'notifications', actions: groups.notifications },
-    { key: 'file', actions: groups.file },
-    { key: 'delete', actions: groups.delete },
-  ];
+  const sections = MENU_GROUP_ORDER.map((key) => ({
+    key,
+    actions: groups[key],
+  }));
 
   return sections.filter((section) => section.actions.length > 0);
 }

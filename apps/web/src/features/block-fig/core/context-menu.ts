@@ -5,6 +5,10 @@
  * pasting, the UI, and zoom. Items show their shortcut keys.
  */
 
+import {
+  groupMenuItems,
+  type MenuGroup,
+} from '../../../lib/core/menu/group-menu-items';
 import type { ViewerAction } from './shortcuts';
 
 /** Menu-only actions, besides the shortcut actions. */
@@ -108,13 +112,13 @@ function clipboardItems(f: SelectionFacts, move: boolean): MenuItem[] {
   if (!f.canEdit) return [copy, png];
   return [
     copy,
+    png,
     { action: 'paste-here', label: 'Paste here', disabled: !f.canPaste },
     {
       action: 'paste-replace',
       label: 'Paste to replace',
       disabled: !f.canPaste || !f.structural,
     },
-    png,
   ];
 }
 
@@ -162,57 +166,86 @@ const movable = (entries: MenuEntry[], move: boolean): MenuEntry[] =>
     e === 'separator' || move ? e : { ...e, disabled: true }
   );
 
+function groupedLayerEntries(entries: MenuEntry[]): MenuEntry[] {
+  const groupOf = (entry: MenuEntry): MenuGroup => {
+    if (entry === 'separator') return 'modify';
+    if (entry.action === 'zoom-selection') return 'open';
+    if (entry.action === 'copy' || entry.action === 'copy-png') return 'copy';
+    if (entry.action === 'toggle-visible' || entry.action === 'toggle-locked')
+      return 'state';
+    if (entry.action === 'delete') return 'delete';
+    return 'modify';
+  };
+  return groupMenuItems(entries, groupOf)
+    .map((section) => tidy(section.items))
+    .filter((section) => section.length > 0)
+    .flatMap((section, index) => [
+      ...(index ? (['separator'] as const) : []),
+      ...section,
+    ]);
+}
 /** The menu for a right-click on selected layers. */
 export function layerMenu(f: SelectionFacts): MenuEntry[] {
   const move = f.canEdit && f.structural;
   if (!f.canEdit)
-    return [
+    return groupedLayerEntries([
       ...clipboardItems(f, move),
       'separator',
       { action: 'zoom-selection', label: 'Zoom to selection', shortcut: '⇧2' },
-    ];
-  return tidy([
-    ...clipboardItems(f, move),
-    'separator',
-    ...movable(
-      [
-        { action: 'bring-to-front', label: 'Bring to front', shortcut: '⌥⌘]' },
-        { action: 'bring-forward', label: 'Bring forward', shortcut: '⌘]' },
-        { action: 'send-backward', label: 'Send backward', shortcut: '⌘[' },
-        { action: 'send-to-back', label: 'Send to back', shortcut: '⌥⌘[' },
-        'separator',
-        ...structureItems(f),
-      ],
-      move
-    ),
-    'separator',
-    {
-      action: 'toggle-visible',
-      label: f.anyVisible ? 'Hide' : 'Show',
-      shortcut: '⇧⌘H',
-    },
-    {
-      action: 'toggle-locked',
-      label: f.anyUnlocked ? 'Lock' : 'Unlock',
-      shortcut: '⇧⌘L',
-    },
-    'separator',
-    ...movable(
-      [
-        { action: 'flip-horizontal', label: 'Flip horizontal', shortcut: '⇧H' },
-        { action: 'flip-vertical', label: 'Flip vertical', shortcut: '⇧V' },
-      ],
-      move
-    ),
-    'separator',
-    f.count === 1 && {
-      action: 'rename',
-      label: 'Rename',
-      shortcut: '⌘R',
-      disabled: !f.structural,
-    },
-    { action: 'delete', label: 'Delete', shortcut: '⌫', disabled: !move },
-  ]);
+    ]);
+  return groupedLayerEntries(
+    tidy([
+      ...clipboardItems(f, move),
+      'separator',
+      ...movable(
+        [
+          {
+            action: 'bring-to-front',
+            label: 'Bring to front',
+            shortcut: '⌥⌘]',
+          },
+          { action: 'bring-forward', label: 'Bring forward', shortcut: '⌘]' },
+          { action: 'send-backward', label: 'Send backward', shortcut: '⌘[' },
+          { action: 'send-to-back', label: 'Send to back', shortcut: '⌥⌘[' },
+          'separator',
+          ...structureItems(f),
+        ],
+        move
+      ),
+      'separator',
+      ...movable(
+        [
+          {
+            action: 'flip-horizontal',
+            label: 'Flip horizontal',
+            shortcut: '⇧H',
+          },
+          { action: 'flip-vertical', label: 'Flip vertical', shortcut: '⇧V' },
+        ],
+        move
+      ),
+      'separator',
+      f.count === 1 && {
+        action: 'rename',
+        label: 'Rename',
+        shortcut: '⌘R',
+        disabled: !f.structural,
+      },
+      'separator',
+      {
+        action: 'toggle-visible',
+        label: f.anyVisible ? 'Hide' : 'Show',
+        shortcut: '⇧⌘H',
+      },
+      {
+        action: 'toggle-locked',
+        label: f.anyUnlocked ? 'Lock' : 'Unlock',
+        shortcut: '⇧⌘L',
+      },
+      'separator',
+      { action: 'delete', label: 'Delete', shortcut: '⌫', disabled: !move },
+    ])
+  );
 }
 
 /** The menu for a right-click on empty canvas. */

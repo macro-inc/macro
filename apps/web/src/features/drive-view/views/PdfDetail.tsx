@@ -77,6 +77,7 @@ function PdfDetailContent(props: {
   };
   const operations: FileOperation[] = [
     {
+      group: 'share-export',
       label: 'Print',
       icon: Printer,
       action: () => {
@@ -90,7 +91,7 @@ function PdfDetailContent(props: {
       },
     },
     {
-      group: 'file',
+      group: 'share-export',
       label: 'Download',
       icon: DownloadIcon,
       action: () => {
@@ -100,7 +101,7 @@ function PdfDetailContent(props: {
     ...(props.data.documentMetadata.fileType === 'docx'
       ? [
           {
-            group: 'file' as const,
+            group: 'share-export' as const,
             label: 'Download DOCX',
             icon: DownloadIcon,
             action: () => {

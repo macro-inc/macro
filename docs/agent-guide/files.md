@@ -48,11 +48,7 @@ database names and **Filter → Type → Database** narrows the list. **New →
 Database** creates and opens a database from file tabs or the folder overview;
 it is absent inside a folder because a new database starts at the root; move
 it in afterwards.
-Database rows open their database block, including Enter and Open in new split.
-Right-click (or long-press) a database for the same entity actions as other
-Drive rows: Open in new split, Rename (edit or owner), Favorite, Copy Link,
-Copy ID, Share, Move to folder and Remove from folder (owner), and Delete
-(owner). Duplicate stays omitted because databases have no duplicate API.
+Database row context menus and long-press sheets use the shared entity order: Open in new split (when available), Share, Favorite, Copy Link, Copy ID, Rename (edit or owner), Move to folder and Remove from folder (owner), then Delete (owner). Duplicate stays omitted because databases have no duplicate API.
 The owner can also drag a database or form row onto a folder (a sidebar folder
 or a folder row), or pick **Move to folder** from the database page's ⋯ menu or
 the form's title menu. A filed database or form appears in that folder's
@@ -181,9 +177,7 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Opening a location in a new
 split clears search and filters in the destination, leaving the original split
-unchanged. Folder menus also offer Favorite/Unfavorite, Mute/Unmute notifications
-with the shared timed-mute presets and custom time picker, Duplicate, Copy Link, Copy ID, Share, and
-owner-only Rename, Move to folder, and Delete, matching the folder's row menu in the Drive list.
+unchanged. Folder menus group available actions as open choices; Share and Favorite; Copy Link and Copy ID; owner-only Rename, Duplicate and Move to folder; Mute/Unmute notifications with timed presets and a custom time picker; then owner-only Delete. The folder's Drive row uses the same actions.
 **Duplicate** on a folder (also in its "…" menu and row menu) makes "<name> copy"
 beside it (or at the top level without edit access to its parent), copying its
 subfolders, documents, tasks, and chats; email threads filed in it stay with the
