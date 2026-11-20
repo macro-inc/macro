@@ -1847,10 +1847,15 @@ impl<S: Storage> Engine<S> {
         } else {
             true
         };
-        self.storage
-            .put_batch_with_projections(to_persist, projections)
-            .await
-            .map_err(EngineError::Storage)?;
+        // A refetch that changes no record and no projection authority has
+        // nothing to store. Pending layers still get their shadows rebased in
+        // the storage write, as before.
+        if revision_advanced || !self.optimistic.is_empty() {
+            self.storage
+                .put_batch_with_projections(to_persist, projections)
+                .await
+                .map_err(EngineError::Storage)?;
+        }
         let revision = if revision_advanced {
             self.advance_revision()?
         } else {
