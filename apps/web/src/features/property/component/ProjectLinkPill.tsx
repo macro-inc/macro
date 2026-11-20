@@ -1,6 +1,7 @@
 import { openProject } from '@app/features/projects/open-project';
 import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
@@ -34,11 +35,11 @@ export function ProjectLinkPill(props: {
     () => 'INITIATIVE',
     { loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? '') }
   );
-  const open = (event: MouseEvent) => {
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) => {
     event.stopPropagation();
     const id = nativeProjectId();
     if (id) openProject(layout, id, { newSplit: event.shiftKey });
-  };
+  });
 
   return (
     <Show
@@ -55,7 +56,7 @@ export function ProjectLinkPill(props: {
           data-property-row-action
           aria-label={t('entityActions.openProjectNamed', { name: name() })}
           class="group/project-link min-w-0 shrink justify-start"
-          onClick={open}
+          {...navHandlers}
         >
           <ProjectIcon
             class={cn(

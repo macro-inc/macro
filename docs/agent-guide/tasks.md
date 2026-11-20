@@ -216,9 +216,10 @@ caret changes the project. Hovering the name turns its icon into an arrow. Peopl
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
 Other single-value entity rows in the Properties side panel, such as Parent Task
-or a custom property holding one contact, company or document, split the same
-way: click the name to open the item (shift-click for a new split), and use the
-caret to change it. People who can't edit get the name alone.
+or a custom property holding one contact, company, document or project, split
+the same way: click the name to open the item (shift-click for a new split; an
+item already open in another split is focused instead), and use the caret to
+change it. People who can't edit get the name alone.
 The property pills beneath the task title place Due date before Project and
 Assignees. Due date has no `Due date:` prefix and uses a 12px desktop icon.
 On touch devices, these pills use 16px Status, Priority, Due date, and Project
