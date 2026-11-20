@@ -1,4 +1,6 @@
+import { t } from '@app/lib/i18n';
 import type { TeamAgentStatus } from '@service-auth/team-agents';
+import { match } from 'ts-pattern';
 
 /**
  * Why the machine an agent runs on gave up on its runtime, as the team
@@ -19,9 +21,34 @@ export type InstallFailure =
  * is nothing to say.
  */
 export function installFailureLine(
-  _failure: InstallFailure | undefined,
-  _status: TeamAgentStatus,
-  _host: string
+  failure: InstallFailure | undefined,
+  status: TeamAgentStatus,
+  host: string
 ): string | undefined {
-  return undefined;
+  if (!failure) return undefined;
+  // A failed update leaves the previous version running.
+  if (status === 'running' || status === 'starting')
+    return match(failure)
+      .with('crashLoop', () => t('teamAgents.rolledBackCrashLoop'))
+      .with('imageUnavailable', () =>
+        t('teamAgents.rolledBackImageUnavailable')
+      )
+      .otherwise(() => t('teamAgents.rolledBackOther'));
+  return match(failure)
+    .with('imageUnavailable', () =>
+      t('teamAgents.failedImageUnavailable', { host })
+    )
+    .with('imageMismatch', () => t('teamAgents.failedImageMismatch', { host }))
+    .with('engineRefused', () => t('teamAgents.failedEngineRefused', { host }))
+    .with('badConfiguration', () =>
+      t('teamAgents.failedBadConfiguration', { host })
+    )
+    .with('incompatibleRuntime', () =>
+      t('teamAgents.failedIncompatibleRuntime', { host })
+    )
+    .with('crashLoop', () => t('teamAgents.failedCrashLoop', { host }))
+    .with('hostUnsupported', () =>
+      t('teamAgents.failedHostUnsupported', { host })
+    )
+    .exhaustive();
 }

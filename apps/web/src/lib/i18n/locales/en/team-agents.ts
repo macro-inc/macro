@@ -33,6 +33,23 @@ export default {
   addPriced: 'Add {{name}} · {{price}}',
   addOn: 'Add {{name}} on {{host}}',
   /** An agent on a machine the viewer didn't pair, so its name isn't theirs to read. */
+  failedImageUnavailable:
+    "{{host}} couldn't download the agent's runtime. Check its internet connection.",
+  failedImageMismatch:
+    "The runtime {{host}} downloaded didn't match the one Macro sent.",
+  failedEngineRefused:
+    "{{host}}'s container engine wouldn't start it. Check that it's running.",
+  failedBadConfiguration: "Its settings didn't apply on {{host}}.",
+  failedIncompatibleRuntime:
+    'It needs a newer runtime image than {{host}} has.',
+  failedCrashLoop: 'It kept crashing on {{host}}.',
+  failedHostUnsupported:
+    "{{host}} can't run agents. Move it to another computer.",
+  rolledBackCrashLoop:
+    'Running the previous version: the update kept crashing.',
+  rolledBackImageUnavailable:
+    "Running the previous version: the update couldn't be downloaded.",
+  rolledBackOther: "Running the previous version: the update didn't start.",
   ownersComputer: "its owner's computer",
   buyAComputer: 'Buy a computer',
   yourComputers: 'Your computers',

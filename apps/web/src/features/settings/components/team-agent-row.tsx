@@ -16,6 +16,8 @@ export function TeamAgentRow(props: {
   menu?: JSX.Element;
   /** Which of its owner's machines it runs on, if it runs on one. */
   runsOn?: JSX.Element;
+  /** Why its own machine couldn't run it, under its status. */
+  problem?: string;
   /** Which Claude its computer runs on, for viewers who manage it. */
   claude?: JSX.Element;
   /** The step its computer's setup is on, while it is being set up. */
@@ -48,6 +50,13 @@ export function TeamAgentRow(props: {
           <div class="flex">
             <TeamAgentStatusLabel status={props.agent.status} />
           </div>
+          <Show when={props.problem}>
+            {(problem) => (
+              <div data-agent-problem class="text-xs text-ink-muted">
+                {problem()}
+              </div>
+            )}
+          </Show>
           <Show when={props.setupStep}>
             {(step) => (
               <div
