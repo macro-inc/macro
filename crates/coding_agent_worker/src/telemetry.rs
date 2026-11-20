@@ -1,7 +1,7 @@
 //! Opt-in service/enrollment tracing; stdout remains the daemon protocol.
 use hosted_runtimes::domain::ids::ComputerId;
 use opentelemetry::trace::TracerProvider;
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
