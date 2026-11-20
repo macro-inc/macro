@@ -16,6 +16,8 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  *
  * @agent
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
+ * When changing both of a task's dates, set the Due Date before the Start Date:
+ * a start after the current due date is saved as that due date.
  */
 export class TaskNamespace {
   constructor(private readonly client: MacroClient) {}
