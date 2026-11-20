@@ -39,7 +39,7 @@ enforced by the ordinary backend APIs.
   tags, inbox, agent session transcripts), returning typed handles.
   `MacroClient` wraps its search service client in the process's search
   limit when one is set (`setDefaultSearchLimit` in `utils/concurrency.ts`,
-  `limitSearches` in code mode, whose bootstrap installs 2): every client's
+  `limitSearches` in code mode, whose bootstrap installs 4): every client's
   searches, every entity's search included, share it and wait in call order.
   Other processes (agent teammates, workers, npm users) set none.
 - `src/entities/calendar/booking-namespace.ts`: `macro.calendar.booking`, booking links
