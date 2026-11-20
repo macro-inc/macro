@@ -96,6 +96,8 @@ pub struct AgentInbox {
     pub state: AgentInboxState,
     /// Why it failed, with [`AgentInboxState::Failed`].
     pub failure: Option<AgentInboxFailure>,
+    /// A stand-in provider serves it: no real mail moves.
+    pub fake_provider: bool,
 }
 
 /// What email_service answers about an agent's mailbox.
@@ -109,6 +111,8 @@ pub struct MailboxView {
     pub state: AgentInboxState,
     /// Why it failed.
     pub last_error: Option<AgentInboxFailure>,
+    /// A stand-in provider serves it.
+    pub fake_provider: bool,
 }
 
 /// A mailbox to create for an agent.
@@ -130,6 +134,9 @@ pub enum MailboxError {
     /// No email provider is set up on this server.
     #[error("no email provider is configured")]
     NotConfigured,
+    /// The provider refused the request.
+    #[error("the email provider refused the request")]
+    Rejected,
     /// email_service didn't answer.
     #[error("email service unavailable")]
     Unavailable(rootcause::Report),
@@ -183,6 +190,8 @@ pub struct InboxRecord {
     pub state: AgentInboxState,
     /// Last known failure.
     pub last_error: Option<AgentInboxFailure>,
+    /// Whether a stand-in provider serves it.
+    pub fake_provider: bool,
     /// When the record last changed.
     pub updated_at: DateTime<Utc>,
 }
@@ -194,6 +203,7 @@ impl InboxRecord {
             address: self.address.clone(),
             state: self.state,
             failure: self.last_error,
+            fake_provider: self.fake_provider,
         }
     }
 }
@@ -209,6 +219,8 @@ pub struct InboxUpdate {
     pub state: AgentInboxState,
     /// Why it failed.
     pub last_error: Option<AgentInboxFailure>,
+    /// Whether a stand-in provider serves it.
+    pub fake_provider: bool,
 }
 
 impl From<MailboxView> for InboxUpdate {
@@ -218,6 +230,7 @@ impl From<MailboxView> for InboxUpdate {
             address: view.address,
             state: view.state,
             last_error: view.last_error,
+            fake_provider: view.fake_provider,
         }
     }
 }
@@ -272,6 +285,18 @@ pub enum InboxError {
     /// Storage failed.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),
+}
+
+impl From<MailboxError> for InboxError {
+    fn from(error: MailboxError) -> Self {
+        match error {
+            MailboxError::NotConfigured => Self::NotConfigured,
+            MailboxError::Unavailable(report) => Self::Unavailable(report),
+            rejected @ MailboxError::Rejected => {
+                Self::Unavailable(rootcause::Report::new(rejected).into_dynamic())
+            }
+        }
+    }
 }
 
 impl InboxError {
@@ -438,12 +463,13 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                         address: record.address,
                         state: AgentInboxState::Released,
                         last_error: record.last_error,
+                        fake_provider: record.fake_provider,
                     },
                 )
                 .await?;
                 return Ok(());
             }
-            Err(MailboxError::Unavailable(error)) => return Err(InboxError::Unavailable(error)),
+            Err(error) => return Err(InboxError::from(error)),
         };
         let (done, after) = match step {
             WindDown::Pause => (self.mailboxes.pause(agent).await, AgentInboxState::Paused),
@@ -454,7 +480,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         };
         match done {
             Ok(()) | Err(MailboxError::NotConfigured) => {}
-            Err(MailboxError::Unavailable(error)) => return Err(InboxError::Unavailable(error)),
+            Err(error) => return Err(InboxError::from(error)),
         }
         self.store(
             agent,
@@ -463,6 +489,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
                 address: record.address,
                 state: after,
                 last_error: None,
+                fake_provider: record.fake_provider,
             },
         )
         .await?;
@@ -485,6 +512,7 @@ fn failed(error: AgentInboxFailure, record: &InboxRecord) -> InboxUpdate {
         address: record.address.clone(),
         state: AgentInboxState::Failed,
         last_error: Some(error),
+        fake_provider: record.fake_provider,
     }
 }
 
@@ -530,6 +558,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                     .await?;
                 return Err(InboxError::NotConfigured);
             }
+            Err(MailboxError::Rejected) => failed(AgentInboxFailure::Rejected, &record),
             Err(MailboxError::Unavailable(error)) => {
                 tracing::warn!(error = ?error, "email service didn't answer an inbox request");
                 failed(AgentInboxFailure::Unavailable, &record)
@@ -567,6 +596,7 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                 tracing::warn!(error = ?error, "email service didn't answer an inbox status");
                 Ok(record.view())
             }
+            Err(MailboxError::Rejected) => Ok(record.view()),
         }
     }
 

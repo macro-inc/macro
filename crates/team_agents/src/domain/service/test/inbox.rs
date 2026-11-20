@@ -43,6 +43,7 @@ impl AgentInboxes for FakeInboxes {
             address: Some(ADDRESS.to_owned()),
             state: AgentInboxState::Active,
             failure: None,
+            fake_provider: true,
         };
         self.made
             .lock()
@@ -279,6 +280,7 @@ async fn a_failed_inbox_shows_on_the_list_with_its_reason() {
             address: None,
             state: AgentInboxState::Failed,
             failure: Some(AgentInboxFailure::AddressTaken),
+            fake_provider: false,
         },
     );
 

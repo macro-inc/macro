@@ -2,6 +2,7 @@
 
 pub mod agent_api_keys;
 pub mod agent_git_repos;
+pub mod email_service_mailboxes;
 pub mod hosted_runtimes_computers;
 pub mod pg_agent_inboxes;
 pub mod pg_team_agents_repo;

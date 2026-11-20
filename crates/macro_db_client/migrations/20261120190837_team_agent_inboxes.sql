@@ -22,6 +22,9 @@ CREATE TABLE team_agent_inboxes (
             'rejected'
         )
     ),
+    -- A stand-in provider serves the mailbox (local stacks, previews): no
+    -- real mail moves.
+    fake_provider BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

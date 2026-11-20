@@ -96,6 +96,7 @@ async fn an_update_keeps_a_known_mailbox_and_address_and_lists_by_team(pool: PgP
                 address: Some("sam-rivera@agents.example.com".to_owned()),
                 state: AgentInboxState::Active,
                 last_error: None,
+                fake_provider: true,
             },
         )
         .await
@@ -108,6 +109,7 @@ async fn an_update_keeps_a_known_mailbox_and_address_and_lists_by_team(pool: PgP
                 address: None,
                 state: AgentInboxState::Failed,
                 last_error: Some(AgentInboxFailure::Unavailable),
+                fake_provider: true,
             },
         )
         .await
@@ -148,6 +150,7 @@ async fn removing_the_agents_seat_drops_its_inbox_record(pool: PgPool) {
                     address: None,
                     state: AgentInboxState::Released,
                     last_error: None,
+                    fake_provider: false,
                 },
             )
             .await,

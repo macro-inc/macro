@@ -48,6 +48,7 @@ struct InboxRow {
     address: Option<String>,
     state: String,
     last_error: Option<String>,
+    fake_provider: bool,
     updated_at: DateTime<Utc>,
 }
 
@@ -72,6 +73,7 @@ impl TryFrom<InboxRow> for InboxRecord {
                 .map(|error| error.parse::<AgentInboxFailure>())
                 .transpose()
                 .map_err(|_| PgAgentInboxesError::Malformed)?,
+            fake_provider: row.fake_provider,
             updated_at: row.updated_at,
         })
     }
@@ -96,7 +98,7 @@ impl AgentInboxRepository for PgAgentInboxes {
             VALUES ($1, $2, $3, $4)
             ON CONFLICT (agent_user_id) DO UPDATE SET agent_user_id = EXCLUDED.agent_user_id
             RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
-                      last_error, updated_at
+                      last_error, fake_provider, updated_at
             "#,
             agent.as_ref(),
             team_id,
@@ -115,7 +117,7 @@ impl AgentInboxRepository for PgAgentInboxes {
             InboxRow,
             r#"
             SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
-                   last_error, updated_at
+                   last_error, fake_provider, updated_at
             FROM team_agent_inboxes
             WHERE agent_user_id = $1
             "#,
@@ -133,7 +135,7 @@ impl AgentInboxRepository for PgAgentInboxes {
             InboxRow,
             r#"
             SELECT agent_user_id, team_id, request_id, mailbox_id, address, state,
-                   last_error, updated_at
+                   last_error, fake_provider, updated_at
             FROM team_agent_inboxes
             WHERE team_id = $1
             "#,
@@ -159,16 +161,18 @@ impl AgentInboxRepository for PgAgentInboxes {
                 address = COALESCE($3, address),
                 state = $4,
                 last_error = $5,
+                fake_provider = $6,
                 updated_at = now()
             WHERE agent_user_id = $1
             RETURNING agent_user_id, team_id, request_id, mailbox_id, address, state,
-                      last_error, updated_at
+                      last_error, fake_provider, updated_at
             "#,
             agent.as_ref(),
             update.mailbox_id,
             update.address,
             update.state.as_ref(),
             update.last_error.map(|error| error.as_ref().to_owned()),
+            update.fake_provider,
         )
         .fetch_optional(&self.pool)
         .await?
