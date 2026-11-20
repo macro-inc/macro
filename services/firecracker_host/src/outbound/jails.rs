@@ -613,7 +613,8 @@ impl Jails {
             connect_ms = Empty,
             exit_code = Empty,
         ),
-        err
+        // Its callers report the error (a shutdown expects it sometimes).
+        err(level = "warn")
     )]
     async fn run_in_guest(
         &self,

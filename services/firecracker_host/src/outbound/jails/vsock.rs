@@ -17,10 +17,11 @@ use super::GuestLinkError;
 mod test;
 
 /// How long a first handshake may take before it is given up and tried
-/// again. Firecracker answers at once (`OK`, or a close when nothing
-/// listens), so a handshake this slow is stuck and a fresh one is the way
-/// out; each timeout doubles the next attempt's limit, in case the guest is
-/// only slow (a restore faulting its memory in from disk).
+/// again. Firecracker forwards the `CONNECT` to the guest and gives up on a
+/// request the guest leaves unanswered within a couple of seconds, so a
+/// handshake still unanswered after this is stuck below the guest agent and
+/// a fresh one is the way out. Each timeout doubles the next attempt's
+/// limit, so a stall longer than the limit is still waited out.
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 /// The pause after a first failed attempt; it doubles up to
 /// [`RETRY_DELAY_MAX`]. No attempt is given less than this.
@@ -57,6 +58,11 @@ pub async fn connect_until(
         let error = match tokio::time::timeout(limit, handshake(socket, port)).await {
             Ok(Ok(stream)) => break Ok(stream),
             Ok(Err(error)) => error,
+            // Cut short by the deadline: the caller's limit, not a stuck
+            // handshake.
+            Err(_) if limit < handshake_limit => {
+                break Err(GuestLinkError::HandshakeTimedOut(limit));
+            }
             Err(_) => {
                 tracing::warn!(
                     attempt,

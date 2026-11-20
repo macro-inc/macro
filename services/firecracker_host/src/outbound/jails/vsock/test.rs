@@ -170,7 +170,7 @@ async fn a_guest_agent_that_never_listens_fails_with_the_refusal_not_a_timeout()
     assert!(matches!(error, GuestLinkError::Refused(_)), "{error:?}");
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn no_socket_fails_with_connect_at_the_deadline() {
     let dir = tempfile::tempdir().unwrap();
     let socket = socket_in(&dir);
@@ -215,7 +215,7 @@ async fn an_exec_returns_the_exit_code_and_stdout() {
     assert_eq!(request.env.get("PATH").map(String::as_str), Some("/bin"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn an_exec_the_guest_never_finishes_times_out_naming_the_program() {
     let (host, mut guest) = UnixStream::pair().unwrap();
     let guest_side =
@@ -230,6 +230,64 @@ async fn an_exec_the_guest_never_finishes_times_out_naming_the_program() {
         "{error:?}"
     );
     guest_side.abort();
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_deadline_already_passed_still_gets_one_short_attempt() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = socket_in(&dir);
+    let (mut lines, _accepted) = firecracker(&socket, vec![Answer::Hang]);
+
+    let started = Instant::now();
+    let error = connect_until(&socket, PORT, started, HANDSHAKE)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, GuestLinkError::HandshakeTimedOut(limit) if limit == Duration::from_millis(10)),
+        "{error:?}"
+    );
+    assert_eq!(lines.recv().await.as_deref(), Some("CONNECT 52"));
+    assert!(lines.try_recv().is_err(), "more than one attempt");
+}
+
+#[tokio::test]
+async fn an_exec_the_guest_closes_before_the_exit_is_closed() {
+    let (host, mut guest) = UnixStream::pair().unwrap();
+    let guest_side = tokio::spawn(async move {
+        // The start and the closed stdin, then the guest goes away.
+        let _ = read_frame(&mut guest).await.unwrap();
+        let _ = read_frame(&mut guest).await.unwrap();
+        drop(guest);
+    });
+
+    let request = root_request(&["true"], "/bin");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let error = exec(host, request, deadline).await.unwrap_err();
+
+    assert!(matches!(error, GuestLinkError::Closed), "{error:?}");
+    guest_side.await.unwrap();
+}
+
+#[tokio::test]
+async fn an_exec_the_guest_cannot_run_is_failed_with_its_reason() {
+    let (host, mut guest) = UnixStream::pair().unwrap();
+    let guest_side = tokio::spawn(async move {
+        let _ = read_frame(&mut guest).await.unwrap();
+        write_frame(&mut guest, &Frame::Failed("no such program".to_owned()))
+            .await
+            .unwrap();
+    });
+
+    let request = root_request(&["nope"], "/bin");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let error = exec(host, request, deadline).await.unwrap_err();
+
+    assert!(
+        matches!(&error, GuestLinkError::Failed(reason) if reason == "no such program"),
+        "{error:?}"
+    );
+    guest_side.await.unwrap();
 }
 
 #[test]
