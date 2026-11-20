@@ -56,8 +56,8 @@ printf '%s' 'https://your-storage-api.example.com' | \
   wrangler secret put MACRO_STORAGE_URL
 ```
 
-`STRIPE_API_KEY` can be a restricted key with read access to subscriptions and
-customers. The Worker reads subscription trial dates for free Checkout sessions
+`STRIPE_API_KEY` can be a restricted key with read access to invoices, subscriptions and
+customers. It reads remaining invoice lines when checking a multi-page invoice for proration. The Worker reads subscription trial dates for free Checkout sessions
 and customer details for cancellation events.
 
 Wrangler prints the URL assigned to the Worker in the deploying Cloudflare

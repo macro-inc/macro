@@ -140,9 +140,27 @@ async function checkoutNotification(
   };
 }
 
-function subscriptionPayment(
+async function hasProration(stripe: Stripe, invoice: Stripe.Invoice) {
+  const isProrated = (line: Stripe.InvoiceLineItem) =>
+    line.parent?.subscription_item_details?.proration ||
+    line.parent?.invoice_item_details?.proration ||
+    ('proration' in line && line.proration === true);
+  if (invoice.lines.data.some(isProrated)) return true;
+  if (invoice.lines.has_more) {
+    for await (const line of stripe.invoices.listLineItems(invoice.id, {
+      starting_after: invoice.lines.data.at(-1)?.id,
+      limit: 100,
+    })) {
+      if (isProrated(line)) return true;
+    }
+  }
+  return false;
+}
+
+async function subscriptionPayment(
+  stripe: Stripe,
   event: Stripe.InvoicePaidEvent
-): PaymentNotification | undefined {
+): Promise<PaymentNotification | undefined> {
   const invoice = event.data.object;
   if (invoice.status !== 'paid' || invoice.amount_paid <= 0) return undefined;
 
@@ -162,13 +180,7 @@ function subscriptionPayment(
   let reason = invoice.billing_reason
     ? (labels[invoice.billing_reason] ?? humanize(invoice.billing_reason))
     : 'Subscription invoice';
-  const prorated = invoice.lines.data.some(
-    (line) =>
-      line.parent?.subscription_item_details?.proration ||
-      line.parent?.invoice_item_details?.proration ||
-      ('proration' in line && line.proration === true)
-  );
-  if (prorated) reason += ' (prorated)';
+  if (await hasProration(stripe, invoice)) reason += ' (prorated)';
 
   return {
     kind: 'payment',
@@ -238,7 +250,7 @@ export async function notificationFromEvent(
     case 'checkout.session.async_payment_succeeded':
       return checkoutNotification(stripe, event);
     case 'invoice.paid':
-      return subscriptionPayment(event);
+      return subscriptionPayment(stripe, event);
     case 'customer.subscription.deleted':
       return cancellationFromSubscription(stripe, event, 'ended');
     case 'customer.subscription.updated':

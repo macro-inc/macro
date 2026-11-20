@@ -199,6 +199,26 @@ describe('notificationFromEvent', () => {
     );
   });
 
+  test('checks later invoice lines for a prorated change', async () => {
+    const invoice = invoicePaidEvent({ billing_reason: 'subscription_update' });
+    invoice.data.object.lines.has_more = true;
+    invoice.data.object.lines.data.push({
+      id: 'il_first',
+    } as Stripe.InvoiceLineItem);
+    const listLineItems = mock(async function* () {
+      yield { parent: { invoice_item_details: { proration: true } } };
+    });
+    const stripe = Object.assign(stripeStub(), { invoices: { listLineItems } });
+    const payment = await notificationFromEvent(stripe, invoice);
+    expect(listLineItems).toHaveBeenCalledWith(invoice.data.object.id, {
+      starting_after: 'il_first',
+      limit: 100,
+    });
+    expect(payment).toMatchObject({
+      invoice: { reason: 'Subscription change (prorated)' },
+    });
+  });
+
   test('only the invoice announces a subscription checkout payment', async () => {
     const checkout = checkoutEvent({
       mode: 'subscription',
