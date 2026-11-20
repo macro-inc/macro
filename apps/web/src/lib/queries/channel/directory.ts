@@ -30,7 +30,9 @@ import {
 import { promiseTimeout, until } from '@solid-primitives/promise';
 import { AsyncQueuer, Batcher } from '@tanstack/pacer';
 import {
+  hashKey,
   type QueryClient,
+  type QueryKey,
   queryOptions,
   useQuery,
   useQueryClient,
@@ -372,6 +374,28 @@ function fetchChannelsById(
   );
 }
 
+/** Per query client, the channel writes `refreshChannelDirectory` has seen,
+ * and how many it had seen when each directory read started. */
+type DirectoryWrites = { seen: number; readFrom: Map<string, number> };
+
+const DIRECTORY_WRITES = new WeakMap<QueryClient, DirectoryWrites>();
+
+/** A read that started before a write reads again at most this often. */
+const CURRENT_READ_ATTEMPTS = 3;
+
+function directoryWrites(client: QueryClient): DirectoryWrites {
+  const known = DIRECTORY_WRITES.get(client);
+  if (known) return known;
+  const created: DirectoryWrites = { seen: 0, readFrom: new Map() };
+  DIRECTORY_WRITES.set(client, created);
+  return created;
+}
+
+function readsBeforeWrite(client: QueryClient, queryKey: QueryKey) {
+  const writes = directoryWrites(client);
+  return (writes.readFrom.get(hashKey(queryKey)) ?? 0) < writes.seen;
+}
+
 /** Every joined channel, paged from the network into memory. For the
  * directory without a cache, and for a full read before the cache is
  * complete. */
@@ -381,9 +405,34 @@ export function channelDirectoryPagesQueryOptions(
 ) {
   return queryOptions({
     queryKey: channelKeys.directory(userId).queryKey,
-    queryFn: ({ signal }) => fetchJoinedChannels(client(), signal),
+    queryFn: ({ signal, client: queries, queryKey }) => {
+      const writes = directoryWrites(queries);
+      writes.readFrom.set(hashKey(queryKey), writes.seen);
+      return fetchJoinedChannels(client(), signal);
+    },
     staleTime: DIRECTORY_STALE_MS,
   });
+}
+
+/**
+ * The directory's pages, read after the latest channel write. A read that
+ * started before one may hold the pages before it, and nothing reads again
+ * for a caller of `fetchQuery`: an invalidation refetches only observed
+ * queries, and the read's success clears it.
+ */
+export async function fetchCurrentDirectoryPages(
+  client: QueryClient,
+  options: ReturnType<typeof channelDirectoryPagesQueryOptions>
+): Promise<readonly DirectoryChannel[]> {
+  let channels = await client.fetchQuery(options);
+  for (
+    let attempt = 1;
+    attempt < CURRENT_READ_ATTEMPTS &&
+    readsBeforeWrite(client, options.queryKey);
+    attempt += 1
+  )
+    channels = await client.fetchQuery({ ...options, staleTime: 0 });
+  return channels;
 }
 
 /**
@@ -397,6 +446,7 @@ export function channelDirectoryPagesQueryOptions(
 export async function refreshChannelDirectory(
   client: QueryClient = queryClient
 ) {
+  directoryWrites(client).seen += 1;
   const filters = { queryKey: channelKeys.directory._def };
   const firstReads = client
     .getQueryCache()
@@ -1048,7 +1098,10 @@ export function createMemoryChannelDirectory(
       return result;
     },
     async readComplete() {
-      const channels = await deps.queryClient.fetchQuery(options());
+      const channels = await fetchCurrentDirectoryPages(
+        deps.queryClient,
+        options()
+      );
       return views.applyList(
         channels.filter(({ isParticipant }) => isParticipant)
       );
@@ -1127,7 +1180,8 @@ export function createAppChannelDirectory(): ChannelDirectory {
           options
         ),
       fetchAll: async () => {
-        const channels = await queryClient.fetchQuery(
+        const channels = await fetchCurrentDirectoryPages(
+          queryClient,
           channelDirectoryPagesQueryOptions(userId, getGraphqlSoupClient)
         );
         return channels.filter(({ isParticipant }) => isParticipant);

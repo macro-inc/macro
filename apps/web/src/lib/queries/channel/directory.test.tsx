@@ -35,6 +35,7 @@ import {
   createByIdReader,
   createCachedChannelDirectory,
   createMemoryChannelDirectory,
+  fetchCurrentDirectoryPages,
   fetchJoinedChannels,
   lookupChannel,
   refreshChannelDirectory,
@@ -332,10 +333,12 @@ describe('staticChannelDirectory', () => {
 });
 
 /** Mounts the in-memory directory under a query client that never retries. */
-function mountMemoryDirectory(network: ReturnType<typeof fakeNetwork>) {
-  const queryClient = new QueryClient({
+function mountMemoryDirectory(
+  network: Pick<ReturnType<typeof fakeNetwork>, 'client'>,
+  queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
-  });
+  })
+) {
   let directory!: ChannelDirectory;
   const view = render(() => (
     <QueryClientProvider client={queryClient}>
@@ -975,7 +978,77 @@ describe('cached channel directory', () => {
   });
 });
 
+/** A network whose first walk answers `first` once released, and every
+ * later one `later`. */
+function changingNetwork(
+  first: ChannelDirectoryFieldsFragment[],
+  later: ChannelDirectoryFieldsFragment[]
+) {
+  let release!: () => void;
+  const held = new Promise<void>((done) => {
+    release = done;
+  });
+  let walks = 0;
+  const client = fakeClient(() => ({
+    toPromise: async () => {
+      walks += 1;
+      if (walks > 1) return page(later, null);
+      await held;
+      return page(first, null);
+    },
+  }));
+  return { client, release, walks: () => walks };
+}
+
 describe('refreshChannelDirectory', () => {
+  it('gives a full read the pages after a write that landed during it', async () => {
+    const network = changingNetwork(
+      [channelRecord('a')],
+      [channelRecord('a'), channelRecord('b')]
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const directory = mountMemoryDirectory(network, queryClient);
+    const complete = directory.readComplete();
+    await vi.waitFor(() => expect(network.walks()).toBe(1));
+
+    const refreshed = refreshChannelDirectory(queryClient);
+    network.release();
+    await refreshed;
+
+    expect(ids(await complete)).toEqual(['a', 'b']);
+  });
+
+  it('reads again for a read nobody observes when a write lands during it', async () => {
+    const network = changingNetwork(
+      [channelRecord('a')],
+      [channelRecord('a'), channelRecord('b')]
+    );
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    disposers.push(() => queryClient.clear());
+    const options = channelDirectoryPagesQueryOptions(
+      VIEWER,
+      () => network.client
+    );
+    const read = fetchCurrentDirectoryPages(queryClient, options);
+    await vi.waitFor(() => expect(network.walks()).toBe(1));
+
+    const refreshed = refreshChannelDirectory(queryClient);
+    network.release();
+    await refreshed;
+
+    expect(ids(await read)).toEqual(['a', 'b']);
+    expect(network.walks()).toBe(2);
+    // Later reads use the cached pages again.
+    expect(ids(await fetchCurrentDirectoryPages(queryClient, options))).toEqual(
+      ['a', 'b']
+    );
+    expect(network.walks()).toBe(2);
+  });
+
   it('reads again after a first read that was in flight during the change', async () => {
     const network = fakeNetwork([channelRecord('a')], { holdPages: true });
     const queryClient = new QueryClient({

@@ -1387,10 +1387,13 @@ list, updated by each cached record that changed or was removed after that
 read began; a cached record unchanged since is older than the network's row,
 so a stale joined row the network left out stays out. A lane pass that
 finishes later makes the cache answer alone again. `failed()` says the
-directory is not complete and that read failed; `retry()` reads again. Channel writes outside the cache's soup updates (join
-links, renames, new DMs) call `refreshChannelDirectory`, which rereads the
-in-memory directory, reading again after a first read that was already in
-flight. The viewer's own views reach no soup update, so the channel view
+directory is not complete and that read failed; `retry()` reads again.
+Channel writes outside the cache's soup updates (join links, renames, new
+DMs) call `refreshChannelDirectory`, which rereads the in-memory directory,
+reading again after a first read that was already in flight; a full read
+(`readComplete()`, and the network list behind a filling cache) that started
+before a write reads again, since nothing else refetches a query nobody
+observes. The viewer's own views reach no soup update, so the channel view
 hands each recorded view to the directory (`recordView`). The directory lays
 it over every record it reads for the rest of its life, so a page, a by-id read
 or a refetch read before the view never shows an older one. The cached
