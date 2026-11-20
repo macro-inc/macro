@@ -714,9 +714,10 @@ async fn a_thread_with_readers_outside_the_session_sees_the_generic_label() {
 }
 
 /// A public or team channel is read by people who are not its participants
-/// (anyone, or the owning team view-only), and a call by guests without an
-/// account, so the participant list is not the whole audience there: the
-/// link stays generic even when every participant can open the session.
+/// (anyone, or the owning team view-only), a call by guests without an
+/// account, and an initiative by its owner's team through a team link share,
+/// so the listed readers are not the whole audience there: the link stays
+/// generic even when every listed reader can open the session.
 #[tokio::test]
 async fn a_thread_read_beyond_its_participants_sees_the_generic_label() {
     for (channel_type, parent) in [
@@ -730,6 +731,7 @@ async fn a_thread_read_beyond_its_participants_sees_the_generic_label() {
         ),
         (None, MessageParent::Channel(Uuid::from_u128(1))),
         (None, MessageParent::Call(Uuid::from_u128(1))),
+        (None, MessageParent::Initiative(Uuid::from_u128(1))),
     ] {
         let label = announcer_with(EditingAccess::shared(), channel_type)
             .link_label(SESSION, Some("Fix login".to_owned()), &parent)
