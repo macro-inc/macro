@@ -358,14 +358,44 @@ impl HubState {
     }
 }
 
-/// The first line of a prompt, short enough for a tab label.
+/// The first line of a prompt, short enough for a tab label. Leading Macro
+/// elements (`<macrod-runtime>…</macrod-runtime>`, `<m-agent-context>`,
+/// mentions) are hidden from the operator, so the title starts after them; a
+/// prompt that is nothing but such elements, or one left unclosed, has none.
 pub(crate) fn title_from(text: &str) -> Option<String> {
-    let line = text.lines().map(str::trim).find(|line| !line.is_empty())?;
+    let mut rest = text.trim_start();
+    while opening_tag(rest).is_ok() {
+        rest = hidden_element(rest).ok()?.0.trim_start();
+    }
+    let line = rest.lines().map(str::trim).find(|line| !line.is_empty())?;
     let mut title: String = line.chars().take(TITLE_LIMIT).collect();
     if line.chars().count() > TITLE_LIMIT {
         title.push('…');
     }
     Some(title)
+}
+
+/// `<name>` for a lowercase element name, as Macro's prompt tags are.
+fn opening_tag(input: &str) -> nom::IResult<&str, &str> {
+    use nom::Parser as _;
+    nom::sequence::delimited(
+        nom::character::complete::char('<'),
+        nom::bytes::complete::take_while1(|character: char| {
+            character.is_ascii_lowercase() || character.is_ascii_digit() || character == '-'
+        }),
+        nom::character::complete::char('>'),
+    )
+    .parse(input)
+}
+
+/// A whole `<name>…</name>` element.
+fn hidden_element(input: &str) -> nom::IResult<&str, &str> {
+    use nom::Parser as _;
+    let (rest, name) = opening_tag(input)?;
+    let close = format!("</{name}>");
+    let (rest, _) = nom::bytes::complete::take_until(close.as_str()).parse(rest)?;
+    let (rest, _) = nom::bytes::complete::tag(close.as_str()).parse(rest)?;
+    Ok((rest, name))
 }
 
 struct Launcher {

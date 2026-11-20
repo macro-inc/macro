@@ -4863,6 +4863,7 @@ dependencies = [
  "macro_uuid",
  "messages",
  "mimalloc",
+ "nom 8.0.0",
  "openssl-sys",
  "opentelemetry",
  "opentelemetry-otlp",
