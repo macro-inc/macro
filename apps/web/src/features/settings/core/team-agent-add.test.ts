@@ -10,6 +10,10 @@ describe('addedAgentProgress', () => {
     expect(addedAgentProgress([{ ...ada, status: 'starting' }], 'ada')).toBe(
       'waiting'
     );
+    // A computer that stopped answering comes back by itself.
+    expect(addedAgentProgress([{ ...ada, status: 'unhealthy' }], 'ada')).toBe(
+      'waiting'
+    );
   });
 
   it('stops at a started computer when the wait ends there', () => {

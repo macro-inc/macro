@@ -4,7 +4,7 @@ import type { HomeTab } from './types';
 
 export const homeTabSearch = {
   namespace: 'home',
-  schema: z.object({ tab: z.enum(['signal', 'noise']) }),
+  schema: z.object({ tab: z.enum(['signal', 'noise', 'recent']) }),
   defaults: { tab: 'signal' as HomeTab },
 };
 

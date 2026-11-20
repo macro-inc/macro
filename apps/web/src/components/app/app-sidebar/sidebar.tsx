@@ -9,6 +9,8 @@ import { calendarPath } from '@app/features/calendar-view/calendar-url';
 import { CALENDAR_VIEW_ID } from '@app/features/calendar-view/types';
 import { DEFAULT_EMAIL_TAB } from '@app/features/email-view/constants';
 import { emailTabSearchUpdate } from '@app/features/email-view/email-route';
+import type { NewHomeMode } from '@app/features/new-home/core/new-home-mode';
+import { useNewHomeMode } from '@app/features/new-home/use-new-home-mode';
 import { requestSearchFocus } from '@app/features/next-soup/soup-view/search-controllers';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useUnifiedNotificationsFlag } from '@app/features/notifications-inbox/use-unified-notifications-flag';
@@ -272,6 +274,7 @@ export const GoToHotkeys = () => {
   const recentViewEnabled = useRecentViewFlag();
   const reviews = useFeatureFlag(enableTasksReviews);
   const notificationsEnabled = useUnifiedNotificationsFlag();
+  const homeMode = useNewHomeMode();
   const external = useFeatureFlag(enableWhatsappLinked);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
@@ -280,7 +283,8 @@ export const GoToHotkeys = () => {
       reviews().enabled,
       notificationsEnabled(),
       external().enabled,
-      crmAccessAllowed()
+      crmAccessAllowed(),
+      homeMode()
     )
   );
 
@@ -390,6 +394,18 @@ const NOTIFICATIONS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.notifications,
 };
 
+/** `g h` with New Home on: New Home, on the tab it was left on. */
+const newHomeLink = (label: () => string): SidebarItem => ({
+  id: 'new-home',
+  get label() {
+    return label();
+  },
+  href: '/new-home',
+  icon: HomeIcon,
+  hotkey: 'h',
+  hotkeyToken: TOKENS.sidebar.goTo.home,
+});
+
 const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   get label() {
@@ -442,7 +458,8 @@ const EXTERNAL_LINK: SidebarItem = {
  * flag-gated Notifications, Recent, Activity, Calls, Reviews,
  * and External entries in their correct positions. Callers subscribe to the
  * flags and pass them in, so a flag that resolves after mount still rebuilds
- * the list.
+ * the list. With New Home on, `g h` is New Home's alone and Notifications
+ * has no letter: it is a New Home tab.
  */
 export const buildSidebarLinks = (
   showActivity: boolean,
@@ -450,7 +467,8 @@ export const buildSidebarLinks = (
   showReviews: boolean,
   showNotifications: boolean,
   showExternal: boolean,
-  canAccessCrm: boolean
+  canAccessCrm: boolean,
+  homeMode: NewHomeMode | undefined
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS;
 
@@ -461,7 +479,13 @@ export const buildSidebarLinks = (
 
   // Home leads; Notifications, Recent and Activity follow it in that order.
   let anchorId = 'home';
-  if (showNotifications) {
+  if (homeMode === 'both' || homeMode === 'new-only') {
+    const newHome = newHomeLink(() =>
+      homeMode === 'both' ? t('home.newHome') : t('nav.home')
+    );
+    links = links.map((link) => (link.id === 'home' ? newHome : link));
+    anchorId = 'new-home';
+  } else if (showNotifications) {
     links = links.map((link) => (link.id === 'home' ? homeLink('h') : link));
     insertAfter(anchorId, NOTIFICATIONS_LINK);
     anchorId = 'notifications';

@@ -251,7 +251,9 @@ impl ImportRepo for PgImportRepo {
             INSERT INTO import_entity (user_id, source, kind, foreign_id, status, initiator, metadata)
             VALUES ($1, $2, $6, $3, 'staged', $4, $5)
             ON CONFLICT (user_id, source, foreign_id) DO UPDATE
-            SET metadata = EXCLUDED.metadata, updated_at = NOW()
+            SET metadata = EXCLUDED.metadata || jsonb_strip_nulls(jsonb_build_object(
+                        'personalFolderId', import_entity.metadata -> 'personalFolderId',
+                        'separateFolder', import_entity.metadata -> 'separateFolder')), updated_at = NOW()
             WHERE import_entity.status = 'staged'
             RETURNING id, user_id, team_id, source, kind, foreign_id, parent_id, review_id, status,
                       initiator, metadata, entity_id, entity_type, last_error, waiting_on, created_at,

@@ -1,0 +1,7 @@
+id: rust-workflows-typed-actions
+valid:
+  - |
+    fn f() -> Step<Use> { ActionsCheckout::new("Checkout").fetch_depth(0).step() }
+invalid:
+  - |
+    fn f() -> Step<Use> { Step::new("Checkout").uses("actions", "checkout", "v6") }

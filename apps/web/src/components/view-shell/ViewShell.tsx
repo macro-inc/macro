@@ -82,6 +82,11 @@ export function asideCollapsedPreferenceKey(app: string) {
   return `macro:pref:view-sidebar:collapsed:${app}`;
 }
 
+/** Where a shell with `asidePreferenceKey` saves the width its navigation was dragged to. */
+export function asideWidthPreferenceKey(app: string) {
+  return `macro:pref:view-sidebar:width:${app}`;
+}
+
 export { useViewShell, type ViewShellLayout } from './view-shell-context';
 
 export type ViewShellRootProps = Omit<
@@ -191,7 +196,7 @@ function Root(props: ViewShellRootProps) {
   // A width the user dragged to wins over the configured default.
   const [chosenAsideWidth, setChosenAsideWidth] = local.asidePreferenceKey
     ? usePreference<number | undefined>(
-        `macro:pref:view-sidebar:width:${local.asidePreferenceKey}`,
+        asideWidthPreferenceKey(local.asidePreferenceKey),
         { default: undefined }
       )
     : createSignal<number>();

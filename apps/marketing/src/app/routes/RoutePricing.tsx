@@ -464,6 +464,13 @@ export function RoutePricing() {
             Email, chat, docs, tasks, and agents on every plan.
           </p>
           <PlanComparison />
+          <p class="pricing-open-source">
+            Paid plans support Macro’s{' '}
+            <a href="https://github.com/macro-inc/macro">
+              open-source development
+            </a>
+            .
+          </p>
         </section>
         <section
           class="pricing-calculator-section"
@@ -485,13 +492,6 @@ export function RoutePricing() {
           title="Questions about pricing"
           items={faqItems}
         />
-        <p class="pricing-open-source">
-          Paid plans support Macro’s{' '}
-          <a href="https://github.com/macro-inc/macro">
-            open-source development
-          </a>
-          .
-        </p>
       </div>
       <HomepageClosing />
     </ProductPage>

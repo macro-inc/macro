@@ -248,8 +248,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   page (newest first) without two exact matches goes to the session,
   which also looks up the other kinds. `routine_code.rs` gives the
   session each SDK area it needs
-  (`area_reference`: the area's index, guidance and declarations, then
-  the generated types they import). `scheduling.rs` composes the drafter
+  (`area_reference`: the area's index, guidance and declarations from every
+  namespace in the topic, then the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the

@@ -156,7 +156,7 @@ data:
           max_workers: 400
           queue_depth: 20000
         s3:
-          bucket: macro-observability-k8s-tempo
+          bucket: observability-traces-fa2328d
           endpoint: s3.us-east-2.amazonaws.com
           region: us-east-2
         search:
