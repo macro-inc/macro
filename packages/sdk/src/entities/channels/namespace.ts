@@ -102,6 +102,22 @@ export class ChannelNamespace {
     return iterate('channels.list', opts, {}, () => this.listed());
   }
 
+  /**
+   * The channels the authenticated user is a member of whose latest message
+   * or reply is at or after `after`: the ones worth reading after a gap.
+   * Pages through every channel; reads no messages.
+   *
+   * @readonly
+   */
+  async *activeSince(after: Date | string): AsyncGenerator<Channel> {
+    const since = (after instanceof Date ? after : new Date(after)).getTime();
+    for await (const record of this.records(CHANNEL_PAGE_SIZE)) {
+      const latest = record.latest_message?.created_at;
+      if (latest !== undefined && Date.parse(latest) >= since)
+        yield Channel.fromListing(this.client, record);
+    }
+  }
+
   private async *listed(pageSize = CHANNEL_PAGE_SIZE): AsyncGenerator<Channel> {
     for await (const record of this.records(pageSize)) {
       yield Channel.fromListing(this.client, record);
