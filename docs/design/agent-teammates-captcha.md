@@ -10,7 +10,9 @@ and hands the rest to the agent's owner, who can take over the agent's screen.
 agent (Claude) ─ solveCaptcha({ reason })                         packages/starter-agent
   │  checks the tab first: no check / unsupported → answers at once, nothing else runs
   │  takes the browser lease (the owner's take-over beats it)
-  └─ one bounded `opencode run`, its only tools the captcha MCP server
+  │  starts a solver run ─ relay /brain/captcha/runs ─ harness → runId (6 min, 16 calls, 2 solves)
+  └─ one bounded `opencode run`, its only tools the captcha MCP server; every call below sends
+     `x-macro-solver-run: <runId>`
        model: Kimi K3 ─ relay /brain/fireworks/v1/chat/completions ─ harness ─ Fireworks
        solve_captcha: read the challenge (site key, origin + path, widget params)
                       ─ relay /brain/captcha/solve ─ harness ─ CapSolver createTask / getTaskResult
@@ -43,8 +45,10 @@ agent (Claude) ─ solveCaptcha({ reason })                         packages/sta
 | One OpenCode run per call: at most 8 model steps, 2048 output tokens a step, 2 solves, 5 minutes (`timeout` inside the sandbox stops OpenCode and its MCP server) | `packages/starter-agent` (`captcha/opencode.ts`, `captcha/mcp.ts`) |
 | Every OpenCode tool off except the two captcha tools; no subagents, shell, files, web, skills or plugins; none of the computer's own OpenCode config | `captcha/opencode.ts` |
 | One driver: the solver's lease refuses the agent's own browser steps; the owner's take-over file refuses both, and the solver checks it again before it touches the page | `browser/driver.ts`, `captcha/solve.ts` |
-| Per agent and per harness process: 1 concurrent solve, 20 an hour, 100 a day, reset on deploy (two replicas allow twice that); 120 s of polling per solve | harness `captcha_gateway` |
-| Idempotent by `solveId` within a process: a repeated request joins the same solve. Each attempt sends a fresh id | harness `captcha_gateway` |
+| Every model call and every solve spends a live solver run (`x-macro-solver-run`): a run lives 6 minutes and allows 16 Fireworks calls (2 at once) and 2 solves; missing, unknown or another agent's run 403 `solver_run_required`, expired 403 `solver_run_expired`, used up 429 `solver_run_exhausted`, 2 calls running 429 `solver_run_busy` | harness `solver_runs`, in Postgres |
+| Per agent: 1 unexpired run, 20 runs an hour, 100 a day (`budgetExceeded`). So the calls-per-hour bound is 20 × 16 = 320, and at most 2 calls run at once | harness `solver_runs`, in Postgres |
+| Per agent: 1 concurrent solve, 20 an hour, 100 a day, counted from the solve rows, so every replica and deploy shares them; 120 s of polling per solve | harness `captcha_gateway`, in Postgres |
+| Idempotent by `solveId` across replicas: a finished solve replays its answer, one still running answers 409 `solve_in_progress`, another agent's id 409 `solve_id_taken`. Each attempt sends a fresh id | harness `captcha_gateway`, in Postgres |
 | Only Kimi K3 on the Fireworks route; `max_tokens` at most 8192, `n` 1, 5 minutes per call | harness `fireworks_gateway` |
 | The harness holds every `/brain/*` call while the owner drives the agent's screen | agent screen (pending: lands with the screen take-over work) |
 
@@ -56,19 +60,24 @@ terms also forbid.
 
 - **Model:** each `/brain/fireworks` call records `UsageAmount::Tokens` under the agent and its team,
   priced as `kimi-k3`, with cached prompt tokens as cache reads. A retried HTTP call is a new request
-  that Fireworks served and is billed once for what it served. Fireworks' response id is on the span
-  (`gen_ai.response.id`), not yet in the ledger.
+  that Fireworks served and is billed once for what it served. The call is also observed in
+  `ai_usage`'s tracking journal (`ai_usage_observation`) under the solver run, with Fireworks'
+  response id as `provider_request_id`; the journal never bills, so the legacy recorder's row is
+  the one charge.
 - **Solves:** a solve that comes back `ready` records `UsageAmount::ProviderCredits { credits: 1 }`
   under the model `capsolver-<task>`, priced per solve from CapSolver's list price (seeded by the
-  `capsolver_pricing` migration). Failed solves cost nothing, here and at CapSolver. The `solveId`
-  is the idempotency key, so a repeated request never records twice.
+  `capsolver_pricing` migration), and is observed in the tracking journal under its solver run with
+  CapSolver's task id as `provider_request_id` (no token dimensions, so its usage reads
+  `UnsupportedDimensions`; the recorder's row is the one charge). Failed solves cost nothing, here
+  and at CapSolver. The `solveId` is the idempotency key, kept in Postgres, so a repeated request
+  never records twice, on any replica.
 
 ## Tracing
 
 One trace per solve: `captcha.solve_captcha` → `captcha.find`, `captcha.opencode_run` → (MCP
 server) `captcha.tool.solve` → `captcha.solve` → `captcha.harness_solve` → (harness)
 `captcha_gateway.solve` → `captcha.apply`. The run's traceparent also goes on each model call, so
-`brain_fireworks.chat` joins it. Spans carry kinds, hosts, outcomes, evidence, counts and the
+`brain_fireworks.chat` joins it. The harness sends no traceparent on to CapSolver or Fireworks. Spans carry kinds, hosts, outcomes, evidence, counts and the
 CapSolver task id: never the token, the site key, a path or query, or page text.
 
 ## Testing
@@ -78,8 +87,9 @@ CapSolver task id: never the token, the site key, a path or query, or page text.
   stand-in harness, and the whole chain through a real OpenCode with a scripted stand-in model.
 - `crates/capsolver_emulator`: a scripted CapSolver for the harness's tests and for local runs
   (`OVERRIDE_CAPSOLVER_API_URL`).
-- `brain_bench` (`agent_harness_service`, feature `brain-bench`, never built by default): the two
-  brain routes alone, with a fixed bench key and an in-memory usage ledger, for driving the whole
-  chain locally without a stack.
+- `brain_bench` (`agent_harness_service`, feature `brain-bench`, never built by default): the
+  brain CAPTCHA and Fireworks routes alone, with a fixed bench key, an in-memory usage ledger and a
+  migrated MacroDB (`--database-url`) for the solver runs, for driving the whole chain locally
+  without a stack.
 - `capsolver_live_contract` (ignored unless `CAPSOLVER_API_KEY` is set): two real solves of
   Cloudflare's and Google's test site keys.
