@@ -21,8 +21,9 @@ export type ConnectorInspection = {
   actionsTruncated: boolean;
   /**
    * Markup that gives the user a button to connect the app, present only for
-   * an unconnected app with advertised actions. Put it in your reply
-   * verbatim, and only when one of `actions` supports the user's task.
+   * an unconnected app with advertised actions. In a program, present a
+   * connect card (`{type: 'connect', name, target: {kind: 'app', appSlug}}`)
+   * instead, and only when one of `actions` supports the user's task.
    */
   connectMarkup: string | undefined;
 };

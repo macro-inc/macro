@@ -181,8 +181,8 @@ export class ConnectedTool {
    * call as the owner waits for the owner to approve it, and a declined or
    * unanswered call comes back with `isError`. Check `isError` on the result: an app that is not connected,
    * or whose connection expired, answers with `isError` and text telling you
-   * what to say to the user, including any connect markup to put in your
-   * reply verbatim. Throws when the app is still rate limiting the account
+   * what to say to the user; present a connect card for the app instead of
+   * any connect markup it gives. Throws when the app is still rate limiting the account
    * after Macro paced and retried the call; the call did not run.
    *
    * @destructive

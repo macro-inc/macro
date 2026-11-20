@@ -60,7 +60,7 @@ where
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ConnectMcpServer",
-    description = "Add a remote MCP server to the current user's connections by its URL, so their agents and chats can use its tools. Use when the user asks to connect, add, or install an MCP server they give you the URL of, or one whose official remote MCP URL you are sure of; never guess a URL. Most servers need the user to sign in afterwards: when the result says so, in an agent session's code mode present a connect widget with a server target for the URL, which signs them in with one click; otherwise tell them to open Settings → Connections and click Connect next to the server. Its tools are available in new conversations once connected. A URL the user already has is left as it is."
+    description = "Add a remote MCP server to the current user's connections by its URL, so their agents and chats can use its tools. Use when the user asks to connect, add, or install an MCP server they give you the URL of, or one whose official remote MCP URL you are sure of; never guess a URL. Most servers need the user to sign in afterwards: when the result says so, tell them to open Settings → Connections and click Connect next to the server. Its tools are available in new conversations once connected. A URL the user already has is left as it is."
 )]
 pub struct ConnectMcpServer {
     /// The server's URL.
@@ -142,6 +142,11 @@ where
     }
 }
 
+/// How the user signs in to a server they added, for a summary that both a
+/// code-mode program (`macro.connectedApps.addServer`) and the
+/// ConnectMcpServer tool read.
+const SIGN_IN: &str = "in an agent session's code mode, present a connect widget with a server target for its URL, whose Connect button signs them in; otherwise tell them to open Settings → Connections and click Connect next to it.";
+
 impl From<AddedServer> for ConnectMcpServerResponse {
     fn from(added: AddedServer) -> Self {
         let already_connected = matches!(added, AddedServer::Existing(_));
@@ -151,11 +156,11 @@ impl From<AddedServer> for ConnectMcpServerResponse {
         let authenticated = record.credentials.is_some();
         let name = &record.server_name;
         let summary = match (already_connected, authenticated, record.enabled) {
-            (false, _, _) => format!(
-                "Added {name}. If it needs a sign-in, the user must open Settings → Connections and click Connect next to {name}."
-            ),
+            (false, _, _) => {
+                format!("Added {name}. If it needs a sign-in, the user must sign in: {SIGN_IN}")
+            }
             (true, false, _) => format!(
-                "{name} was already added but is not signed in. The user must open Settings → Connections and click Connect next to {name}."
+                "{name} was already added but is not signed in. The user must sign in: {SIGN_IN}"
             ),
             (true, true, false) => format!(
                 "{name} is already connected but turned off. The user can enable it in Settings → Connections."

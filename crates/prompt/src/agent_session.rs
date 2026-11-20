@@ -37,3 +37,18 @@ can answer mid-turn.";
 
 /// The agent-session preamble for the in-process Macro agent.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A code-mode agent presents a connect card; without code mode the
+    /// returned chip markup stays.
+    #[test]
+    fn unconnected_apps_get_a_connect_card_in_code_mode_and_the_chip_otherwise() {
+        assert!(INSTRUCTIONS.contains(
+            "For a suitable unconnected app in code mode, present a connect card, `execution.views.present({widgets: [{type: \"connect\", name, target: {kind: \"app\", appSlug}}]})`"
+        ));
+        assert!(INSTRUCTIONS.contains("without code mode, include the returned connect_markup"));
+    }
+}
