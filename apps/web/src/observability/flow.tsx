@@ -1,3 +1,4 @@
+import { usePaneHidden } from '@core/context/pane-visibility';
 import {
   NOOP_SPAN,
   type Span,
@@ -165,6 +166,26 @@ function childNode(
   });
 }
 
+/**
+ * The node of a flow in a hidden view (a parked pane): already settled, so it
+ * records nothing and its loads never join or hold the visible view's trace.
+ */
+function hiddenNode(): FlowNode {
+  const root: FlowRoot = {
+    span: NOOP_SPAN,
+    name: 'hidden',
+    phaseCount: 0,
+    readyPhases: 0,
+  };
+  return createNode(
+    NOOP_SPAN,
+    root,
+    undefined,
+    () => {},
+    () => true
+  );
+}
+
 /** The nearest flow; a keyed flow replaces its node when the key changes. */
 interface FlowScope {
   /** The current node, read without tracking. */
@@ -325,13 +346,16 @@ export function TraceFlow(props: {
   children: JSX.Element;
 }): JSX.Element {
   const parent = useContext(FlowContext);
+  const hidden = usePaneHidden();
   const start = () =>
-    openNode(
-      parent,
-      untrack(() => props.name),
-      untrack(() => props.attributes),
-      untrack(() => props.sampling)
-    );
+    untrack(hidden)
+      ? hiddenNode()
+      : openNode(
+          parent,
+          untrack(() => props.name),
+          untrack(() => props.attributes),
+          untrack(() => props.sampling)
+        );
   const [current, setCurrent] = createSignal(start());
   const scope = flowScope(current);
   const releaseMount = scope.node.hold();
@@ -352,6 +376,16 @@ export function TraceFlow(props: {
         { defer: true }
       )
     );
+  // A view parked while loading stops timing it, as when it unmounted.
+  createEffect(
+    on(
+      hidden,
+      (isHidden) => {
+        if (isHidden) scope.node.abandon();
+      },
+      { defer: true }
+    )
+  );
   onCleanup(() => scope.node.abandon());
   return (
     <FlowContext.Provider value={scope}>{props.children}</FlowContext.Provider>
@@ -371,11 +405,14 @@ export function usePending(
 ): void {
   const scope = useContext(FlowContext);
   if (!scope) return;
+  // A hidden (parked) view's loads are not the visible view's: a suspended
+  // one would hold the enclosing flow until it is shown again.
+  const hidden = usePaneHidden();
   let phase: FlowNode | undefined;
   let release: (() => void) | undefined;
   let attached = scope.node;
   const begin = () => {
-    if (phase || scope.node.settled) return;
+    if (phase || scope.node.settled || untrack(hidden)) return;
     scope.node.span.setAttr(`${name}.waited`, true);
     phase = childNode(scope.node, name, attributes);
     release = phase.hold();
@@ -395,10 +432,11 @@ export function usePending(
   }
   createEffect(
     on(
-      [pending, scope.current],
-      ([isPending, node]) => {
-        // A keyed flow restarted while loading: the phase moves to it.
-        if (node !== attached) {
+      [pending, scope.current, hidden],
+      ([isPending, node, isHidden]) => {
+        // A keyed flow restarted while loading, or the view was parked: the
+        // phase moves to the new flow, or ends.
+        if (node !== attached || isHidden) {
           attached = node;
           phase?.abandon();
           phase = undefined;
@@ -438,14 +476,17 @@ const NO_FLOW: Flow = {
 /** The enclosing flow, for imperative phases and attributes. */
 export function useFlow(): Flow {
   const scope = useContext(FlowContext);
+  const hidden = usePaneHidden();
   if (!scope) return NO_FLOW;
+  // A hidden (parked) view's work never joins the flow above it.
+  const outside = () => scope.node.settled || untrack(hidden);
   return {
     get span() {
-      return scope.node.span;
+      return untrack(hidden) ? NOOP_SPAN : scope.node.span;
     },
-    run: (work) => (scope.node.settled ? work() : scope.node.span.run(work)),
+    run: (work) => (outside() ? work() : scope.node.span.run(work)),
     task: async (name, operation) => {
-      if (scope.node.settled) return operation(NOOP_SPAN);
+      if (outside()) return operation(NOOP_SPAN);
       const phase = childNode(scope.node, name);
       const release = phase.hold();
       try {

@@ -136,6 +136,23 @@ export function createViewState(options: {
       }
       return snapshot;
     },
+    /**
+     * Saves what `owner`'s views show now, for a view about to unmount
+     * without leaving (a parked pane being discarded), so it resumes there.
+     */
+    keep(owner: string) {
+      if (!authenticated()) return;
+      for (const source of sources) {
+        if (source.owner !== owner) continue;
+        const entry = source.entry();
+        if (!entry || !currentEntry(entry)) continue;
+        const snapshot = source.capture(entry);
+        const previous = saved.get(source.key);
+        if (snapshot && (!previous || source.order >= previous.order)) {
+          saved.set(source.key, { snapshot, order: source.order });
+        }
+      }
+    },
     activate(owner: string) {
       if (!authenticated()) return;
       for (const source of sources) {

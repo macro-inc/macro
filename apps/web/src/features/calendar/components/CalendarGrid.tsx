@@ -6,6 +6,7 @@ import {
 import type {
   DateSelectArg,
   DatesSetArg,
+  EventClickArg,
   EventInput,
 } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -60,6 +61,11 @@ const formatWeekdayHeader = {
 const formatDayNumber = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
 }).format;
+
+const DAY_HEADER_FORMATS = {
+  narrow: { weekday: 'narrow' },
+  short: { weekday: 'short' },
+} as const;
 
 function CurrentTimeAxisIndicator(props: {
   date: Date;
@@ -205,6 +211,29 @@ export function CalendarGrid(props: CalendarGridProps) {
     });
   };
 
+  // FullCalendar resets every option whose value changed identity, and an
+  // events update re-reads them all: options derived from props are memos of
+  // what they depend on, so an events update resets only the events.
+  const dayCount = createMemo(() => props.settings.dayCount);
+  const dateIncrement = createMemo(() => {
+    const days = dayCount();
+    return days === undefined ? undefined : { days };
+  });
+  const dayHeaderFormat = createMemo(
+    () =>
+      DAY_HEADER_FORMATS[
+        props.settings.useNarrowDayHeaders ? 'narrow' : 'short'
+      ]
+  );
+  const handleEventClick = ({ el, event, jsEvent }: EventClickArg) => {
+    jsEvent.preventDefault();
+    const selectedEvent = eventByRenderId(calendarEventRenderId(event));
+    if (selectedEvent) props.selection.onEventSelect?.(selectedEvent, el);
+  };
+  const eventClick = createMemo(() =>
+    props.selection.onEventSelect ? handleEventClick : undefined
+  );
+
   const eventElements = new Map<string, HTMLElement>();
   const [chipMounts, notifyChipMount] = createSignal(undefined, {
     equals: false,
@@ -234,13 +263,9 @@ export function CalendarGrid(props: CalendarGridProps) {
       ]}
       initialView={initialView}
       initialDate={props.initialDate}
-      dayCount={props.settings.dayCount}
-      dateIncrement={
-        props.settings.dayCount === undefined
-          ? undefined
-          : { days: props.settings.dayCount }
-      }
-      dateAlignment={props.settings.dayCount === undefined ? undefined : 'day'}
+      dayCount={dayCount()}
+      dateIncrement={dateIncrement()}
+      dateAlignment={dayCount() === undefined ? undefined : 'day'}
       dayHeaders={props.settings.showDayHeaders ?? true}
       allDaySlot={props.settings.showAllDaySlot ?? true}
       height="100%"
@@ -286,18 +311,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       selectMinDistance={0}
       snapDuration="00:30:00"
       select={(selection) => props.selection.onDateSelect?.(selection)}
-      eventClick={
-        props.selection.onEventSelect
-          ? ({ el, event, jsEvent }) => {
-              jsEvent.preventDefault();
-              const selectedEvent = eventByRenderId(
-                calendarEventRenderId(event)
-              );
-              if (selectedEvent)
-                props.selection.onEventSelect?.(selectedEvent, el);
-            }
-          : undefined
-      }
+      eventClick={eventClick()}
       eventDidMount={({ el, event, isMirror }) => {
         const eventId = calendarEventRenderId(event);
         const calendarEvent = eventByRenderId(eventId);
@@ -328,9 +342,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         }
       }}
       datesSet={(info) => props.onDatesSet?.(info)}
-      dayHeaderFormat={{
-        weekday: props.settings.useNarrowDayHeaders ? 'narrow' : 'short',
-      }}
+      dayHeaderFormat={dayHeaderFormat()}
       dayCellClassNames={({ date, view }) =>
         isSameLocalDate(date, view.calendar.getDate())
           ? ['calendar-day-selected']

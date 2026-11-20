@@ -49,6 +49,10 @@ export type RestoreLayoutOptions = {
 export type ShowLayoutOptions = {
   /** Remove the open panes, through their leave guards, instead of parking them. */
   closeOpen?: boolean;
+  /** With `closeOpen`, open panes to park anyway. */
+  park?: readonly PaneId[];
+  /** Recorded on the navigation's perf span. */
+  attributes?: Navigation['attributes'];
 };
 
 const shownEntry = (pane: LayoutPane): Entry => pane.entries[pane.index]!;
@@ -210,14 +214,23 @@ export function createLayout(options: {
     if (next.length === 0 || missing) return CANCELLED_RESULT;
 
     const open = untrack(panes.ids);
+    const parks = (pane: PaneId) => showOptions.park?.includes(pane) ?? false;
     const removed = showOptions.closeOpen
-      ? open.filter((pane) => !next.includes(pane))
+      ? open.filter((pane) => !next.includes(pane) && !parks(pane))
       : [];
 
     const navigation: Navigation = {
       cause: 'navigate',
       targets: [],
       removed,
+      // Whether a view comes back from parked instead of rendering, so a
+      // restore is not read as a fast render.
+      attributes: {
+        ...showOptions.attributes,
+        'navigation.restored_from_parked': next.some(
+          (pane) => !open.includes(pane)
+        ),
+      },
       apply: () => {
         batch(() => {
           panes.show(next);

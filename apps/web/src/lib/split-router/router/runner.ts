@@ -225,6 +225,7 @@ export function createRunner(options: {
     const interaction = beginInteraction('navigation', {
       kind: 'navigation',
       attributes: {
+        ...navigation.attributes,
         'navigation.cause': navigation.cause,
         'navigation.pane_count': navigation.targets.length,
       },

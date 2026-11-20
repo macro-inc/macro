@@ -1,3 +1,4 @@
+import { usePaneHidden } from '@core/context/pane-visibility';
 import {
   type AllDayContentArg,
   Calendar,
@@ -153,7 +154,8 @@ export function FullCalendarRoot(props: FullCalendarRootProps) {
   const [local, options] = splitProps(props, ['children']);
   const controller = createFullCalendarController(
     () => ({ ...options }),
-    () => options.datesSet
+    () => options.datesSet,
+    usePaneHidden()
   );
 
   onCleanup(() => controller.destroy());
@@ -264,7 +266,9 @@ function useFullCalendarController(): FullCalendarController {
 
 function createFullCalendarController(
   getOptions: Accessor<FullCalendarOptions>,
-  getDatesSet: Accessor<FullCalendarOptions['datesSet']>
+  getDatesSet: Accessor<FullCalendarOptions['datesSet']>,
+  /** While true (a parked pane), option changes wait until it shows. */
+  paneHidden: Accessor<boolean>
 ): FullCalendarController {
   const [calendar, setCalendar] = createSignal<Calendar>();
   const [dateInfo, setDateInfo] = createSignal<DatesSetArg>();
@@ -325,9 +329,11 @@ function createFullCalendarController(
     );
   });
 
+  // Each reset lays out the calendar, which in a hidden pane costs as much as
+  // in a shown one; a hidden calendar applies the latest options once shown.
   const resetOptions = () => {
     const calendarInstance = calendar();
-    if (!calendarInstance) return;
+    if (!calendarInstance || untrack(paneHidden)) return;
 
     const nextOptions = buildOptions();
     const next = nextOptions.options as Record<string, unknown>;
@@ -349,7 +355,7 @@ function createFullCalendarController(
     );
   };
 
-  createEffect(on(getOptions, resetOptions, { defer: true }));
+  createEffect(on([getOptions, paneHidden], resetOptions, { defer: true }));
 
   const unmount = (element: HTMLDivElement) => {
     if (hostElement() !== element) return;

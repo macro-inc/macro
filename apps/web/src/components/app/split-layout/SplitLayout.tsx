@@ -8,6 +8,7 @@ import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
+import { isPlatform } from '@core/util/platform';
 import {
   createEffect,
   createMemo,
@@ -30,6 +31,7 @@ import {
   type SplitId,
   splitOf,
 } from './layoutManager';
+import { createMobileDockParking } from './mobile/createMobileDockParking';
 import { createMobilePaneStack } from './mobile/createMobilePaneStack';
 import { MobileSplitContainer } from './mobile/MobileSplitContainer';
 import {
@@ -51,20 +53,26 @@ export function SplitLayoutProvider(props: ParentProps) {
   const userId = useUserId();
   const authenticated = useIsAuthenticated();
 
+  const sessionKey = () => (authenticated() === false ? undefined : userId());
   const splitManager = createSplitLayout(blockOrchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
     stacked: isNativeMobilePlatform,
-    sessionKey: () => (authenticated() === false ? undefined : userId()),
+    sessionKey,
     consumeSplitBelowIntent,
   });
+  // Android only for now: iOS before Safari 18 has no `content-visibility`,
+  // so a parked pane there would still lay out on every change.
+  const dockParking = isPlatform('android')
+    ? createMobileDockParking({ router, manager: splitManager, sessionKey })
+    : undefined;
   if (!isTouchDevice()) onCleanup(installSplitBelowIntentTracker());
   createEffect(() => setGlobalSplitManager(splitManager));
   onCleanup(() => setGlobalSplitManager(undefined));
 
   return (
-    <SplitLayoutContext.Provider value={{ manager: splitManager }}>
+    <SplitLayoutContext.Provider value={{ manager: splitManager, dockParking }}>
       <CreateContextProvider focusedPaneId={splitManager.activeSplitId}>
         <DesktopTabsController router={router} manager={splitManager} />
         {props.children}
@@ -219,7 +227,12 @@ export function SplitLayout() {
           <MobileSplitContainer
             splitManager={splitManager}
             stack={stack()}
-            splits={splits}
+            parkedPanes={() =>
+              router
+                .retainedPanes()
+                .filter((pane) => !router.panes().includes(pane))
+            }
+            openPanes={router.panes}
             panelRefs={panelRefs}
           />
         )}

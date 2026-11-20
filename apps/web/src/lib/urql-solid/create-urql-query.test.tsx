@@ -1,3 +1,4 @@
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
@@ -22,6 +23,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject, onEnd, pipe } from 'wonka';
 import { UrqlProvider } from './context';
+import { latestResult } from './create-base-query';
 import { createUrqlQuery } from './create-urql-query';
 import type {
   UrqlClientSource,
@@ -259,6 +261,67 @@ describe('createUrqlQuery reactive state', () => {
     execution?.next({ data: { value: 'pushed' } });
     expect(query.data).toEqual({ value: 'pushed' });
     expect(fake.executions).toHaveLength(1);
+  });
+
+  it('holds pushed results while its pane is hidden and applies the latest on showing', () => {
+    const fake = makeFakeClient();
+    const [hidden, setHidden] = createSignal(false);
+    let query!: UrqlQueryResult<Data, Variables>;
+    disposals.push(
+      createRoot((dispose) => {
+        createComponent(PaneHiddenContext.Provider, {
+          value: hidden,
+          get children() {
+            query = createUrqlQuery(() => activeOptions(fake.client));
+            return undefined;
+          },
+        });
+        return dispose;
+      })
+    );
+    const execution = fake.executions[0];
+    execution?.next({ data: { value: 'shown' } });
+    expect(query.data).toEqual({ value: 'shown' });
+
+    setHidden(true);
+    execution?.next({ data: { value: 'first while hidden' } });
+    execution?.next({ data: { value: 'second while hidden' } });
+    expect(query.data).toEqual({ value: 'shown' });
+    // Waits on a request read past the hold.
+    expect(latestResult(query).data).toEqual({ value: 'second while hidden' });
+
+    setHidden(false);
+    expect(query.data).toEqual({ value: 'second while hidden' });
+    expect(fake.executions).toHaveLength(1);
+  });
+
+  it('applies a new cache session at once while its pane is hidden', async () => {
+    const fake = makeFakeClient();
+    const [hidden, setHidden] = createSignal(false);
+    let query!: UrqlQueryResult<Data, Variables>;
+    disposals.push(
+      createRoot((dispose) => {
+        createComponent(PaneHiddenContext.Provider, {
+          value: hidden,
+          get children() {
+            query = createUrqlQuery(() => activeOptions(fake.client));
+            return undefined;
+          },
+        });
+        return dispose;
+      })
+    );
+    fake.executions[0]?.next({ data: { value: 'before' } });
+    setHidden(true);
+
+    await cacheSessionGeneration.transition(async () => {});
+
+    // Retired data must not stay in a hidden pane until it shows.
+    expect(query.data).toBeUndefined();
+    fake.executions.at(-1)?.next({ data: { value: 'while hidden' } });
+    expect(query.data).toBeUndefined();
+    setHidden(false);
+    expect(query.data).toEqual({ value: 'while hidden' });
   });
 
   it('marks a completed data-less result as successful', () => {

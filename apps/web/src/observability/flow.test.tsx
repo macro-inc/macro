@@ -1,3 +1,4 @@
+import { PaneHiddenContext } from '@core/context/pane-visibility';
 import { render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -475,5 +476,86 @@ describe('TraceFlow', () => {
       ['view.home', 'success'],
     ]);
     expect(operations).toEqual([{ name: 'app.boot', outcome: 'painted' }]);
+  });
+});
+
+describe('TraceFlow in a hidden (parked) pane', () => {
+  beforeEach(() => {
+    spans.length = 0;
+    operations.length = 0;
+    contexts.length = 0;
+  });
+
+  it('records nothing and never holds the visible navigation open', async () => {
+    function Content() {
+      usePending('mail.items', () => true);
+      return null;
+    }
+    const navigation = beginInteraction('navigation');
+    render(() => (
+      <PaneHiddenContext.Provider value={() => true}>
+        <TraceFlow name="view.mail">
+          <Content />
+        </TraceFlow>
+      </PaneHiddenContext.Provider>
+    ));
+    navigation.end();
+    await flush();
+
+    expect(operations).toEqual([{ name: 'navigation', outcome: 'painted' }]);
+    expect(spans.map((span) => span.name)).toEqual(['navigation']);
+  });
+
+  it('cancels a view still loading when its pane is parked', async () => {
+    const [isHidden, setHidden] = createSignal(false);
+    function Content() {
+      usePending('mail.items', () => true);
+      return null;
+    }
+    render(() => (
+      <PaneHiddenContext.Provider value={isHidden}>
+        <TraceFlow name="view.mail">
+          <Content />
+        </TraceFlow>
+      </PaneHiddenContext.Provider>
+    ));
+    await flush();
+    expect(operations).toEqual([{ name: 'view.mail', outcome: undefined }]);
+
+    setHidden(true);
+    await flush();
+    expect(operations).toEqual([{ name: 'view.mail', outcome: 'cancelled' }]);
+  });
+});
+
+describe('loads in a hidden (parked) pane under an app-level flow', () => {
+  beforeEach(() => {
+    spans.length = 0;
+    operations.length = 0;
+    contexts.length = 0;
+  });
+
+  it('never hold the flow above the pane', async () => {
+    const [isHidden, setHidden] = createSignal(false);
+    const [loading] = createSignal(true);
+    function List() {
+      usePending('soup.network', loading);
+      return null;
+    }
+    render(() => (
+      <TraceFlow name="view.app">
+        <PaneHiddenContext.Provider value={isHidden}>
+          <List />
+        </PaneHiddenContext.Provider>
+      </TraceFlow>
+    ));
+    await flush();
+    expect(operations).toEqual([{ name: 'view.app', outcome: undefined }]);
+
+    // Parked while its list still loads (hidden, it would never finish).
+    setHidden(true);
+    await flush();
+    await flush();
+    expect(operations).toEqual([{ name: 'view.app', outcome: 'painted' }]);
   });
 });

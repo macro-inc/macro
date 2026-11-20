@@ -3,10 +3,13 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { isRecord, type PaneId, useSplitRouter } from '@app/lib/split-router';
 import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import {
   type Component,
+  createEffect,
   type JSX,
   Match,
+  on,
   onMount,
   Show,
   Switch,
@@ -16,10 +19,21 @@ import { useSplitPanelOrThrow } from '../layoutUtils';
 
 export function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
-  onMount(() => {
+  const hidden = usePaneHidden();
+  const track = () => {
     analytics.pageView(pageTitle);
     analytics.track('open_view', { viewId: pageTitle });
+  };
+  // A view still loading when it was parked opens when it is shown.
+  onMount(() => {
+    if (!hidden()) track();
   });
+  // A parked view shown again is opened again, as when it remounted.
+  createEffect(
+    on(hidden, (isHidden, wasHidden) => {
+      if (wasHidden === true && !isHidden) track();
+    })
+  );
 }
 
 /** Renders `View` once signed in; `Pending`, if given, draws while sign-in is confirmed. */

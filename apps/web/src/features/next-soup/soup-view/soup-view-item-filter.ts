@@ -51,7 +51,7 @@ export type SoupViewItemFilterSnapshot = {
   tagFilterMode: TagFilterMode;
   /** Caller-supplied membership gate (a project block scopes to its project). */
   membershipFilter: SoupApiItemFilter | undefined;
-  /** The soup state's predicate store test; reads the live predicate ids. */
+  /** The soup state's predicates active when the options were read. */
   testPredicates: (entity: SoupEntity, ctx: FilterContext) => boolean;
   filterContext: FilterContext;
   readFilter: ReadFilter;

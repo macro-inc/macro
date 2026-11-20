@@ -59,6 +59,8 @@ export type Navigation = {
   revert?: () => MaybePromise<void>;
   /** Changes the panes to show `entries`, one per target, and writes the URL. */
   apply(entries: readonly Entry[]): NavigationResult;
+  /** Recorded on the navigation's perf span. */
+  attributes?: Readonly<Record<string, string | number | boolean>>;
 };
 
 export type CancelReason =
@@ -85,6 +87,14 @@ export type SplitNavigateOptions = EntryOptions & {
   allowDuplicate?: boolean;
   /** Depth of the calling outlet; relative paths resolve against it. */
   depth?: number;
+  /**
+   * Open panes to park instead of removing: they keep their history and stay
+   * mounted, out of the URL, until `showLayout` brings them back or
+   * `discardPanes` forgets them. The navigation never reuses them.
+   */
+  park?: readonly PaneId[];
+  /** Recorded on the navigation's perf span. */
+  attributes?: Navigation['attributes'];
 };
 
 export type LeaveGuardContext = {

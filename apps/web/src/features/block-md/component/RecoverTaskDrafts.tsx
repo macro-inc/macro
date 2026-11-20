@@ -1,4 +1,4 @@
-import { useMutationState } from '@tanstack/solid-query';
+import { useMutationState } from '@queries/mutation-state';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
 import {

@@ -11,7 +11,8 @@ import { paneRoute } from '@app/routes/app-route';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createMemo, useContext } from 'solid-js';
+import { SplitLayoutContext } from '../split-layout/context';
 import { useSplitLayout } from '../split-layout/layout';
 import { isMobileNavViewId, type MobileNavViewId } from './mobile-nav-views';
 
@@ -117,6 +118,7 @@ export function useForegroundMobileView(): Accessor<
  */
 export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
   const { openWithSplit, replaceAllSplits } = useSplitLayout();
+  const dockParking = useContext(SplitLayoutContext)?.dockParking;
   const { toggleSettings } = useSettingsState();
   const unifiedNotifications = useUnifiedNotificationsFlag();
 
@@ -134,7 +136,17 @@ export function useMobileNavNavigate(): (id: MobileDockNavId) => void {
       const routeState: MobileSearchRouteState | undefined =
         id === 'search' ? { sessionId: crypto.randomUUID() } : undefined;
       // Search taps intentionally start a new search session.
-      replaceAllSplits(content, { routeState, resume: id !== 'search' });
+      const replaceOptions = { routeState, resume: id !== 'search' };
+      // The bell opens one of Home and Notifications; the other (Home is
+      // where the app starts) is never shown by the dock again.
+      const bellElsewhere = unifiedNotifications() ? 'home' : 'notifications';
+      if (dockParking)
+        dockParking.show(
+          content,
+          replaceOptions,
+          (view) => view !== bellElsewhere
+        );
+      else replaceAllSplits(content, replaceOptions);
       return;
     }
     const fgContent = globalSplitManager()?.activeSplit()?.content();

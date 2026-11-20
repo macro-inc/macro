@@ -109,12 +109,17 @@ export function createUrlNavigation(options: {
     navigateOptions: SplitNavigateOptions
   ): MaybePromise<NavigationResult> => {
     const entry = createEntry(routes, location, undefined, navigateOptions);
-    const diff = panes.diff([{ entry }], { same: sameVisit, adopt });
+    const diff = panes.diff(
+      [{ entry }],
+      { same: sameVisit, adopt },
+      navigateOptions.park
+    );
 
     const navigation: Navigation = {
       cause: 'navigate',
       targets: changedPanes(diff).map(toTarget),
       removed: diff.removed,
+      attributes: navigateOptions.attributes,
       apply: (entries) => {
         panes.applyDiff(diff, entries);
         url.write(navigateOptions.replace ? 'replace' : 'push');
@@ -130,8 +135,8 @@ export function createUrlNavigation(options: {
 
   /**
    * A navigation from the base, as any router's: a path's panes replace the
-   * open ones, and a route or location target becomes the only pane. Panes
-   * already showing their entry stay mounted.
+   * open ones, and a route or location target becomes the only pane besides
+   * the ones it parks. Panes already showing their entry stay mounted.
    */
   const navigate = (
     to: SplitNavigationTarget,

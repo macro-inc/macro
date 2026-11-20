@@ -1,7 +1,8 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { skipToken, useMutationState, useQuery } from '@tanstack/solid-query';
+import { skipToken, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import { queryClient } from '../../client';
+import { useMutationState } from '../../mutation-state';
 import type { SoupAstItemsData } from '../items';
 import { refreshActiveGraphqlSoupQueries } from './active-queries';
 import { soupEntityKey } from './entity-input';

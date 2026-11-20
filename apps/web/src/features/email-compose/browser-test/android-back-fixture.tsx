@@ -1,9 +1,6 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
-import type {
-  SplitId,
-  SplitState,
-} from '@components/app/split-layout/layoutManager';
+import type { SplitId } from '@components/app/split-layout/layoutManager';
 import type { MobilePaneStack } from '@components/app/split-layout/mobile/createMobilePaneStack';
 import { MobileSplitContainer } from '@components/app/split-layout/mobile/MobileSplitContainer';
 import { useAndroidBack } from '@core/mobile/androidBack';
@@ -167,12 +164,16 @@ export function AndroidBackFixture() {
   return (
     <main class="min-h-screen bg-surface text-ink">
       <MobileSplitContainer
-        splitManager={{ getSplit: () => undefined }}
+        splitManager={{
+          getSplit: () => undefined,
+          splitState: () => undefined,
+        }}
         stack={stubPaneStack(() => {
           setNavigatedBack((count) => count + 1);
           setComposerOpen(false);
         })}
-        splits={() => [] as ReadonlyArray<SplitState>}
+        parkedPanes={() => []}
+        openPanes={() => []}
         panelRefs={new Map<SplitId, HTMLDivElement>()}
       />
       <Show

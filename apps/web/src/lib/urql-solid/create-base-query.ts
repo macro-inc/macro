@@ -1,4 +1,5 @@
 import { useFlowTrace } from '@app/observability/flow';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -7,6 +8,7 @@ import {
   createComputed,
   createMemo,
   createSignal,
+  on,
   onCleanup,
   untrack,
 } from 'solid-js';
@@ -19,6 +21,18 @@ import {
   supportsStoreReconciliation,
 } from './reactive-selection';
 import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
+
+const LATEST_RESULT = Symbol('urql-latest-result');
+
+/**
+ * The observer's latest result. In a hidden parked pane the store holds an
+ * older one until the pane shows, so code that waits for its own request to
+ * settle (an explicit refresh) reads this instead.
+ */
+export function latestResult<Result extends object>(query: Result): Result {
+  const read = (query as { [LATEST_RESULT]?: Accessor<Result> })[LATEST_RESULT];
+  return read ? read() : query;
+}
 
 /** Bridges a framework-neutral urql observer into one reactive Solid store. */
 export function createBaseQuery<
@@ -69,8 +83,10 @@ export function createBaseQuery<
   // The store mutates its root; observer snapshots must remain independent.
   const [state, setState] = createStore<Result>({ ...previous });
 
+  const [latest, setLatest] = createSignal<Result>(previous);
   const result = new Proxy(state, {
     get(target, property) {
+      if (property === LATEST_RESULT) return latest;
       return Reflect.get(target, property);
     },
   }) as Result;
@@ -116,10 +132,42 @@ export function createBaseQuery<
     );
   };
 
+  // A hidden parked pane keeps only the latest result and applies it once
+  // shown, so nothing it renders changes while hidden. A new cache session
+  // (an authorization change) applies at once, so retired data never stays
+  // in a hidden pane.
+  const paneHidden = usePaneHidden();
+  let held: Result | undefined;
+  let shownSession = untrack(crmSnapshotAuthorization);
+  const deliver = (next: Result): void => {
+    setLatest(() => next);
+    const session = untrack(crmSnapshotAuthorization);
+    if (untrack(paneHidden) && session === shownSession) {
+      held = next;
+      return;
+    }
+    held = undefined;
+    shownSession = session;
+    update(next);
+  };
+  createComputed(
+    on(
+      paneHidden,
+      (hidden) => {
+        if (hidden || !held) return;
+        const next = held;
+        held = undefined;
+        shownSession = untrack(crmSnapshotAuthorization);
+        update(next);
+      },
+      { defer: true }
+    )
+  );
+
   createComputed(() => {
     const current = observer();
-    update(untrack(() => current.getCurrentResult()));
-    const unsubscribe = current.subscribe(update);
+    deliver(untrack(() => current.getCurrentResult()));
+    const unsubscribe = current.subscribe(deliver);
     onCleanup(unsubscribe);
   });
 

@@ -1,3 +1,4 @@
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { Client } from '@urql/core';
 import {
@@ -98,8 +99,11 @@ export function createInboxClears(options: InboxClearsOptions) {
   );
   const poll = setInterval(readRunning, CLEAR_POLL_MS);
   onCleanup(() => clearInterval(poll));
+  // A parked inbox (kept mounted while hidden) is not visible either.
+  const paneHidden = usePaneHidden();
   const discovery = setInterval(() => {
-    if (options.enabled() && document.visibilityState === 'visible') {
+    const visible = document.visibilityState === 'visible' && !paneHidden();
+    if (options.enabled() && visible) {
       fireAndForget(read(), 'notifications-inbox');
     }
   }, CLEAR_DISCOVERY_MS);

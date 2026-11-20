@@ -53,6 +53,7 @@ import {
 } from './contentInstanceRegistry';
 import { adjacentPane, type SplitDirection } from './split-direction';
 import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
+import { paneOf, splitOf } from './split-ids';
 import { viewRestorationKey } from './view-restoration-key';
 import { createViewState, type ViewState } from './view-state';
 
@@ -190,6 +191,10 @@ export type ReplaceAllSplitsOptions = {
   referredFrom?: ReferredFrom;
   /** Router state validated by the destination route, separate from runtime EntryState. */
   routeState?: unknown;
+  /** Open splits to park, kept mounted off screen, instead of closing. */
+  park?: readonly SplitId[];
+  /** Recorded on the navigation's perf span. */
+  attributes?: SplitNavigateOptions['attributes'];
 };
 
 export type SplitState = {
@@ -612,9 +617,7 @@ function contentIdentity(content: SplitContent) {
     : content;
 }
 
-/** A split is its router pane; the ids are the same string. */
-export const paneOf = (id: SplitId) => id as string as PaneId;
-export const splitOf = (pane: PaneId) => pane as string as SplitId;
+export { paneOf, splitOf };
 
 export function createSplitLayout(
   orchestrator: BlockOrchestrator,
@@ -1943,6 +1946,8 @@ export function createSplitLayout(
           activate: true,
         }),
         ...(options.routeState !== undefined && { state: options.routeState }),
+        park: options.park?.map(paneOf),
+        attributes: options.attributes,
       }
     );
     const showAlone = (outcome: NavigationResult) => {

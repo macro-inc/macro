@@ -44,6 +44,46 @@ type PredicatesStoreOptions<
   };
 };
 
+function matchesPredicates<T, TContext>(
+  configMap: ReadonlyMap<string, PredicateConfig<T, string, TContext>>,
+  andList: readonly string[],
+  orList: readonly string[],
+  entity: T,
+  ctx: TContext
+): boolean {
+  if (andList.length === 0 && orList.length === 0) return true;
+
+  for (const id of andList) {
+    const config = configMap.get(id);
+    if (config && !config.predicate(entity, ctx)) return false;
+  }
+
+  if (orList.length > 0) {
+    let anyMatch = false;
+    for (const id of orList) {
+      const config = configMap.get(id);
+      if (config?.predicate(entity, ctx)) {
+        anyMatch = true;
+        break;
+      }
+    }
+    if (!anyMatch) return false;
+  }
+
+  return true;
+}
+
+// Built at module scope: a closure made inside the store would share the
+// store's scope, owner included.
+function predicatesSnapshot<T, TContext>(
+  configMap: ReadonlyMap<string, PredicateConfig<T, string, TContext>>,
+  andList: readonly string[],
+  orList: readonly string[]
+): FilterPredicate<T, TContext> {
+  return (entity, ctx) =>
+    matchesPredicates(configMap, andList, orList, entity, ctx);
+}
+
 export function createPredicatesStore<
   T,
   TContext,
@@ -116,31 +156,16 @@ export function createPredicatesStore<
     setOrIds([]);
   };
 
-  const test = (entity: T, ctx: TContext): boolean => {
-    const andList = andIds();
-    const orList = orIds();
+  const test = (entity: T, ctx: TContext): boolean =>
+    matchesPredicates(configMap, andIds(), orIds(), entity, ctx);
 
-    if (andList.length === 0 && orList.length === 0) return true;
-
-    for (const id of andList) {
-      const config = configMap.get(id);
-      if (config && !config.predicate(entity, ctx)) return false;
-    }
-
-    if (orList.length > 0) {
-      let anyMatch = false;
-      for (const id of orList) {
-        const config = configMap.get(id);
-        if (config?.predicate(entity, ctx)) {
-          anyMatch = true;
-          break;
-        }
-      }
-      if (!anyMatch) return false;
-    }
-
-    return true;
-  };
+  /**
+   * `test` over the predicates active now. It holds no reactive state, so a
+   * cached query's options can keep it without keeping this store's owner,
+   * and with it the view, alive.
+   */
+  const snapshotTest = (): FilterPredicate<T, TContext> =>
+    predicatesSnapshot(configMap, andIds(), orIds());
 
   return {
     andIds,
@@ -154,5 +179,6 @@ export function createPredicatesStore<
     getConfig,
     available: configs,
     test,
+    snapshotTest,
   };
 }

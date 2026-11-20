@@ -687,6 +687,20 @@ leave the saved snapshot unchanged. Direct links and explicit Shift/open-in-spli
 actions keep their requested destination. Closing a detail before switching apps
 remembers the list, not the closed detail. Views unmount normally; this is not a
 keep-alive cache for editors or other transient UI.
+The exception is the Android app with `enable-mobile-parked-dock-views` on: a
+dock tap parks the dock view it leaves (kept mounted, hidden and inert), and a
+tap on a parked view shows it as it was, without rendering it again, so its
+open search page, Notifications scroll, Calendar position and other in-memory
+state come back too. Only the view at the root of the stack is parked: a
+channel or document opened above it closes on the switch as before, and Search
+always starts fresh. Up to the flag payload's `maxParked` views (five by
+default) stay parked; the least recently shown is dropped past that, as are all
+of them on sign-out or an account change, and a dropped view resumes through
+the memory above. A parked view holds its query results and applies the latest
+once shown, never takes Back or focus, and records no perf flows; the
+navigation span's `navigation.restored_from_parked` says whether a switch was a
+restore. Check a switch back keeps the scroll and current rows, Back at a dock
+root still leaves the app, and a link to a parked view opens it once.
 On desktop, if the remembered detail is already open in another split or
 its inline preview, switching apps opens the requested app's list in the target
 split instead of moving focus to the existing detail. For example, with Home on

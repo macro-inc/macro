@@ -12,10 +12,13 @@ import {
 } from 'solid-js';
 import type { PriorityCollapser } from '../../priority-collapse/createPriorityCollapser';
 import type { SplitHandle, SplitManager } from './layoutManager';
+import type { MobileDockParking } from './mobile/createMobileDockParking';
 import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
 
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;
+  /** Native mobile: the dock's parked views. */
+  dockParking?: MobileDockParking;
 }>();
 
 export type SplitBottomPanelRegistration = {

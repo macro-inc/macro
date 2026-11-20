@@ -48,9 +48,17 @@ export function createMobileSplitMotion(options: {
 
   /**
    * The pane presented as the active one. While a pane slides in, the one it
-   * covers stays active, so its floating chrome stays until the slide ends.
+   * covers stays active, so its floating chrome stays until the slide ends;
+   * once that pane leaves the stack (a dock switch parks it), the front is.
    */
-  const presentedFront = () => (forwardIsActive() ? outgoing() : stack.front());
+  const presentedFront = () => {
+    const covered = outgoing();
+    return forwardIsActive() &&
+      covered !== undefined &&
+      covered === stack.behind()
+      ? covered
+      : stack.front();
+  };
 
   function styleFor(isFront: boolean) {
     if (forwardIsActive()) return forwardAnimation.styleFor(isFront);

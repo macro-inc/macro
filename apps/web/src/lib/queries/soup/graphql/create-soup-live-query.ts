@@ -1,5 +1,6 @@
 import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { usePending } from '@app/observability/flow';
+import { usePaneHidden } from '@core/context/pane-visibility';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { until } from '@solid-primitives/promise';
@@ -49,6 +50,7 @@ import {
   graphqlSoupProjectionSupported,
   hasGraphqlCacheHost,
 } from '../../../service-clients/service-storage/graphql-soup';
+import { latestResult } from '../../../urql-solid/create-base-query';
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { createHiddenDeferral } from '../../visible-refresh';
@@ -109,6 +111,7 @@ export function createSoupLiveQuery(
   const owner = getOwner();
   const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingAppearance = usePendingEntityAppearance();
+  const paneHidden = usePaneHidden();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -324,12 +327,13 @@ export function createSoupLiveQuery(
       }
     };
     let latestRevision: CacheRevision | undefined;
-    // Every open tab shares one cache engine. A hidden tab keeps a dirty bit
-    // instead of evaluating this list on each revision or engine replacement.
+    // Every open tab shares one cache engine. A hidden tab or parked pane
+    // keeps a dirty bit instead of evaluating this list on each revision or
+    // engine replacement.
     const deferral = createHiddenDeferral(() => {
       if (latestRevision !== undefined) setCurrentCacheRevision(latestRevision);
       else fireAndForget(observeCurrentRevision(), 'soup-live-query');
-    });
+    }, paneHidden);
     const unsubscribeChanges = host.onCacheChanged(
       (revision) => {
         cacheObservation += 1;
@@ -1295,10 +1299,16 @@ export function createSoupLiveQuery(
           entities: options().cacheFirstEntities ?? [],
           input,
         });
+        // The request's own result: a parked view's store holds an older one.
+        const current = () => latestResult(query);
         await runWithOwner(owner, () =>
-          until(() => !query.isFetching && (query.isSuccess || query.error))
+          until(
+            () =>
+              !current().isFetching && (current().isSuccess || current().error)
+          )
         );
-        if (query.error) throw query.error;
+        const error = current().error;
+        if (error) throw error;
         return;
       }
       // An explicit list refresh rebuilds the cursor chain in order. The
