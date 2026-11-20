@@ -79,7 +79,10 @@ async fn wait_until_classified(user: &User, thread_id: &str) -> Result<Value, Re
 async fn arrives(inbox: &Inbox, from: &str, subject: &str) -> Result<String, Report> {
     inbox.deliver(&Mail::new(from, subject, "Hello."))?;
     let preview = inbox.wait_for_preview("inbox", subject).await?;
-    Ok(preview["id"].as_str().unwrap_or_default().to_owned())
+    let id = preview["id"]
+        .as_str()
+        .ok_or_else(|| rootcause::report!("the preview of {subject} has no thread id"))?;
+    Ok(id.to_owned())
 }
 
 /// The pushes that told the inbox's readers its Focus changed.
@@ -258,4 +261,116 @@ async fn gmail_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal() -> R
 async fn outlook_a_senders_mail_leaves_focus_as_noise_and_returns_as_signal() -> Result<(), Report>
 {
     a_senders_mail_leaves_focus_as_noise_and_returns_as_signal(Provider::Outlook).await
+}
+
+/// Focus reads the mail of an owner only while they have the Focus flag.
+/// Bob does not: his mail never reaches the model, his thread gets no
+/// verdict and his Home stays empty, while Ada's mail, which arrives after
+/// his, is classified and her app told.
+///
+/// When it fails: the worker classifies the mail of an owner the rollout
+/// leaves out, and shows it to the model.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_mail_of_an_owner_without_the_focus_flag_is_not_classified() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    classifier.turn_off_focus_flag_for(bob.email())?;
+    let bobs = bob.link(Provider::Gmail, bob.email()).await?;
+    let adas = ada.link(Provider::Gmail, ada.email()).await?;
+
+    let left_out = arrives(&bobs, MALLORY, "Contract renewal for Bob").await?;
+    eventually(
+        "the worker to leave Bob's mail for his flag",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&left_out).then_some(())),
+    )
+    .await?;
+    let wanted = arrives(&adas, MALLORY, "Contract renewal for Ada").await?;
+    let verdict = wait_until_classified(&ada, &wanted).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_home(&ada, &["Contract renewal for Ada"]).await?;
+    eventually(
+        "a push telling Ada's app Focus changed",
+        DEFAULT_TIMEOUT,
+        async || Ok(focus_pushes(&stack, &adas).into_iter().next()),
+    )
+    .await?;
+
+    assert_eq!(classifier.times_asked_about("for Bob"), 0);
+    assert_eq!(thread_focus(&bob, &left_out).await?, Value::Null);
+    assert_eq!(on_home(&bob).await?, Vec::<Value>::new());
+    assert_eq!(focus_pushes(&stack, &bobs), Vec::<Value>::new());
+
+    stack.finish().await
+}
+
+/// The id of the account that owns the inbox, as the user who linked it
+/// lists it.
+async fn owner_of(user: &User, inbox: &Inbox) -> Result<Value, Report> {
+    let links = user.get("/email/links").await?.ok()?;
+    let link = links["links"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|link| link["id"] == inbox.link_id().to_string().as_str())
+        .ok_or_else(|| rootcause::report!("the inbox is not listed: {links}"))?;
+    Ok(link["macro_id"].clone())
+}
+
+/// A linked inbox follows the Focus flag of the person whose tab lists it.
+/// Ada has the flag and links Bob's mailbox. Bob has a Macro account and no
+/// flag, so the inbox stays Bob's. Mail to it is classified, listed on
+/// Ada's Home, and Ada's app is told. Carol, without the flag, links Dan's
+/// mailbox, and Dan lacks it too: that mail never reaches the model.
+///
+/// When it fails: an inbox linked to someone with the flag gets no Focus
+/// because the worker asks only its owner's flag, or a linked inbox is
+/// classified while nobody whose tab shows it has the flag.
+#[tokio::test(flavor = "multi_thread")]
+async fn gmail_a_linked_inbox_follows_the_flag_of_the_user_who_linked_it() -> Result<(), Report> {
+    let stack = focus_stack().await?;
+    let classifier = stack.focus_classifier()?;
+    classifier.put_in_focus_when_mail_contains("Contract renewal");
+    let ada = stack.user("ada").await?;
+    let bob = stack.user("bob").await?;
+    let carol = stack.user("carol").await?;
+    let dan = stack.user("dan").await?;
+    for outside in [&bob, &carol, &dan] {
+        classifier.turn_off_focus_flag_for(outside.email())?;
+    }
+    let bobs = ada.link(Provider::Gmail, bob.email()).await?;
+    let dans = carol.link(Provider::Gmail, dan.email()).await?;
+    assert_eq!(owner_of(&ada, &bobs).await?, bob.macro_id());
+    assert_eq!(owner_of(&carol, &dans).await?, dan.macro_id());
+
+    let left_out = arrives(&dans, MALLORY, "Contract renewal for Dan").await?;
+    eventually(
+        "the worker to leave Dan's mail, linked to Carol, for their flags",
+        DEFAULT_TIMEOUT,
+        async || Ok(stack.focus_skipped_without_flag(&left_out).then_some(())),
+    )
+    .await?;
+    let wanted = arrives(&bobs, MALLORY, "Contract renewal for Bob").await?;
+    let verdict = wait_until_classified(&ada, &wanted).await?;
+    assert_eq!(verdict, json!({ "isFocus": true, "category": "OTHER" }));
+    wait_for_home(&ada, &["Contract renewal for Bob"]).await?;
+    let push = eventually(
+        "a push telling Ada's app Focus changed",
+        DEFAULT_TIMEOUT,
+        async || Ok(focus_pushes(&stack, &bobs).into_iter().next()),
+    )
+    .await?;
+    assert!(
+        push["entities"].to_string().contains(ada.macro_id()),
+        "{push}"
+    );
+
+    assert_eq!(classifier.times_asked_about("for Dan"), 0);
+    assert_eq!(thread_focus(&carol, &left_out).await?, Value::Null);
+    assert_eq!(on_home(&carol).await?, Vec::<Value>::new());
+
+    stack.finish().await
 }

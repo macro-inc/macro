@@ -7,6 +7,7 @@ export type IdentityBindingWire = {
   revalidationVariables?: string[];
 };
 
+import { CacheAuthoritySchema } from './authority.generated';
 import type { EntityResolverWire } from './exchange/entity-resolvers';
 import type {
   ContactReconcile,
@@ -721,7 +722,11 @@ export type MutationUpsertKind =
   | { kind: 'replaced-pending'; removedTransactionId: string }
   | { kind: 'appended-after-active'; activeTransactionId: string };
 
-/** Read-only request snapshot; never contains a settlement lease token. */
+/**
+ * Read-only request snapshot. Its lease lets a runner release a claim whose
+ * owner has gone; every settlement still presents the owner and generation,
+ * which the engine checks. Native engines built before the lease omit it.
+ */
 export type MutationInspection = Pick<
   ClaimedMutation,
   | 'transactionId'
@@ -732,7 +737,13 @@ export type MutationInspection = Pick<
   | 'variables'
   | 'clientMetadata'
   | 'enqueuedAtMs'
-> & { optimisticData: unknown };
+> & { optimisticData: unknown; lease?: MutationLease };
+
+/** A queued mutation's current claim. */
+export type MutationLease = MutationClaim & {
+  /** When another runner may claim the mutation, in epoch milliseconds. */
+  expiresAtMs: number;
+};
 
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
@@ -822,10 +833,21 @@ export type MutationSettlement = { mutationUuid?: string } & (
     }
 );
 
-export type CacheRequest = { id: number } & (
+export type CacheRequest = {
+  id: number;
+  generation?: string;
+} & (
   | { kind: 'init'; scope: string; hotCapacity?: number }
   | { kind: 'current-revision' }
   | { kind: 'current-storage-generation' }
+  | { kind: 'current-authority'; identity: string; traceparent?: string }
+  | {
+      kind: 'transition-authority';
+      traceparent?: string;
+      identity: string;
+      expected: string;
+      policy: string;
+    }
   | { kind: 'inspect-mutations' }
   | {
       kind: 'read';
@@ -1029,7 +1051,7 @@ export const ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE: CacheResponseErrorCode =
   'admitted-enqueue-uncertain';
 
 export type CacheResponse =
-  | { id: number; ok: true; result: unknown }
+  | { id: number; ok: true; result: unknown; authorityGeneration?: string }
   | {
       id: number;
       ok: false;
@@ -1042,7 +1064,11 @@ export type CacheResponse =
  * operations whose underlying records changed. The host filters by its own
  * clientId prefix and re-executes.
  */
-export type CachePush =
+export type CachePush = { authorityGeneration?: string } & (
+  | {
+      kind: 'authority-changed';
+      authority: import('./authority').CacheAuthority;
+    }
   | {
       kind: 'ops-affected';
       opIds: string[];
@@ -1059,7 +1085,8 @@ export type CachePush =
       kind: 'cache-hydrated';
       revision: CacheRevision;
     } & CacheChangeHints)
-  | { kind: 'mutation-settled'; settlement: MutationSettlement };
+  | { kind: 'mutation-settled'; settlement: MutationSettlement }
+);
 
 export type WorkerMessage = CacheResponse | CachePush;
 
@@ -1142,7 +1169,10 @@ export function isCacheResponse(value: unknown): value is CacheResponse {
   }
   if (value.ok === true) {
     return (
-      hasOnlyWireKeys(value, ['id', 'ok', 'result']) &&
+      hasOnlyWireKeys(value, ['id', 'ok', 'result', 'authorityGeneration']) &&
+      (value.authorityGeneration === undefined ||
+        (typeof value.authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(value.authorityGeneration))) &&
       Object.hasOwn(value, 'result')
     );
   }
@@ -1183,7 +1213,21 @@ export function isRecordFieldChanges(
 /** Strictly validates a pushed cache notification. */
 export function isCachePush(value: unknown): value is CachePush {
   if (!isWireRecord(value)) return false;
+  if (Object.hasOwn(value, 'authorityGeneration')) {
+    const { authorityGeneration, ...push } = value;
+    return (
+      (authorityGeneration === undefined ||
+        (typeof authorityGeneration === 'string' &&
+          /^[0-9a-f-]{36}$/.test(authorityGeneration))) &&
+      isCachePush(push)
+    );
+  }
   switch (value.kind) {
+    case 'authority-changed':
+      return (
+        hasOnlyWireKeys(value, ['kind', 'authority']) &&
+        CacheAuthoritySchema.safeParse(value.authority).success
+      );
     case 'ops-affected':
       return (
         hasOnlyWireKeys(value, ['kind', 'opIds', 'keys', 'fieldChanges']) &&

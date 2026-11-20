@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -11,6 +12,7 @@ import DotsIcon from '@icon/system/regular/dots-three.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
+import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
   createSignal,
@@ -119,6 +121,7 @@ function subRoutineItems(
 
 export function RoutineDetailView(props: {
   source: RoutineDetailSource;
+  mobileHeader?: ComponentProps<typeof RoutineEditor>['mobileHeader'];
   userId: Accessor<string | undefined>;
   defaultModel: string;
   /** Decisions are answered by the classifier behind trigger conditions. */
@@ -131,7 +134,8 @@ export function RoutineDetailView(props: {
   onCopyPrompt(prompt: string): Promise<void | boolean>;
   onShare?(): void;
   appearanceMenu?: JSX.Element;
-  identityIcon?: JSX.Element;
+  /** Makes the top bar's routine icon a control, e.g. to change it. */
+  identityIcon?: (icon: JSX.Element) => JSX.Element;
   /** Opens an agent conversation about this routine. */
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
@@ -196,6 +200,9 @@ export function RoutineDetailView(props: {
     >
       {(routine) => (
         <RoutineEditor
+          mobile={isTouchDevice()}
+          mobileHeader={props.mobileHeader}
+          appearance={routine().appearance}
           identityIcon={props.identityIcon}
           {...routineSections({
             draft: state,
@@ -211,6 +218,7 @@ export function RoutineDetailView(props: {
                 ? 'You'
                 : getDisplayName(tryMacroId(routine().ownerId)) || 'Owner',
             runsAsDescription: 'Steps and AI act with the owner’s access.',
+            unusableItems: props.source.unusableItems,
             unsupported: (
               <p class="text-sm text-ink-muted">
                 This routine has an unsupported task configuration.

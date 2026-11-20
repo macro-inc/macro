@@ -9,7 +9,9 @@ import type {
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import { CrmEmailPrivacyNamespace } from '../crm-email-privacy/email-privacy';
 import type { Document } from '../documents/document';
+import type { SearchOpts } from '../search/options';
 import { Team } from '../teams/team';
 import { Company } from './company';
 import { Contact } from './contact';
@@ -18,7 +20,7 @@ import { type CompanyImport, pipelineImport } from './pipeline-entry';
 import { PipelineNamespace } from './pipelines';
 
 /**
- * @routing Use when working with CRM deals, pipelines, stages, companies or contacts; not generic databases, and not a search that merely names a company.
+ * @routing Use when working with CRM records and pipelines; not generic databases or email contribution.
  *
  * @agent
  * ## How CRM pipelines work
@@ -30,11 +32,15 @@ import { PipelineNamespace } from './pipelines';
  * A company also has its own Stage, Owner and Revenue properties on its CRM page. They are separate from every pipeline and not kept in sync with it. When the user has pipelines, deal and stage requests mean pipeline entries; change the company's own properties only when the user asks for those properties specifically.
  */
 export class CrmNamespace {
+  /** Your email contribution. */
+  readonly emailPrivacy: CrmEmailPrivacyNamespace;
+
   /** Pipelines, their records and sharing settings. */
   readonly pipelines: PipelineNamespace;
 
   constructor(private readonly client: MacroClient) {
     this.pipelines = new PipelineNamespace(client);
+    this.emailPrivacy = new CrmEmailPrivacyNamespace(client);
   }
 
   /**
@@ -117,9 +123,9 @@ export class CrmNamespace {
   }
 
   /**
-   * Create a contact without a company for the caller's current team. The
-   * email is optional and may be at any domain. To add someone to a company,
-   * use {@link Company.createContact}.
+   * Create a contact for the caller's current team. The email is optional; a
+   * work address links the contact to its domain's company, created if
+   * missing. To choose the company, use {@link Company.createContact}.
    *
    * @write
    */
@@ -254,11 +260,11 @@ export class CrmNamespace {
   }
 
   /**
-   * Search CRM companies by name/domain, most relevant first, auto-paginated.
+   * Search CRM companies by name/domain, most relevant first, auto-paginated; `maxItems` caps the total.
    *
    * @readonly
    */
-  searchCompanies(query: string): AsyncGenerator<Company> {
-    return Company.search(this.client, query);
+  searchCompanies(query: string, opts?: SearchOpts): AsyncGenerator<Company> {
+    return Company.search(this.client, query, opts);
   }
 }

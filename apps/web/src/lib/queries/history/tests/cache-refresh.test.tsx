@@ -47,7 +47,7 @@ afterEach(() => {
 });
 
 describe('cache-backed history refresh', () => {
-  it('rereads for a reader only while it reads, catching up once', async () => {
+  it('rereads for an idle reader at most once a minute, and nothing as it starts reading', async () => {
     let notify: (() => void) | undefined;
     mocks.subscribe.mockImplementation((callback: () => void) => {
       notify = callback;
@@ -72,15 +72,25 @@ describe('cache-backed history refresh', () => {
     await waitFor(() => expect(query?.isSuccess).toBe(true));
     const initialCalls = mocks.readHistory.mock.calls.length;
 
+    vi.useFakeTimers();
     notify?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 1);
     notify?.();
-    await Promise.resolve();
-    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls);
-
     setReading(true);
-    await waitFor(() =>
-      expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 1)
-    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 1);
+
+    notify?.();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 2);
+
+    setReading(false);
+    notify?.();
+    await vi.advanceTimersByTimeAsync(59_000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.readHistory).toHaveBeenCalledTimes(initialCalls + 3);
     view.unmount();
     client.clear();
   });

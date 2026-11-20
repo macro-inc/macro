@@ -320,7 +320,16 @@ impl OutlookApiClientRepository {
         master: Value,
     ) -> Result<CalendarEventUpsert, CalendarProviderError> {
         let instances = self.calendar_occurrences(token, target, &master).await?;
-        Ok(normalize::projection(target, master, instances)?.upsert)
+        let normalize::Projection {
+            mut upsert,
+            skipped,
+        } = normalize::projection(target, master, instances)?;
+        // An edit's echo of a series missing an occurrence Macro could not
+        // read is stored under no role, as the sync stores that series.
+        if !skipped.is_empty() {
+            upsert.source.details_mut().observed_access_role = None;
+        }
+        Ok(upsert)
     }
     async fn calendar_refresh(
         &self,
@@ -447,6 +456,11 @@ impl OutlookCalendarReader for OutlookApiClientRepository {
                         .flatten()
                         .filter_map(|v| v.as_str().map(str::to_owned))
                         .collect(),
+                    owner_address: c["owner"]["address"]
+                        .as_str()
+                        .filter(|address| !address.is_empty())
+                        .map(str::to_owned),
+                    shared_with_me: c["isSharedWithMe"].as_bool() == Some(true),
                 })
             })
             .collect::<Result<_, CalendarProviderError>>()?;

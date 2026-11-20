@@ -53,11 +53,13 @@ fn text<'a>(record: &'a Record, field: &str) -> Option<&'a str> {
 /// Among names matching at a word start, people with a positive interaction
 /// time rank above everyone else, however exactly a stranger's name matches; the
 /// name tier then orders each group. Contains-only matches stay below both
-/// groups. The frontend publishes that time from direct-message channels: the
+/// groups, and address-only matches below those. The frontend publishes that time from direct-message channels: the
 /// first other participant of each, including group and never-written DMs.
 fn priority(stage: NameStage, messaged: bool) -> u8 {
     match (stage, messaged) {
-        (NameStage::Browse, _) => 0,
+        // Browse answers only an empty query and Address only a nonempty one,
+        // so they never meet in one search and can share the lowest rank.
+        (NameStage::Browse | NameStage::Address, _) => 0,
         (NameStage::Contains, _) => 1,
         (NameStage::WordPrefix, false) => 2,
         (NameStage::ExactName, false) => 3,
@@ -198,12 +200,17 @@ impl<'a> NameSearchRead<'a> {
             NameSearch::EmailPrefix(_) => vec![NameStage::EmailPrefix],
             NameSearch::Name(q) if q.normalized().is_empty() => vec![NameStage::Browse],
             NameSearch::Name(q) if q.words().next().is_none() => {
-                vec![NameStage::ExactName, NameStage::Contains]
+                vec![
+                    NameStage::ExactName,
+                    NameStage::Contains,
+                    NameStage::Address,
+                ]
             }
             NameSearch::Name(_) => vec![
                 NameStage::ExactName,
                 NameStage::WordPrefix,
                 NameStage::Contains,
+                NameStage::Address,
             ],
         };
         stages

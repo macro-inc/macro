@@ -5,7 +5,10 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableCrmMemberAccessChanges,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -69,7 +72,12 @@ import {
   SettingsSection,
 } from './primitives';
 import { useRetryTeamAgentSetup } from './primitives/team-agent-status';
-import { InviteToTeamDialog, useTeamViewer } from './Team';
+import {
+  type InviteKind,
+  InviteToTeamDialog,
+  useCanInviteAgents,
+  useTeamViewer,
+} from './Team';
 import { CopyTeamInviteLinkButton } from './TeamInviteLinkSection';
 import {
   canInviteToTeam,
@@ -160,6 +168,10 @@ function MemberRow(props: {
   showPlan: boolean;
   canEditPlan: boolean;
   planPending: boolean;
+  crmAccess: boolean;
+  canManageCrm: boolean;
+  crmPending: boolean;
+  onCrmAccessChange: (enabled: boolean) => void;
   pendingDowngrade: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
@@ -177,87 +189,114 @@ function MemberRow(props: {
   };
 
   return (
-    <div class="flex items-center justify-between gap-2 px-4 py-4">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
-        <div class="shrink-0">
-          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-1.5 min-w-0">
-            <div class="text-sm font-medium text-ink truncate">
-              {displayName()}
-              {props.isCurrentUser && (
-                <span class="text-ink-muted font-normal"> (you)</span>
-              )}
+    <div data-team-member={props.member.user_id}>
+      <div class="flex items-center justify-between gap-2 px-4 py-4">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="shrink-0">
+            <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-1.5 min-w-0">
+              <div class="text-sm font-medium text-ink truncate">
+                {displayName()}
+                {props.isCurrentUser && (
+                  <span class="text-ink-muted font-normal"> (you)</span>
+                )}
+              </div>
+              <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+                <AgentTag />
+              </Show>
             </div>
-            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
-              <AgentTag />
+            <Show when={showEmail()}>
+              <div class="text-xs text-ink-muted truncate">{email()}</div>
             </Show>
           </div>
-          <Show when={showEmail()}>
-            <div class="text-xs text-ink-muted truncate">{email()}</div>
-          </Show>
         </div>
-      </div>
-      <div class="flex items-center gap-2 shrink-0">
-        <Show when={props.showPlan}>
+        <div class="flex items-center gap-2 shrink-0">
+          <Show when={props.showPlan}>
+            <Show
+              when={props.canEditPlan}
+              fallback={
+                <span class="text-xs text-ink-muted capitalize">
+                  {memberPlan(props.member)}
+                </span>
+              }
+            >
+              <TeamSeatPlanSelect
+                value={memberPlan(props.member)}
+                onChange={props.onPlanChange}
+                disabled={props.planPending}
+                aiUsageBilling
+                pendingDowngrade={props.pendingDowngrade}
+              />
+            </Show>
+          </Show>
           <Show
-            when={props.canEditPlan}
+            when={props.isOwner && !isMemberOwner()}
             fallback={
               <span class="text-xs text-ink-muted capitalize">
-                {memberPlan(props.member)}
+                {props.member.role}
               </span>
             }
           >
-            <TeamSeatPlanSelect
-              value={memberPlan(props.member)}
-              onChange={props.onPlanChange}
-              disabled={props.planPending}
-              aiUsageBilling
-              pendingDowngrade={props.pendingDowngrade}
+            <RoleSelect
+              value={props.member.role}
+              onChange={props.onRoleChange}
             />
           </Show>
-        </Show>
-        <Show
-          when={props.isOwner && !isMemberOwner()}
-          fallback={
-            <span class="text-xs text-ink-muted capitalize">
-              {props.member.role}
-            </span>
-          }
-        >
-          <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
-        </Show>
-        <Show when={props.canManageRemovals}>
-          <Show
-            when={props.canRemove}
-            fallback={
-              <Tooltip
-                label={
-                  isMemberOwner()
-                    ? 'Cannot remove team owner'
-                    : 'Cannot remove yourself'
-                }
-              >
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled
-                  class="opacity-50 cursor-not-allowed"
+          <Show when={props.canManageRemovals}>
+            <Show
+              when={props.canRemove}
+              fallback={
+                <Tooltip
+                  label={
+                    isMemberOwner()
+                      ? 'Cannot remove team owner'
+                      : 'Cannot remove yourself'
+                  }
                 >
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled
+                    class="opacity-50 cursor-not-allowed"
+                  >
+                    <TrashIcon class="size-4" />
+                  </Button>
+                </Tooltip>
+              }
+            >
+              <Tooltip label="Remove member">
+                <Button variant="ghost" size="sm" onClick={props.onRemove}>
                   <TrashIcon class="size-4" />
                 </Button>
               </Tooltip>
-            }
-          >
-            <Tooltip label="Remove member">
-              <Button variant="ghost" size="sm" onClick={props.onRemove}>
-                <TrashIcon class="size-4" />
-              </Button>
-            </Tooltip>
+            </Show>
           </Show>
-        </Show>
+        </div>
       </div>
+      <Show when={props.canManageCrm}>
+        <SettingsRow
+          label={t('crm.memberAccess')}
+          description={
+            props.member.role !== TeamRole.member
+              ? t('crm.memberAccessAlways')
+              : undefined
+          }
+        >
+          <Show when={props.member.role === TeamRole.member}>
+            <ToggleSwitch
+              size="md"
+              label={t('crm.memberAccessFor', { name: displayName() })}
+              labelClass="sr-only"
+              class="touch:min-h-11 touch:min-w-11 justify-center"
+              checked={props.crmAccess}
+              disabled={props.crmPending}
+              onChange={props.onCrmAccessChange}
+            />
+          </Show>
+        </SettingsRow>
+      </Show>
     </div>
   );
 }
@@ -283,6 +322,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const resendInviteMutation = useResendTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
+  const crmAccessMutation = usePatchTeamMutation();
+  const crmAccessChanges = useFeatureFlag(enableCrmMemberAccessChanges);
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
@@ -291,7 +332,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
   );
   const [showCancelInviteModal, setShowCancelInviteModal] =
     createSignal<TeamInviteDetails | null>(null);
-  const [showInviteModal, setShowInviteModal] = createSignal(false);
+  // The invite flow open, if any: people by email, or an agent teammate.
+  const [showInviteModal, setShowInviteModal] = createSignal<InviteKind>();
   const [agentToRemove, setAgentToRemove] = createSignal<TeamAgent | null>(
     null
   );
@@ -299,6 +341,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   // Agent teammates: listed with their status once the flag is on. Loading
   // is not on, and off leaves the roster exactly as it was.
   const agentFlag = useFeatureFlag(enableAgentTeammates);
+  const canInviteAgents = useCanInviteAgents(isAdminOrOwner);
   const agentsOn = () => !agentFlag().loading && agentFlag().enabled;
   const agentsQuery = useTeamAgentsQuery(() => props.team.id, agentsOn);
   const removeAgentMutation = useRemoveTeamAgentMutation();
@@ -476,23 +519,36 @@ export function TeamMembers(props: { team: TeamSummary }) {
           <Show
             when={canInviteToTeam(currentUserRole(), allowNonAdminInvites())}
           >
-            <div class="flex items-center gap-2">
+            {/* A narrow page wraps the invite buttons, as a pair, onto
+                their own line. */}
+            <div class="flex flex-wrap items-center gap-2">
               {/* A link someone sends themselves gets opened; keep it one
                   click from the page alongside the email invite. */}
               <CopyTeamInviteLinkButton
                 teamId={props.team.id}
                 class="text-[15px]"
               />
-              {/* Inverted (black on light, white on dark) so inviting is the
-                  page's primary action. */}
-              <Button
-                variant="primary"
-                class="text-[15px]"
-                onClick={() => setShowInviteModal(true)}
-              >
-                <PlusIcon class="size-4" />
-                Invite
-              </Button>
+              {/* One button per kind of invite, each opening its flow. */}
+              <div class="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  class="text-[15px]"
+                  onClick={() => setShowInviteModal('people')}
+                >
+                  <PlusIcon class="size-4" />
+                  Invite Human
+                </Button>
+                <Show when={canInviteAgents()}>
+                  <Button
+                    variant="secondary"
+                    class="text-[15px]"
+                    onClick={() => setShowInviteModal('agent')}
+                  >
+                    <PlusIcon class="size-4" />
+                    Invite Agent
+                  </Button>
+                </Show>
+              </div>
             </div>
           </Show>
         }
@@ -571,6 +627,26 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       showPlan={showSeatPlans()}
                       canEditPlan={isAdminOrOwner()}
                       planPending={planMovePending()}
+                      crmAccess={
+                        member.role !== TeamRole.member ||
+                        teamQuery.data?.crm_member_access?.[member.user_id] !==
+                          false
+                      }
+                      canManageCrm={
+                        isAdminOrOwner() && crmAccessChanges().enabled
+                      }
+                      crmPending={crmAccessMutation.isPending}
+                      onCrmAccessChange={(enabled) => {
+                        crmAccessMutation.mutate({
+                          teamId: props.team.id,
+                          request: {
+                            member_crm_access: {
+                              user_id: member.user_id,
+                              enabled,
+                            },
+                          },
+                        });
+                      }}
                       pendingDowngrade={
                         teamQuery.data?.scheduled_seat_plans?.[member.user_id]
                           ?.plan === 'premium'
@@ -763,9 +839,10 @@ export function TeamMembers(props: { team: TeamSummary }) {
       <InviteToTeamDialog
         teamId={props.team.id}
         canManageLink={isAdminOrOwner()}
-        canInviteAgents={isAdminOrOwner()}
-        open={showInviteModal()}
-        onClose={() => setShowInviteModal(false)}
+        kind={showInviteModal()}
+        canInviteAgents={canInviteAgents()}
+        open={!!showInviteModal()}
+        onClose={() => setShowInviteModal(undefined)}
       />
     </>
   );

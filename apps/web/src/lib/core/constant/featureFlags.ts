@@ -160,16 +160,6 @@ export const enableDesktopTabs = defineFlag({
 });
 
 /**
- * Macro computers: the whole computer UI (Settings → Machines, Billing,
- * Agents). Off hides it; existing computers keep running and billing.
- * No dev default: dev follows PostHog like the backend, which fails closed.
- */
-export const enableMacroComputers = defineFlag({
-  key: 'enable-macro-computers',
-  env: 'ENABLE_MACRO_COMPUTERS',
-});
-
-/**
  * Agent teammates: team admins invite an AI agent, with its own account and
  * Macro computer, from Settings → Team → Members.
  */
@@ -484,10 +474,21 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// No dev override: the server requires this same remote flag before accepting writes.
+export const enableCrmMemberAccessChanges = defineFlag({
+  key: 'enable-crm-member-access-changes',
+});
+
 // Stay off until all ingestion and Team email reader binaries support exceptions.
 // No dev default or local override: the server independently requires this flag.
 export const enableCrmThreadExclusions = defineFlag({
   key: 'enable-crm-thread-exclusions',
+});
+
+// Default off in dev and local too; authoring requires the matching server gate.
+export const enableCrmSelectiveEmailContribution = defineFlag({
+  key: 'enable-crm-selective-email-contribution',
+  env: 'ENABLE_CRM_SELECTIVE_EMAIL_CONTRIBUTION',
 });
 
 // Company collections are paused until ready; preserve stored lists while off.
@@ -681,6 +682,16 @@ export const enableChatSidebarSections = defineFlag({
   default: onInDev,
 });
 
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
+  default: onInDev,
+});
+
 // Opt-in vertical resizing for desktop Chat sections. Keep it off in development
 // too so sections use their natural height unless PostHog or a local override enables it.
 export const enableChatSidebarSectionResize = defineFlag({
@@ -744,6 +755,13 @@ export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
   default: onInDev,
+});
+
+// Keep navigation numbers off in every environment while unread counts are
+// being investigated. Unified unread dots continue to use the subscription.
+export const enableNavigationUnreadCounts = defineFlag({
+  env: 'ENABLE_NAVIGATION_UNREAD_COUNTS',
+  default: false,
 });
 
 // Agents home: pending updates from coding agents shown as a stack under the

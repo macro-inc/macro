@@ -1,5 +1,6 @@
 use super::*;
 
+mod payment_terms;
 mod seat_requests;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use serde::{Serialize, de::DeserializeOwned};

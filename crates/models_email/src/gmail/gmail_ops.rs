@@ -146,16 +146,32 @@ pub struct DeleteLabelPayload {
     pub provider_label_id: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+/// `Debug` leaves out the sender's address, so a gmail ops message logged or
+/// recorded on a span carries no personal data.
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct BlockSenderPayload {
     pub email_address: String,
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+impl std::fmt::Debug for BlockSenderPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BlockSenderPayload").finish_non_exhaustive()
+    }
+}
+
+/// `Debug` leaves out the sender's address, like [`BlockSenderPayload`].
+#[derive(Deserialize, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct UnblockSenderPayload {
     pub email_address: String,
+}
+
+impl std::fmt::Debug for UnblockSenderPayload {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnblockSenderPayload")
+            .finish_non_exhaustive()
+    }
 }
 
 #[cfg(test)]

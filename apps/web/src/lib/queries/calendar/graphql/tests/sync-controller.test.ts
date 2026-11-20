@@ -1,17 +1,61 @@
+import { StaleCacheAuthorityError } from '@graphql-cache/authority';
+import { normalizedCacheExchange } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type {
   CalendarCommitArgs,
   CalendarRangeCacheResult,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { CalendarsDocument } from '@service-storage/graphql/generated/graphql';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { createClient, fetchExchange } from '@urql/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type CalendarChangesPage,
   CalendarSyncController,
+  refetchCalendarList,
 } from '../sync-controller';
 import { graphqlEvent, graphqlOccurrence } from './fixtures';
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: vi.fn(),
 }));
+
+it('refreshes the calendar list while the visible list is reading the cache', async () => {
+  const cacheReadStarted = Promise.withResolvers<void>();
+  const finishCacheRead = Promise.withResolvers<void>();
+  const emptyList = { user: { id: 'viewer', calendars: [] } };
+  const discoveredList = {
+    user: { id: 'viewer', calendars: [{ id: 'new-calendar' }] },
+  };
+  const host = createNoopCacheHost();
+  const read = vi.spyOn(host, 'readQuery').mockImplementation(async () => {
+    cacheReadStarted.resolve();
+    await finishCacheRead.promise;
+    return { kind: 'hit', data: emptyList };
+  });
+  const write = vi.spyOn(host, 'writeQuery');
+  const fetch = vi.fn(async () => Response.json({ data: discoveredList }));
+  const client = createClient({
+    url: 'https://example.test/graphql',
+    exchanges: [normalizedCacheExchange(host), fetchExchange],
+    fetch,
+  });
+  vi.mocked(getGraphqlSoupClient).mockReturnValue(client);
+
+  const visible = client.query(CalendarsDocument, {}).toPromise();
+  await cacheReadStarted.promise;
+  const refreshed = refetchCalendarList();
+  finishCacheRead.resolve();
+
+  await expect(refreshed).resolves.toEqual(discoveredList);
+  await expect(visible).resolves.toMatchObject({ data: emptyList });
+  expect(read).toHaveBeenCalledOnce();
+  expect(fetch).toHaveBeenCalledOnce();
+  expect(write).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ data: discoveredList })
+  );
+});
 
 const syncState = (
   watermark: Array<{ linkId: string; seq: string }> | null
@@ -72,6 +116,46 @@ describe('CalendarSyncController', () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it('runs the requested new-generation pass after an old commit is rejected', async () => {
+    const { host, fetchChanges, controller } = setup([changes()]);
+    const started = Promise.withResolvers<void>();
+    const first = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      started.resolve();
+      return first.promise;
+    });
+    host.calendarCommit.mockRejectedValueOnce(new StaleCacheAuthorityError());
+    const running = controller.runDelta();
+    await started.promise;
+    const rerun = controller.runDelta();
+    first.resolve(changes());
+    await Promise.all([running, rerun]);
+    expect(fetchChanges).toHaveBeenCalledTimes(2);
+    expect(host.calendarCommit).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it('preserves the delta request generation through a later index commit', async () => {
+    const { host, fetchChanges, controller } = setup([]);
+    const entered = Promise.withResolvers<void>();
+    const response = Promise.withResolvers<CalendarChangesPage>();
+    fetchChanges.mockImplementationOnce(() => {
+      entered.resolve();
+      return response.promise;
+    });
+    const generation = cacheSessionGeneration.capture();
+    const syncing = controller.runDelta();
+    await entered.promise;
+    await cacheSessionGeneration.transition(async () => {});
+    response.resolve(changes());
+    await syncing;
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      expect.anything(),
+      generation
+    );
+    controller.dispose();
+  });
+
   it('replaces changed events, deletes removals, and advances the watermark', async () => {
     const { host, fetchChanges, refetchCalendars, controller } = setup([
       changes({
@@ -92,28 +176,31 @@ describe('CalendarSyncController', () => {
       { linkId: 'link-1', seq: '1' },
       { linkId: 'link-2', seq: '7' },
     ]);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      replacedEvents: [
-        {
-          eventKey: 'GraphqlCalendarEvent:event-1',
-          occurrenceKeys: [
-            'GraphqlCalendarOccurrence:event-1:2026-10-06T09:00:00+00:00',
-          ],
-        },
-      ],
-      deletedEventKeys: ['GraphqlCalendarEvent:event-2'],
-      deletedCalendarKeys: ['GraphqlCalendar:calendar-9'],
-      removedLinkIds: ['link-2'],
-      watermark: {
-        kind: 'advance',
-        since: [
-          { linkId: 'link-1', seq: '1' },
-          { linkId: 'link-2', seq: '7' },
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        replacedEvents: [
+          {
+            eventKey: 'GraphqlCalendarEvent:event-1',
+            occurrenceKeys: [
+              'GraphqlCalendarOccurrence:event-1:2026-10-06T09:00:00+00:00',
+            ],
+          },
         ],
-        to: [{ linkId: 'link-1', seq: '5' }],
+        deletedEventKeys: ['GraphqlCalendarEvent:event-2'],
+        deletedCalendarKeys: ['GraphqlCalendar:calendar-9'],
+        removedLinkIds: ['link-2'],
+        watermark: {
+          kind: 'advance',
+          since: [
+            { linkId: 'link-1', seq: '1' },
+            { linkId: 'link-2', seq: '7' },
+          ],
+          to: [{ linkId: 'link-1', seq: '5' }],
+        },
+        freshness: 'fresh',
       },
-      freshness: 'fresh',
-    });
+      expect.any(String)
+    );
     expect(refetchCalendars).toHaveBeenCalledTimes(1);
   });
 
@@ -164,10 +251,13 @@ describe('CalendarSyncController', () => {
     await controller.runDelta();
 
     expect(host.calendarCommit).toHaveBeenCalledTimes(1);
-    expect(host.calendarCommit).toHaveBeenCalledWith({
-      reset: true,
-      watermark: { kind: 'merge', links: [{ linkId: 'link-3', seq: '40' }] },
-    });
+    expect(host.calendarCommit).toHaveBeenCalledWith(
+      {
+        reset: true,
+        watermark: { kind: 'merge', links: [{ linkId: 'link-3', seq: '40' }] },
+      },
+      expect.any(String)
+    );
     expect(refetchCalendars).toHaveBeenCalledTimes(1);
   });
 

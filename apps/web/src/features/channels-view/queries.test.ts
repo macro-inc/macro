@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import { createMemo, createRoot, createSignal } from 'solid-js';
+import { createMemo, createRoot, createSignal, onCleanup } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -46,13 +46,23 @@ vi.mock('@entity', () => ({
   isChannelThreadEntity: (entity: { type: string }) =>
     entity.type === 'channel_thread',
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'user-1',
+  useIsAuthenticated: () => () => true,
+}));
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return { queryClient: new QueryClient() };
+});
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
+import { resetQueryAccountSession } from '@queries/auth/account-scope';
+import { authKeys } from '@queries/auth/keys';
 import {
   useCachedChannelsByIds,
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
+import { queryClient } from '@queries/client';
 import {
   fetchChannelGroupIds,
   resolveReferencedChannels,
@@ -325,6 +335,62 @@ describe('channels resolved by id', () => {
       useSoupAstItemsQuery.mockReset();
     }
   });
+  it('distinguishes pending, failed, and successfully omitted referenced channels', async () => {
+    const refresh = vi.fn(async () => {});
+    const { result, dispose, setPending, setError } = createRoot((dispose) => {
+      const [pending, setPending] = createSignal(true);
+      const [error, setError] = createSignal<Error>();
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        get isPending() {
+          return pending();
+        },
+        get isLoading() {
+          return pending();
+        },
+        get isFetching() {
+          return pending();
+        },
+        get hasPageData() {
+          return !pending();
+        },
+        get fetchError() {
+          return error();
+        },
+        hasNextPage: false,
+        refresh,
+        get data() {
+          if (pending()) throw new Error('A pending query resource was read');
+          return { entities: [channelEntity('resolved')] };
+        },
+      }));
+      return {
+        result: useCachedChannelsByIds(
+          () => ['resolved', 'missing'],
+          () => true
+        ),
+        dispose,
+        setPending,
+        setError,
+      };
+    });
+    try {
+      expect([...result.pendingIds()]).toEqual(['missing', 'resolved']);
+      expect([...result.unavailableIds()]).toEqual([]);
+      setPending(false);
+      expect(result.channels().map(({ id }) => id)).toEqual(['resolved']);
+      expect([...result.unavailableIds()]).toEqual(['missing']);
+      setError(new Error('offline'));
+      expect([...result.unavailableIds()]).toEqual([]);
+      expect([...result.failedIds()]).toEqual(['missing']);
+      expect(result.error()).toBeInstanceOf(Error);
+      await result.retry();
+      expect(refresh).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
   it('keeps the previous answer when a settled lookup has no data', () => {
     expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
   });
@@ -412,6 +478,439 @@ describe('Threads rail paging', () => {
       return dispose;
     });
     expect(fetchNextPage).toHaveBeenCalled();
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+});
+
+describe('channel sidebar cache hydration', () => {
+  it('renders the shared cached channel list while Soup is still loading', () => {
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: true,
+      isLoading: true,
+      isFetching: true,
+      get data(): { entities: ChannelEntity[] } {
+        throw new Error('A pending query resource was read');
+      },
+    }));
+    const { sources, dispose } = createRoot((dispose) => ({
+      dispose,
+      sources: useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        () => [channelEntity('cached')]
+      ),
+    }));
+    try {
+      expect(
+        sources.team_channels.items().map((channel) => channel.id)
+      ).toEqual(['cached']);
+      expect(sources.team_channels.isLoading()).toBe(false);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+  it('hydrates a reload before Soup settles and lets an empty server page replace the seed', () => {
+    const { sources, dispose, restore, settle } = createRoot((dispose) => {
+      const [cached, restore] = createSignal<ChannelEntity[]>([]);
+      const [pending, setPending] = createSignal(true);
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        get isPending() {
+          return pending();
+        },
+        get isLoading() {
+          return pending();
+        },
+        get isFetching() {
+          return pending();
+        },
+        get hasPageData() {
+          return !pending();
+        },
+        get data() {
+          if (pending()) throw new Error('A pending query resource was read');
+          return { entities: [] };
+        },
+      }));
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        cached
+      );
+      return { sources, dispose, restore, settle: () => setPending(false) };
+    });
+    try {
+      expect(sources.team_channels.items()).toEqual([]);
+      expect(sources.team_channels.isLoading()).toBe(true);
+      restore([channelEntity('cached')]);
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'cached',
+      ]);
+      expect(sources.team_channels.isLoading()).toBe(false);
+      settle();
+      expect(sources.team_channels.items()).toEqual([]);
+      expect(sources.team_channels.isLoading()).toBe(false);
+      restore([channelEntity('stale')]);
+      expect(sources.team_channels.items()).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('bounds the cached seed and excludes channels outside the viewer membership and section', () => {
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: true,
+      isLoading: true,
+      data: { entities: [] },
+    }));
+    const { sources, dispose } = createRoot((dispose) => ({
+      dispose,
+      sources: useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        () => [
+          { ...channelEntity('left'), isParticipant: false },
+          { ...channelEntity('private'), channelType: 'private' },
+          ...Array.from({ length: 105 }, (_, index) => ({
+            ...channelEntity(`channel-${index}`),
+            updatedAt: new Date(index * 1000).toISOString(),
+          })),
+        ]
+      ),
+    }));
+    try {
+      expect(sources.team_channels.items()).toHaveLength(100);
+      expect(sources.team_channels.items()[0].id).toBe('channel-104');
+      expect(sources.team_channels.items().at(-1)?.id).toBe('channel-5');
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+  it('retains shared cached rows when an offline partial index has no page', () => {
+    useSoupAstItemsQuery.mockImplementation(() => ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      hasPageData: false,
+      data: { entities: [] },
+    }));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        () => [channelEntity('cached')]
+      );
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'cached',
+      ]);
+      expect(sources.team_channels.isLoading()).toBe(false);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('merges partial local rows without shrinking the seed before a page answers', () => {
+    const { sources, dispose, setLocal, setHasPage } = createRoot((dispose) => {
+      const [local, setLocal] = createSignal([channelEntity('local')]);
+      const [hasPage, setHasPage] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        get hasPageData() {
+          return hasPage();
+        },
+        get data() {
+          return { entities: local() };
+        },
+      }));
+      return {
+        sources: useChannelsSources(
+          (scope) => scope === 'team_channels',
+          () => 'updated_at',
+          () => [channelEntity('local'), channelEntity('cached')]
+        ),
+        dispose,
+        setLocal,
+        setHasPage,
+      };
+    });
+    try {
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'local',
+        'cached',
+      ]);
+      setLocal([]);
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'local',
+        'cached',
+      ]);
+      setHasPage(true);
+      expect(sources.team_channels.items()).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('does not mark references unavailable until a page confirms their absence', () => {
+    const { references, dispose, setHasPage } = createRoot((dispose) => {
+      const [hasPage, setHasPage] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        get hasPageData() {
+          return hasPage();
+        },
+        data: { entities: [] },
+      }));
+      return {
+        references: useCachedChannelsByIds(
+          () => ['missing'],
+          () => true
+        ),
+        dispose,
+        setHasPage,
+      };
+    });
+    try {
+      expect([...references.unavailableIds()]).toEqual([]);
+      setHasPage(true);
+      expect([...references.unavailableIds()]).toEqual(['missing']);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+  it('retires the complete query graph across same-viewer reauthentication', async () => {
+    queryClient.setQueryData(authKeys.userInfo.queryKey, {
+      id: 'user-1',
+      authenticated: true,
+    });
+    let session = 0;
+    const disposedQueries: number[] = [];
+    const refreshes = vi.fn();
+    const {
+      sources,
+      references,
+      dispose,
+      setCached,
+      setOldRows,
+      setFreshPending,
+      setEnabled,
+      setSort,
+    } = createRoot((dispose) => {
+      const [cached, setCached] = createSignal<ChannelEntity[]>([]);
+      const [oldRows, setOldRows] = createSignal([channelEntity('old')]);
+      const [freshPending, setFreshPending] = createSignal(true);
+      const [enabled, setEnabled] = createSignal(true);
+      const [sort, setSort] = createSignal<'updated_at' | 'created_at'>(
+        'updated_at'
+      );
+      useSoupAstItemsQuery.mockImplementation(() => {
+        const querySession = session;
+        const id = useSoupAstItemsQuery.mock.calls.length;
+        onCleanup(() => disposedQueries.push(id));
+        return {
+          isEnabled: true,
+          get isPending() {
+            return querySession > 0 && freshPending();
+          },
+          get isLoading() {
+            return querySession > 0 && freshPending();
+          },
+          get isFetching() {
+            return querySession > 0 && freshPending();
+          },
+          get hasPageData() {
+            return querySession === 0 || !freshPending();
+          },
+          refresh: async () => {
+            refreshes(querySession);
+          },
+          get data() {
+            if (querySession === 0) return { entities: oldRows() };
+            if (freshPending())
+              throw new Error('A pending query resource was read');
+            return { entities: [channelEntity('fresh')] };
+          },
+        };
+      });
+      return {
+        sources: useChannelsSources(enabled, sort, cached),
+        references: useCachedChannelsByIds(
+          () => ['old'],
+          () => true
+        ),
+        dispose,
+        setCached,
+        setOldRows,
+        setFreshPending,
+        setEnabled,
+        setSort,
+      };
+    });
+    const confirmLogin = () =>
+      queryClient.fetchQuery({
+        queryKey: authKeys.userInfo.queryKey,
+        queryFn: async () => ({ id: 'user-1', authenticated: true }),
+        staleTime: 0,
+      });
+    const refresh = sources.team_channels.refresh;
+    try {
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'old',
+      ]);
+      expect(references.channels().map(({ id }) => id)).toEqual(['old']);
+      const initialQueries = useSoupAstItemsQuery.mock.calls.length;
+      await resetQueryAccountSession();
+      expect(
+        Object.values(sources).every((source) => source.items().length === 0)
+      ).toBe(true);
+      expect(references.channels()).toEqual([]);
+      expect(disposedQueries).toHaveLength(initialQueries);
+      await refresh();
+      expect(refreshes).not.toHaveBeenCalled();
+      queryClient.setQueryData(authKeys.userInfo.queryKey, {
+        id: 'user-1',
+        authenticated: true,
+      });
+      expect(useSoupAstItemsQuery.mock.calls).toHaveLength(initialQueries);
+      session = 1;
+      await confirmLogin();
+      expect(useSoupAstItemsQuery.mock.calls.length).toBeGreaterThan(
+        initialQueries
+      );
+      const currentQueries = useSoupAstItemsQuery.mock.calls.length;
+      expect(sources.team_channels.items()).toEqual([]);
+      expect(references.channels()).toEqual([]);
+      setOldRows([channelEntity('late-old')]);
+      expect(sources.team_channels.items()).toEqual([]);
+      setCached([channelEntity('cached-in-new-session')]);
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'cached-in-new-session',
+      ]);
+      setFreshPending(false);
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'fresh',
+      ]);
+      setSort('created_at');
+      setEnabled(false);
+      setEnabled(true);
+      expect(useSoupAstItemsQuery.mock.calls).toHaveLength(currentQueries);
+      await refresh();
+      expect(refreshes).toHaveBeenCalledExactlyOnceWith(1);
+    } finally {
+      dispose();
+      await confirmLogin();
+      useSoupAstItemsQuery.mockReset();
+      queryClient.clear();
+    }
+  });
+});
+describe('channel list failures', () => {
+  const failedQuery = (entities: ChannelEntity[]) =>
+    ({
+      isEnabled: true,
+      isPending: false,
+      isLoading: false,
+      isFetching: false,
+      // Offline, the live query hides a network error behind its local cache
+      // projection, which is empty when the list was never loaded.
+      error: null,
+      fetchError: new Error('network'),
+      data: { entities },
+    }) as never;
+
+  it('reports a failed fetch when no conversations are listed', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([]));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'direct_messages',
+        () => 'updated_at'
+      );
+      expect(sources.direct_messages.items()).toEqual([]);
+      expect(sources.direct_messages.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('keeps a shared-list seed and offers Retry when the first Soup page fails', () => {
+    useSoupAstItemsQuery.mockImplementation(() => failedQuery([]));
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at',
+        () => [channelEntity('cached')]
+      );
+      expect(sources.team_channels.items().map(({ id }) => id)).toEqual([
+        'cached',
+      ]);
+      expect(sources.team_channels.error()).toBeInstanceOf(Error);
+      return dispose;
+    });
+    dispose();
+    useSoupAstItemsQuery.mockReset();
+  });
+
+  it('does not revive a seed after a confirmed empty page subsequently fails to refresh', () => {
+    const { sources, dispose, fail } = createRoot((dispose) => {
+      const [error, fail] = createSignal<Error>();
+      useSoupAstItemsQuery.mockImplementation(() => ({
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        hasPageData: true,
+        get fetchError() {
+          return error();
+        },
+        data: { entities: [] },
+      }));
+      return {
+        sources: useChannelsSources(
+          (scope) => scope === 'team_channels',
+          () => 'updated_at',
+          () => [channelEntity('cached')]
+        ),
+        dispose,
+        fail,
+      };
+    });
+    try {
+      expect(sources.team_channels.items()).toEqual([]);
+      fail(new Error('offline'));
+      expect(sources.team_channels.items()).toEqual([]);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('keeps cached conversations listed through a failed fetch', () => {
+    useSoupAstItemsQuery.mockImplementation(() =>
+      failedQuery([channelEntity('eng')])
+    );
+    const dispose = createRoot((dispose) => {
+      const sources = useChannelsSources(
+        (scope) => scope === 'team_channels',
+        () => 'updated_at'
+      );
+      expect(sources.team_channels.items().map((c) => c.id)).toEqual(['eng']);
+      expect(sources.team_channels.error()).toBeUndefined();
+      return dispose;
+    });
     dispose();
     useSoupAstItemsQuery.mockReset();
   });

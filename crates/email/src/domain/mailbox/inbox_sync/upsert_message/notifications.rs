@@ -276,10 +276,10 @@ pub fn build_notification_recipients(
             Ok(id) => {
                 recipient_ids.insert(id);
             }
-            Err(e) => {
+            // The parse error quotes its input, an address, so it stays out
+            // of the log.
+            Err(_) => {
                 tracing::warn!(
-                    error=?e,
-                    inbox_owner=%owner,
                     "skipping delegated primary that failed to parse as a macro user id"
                 );
             }

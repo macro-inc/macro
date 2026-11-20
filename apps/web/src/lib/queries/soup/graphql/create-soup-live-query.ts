@@ -501,8 +501,6 @@ export function createSoupLiveQuery(
     };
   });
 
-  usePending('soup.network', () => query.isLoading);
-
   const isEnabled = () =>
     cacheFirstEntities()
       ? options().enabled !== false && !options().localOnly && isSupported()
@@ -1103,6 +1101,15 @@ export function createSoupLiveQuery(
     })
   );
 
+  const isLoading = () => {
+    if (!query.isLoading) return false;
+    const local = displayLocalProjection();
+    if (!local) return true;
+    // A partial local index cannot prove an empty list. Keep a true cold load
+    // pending, but never make already visible cache rows wait for revalidation.
+    return local.records.length === 0 && !offline() && !options().networkPaused;
+  };
+  usePending('soup.network', isLoading);
   return {
     cacheMaintained,
     revalidationQueries,
@@ -1141,19 +1148,11 @@ export function createSoupLiveQuery(
     fetchError: () => query.error ?? undefined,
     isSupported,
     isEnabled,
-    isLoading: () => {
-      if (!query.isLoading) return false;
-      const local = displayLocalProjection();
-      if (!local) return true;
-      // An empty local Mail page does not establish complete mailbox coverage.
-      // Wait for the first query response before showing an online empty state.
-      return (
-        local.mail !== undefined &&
-        local.records.length === 0 &&
-        !offline() &&
-        !options().networkPaused
-      );
-    },
+    hasPageData: () =>
+      baselineInputKey() === inputKey() &&
+      baselineGeneration() === cacheGeneration &&
+      query.data !== undefined,
+    isLoading,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () =>
       fetchingMailPage() || (!cachedMail() && query.isFetchingNextPage),

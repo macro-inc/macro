@@ -56,6 +56,12 @@ export type AvailabilityCalendarsResponse = {
  */
 export type Booking = {
     /**
+     * When Macro stopped trying to update the host's calendar for the
+     * booking's latest change. A failed booking with this set is not being
+     * retried, and cancelling it is the way to release its time.
+     */
+    abandonedAt?: string | null;
+    /**
      * Answers keyed by question identity.
      */
     answers: {
@@ -2289,6 +2295,10 @@ export type ChangeBookingErrors = {
     403: unknown;
     404: unknown;
     409: unknown;
+    /**
+     * The host's calendar refused the reschedule; the booking keeps its original time
+     */
+    422: unknown;
 };
 
 export type ChangeBookingResponses = {

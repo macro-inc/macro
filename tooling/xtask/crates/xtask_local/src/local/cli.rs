@@ -40,6 +40,8 @@ enum Cmd {
     KafkaProvision(InstanceArgs),
     /// Restore missing local AWS resources without resetting databases or volumes.
     LocalstackProvision(InstanceArgs),
+    /// Give every team its Passwords vault namespace in the instance's OpenBao.
+    PasswordsProvision(InstanceArgs),
     /// Preflight checks (docker, toolchain, ports, env sources, images).
     DoctorLocal(InstanceArgs),
     /// Show an instance's endpoints and container states without starting anything.
@@ -285,11 +287,8 @@ fn run(cli: Cli) -> Result<()> {
                 a.instance.instance.as_deref(),
                 a.instance.port_base,
             )?;
-            let computers = super::computers::Computers::new(
-                Mode::Local,
-                a.computers.fleet(super::computers::Fleet::Docker),
-                &instance,
-            );
+            let computers =
+                super::computers::Computers::new(Mode::Local, a.computers.fleet(), &instance);
             super::validate::local_compose(&instance, Mode::Local, &computers)
         }
         Cmd::ValidateLocalEnv(a) => {
@@ -308,6 +307,13 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::LocalstackProvision(a) => {
             let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
             super::localstack::provision(&instance)
+        }
+        Cmd::PasswordsProvision(a) => {
+            let instance = super::instance::Instance::resolve(a.instance.as_deref(), a.port_base)?;
+            super::passwords_vault::provision_teams(
+                &super::stage::Stage::from_env_cli(false),
+                &instance,
+            )
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StatusLocal(a) => {

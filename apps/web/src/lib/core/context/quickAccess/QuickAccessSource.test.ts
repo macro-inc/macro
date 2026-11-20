@@ -84,6 +84,7 @@ const mocks = vi.hoisted(() => ({
   initiatives: [] as InitiativeEntity[],
   databases: [] as ListedDatabase[],
   schedules: [] as ScheduledAction[],
+  crmAllowed: (): boolean => true,
   cacheEnabled: true,
   historyReading: undefined as (() => boolean) | undefined,
   queries: {} as Partial<
@@ -92,6 +93,9 @@ const mocks = vi.hoisted(() => ({
       () => UseQueryResult<unknown[]>
     >
   >,
+}));
+vi.mock('@service-storage/crm-access-authority', () => ({
+  crmAccessAllowed: () => mocks.crmAllowed(),
 }));
 vi.mock('@core/context/user', () => ({
   useIsAuthenticated: () => () => true,
@@ -280,6 +284,7 @@ beforeEach(() => {
   mocks.initiatives = [];
   mocks.databases = [];
   mocks.schedules = [];
+  mocks.crmAllowed = () => true;
   mocks.cacheEnabled = true;
   mocks.queries = {};
   mocks.readRecordsByKeys.mockReset().mockResolvedValue({
@@ -1511,7 +1516,7 @@ describe('Quick Access source integration', () => {
 });
 
 describe('Quick Access shared sources', () => {
-  it('rereads history and recent channels only while a list reads the cache', () => {
+  it('follows recent channels closely only while a list reads the cache and once a minute otherwise, telling history the same', async () => {
     const [first, setFirst] = createSignal(false);
     const [second, setSecond] = createSignal(false);
     setup((source) => [
@@ -1519,14 +1524,21 @@ describe('Quick Access shared sources', () => {
       source.useList({ buckets: ['channel', 'dm', 'note'], enabled: first }),
       source.useList({ buckets: ['note'], enabled: second }),
     ]);
+    vi.useFakeTimers();
 
     mocks.changed?.();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(1_000);
     expect(mocks.historyReading?.()).toBe(false);
-    expect(mocks.channelRefetch).not.toHaveBeenCalled();
+    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
 
     setFirst(true);
+    await vi.advanceTimersByTimeAsync(1_500);
     expect(mocks.historyReading?.()).toBe(true);
     expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
 
     setSecond(true);
     setFirst(false);
@@ -1534,8 +1546,11 @@ describe('Quick Access shared sources', () => {
 
     setSecond(false);
     mocks.changed?.();
+    await vi.advanceTimersByTimeAsync(59_000);
     expect(mocks.historyReading?.()).toBe(false);
-    expect(mocks.channelRefetch).toHaveBeenCalledOnce();
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(mocks.channelRefetch).toHaveBeenCalledTimes(3);
   });
 
   it('keeps a channel renamed after the cached list was read', async () => {
@@ -1855,3 +1870,86 @@ it('keeps a cached sender hit when the same thread has an unmatched local draft'
   expect(list.items().map((item) => item.id)).toEqual(['thread-1']);
   expect(list.items()[0].searchText).toContain('teo@example.com');
 });
+
+it('conceals CRM rows and excludes CRM search buckets after access is revoked', async () => {
+  const [allowed, setAllowed] = createSignal(true);
+  mocks.crmAllowed = allowed;
+  mocks.companies = [restCompany];
+  const list = setup((source) =>
+    source.useList({
+      buckets: ['crm_company', 'crm_contact'],
+      searchTerm: () => 'acme',
+    })
+  );
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(list.items().map((item) => item.id)).toContain(restCompany.id);
+  mocks.search.mockClear();
+  setAllowed(false);
+  expect(list.items()).toEqual([]);
+  await vi.waitFor(() => expect(list.isLoading()).toBe(false));
+  expect(
+    mocks.search.mock.calls.every(
+      ([args]) =>
+        !args.buckets?.some(
+          (bucket: string) =>
+            bucket === 'crm_company' || bucket === 'crm_contact'
+        )
+    )
+  ).toBe(true);
+  setAllowed(true);
+  await vi.waitFor(() =>
+    expect(list.items().map((item) => item.id)).toContain(restCompany.id)
+  );
+});
+
+it.each([false, true])(
+  'retires cached CRM lookups until fresh rows arrive (read while denied: %s)',
+  (readWhileDenied) => {
+    const [allowed, setAllowed] = createSignal(true);
+    mocks.crmAllowed = allowed;
+    mocks.cacheEnabled = false;
+    mocks.companies = [restCompany];
+    mocks.crmContacts = [
+      {
+        type: 'crm_contact',
+        id: 'contact-1',
+        name: 'Contact',
+        ownerId: 'owner',
+        companyId: restCompany.id,
+        email: 'contact@example.com',
+        hidden: false,
+      },
+    ];
+    mocks.history = retainedHistory;
+    const { source, list } = setup((source) => {
+      const list = source.useList('crm_company', 'crm_contact', 'note');
+      list.items();
+      return { source, list };
+    });
+    expect(source.getById(restCompany.id)?.bucket).toBe('crm_company');
+    expect(source.getById('contact-1')?.bucket).toBe('crm_contact');
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(false);
+    if (readWhileDenied) {
+      expect(source.getById(restCompany.id)).toBeUndefined();
+      expect(source.getById('contact-1')).toBeUndefined();
+      expect(list.items().some((item) => item.bucket.startsWith('crm_'))).toBe(
+        false
+      );
+    }
+    expect(source.getById('older-note')?.bucket).toBe('note');
+    setAllowed(true);
+    expect(source.getById(restCompany.id)).toBeUndefined();
+    expect(source.getById('contact-1')).toBeUndefined();
+    mocks.companies = [{ ...restCompany, name: 'Fresh company' }];
+    mocks.crmContacts = [{ ...mocks.crmContacts[0], name: 'Fresh contact' }];
+    list.items();
+    expect(source.getById(restCompany.id)?.data).toMatchObject({
+      name: 'Fresh company',
+    });
+    expect(source.getById('contact-1')?.data).toMatchObject({
+      name: 'Fresh contact',
+    });
+    expect(source.getById('older-note')?.bucket).toBe('note');
+  }
+);

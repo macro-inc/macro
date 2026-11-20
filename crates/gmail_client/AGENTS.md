@@ -47,6 +47,12 @@ contacts, watch) behind a single public facade; most modules are
 
 - Any new error path should go through `sanitize_error_body` (or an
   equivalent) before logging — Gmail error bodies can contain email addresses.
+- Decode JSON responses with `decode_json_response` (`src/error.rs`): a
+  failure names the JSON path and a missing field's name, never serde's
+  message, which quotes the value, and a body cut off mid-read is a transport
+  error, so it is retried. Gmail's schema makes most response fields
+  optional, so a wire field that Gmail can omit gets `#[serde(default)]` or an
+  `Option`; one required field Gmail leaves out fails the whole response.
 - Requests time out after 60 s (`REQUEST_TIMEOUT`). The email service's
   Gmail request gate holds a permit for each call and sizes its lease above
   this (`PERMIT_MS` in `gmail_gate.rs`); keep the two in step.

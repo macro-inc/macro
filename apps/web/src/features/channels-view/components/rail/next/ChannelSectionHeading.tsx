@@ -1,8 +1,6 @@
-import { createDistancePointerSensor } from '@app/components/drag-drop/create-distance-pointer-sensor';
 import { CollapsibleSection } from '@app/components/view-shell';
-import { t } from '@app/lib/i18n';
-import { createDraggable, useDragDropContext } from '@thisbeyond/solid-dnd';
-import { Button, cn, Tooltip } from '@ui';
+import { SidebarSectionDragHandle } from '@app/components/view-shell/SidebarSectionDragHandle';
+import { cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
 import type { useSectionReorder } from './useSectionReorder';
@@ -64,84 +62,14 @@ export function DraggableChannelSectionHeading(props: {
   reorder: ReturnType<typeof useSectionReorder>;
   children: JSX.Element;
 }) {
-  const dragId = `${props.reorder.scope}:${props.section}`;
-  const draggable = createDraggable(dragId, {
-    dragType: 'channel-section',
-    dndScope: props.reorder.scope,
-    section: props.section,
-    get name() {
-      return props.label;
-    },
-    overlayContent: () => (
-      <div class="w-56 p-1">
-        <div class="flex min-w-0 items-center gap-2 text-xs font-medium text-ink">
-          <span class="truncate">{props.label}</span>
-        </div>
-        <p class="mt-2 border-t border-edge-muted pt-2 text-xs text-ink-muted">
-          {t('channelSections.reorderingSection')}
-        </p>
-      </div>
-    ),
-  });
-
-  const pointer = createDistancePointerSensor(8, props.reorder.cancel, {
-    id: `${dragId}:pointer`,
-    manual: true,
-  });
-  const [, actions] = useDragDropContext() ?? [];
-  let didDrag = false;
-
-  actions?.onDragStart(({ draggable: source }) => {
-    if (source.id === dragId) {
-      didDrag = true;
-    }
-  });
-
-  const preventToggleAfterDrag = (event: MouseEvent) => {
-    if (!didDrag || event.detail === 0) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
   return (
-    <div
-      ref={draggable.ref}
-      class="relative cursor-grab active:cursor-grabbing"
-      onMouseDown={(event) => pointer.start(event, dragId)}
-      onPointerDown={() => {
-        didDrag = false;
-      }}
-      on:click={{ capture: true, handleEvent: preventToggleAfterDrag }}
+    <SidebarSectionDragHandle
+      section={props.section}
+      label={props.label}
+      reorder={props.reorder}
+      dragType="channel-section"
     >
-      {/* Keep Button positioning and sizing out of the heading's normal flow. */}
-      <div class="sr-only focus-within:not-sr-only focus-within:absolute focus-within:inset-x-0 focus-within:top-0 focus-within:z-30">
-        <Button
-          variant="secondary"
-          size="sm"
-          fullWidth
-          aria-label={t('channelSections.reorderSection', {
-            name: props.label,
-          })}
-          tooltip={t('channelSections.reorderSectionHint')}
-          onClick={(event: MouseEvent) => event.stopPropagation()}
-          onKeyDown={(event: KeyboardEvent) => {
-            if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
-              return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
-          }}
-        >
-          {t('channelSections.reorderSection', { name: props.label })}
-        </Button>
-      </div>
       {props.children}
-    </div>
+    </SidebarSectionDragHandle>
   );
 }

@@ -23,8 +23,14 @@ pub enum InitializationError {
     },
     #[error("the mailbox changed while connecting; retry")]
     Changed,
+    #[error("the inbox is still being removed; retry once its removal finishes")]
+    InboxBeingRemoved,
     #[error("mailbox initialization is temporarily unavailable")]
     Unavailable,
+    /// Another transaction held the inbox's link row past the lock timeout;
+    /// connecting again succeeds once it finishes.
+    #[error("the inbox is busy; retry")]
+    Contended,
 }
 
 #[derive(Debug, Clone)]
@@ -58,6 +64,11 @@ pub struct ExistingMailbox {
     pub tenant_id: Option<String>,
     pub mailbox_id: Option<String>,
     pub actor_has_access: bool,
+    /// Deleting an account removes its inboxes later, so a link can outlive
+    /// its owner's account.
+    pub owner_account_exists: bool,
+    /// Its disconnect or purge has started.
+    pub being_removed: bool,
 }
 
 pub struct InitializationSnapshot {
@@ -68,9 +79,15 @@ pub struct InitializationSnapshot {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InitializationDecision {
-    Create { owner: MacroUserIdStr<'static> },
+    Create {
+        owner: MacroUserIdStr<'static>,
+    },
     Reconnect,
     Delegate,
+    /// Move the existing link to `owner`, keeping its one synced copy.
+    Rehome {
+        owner: MacroUserIdStr<'static>,
+    },
     Promote,
 }
 
@@ -190,23 +207,43 @@ fn decide(
     }
     let Some(existing) = &snapshot.existing else {
         return Ok(InitializationDecision::Create {
-            owner: snapshot
-                .account_for_email
-                .clone()
-                .unwrap_or_else(|| request.actor.clone()),
+            owner: address_owner(request, snapshot),
         });
     };
     // Email-address equality cannot adopt another Microsoft mailbox's content.
+    // A link on its way out keeps the address until its purge deletes it: a
+    // second link beside it can collide with it on credentials and address.
     if existing.tenant_id.as_deref() != Some(&grant.tenant_id)
         || existing.mailbox_id.as_deref() != Some(&grant.mailbox_id)
     {
+        if existing.being_removed || !existing.owner_account_exists {
+            return Err(InitializationError::InboxBeingRemoved);
+        }
         return Err(InitializationError::IdentityConflict);
+    }
+    if existing.being_removed {
+        return Err(InitializationError::InboxBeingRemoved);
     }
     if existing.owner == request.actor || existing.actor_has_access {
         return Ok(InitializationDecision::Reconnect);
     }
+    // As on Gmail, a connected mailbox is shared only when its address has no
+    // account: the address's own account holds its mailbox, as Create and
+    // Delegate assume, and a link whose owner's account is gone has no one
+    // to share it with. Both take the one link over instead of minting a
+    // shared mailbox user, which would collide with the address's account.
+    if !existing.owner_account_exists {
+        return Ok(InitializationDecision::Rehome {
+            owner: address_owner(request, snapshot),
+        });
+    }
     if existing.owner.email_str() == grant.email {
         return Ok(InitializationDecision::Delegate);
+    }
+    if let Some(account) = &snapshot.account_for_email {
+        return Ok(InitializationDecision::Rehome {
+            owner: account.clone(),
+        });
     }
     if request.force_share {
         return Ok(InitializationDecision::Promote);
@@ -216,4 +253,15 @@ fn decide(
         email: grant.email.clone(),
         owner_email: existing.owner.email_str().to_string(),
     })
+}
+
+/// The account a mailbox belongs to: the address's own, else the actor's.
+fn address_owner(
+    request: &InitializeMailbox,
+    snapshot: &InitializationSnapshot,
+) -> MacroUserIdStr<'static> {
+    snapshot
+        .account_for_email
+        .clone()
+        .unwrap_or_else(|| request.actor.clone())
 }

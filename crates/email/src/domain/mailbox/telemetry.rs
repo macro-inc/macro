@@ -22,11 +22,14 @@ pub fn defer_reason(error: &MailboxError) -> &'static str {
         // Graph refuses one item (`ErrorAccessDenied`) while the grant still
         // works; a revoked grant answers 401 and is `auth_required`.
         MailboxError::Provider(EmailApiError::Forbidden) => "forbidden",
+        MailboxError::Provider(EmailApiError::NotFound) => "not_found",
         MailboxError::Provider(EmailApiError::Permanent { .. }) => "permanent",
         MailboxError::Persistence | MailboxError::Database(_) => "persistence",
+        MailboxError::Unstorable(_) => "unstorable",
         MailboxError::Effect(_) => "effect",
         MailboxError::LocationUnsettled => "location_unsettled",
         MailboxError::CalendarPartsUnavailable => "calendar_parts",
+        MailboxError::ClaimsUnfinished(_) => "unfinished",
         _ => "other",
     }
 }
@@ -43,7 +46,8 @@ fn is_gate_refusal(error: &MailboxError) -> bool {
     )
 }
 
-/// The unit committed its work: `imported` or, for a vanished message, `absent`.
+/// The unit committed its work: `imported` or, for a vanished message,
+/// `absent`; `paced` for an import round's folder that waited for its import.
 pub(super) fn record_done(span: &Span, outcome: &'static str) {
     span.record("outlook.outcome", outcome);
 }
@@ -75,6 +79,34 @@ pub(super) fn record_abandoned(span: &Span, link_id: Uuid, error: &MailboxError,
     span.record("outlook.defer_reason", reason);
     span.record("otel.status_description", tracing::field::display(error));
     tracing::warn!(parent: span, %link_id, defer_reason = reason, attempts, %error, "mailbox message abandoned");
+}
+
+/// The projection gave up on an event (`MessageRetry::Abandon`, or claims
+/// that kept ending unfinished): its entry is deleted, so this is the one
+/// record of it. The line holds only ids and kinds.
+pub(super) fn record_projection_abandoned(
+    span: &Span,
+    link_id: Uuid,
+    event_id: Uuid,
+    event_kind: &'static str,
+    attempts: i32,
+    error: &MailboxError,
+) {
+    let reason = defer_reason(error);
+    span.record("outlook.outcome", "abandoned");
+    span.record("outlook.defer_reason", reason);
+    span.record("otel.status_description", tracing::field::display(error));
+    let attachment_id = record_effect(span, error);
+    tracing::warn!(
+        parent: span,
+        %link_id,
+        %event_id,
+        event_kind,
+        attempts,
+        defer_reason = reason,
+        attachment_id = attachment_id.map(tracing::field::display),
+        "mailbox projection abandoned"
+    );
 }
 
 /// The unit stopped without releasing its work, which another worker retries

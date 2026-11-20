@@ -11,6 +11,9 @@ use hosted_runtimes::domain::{
 use macro_authorization::INTERNAL_API_KEY_HEADER;
 use reqwest::{StatusCode, header::HeaderValue};
 
+#[cfg(test)]
+mod test;
+
 /// Calls `POST /internal/team_agent_enrollment/{computer}/{generation}`.
 /// Neither response bodies nor credentials are logged.
 pub(crate) struct AuthAgentEnrollment {

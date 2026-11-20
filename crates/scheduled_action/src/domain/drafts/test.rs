@@ -189,6 +189,8 @@ pub(super) struct Sessions {
     pub(super) unreadable: bool,
     pub(super) unstoppable: bool,
     pub(super) refuses: Option<RoutineSessionError>,
+    /// The apps each check names as needed but not connected.
+    pub(super) missing_apps: Vec<AgentMcpServer>,
     /// Where preparing waits for its admission.
     pub(super) admitting: Gate,
     /// Where stopping a session waits.
@@ -211,6 +213,7 @@ impl Sessions {
             unreadable: false,
             unstoppable: false,
             refuses: None,
+            missing_apps: Vec::new(),
             admitting: Gate::default(),
             stopping: Gate::default(),
             prepared: Mutex::new(Vec::new()),
@@ -249,7 +252,11 @@ impl RoutineSessions for Sessions {
     ) -> Result<RoutinePromptAccepted, RoutineSessionError> {
         self.prompts.lock().unwrap().push(command.prompt.clone());
         for (routine, created) in (self.turn)(&command.prompt) {
-            let check = checked(self.code.as_ref(), routine).await;
+            let mut check = checked(self.code.as_ref(), routine).await;
+            check.missing_apps = crate::domain::service::named_missing_apps(
+                self.missing_apps.clone(),
+                &check.routine.task,
+            );
             self.rows
                 .record(
                     command.action.session_id.as_uuid(),
@@ -315,6 +322,7 @@ pub(super) async fn checked(code: &Checker, routine: ActionConfiguration) -> Rou
         problems: Vec::new(),
         steps,
         routine,
+        missing_apps: Vec::new(),
     }
 }
 
@@ -386,6 +394,7 @@ pub(super) fn configuration(name: &str, trigger: Value, steps: Value) -> ActionC
         enabled: true,
         run_visibility: Default::default(),
         description: String::new(),
+        appearance: None,
     }
 }
 
@@ -513,6 +522,15 @@ async fn a_draft_runs_in_a_hidden_read_only_session_and_hands_back_its_last_chec
         prompt.contains(&format!("<request>{}</request>", inbox.request)),
         "{prompt}"
     );
+    // Only the ones marked as examples: the rest would lengthen the prompt.
+    for routine in routine_program::CATALOG.iter() {
+        assert_eq!(
+            prompt.contains(&format!("<request>{}</request>", routine.request)),
+            routine.example,
+            "{}",
+            routine.key
+        );
+    }
     assert!(drafted.created.is_empty());
     // The session and its row are gone once the draft is back.
     let session = prepared.session_id;
@@ -754,10 +772,11 @@ async fn a_draft_of_a_single_agent_task_a_program_would_refuse_fails() {
     );
 }
 
-/// A single agent task that declares apps fails the draft as before: a
-/// draft holds only steps, so the apps its step needs would be lost.
+/// A single agent task that declares apps becomes its agent step, and the
+/// draft requires its apps: on a host that lists no connected apps, they
+/// stay as the check required them.
 #[tokio::test(start_paused = true)]
-async fn a_draft_of_a_single_agent_task_with_apps_fails() {
+async fn a_draft_of_a_single_agent_task_keeps_its_apps() {
     let task = json!({
         "prompt": "Read the channel.",
         "user_prompt": "Summarize it.",
@@ -776,10 +795,299 @@ async fn a_draft_of_a_single_agent_task_with_apps_fails() {
         }),
     ));
 
-    assert_eq!(
-        draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await,
-        failed(ROUTINE_FAILED)
+    let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+    assert_eq!(drafted.steps.len(), 1);
+    assert_eq!(drafted.apps, [app("linear", "Linear")]);
+    assert!(drafted.missing_apps.is_empty());
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(!prompt.contains("## Apps they connected"), "{prompt}");
+}
+
+pub(super) fn app(slug: &str, name: &str) -> AgentMcpServer {
+    AgentMcpServer {
+        app_slug: slug.into(),
+        server_name: name.into(),
+    }
+}
+
+/// The apps its owner connected, as the harness lists them, or a failure.
+pub(super) struct Connected(pub(super) Option<Vec<AgentMcpServer>>);
+
+/// An app Macro reaches through its own MCP server, which no routine can
+/// require.
+const NATIVE_APP: &str = "sentry";
+
+#[async_trait::async_trait]
+impl DraftApps for Connected {
+    async fn connected(&self, _owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>> {
+        self.0
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("connections unreadable"))
+    }
+
+    async fn requirable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>> {
+        Ok(apps
+            .into_iter()
+            .filter(|app| app.app_slug != NATIVE_APP)
+            .collect())
+    }
+}
+
+/// A routine whose one step is Ask AI, requiring `apps`.
+fn asks_ai_with(apps: Value) -> ActionConfiguration {
+    let mut routine = configuration("File bugs", message_posted(&[]), json!([agent_step()]));
+    routine.task["mcp_servers"] = apps;
+    routine
+}
+
+/// The draft's prompt lists the apps its owner connected, so its Ask AI
+/// step can require the ones it uses; the draft holds them.
+#[tokio::test]
+async fn a_routine_draft_requires_the_connected_apps_its_ask_ai_step_uses() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(asks_ai_with(
+                json!([{ "app_slug": "linear", "server_name": "Linear" }]),
+            ))]
+        }),
+    ));
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::new(Connected(Some(vec![
+        app("linear", "Linear"),
+        app("github", "GitHub"),
+    ]))));
+
+    let drafted =
+        drafted_routine(draft(&drafts, routine("file a Linear issue for each bug")).await);
+
+    assert_eq!(drafted.apps, [app("linear", "Linear")]);
+    assert!(drafted.missing_apps.is_empty());
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(prompt.contains("## Apps they connected"), "{prompt}");
+    assert!(
+        prompt.contains(r#"{ slug: "linear", name: "Linear" }"#),
+        "{prompt}"
     );
+    assert!(prompt.contains("missingApps"), "{prompt}");
+    // The session itself is given no apps: the agent has its owner's.
+    let prepared = sessions.prepared.lock().unwrap();
+    assert!(prepared[0].selection.mcp_servers.is_empty());
+}
+
+/// An app the routine needs that its owner hasn't connected is never
+/// required: the draft names it for them to connect. One the session named
+/// as missing that is connected after all is required, by its listed name.
+#[tokio::test]
+async fn a_routine_draft_says_which_apps_it_needs_that_arent_connected() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            vec![plain(asks_ai_with(
+                // Required, though not connected: the check would refuse it.
+                json!([{ "app_slug": "notion", "server_name": "Notion" }]),
+            ))]
+        }),
+    );
+    sessions.missing_apps = vec![app("github", "GitHub"), app("linear", "Linear app")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions)
+        .with_apps(Arc::new(Connected(Some(vec![app("linear", "Linear")]))));
+
+    let drafted =
+        drafted_routine(draft(&drafts, routine("file each bug in Linear and GitHub")).await);
+
+    assert_eq!(drafted.apps, [app("linear", "Linear")]);
+    assert_eq!(
+        drafted.missing_apps,
+        [app("notion", "Notion"), app("github", "GitHub")]
+    );
+}
+
+/// An app a routine can't require, even once connected, is never named as
+/// missing: connecting it would still leave the routine unsaveable.
+#[tokio::test]
+async fn a_routine_draft_names_only_missing_apps_a_routine_can_require() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| vec![plain(asks_ai_with(json!([])))]));
+    sessions.missing_apps = vec![app(NATIVE_APP, "Sentry"), app("notion", "Notion")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::new(Connected(Some(Vec::new()))));
+
+    let drafted =
+        drafted_routine(draft(&drafts, routine("file each Sentry error in Notion")).await);
+
+    assert!(drafted.apps.is_empty());
+    assert_eq!(drafted.missing_apps, [app("notion", "Notion")]);
+}
+
+/// Apps a routine's owner connected (none), recording which ones the
+/// drafter asked about, or failing to tell.
+#[derive(Default)]
+struct Vetting {
+    asked: std::sync::Mutex<Vec<AgentMcpServer>>,
+    fails: bool,
+}
+
+#[async_trait::async_trait]
+impl DraftApps for Vetting {
+    async fn connected(&self, _owner: &MacroUserIdStr<'static>) -> Result<Vec<AgentMcpServer>> {
+        Ok(Vec::new())
+    }
+
+    async fn requirable(
+        &self,
+        _owner: &MacroUserIdStr<'static>,
+        apps: Vec<AgentMcpServer>,
+    ) -> Result<Vec<AgentMcpServer>> {
+        self.asked.lock().unwrap().extend(apps.iter().cloned());
+        if self.fails {
+            anyhow::bail!("overlays unreadable");
+        }
+        Ok(apps)
+    }
+}
+
+/// The apps a check requires aren't capped, and those not connected join
+/// the missing ones: the drafter asks about ten app-shaped ones at most,
+/// each once, however many the check required.
+#[tokio::test]
+async fn a_routine_draft_asks_about_at_most_ten_missing_apps() {
+    let mut required: Vec<Value> = (0..12)
+        .map(|n| json!({ "app_slug": format!("app_{n}"), "server_name": format!("App {n}") }))
+        .collect();
+    required.insert(
+        1,
+        json!({ "app_slug": "Not an app!", "server_name": "Nope" }),
+    );
+    required.insert(2, json!({ "app_slug": "app_0", "server_name": "App 0" }));
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(move |_| vec![plain(asks_ai_with(Value::Array(required.clone())))]),
+    ));
+    let vetting = Arc::new(Vetting::default());
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::clone(&vetting) as Arc<dyn DraftApps>);
+
+    let drafted = drafted_routine(draft(&drafts, routine("file each bug everywhere")).await);
+
+    let first_ten: Vec<AgentMcpServer> = (0..10)
+        .map(|n| app(&format!("app_{n}"), &format!("App {n}")))
+        .collect();
+    assert_eq!(*vetting.asked.lock().unwrap(), first_ten);
+    assert_eq!(drafted.missing_apps, first_ten);
+}
+
+/// When the drafter can't tell which missing apps a routine can require, it
+/// names none rather than offer to connect one that can't make the routine
+/// saveable.
+#[tokio::test]
+async fn a_routine_draft_names_no_missing_app_it_cannot_vouch_for() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| vec![plain(asks_ai_with(json!([])))]));
+    sessions.missing_apps = vec![app("notion", "Notion")];
+    let sessions = Arc::new(sessions);
+    let vetting = Arc::new(Vetting {
+        fails: true,
+        ..Vetting::default()
+    });
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::clone(&vetting) as Arc<dyn DraftApps>);
+
+    let drafted = drafted_routine(draft(&drafts, routine("file each bug in Notion")).await);
+
+    assert_eq!(*vetting.asked.lock().unwrap(), [app("notion", "Notion")]);
+    assert!(drafted.missing_apps.is_empty());
+}
+
+/// With nothing connected the prompt says so, and every app is missing.
+#[tokio::test]
+async fn with_no_app_connected_every_app_it_needs_is_missing() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(&rows, Box::new(|_| vec![plain(asks_ai_with(json!([])))]));
+    sessions.missing_apps = vec![app("linear", "Linear")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::new(Connected(Some(Vec::new()))));
+
+    let drafted = drafted_routine(draft(&drafts, routine("file each bug in Linear")).await);
+
+    assert!(drafted.apps.is_empty());
+    assert_eq!(drafted.missing_apps, [app("linear", "Linear")]);
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(prompt.contains("connected these:\n\nNone."), "{prompt}");
+}
+
+/// Apps reach only an Ask AI step: a routine of code steps alone holds
+/// none, whatever its check named.
+#[tokio::test]
+async fn a_routine_draft_of_code_steps_alone_holds_no_apps() {
+    let rows = Arc::new(Rows::default());
+    let mut sessions = Sessions::new(
+        &rows,
+        Box::new(|_| {
+            let mut routine = configuration(
+                "Bug tasks",
+                message_posted(&[]),
+                json!([code_step("Make a task", "good")]),
+            );
+            routine.task["mcp_servers"] =
+                json!([{ "app_slug": "linear", "server_name": "Linear" }]);
+            vec![plain(routine)]
+        }),
+    );
+    sessions.missing_apps = vec![app("github", "GitHub")];
+    let sessions = Arc::new(sessions);
+    let drafts = drafts(&rows, &sessions)
+        .with_apps(Arc::new(Connected(Some(vec![app("linear", "Linear")]))));
+
+    let drafted = drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
+
+    assert!(drafted.apps.is_empty() && drafted.missing_apps.is_empty());
+}
+
+/// Connections that can't be read still draft, without apps in the prompt.
+#[tokio::test]
+async fn unreadable_connections_draft_without_apps() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(
+        &rows,
+        Box::new(|_| vec![plain(asks_ai_with(json!([])))]),
+    ));
+    let drafts = drafts(&rows, &sessions).with_apps(Arc::new(Connected(None)));
+
+    let drafted = drafted_routine(draft(&drafts, routine(BUG_REPORTS)).await);
+
+    assert!(drafted.apps.is_empty() && drafted.missing_apps.is_empty());
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(!prompt.contains("## Apps they connected"), "{prompt}");
+}
+
+/// A step's draft holds no apps, so its prompt lists none.
+#[tokio::test]
+async fn a_step_draft_lists_no_apps() {
+    let rows = Arc::new(Rows::default());
+    let sessions = Arc::new(Sessions::new(&rows, Box::new(|_| Vec::new())));
+    drafts(&rows, &sessions)
+        .with_apps(Arc::new(Connected(Some(vec![app("linear", "Linear")]))))
+        .draft(
+            owner(),
+            add(
+                "file it in Linear",
+                vec![code_step("Make a task", "good")],
+                None,
+            ),
+            context(),
+        )
+        .await
+        .unwrap();
+
+    let prompt = sessions.prompts.lock().unwrap()[0].clone();
+    assert!(!prompt.contains("## Apps they connected"), "{prompt}");
 }
 
 #[tokio::test(start_paused = true)]
@@ -829,6 +1137,39 @@ async fn a_draft_stops_its_session_once_a_check_passes() {
     assert_eq!(sessions.cancelled.lock().unwrap().len(), 1);
 }
 
+/// A draft keeps the look AI picked from Macro's icons, and drops a pick
+/// naming an icon Macro doesn't have.
+#[tokio::test(start_paused = true)]
+async fn a_draft_keeps_the_look_ai_picked_from_macros_icons() {
+    for (icon, kept) in [("bug", true), ("not-an-icon", false)] {
+        let look: model_entity::EntityAppearance = serde_json::from_value(json!({
+            "icon": { "kind": "macro", "name": icon },
+            "color": "red",
+        }))
+        .unwrap();
+        let picked = look.clone();
+        let rows = Arc::new(Rows::default());
+        let mut sessions = Sessions::new(
+            &rows,
+            Box::new(move |_| {
+                vec![plain(ActionConfiguration {
+                    appearance: Some(picked.clone()),
+                    ..configuration(
+                        "Bug tasks",
+                        message_posted(&[]),
+                        json!([code_step("Make a task", "good")]),
+                    )
+                })]
+            }),
+        );
+        sessions.hangs = true;
+        let sessions = Arc::new(sessions);
+
+        let drafted = drafted_routine(draft(&drafts(&rows, &sessions), routine(BUG_REPORTS)).await);
+
+        assert_eq!(drafted.appearance, kept.then_some(look), "{icon}");
+    }
+}
 /// A turn that can't be read a few times in a row ends the draft as failed,
 /// well before its timeout, and still cleans up.
 #[tokio::test(start_paused = true)]

@@ -33,7 +33,11 @@ Verified against production web-app spans:
   `@ui.work_to_ready_ms`). Resource attributes are facets too: `@app.platform`
   (`web`, `desktop`, `ios`, `android`), `@app.runtime`, `@os.type`,
   `@version` (group by `@version`; bare `version` returns nothing), and
-  `env` (`prod`, `development`, `dev`).
+  `env` (`prod`, `development`, `dev`). `@version` is the web bundle, which
+  over-the-air updates bring to old binaries; the native binary is
+  `@macro.native.build` (Android versionCode, iOS CFBundleVersion, desktop
+  release build; numeric, so `@macro.native.build:>=28` works). Spans whose
+  web bundle predates it have none.
 - Numeric attributes are measures (`pc75` over `@ui.elapsed_ms` works).
   Booleans arrive as strings: `@agent.session.load.cache_hit:true`.
 - `@duration` is nanoseconds; `ui.*_ms` fields are milliseconds; trace metrics
@@ -150,6 +154,18 @@ return agg(
   [ { facet: "@app.platform", limit: 10 } ]);
 ```
 
+A native fix ships in a binary, not the bundle: split by native build to see
+it. Spans from bundles older than the attribute fall in `unknown`:
+
+```javascript
+return agg(
+  { query: "service:web-app env:prod @app.platform:android operation_name:http.client.request @http.body_outcome:complete" },
+  [ { aggregation: "pc75", metric: "@http.body_ms", type: "total" },
+    { aggregation: "pc95", metric: "@http.body_ms", type: "total" },
+    { aggregation: "count", type: "total" } ],
+  [ { facet: "@macro.native.build", limit: 20, missing: "unknown" } ]);
+```
+
 For `graphql.transport` use `resource_name:graphql.transport
 @graphql.body_outcome:complete` over `@graphql.body_ms`. The
 `macro.web.http.body_ms` and `macro.web.graphql.body_ms` span-based metrics
@@ -184,7 +200,9 @@ instrumentation skill explains each primitive.
 
 For Android, measure on an emulator with the benchmark harness
 ([README](../../../apps/web/scripts/android-benchmark/README.md)): it reads these same
-spans from a release build, so its numbers compare with the field.
+spans from a release build, so its numbers compare with the field. Run it with
+`--cpu-throttle 4` for main-thread-bound flows such as view switches: the
+emulator's WebView CPU is several times faster than an Android phone's.
 
 Before relying on a new or renamed span in Datadog, run the flow on a local
 stack and find it in Tempo (`live-debug` skill): `{ span.flow.kind != nil }`

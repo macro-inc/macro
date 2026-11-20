@@ -1,6 +1,15 @@
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { openAgentsPage } from './open-page';
+
+const device = vi.hoisted(() => ({ touch: false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
+
+afterEach(() => {
+  device.touch = false;
+});
 
 describe('openAgentsPage', () => {
   it('opens routines using durable list and detail routes', () => {
@@ -57,6 +66,26 @@ describe('openAgentsPage', () => {
       id: 'agents',
       params: { agentPage: 'connections' },
     });
+  });
+
+  it('pushes a phone page even when Agents is already mounted', () => {
+    device.touch = true;
+    const replace = vi.fn();
+    const openWithSplit = vi.fn(() => ({
+      status: 'reused' as const,
+      split: { content: () => ({ type: 'component', id: 'agents' }), replace },
+    }));
+    const layout = { openWithSplit } as unknown as Parameters<
+      typeof openAgentsPage
+    >[0];
+    openAgentsPage(layout, 'archived');
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ agentPage: 'archived' }),
+      }),
+      { activate: true, search: {} }
+    );
+    expect(replace).not.toHaveBeenCalled();
   });
 
   it('allows navigation to be intercepted', () => {
