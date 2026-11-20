@@ -147,16 +147,17 @@ fn deep_nesting_is_refused_cheaply() {
     // the innermost text wraps every few characters, and each of those lines
     // carries the whole prefix.
     let quotes = format!("{}{}", "<blockquote>".repeat(1_000), "ab ".repeat(40_000));
+    // Within the parse's node limit, so the prefix width refuses them.
     let lists = format!(
         "{}{}",
         "<ol start=999999999><li>".repeat(128),
-        "x<br>".repeat(40_000)
+        "x<br>".repeat(20_000)
     );
     // Only 64 levels, but each numbers its lines with 19 digits.
     let numbers = format!(
         "{}{}",
         "<ol start=9223372036854775807><li>".repeat(64),
-        "x<br>".repeat(40_000)
+        "x<br>".repeat(20_000)
     );
 
     for html in [quotes, lists, numbers] {
@@ -172,6 +173,103 @@ fn deep_nesting_is_refused_cheaply() {
             html.len()
         );
     }
+}
+
+#[test]
+fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
+    let distinct_bold: String = (0..1_000).map(|i| format!("<b id={i}>")).collect();
+    let formatting = [
+        "b", "big", "code", "em", "font", "i", "s", "small", "strike", "strong", "tt", "u",
+    ]
+    .map(|name| format!("<{name}>").repeat(3))
+    .concat();
+    let quoted_titles: String = (0..5)
+        .map(|i| format!("<b id={i} title='{}'>", "\"".repeat(4_000)))
+        .collect();
+    // Each body with the number of `x`s in its text.
+    let shallow = [
+        // Each `<p>` closes the paragraph holding the bold tags, and html5ever
+        // rebuilds them all inside the next: 13 KB that built a million nodes
+        // and took 2.5 GB to convert.
+        (format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)), 1_000),
+        (format!("<p>{formatting}{}", "<p>x".repeat(60_000)), 60_000),
+        (
+            format!("<p>{quoted_titles}{}", "<p>x".repeat(50_000)),
+            50_000,
+        ),
+        // Each `</p>` scans the open elements for a paragraph: 28 s to parse.
+        (
+            format!("{}{}", "<div>".repeat(40_000), "</p>".repeat(40_000)),
+            0,
+        ),
+        // Three identical bold tags rebuilt per paragraph stay within the
+        // sanitizer's node limit, but took html2text 457 MB.
+        (format!("<p><b><b><b>{}", "<p>x".repeat(49_000)), 49_000),
+    ];
+    // html2text parses `<noscript>` with scripting off and `<select>` with a
+    // newer html5ever, so a check that read them otherwise let these through
+    // at full cost. Scripting off, `<noscript>` holds the same markup; inside
+    // `<select>` the bounded parse keeps only the text, and html2text reads
+    // that tree, so it converts cheaply to the body's `x`s, run together.
+    let refused = shallow.iter().map(|(body, _)| (body.clone(), None)).chain(
+        shallow
+            .iter()
+            .map(|(body, _)| (format!("<noscript>{body}</noscript>"), None)),
+    );
+    let selects = shallow
+        .iter()
+        .map(|(body, xs)| (format!("<select>{body}"), Some(*xs)));
+
+    for (html, expected_xs) in refused.chain(selects) {
+        let body = Some(html.clone());
+        let mut texts = (Some(String::new()), Some(String::new()));
+        let started = std::time::Instant::now();
+
+        let peak = peak_bytes_during(|| {
+            texts = (html_to_plaintext(&html), compute_body_parsed(true, &body));
+        });
+
+        match expected_xs {
+            None => assert_eq!(texts, (None, None)),
+            Some(xs) => {
+                let expected = Some("x".repeat(xs));
+                assert_eq!(texts, (expected.clone(), expected));
+            }
+        }
+        assert!(
+            peak < 32 << 20,
+            "{peak} bytes to convert {} bytes of HTML",
+            html.len()
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(5),
+            "{:?} to convert {} bytes of HTML",
+            started.elapsed(),
+            html.len()
+        );
+    }
+}
+
+#[test]
+fn a_legacy_doctype_body_converts_in_its_own_quirks_mode() {
+    // In quirks mode a paragraph stays open around a table; read again in
+    // no-quirks mode, each table closes it and rebuilds the bold tags around
+    // it, which took twice the memory: 194 MB against 98 MB.
+    let bold: String = (0..31).map(|i| format!("<b id={i}>")).collect();
+    let html = format!(
+        r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><p>{bold}{}"#,
+        "<p>z<table></table>y".repeat(1_200)
+    );
+    let mut text = None;
+
+    let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
+
+    assert!(text.is_some());
+    assert!(
+        peak < 128 << 20,
+        "{peak} bytes to convert {} bytes of HTML",
+        html.len()
+    );
 }
 
 /// Bodies whose parse would build far more than the node limit, or nest

@@ -68,10 +68,18 @@ sender/generic-address checks.
   axis, because one message that exhausted it ran the email workers out of
   memory. It reads at most `MAX_HTML_BYTES` and renders in raw mode (table
   cells stacked in reading order, never laid out in padded columns) at
-  `TEXT_WIDTH`, wider than any line can be, so no text wraps. It refuses a
-  body whose tables exceed `MAX_TABLE_CELLS` (rows times widest row, since
-  html2text copies a table's column widths into every row) or whose quotes,
-  lists, definitions and headings prefix a line with more than `MAX_INDENT`
+  `TEXT_WIDTH`, wider than any line can be, so no text wraps. It first
+  parses with `bounded_html::parse_document_for_text` (scripting off, as
+  html2text parses, and `MAX_TEXT_NODES`, since html2text takes 1.3 to 1.9 KB
+  a node) and refuses a body that clips: html2text parses with html5ever too,
+  so a byte cap alone let 13 KB build a million nodes. html2text then
+  converts that tree's serialization, never the body: it parses with a newer
+  html5ever whose rules differ (inside `<select>`), so a check of the body
+  alone could be passed by markup the two read differently. Calendar
+  descriptions reach it as received. It also refuses a body whose tables
+  exceed `MAX_TABLE_CELLS` (rows times widest row, since html2text copies a
+  table's column widths into every row) or whose quotes, lists,
+  definitions and headings prefix a line with more than `MAX_INDENT`
   columns (each prefixes every line inside it; an ordered list as wide as
   its largest number). The cell count is exact only because the same walk
   drops every cell's `rowspan` and `colspan`, which raw mode does not need
@@ -109,6 +117,12 @@ sender/generic-address checks.
   stripping still recurses once per level (`get_previous_html_recursively`),
   so its own depth check must run before it: moving a node (misnested
   formatting) can nest it deeper than the parse inserted it.
+- `bounded_html`'s sink moves children itself in `reparent_children`.
+  Scraper's own implementation uses ego-tree's `reparent_from_id_append`,
+  which (in ego-tree 0.6.3) gives only the first and last moved child its new
+  parent, so a later move of any other one dropped it from the tree: plain
+  `Html::parse_document` loses `lost` in `<b><div>a<p><div>lost</b>`. Keep
+  the override until ego-tree fixes it.
 
 ## Related
 
