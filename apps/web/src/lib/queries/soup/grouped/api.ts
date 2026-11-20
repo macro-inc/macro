@@ -97,17 +97,23 @@ export function parseGroupMeta(raw: ApiGroupMeta): GroupMeta {
   };
 }
 
+/** Entity type groups as Soup labels and orders them
+ * (crates/soup/src/domain/models/grouping.rs `entity_type_labels`). GraphQL
+ * grouped lists take the label from here, so a type missing here would show
+ * as "Other". */
 const ENTITY_TYPE_META: Record<
   string,
   { label: string; displayOrder: number }
 > = {
   document: { label: 'Documents', displayOrder: 0 },
   email: { label: 'Emails', displayOrder: 1 },
-  channel: { label: 'Messages', displayOrder: 2 },
-  chat: { label: 'Chats', displayOrder: 3 },
-  project: { label: 'Projects', displayOrder: 4 },
-  call: { label: 'Calls', displayOrder: 5 },
+  calendar_event: { label: 'Calendar', displayOrder: 2 },
+  channel: { label: 'Messages', displayOrder: 3 },
+  chat: { label: 'Chats', displayOrder: 4 },
+  project: { label: 'Projects', displayOrder: 5 },
+  call: { label: 'Calls', displayOrder: 6 },
 };
+const OTHER_ENTITY_TYPE = { label: 'Other', displayOrder: 7 };
 
 export type ResolvedGroupMeta = Pick<
   GroupMeta,
@@ -123,7 +129,7 @@ export function resolveGroupMetaForKey(
 
   return match(groupBy)
     .with({ type: 'entity_type' }, () => {
-      const meta = ENTITY_TYPE_META[key] ?? { label: 'Other', displayOrder: 6 };
+      const meta = ENTITY_TYPE_META[key] ?? OTHER_ENTITY_TYPE;
 
       return { key, label: meta.label, displayOrder: meta.displayOrder };
     })

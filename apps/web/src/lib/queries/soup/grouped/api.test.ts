@@ -1,6 +1,6 @@
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { expect, it } from 'vitest';
-import { makeGroupComparator } from './api';
+import { makeGroupComparator, resolveGroupMetaForKey } from './api';
 import { type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 
 const group = (key: string, label: string): GroupMeta => ({
@@ -101,4 +101,32 @@ it('keeps stored group ordering for status and custom properties', () => {
         .map((g) => g.label)
     ).toEqual(['First option', 'Last option', 'Not set']);
   }
+});
+
+it('labels and orders entity type groups as Soup does', () => {
+  const meta = (key: string) =>
+    resolveGroupMetaForKey({ type: 'entity_type' }, key);
+
+  // crates/soup/src/domain/models/grouping.rs entity_type_labels.
+  expect(
+    [
+      'document',
+      'email',
+      'calendar_event',
+      'channel',
+      'chat',
+      'project',
+      'call',
+      'initiative',
+    ].map(meta)
+  ).toEqual([
+    { key: 'document', label: 'Documents', displayOrder: 0 },
+    { key: 'email', label: 'Emails', displayOrder: 1 },
+    { key: 'calendar_event', label: 'Calendar', displayOrder: 2 },
+    { key: 'channel', label: 'Messages', displayOrder: 3 },
+    { key: 'chat', label: 'Chats', displayOrder: 4 },
+    { key: 'project', label: 'Projects', displayOrder: 5 },
+    { key: 'call', label: 'Calls', displayOrder: 6 },
+    { key: 'initiative', label: 'Other', displayOrder: 7 },
+  ]);
 });
