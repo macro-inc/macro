@@ -7,7 +7,7 @@ through its transaction-aware producer port in the state-change transaction.
 ## Contract
 
 A notification has a UUIDv7 id, session, typed event (`review.decided`,
-`review.settled`, `import.planned`, `app.connected`), subject, payload, dedupe
+`review.settled`, `import.planned`, `app.connected`, `job.settled`), subject, payload, dedupe
 key, wake policy, creation time and producer trace context. Dedupe is scoped to
 a session; absent an explicit key it is kind plus subject. Review decisions
 include a revision in their key because a stack can be decided in several
@@ -26,6 +26,14 @@ are Notion's). Both wake the session. A settled payload is
 either an import report or the review service's own outcome; the enum is
 untagged so settlements stored before imports existed still read. Dismissing
 an import still wakes, as for other kinds.
+
+A background job (`ExecuteCode` with `background`, see
+`crates/agent_code_mode/AGENTS.md`) produces one waking `job.settled` per job
+(subject: its execution id), carrying its title, status (`done`, `failed`,
+`cancelled`, `timed_out`, `interrupted`) and its result when that fits in
+48 KiB, in the transaction that saves its final record. A user prompt already
+queued when it settles carries it as context; a separate system turn runs only
+when nothing is queued.
 
 The harness serializes delivery with all other session commands. It claims a
 bounded batch under a lease using SKIP LOCKED. Waking events start an idle turn;
