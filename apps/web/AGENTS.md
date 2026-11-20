@@ -1958,8 +1958,10 @@ from the network, are a section below People; phones pin People rows above the r
 Cmd+K stops saying "Searching…". The held rows stay blank for `LOADING_ROWS_DELAY_MS`
 before they shimmer, so an ordinary open shows no loading state. The menu's directory
 read gives the cache `PEOPLE_CACHE_BUDGET_MS` (`peopleLocalBudgetMs`), then reads the
-server's window once for that query; those rows are ranked by the menu and are not
-re-read on cache changes, so the cache answering later never reorders them. The menu
+server's window once for that query. A typed search's rows keep the order that window
+gives them (the people the text names first; see the server page ordering under Development
+Patterns), a browsing page's rows are ranked by the menu, and neither is re-read on cache
+changes, so the cache answering later never reorders them. The menu
 reads a failed people window again once by itself, holding the rows meanwhile, and
 offers Retry when that read fails too or a read is still pending when the hold ends
 (`peopleFailed`): People never disappears without saying why.

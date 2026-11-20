@@ -197,6 +197,8 @@ export function createContactDirectoryList(
     return {
       ...page,
       users,
+      // Whether the first listed page was ranked, whichever page landed last.
+      named: listed.named,
       people: [...people.values()],
       nextCursor: users.length < MAX_LISTED_CONTACTS ? page.nextCursor : null,
     };

@@ -92,9 +92,11 @@ export function createPersonList(options: {
             dm && options.policy().mode === 'command' && options.search().trim()
               ? options.conversation(dm.id)
               : undefined;
-          // The server's page is in no meaningful order, so its rows carry
-          // none and callers rank them as they rank other people.
-          const order = page.localLate ? {} : { personOrder };
+          // A server page read for a late cache is in no meaningful order
+          // unless its text named people and the list ranked them. Those
+          // rows keep their place; callers rank the others as they rank
+          // other people.
+          const order = page.localLate && !page.named ? {} : { personOrder };
           return target
             ? { ...item, commandTarget: target, ...order }
             : { ...item, ...order };

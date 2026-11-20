@@ -523,3 +523,98 @@ it('lists a typed teammate first when a tab without the cache reads people from 
   await vi.runOnlyPendingTimersAsync();
   client.clear();
 });
+
+it('keeps the order of a server page read for a late cache only when the page ranked the people its text names', async () => {
+  vi.useFakeTimers();
+  const viewer = 'macro|viewer@example.com';
+  const contact = (email: string, name: string) => ({
+    __typename: 'GraphqlContact' as const,
+    id: `contact-${email}`,
+    userId: `macro|${email}`,
+    email,
+    name,
+  });
+  vi.mocked(fetchContactDirectoryPage).mockResolvedValue({
+    user: {
+      id: viewer,
+      contacts: {
+        nodes: [
+          contact('mateo@example.com', 'Mateo Rossi'),
+          contact('teo.nys@example.com', 'Teo Nys'),
+        ],
+        nextCursor: null,
+      },
+    },
+  });
+  vi.mocked(fetchContactReferencePage).mockResolvedValue({
+    user: { id: viewer, contacts: { nodes: [], nextCursor: null } },
+  });
+  vi.mocked(fetchContactDirectoryByIds).mockResolvedValue({
+    user: { id: viewer, contactsByUserIds: [] },
+  });
+  // A cache that never answers: after the budget the server lists the people.
+  const host = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    currentStorageGeneration: async () =>
+      '00000000-0000-4000-8000-000000000001',
+    readQuery: () => new Promise<never>(() => {}),
+    people: {
+      ...unsupportedContactSync,
+      readSql: vi
+        .fn<PeopleCache['readSql']>()
+        .mockResolvedValue({ kind: 'unsupported' }),
+      resolveReferences: vi.fn<PeopleCache['resolveReferences']>(),
+      search: vi.fn<PeopleCache['search']>(),
+      context: vi.fn<PeopleCache['context']>(),
+      update: vi.fn<PeopleCache['update']>(),
+    },
+  };
+  const client = new QueryClient();
+  const [query, setQuery] = createSignal('');
+  let list: ReturnType<typeof createPersonList> | undefined;
+  function Harness() {
+    list = createPersonList({
+      scope: () => ({ userId: viewer, host }),
+      search: query,
+      enabled: () => true,
+      localBudgetMs: 2_000,
+      policy: () => ({ mode: 'mention', excluded: [] }),
+      activity: () => new Map(),
+      teammates: () => new Set(['macro|teo.nys@example.com']),
+      conversation: () => undefined,
+      excluded: () => false,
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+
+  // Browsing: the server's order means nothing, so the rows carry none.
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(list?.items().map((item) => item.data.name)).toEqual([
+    'Mateo Rossi',
+    'Teo Nys',
+  ]);
+  expect(list?.items().map((item) => item.personOrder)).toEqual([
+    undefined,
+    undefined,
+  ]);
+
+  // A typed search: the page ranked the person the text names, and that
+  // order is the window's.
+  setQuery('teo');
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(list?.items().map((item) => item.data.name)).toEqual([
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+  expect(list?.items().map((item) => item.personOrder)).toEqual([0, 1]);
+
+  mounted.unmount();
+  await vi.runOnlyPendingTimersAsync();
+  client.clear();
+});
