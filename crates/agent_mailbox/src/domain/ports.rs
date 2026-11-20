@@ -237,4 +237,11 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         mailbox: AgentMailboxId,
         idempotency_key: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Delete send records created before `before`; they no longer count
+    /// toward a cap or dedupe a retry. Returns how many went.
+    fn prune_sends(
+        &self,
+        before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 }

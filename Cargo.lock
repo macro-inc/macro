@@ -916,10 +916,13 @@ dependencies = [
 name = "agent_mailbox"
 version = "0.1.0"
 dependencies = [
+ "agent_mailbox",
  "chrono",
  "email_validator",
+ "macro_db_migrator",
  "macro_user_id",
  "rootcause",
+ "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",

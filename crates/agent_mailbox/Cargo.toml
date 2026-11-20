@@ -4,11 +4,16 @@ name = "agent_mailbox"
 publish = false
 version = "0.1.0"
 
+[features]
+default = []
+outbound = ["dep:sqlx"]
+
 [dependencies]
 chrono = { workspace = true }
 email_validator = { path = "../email_validator" }
 macro_user_id = { path = "../macro_user_id" }
 rootcause = { workspace = true }
+sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
@@ -17,4 +22,11 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+agent_mailbox = { path = ".", features = ["outbound"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+# The crate depends on itself in tests to turn on `outbound`, which shear reads as unused.
+[package.metadata.cargo-shear]
+ignored = ["agent_mailbox"]

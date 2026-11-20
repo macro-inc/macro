@@ -42,6 +42,10 @@ pub const MAX_SUBJECT_CHARS: usize = 998;
 /// Most messages on one page.
 pub const MAX_PAGE_SIZE: u8 = 50;
 
+/// Send records are kept this long: past the daily cap's window and the
+/// provider's 24-hour idempotency replay.
+pub const SEND_RECORD_RETENTION: Duration = Duration::days(7);
+
 /// Mailboxes the sweep moves on per round.
 pub const SWEEP_BATCH: u16 = 50;
 
@@ -490,6 +494,11 @@ where
                 }
             }
         }
+
+        self.repository
+            .prune_sends(now - SEND_RECORD_RETENTION)
+            .await
+            .map_err(internal)?;
 
         let span = tracing::Span::current();
         span.record("agent_mailbox.sweep.advanced", report.advanced);

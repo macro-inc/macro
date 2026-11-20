@@ -607,6 +607,13 @@ impl AgentMailboxRepository for FakeRepository {
             .retain(|send| !(send.mailbox == mailbox && send.key == idempotency_key));
         Ok(())
     }
+
+    async fn prune_sends(&self, before: DateTime<Utc>) -> Result<u64, FakeError> {
+        let mut state = self.0.lock().unwrap();
+        let count = state.sends.len();
+        state.sends.retain(|send| send.at >= before);
+        Ok((count - state.sends.len()) as u64)
+    }
 }
 
 // ---------------------------------------------------------------------------

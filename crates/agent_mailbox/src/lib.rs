@@ -15,3 +15,5 @@
 //! - **outbound**: Postgres, KMS and provider adapters (feature `outbound`).
 
 pub mod domain;
+#[cfg(feature = "outbound")]
+pub mod outbound;
