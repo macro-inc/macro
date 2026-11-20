@@ -292,3 +292,89 @@ npm error You can rerun the command with `--loglevel=verbose` to see the logs in
          `--loglevel=verbose` to see the logs in your terminal"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn an_unpublished_adapter_reports_npm_s_404_paragraphs() {
+    use std::os::unix::process::ExitStatusExt as _;
+    // npm separates the paragraphs of a titled section with a line holding
+    // only the title.
+    let stderr = "\
+npm error code E404
+npm error 404 Not Found - GET https://registry.npmjs.org/@agentclientprotocol%2fnope - Not found
+npm error 404
+npm error 404  '@agentclientprotocol/nope@0.1.0' is not in this registry.
+npm error 404
+npm error 404 Note that you can also install from a
+npm error 404 tarball, folder, http url, or git url.
+npm error A complete log of this run can be found in: /home/test/.npm/_logs/debug-0.log
+";
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "404 Not Found - GET https://registry.npmjs.org/@agentclientprotocol%2fnope - Not found; \
+         '@agentclientprotocol/nope@0.1.0' is not in this registry.; \
+         Note that you can also install from a tarball, folder, http url, or git url. \
+         (npm log: /home/test/.npm/_logs/debug-0.log)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn an_offline_install_reports_npm_s_network_paragraphs() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let stderr = "\
+npm error code ENOTFOUND
+npm error syscall getaddrinfo
+npm error errno ENOTFOUND
+npm error network request to https://registry.npmjs.org/x failed, reason: getaddrinfo ENOTFOUND registry.npmjs.org
+npm error network This is a problem related to network connectivity.
+npm error network In most cases you are behind a proxy or have bad network settings.
+npm error network
+npm error network If you are behind a proxy, please make sure that the
+npm error network 'proxy' config is set properly.  See: 'npm help config'
+npm error A complete log of this run can be found in: /home/test/.npm/_logs/debug-0.log
+";
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "network request to https://registry.npmjs.org/x failed, reason: getaddrinfo ENOTFOUND \
+         registry.npmjs.org This is a problem related to network connectivity. In most cases \
+         you are behind a proxy or have bad network settings.; If you are behind a proxy, \
+         please make sure that the 'proxy' config is set properly.  See: 'npm help config'; \
+         code ENOTFOUND (npm log: /home/test/.npm/_logs/debug-0.log)"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn metadata_and_prose_words_are_not_titles() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let stderr = "\
+npm error boom
+npm error code X
+npm error other
+npm error
+npm error To fix this, run:
+npm error To be sure, run it twice.
+";
+    assert_eq!(
+        npm_adapter::failure_summary(stderr, std::process::ExitStatus::from_raw(1 << 8)),
+        "boom; other; To fix this, run: To be sure, run it twice."
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn a_long_install_script_failure_is_clipped() {
+    use std::os::unix::process::ExitStatusExt as _;
+    let stderr = format!(
+        "npm error command failed\nnpm error command sh -c node install.js\n{}",
+        "npm error gyp info it worked if it ends with ok\n".repeat(40)
+    );
+    let summary = npm_adapter::failure_summary(&stderr, std::process::ExitStatus::from_raw(1 << 8));
+    assert_eq!(summary.chars().count(), 301);
+    assert!(
+        summary.starts_with("command failed sh -c node install.js gyp info it worked"),
+        "{summary}"
+    );
+    assert!(summary.ends_with('…'), "{summary}");
+}

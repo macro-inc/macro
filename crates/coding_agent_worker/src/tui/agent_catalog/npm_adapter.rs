@@ -155,6 +155,11 @@ impl AdapterInstall {
 /// Paragraphs of npm's error output a user needs to act on, at most this many.
 const SUMMARY_PARAGRAPHS: usize = 3;
 
+/// The longest a paragraph of the summary gets, in characters. A failing
+/// install script prints its whole output as one paragraph; the full text is
+/// in the warning log.
+const PARAGRAPH_CHARS: usize = 300;
+
 /// npm's closing line, naming its debug log. It is always last, so showing
 /// only the last line hid the actual error.
 const NPM_LOG_LINE: &str = "A complete log of this run can be found in:";
@@ -167,16 +172,27 @@ const METADATA_KEYS: [&str; 5] = ["code ", "syscall ", "errno ", "path ", "dest 
 /// update notice npm prints between its error paragraphs.
 const UNRELATED_PREFIXES: [&str; 3] = ["npm notice", "npm warn", "npm WARN"];
 
+/// One paragraph of npm's error output, joined from its wrapped lines.
+struct Paragraph {
+    text: String,
+    first_word: String,
+    lines: usize,
+}
+
 /// The reason npm gave for failing, on one line: its first few error
 /// paragraphs without the `npm error` prefix (metadata last), then the path of
 /// its full log. npm wraps a paragraph over several lines and separates
-/// paragraphs with a bare `npm error`, so a fix it suggests (such as the
-/// `sudo chown` for a root-owned cache) stays whole.
+/// paragraphs with a bare `npm error`, or, in a titled section such as
+/// `npm error 404 ...`, with a line holding only the title. Keeping whole
+/// paragraphs keeps a fix npm suggests (such as the `sudo chown` for a
+/// root-owned cache) whole.
 pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) -> String {
     let mut log = None;
     let mut awaiting_log_path = false;
     let mut paragraphs: Vec<String> = Vec::new();
-    let mut paragraph_open = false;
+    let mut open: Option<Paragraph> = None;
+    // The title npm repeats on every line of a section, e.g. `notarget`.
+    let mut title: Option<String> = None;
     let mut metadata = Vec::new();
     for raw in stderr.lines() {
         let raw = raw.trim();
@@ -184,7 +200,7 @@ pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) ->
             .iter()
             .any(|prefix| raw.starts_with(prefix))
         {
-            paragraph_open = false;
+            close(&mut open, &mut paragraphs);
             continue;
         }
         let line = raw
@@ -201,24 +217,56 @@ pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) ->
             log = Some(line);
             awaiting_log_path = false;
         } else if METADATA_KEYS.iter().any(|key| line.starts_with(key)) {
+            close(&mut open, &mut paragraphs);
             metadata.push(line.to_owned());
         } else if line.is_empty() {
-            paragraph_open = false;
-        } else if let (true, Some(paragraph)) = (paragraph_open, paragraphs.last_mut()) {
-            let continuation = without_repeated_title(paragraph_title(paragraph), line);
-            paragraph.push(' ');
-            paragraph.push_str(continuation);
+            close(&mut open, &mut paragraphs);
+            title = None;
+        } else if title.as_deref() == Some(line)
+            || open
+                .as_ref()
+                .is_some_and(|paragraph| paragraph.first_word == line && is_section_title(line))
+        {
+            // A line holding only the title separates the section's paragraphs.
+            title = Some(line.to_owned());
+            close(&mut open, &mut paragraphs);
+        } else if let Some(paragraph) = open.as_mut() {
+            let first_word = line.split_whitespace().next().unwrap_or_default();
+            if paragraph.lines == 1
+                && first_word == paragraph.first_word
+                && is_section_title(first_word)
+            {
+                title = Some(first_word.to_owned());
+            }
+            paragraph.text.push(' ');
+            paragraph
+                .text
+                .push_str(without_title(title.as_deref(), line));
+            paragraph.lines += 1;
         } else {
-            paragraphs.push(line.to_owned());
-            paragraph_open = true;
+            let text = without_title(title.as_deref(), line);
+            open = Some(Paragraph {
+                text: text.to_owned(),
+                first_word: line
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_owned(),
+                lines: 1,
+            });
         }
     }
+    close(&mut open, &mut paragraphs);
     paragraphs.extend(metadata);
     paragraphs.truncate(SUMMARY_PARAGRAPHS);
     let summary = if paragraphs.is_empty() {
         format!("npm exited with {status} and no error output")
     } else {
-        paragraphs.join("; ")
+        paragraphs
+            .iter()
+            .map(|paragraph| clipped(paragraph))
+            .collect::<Vec<_>>()
+            .join("; ")
     };
     match log {
         Some(log) => format!("{summary} (npm log: {log})"),
@@ -226,15 +274,36 @@ pub(super) fn failure_summary(stderr: &str, status: std::process::ExitStatus) ->
     }
 }
 
-/// The first word of a paragraph: npm repeats a title such as `notarget` on
-/// every line of its paragraph.
-fn paragraph_title(paragraph: &str) -> &str {
-    paragraph.split_whitespace().next().unwrap_or_default()
+fn close(open: &mut Option<Paragraph>, paragraphs: &mut Vec<String>) {
+    if let Some(paragraph) = open.take() {
+        paragraphs.push(paragraph.text);
+    }
 }
 
-fn without_repeated_title<'line>(title: &str, line: &'line str) -> &'line str {
-    match line.strip_prefix(title) {
-        Some(rest) if rest.starts_with(' ') && !title.is_empty() => rest.trim_start(),
+/// Whether a word can be the title npm repeats on each line of a section:
+/// one token such as `notarget`, `404`, `network` or `ERESOLVE`, never a
+/// capitalized prose word such as `To`.
+fn is_section_title(word: &str) -> bool {
+    let token = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'-';
+    let bytes = word.as_bytes();
+    !bytes.is_empty()
+        && bytes.iter().all(|byte| token(*byte))
+        && (bytes.iter().all(|byte| !byte.is_ascii_uppercase())
+            || bytes.iter().all(|byte| !byte.is_ascii_lowercase()))
+}
+
+fn without_title<'line>(title: Option<&str>, line: &'line str) -> &'line str {
+    match title.and_then(|title| line.strip_prefix(title)) {
+        Some(rest) if rest.starts_with(' ') => rest.trim_start(),
         _ => line,
     }
+}
+
+fn clipped(paragraph: &str) -> String {
+    if paragraph.chars().count() <= PARAGRAPH_CHARS {
+        return paragraph.to_owned();
+    }
+    let mut kept: String = paragraph.chars().take(PARAGRAPH_CHARS).collect();
+    kept.push('…');
+    kept
 }
