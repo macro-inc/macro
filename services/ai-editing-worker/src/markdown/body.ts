@@ -7,7 +7,10 @@ import {
 } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
 import { INTERNAL_TRANSFORMERS } from '@macro-inc/lexical-core/transformers';
-import { E_TABLE_NODE } from '@macro-inc/lexical-core/transformers/tables';
+import {
+  E_TABLE_NODE,
+  isolatePipeTables,
+} from '@macro-inc/lexical-core/transformers/tables';
 import {
   $createParagraphNode,
   $getRoot,
@@ -40,6 +43,8 @@ export type MarkdownResponse =
  * else and documents created from markdown already accept. Nothing else from
  * the external set: its entity and mention importers would read an unchanged
  * internal block differently and replace it, dropping its ids and comments.
+ * `isolatePipeTables` keeps other pipe-delimited lines text for the same
+ * reason, since the internal format writes them unescaped.
  */
 const BODY_IMPORT_TRANSFORMERS = [...INTERNAL_TRANSFORMERS, E_TABLE_NODE];
 
@@ -213,7 +218,11 @@ export async function prepareMarkdownBody(
   try {
     const live = await sessionFromSnapshot(manager, snapshot);
     const requested = createEditingSession();
-    loadMarkdown(requested, markdown, BODY_IMPORT_TRANSFORMERS);
+    loadMarkdown(
+      requested,
+      isolatePipeTables(markdown),
+      BODY_IMPORT_TRANSFORMERS
+    );
 
     const currentBlocks = toSnapshot(live).root.children;
     const requestedBlocks = toSnapshot(requested).root.children;

@@ -11,7 +11,13 @@ import { runMarkdownRequest } from './body';
 const DOC = 'doc-1';
 const MARK = '0199a1b2-0000-7000-8000-000000000001';
 
-type Node = { type?: string; ids?: string[]; text?: string; children?: Node[] };
+type Node = {
+  $?: { id: string };
+  type?: string;
+  ids?: string[];
+  text?: string;
+  children?: Node[];
+};
 
 function revisionOf(doc: LoroDoc): string {
   return btoa(String.fromCharCode(...doc.oplogVersion().encode()));
@@ -426,5 +432,96 @@ describe('pipe tables', () => {
     );
     expect(rewritten).toMatchObject({ changed: false });
     expect(synced.commits).toBe(commits);
+  });
+
+  it('keeps a commented pipe-delimited paragraph as text when written back', async () => {
+    const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId: DOC });
+    (
+      await manager.initializeFromSnapshot(
+        (await markdownToLoroSnapshot('# Plan\n\n\\| plain text |'))!
+      )
+    )._unsafeUnwrap();
+    await applyCommentMarkChange(manager, createNoopLiveSyncSource(DOC), {
+      action: 'add',
+      markId: MARK,
+      text: 'plain text',
+    });
+    const synced = new SyncedDocument(manager.doc.export({ mode: 'snapshot' }));
+    manager.dispose();
+    const [, paragraph] = blocks(synced.doc);
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+    expect(read.markdown).toBe('# Plan\n\n| plain text |');
+
+    const unchanged = await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown,
+      },
+      synced,
+      signal()
+    );
+    expect(unchanged).toMatchObject({ changed: false });
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: read.markdown.replace('# Plan', '# Launch plan'),
+      },
+      synced,
+      signal()
+    );
+    const after = blocks(synced.doc);
+    expect(after[1]).toEqual(paragraph);
+    expect(after[1].type).toBe('paragraph');
+    const marks = walk(after[1]).filter((n) => n.type === 'comment-mark');
+    expect(marks[0].ids).toEqual([MARK]);
+  });
+
+  it('starts a new table for a pipe table on the line after an existing one', async () => {
+    const synced = new SyncedDocument(
+      (await markdownToLoroSnapshot(
+        '<m-table><m-table-row><m-table-cell>Old</m-table-cell></m-table-row></m-table>'
+      ))!
+    );
+    const [existing] = blocks(synced.doc);
+    const read = await runMarkdownRequest(
+      DOC,
+      { action: 'read' },
+      synced,
+      signal()
+    );
+    if (read.action !== 'read') throw new Error('expected a read');
+
+    await runMarkdownRequest(
+      DOC,
+      {
+        action: 'write',
+        expectedRevision: read.revision,
+        markdown: `${read.markdown}\n| Header |\n| --- |\n| New |`,
+      },
+      synced,
+      signal()
+    );
+
+    const after = blocks(synced.doc);
+    expect(after.map((block) => block.type)).toEqual(['table', 'table']);
+    expect(after[0].$).toEqual(existing.$);
+    expect(after[0].children?.map((row) => row.children?.map(textOf))).toEqual([
+      ['Old'],
+    ]);
+    expect(after[1].children?.map((row) => row.children?.map(textOf))).toEqual([
+      ['Header'],
+      ['New'],
+    ]);
   });
 });

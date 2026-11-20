@@ -58,6 +58,7 @@ import {
 } from './mentions';
 import {
   BR_TAG_TO_LINE_BREAK,
+  codeFenceLines,
   HTML_ENTITY_TRANSFORMERS,
   LINK_XML,
 } from './transformers';
@@ -503,6 +504,53 @@ function $alignToHeader(table: TableNode, rows: TableRowNode[]) {
         $alignCell(cell, headerCells[column]?.getFormatType() ?? '');
       });
   }
+}
+
+/**
+ * Limits `E_TABLE_NODE` to GitHub tables: a header row, a delimiter row with
+ * as many columns, then body rows. `E_TABLE_NODE` alone reads any line between
+ * pipes as a row, and appends rows to a table on the line above. So every other
+ * run of pipe lines outside fenced code gets its leading pipe escaped and stays
+ * text, and a table gets a blank line above it, so it never joins the block
+ * before it.
+ */
+export function isolatePipeTables(markdown: string): string {
+  const lines = markdown.split('\n');
+  const inCode = codeFenceLines(lines);
+  const isRow = (index: number) =>
+    index < lines.length &&
+    !inCode[index] &&
+    REG_EXP_TABLE_ROW.test(lines[index]);
+
+  const output: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    if (!isRow(index)) {
+      output.push(lines[index]);
+      index += 1;
+      continue;
+    }
+
+    let end = index;
+    while (isRow(end)) end += 1;
+    const run = lines.slice(index, end);
+    const header = run[0].match(REG_EXP_TABLE_ROW)?.[1] ?? '';
+    const isTable =
+      run.length >= 2 &&
+      REG_EXP_TABLE_ROW_DIVIDER.test(run[1]) &&
+      splitTableRow(header).length === columnAlignments(run[1]).length;
+
+    if (isTable) {
+      if (output.length > 0 && output[output.length - 1].trim() !== '') {
+        output.push('');
+      }
+      output.push(...run);
+    } else {
+      output.push(...run.map((line) => `\\${line}`));
+    }
+    index = end;
+  }
+  return output.join('\n');
 }
 
 export const E_TABLE_NODE: ElementTransformer = {
