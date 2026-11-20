@@ -517,7 +517,13 @@ pub fn read_symbols(symbols: &[String]) -> SymbolReferences {
     for symbol in symbols {
         let Some(reference) = symbol_reference(symbol.trim()) else {
             result.unknown.push(symbol.clone());
-            result.suggestions.extend(suggest(symbol.trim()));
+            if !result
+                .suggestions
+                .iter()
+                .any(|suggestion| suggestion.symbol == symbol.trim())
+            {
+                result.suggestions.extend(suggest(symbol.trim()));
+            }
             continue;
         };
         // The first reference is always returned; none is larger than the budget.
@@ -605,23 +611,31 @@ fn suggest(symbol: &str) -> Option<SymbolSuggestion> {
     })
 }
 
-/// The entity whose index lists `symbol` or its class, or whose name is its
-/// namespace (`properties` for `properties.SetPropertyValue`).
+/// The entity that declares `symbol`: the one named for its namespace
+/// (`properties` for `properties.SetPropertyValue`) or whose index has a
+/// section for its class, else the first whose index lists it, as another
+/// entity's index may cross-reference it.
 fn entity_listing(symbol: &str) -> Option<&'static str> {
     let class = symbol.split('.').next().unwrap_or(symbol);
-    let listed = format!("`{symbol}`");
     let header = format!("### {class}");
     let header_with_alias = format!("{header} ");
-    sdk_documentation()
-        .iter()
+    let listed = format!("`{symbol}`");
+    let docs = sdk_documentation();
+    docs.iter()
         .find(|doc| {
             doc.name == class
                 || doc.index.as_deref().is_some_and(|index| {
-                    index.contains(&listed)
-                        || index
-                            .lines()
-                            .any(|line| line == header || line.starts_with(&header_with_alias))
+                    index
+                        .lines()
+                        .any(|line| line == header || line.starts_with(&header_with_alias))
                 })
+        })
+        .or_else(|| {
+            docs.iter().find(|doc| {
+                doc.index
+                    .as_deref()
+                    .is_some_and(|index| index.contains(&listed))
+            })
         })
         .map(|doc| doc.name.as_str())
 }

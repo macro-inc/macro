@@ -271,6 +271,13 @@ fn an_unknown_symbol_suggests_the_nearest_real_one_and_its_entity() {
     assert_eq!(suggestion.did_you_mean[0], "PropertiesNamespace.create");
     assert!(suggestion.did_you_mean.len() <= 3);
     assert_eq!(suggestion.entities[0], "properties");
+    // The same unknown symbol asked for twice is suggested for once.
+    let twice = ReadCodeDocs {
+        symbols: vec!["PropertyNamespace.create".into(); 2],
+    }
+    .read()
+    .unwrap();
+    assert_eq!(twice.suggestions.len(), 1);
 }
 
 #[test]
