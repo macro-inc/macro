@@ -8352,10 +8352,14 @@ export const searchContactsResponse = zod
   .describe('Response from searching CRM contacts.');
 
 /**
- * @summary Manually create a contact without a company for the caller's team.
-Any team member may create one. The team must not already have a
-company-less contact with the email (409), and the team's CRM
-killswitch must be on (403).
+ * @summary Manually create a contact for the caller's team without naming a company.
+An email at a company's own domain files the contact under the team's
+company for that domain, creating the company when the team has none; a
+personal or generic provider address, a domain the team blocks, or a
+hidden company leaves the contact without a company. Any team member may
+create one. The team must not already have the email on a contact without
+a company or under that company (409), and the team's CRM killswitch must
+be on (403).
  */
 export const createCrmTeamContactBody = zod
   .object({
@@ -8363,7 +8367,7 @@ export const createCrmTeamContactBody = zod
       .string()
       .nullish()
       .describe(
-        "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+        "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company. Optional: omit it\nto add the contact by name only."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -8644,7 +8648,9 @@ export const setCrmContactCompanyBody = zod
   .object({
     companyId: zod.uuid().describe('Destination company in the same team.'),
   })
-  .describe('Link or switch a contact with a known personal-provider email.');
+  .describe(
+    'Link a contact without a company, or switch the company of a contact\nwith a known personal-provider email.'
+  );
 
 export const setCrmContactCompanyResponse = zod
   .object({

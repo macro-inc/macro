@@ -9179,7 +9179,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_team_contact"],
-        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact for the caller's team without naming a company.\nAn email at a company's own domain files the contact under the team's\ncompany for that domain, creating the company when the team has none; a\npersonal or generic provider address, a domain the team blocks, or a\nhidden company leaves the contact without a company. Any team member may\ncreate one. The team must not already have the email on a contact without\na company or under that company (409), and the team's CRM killswitch must\nbe on (403).",
         "operationId": "create_crm_team_contact",
         "requestBody": {
           "content": {
@@ -38917,7 +38917,7 @@
         "properties": {
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+            "description": "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company. Optional: omit it\nto add the contact by name only."
           },
           "name": {
             "type": "string",
@@ -61354,7 +61354,7 @@
       },
       "SetContactCompanyRequest": {
         "type": "object",
-        "description": "Link or switch a contact with a known personal-provider email.",
+        "description": "Link a contact without a company, or switch the company of a contact\nwith a known personal-provider email.",
         "required": ["companyId"],
         "properties": {
           "companyId": {

@@ -124,9 +124,8 @@ export class CrmNamespace {
 
   /**
    * Create a contact for the caller's current team. The email is optional; a
-   * work address links the contact to its domain's company (created if
-   * missing), a personal one leaves it without a company. To choose the
-   * company, use {@link Company.createContact}.
+   * work address links the contact to its domain's company, created if
+   * missing. To choose the company, use {@link Company.createContact}.
    *
    * @write
    */

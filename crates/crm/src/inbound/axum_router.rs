@@ -50,7 +50,7 @@ pub mod create_company;
 /// Manually create a contact (name + email) under a CRM company.
 pub mod create_contact;
 
-/// Manually create a contact without a company for the caller's team.
+/// Manually create a contact for the caller's team without naming a company.
 pub mod create_team_contact;
 
 /// Operator route: file a team's manual contacts under their domain's company.

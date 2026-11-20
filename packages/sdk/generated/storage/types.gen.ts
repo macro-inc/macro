@@ -5321,8 +5321,9 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company. Optional: omit it
+     * to add the contact by name only.
      */
     email?: string | null;
     /**
@@ -19299,7 +19300,8 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * with a known personal-provider email.
  */
 export type SetContactCompanyRequest = {
     /**

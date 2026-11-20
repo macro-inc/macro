@@ -7660,11 +7660,11 @@ export interface CreateConfirmedCalendarEvent {
   userConfirmation: string;
 }
 /**
- * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Personal email and addresses with a different domain are accepted; selecting a company is an explicit association. Find the company with ListCompanies, or add it first with CreateCompany.
+ * Add a contact person to the user's team CRM, as New contact does. The company and the email are both optional. Without a company, a work email links the contact to the company for its domain, adding that company when the team does not have it; a personal email leaves the contact without a company. With a company, any email is accepted, whatever its domain. Find the company with ListCompanies, or add it first with CreateCompany.
  */
 export interface CreateContact {
   /**
-   * The CRM company id to add the contact to. Omit it for a person with no company.
+   * The CRM company id to add the contact to. Omit it to file the contact by its email domain, or for a person with no company.
    */
   companyId?: string | null;
   /**

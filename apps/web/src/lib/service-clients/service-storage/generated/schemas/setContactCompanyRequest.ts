@@ -6,7 +6,8 @@
  */
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+with a known personal-provider email.
  */
 export interface SetContactCompanyRequest {
   /** Destination company in the same team. */

@@ -1581,10 +1581,14 @@ export class Sdk extends HeyApiClient {
     }
 
     /**
-     * Manually create a contact without a company for the caller's team.
-     * Any team member may create one. The team must not already have a
-     * company-less contact with the email (409), and the team's CRM
-     * killswitch must be on (403).
+     * Manually create a contact for the caller's team without naming a company.
+     * An email at a company's own domain files the contact under the team's
+     * company for that domain, creating the company when the team has none; a
+     * personal or generic provider address, a domain the team blocks, or a
+     * hidden company leaves the contact without a company. Any team member may
+     * create one. The team must not already have the email on a contact without
+     * a company or under that company (409), and the team's CRM killswitch must
+     * be on (403).
      */
     public createCrmTeamContact<ThrowOnError extends boolean = false>(options: Options<CreateCrmTeamContactData, ThrowOnError>): RequestResult<CreateCrmTeamContactResponses, CreateCrmTeamContactErrors, ThrowOnError> {
         return (options.client ?? this.client).post<CreateCrmTeamContactResponses, CreateCrmTeamContactErrors, ThrowOnError>({
