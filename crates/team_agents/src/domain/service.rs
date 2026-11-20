@@ -15,9 +15,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::models::{
-    AGENT_EMAIL_DOMAIN, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent, CreatedAccount,
-    MAX_NAME_CHARS, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, TeamAgent, TeamAgentError,
-    TeamAgentRecord, TeamAgentStatus, TeamAgents,
+    AGENT_EMAIL_DOMAIN, AgentName, AgentReady, ComputerId, ComputerPurchase, CreateTeamAgent,
+    CreatedAccount, MAX_PROFILE_CHARS, NewAgentAccount, PersonaSeed, PurchaseKey, TeamAgent,
+    TeamAgentError, TeamAgentInvite, TeamAgentRecord, TeamAgentStatus, TeamAgents,
 };
 use super::ports::{
     AgentApiKeys, AgentReadyNotices, AgentRepos, Computers, EnrollmentEnvironment,
@@ -133,11 +133,10 @@ fn slug(name: &str) -> String {
     }
 }
 
-fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError> {
-    let name = request.name.trim().to_owned();
-    if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
-        return Err(TeamAgentError::InvalidName);
-    }
+fn validate(request: CreateTeamAgent) -> Result<TeamAgentInvite, TeamAgentError> {
+    let name = AgentName::try_new(&request.name)?;
+    let purchase_key = PurchaseKey::try_new(request.purchase_key)
+        .map_err(|_| TeamAgentError::InvalidPurchaseKey)?;
     let job_description = request.job_description.trim().to_owned();
     let personality = request.personality.trim().to_owned();
     for profile in [&job_description, &personality] {
@@ -151,8 +150,8 @@ fn validate(request: CreateTeamAgent) -> Result<CreateTeamAgent, TeamAgentError>
     {
         return Err(TeamAgentError::InvalidAvatar);
     }
-    Ok(CreateTeamAgent {
-        purchase_key: request.purchase_key,
+    Ok(TeamAgentInvite {
+        purchase_key,
         name,
         job_description,
         personality,
@@ -331,7 +330,7 @@ where
         &self,
         receipt: &EntityAccessReceipt<AdminTeamRole>,
         created_by: &MacroUserIdStr<'static>,
-        request: &CreateTeamAgent,
+        request: &TeamAgentInvite,
         undo: &mut Undo,
     ) -> Result<Prepared, TeamAgentError> {
         let team_id = team_id(receipt)?;
@@ -343,7 +342,10 @@ where
             .rev()
             .take(6)
             .collect();
-        let email = format!("{}-{suffix}@{AGENT_EMAIL_DOMAIN}", slug(&request.name));
+        let email = format!(
+            "{}-{suffix}@{AGENT_EMAIL_DOMAIN}",
+            slug(request.name.as_str())
+        );
         let user_id = MacroUserIdStr::parse_from_str(&format!("macro|{email}"))
             .map_err(|_| TeamAgentError::InvalidName)?
             .into_owned();
@@ -353,7 +355,7 @@ where
         );
         let seed = PersonaSeed {
             creator_id: Some(created_by.clone()),
-            name: request.name.clone(),
+            name: request.name.as_str().to_owned(),
             job_description: request.job_description.clone(),
             personality: request.personality.clone(),
             voice: request.voice.clone(),
@@ -468,6 +470,9 @@ where
         self.ensure_enabled(&created_by).await?;
         let request = validate(request)?;
         let team_id = team_id(&receipt)?;
+        // A buyer the computers rollout doesn't include is refused before an
+        // account, seat or repository exists to take back.
+        self.computers.require_purchase_rollout(&created_by).await?;
 
         let mut undo = Undo::default();
         let (user_id, seed) = match self

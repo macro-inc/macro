@@ -807,3 +807,48 @@ async fn a_reconnect_with_the_same_grant_makes_the_work_a_missing_mailbox_held_d
     .unwrap();
     assert_eq!((upkeep.failures, upkeep.due), (0, true));
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_reconnect_behind_a_population_is_busy_and_keeps_its_attempt(db: PgPool) {
+    let actor = actor(&db, "owner@example.com").await;
+    let service = MailboxInitializationService::new(
+        PgMailboxInitialization(db.clone()),
+        Grants(grant(actor.0)),
+    );
+    let link = service
+        .initialize(attempt(&db, actor.clone()).await)
+        .await
+        .unwrap();
+    let again = attempt(&db, actor.clone()).await;
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        service.initialize(again.clone()),
+    )
+    .await
+    .expect("the reconnect waited past its lock timeout");
+    assert!(
+        matches!(blocked, Err(InitializationError::Contended)),
+        "{blocked:?}"
+    );
+    // The attempt survives, so the same connection can be retried.
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM in_progress_user_link WHERE id = $1",
+            again.attempt
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    population.rollback().await.unwrap();
+
+    assert_eq!(service.initialize(again).await.unwrap(), link);
+}

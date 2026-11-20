@@ -838,7 +838,7 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
 }
 
 type CreateCallbacks = MutationCallbacks<
-  CalendarEventEntity,
+  CalendarEventEntity | undefined,
   Error,
   CreateCalendarEventRequest,
   unknown
@@ -858,9 +858,14 @@ export function useCreateCalendarEventMutation(callbacks?: CreateCallbacks) {
         return (await executeGraphqlCreate(args)).event;
       return await throwOnErr(() => emailClient.createCalendarEvent(args));
     },
-    ...withCallbacks<CalendarEventEntity, Error, CreateCalendarEventRequest>(
+    ...withCallbacks<
+      CalendarEventEntity | undefined,
+      Error,
+      CreateCalendarEventRequest
+    >(
       {
         onSuccess: (event, args) => {
+          if (!event) return;
           analytics.track('calendar_event_created', {
             eventId: event.id,
             attendees: args.attendees?.length ?? 0,

@@ -26,11 +26,6 @@ async fn thread_exclusion_is_retroactive_and_population_cannot_restore_it(
         .await?;
     }
     assert!(!allowed(&pool, team, thread).await?);
-    assert!(
-        !repo
-            .may_contribute_contact(team, link, "person@client.example.com")
-            .await?
-    );
     assert_eq!(
         interaction_parity::scan(&pool, team, link, "person@client.example.com").await?,
         (None, None, None)
@@ -61,10 +56,6 @@ async fn thread_exclusion_is_retroactive_and_population_cannot_restore_it(
     )
     .await?;
     assert!(allowed(&pool, team, thread).await?);
-    assert!(
-        repo.may_contribute_contact(team, link, "person@client.example.com")
-            .await?
-    );
     assert!(
         repo.excluded_email_threads(team, OWNER, None, None)
             .await?

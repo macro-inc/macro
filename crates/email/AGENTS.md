@@ -197,18 +197,38 @@ tools — hexagonal, heavily feature-gated.
   sender lookup stops one past the initial superset cap, so generic plans can
   stop on that index instead of building a bitmap of all its messages; the
   cap cannot truncate a page the probe proved sparse.
-  Indexed recipient lookups apply only to all-recipient-role groups. A rare
+  Indexed text-recipient lookups apply only to all-recipient-role groups. A rare
   requested role can scan a dense domain before the cap finds a match, so
-  role-restricted recipient groups keep joined SQL. Dense underfill fallbacks
-  and larger Owned round probes also keep joined SQL; per-message probes can make those
-  large sets slower. Checked General branches keep their original joins so
-  mailbox-fact checks are planned with the messages. Optimized Team probes
-  and pages share a read-only repeatable-read snapshot, as Owned reads do,
-  so imports cannot outgrow the probe's cap between statements; privacy changes
+  role-restricted text-recipient groups keep joined SQL. Complete-address
+  all-role recipient branches drive their capped probe and sparse page from
+  the deduplicated contact IDs, with an `OFFSET 0` fence around each recipient
+  lookup and message primary-key fetch. Restricted roles keep joined SQL so
+  dense contacts can use role-first or parallel plans. Dense underfill
+  fallbacks and larger Owned round probes also keep joined SQL; per-message
+  probes can make those large sets slower. Checked General branches keep their
+  original joins so mailbox-fact checks are planned with the messages. The
+  initial Owned sparse page, like Team's superset, fetches distinct matched
+  thread IDs through a primary-key fence before mailbox and cursor filters;
+  its CTE estimate must not turn those IDs into a whole-mailbox filter.
+  Optimized Team probes and pages share a read-only repeatable-read snapshot,
+  as Owned reads do, so imports cannot outgrow the probe's cap between statements;
+  privacy changes
   committed mid-request apply to the next request. Resolve contribution modes
   in that snapshot too. If none of the requested contributors uses selected
   mode, keep the all-mail probe/page SQL without selected-rule work. General
-  reads keep their existing page transaction.
+  Team fallbacks keep that same snapshot through discovery and their page too;
+  reopening a transaction can read a policy that discovery never checked.
+- Selected Team reads require an injected `EmailRuleDiscoveryService` on
+  `EmailPgRepo`. Discover once in the read snapshot and reuse complete contacts
+  in probe/page; all-mail reads call no discovery and keep their SQL unchanged.
+  Preserve typed resource-limit failures through `EmailErr` and Soup: return
+  HTTP 503 with the limit, never an empty or truncated page. The CRM core also
+  admits policy writes; do not implement separate limits in the email adapter.
+  A bare repository fails closed for selected reads if composition omitted
+  discovery. Keep General's scalar eligibility read in the discovery snapshot.
+  In optimized selected pages, share the complete non-draft participant set
+  between inclusion and domain vetoes; an early positive match must not hide
+  a later private participant. Keep all-mail-only eligibility SQL unchanged.
 - A requested sender may be a verified Gmail send-as alias, not just an inbox
   address: `resolve_sending_inbox` (AI tools) picks the inbox that owns it, and
   `resolve_sender` (drafts, REST `from`) checks it against the chosen inbox.
@@ -246,10 +266,13 @@ tools — hexagonal, heavily feature-gated.
   `NEW_INVITES_STAY_OUT` in `domain/focus/rule.rs` is the switch for new invites.
   `stale_threads` restates `domain/focus/calendar.rs`'s test for a change in SQL;
   change both.
-- Focus classifies an inbox only while its owner is in the rollout
-  (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus` flag). Check it
+- Focus classifies an inbox only while someone whose Focus tab shows it is in the
+  rollout (`FocusEnrollment`, the worker's locally evaluated `enable-email-focus`
+  flag): its owner, or a user it is linked to (`macro_user_links.primary_macro_id`,
+  read as `delegates` by `thread_inbox`, `inboxes_with_focus` and
+  `syncing_inboxes`), so a linked inbox follows its primary user's flag. Check it
   after `thread_inbox` and before any mail is read. `enrolled_inboxes` checks every
-  `syncing_inboxes` owner, so an owner who joins is found without mail, and
+  `syncing_inboxes` inbox, so a person who joins is found without mail, and
   `backfill` fills one inbox several threads at a time. The sweep goes inbox by
   inbox (`inboxes_with_focus` plus those seen enrolled) and leaves an inbox being
   backfilled to the backfill, so no thread is classified twice at once; `stale_threads` reads one
@@ -294,7 +317,7 @@ tools — hexagonal, heavily feature-gated.
   once per page, retaining bounded IDs for per-thread indexed probes. Its
   positive-target probe runs before the record probe and
   resolves live company domains once against each selected mailbox's
-  contacts. All-mail-only reads retain their existing candidate path.
+  contacts. All-mail-only reads skip selected-rule discovery.
   Keep selected-policy contact resolution within the requested mailboxes;
   record probes and sparse pages reuse the shared indexed sender/recipient
   branches. Positive-target discovery probes participants by their IDs. Do not
@@ -311,6 +334,18 @@ tools — hexagonal, heavily feature-gated.
   own inbox's contacts (`parse_and_upsert_message_contacts`); a writer that
   broke that would drop threads from the Team view, and their conversations'
   other copies with them (`docs/CRM_EMAIL_PRIVACY.md`).
+- `TeamRead` also covers `ViewedUpdated` when the filter itself does not use
+  view history. A saved view overrides message recency, even if the view is
+  older; keep `COALESCE`, not `GREATEST`. Sparse matches use the history primary
+  key. Dense pages merge viewed and never-viewed sources, complete timestamp
+  ties before the ID tiebreaker, and refill below the last raw window in the
+  same snapshot. Apply source filters before each cap so a short source proves
+  exhaustion. Competing copies use their own view time and never the page or
+  refill cursor. Discard accumulated rows on any later error. Emitted windows
+  do not bound rejected rows or history ties; retain the request deadline.
+  `crm.team_email_read` records the sort and `general`/`optimized` path across
+  both branches, including errors; its optimized child records refill rounds.
+  ViewedAt filters and sorts still use General.
 - The unfiltered inbox's viewed sorts (`preview_views/new_inbox.sql`) never sort
   the inbox: each inbox takes a page of opened threads and a page of
   never-opened threads (`idx_email_threads_inbox_reminder_sort` for
@@ -334,6 +369,9 @@ tools — hexagonal, heavily feature-gated.
   inbox's whole folder.
 - Restore Outlook junk drafts to Drafts without Inbox membership; continue rejecting
   attempts to mark clean drafts as junk.
+- Include a reader’s cross-inbox reply draft on a shared thread at Edit only
+  when it belongs to an inbox in the reader’s Drafts scope. Apply the same
+  rule to full and parsed thread reads.
 
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - `domain/scheduled_delivery/{state,identity,deletion}.rs` owns claim
@@ -478,6 +516,35 @@ tools — hexagonal, heavily feature-gated.
   whether a mailbox still has mail with an address leave such rows out
   (`email_db_client`'s `link_has_any_message_with`, and CRM's
   `other_address_mail.sql` and `interactions.sql`).
+- Open every `mailbox_pg` transaction with `PgMailboxSync::begin`, which sets a
+  5 s `lock_timeout`, so a write queued behind a long lock holder (a CRM
+  population share-locks its link) fails instead of holding a pooled
+  connection; a locking read runs in one too. Pre-checks that a write repeats
+  under the lock (settings access) and credential health that has not changed
+  read without the lock, so reads and Graph calls never wait on it. The
+  timeout is SQLSTATE 55P03
+  (`MailboxError::is_lock_timeout`, `InboxLifecycleError::Contended`) and every
+  caller retries it: lease release or expiry, message backoff, redelivery, a
+  409 for user requests. A write that records a provider call's result (the
+  draft checkpoint, a command's draft write version) retries it in-process
+  through `record_after_provider`, and a delivery the queue would dead-letter
+  (link deletion) retries in the same delivery, each a bounded number of times
+  inside its lease or visibility timeout. The purge's batches run in
+  `email_db_client` without the timeout.
+- The user writes in `email_pg_repo` that lock an inbox's link row (draft
+  save and send admission, attachments, discard, resolution, transfer,
+  scheduling, Undo send, mailbox actions, sender policy) open with
+  `email_pg_repo::begin`, the same 5 s `lock_timeout`
+  (`email-link-lock-transactions-time-out`). Most take `FOR SHARE` on the
+  link: it fences the mailbox workers and a disconnect, which lock it
+  exclusively, while a CRM population, which share-locks it, runs alongside;
+  user writes on one draft serialize on its message row and advisory locks,
+  as Gmail's, which take no link lock, always have. Mailbox actions keep
+  `FOR UPDATE`, because a command's `accepted_order` is allocated under it,
+  and so does sender policy, like the settings worker. A timeout is
+  `EmailErr::Contended` (`AttachmentError::Contended`): 409 on REST, 503 with
+  `Retry-After` on attachment routes (whose 409 means the draft changed),
+  and GraphQL `INBOX_BUSY` with `retryable`.
 - Map database errors in `mailbox_pg` with `db_error` (or `wrapped_db_error`
   for `email_db_client` calls) so the SQLSTATE reaches the log; keep
   `MailboxError::Persistence` for stored data that cannot be decoded. Both,
@@ -490,7 +557,9 @@ tools — hexagonal, heavily feature-gated.
   database steps with `database_failed` and everything else with `failed`.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
-  a cause.
+  a cause. A failed attachment download or database step is not an effect, so
+  email-service's attachment step records `outlook.attachment_id` for it
+  before returning; the span carries the field once either way.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
   import reconciliation rows, `provider` for everything else, live passes
@@ -548,10 +617,40 @@ tools — hexagonal, heavily feature-gated.
   once per change: the folder catalog rechecks a folder's stored mail only
   in the discovery that sees the folder leave, or move in or out of Deleted
   Items.
+  A message whose claims keep ending with no outcome (its worker stopped
+  holding the lease) is abandoned unread on the claim after five
+  (`UNFINISHED_CLAIM_LIMIT`, `defer_reason=unfinished`): `claim_message`
+  counts `unfinished_claims` from a lease still set when it claims, since
+  every recorded outcome deletes the row or clears the lease. The first claim
+  after a recorded release, or of a revision newer than the last claim read
+  (`claimed_revision`), starts the count over, so a change that arrives
+  during an unfinished claim is read.
   Throttling and token refusals give their claim back to `attempts`, and so
   does a transient provider failure (Graph 5xx or 408, a request Graph never
-  answered) once its backoff is at 30 minutes, so a provider outage never
-  abandons a message.
+  answered) or a lock timeout once its backoff is at 30 minutes, so a provider
+  outage or a busy mailbox never abandons a message.
+- A projection event that keeps failing is given up as a message read is:
+  `MailboxProjectionService::project_leased` decides with `message_retry`
+  (backoff included), and `finish_projection` gives an uncounted claim back to
+  `attempts`. One whose claims keep ending without an outcome is given up
+  unprojected after `UNFINISHED_CLAIM_LIMIT`: `claim_projection` counts
+  `email_projection_outbox.unfinished_claims` from a lease still set when it
+  claims, since every recorded outcome deletes the entry or clears its lease.
+  A given-up entry is deleted, not parked: an event is projected once, a later
+  event for the link carries newer state, and a parked entry's `dedupe_key`
+  would swallow a re-enqueue of the same message version. It logs one
+  `mailbox projection abandoned` WARN holding only ids and kinds.
+- A projection's attachment download or upload that keeps failing is counted
+  on the attachment (`email_attachments.upload_failures`), not the event, and
+  abandoned at the limit `attachment_failure_limit` in
+  `domain/mailbox/projection.rs` gives: 3 refusals or 50 other failures. A
+  transient download failure counts there, unlike a message read's, because
+  Graph can cut the same attachment's download every time. The abandoned
+  attachment keeps its upload claim and gets `upload_abandoned_at`, so no claim
+  takes it and the projection stops waiting on it; nothing revives it, and
+  opening it still downloads it on demand. email-service writes a failure only
+  while the claim is still the one its claiming statement returned, so a pass
+  that outlived the three-minute claim cannot undo the next pass's outcome.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can

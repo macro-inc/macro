@@ -61,6 +61,10 @@ pub fn router<A: MacroAuthorizationService, T: Send + Sync + 'static>(
                 .patch(patch::<A>)
                 .delete(remove::<A>),
         )
+        .route(
+            "/teams/{team}/items/{item}/favorite",
+            put(set_favorite::<A>).delete(remove_favorite::<A>),
+        )
         .route("/teams/{team}/items/{item}/reveal", post(reveal::<A>))
         .route("/teams/{team}/items/{item}/copy", post(copy::<A>))
         .route("/teams/{team}/items/{item}/username", get(username::<A>))
@@ -627,3 +631,31 @@ pub async fn move_folder<A: MacroAuthorizationService>(
 
 #[cfg(test)]
 pub(crate) mod test;
+
+#[utoipa::path(operation_id = "passwords_set_favorite",put,path="/passwords/teams/{team}/items/{item}/favorite",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=204),(status=404,body=Failure),(status=503,body=Failure)),tag="passwords")]
+/// Change only the authenticated viewer's private preference.
+pub async fn set_favorite<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path((team, item)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .service
+        .set_favorite(&actor(user)?, TeamId(team), ItemId(item), true)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(operation_id = "passwords_remove_favorite",delete,path="/passwords/teams/{team}/items/{item}/favorite",params(("team"=Uuid,Path),("item"=Uuid,Path),("X-Macro-Passwords"=String,Header,description="Required CSRF header; send 1")),responses((status=204),(status=404,body=Failure),(status=503,body=Failure)),tag="passwords")]
+/// Change only the authenticated viewer's private preference.
+pub async fn remove_favorite<A: MacroAuthorizationService>(
+    State(state): State<PasswordRouterState<A>>,
+    user: MacroAuthorizationExtractor<A, UserOnly>,
+    Path((team, item)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .service
+        .set_favorite(&actor(user)?, TeamId(team), ItemId(item), false)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}

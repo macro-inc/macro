@@ -13,6 +13,11 @@ means this is a Macro-managed team vault.
 - `src/domain/ports.rs`: provider, metadata, lock and per-user rollout ports.
 - `src/outbound/openbao.rs`: team JWT login, KV v2 CAS/history, TOTP.
 - `src/outbound/postgres.rs`: metadata index, durable intents and transaction-scoped locks.
+- `src/outbound/postgres/update_record.sql`: guarded update that locks the row by
+  primary key and updates it by ctid (a Tid Scan; no team-wide index scan under
+  stale statistics). `test/update_plan.rs` pins the plan. A concurrent change after
+  the statement snapshot is not re-checked, so every writer of a live item must
+  bump `revision`.
 - `src/inbound/router.rs`: authenticated human routes, CSRF header, private no-store responses.
 - `src/domain/agent.rs`, `src/domain/agent/service.rs`: bounded agent vault API
   (closed Login/API selectors, Agent grants, standing approval, requests, TOTP lifetime).
@@ -59,6 +64,12 @@ Do not add plaintext values to any metadata record, errors or tracing fields.
   persist actor-specific capabilities in metadata or write intents.
   `canEdit` uses current edit grants or administrator access; management remains
   creator/administrator-only, and view grants still permit reveal and copy.
+- Favorites are private human preferences in `password_item_favorites`, projected
+  in one bounded lookup for list/match responses and one for detail. PUT/DELETE
+  `items/{item}/favorite` needs view access, no credential lease, version change
+  or shared Activity entry. Initial create/import seeds only the creator's star;
+  later credential saves never seed again. Item soft deletion clears preferences;
+  physical item deletion and member removal cascade through foreign keys.
 - Mutations require `X-Macro-Passwords: 1`; responses use `private, no-store`.
 - Missing provider username slots resolve as empty strings; malformed values still
   fail. Username spans record `empty`, `present` or `failed`; HTTP failures warn

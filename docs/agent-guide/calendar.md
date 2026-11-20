@@ -34,6 +34,11 @@ Moving the start date or time moves the end with it, keeping the event's length
 after that the end stays put, and a start past it shows the end-before-start
 error.
 
+If a permission change retires a successful create response, the composer uses
+the preserved server identity. If that identity cannot be read yet, it closes
+and refreshes the calendar without opening the event or offering a duplicate
+creation. The universal input reports **Event created** without an Open action.
+
 The path selects the Month, Week, or Day period, and choosing another period updates
 that path. Calendar navigation defaults to Day on phones and Week on desktop; the most
 recent choice is remembered locally for navigation that does not specify a period. An
@@ -214,19 +219,25 @@ The calendar view's setup prompt decides and acts on own inboxes alone too: a
 delegate with no inbox of their own sees **Connect your calendar**, the Calendar
 is off vs Enable calendar wording counts only own inboxes, and Grant access, Turn
 on and Reconnect only start consent for one of them. It covers the grid only in a
-week without events and with no working calendar the viewer can see; a working
-calendar shared with them keeps it to the bottom-right pill, so a delegate whose
-only working calendar is shared sees the pill in every week.
+week without events and with no working calendar the viewer can see. Otherwise
+(a teammate's out-of-office on the grid, or a working calendar shared with them)
+it is a banner in the page's flow with the same title, description and action,
+above the grid on desktop and tablets and below it on phones, where
+`RangeUnavailableBanner` sits, so it never covers an event. A delegate whose only
+working calendar is shared sees the banner in every week.
 An own inbox whose calendar used to sync but lost calendar access without the
 user turning it off (a Google grant from before Macro narrowed its calendar
 scopes, which the server turns off and clears hourly) shows **Calendar for
 <address> stopped syncing** with **Reconnect** even while another inbox works;
 Reconnect asks for calendar access alone, and the re-grant re-imports its events.
 For the same inbox the app-wide toast reads **Calendar stopped syncing** with
-**Reconnect** (shown again even if an earlier Enable calendar was dismissed), and
-the sidebar's Connect more calendars card and the calendar settings menu say
+**Reconnect** (shown again even if an earlier Enable calendar was dismissed), the
+sidebar card reads **Calendar stopped syncing** with **Reconnect calendar** (also
+past an earlier dismissal of the card), and the calendar settings menu says
 **Reconnect**. A calendar that was never connected keeps Enable calendar, Grant
-access and Turn on calendar. The signal is the inbox's calendar data
+access and Turn on calendar, unless its mailbox needs a full reconnect: then the
+calendar view, the card and the menu all offer Reconnect, asking for the mailbox
+and calendar together. The signal is the inbox's calendar data
 (`has_calendar_data`) beside missing calendar permission: Macro creates the
 calendar account only from a grant with the capability and keeps it when the
 capability goes.
@@ -484,7 +495,8 @@ excluded from Upcoming events, including both all-day and hourly locations.
 Events require connecting a Google account (`Connect calendar`). The
 `Calendar settings` (gear) menu has an `Accounts`
 section listing each connected account with a per-account `Enable` (grant calendar),
-`Reconnect` (expired Google authorization), or `Turn off` action, plus
+`Reconnect` (expired Google authorization, with or without calendar access, as
+the calendar view says), or `Turn off` action, plus
 `Connect another account` to connect a new Google account
 (email + calendar; the item and the `Connect email` dialog both say the email
 and calendar connect together). A Google consent that leaves the email
@@ -544,6 +556,9 @@ send `macroCall` on the update route, which writes the join link and removes the
 Google Meet in one update. An event already holding a Macro call keeps it, and an
 Outlook event's Teams meeting cannot be removed this way.
 
+Drag the Upcoming events, Calendars, or Team out of office heading to reorder
+sidebar sections locally. Their order survives reloads per account; the mini
+calendar and footer controls stay fixed. Nested calendar accounts remain grouped.
 The sidebar's `Calendars` section folds each connected account into a collapsible
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,

@@ -15,7 +15,9 @@ the Soup-backed thread list, and saved email views.
   (`EmailMobileSearchField`) and recent searches
   (`EmailMobileRecentSearches`); the mobile layout in `email-view.tsx` opens
   it from the search pill, puts the field in place of the list pane's pill
-  row, and keeps the list mounted below it. `primitives/create-email-mobile-search.ts` owns whether the page is
+  row, and keeps the list mounted below it. The search pill and filter drawer
+  stay to the right of the scrolling tabs while the sidebar toggle stays on
+  the left. `primitives/create-email-mobile-search.ts` owns whether the page is
   open, and ends its search whenever it closes.
 - `components/EmailDetailView.tsx` and `components/EmailComposeRouteView.tsx`:
   entries for a thread and a new email inside Mail. They hold the state and
@@ -45,12 +47,17 @@ the Soup-backed thread list, and saved email views.
 - `primitives/create-email-saved-view-draft.ts`: confirmed baseline, dirty
   state, and revision-aware reconciliation.
 - `views/email-saved-views.tsx`: sidebar section, menus, the builder dialog,
-  header actions, unavailable and skipped-setting states. The section uses
+  header actions, unavailable and skipped-setting states. Saved-view rows use
   the shell's sidebar layout to choose drag or, in the navigation sheet,
-  Move up and Move down.
+  Move up and Move down. The unnamed mail-folder group, Library, and Saved views
+  use shared `ViewSidebar` ordering with per-account local preferences; Accounts
+  is explicitly pinned above those sections.
+- Saved-view creation uses the shared `create-saved-view-creation` lifecycle and route-owned `SavedViewDraftHost` leave protection.
 
 ## Gotchas
 
+- Append each new or duplicated view as a selected draft after saved email views; retain builder name, sharing, and filters until Save or Discard, and confirm leaving dirty new drafts without prompting for saved-view edits.
+- Keep saved-view appearance live in sidebar rows and breadcrumbs even with unsaved filters; expose owner-only Change icon in the shared menus behind `enableEntityAppearance`.
 - Keep tags in the desktop Filters menu and mobile filter drawer, not in the
   sidebar; filter changes stay on the current tab.
 - A saveable tab is a built-in view: it starts from its own restrictions

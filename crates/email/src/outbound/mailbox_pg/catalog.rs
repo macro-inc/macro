@@ -35,7 +35,7 @@ impl PgMailboxSync {
         lease: &CatalogLease,
         folders: &[MailFolder],
     ) -> Result<Option<ImportCompleted>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // Serialize against disconnect/reconnect before touching the shared catalog.
         let current = sqlx::query!(
             r#"

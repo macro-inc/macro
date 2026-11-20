@@ -185,7 +185,7 @@ impl DraftRepository for PgMailboxSync {
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         if let Some(draft) = &checkpoint.draft {
             Self::bind_draft(&mut tx, lease, draft).await?;
@@ -215,7 +215,7 @@ impl DraftRepository for PgMailboxSync {
         lease: &DraftLease,
         failure: DraftFailure,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         // A discard that arrived during this lease runs next instead, as it
         // would have after the failure (see `delete_draft_message`).
@@ -257,7 +257,7 @@ impl DraftRepository for PgMailboxSync {
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         let draft = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
         Self::bind_draft(&mut tx, lease, draft).await?;
@@ -283,7 +283,7 @@ impl DraftRepository for PgMailboxSync {
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> Result<DeliveryStart, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         let state = sqlx::query!(r#"
             SELECT d.revision,d.delete_requested,m.is_sent,f.in_trash,
@@ -322,7 +322,7 @@ impl DraftRepository for PgMailboxSync {
         lease: &DraftLease,
         checkpoint: &DraftCheckpoint,
     ) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         let draft = checkpoint.draft.as_ref().ok_or(MailboxError::Persistence)?;
         if draft.is_draft {
@@ -352,7 +352,7 @@ impl DraftRepository for PgMailboxSync {
     }
 
     async fn confirm_deleted(&self, lease: &DraftLease) -> Result<(), MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         Self::lock_draft(&mut tx, lease).await?;
         // Release upload metadata only after remote deletion is confirmed. Queued
         // object cleanup still respects other drafts and frozen revisions.

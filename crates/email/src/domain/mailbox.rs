@@ -75,6 +75,11 @@ pub enum MailboxError {
     /// Inbox. The link is marked until a later discovery finds one.
     #[error("the account has no mailbox the provider will serve")]
     NoMailbox,
+    /// The message's last claims all ended without an outcome: each worker
+    /// reading it stopped (a read that runs the worker out of memory kills
+    /// every worker that claims it) and its lease expired.
+    #[error("the message's last {0} claims ended without an outcome")]
+    ClaimsUnfinished(i32),
 }
 
 /// Which projection effect deferred the work (`outlook.effect`).
@@ -134,6 +139,12 @@ impl MailboxError {
             failure => Self::Database(failure),
         }
     }
+
+    /// Whether a database call gave up waiting for a lock (see
+    /// [`DatabaseFailure::is_lock_timeout`]).
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Database(failure) if failure.is_lock_timeout())
+    }
 }
 
 /// What failed underneath a database call. The database's own message is
@@ -161,6 +172,14 @@ impl std::fmt::Display for DatabaseFailure {
             Self::Decode => f.write_str("decode failed"),
             Self::Other => f.write_str("driver error"),
         }
+    }
+}
+
+impl DatabaseFailure {
+    /// Whether the statement gave up waiting for a lock. The rows were busy,
+    /// not wrong, so the same work succeeds once their holder finishes.
+    pub fn is_lock_timeout(&self) -> bool {
+        matches!(self, Self::Sqlstate(code) if code == super::models::error::LOCK_NOT_AVAILABLE)
     }
 }
 
@@ -207,6 +226,9 @@ pub struct MessageLease {
     pub lease_id: Uuid,
     pub is_import: bool,
     pub attempts: i32,
+    /// Claims of this revision in a row before this one that ended without
+    /// recording an outcome: their worker stopped while it held the lease.
+    pub unfinished_claims: i32,
     /// The newest change notification that queued this message.
     pub notification: Option<Notification>,
 }
@@ -717,7 +739,24 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
             otel.status_description = tracing::field::Empty,
         );
         adopt_notification_trace(&span, lease.notification.as_ref());
+        if lease.unfinished_claims >= UNFINISHED_CLAIM_LIMIT {
+            return self.abandon_unfinished(&lease).instrument(span).await;
+        }
         self.reconcile(&lease).instrument(span).await
+    }
+
+    /// Gives up on a message without reading it, since the read is the likely
+    /// cause of the workers that stopped. A new change revives it as it does
+    /// any abandoned message.
+    async fn abandon_unfinished(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
+        let span = Span::current();
+        let error = MailboxError::ClaimsUnfinished(lease.unfinished_claims);
+        self.repo
+            .release_message(lease, MessageRetry::Abandon)
+            .await
+            .inspect_err(|release| record_failed(&span, lease.mailbox.link_id, release))?;
+        record_abandoned(&span, lease.mailbox.link_id, &error, lease.attempts);
+        Err(error)
     }
 
     async fn reconcile(&self, lease: &MessageLease) -> Result<bool, MailboxError> {
@@ -848,6 +887,43 @@ where
     }
 }
 
+/// Attempts a write that records a provider call's result gets while its
+/// mailbox stays locked, and the wait between them. With each attempt's 5 s
+/// lock timeout they take about 80 s, inside one 3 minute lease even before it
+/// is renewed.
+pub(crate) const AFTER_PROVIDER_ATTEMPTS: u32 = 6;
+pub(crate) const AFTER_PROVIDER_RETRY_DELAY: std::time::Duration =
+    std::time::Duration::from_secs(10);
+
+/// Retries `write` while it times out on a lock. A later attempt reads the
+/// provider's new state as already applied, or as another client's change,
+/// so what the call changed has to be recorded now. Each attempt opens its
+/// own transaction, so no connection is held between attempts.
+pub(crate) async fn record_after_provider<F, W>(
+    unit: &'static str,
+    mut write: F,
+) -> Result<(), MailboxError>
+where
+    F: FnMut() -> W,
+    W: Future<Output = Result<(), MailboxError>>,
+{
+    let mut attempt = 1;
+    loop {
+        match write().await {
+            Err(error) if attempt < AFTER_PROVIDER_ATTEMPTS && error.is_lock_timeout() => {
+                tracing::debug!(
+                    unit,
+                    attempt,
+                    "write after a provider call waits for its mailbox to be free"
+                );
+                tokio::time::sleep(AFTER_PROVIDER_RETRY_DELAY).await;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
 /// Due import messages a mailbox may have before its folders' import rounds
 /// stop reading pages: two pages. Gmail's backfill lists its next page
 /// behind the threads it queued; this keeps an Outlook walk about as far
@@ -873,6 +949,14 @@ const PERMANENT_FAILURE_ATTEMPTS: i32 = 3;
 /// its own is abandoned. With the backoff below that is about a day.
 const MESSAGE_FAILURE_ATTEMPTS: i32 = 50;
 
+/// Claims in a row that may end without an outcome before a message, or a
+/// projection event, is abandoned unread. Its next claim comes when the
+/// 3-minute lease expires, so a read that kills its worker kills five, over
+/// about 15 minutes, instead of one every few minutes forever. A deploy, or a
+/// worker stopped for another reason, leaves one such claim on whatever it
+/// was reading.
+const UNFINISHED_CLAIM_LIMIT: i32 = 5;
+
 /// The longest backoff. The `outlook-message-parked-too-long` monitor alerts
 /// above 30 minutes, which only a Graph `Retry-After` should reach.
 const MAX_BACKOFF_SECONDS: u32 = 1800;
@@ -881,13 +965,16 @@ const MAX_BACKOFF_SECONDS: u32 = 1800;
 /// without calendar parts.
 const CALENDAR_PARTS_ATTEMPTS: i32 = 3;
 
-/// How a failed reconciliation is retried. `attempts` counts this claim.
+/// How a failed reconciliation, or projection event, is retried. `attempts`
+/// counts this claim.
 /// Throttling and credential failures belong to the mailbox, not the message,
 /// so they keep their own delays and never move it closer to abandonment.
 /// A transient provider failure (Graph 5xx or 408, a request Graph never
 /// answered) says nothing about the message either: during an outage every
 /// message gets one. It backs off like any failure but is never abandoned, and
-/// stops counting once the backoff is at its longest. Data the database
+/// stops counting once the backoff is at its longest. A lock the database
+/// could not grant in time is the same: another transaction held the
+/// mailbox's rows, which says nothing about the message. Data the database
 /// refuses is refused the same way again, so it stops as an outright refusal
 /// does; the few tries let a refusal that briefly hit valid data (a deploy
 /// in progress) clear.
@@ -912,7 +999,12 @@ fn message_retry(error: &MailboxError, attempts: i32) -> MessageRetry {
                 }
             }
         }
-        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+        _ if error.is_lock_timeout()
+            || matches!(
+                error,
+                MailboxError::Provider(EmailApiError::Transient { .. })
+            ) =>
+        {
             let seconds = backoff_seconds(attempts);
             MessageRetry::After {
                 seconds,

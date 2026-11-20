@@ -32,6 +32,7 @@ vi.mock('@queries/email/local-drafts', async (importOriginal) => ({
 }));
 vi.mock('@queries/client', () => ({
   queryClient: {
+    getQueryState: () => undefined,
     getQueryCache: () => ({ subscribe: () => () => {} }),
   },
 }));

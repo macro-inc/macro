@@ -22,6 +22,8 @@ export type ViewShellLayout = {
     canCollapse: Accessor<boolean>;
     isOverlay: Accessor<boolean>;
     isSheet: Accessor<boolean>;
+    /** Whether a list aside (`asideList`) fills a narrow shell in place of Main. */
+    fillsShell: Accessor<boolean>;
     collapse: () => void;
     expand: () => void;
     toggle: () => void;

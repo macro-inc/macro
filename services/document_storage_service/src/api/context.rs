@@ -344,7 +344,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
-        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
+        calendar_events::outbound::gateway_refresh::GatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -973,6 +973,8 @@ pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRo
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub search_term_matching: Arc<dyn search_service::TermMatchingRollout>,
+    /// Each caller's unified search lane, shared by both search mounts.
+    pub search_lanes: Arc<search_service::SearchLanes>,
     pub passwords_state: passwords::inbound::router::PasswordRouterState<AuthorizationService>,
     pub passwords_agent_state:
         passwords::inbound::agent_router::AgentRouterState<AuthorizationService>,
@@ -1131,6 +1133,7 @@ impl From<&ApiContext> for SearchHandlerState {
                 ctx.readonly_db.0.clone(),
             ))) as Arc<dyn CalendarEventLabelReader>,
             term_matching_rollout: ctx.search_term_matching.clone(),
+            search_lanes: ctx.search_lanes.clone(),
         }
     }
 }

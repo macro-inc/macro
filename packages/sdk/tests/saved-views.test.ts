@@ -73,7 +73,10 @@ describe('saved views', () => {
     const { macro, requests } = serve(
       Response.json(record()),
       Response.json(record({ name: 'Bills', revision: 4 })),
+      Response.json(record({ name: 'Bills', revision: 4 })),
       Response.json(record({ name: 'Bills', revision: 5, sharedTeamId: TEAM })),
+      Response.json(record({ name: 'Bills', revision: 5, sharedTeamId: TEAM })),
+      Response.json(record({ name: 'Bills', revision: 6 })),
       Response.json(record({ name: 'Bills', revision: 6 })),
     );
     const view = macro.savedViews.byId(VIEW);
@@ -85,18 +88,20 @@ describe('saved views', () => {
     expect(requests.map((request) => request.method)).toEqual([
       'GET',
       'PATCH',
+      'GET',
       'PATCH',
+      'GET',
       'PATCH',
     ]);
     expect(await requests[1].json()).toEqual({
       expectedRevision: 3,
       name: 'Bills',
     });
-    expect(await requests[2].json()).toEqual({
+    expect(await requests[3].json()).toEqual({
       expectedRevision: 4,
       sharing: { teamId: TEAM },
     });
-    expect(await requests[3].json()).toEqual({
+    expect(await requests[5].json()).toEqual({
       expectedRevision: 5,
       sharing: { teamId: null },
     });
@@ -168,5 +173,97 @@ describe('saved views', () => {
       kind: 'email',
       ids: [OTHER, VIEW],
     });
+  });
+
+  test('creates appearance atomically and replaces it without changing the filter revision', async () => {
+    const appearance = {
+      icon: { kind: 'emoji' as const, value: '📚' },
+      color: 'blue' as const,
+    };
+    const { macro, requests } = serve(
+      Response.json(record({ appearance }), { status: 201 }),
+      Response.json(record({ appearance: {} })),
+      Response.json(record({ appearance: {} })),
+      Response.json(record({ name: 'Bills', appearance: {}, revision: 4 })),
+    );
+    const view = await macro.savedViews.create({
+      name: 'Invoices',
+      config: { kind: 'email', version: 1, filters: {} },
+      appearance,
+    });
+    expect(await view.appearance()).toEqual(appearance);
+    expect((await requests[0].json()).appearance).toEqual(appearance);
+    expect(await view.setAppearance({})).toEqual({});
+    expect(requests[1].method).toBe('PUT');
+    expect(new URL(requests[1].url).pathname).toBe(
+      `/saved_views/definitions/${VIEW}/appearance`,
+    );
+    expect(await requests[1].json()).toEqual({});
+    expect(await view.revision()).toBe(3);
+    await view.edit({ name: 'Bills' });
+    expect((await requests[3].json()).expectedRevision).toBe(3);
+  });
+
+  test('retains the loaded appearance when the owner-only write is refused', async () => {
+    const appearance = { icon: { kind: 'emoji' as const, value: '📚' } };
+    const { macro } = serve(
+      Response.json(record({ appearance })),
+      Response.json({ message: 'not found' }, { status: 404 }),
+    );
+    const view = macro.savedViews.byId(VIEW);
+    expect(await view.appearance()).toEqual(appearance);
+    await expect(view.setAppearance({})).rejects.toMatchObject({ status: 404 });
+    expect(await view.appearance()).toEqual(appearance);
+    expect(await view.revision()).toBe(3);
+  });
+
+  test('reloads the current revision after an older appearance response arrives late', async () => {
+    const appearanceResponse = Promise.withResolvers<Response>();
+    const appearanceStarted = Promise.withResolvers<void>();
+    const revisions: number[] = [];
+    let latest = record();
+    globalThis.fetch = Object.assign(
+      async (...[input, init]: Parameters<typeof fetch>) => {
+        const request =
+          input instanceof Request ? input : new Request(input, init);
+        if (request.method === 'PUT') {
+          latest = { ...latest, appearance: {} };
+          appearanceStarted.resolve();
+          return appearanceResponse.promise;
+        }
+        if (request.method === 'PATCH') {
+          const body: { expectedRevision: number; name: string } =
+            await request.json();
+          revisions.push(body.expectedRevision);
+          if (body.expectedRevision !== latest.revision)
+            return Response.json(
+              { message: 'revision conflict' },
+              { status: 409 },
+            );
+          latest = {
+            ...latest,
+            name: body.name,
+            revision: latest.revision + 1,
+          };
+        }
+        return Response.json(latest);
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { storage: 'https://storage.example.test' },
+    });
+    const view = macro.savedViews.byId(VIEW);
+    await view.name();
+    const changingAppearance = view.setAppearance({});
+    await appearanceStarted.promise;
+    await view.edit({ name: 'Bills' });
+    appearanceResponse.resolve(Response.json(record({ appearance: {} })));
+    await changingAppearance;
+    await view.edit({ name: 'Latest bills' });
+    expect(revisions).toEqual([3, 4]);
+    expect(await view.name()).toBe('Latest bills');
+    expect(await view.appearance()).toEqual({});
   });
 });

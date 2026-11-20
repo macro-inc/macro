@@ -58,7 +58,7 @@ export class CodeExecution extends MacroEntity<ExecutionRecord> {
   /** Saved execution state. Call refresh to observe subsequent changes. */
   readonly status = this.field('status');
 
-  /** The submitted JavaScript module source. */
+  /** The submitted TypeScript module source. */
   readonly source = this.field('source');
 
   /** Legacy bridge calls; direct HTTP executions leave this empty. */

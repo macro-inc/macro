@@ -14,6 +14,7 @@ use email_api_client::domain::models::{MailboxState, SendRequest};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod delivery_status;
+mod lock_timeouts;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";

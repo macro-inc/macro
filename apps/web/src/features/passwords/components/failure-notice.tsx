@@ -23,6 +23,9 @@ export function FailureNotice(props: {
       <Match when={props.failure === 'unreachable'}>
         {alert(t('passwords.unreachable'))}
       </Match>
+      <Match when={props.failure === 'serviceUnavailable'}>
+        {alert(t('passwords.serviceUnavailable'))}
+      </Match>
       <Match when={props.failure === 'notProvisioned'}>
         {alert(t('passwords.vaultNotProvisioned'))}
       </Match>

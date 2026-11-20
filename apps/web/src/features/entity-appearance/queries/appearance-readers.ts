@@ -26,13 +26,15 @@ type Reader = {
   key: QueryKey;
   patch: (appearance: EntityAppearance) => Rollback;
 };
-export type SoupAppearanceTarget = {
-  tag: 'document' | 'initiative';
-  typename: 'GraphqlSoupDocument' | 'GraphqlSoupInitiative';
-};
+export type GraphqlAppearanceTarget =
+  | {
+      tag: 'document' | 'initiative';
+      typename: 'GraphqlSoupDocument' | 'GraphqlSoupInitiative';
+    }
+  | { tag: 'saved_view'; typename: 'GraphqlSavedView' };
 type Adapter = {
   apiType: ApiEntityType;
-  soup?: SoupAppearanceTarget;
+  graphql?: GraphqlAppearanceTarget;
   readers: Reader[];
 };
 
@@ -78,7 +80,7 @@ export function appearanceAdapter(
   const adapters: Record<AppearanceEntityType, () => Adapter> = {
     document: () => ({
       apiType: 'document',
-      soup: { tag: 'document', typename: 'GraphqlSoupDocument' },
+      graphql: { tag: 'document', typename: 'GraphqlSoupDocument' },
       readers: [
         reader<DocumentMetadata>(
           entityKeys.documentMetadata(id).queryKey,
@@ -89,7 +91,12 @@ export function appearanceAdapter(
     }),
     initiative: () => ({
       apiType: 'initiative',
-      soup: { tag: 'initiative', typename: 'GraphqlSoupInitiative' },
+      graphql: { tag: 'initiative', typename: 'GraphqlSoupInitiative' },
+      readers: [],
+    }),
+    saved_view: () => ({
+      apiType: 'saved_view',
+      graphql: { tag: 'saved_view', typename: 'GraphqlSavedView' },
       readers: [],
     }),
     routine: () => ({
@@ -178,6 +185,7 @@ export function patchAppearanceReaders(
   id: string,
   appearance: EntityAppearance
 ): Rollback {
+  if (adapter.graphql?.tag === 'saved_view') return () => {};
   const rollbacks = adapter.readers.map((reader) => reader.patch(appearance));
   const previewBefore = setPreviewAppearance(id, appearance);
   if (previewBefore !== undefined) {
@@ -185,7 +193,7 @@ export function patchAppearanceReaders(
       setPreviewAppearance(id, previewBefore.appearance, appearance);
     });
   }
-  const soup = adapter.soup;
+  const soup = adapter.graphql;
   const current = soup && getSoupEntityById(id);
   if (
     soup &&

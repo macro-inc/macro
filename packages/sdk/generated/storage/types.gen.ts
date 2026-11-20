@@ -5321,8 +5321,10 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company, unless the team
+     * blocks the domain or the company is hidden. Optional: omit it to add
+     * the contact by name only.
      */
     email?: string | null;
     /**
@@ -5700,6 +5702,7 @@ export type CreateProjectResponse = {
 };
 
 export type CreateSavedViewDefinitionRequest = {
+    appearance?: null | EntityAppearance;
     /**
      * Consumer configuration with its `kind` and `version`, at most 32 KiB.
      */
@@ -16746,7 +16749,7 @@ export type PasswordItemFields = {
      */
     createdAt: string;
     /**
-     * Whether the item is marked as a favorite.
+     * The current viewer's private favorite in responses; legacy initial flag in storage.
      */
     favorite: boolean;
     /**
@@ -16860,7 +16863,7 @@ export type PasswordPatchItem = {
      */
     expectedVersion: number;
     /**
-     * Whether the item is marked as a favorite.
+     * Legacy accepted field, ignored; change private preferences through the favorite endpoint.
      */
     favorite: boolean;
     /**
@@ -17035,7 +17038,7 @@ export type PasswordWriteItem = {
      */
     expectedVersion?: number | null;
     /**
-     * Whether the item is marked as a favorite.
+     * Initial creator preference on create; ignored on update. Use the favorite endpoint afterward.
      */
     favorite: boolean;
     /**
@@ -19013,6 +19016,7 @@ export type SavedQuery = {
  * A saved filter definition, not a snapshot of matching entities.
  */
 export type SavedViewDefinition = {
+    appearance?: null | EntityAppearance;
     /**
      * Versioned configuration interpreted by the consuming feature, with its
      * `kind` (such as `email` or `task`) and `version`.
@@ -19297,7 +19301,9 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * whose primary email is at a known personal provider. A contact with an
+ * address on its current company's domain cannot switch.
  */
 export type SetContactCompanyRequest = {
     /**
@@ -24116,6 +24122,7 @@ export type VersionedTable = {
 };
 
 export type View = {
+    appearance?: null | EntityAppearance;
     /**
      * It is an explicit choice that the structure of the view configuration
      * is up to the frontend. The structure and composition of view configuration
@@ -34856,6 +34863,10 @@ export type GetItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type GetItemsSoupError = GetItemsSoupErrors[keyof GetItemsSoupErrors];
@@ -34884,6 +34895,10 @@ export type PostItemsSoupErrors = {
      */
     403: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupError = PostItemsSoupErrors[keyof PostItemsSoupErrors];
@@ -34916,6 +34931,10 @@ export type PostItemsSoupAstErrors = {
      */
     404: ErrorResponse;
     500: ErrorResponse;
+    /**
+     * Selected email rules exceeded a resource limit
+     */
+    503: ErrorResponse;
 };
 
 export type PostItemsSoupAstError = PostItemsSoupAstErrors[keyof PostItemsSoupAstErrors];
@@ -36084,6 +36103,64 @@ export type PasswordsCopyResponses = {
 
 export type PasswordsCopyResponse = PasswordsCopyResponses[keyof PasswordsCopyResponses];
 
+export type PasswordsRemoveFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsRemoveFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsRemoveFavoriteError = PasswordsRemoveFavoriteErrors[keyof PasswordsRemoveFavoriteErrors];
+
+export type PasswordsRemoveFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsRemoveFavoriteResponse = PasswordsRemoveFavoriteResponses[keyof PasswordsRemoveFavoriteResponses];
+
+export type PasswordsSetFavoriteData = {
+    body?: never;
+    headers: {
+        /**
+         * Required CSRF header; send 1
+         */
+        'X-Macro-Passwords': string;
+    };
+    path: {
+        team: string;
+        item: string;
+    };
+    query?: never;
+    url: '/passwords/teams/{team}/items/{item}/favorite';
+};
+
+export type PasswordsSetFavoriteErrors = {
+    404: PasswordFailure;
+    503: PasswordFailure;
+};
+
+export type PasswordsSetFavoriteError = PasswordsSetFavoriteErrors[keyof PasswordsSetFavoriteErrors];
+
+export type PasswordsSetFavoriteResponses = {
+    204: void;
+};
+
+export type PasswordsSetFavoriteResponse = PasswordsSetFavoriteResponses[keyof PasswordsSetFavoriteResponses];
+
 export type PasswordsHistoryData = {
     body?: never;
     path: {
@@ -37191,6 +37268,33 @@ export type UpdateSavedViewDefinitionResponses = {
 };
 
 export type UpdateSavedViewDefinitionResponse = UpdateSavedViewDefinitionResponses[keyof UpdateSavedViewDefinitionResponses];
+
+export type SetSavedViewAppearanceData = {
+    body: EntityAppearance;
+    path: {
+        /**
+         * The saved view to edit
+         */
+        saved_view_id: string;
+    };
+    query?: never;
+    url: '/saved_views/definitions/{saved_view_id}/appearance';
+};
+
+export type SetSavedViewAppearanceErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetSavedViewAppearanceError = SetSavedViewAppearanceErrors[keyof SetSavedViewAppearanceErrors];
+
+export type SetSavedViewAppearanceResponses = {
+    200: SavedViewDefinition;
+};
+
+export type SetSavedViewAppearanceResponse = SetSavedViewAppearanceResponses[keyof SetSavedViewAppearanceResponses];
 
 export type ExcludeDefaultViewHandlerData = {
     body: ExcludeDefaultViewRequest;

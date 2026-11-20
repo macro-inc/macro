@@ -1,4 +1,13 @@
 export default {
+  accessDenied: "You don't have access to CRM",
+  accessDeniedHelp: 'Ask a team admin or owner to restore your access.',
+  accessCheckFailed: "Couldn't check your CRM access.",
+  listLoadFailed: "Couldn't load this list.",
+  listReloadHelp: 'Please try again to reload this view.',
+  tryAgain: 'Try again',
+  memberAccess: 'CRM access',
+  memberAccessAlways: 'Owners and admins always have access',
+  memberAccessFor: 'CRM access for {{name}}',
   policyChange: 'Change',
   policyRules: 'Sharing rules',
   policyEdit: 'Edit JSON',
@@ -190,8 +199,6 @@ export default {
   removeCompanyTitle: 'Remove company from this contact?',
   removeCompanyBody:
     'The contact, its email history and its discussions are kept. It will no longer appear under this company.',
-  removeCompanyPermanent:
-    'Its primary email is not a personal address, so it cannot be linked to a company again from here.',
   contactCompanyLinkedByEmail:
     'Linked by an email address on this company’s domain.',
   goToCompany: 'Go to company',
@@ -319,7 +326,7 @@ export default {
   privacyRetry: 'Retry',
   privacyContributionTitle: 'Your email contribution',
   privacyAvailability:
-    'Everyone on your team can use CRM and manage companies without sharing their email.',
+    'Email contribution is optional and separate from CRM access.',
   privacyConnect: 'Connect your email first',
   privacyShared: 'Your eligible emails are shared with your team.',
   privacyNotShared: 'Your emails are not contributing to CRM.',
