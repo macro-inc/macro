@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
 use crate::domain::markdown_edits::{
-    BlockId, MarkdownEditCandidate, MarkdownEditMerge, MarkdownEditRefusal,
+    BlockId, MarkdownEditMatchingBlock, MarkdownEditMerge, MarkdownEditRefusal,
     MarkdownEditRefusalCode, MarkdownEdited,
 };
 use crate::domain::models::{
@@ -689,7 +689,7 @@ impl EditingWorkerService for FakeEditingWorker {
                     before: "Ship in Q3.".into(),
                     after: "Ship in Q4.".into(),
                 }],
-                merge: MarkdownEditMerge::Current,
+                merge: Some(MarkdownEditMerge::Current),
             }),
         })
     }
@@ -1140,13 +1140,13 @@ async fn edits_apply_directly_without_the_ai_editor() {
 }
 
 #[tokio::test]
-async fn a_refused_batch_names_the_code_and_the_candidate_blocks() {
+async fn a_refused_batch_names_the_code_and_the_matching_blocks() {
     let editing = FakeEditingWorker {
         markdown_edit_refusal: Some(MarkdownEditRefusal {
             code: MarkdownEditRefusalCode::AmbiguousMatch,
             message: "edit 1: old occurs 2 times; add block_id".into(),
             edit: Some(1),
-            candidates: vec![MarkdownEditCandidate {
+            blocks: vec![MarkdownEditMatchingBlock {
                 block_id: "b1".into(),
                 occurrences: 2,
                 markdown: "Q3 and Q3".into(),

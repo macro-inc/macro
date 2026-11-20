@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { EditDocumentMarkdownData } from '../../../generated/storage/types.gen';
 import {
   DocumentBlock,
+  DocumentBusyError,
   DocumentChangedError,
   EditOutcomeUnknownError,
   MarkdownEditsRefusedError,
@@ -133,7 +134,7 @@ describe('document.applyMarkdownEdits', () => {
     expect(requests).toEqual([]);
   });
 
-  test('a refusal throws with its code, edit and candidate blocks', async () => {
+  test('a refusal throws with its code, edit and matching blocks', async () => {
     const { client } = clientAnswering({
       error: {
         error: 'edit_refused',
@@ -142,7 +143,7 @@ describe('document.applyMarkdownEdits', () => {
           code: 'ambiguous_match',
           message: 'edit 1: old occurs 2 times',
           edit: 1,
-          candidates: [
+          blocks: [
             { blockId: 'p1', occurrences: 2, markdown: 'Q3 and Q3' },
           ],
         },
@@ -158,17 +159,21 @@ describe('document.applyMarkdownEdits', () => {
     const refused = thrown as MarkdownEditsRefusedError;
     expect(refused.code).toBe('ambiguous_match');
     expect(refused.edit).toBe(1);
-    expect(refused.candidates[0].occurrences).toBe(2);
-    expect(refused.candidates[0].block.toJSON()).toEqual({
+    expect(refused.blocks[0].occurrences).toBe(2);
+    expect(refused.blocks[0].block.toJSON()).toEqual({
       id: 'p1',
       documentId: 'doc',
       markdown: 'Q3 and Q3',
     });
   });
 
-  test('a gone match is DocumentChangedError and a 502 an unknown outcome', async () => {
+  test('a gone match is DocumentChangedError, a busy document DocumentBusyError and a 502 an unknown outcome', async () => {
     const conflict = clientAnswering({
-      error: { error: 'revision_conflict', message: 'gone' },
+      error: { error: 'revision_conflict', message: 'gone', conflict: 'changed' },
+      response: { status: 409 },
+    });
+    const busy = clientAnswering({
+      error: { error: 'revision_conflict', message: 'busy', conflict: 'busy' },
       response: { status: 409 },
     });
     const failed = clientAnswering({
@@ -179,11 +184,15 @@ describe('document.applyMarkdownEdits', () => {
     const changed = await Document.byId(conflict.client, 'doc')
       .applyMarkdownEdits([{ replace: 'Q3', with: 'Q4' }])
       .catch((error: unknown) => error);
+    const retry = await Document.byId(busy.client, 'doc')
+      .applyMarkdownEdits([{ replace: 'Q3', with: 'Q4' }])
+      .catch((error: unknown) => error);
     const unknown = await Document.byId(failed.client, 'doc')
       .applyMarkdownEdits([{ replace: 'Q3', with: 'Q4' }])
       .catch((error: unknown) => error);
 
     expect(changed).toBeInstanceOf(DocumentChangedError);
+    expect(retry).toBeInstanceOf(DocumentBusyError);
     expect(unknown).toBeInstanceOf(EditOutcomeUnknownError);
   });
 });

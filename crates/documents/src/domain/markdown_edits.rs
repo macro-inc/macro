@@ -285,8 +285,9 @@ pub struct MarkdownEdited {
     pub revision: String,
     /// What changed, block by block.
     pub changes: Vec<MarkdownBlockChange>,
-    /// How the batch was placed.
-    pub merge: MarkdownEditMerge,
+    /// How the batch was placed; absent for `already_applied`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge: Option<MarkdownEditMerge>,
 }
 
 /// Why a batch was refused; the document is untouched.
@@ -321,11 +322,11 @@ pub enum MarkdownEditRefusalCode {
     VerifyFailed,
 }
 
-/// A block an ambiguous or missing `old` may have meant.
+/// A block a missing or ambiguous `old` was found in, or is nearest to.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
-pub struct MarkdownEditCandidate {
+pub struct MarkdownEditMatchingBlock {
     /// The block.
     pub block_id: String,
     /// How often `old` occurs in it (0 for a no-match suggestion).
@@ -345,9 +346,31 @@ pub struct MarkdownEditRefusal {
     pub message: String,
     /// The 1-based edit it concerns, when one.
     pub edit: Option<u32>,
-    /// Blocks it may have meant.
+    /// For `no_match` and `ambiguous_match`, the blocks `old` was found in or
+    /// is nearest to.
     #[serde(default)]
-    pub candidates: Vec<MarkdownEditCandidate>,
+    pub blocks: Vec<MarkdownEditMatchingBlock>,
+}
+
+/// Why a batch conflicts with the document as it is now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum MarkdownEditConflictReason {
+    /// The document changed since the base revision so that an edit no
+    /// longer applies: read it again and redo the edit.
+    Changed,
+    /// Other edits kept landing while this one committed: retry it as is.
+    Busy,
+}
+
+/// A batch that conflicts with the document as it is now; nothing was written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MarkdownEditConflict {
+    /// Why.
+    pub reason: MarkdownEditConflictReason,
+    /// What happened, for the caller; may quote the document.
+    pub message: String,
 }
 
 /// Why direct edits did not complete.
@@ -359,10 +382,10 @@ pub enum MarkdownEditError {
     /// The batch was refused; nothing was written.
     #[error("{}", .0.message)]
     Refused(MarkdownEditRefusal),
-    /// An edit's matched text is gone since the base revision; nothing was
-    /// written. The message says which.
-    #[error("{0}")]
-    Conflict(String),
+    /// The batch conflicts with the document as it is now; nothing was
+    /// written.
+    #[error("{}", .0.message)]
+    Conflict(MarkdownEditConflict),
     /// The blocks could not be read.
     #[error("markdown blocks read failed: {0}")]
     ReadFailed(anyhow::Error),
@@ -428,6 +451,7 @@ pub async fn apply_markdown_edits<Worker: EditingWorkerService>(
     {
         MarkdownEditOutcome::Applied(edited) => Ok(edited),
         MarkdownEditOutcome::Refused(refusal) => Err(MarkdownEditError::Refused(refusal)),
-        MarkdownEditOutcome::Conflict(message) => Err(MarkdownEditError::Conflict(message)),
+        MarkdownEditOutcome::Conflict(conflict) => Err(MarkdownEditError::Conflict(conflict)),
+        MarkdownEditOutcome::Invalid(message) => Err(DocumentError::BadRequest(message).into()),
     }
 }

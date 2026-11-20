@@ -2,8 +2,8 @@
 
 use crate::domain::ai_editing::{AiEditError, AiEditRequest};
 use crate::domain::markdown_edits::{
-    MarkdownBlockChange, MarkdownEdit, MarkdownEditError, MarkdownEditOutcomeKind,
-    MarkdownEditRequest, apply_markdown_edits,
+    MarkdownBlockChange, MarkdownEdit, MarkdownEditConflictReason, MarkdownEditError,
+    MarkdownEditOutcomeKind, MarkdownEditRequest, apply_markdown_edits,
 };
 use crate::domain::permission_token::encode_permission_token;
 use crate::domain::ports::{
@@ -178,17 +178,24 @@ impl EditDocument {
                             .unwrap_or_default(),
                         refusal.message
                     );
-                    for candidate in &refusal.candidates {
+                    for block in &refusal.blocks {
                         text.push_str(&format!(
                             "\n- block {} ({} occurrence(s)): {}",
-                            candidate.block_id, candidate.occurrences, candidate.markdown
+                            block.block_id, block.occurrences, block.markdown
                         ));
                     }
                     text
                 }
-                MarkdownEditError::Conflict(message) => {
-                    format!("the document changed and an edit no longer applies, nothing was written: {message}")
-                }
+                MarkdownEditError::Conflict(conflict) => match conflict.reason {
+                    MarkdownEditConflictReason::Changed => format!(
+                        "the document changed and an edit no longer applies, nothing was written: {}; read it again",
+                        conflict.message
+                    ),
+                    MarkdownEditConflictReason::Busy => format!(
+                        "others kept editing the document, nothing was written: {}",
+                        conflict.message
+                    ),
+                },
                 MarkdownEditError::Document(error) => error.to_string(),
                 MarkdownEditError::ReadFailed(_) | MarkdownEditError::WriteFailed(_) => {
                     "the edit failed and may have applied; read the document before retrying".to_owned()

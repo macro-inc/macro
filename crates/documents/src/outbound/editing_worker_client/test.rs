@@ -295,8 +295,8 @@ async fn spreadsheet_instructions_carry_usage_with_every_outcome() {
 #[tokio::test]
 async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
     use crate::domain::markdown_edits::{
-        BlockId, DeleteEdit, MarkdownEdit, MarkdownEditMerge, MarkdownEditOutcomeKind,
-        MarkdownEditRefusalCode, MarkdownEditRequest,
+        BlockId, DeleteEdit, MarkdownEdit, MarkdownEditConflict, MarkdownEditConflictReason,
+        MarkdownEditMerge, MarkdownEditOutcomeKind, MarkdownEditRefusalCode, MarkdownEditRequest,
     };
     use axum::{Json, Router, http::StatusCode, routing::post};
 
@@ -328,13 +328,13 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
                                 "code": "unknown_block",
                                 "message": "edit 1: no block with id b1",
                                 "edit": 1,
-                                "candidates": [],
+                                "blocks": [],
                             },
                         })),
                     ),
                     _ => (
                         StatusCode::CONFLICT,
-                        Json(serde_json::json!({ "error": "the matched text is gone", "conflict": { "edit": 1 } })),
+                        Json(serde_json::json!({ "error": "the matched text is gone", "conflict": { "reason": "changed", "edit": 1 } })),
                     ),
                 }
             }
@@ -364,7 +364,7 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
     match applied {
         MarkdownEditOutcome::Applied(edited) => {
             assert_eq!(edited.outcome, MarkdownEditOutcomeKind::Committed);
-            assert_eq!(edited.merge, MarkdownEditMerge::Current);
+            assert_eq!(edited.merge, Some(MarkdownEditMerge::Current));
             assert_eq!(edited.changes.len(), 1);
         }
         other => panic!("expected an applied batch, got {other:?}"),
@@ -378,7 +378,10 @@ async fn direct_markdown_edits_send_the_batch_and_read_each_outcome() {
     }
     assert_eq!(
         conflict,
-        MarkdownEditOutcome::Conflict("the matched text is gone".into())
+        MarkdownEditOutcome::Conflict(MarkdownEditConflict {
+            reason: MarkdownEditConflictReason::Changed,
+            message: "the matched text is gone".into(),
+        })
     );
     assert_eq!(
         bodies.lock().unwrap()[0],

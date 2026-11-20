@@ -126,6 +126,20 @@ struct WorkerRefusal {
     refusal: crate::domain::markdown_edits::MarkdownEditRefusal,
 }
 
+/// The worker's 409 body for a direct-edit batch.
+#[cfg(feature = "ai_tools")]
+#[derive(serde::Deserialize)]
+struct WorkerConflict {
+    error: String,
+    conflict: WorkerConflictDetail,
+}
+
+#[cfg(feature = "ai_tools")]
+#[derive(serde::Deserialize)]
+struct WorkerConflictDetail {
+    reason: crate::domain::markdown_edits::MarkdownEditConflictReason,
+}
+
 /// The worker's `error` message, or a generic one when its body has none.
 #[cfg(feature = "ai_tools")]
 async fn worker_error(response: reqwest::Response) -> String {
@@ -457,7 +471,16 @@ impl EditingWorkerService for ReqwestEditingWorkerClient {
         let response = self.markdown(document_id, document_token, body).await?;
         let status = response.status();
         if status == reqwest::StatusCode::CONFLICT {
-            return Ok(MarkdownEditOutcome::Conflict(worker_error(response).await));
+            let body: WorkerConflict = response.json().await?;
+            return Ok(MarkdownEditOutcome::Conflict(
+                crate::domain::markdown_edits::MarkdownEditConflict {
+                    reason: body.conflict.reason,
+                    message: body.error,
+                },
+            ));
+        }
+        if status == reqwest::StatusCode::BAD_REQUEST {
+            return Ok(MarkdownEditOutcome::Invalid(worker_error(response).await));
         }
         if status == reqwest::StatusCode::UNPROCESSABLE_ENTITY {
             let body: WorkerRefusal = response.json().await?;

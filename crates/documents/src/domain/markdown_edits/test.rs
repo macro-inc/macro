@@ -153,7 +153,7 @@ fn the_worker_response_reads_as_changes() {
         MarkdownEdited {
             outcome: MarkdownEditOutcomeKind::Committed,
             revision: "AQIE".into(),
-            merge: MarkdownEditMerge::Base,
+            merge: Some(MarkdownEditMerge::Base),
             changes: vec![
                 MarkdownBlockChange::Edited {
                     block_id: block("b1"),
@@ -205,7 +205,7 @@ async fn edits_go_to_the_worker_with_an_edit_token_for_the_caller() {
                     outcome: MarkdownEditOutcomeKind::Committed,
                     revision: "AQIE".into(),
                     changes: vec![],
-                    merge: MarkdownEditMerge::Current,
+                    merge: Some(MarkdownEditMerge::Current),
                 }))
             })
         });
@@ -229,7 +229,7 @@ async fn a_refusal_and_a_conflict_come_back_typed() {
         code: MarkdownEditRefusalCode::AmbiguousMatch,
         message: "edit 1: old occurs 2 times".into(),
         edit: Some(1),
-        candidates: vec![],
+        blocks: vec![],
     };
     let mut worker = MockEditingWorkerService::new();
     let refused = refusal.clone();
@@ -241,7 +241,12 @@ async fn a_refusal_and_a_conflict_come_back_typed() {
             Box::pin(async move { Ok(MarkdownEditOutcome::Refused(refused)) })
         });
     worker.expect_edit_markdown().times(1).returning(|_, _, _| {
-        Box::pin(async { Ok(MarkdownEditOutcome::Conflict("text is gone".into())) })
+        Box::pin(async {
+            Ok(MarkdownEditOutcome::Conflict(MarkdownEditConflict {
+                reason: MarkdownEditConflictReason::Changed,
+                message: "text is gone".into(),
+            }))
+        })
     });
 
     let first = edit_markdown(
@@ -262,7 +267,11 @@ async fn a_refusal_and_a_conflict_come_back_typed() {
     .await;
 
     assert!(matches!(first, Err(MarkdownEditError::Refused(r)) if r == refusal));
-    assert!(matches!(second, Err(MarkdownEditError::Conflict(m)) if m == "text is gone"));
+    assert!(matches!(
+        second,
+        Err(MarkdownEditError::Conflict(conflict))
+            if conflict.reason == MarkdownEditConflictReason::Changed && conflict.message == "text is gone"
+    ));
 }
 
 #[tokio::test]

@@ -153,7 +153,8 @@ enforced by the ordinary backend APIs.
   `applyMarkdownEdits()` (storage `/documents/{id}/markdown/blocks` and
   `/markdown/edits`, the `EditDocument` tool's `edits` engine) over
   `DocumentBlock` handles; a 422 is `MarkdownEditsRefusedError` with its code
-  and candidate blocks, a 409 `DocumentChangedError`.
+  and matching blocks, a 409 `DocumentChangedError` (or `DocumentBusyError`
+  when others kept editing: retry as is).
 - `src/entities/documents/text-comment.ts`: `Document.commentOnText()` anchors a
   thread to quoted text (`POST /documents/{id}/comments/text`, the
   `CommentOnText` tool's domain function); a 422 becomes

@@ -3,8 +3,8 @@
 use super::DocumentRouterState;
 use crate::domain::{
     markdown_edits::{
-        DocumentMarkdownBlocks, MarkdownEditError, MarkdownEditRefusal, MarkdownEditRequest,
-        MarkdownEdited, edit_markdown, read_markdown_blocks,
+        DocumentMarkdownBlocks, MarkdownEditConflictReason, MarkdownEditError, MarkdownEditRefusal,
+        MarkdownEditRequest, MarkdownEdited, edit_markdown, read_markdown_blocks,
     },
     models::DocumentError,
     ports::DocumentService,
@@ -31,8 +31,8 @@ use model::document::DocumentBasic;
 pub enum MarkdownEditFailureCode {
     /// The batch was refused; `refusal` says why. Nothing was written.
     EditRefused,
-    /// An edit's matched text is gone since the base revision. Nothing was
-    /// written; read the blocks again.
+    /// The batch conflicts with the document as it is now; `conflict` says
+    /// why. Nothing was written.
     RevisionConflict,
     /// The blocks could not be read.
     ReadFailed,
@@ -50,6 +50,9 @@ pub struct MarkdownEditFailure {
     /// The refusal, for `edit_refused`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refusal: Option<MarkdownEditRefusal>,
+    /// Why, for `revision_conflict`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conflict: Option<MarkdownEditConflictReason>,
 }
 
 impl IntoResponse for MarkdownEditError {
@@ -62,14 +65,16 @@ impl IntoResponse for MarkdownEditError {
                     error: MarkdownEditFailureCode::EditRefused,
                     message: refusal.message.clone(),
                     refusal: Some(refusal),
+                    conflict: None,
                 },
             ),
-            MarkdownEditError::Conflict(message) => (
+            MarkdownEditError::Conflict(conflict) => (
                 StatusCode::CONFLICT,
                 MarkdownEditFailure {
                     error: MarkdownEditFailureCode::RevisionConflict,
-                    message,
+                    message: conflict.message,
                     refusal: None,
+                    conflict: Some(conflict.reason),
                 },
             ),
             MarkdownEditError::ReadFailed(error) => {
@@ -80,6 +85,7 @@ impl IntoResponse for MarkdownEditError {
                         error: MarkdownEditFailureCode::ReadFailed,
                         message: "The document could not be read; retry.".to_owned(),
                         refusal: None,
+                        conflict: None,
                     },
                 )
             }
@@ -91,6 +97,7 @@ impl IntoResponse for MarkdownEditError {
                         error: MarkdownEditFailureCode::EditFailed,
                         message: "The edit failed after it was sent and may have applied; read the document before retrying.".to_owned(),
                         refusal: None,
+                        conflict: None,
                     },
                 )
             }

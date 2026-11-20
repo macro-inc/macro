@@ -89,9 +89,12 @@ pub enum MarkdownEditOutcome {
     Applied(crate::domain::markdown_edits::MarkdownEdited),
     /// Refused before anything was written.
     Refused(crate::domain::markdown_edits::MarkdownEditRefusal),
-    /// An edit's matched text is gone since the base revision; nothing was
-    /// written. The message is the worker's, for the caller.
-    Conflict(String),
+    /// The batch conflicts with the document as it is now; nothing was
+    /// written.
+    Conflict(crate::domain::markdown_edits::MarkdownEditConflict),
+    /// The worker found the request invalid (a malformed base revision);
+    /// nothing was written. The message is the worker's.
+    Invalid(String),
 }
 
 /// Port for applying AI-driven edits to a document via the editing worker.

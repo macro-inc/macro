@@ -192,8 +192,8 @@ export interface MarkdownEditResult {
   webUrl: string;
 }
 
-/** A block a refused edit may have meant. */
-export interface MarkdownEditCandidate {
+/** A block a refused `replace` was found in, or is nearest to. */
+export interface MarkdownEditMatchingBlock {
   /** The block, with its markdown as the edit saw it. */
   block: DocumentBlock;
   /** How often the text occurs in it (0 for a no-match suggestion). */
@@ -204,7 +204,8 @@ export interface MarkdownEditCandidate {
  * The edits were refused (HTTP 422); nothing changed. `code` says why
  * (`no_match`, `ambiguous_match`, `unknown_block`, `opaque_edit`,
  * `comment_loss`, `mass_delete`, …), `edit` which edit (1-based), and
- * `candidates` the blocks a missing or ambiguous `replace` may have meant.
+ * `blocks` the blocks a missing or ambiguous `replace` was found in or is
+ * nearest to.
  */
 export class MarkdownEditsRefusedError extends MacroApiError {
   /** Why the edits were refused. */
@@ -213,8 +214,8 @@ export class MarkdownEditsRefusedError extends MacroApiError {
   /** The 1-based edit it concerns, when one. */
   readonly edit: number | undefined;
 
-  /** Blocks it may have meant. */
-  readonly candidates: MarkdownEditCandidate[];
+  /** The blocks a missing or ambiguous `replace` was found in or is nearest to. */
+  readonly blocks: MarkdownEditMatchingBlock[];
 
   constructor(document: Document, refusal: MarkdownEditRefusal) {
     super(422, refusal);
@@ -222,12 +223,26 @@ export class MarkdownEditsRefusedError extends MacroApiError {
     this.message = refusal.message;
     this.code = refusal.code;
     this.edit = refusal.edit ?? undefined;
-    this.candidates = (refusal.candidates ?? []).map((candidate) => ({
-      block: DocumentBlock.read(document, candidate.blockId, {
-        markdown: candidate.markdown,
+    this.blocks = (refusal.blocks ?? []).map((matching) => ({
+      block: DocumentBlock.read(document, matching.blockId, {
+        markdown: matching.markdown,
       }),
-      occurrences: candidate.occurrences,
+      occurrences: matching.occurrences,
     }));
+  }
+}
+
+/**
+ * Others kept editing the document while the edits committed (HTTP 409);
+ * nothing was written. Retry the same call; unlike `DocumentChangedError`,
+ * the edits still apply.
+ */
+export class DocumentBusyError extends MacroApiError {
+  constructor(data: unknown) {
+    super(409, data);
+    this.name = 'DocumentBusyError';
+    this.message =
+      'Others kept editing the document while the edits committed; nothing was written. Retry.';
   }
 }
 
@@ -336,7 +351,10 @@ export async function applyEdits(
   const failure = result.error as MarkdownEditFailure | undefined;
   if (status === 422 && failure?.refusal)
     throw new MarkdownEditsRefusedError(document, failure.refusal);
-  if (status === 409) throw new DocumentChangedError(result.error);
+  if (status === 409)
+    throw failure?.conflict === 'busy'
+      ? new DocumentBusyError(result.error)
+      : new DocumentChangedError(result.error);
   if (status === 502 || status === 504)
     throw new EditOutcomeUnknownError(result.error, status);
   if (result.error !== undefined && result.response === undefined)

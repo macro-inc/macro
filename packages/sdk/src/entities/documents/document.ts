@@ -609,15 +609,16 @@ export class Document
    *   moves one.
    *
    * Blocks are `DocumentBlock` handles from `markdownBlocks()`, a result's
-   * `changes` or a refusal's `candidates`. Edited blocks keep their ids,
+   * `changes` or a refusal's `blocks`. Edited blocks keep their ids,
    * comments and formatting. Pass the read as `base`: edits people made since
    * merge with yours, and a retry of a batch that committed is not applied
    * twice.
    *
    * Throws `MarkdownEditsRefusedError` (nothing written) with `code`, the
-   * 1-based `edit` and, for `no_match` and `ambiguous_match`, the `candidates`
+   * 1-based `edit` and, for `no_match` and `ambiguous_match`, the `blocks`
    * it may have meant; `DocumentChangedError` when text an edit matched was
-   * changed since `base` (read again and redo it); and
+   * changed since `base` (read again and redo it); `DocumentBusyError` when
+   * others kept editing while it committed (retry as is); and
    * `EditOutcomeUnknownError` when the outcome is unknown (read first).
    *
    * @example Fix a date and add a step after the intro.
@@ -640,7 +641,7 @@ export class Document
    *   await document.applyMarkdownEdits([{ replace: 'TBD', with: 'Friday' }]);
    * } catch (error) {
    *   if (error.name !== 'MarkdownEditsRefusedError') throw error;
-   *   return { data: { code: error.code, candidates: error.candidates } };
+   *   return { data: { code: error.code, blocks: error.blocks } };
    * }
    * ```
    *
