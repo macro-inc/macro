@@ -77,6 +77,24 @@ bun tests/channels-e2e/ledger/check.ts                      # ledger against the
 bun tests/channels-e2e/ledger/check.ts --report <report>    # and against a run
 ```
 
+## In CI
+
+`Channels end-to-end` (`channels_e2e.yml`) is not part of `PR CI`, and
+`CI gate` does not wait for it.
+
+| When | What runs |
+| --- | --- |
+| A push to `main` that changes the web app, backend code, or what the stack is seeded and started from | The suite and the ledger check, one run at a time; of the pushes that come meanwhile only the newest waits. |
+| Nightly, 04:00 UTC | The same, on `main`. |
+| By hand: `gh workflow run channels_e2e.yml --ref <branch>` | The same, on that branch. Do this before merging a change to channels or to the suite. |
+
+A red run on `main` blocks nothing. Its last job tells the Macro Alerts
+channel when the pushes or the nightly runs turn red, with the failed tests,
+and when they pass again
+([what to do](../../../../docs/development/ci.md#when-an-email-end-to-end-alert-fires)).
+A failed run keeps the stack's logs (`channels-e2e-stack-logs`) and its
+traces (`channels-e2e-results`).
+
 ## Writing a test
 
 - Title: an id (`MSG-03`) then a sentence a person would say. Above it, a

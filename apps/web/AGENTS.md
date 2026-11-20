@@ -231,7 +231,9 @@ database writes only for the original account/session.
 
 Channels (team chat) have an end-to-end suite over a whole local stack, with
 several people in separate browser profiles: `just test-channels-e2e <instance>`
-(see `tests/channels-e2e/README.md`). CI runs it when channel code changes.
+(see `tests/channels-e2e/README.md`). CI runs it on pushes to `main` and nightly,
+not on pull requests; run it on a branch by hand
+(`gh workflow run channels_e2e.yml --ref <branch>`).
 
 `just test-functional` builds a production-like bundle of its fixtures and runs
 Playwright against it, not a dev server: each page otherwise fetches thousands of

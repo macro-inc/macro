@@ -1,8 +1,8 @@
 // Tells the Macro Alerts channel when an email end-to-end workflow turns red
 // on `main`, and when it turns green again. The last job of `email_e2e.yml`,
 // `email_e2e_browser.yml` and `email_e2e_full_stack.yml` runs it after every
-// other job, on a push to `main` and in the daily sweep; never on a run by
-// hand.
+// other job, as does that of `channels_e2e.yml`, on a push to `main` and in
+// the daily sweep; never on a run by hand.
 //
 // A run posts only when its result differs from what the channel was last
 // told about its stream: the workflow's runs on the same branch for the same
@@ -353,6 +353,14 @@ export function browserFindings(
   };
 }
 
+/**
+ * What the one Playwright report of a suite with no coverage check says failed
+ * (the channels suite's `playwright-report.json`).
+ */
+export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
+  return { failedTests: failedSpecs(report), knownBugsPassing: [], otherProblems: [] };
+}
+
 /** What the coverage report in `dir` says failed, or null when there is none. */
 export function readFindings(dir: string): Findings | null {
   const read = (name: string) => JSON.parse(readFileSync(`${dir}/${name}`, 'utf8'));
@@ -364,6 +372,9 @@ export function readFindings(dir: string): Findings | null {
       .filter((name) => /^playwright-.*\.json$/.test(name))
       .map((name) => ({ name, report: read(name) }));
     return browserFindings(read('ledger.json'), reports);
+  }
+  if (existsSync(`${dir}/playwright-report.json`)) {
+    return suiteFindings(read('playwright-report.json'));
   }
   return null;
 }

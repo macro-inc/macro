@@ -24,7 +24,9 @@ in separate browser profiles. [README.md](README.md) has how to run and extend i
   seeded with `seed/scenarios/channels-e2e.json`.
 - `bun tests/channels-e2e/ledger/check.ts` after adding, renaming or removing
   a test.
-- CI: `Channels end-to-end` (`channels_e2e.yml`), called by `PR CI`.
+- CI: `Channels end-to-end` (`channels_e2e.yml`) on pushes to `main` and
+  nightly, not in `PR CI`; on a branch,
+  `gh workflow run channels_e2e.yml --ref <branch>`.
 
 ## Gotchas
 

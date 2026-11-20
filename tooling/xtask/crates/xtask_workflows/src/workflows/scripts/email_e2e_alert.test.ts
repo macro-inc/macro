@@ -21,6 +21,7 @@ import {
   recoveryMessage,
   rustFindings,
   type StreamRun,
+  suiteFindings,
 } from './email_e2e_alert.ts';
 
 const NAMES: Names = {
@@ -426,6 +427,14 @@ describe('findings', () => {
 
   test('a Playwright report: the specs that failed, however deep', () => {
     assert.deepEqual(failedSpecs(report), ['inbox.spec.ts:20 archives a thread']);
+  });
+
+  test('a suite with one report and no coverage check: the specs that failed', () => {
+    assert.deepEqual(suiteFindings(report), {
+      failedTests: ['inbox.spec.ts:20 archives a thread'],
+      knownBugsPassing: [],
+      otherProblems: [],
+    });
   });
 
   test('the browser suite: failed tests of the gating runs, once each, and known bugs that pass', () => {
