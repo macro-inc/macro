@@ -61,6 +61,13 @@ fixed-size child in a smaller wrapper shifts the icon below the label.
 Empty Source values use the same link glyph; unsupported references retain the
 ordinary property editor.
 
+Every other single-value entity row in the side panel splits the same way once
+it has a value: `EntityLinkPill` puts the item behind the name and the picker
+behind the caret, and `ProjectLinkPill` does it for a project value. A viewer
+who cannot edit gets the name alone. An empty value, a person, and a value
+`usePropertyEntityLink` has nothing to open for keep the one pill that opens
+the picker.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
