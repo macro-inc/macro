@@ -106,6 +106,9 @@ define_system_properties! {
 
     // Projects: the one project (initiative) a task belongs to
     Project,           PROJECT_UUID,            0x14, "Project";
+
+    // Tasks and projects: when work begins, the other end of the Due Date range
+    StartDate,         START_DATE_UUID,         0x15, "Start Date";
 }
 
 impl SystemPropertyKey {
@@ -183,7 +186,7 @@ mod tests {
     #[test]
     fn test_all_system_property_keys_returns_all_uuids() {
         let all_keys = SystemPropertyKey::all_system_property_keys();
-        assert_eq!(all_keys.len(), 20);
+        assert_eq!(all_keys.len(), 21);
         assert!(all_keys.contains(&SystemPropertyKey::ASSIGNEES_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::STATUS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PRIORITY_UUID));
@@ -204,6 +207,7 @@ mod tests {
         assert!(all_keys.contains(&SystemPropertyKey::REVENUE_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::CONTACTS_UUID));
         assert!(all_keys.contains(&SystemPropertyKey::PROJECT_UUID));
+        assert!(all_keys.contains(&SystemPropertyKey::START_DATE_UUID));
     }
 
     #[test]
@@ -311,6 +315,7 @@ mod tests {
             SystemPropertyKey::Revenue,
             SystemPropertyKey::Contacts,
             SystemPropertyKey::Project,
+            SystemPropertyKey::StartDate,
         ];
 
         for variant in variants {

@@ -7,6 +7,8 @@ use crate::domain::model::{PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
+mod start_date_migration;
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn initiative_initialization_preserves_values_and_folder_namespace(
     pool: Pool<Postgres>,
