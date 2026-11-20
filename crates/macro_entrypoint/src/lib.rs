@@ -392,7 +392,8 @@ fn service_name() -> String {
         .unwrap_or_else(|| "unknown-service".to_string())
 }
 
-fn otel_endpoint() -> String {
+/// The OTLP/gRPC endpoint this service exports its spans to.
+pub fn otel_endpoint() -> String {
     OtelExporterOtlpEndpoint::new()
         .map(|e| e.to_string())
         .unwrap_or_else(|| DEFAULT_OTLP_ENDPOINT.to_string())
