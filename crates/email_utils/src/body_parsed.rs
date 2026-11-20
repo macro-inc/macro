@@ -1,6 +1,8 @@
 use html2text::config::Config;
 use html2text::render::PlainDecorator;
 use html2text::{Element, Handle};
+use html5ever::tree_builder::QuirksMode;
+use scraper::Html;
 
 /// The line width html2text lays a body out at: wider than any line the first
 /// `MAX_HTML_BYTES` of HTML can make, so no text wraps. In raw mode nothing
@@ -129,7 +131,8 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
     // one past its limits gets no text. html2text then reads the bounded
     // tree's serialization, never the body: it parses with a newer html5ever
     // whose rules differ (inside `<select>`, for one), and a well-formed
-    // serialization builds it no more than the bounded parse did.
+    // serialization, parsed in the same quirks mode, builds it no more than
+    // the bounded parse did.
     let parsed = crate::bounded_html::parse_document_for_text(html, MAX_TEXT_NODES);
     if parsed.clipped {
         tracing::warn!(
@@ -138,7 +141,7 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
         );
         return None;
     }
-    let html = parsed.html.html();
+    let html = serialize_in_its_quirks_mode(&parsed.html);
     drop(parsed);
     // html2text panics on some malformed-but-real email HTML (e.g. a table
     // rowspan overhanging past the last row). A panic here takes down the
@@ -176,6 +179,26 @@ fn parse_html_to_text(html: &str, config: Config<PlainDecorator>) -> Option<Stri
             Some(trimmed)
         }
         Ok(Ok(None) | Err(_)) | Err(_) => None,
+    }
+}
+
+/// A doctype html5ever reads in limited-quirks mode.
+const LIMITED_QUIRKS_DOCTYPE: &str =
+    r#"<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">"#;
+
+/// The document as HTML that parses in its own quirks mode. Scraper writes
+/// any doctype as `<!DOCTYPE html>`, so a page with a legacy doctype (common
+/// in Outlook mail) would be read again in no-quirks mode, where a paragraph
+/// before a table closes and the formatting around it is rebuilt: a
+/// different tree, and twice as large for crafted HTML.
+fn serialize_in_its_quirks_mode(document: &Html) -> String {
+    match document.quirks_mode {
+        QuirksMode::NoQuirks => document.html(),
+        // A document without a doctype parses in quirks mode.
+        QuirksMode::Quirks => document.root_element().html(),
+        QuirksMode::LimitedQuirks => {
+            format!("{LIMITED_QUIRKS_DOCTYPE}{}", document.root_element().html())
+        }
     }
 }
 

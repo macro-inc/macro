@@ -147,16 +147,17 @@ fn deep_nesting_is_refused_cheaply() {
     // the innermost text wraps every few characters, and each of those lines
     // carries the whole prefix.
     let quotes = format!("{}{}", "<blockquote>".repeat(1_000), "ab ".repeat(40_000));
+    // Within the parse's node limit, so the prefix width refuses them.
     let lists = format!(
         "{}{}",
         "<ol start=999999999><li>".repeat(128),
-        "x<br>".repeat(40_000)
+        "x<br>".repeat(20_000)
     );
     // Only 64 levels, but each numbers its lines with 19 digits.
     let numbers = format!(
         "{}{}",
         "<ol start=9223372036854775807><li>".repeat(64),
-        "x<br>".repeat(40_000)
+        "x<br>".repeat(20_000)
     );
 
     for html in [quotes, lists, numbers] {
@@ -236,6 +237,28 @@ fn a_body_that_builds_past_the_parse_limits_gets_no_text_cheaply() {
             html.len()
         );
     }
+}
+
+#[test]
+fn a_legacy_doctype_body_converts_in_its_own_quirks_mode() {
+    // In quirks mode a paragraph stays open around a table; read again in
+    // no-quirks mode, each table closes it and rebuilds the bold tags around
+    // it, which took twice the memory: 194 MB against 98 MB.
+    let bold: String = (0..31).map(|i| format!("<b id={i}>")).collect();
+    let html = format!(
+        r#"<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"><p>{bold}{}"#,
+        "<p>z<table></table>y".repeat(1_200)
+    );
+    let mut text = None;
+
+    let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
+
+    assert!(text.is_some());
+    assert!(
+        peak < 128 << 20,
+        "{peak} bytes to convert {} bytes of HTML",
+        html.len()
+    );
 }
 
 /// Bodies whose parse would build far more than the node limit, or nest
