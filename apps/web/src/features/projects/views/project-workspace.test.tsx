@@ -7,9 +7,6 @@ import { ProjectsProvider } from '../context/projects-context';
 import type { ProjectDetail } from '../core/project';
 import { ProjectWorkspace } from './project-workspace';
 
-vi.mock('@property/hooks/useStartDateEnabled', () => ({
-  useStartDateEnabled: () => () => false,
-}));
 vi.mock('@components/app/side-panel', () => ({
   SidePanel: {
     Layout: (props: { children: JSX.Element }) => props.children,

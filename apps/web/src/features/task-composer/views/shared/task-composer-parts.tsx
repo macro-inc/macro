@@ -17,7 +17,6 @@ import {
   type StartDueEditorProps,
 } from '@property/editors/popover/StartDueEditor';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { InlineTagsPill } from '@property/tags';
 import type { Property as PropertyType } from '@property/types';
@@ -306,7 +305,7 @@ function Properties(props: { class?: string }) {
   const composer = useTaskComposer();
   const pickers = useContext(TaskComposerPickersContext);
   // The due date pill reads as the range and sets the start too.
-  const startDateEnabled = useStartDateEnabled();
+  const startDateEnabled = composer.startDatesEnabled;
   const draftDate = (definitionId: string) => {
     const property = composer.draftProperty(definitionId);
     return property && isDateProperty(property) ? property : undefined;

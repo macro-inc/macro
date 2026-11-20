@@ -1,7 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
 import { EntityMetadata } from '@components/app/side-panel/EntityMetadata';
 import { buildStartDateDefaultProperty } from '@entity/extractors-property';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { EntityPropertiesSection } from '@property/side-panel/properties/EntityPropertiesSection';
 import { type ParentProps, Show } from 'solid-js';
@@ -29,8 +28,9 @@ const PROJECT_PROPERTY_ORDER_WITH_DATES = [
 export function ProjectWorkspaceLayout(
   props: ParentProps<ProjectWorkspaceProps>
 ) {
-  const definitions = useProjectsContext().createPropertyDefinitionsSource();
-  const startDateEnabled = useStartDateEnabled();
+  const projects = useProjectsContext();
+  const definitions = projects.createPropertyDefinitionsSource();
+  const startDateEnabled = () => projects.startDatesEnabled?.() ?? false;
   return (
     <SidePanel.Layout headerToggle={false} floating defaultOpen={false}>
       <SidePanel.Footer>

@@ -3,7 +3,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { buildStartDateDefaultProperty } from '@entity/extractors-property';
 import { PropertyValuePill } from '@property/component/PropertyValuePill';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { isDateProperty } from '@property/utils';
@@ -11,13 +10,15 @@ import { formatStartDue, startDueOf } from '@property/utils/start-due';
 import { Key } from '@solid-primitives/keyed';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 import type { ProjectWorkspaceProps } from '../../context/project-workspace';
+import { useProjectsContext } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
 
 export function ProjectSummary(props: ParentProps<ProjectWorkspaceProps>) {
   const [error, setError] = createSignal<string>();
   // The due date pill reads as the range and sets the start too; the start
   // has no pill of its own.
-  const startDateEnabled = useStartDateEnabled();
+  const projects = useProjectsContext();
+  const startDateEnabled = () => projects.startDatesEnabled?.() ?? false;
   const pills = () =>
     props.source
       .properties()

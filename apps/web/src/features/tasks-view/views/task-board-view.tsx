@@ -4,7 +4,6 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { formatStartDue, startDueOf } from '@property/utils/start-due';
@@ -99,7 +98,7 @@ export function TaskBoardView(props: {
       )?.label ?? 'Updated';
     return `Board sorted by ${sort}`;
   };
-  const startDateEnabled = useStartDateEnabled();
+  const startDateEnabled = () => props.data.startDatesEnabled();
   const cardPropertyIds = () =>
     CARD_PROPERTY_IDS.filter((id) => {
       if (

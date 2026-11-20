@@ -9,7 +9,6 @@ import { buildStartDateDefaultProperty } from '@entity/extractors-property';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
-import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { isDateProperty } from '@property/utils';
@@ -17,6 +16,7 @@ import { formatStartDue, startDueOf } from '@property/utils/start-due';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
+import { useProjectsContext } from '../../context/projects-context';
 import { canEditProject } from '../../core/project';
 import type { ProjectRowProps } from '../../project-row';
 
@@ -74,7 +74,8 @@ export function ProjectRowColumns(
     props.definitions?.find((property) => property.propertyDefinitionId === id);
   // The due date cell reads as the range and sets the start too.
   const context = usePropertiesContext();
-  const startDateEnabled = useStartDateEnabled();
+  const projects = useProjectsContext();
+  const startDateEnabled = () => projects.startDatesEnabled?.() ?? false;
   const startDate = () => {
     const property =
       propertyFor(SYSTEM_PROPERTY_IDS.START_DATE) ??
