@@ -51,6 +51,13 @@ impl RuntimeConnections for Offline {
         false
     }
 
+    fn connection_of(
+        &self,
+        _harness: HarnessId,
+    ) -> Option<agent_harness::domain::ports::RuntimeConnectionId> {
+        None
+    }
+
     async fn sessions_on_harness(
         &self,
         _harness: HarnessId,

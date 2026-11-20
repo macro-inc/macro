@@ -90,7 +90,11 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. A dial always restores sessions
+archived and managed sessions are skipped, and so are sessions already attached on
+the runtime's current connection. A session whose actor is still on the socket the
+redial displaced (each `RuntimeConnection` has a `RuntimeConnectionId`, which its
+sessions' attachments carry) is closed first, waiting for its `disconnected` frame,
+then attached to the new connection. A dial always restores sessions
 with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
 open when the session disconnected, from `agent_session.turn_interrupted`), or a
 durable queue, however many; it fills the rest of `MAX_EAGER_PER_DIAL` (50) with

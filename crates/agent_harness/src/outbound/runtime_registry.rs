@@ -50,6 +50,7 @@ pub struct LiveRuntimeSessions {
 
 /// A connection and the identity its presence reports carry.
 struct ListedConnection<Sender> {
+    /// Always `connection.id()`.
     id: RuntimeConnectionId,
     connection: Arc<RuntimeConnection<Sender>>,
     accepts: RuntimeAccepts,
@@ -204,9 +205,10 @@ where
     ) where
         Carrier: Transport<ToRuntimeMessage, ToServerMessage, Sender = Sender>,
     {
+        let connection = RuntimeConnection::connect(carrier);
         let listed = ListedConnection {
-            id: RuntimeConnectionId::generate(),
-            connection: RuntimeConnection::connect(carrier),
+            id: connection.id(),
+            connection,
             accepts,
         };
 
@@ -421,6 +423,10 @@ where
 
     fn is_connected(&self, harness: HarnessId) -> bool {
         self.registry.is_connected(harness)
+    }
+
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId> {
+        self.registry.connection_of(harness)
     }
 
     async fn access_facts(
