@@ -403,6 +403,10 @@ describe('the finding score of a run', () => {
     const beside = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: unread })] }]).join('\n');
     expect(beside).toContain("1 held-out people's work lists read and judged, fewer than 2: not shown");
     expect(beside).not.toContain('entries naming none');
+    // No read list at all is fewer than two too.
+    const none = lines([{ ...run, attempts: [heldout('p1', { finding: unread }), heldout('p2', { findingError: 'judge' })] }]).join('\n');
+    expect(none).toContain("0 held-out people's work lists read and judged, fewer than 2: not shown");
+    expect(none).not.toContain('entries naming none');
     const two = lines([{ ...run, attempts: [heldout('p1', { finding: list }), heldout('p2', { finding: list })] }]).join('\n');
     expect(two).toContain('named 100%');
   });
@@ -417,6 +421,11 @@ describe('the finding score of a run', () => {
     expect(row).not.toContain('7s');
     expect(row).not.toContain('0.75');
     expect(summary([timed('p1'), timed('p2'), heldout('p3')])).toMatchObject({ firstMedianMs: 7000, lastMedianMs: 12000, wallMedianMs: 12000, quality: 0.75 });
+    // A feed rating missing from one generation counts 0, so one person's rating beside it would show.
+    const rated = (persona: string) => heldout(persona, { section: 'feed', score: { ...failedScore(3), feedRating: 9 } });
+    expect(summary([rated('p1'), heldout('p2', { section: 'feed' })]).feedRating).toBeNaN();
+    expect(summary([rated('p1'), rated('p2'), heldout('p3', { section: 'feed' })]).feedRating).toBe(6);
+    expect(summary([attempt({ score: { ...failedScore(3), feedRating: 9 } }), attempt({ persona: 'other' })]).feedRating).toBe(4.5);
     const margins = { score: 1, found: 1, bad: 1 };
     const side = [timed('p1'), timed('p1', 2), heldout('p2'), heldout('p2', { rep: 2 })];
     expect(verdict(side, side, margins).wallRatio).toBeNaN();

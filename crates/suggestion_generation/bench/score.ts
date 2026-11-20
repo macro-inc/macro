@@ -17,14 +17,15 @@ export type Section = 'routines' | 'feed';
 export const MIN_HELDOUT_PEOPLE = 2;
 
 /**
- * Whether a measure taken over `attempts` is an aggregate: held-out people
- * count only two or more at a time. Each measure asks of the attempts that
- * have it (the timed ones, the ones whose list was read), since a run where
- * two people scored but one was timed would show that one's time.
+ * Whether a measure taken over `having`, the attempts of `run` that have it,
+ * is an aggregate: in a run with held-out people, only over two of them or
+ * more. Each measure asks of the attempts that have it (the timed ones, the
+ * ones whose list was read), since a run where two people scored but one was
+ * timed would show that one's time.
  */
-export function aggregate(attempts: Attempt[]): boolean {
-  const heldout = attempts.filter((attempt) => attempt.heldout);
-  return !heldout.length || new Set(heldout.map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
+export function aggregate(having: Attempt[], run: Attempt[] = having): boolean {
+  if (!run.some((attempt) => attempt.heldout)) return true;
+  return new Set(having.filter((attempt) => attempt.heldout).map((attempt) => attempt.persona)).size >= MIN_HELDOUT_PEOPLE;
 }
 
 export type Score = {
@@ -240,7 +241,7 @@ export function summary(attempts: Attempt[]) {
   // Each measure over the attempts that have it, and none (NaN) where those hold fewer held-out people than an aggregate needs.
   const over = (has: (a: (typeof done)[number]) => number | undefined | null) => {
     const having = done.filter((a) => has(a) !== undefined && has(a) !== null);
-    return aggregate(having) ? having.map((a) => has(a)!) : [];
+    return aggregate(having, attempts) ? having.map((a) => has(a)!) : [];
   };
   const first = over((a) => a.generation.firstMs);
   const wall = over((a) => a.generation.wallMs);
@@ -248,7 +249,8 @@ export function summary(attempts: Attempt[]) {
   const qualities = over((a) => a.score.quality);
   const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
   // A list the session never read scores as an empty one, so it can't make another person's list an aggregate.
-  const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread));
+  const listsShown = aggregate(done.filter((a) => a.finding && !a.finding.unread), attempts);
+  const rated = done.filter((a) => a.score.feedRating !== undefined);
   const listErrors = done.filter((a) => a.findingError).length;
   const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
@@ -264,7 +266,8 @@ export function summary(attempts: Attempt[]) {
     invented: avg(done.map((a) => a.score.invented)),
     wrongPerRun: Object.fromEntries(Object.entries(wrong).map(([k, v]) => [k, v / Math.max(1, done.length)])),
     quality: qualities.length ? avg(qualities) : NaN,
-    feedRating: done.some((a) => a.score.feedRating !== undefined) ? avg(done.map((a) => a.score.feedRating ?? 0)) : undefined,
+    // A generation with no rating counts 0, so a held-out rating shows only where two people or more were rated.
+    feedRating: !rated.length ? undefined : aggregate(rated, attempts) ? avg(done.map((a) => a.score.feedRating ?? 0)) : NaN,
     // Routines runs scored before good suggestions were counted have none of these.
     ...(done.length && done.every((a) => a.score.goodDrafts !== undefined)
       ? {
@@ -425,7 +428,7 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
   const usd = contrast(a, b, (attempt) => attempt.generation.cost.usd);
   const timed = (attempts: Attempt[]) => scored(attempts).filter((attempt) => attempt.generation.wallMs);
   // A side's median shows only over two held-out people's times or more.
-  const median = (attempts: Attempt[]) => (aggregate(timed(attempts)) ? quantile(timed(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
+  const median = (attempts: Attempt[]) => (aggregate(timed(attempts), attempts) ? quantile(timed(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
   return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 

@@ -30,7 +30,7 @@ export function lines(runs: RunFile[]): string[] {
     }
     const s = summary(run.attempts);
     out.push(
-      `| ${run.section} | ${run.label} | ${run.set} | ${run.commit} | ${s.score.toFixed(1)} (${s.scoreInterval[0].toFixed(1)}–${s.scoreInterval[1].toFixed(1)}) | ${s.found.toFixed(2)} / ${s.needs.toFixed(1)} | ${s.bad.toFixed(2)} | ${s.invented.toFixed(2)} | ${s.suggestions.toFixed(1)} | ${Number.isFinite(s.quality) ? s.quality.toFixed(2) : '–'}${s.feedRating !== undefined ? ` (feed ${s.feedRating.toFixed(1)}/10)` : ''} | ${secs(s.firstMedianMs)} | ${secs(s.lastMedianMs)} | ${secs(s.wallMedianMs)} | ${s.usd.toFixed(3)} | ${s.judgeUsd.toFixed(3)} | ${s.scored}/${s.attempts} |`,
+      `| ${run.section} | ${run.label} | ${run.set} | ${run.commit} | ${s.score.toFixed(1)} (${s.scoreInterval[0].toFixed(1)}–${s.scoreInterval[1].toFixed(1)}) | ${s.found.toFixed(2)} / ${s.needs.toFixed(1)} | ${s.bad.toFixed(2)} | ${s.invented.toFixed(2)} | ${s.suggestions.toFixed(1)} | ${Number.isFinite(s.quality) ? s.quality.toFixed(2) : '–'}${s.feedRating !== undefined ? ` (feed ${Number.isFinite(s.feedRating) ? s.feedRating.toFixed(1) : '–'}/10)` : ''} | ${secs(s.firstMedianMs)} | ${secs(s.lastMedianMs)} | ${secs(s.wallMedianMs)} | ${s.usd.toFixed(3)} | ${s.judgeUsd.toFixed(3)} | ${s.scored}/${s.attempts} |`,
     );
   }
   for (const run of runs) {

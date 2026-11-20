@@ -504,7 +504,7 @@ async function main() {
         console.log(`- ${part}: ${c.a.toFixed(2)} → ${c.b.toFixed(2)}, ${c.delta >= 0 ? '+' : ''}${c.delta.toFixed(2)} (95% ${c.interval[0].toFixed(2)} to ${c.interval[1].toFixed(2)}), no margin`);
       }
       console.log(`- cost per generation: ${v.usd[0].toFixed(3)} → ${v.usd[1].toFixed(3)} (difference 95% ${v.usdInterval[0].toFixed(3)} to ${v.usdInterval[1].toFixed(3)})`);
-      console.log(`- time: B/A median ${Number.isFinite(v.wallRatio) ? `×${v.wallRatio.toFixed(2)}` : `not shown (fewer than ${MIN_HELDOUT_PEOPLE} held-out people timed on a side)`}`);
+      console.log(`- time: B/A median ${Number.isFinite(v.wallRatio) ? `×${v.wallRatio.toFixed(2)}` : `not shown (a side has no times, or fewer than ${MIN_HELDOUT_PEOPLE} held-out people timed)`}`);
       break;
     }
     case 'noise': {
