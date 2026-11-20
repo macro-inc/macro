@@ -45,6 +45,7 @@ import {
   AgentsRouteView,
   BookingLinksRouteView,
   CalendarRouteView,
+  AgentScreenRouteView,
   CallDetailRouteView,
   CallsCallDetail,
   CallsRouteView,
@@ -107,6 +108,7 @@ import {
   bookingLinksRoute,
   bookingReceiptRoute,
   calendarSplitRoute,
+  agentScreenRoute,
   callDetailRoute,
   callsCallRoute,
   callsRoute,
@@ -474,6 +476,7 @@ export function appRouteElements(): JSX.Element {
           <Route definition={callsCallRoute} component={CallsCallDetail} />
         </Route>
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
+        <Route definition={agentScreenRoute} component={AgentScreenRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
             <Route definition={crmPipelineItemRoute} />

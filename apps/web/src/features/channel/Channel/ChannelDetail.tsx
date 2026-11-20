@@ -9,6 +9,10 @@ import {
 import { ViewShell } from '@app/components/view-shell';
 import { AccountManagerRequestButton } from '@app/features/account-manager/account-manager-request-button';
 import {
+  DmScreenButton,
+  useDmScreenHarnessId,
+} from '@app/features/agent-screen/dm-screen-button';
+import {
   DmWorkPanel,
   DmWorkProvider,
   DmWorkToggle,
@@ -189,6 +193,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
+  // An agent teammate's DM: an ordinary DM (a team agent is a user) or a bot
+  // DM. Other conversations never look their participants up for it.
+  const screenHarnessId = useDmScreenHarnessId(() =>
+    channelType() === ChannelType.direct_message || channel()?.agent_dm
+      ? props.channelId
+      : ''
+  );
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 
@@ -245,6 +256,13 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
         </DebugSuspense>
       </Show>
       <HeaderActionGroup label="Conversation actions">
+        <Show when={screenHarnessId()}>
+          {(harnessId) => (
+            <DebugSuspense name="ChannelDetail.screen-button">
+              <DmScreenButton grouped harnessId={harnessId()} />
+            </DebugSuspense>
+          )}
+        </Show>
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
         >
@@ -319,6 +337,13 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
   const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
+  // An agent teammate's DM: an ordinary DM (a team agent is a user) or a bot
+  // DM. Other conversations never look their participants up for it.
+  const screenHarnessId = useDmScreenHarnessId(() =>
+    channelType() === ChannelType.direct_message || channel()?.agent_dm
+      ? props.channelId
+      : ''
+  );
   const call = useCall(() => props.channelId);
   const { activeTab, setActiveTab } = useChannelTab();
   const tabs = useChannelTabItems(props.channelId);
@@ -351,6 +376,15 @@ function TouchChannelDetailTopBar(props: ChannelDetailHeaderProps) {
         </DebugSuspense>
       </HeaderIsland>
       <div class="ml-auto flex shrink-0 items-center gap-2">
+        <Show when={screenHarnessId()}>
+          {(harnessId) => (
+            <HeaderIsland class="px-1">
+              <DebugSuspense name="ChannelDetail.touch-screen">
+                <DmScreenButton harnessId={harnessId()} />
+              </DebugSuspense>
+            </HeaderIsland>
+          )}
+        </Show>
         <Show
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
         >

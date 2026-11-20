@@ -621,9 +621,15 @@ export function useHotKeyRoot() {
   // dispatched (untrusted) events, so they stay exempt. Chrome autofill
   // dispatches trusted keydown/keyup events with no `key`; they are not key
   // presses either.
+  //
+  // A control marked `data-owns-keyboard` (the agent screen viewer while it
+  // drives a remote computer) takes every key itself: no app hotkey may run,
+  // or typing "macro" into the remote desktop opens Create at the "c".
   const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
     typeof e.key !== 'string' ||
-    (!e.isTrusted && import.meta.env.MODE !== 'test');
+    (!e.isTrusted && import.meta.env.MODE !== 'test') ||
+    (e.target instanceof Element &&
+      e.target.closest('[data-owns-keyboard]') !== null);
 
   const handleKeyDown = (e: KeyboardEvent) => {
     if (shouldIgnoreKeyEvent(e)) return;

@@ -74,6 +74,7 @@ import {
 } from '@core/constant/settingsTabsConfig';
 import { COMMENT_LINK_PARAM } from '@core/messages/comment-link';
 import { z } from 'zod';
+import { AGENT_SCREEN_ROUTE_ID } from '@app/features/agent-screen/core/route';
 import { APP_ROUTE_ID, NOT_FOUND_ROUTE_ID } from './app-route';
 
 export const EMAIL_SIGNUP_CALLBACK_PATH = '/email-signup-callback';
@@ -835,6 +836,18 @@ export const callDetailRoute = defineRoute({
   externalSearch: [CALL_URL_PARAMS.transcriptId, CALL_URL_PARAMS.messageId],
   remountKey: ({ callId }) => callId,
   claim: ({ callId }) => ({ namespace: 'block', id: `call:${callId}` }),
+});
+
+/** An agent teammate's computer screen: watch it, and take over (`agent-screen`). */
+export const agentScreenRoute = defineRoute({
+  id: AGENT_SCREEN_ROUTE_ID,
+  path: 'screen/:harnessId',
+  params: z.object({ harnessId: z.string().min(1) }),
+  remountKey: ({ harnessId }) => harnessId,
+  claim: ({ harnessId }) => ({
+    namespace: 'component',
+    id: `${AGENT_SCREEN_ROUTE_ID}:${harnessId}`,
+  }),
 });
 
 export const companiesRoute = defineRoute({

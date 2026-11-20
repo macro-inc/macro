@@ -275,6 +275,11 @@ returning to the split you came from, a list keeping `Shift+Up/Down` for its
 selection, and a grid marked `data-owns-arrow-keys` keeping `Shift+Arrow`:
 `bunx playwright test --config src/components/app/split-layout/focus-browser-test/playwright.config.ts`.
 
+A control marked `data-owns-keyboard` takes every key: the hotkey engine
+ignores key events from inside it, input-proof hotkeys included. The agent
+screen viewer's keyboard field carries it while driving, so typing into a
+remote desktop never runs app hotkeys (`screen-stage.test.tsx`).
+
 One document open in two desktop tabs has a backend-free browser regression over
 the real router, tab manager, split layout, and orchestrator: each tab mounts its
 own instance and keeps its own state, and reopening within a tab reuses it. The

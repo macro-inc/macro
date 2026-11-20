@@ -1,0 +1,136 @@
+import { cn } from '@ui/utils/classname';
+import { type JSX, Show } from 'solid-js';
+import type { Point } from '../core/geometry';
+import type { ScreenFrameSize, ScreenRect } from '../transports/types';
+import { Loupe } from './loupe';
+
+export type ScreenStageHandlers = {
+  onPointerDown: (event: PointerEvent) => void;
+  onPointerMove: (event: PointerEvent) => void;
+  onPointerUp: (event: PointerEvent) => void;
+  onPointerCancel: (event: PointerEvent) => void;
+  onWheel: (event: WheelEvent) => void;
+  onContextMenu: (event: MouseEvent) => void;
+  onKeyDown: (event: KeyboardEvent) => void;
+  onKeyUp: (event: KeyboardEvent) => void;
+  onCompositionEnd: (event: CompositionEvent) => void;
+  onBlur: () => void;
+  onPaste: (event: ClipboardEvent) => void;
+};
+
+/**
+ * The picture: a container the size of the viewer, the frame element the
+ * transport renders into at the guest's native size (placed by `transform`),
+ * and an input surface over both that takes every pointer, wheel and key.
+ * `children` are overlays (state, notices, zoom) above the input surface.
+ */
+export function ScreenStage(props: {
+  label: string;
+  frame: ScreenFrameSize | undefined;
+  transform: string | undefined;
+  /** Amber frame while someone drives. */
+  driven: boolean;
+  /** This viewer drives: the input surface takes keyboard focus. */
+  drivingMe: boolean;
+  /** Grey the last picture out while it isn't live. */
+  stale: boolean;
+  loupe: { at: Point; guest: Point } | undefined;
+  snapshot: (rect: ScreenRect) => Promise<ImageBitmap | undefined> | undefined;
+  handlers: ScreenStageHandlers;
+  containerRef: (element: HTMLDivElement) => void;
+  frameRef: (element: HTMLDivElement) => void;
+  class?: string;
+  children?: JSX.Element;
+}) {
+  let frameElement: HTMLDivElement | undefined;
+  let keyboardField: HTMLTextAreaElement | undefined;
+
+  return (
+    <div
+      ref={props.containerRef}
+      class={cn(
+        'relative overflow-hidden bg-surface-2',
+        props.driven && 'outline-2 -outline-offset-2 outline-amber',
+        props.class
+      )}
+    >
+      <div
+        ref={(element) => {
+          frameElement = element;
+          props.frameRef(element);
+        }}
+        class={cn(
+          'absolute top-0 left-0 origin-top-left transition-[filter] duration-300 motion-reduce:transition-none',
+          props.stale && 'brightness-50 grayscale'
+        )}
+        style={{
+          width: props.frame ? `${props.frame.width}px` : '0px',
+          height: props.frame ? `${props.frame.height}px` : '0px',
+          transform: props.transform,
+          visibility: props.frame && props.transform ? 'visible' : 'hidden',
+        }}
+      />
+
+      {/*
+        Keys go to a hidden text field rather than the surface itself, so an
+        input method (Japanese, Chinese, Korean, dead keys) can compose in it;
+        focusable only while driving.
+      */}
+      <textarea
+        ref={keyboardField}
+        aria-label={props.label}
+        tabIndex={props.drivingMe ? 0 : -1}
+        // While driving every key belongs to the remote computer: the app's
+        // hotkeys stand down (core/hotkey) and nothing bubbles past here.
+        data-owns-keyboard={props.drivingMe ? '' : undefined}
+        autocomplete="off"
+        inputmode="none"
+        autocapitalize="off"
+        spellcheck={false}
+        class="pointer-events-none absolute top-0 left-0 size-px resize-none overflow-hidden border-0 p-0 opacity-0"
+        onKeyDown={(event) => {
+          if (props.drivingMe) event.stopPropagation();
+          props.handlers.onKeyDown(event);
+        }}
+        onKeyUp={(event) => {
+          if (props.drivingMe) event.stopPropagation();
+          props.handlers.onKeyUp(event);
+        }}
+        onCompositionEnd={(event) => props.handlers.onCompositionEnd(event)}
+        onBlur={() => props.handlers.onBlur()}
+        onPaste={(event) => props.handlers.onPaste(event)}
+      />
+      <div
+        role="application"
+        aria-label={props.label}
+        class="absolute inset-0 touch-none outline-hidden select-none"
+        onPointerDown={(event) => {
+          // `inputmode="none"` keeps a phone's own keyboard down: touch
+          // types through the key bar, a hardware keyboard through here.
+          if (props.drivingMe) keyboardField?.focus({ preventScroll: true });
+          props.handlers.onPointerDown(event);
+        }}
+        onPointerMove={(event) => props.handlers.onPointerMove(event)}
+        onPointerUp={(event) => props.handlers.onPointerUp(event)}
+        onPointerCancel={(event) => props.handlers.onPointerCancel(event)}
+        onWheel={(event) => props.handlers.onWheel(event)}
+        onContextMenu={(event) => props.handlers.onContextMenu(event)}
+      />
+
+      <Show when={props.loupe}>
+        {(loupe) => (
+          <Loupe
+            at={loupe().at}
+            guest={loupe().guest}
+            media={() =>
+              frameElement?.querySelector('canvas, video') ?? undefined
+            }
+            snapshot={props.snapshot}
+          />
+        )}
+      </Show>
+
+      {props.children}
+    </div>
+  );
+}
