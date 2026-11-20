@@ -3,6 +3,7 @@
 
 import { expect } from '@playwright/test';
 import type { Mailbox } from './fixtures';
+import { isoDay, localDay, seedFocus } from './states-list';
 
 /**
  * The owner's reply to a message, sent from Gmail's own client: in the
@@ -38,29 +39,18 @@ export type FocusFlag = 'reply' | 'follow-up' | 'none';
  * Focus would leave it: no stack runs its model. `full-stack-home.spec.ts`
  * seeds Focus the same way. The list settles the flag again on the latest
  * message (`focus_for_threads` in `crates/email/src/outbound/focus_pg.rs`):
- * Follow up shows only when the owner wrote last, Reply needed only when
- * someone else did.
+ * Reply needed shows only when someone else wrote last, and Follow up only
+ * when the owner did and their message has waited three days for an answer
+ * or its due day has come. A follow-up thread here is due today.
  */
 export async function inFocus(
   mailbox: Mailbox,
   threadId: string,
   flag: FocusFlag
 ): Promise<void> {
-  const rows = await mailbox.stack.sql(
-    `INSERT INTO email_thread_focus (
-       thread_id, link_id, classified_message_id, classified_message_ts,
-       is_focus, category, importance, needs_reply, needs_follow_up, scores,
-       model, classified_at)
-     SELECT t.id, t.link_id, m.id, COALESCE(m.internal_date_ts, m.created_at),
-            true, 'known', 50, ${flag === 'reply'}, ${flag === 'follow-up'},
-            '{}'::jsonb, 'email-e2e', now()
-     FROM email_threads t
-     JOIN LATERAL (
-       SELECT id, internal_date_ts, created_at FROM email_messages
-       WHERE thread_id = t.id ORDER BY created_at DESC LIMIT 1
-     ) m ON true
-     WHERE t.id = '${threadId}' AND t.link_id = '${mailbox.inbox.linkId}'
-     RETURNING thread_id`
-  );
-  expect(rows).toHaveLength(1);
+  await seedFocus(mailbox, threadId, {
+    category: 'known',
+    ...(flag === 'none' ? {} : { flag }),
+    ...(flag === 'follow-up' ? { dueOn: isoDay(localDay(0)) } : {}),
+  });
 }
