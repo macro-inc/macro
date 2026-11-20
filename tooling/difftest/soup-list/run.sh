@@ -28,7 +28,7 @@ NEW_PORT=${NEW_PORT:-23250}
 OLD_PORT=${OLD_PORT:-23251}
 SEEDS=(${SEEDS:-A1 B1 C1})
 FUZZ=${FUZZ:-1500}
-SEQ_LANES=${SEQ_LANES:-8}
+SEQ_LANES=${SEQ_LANES:-13}
 SEQS=${SEQS:-104}
 STEPS=${STEPS:-20}
 OUT=${OUT:-$here/results}
@@ -75,7 +75,7 @@ run() { # <label> <seed> <cache> [args...]
   (cd "$here" && bun run run.ts --seed "$seed" --label "$label" --cache "$cache" \
     --out "$OUT/$label.json" --new "http://localhost:$NEW_PORT" --old "http://localhost:$OLD_PORT" \
     --stack "$STACK" --instance "$INSTANCE" --new-ref "$(git -C "$NEW_CHECKOUT" rev-parse "$NEW_REF")" \
-    --old-ref "$(git -C "$OLD_CHECKOUT" rev-parse "$OLD_REF")" --lanes "${LANES:-6}" "$@") 2>&1 | tee "$OUT/$label.log"
+    --old-ref "$(git -C "$OLD_CHECKOUT" rev-parse "$OLD_REF")" --lanes "${LANES:-16}" "$@") 2>&1 | tee "$OUT/$label.log"
 }
 
 start_vites on
