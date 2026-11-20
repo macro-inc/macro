@@ -28,6 +28,8 @@ type PropertyValuePillProps = Pick<
   opensProject?: boolean;
   /** The editor the pill opens; `Property.SheetEditor` inside a touch sheet. */
   editor?: typeof Property.PopoverEditor;
+  /** Text shown with the date icon in place of the value, such as a range. */
+  valueText?: string;
 };
 
 /** Controlled property pill shared by task and project composers. */
@@ -69,41 +71,59 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 {property().displayName}:
               </span>
             </Show>
-            <span class="inline-flex min-w-0 items-center gap-1">
-              <Show when={hasValue(property())}>
-                <Switch
-                  fallback={
-                    <Property.Icon
-                      property={property()}
-                      class={cn('shrink-0', props.iconClass)}
-                    />
-                  }
-                >
-                  <Match when={isMultiUserEntity()}>
-                    <Property.UserStack property={property()} maxUsers={2} />
-                  </Match>
-                  <Match when={isUserEntity()}>
-                    <Property.Icon property={property()} />
-                  </Match>
-                </Switch>
-              </Show>
-              <Property.Text
-                property={property()}
-                hideIcon={property().specificEntityType === 'INITIATIVE'}
-                resolveSingleEntity={
-                  props.showLabel ||
-                  property().specificEntityType === 'INITIATIVE'
-                }
-                class="min-w-0 max-w-60"
-                fallback={
-                  <Property.Empty
-                    propertyDefinitionId={property().propertyDefinitionId}
-                    label={props.emptyLabel ?? property().displayName}
-                    iconClass={props.iconClass}
+            <Show
+              when={props.valueText}
+              fallback={
+                <span class="inline-flex min-w-0 items-center gap-1">
+                  <Show when={hasValue(property())}>
+                    <Switch
+                      fallback={
+                        <Property.Icon
+                          property={property()}
+                          class={cn('shrink-0', props.iconClass)}
+                        />
+                      }
+                    >
+                      <Match when={isMultiUserEntity()}>
+                        <Property.UserStack
+                          property={property()}
+                          maxUsers={2}
+                        />
+                      </Match>
+                      <Match when={isUserEntity()}>
+                        <Property.Icon property={property()} />
+                      </Match>
+                    </Switch>
+                  </Show>
+                  <Property.Text
+                    property={property()}
+                    hideIcon={property().specificEntityType === 'INITIATIVE'}
+                    resolveSingleEntity={
+                      props.showLabel ||
+                      property().specificEntityType === 'INITIATIVE'
+                    }
+                    class="min-w-0 max-w-60"
+                    fallback={
+                      <Property.Empty
+                        propertyDefinitionId={property().propertyDefinitionId}
+                        label={props.emptyLabel ?? property().displayName}
+                        iconClass={props.iconClass}
+                      />
+                    }
                   />
-                }
-              />
-            </span>
+                </span>
+              }
+            >
+              {(text) => (
+                <span class="inline-flex min-w-0 items-center gap-1">
+                  <Property.Icon
+                    property={property()}
+                    class={cn('shrink-0', props.iconClass)}
+                  />
+                  <span class="min-w-0 max-w-60 truncate">{text()}</span>
+                </span>
+              )}
+            </Show>
             <Property.Caret />
           </Property.Pill>
         );

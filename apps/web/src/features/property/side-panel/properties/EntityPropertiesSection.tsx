@@ -19,15 +19,18 @@ import {
 } from '@property/context/PropertiesContext';
 import { resolvePinnedPropertyIds } from '@property/core/pinned-property-ids';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
+import { StartDueEditor } from '@property/editors/popover/StartDueEditor';
 import { useEntityProperties, usePropertyEntityDisplay } from '@property/hooks';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { isTaggableEntityType, TagsRow } from '@property/tags';
 import type {
+  DateProperty,
   Property,
   PropertyApiValues,
   PropertyDefinitionDomain,
 } from '@property/types';
-import { getEntityValues, hasValue } from '@property/utils';
+import { getEntityValues, hasValue, isDateProperty } from '@property/utils';
+import { type DateField, dateFieldOf } from '@property/utils/start-due';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -89,6 +92,8 @@ export interface EntityPropertiesSectionProps {
    * team has its own stage set.
    */
   hidePropertyDefinitionIds?: string[];
+  /** Start Date and Due Date rows open one picker for both, each on its own end. */
+  pairStartAndDue?: () => boolean;
 }
 
 export {
@@ -303,6 +308,23 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
+  const dateEnd = (field: DateField): DateProperty | undefined => {
+    const definitionId =
+      field === 'start'
+        ? SYSTEM_PROPERTY_IDS.START_DATE
+        : SYSTEM_PROPERTY_IDS.DUE_DATE;
+    const property = mergedProperties().find(
+      (candidate) => candidate.propertyDefinitionId === definitionId
+    );
+    return property && isDateProperty(property) ? property : undefined;
+  };
+  const otherDateEnd = (property: Property) => {
+    if (!props.pairStartAndDue?.()) return undefined;
+    const field = dateFieldOf(property.propertyDefinitionId);
+    if (!field) return undefined;
+    return dateEnd(field === 'start' ? 'due' : 'start');
+  };
+
   const canShowProperties = () => !error() || properties().length > 0;
   const renderContent = () => (
     <Show
@@ -349,6 +371,10 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                   entityId={props.entityId}
                   getEmptyLabel={props.getEmptyLabel}
                   property={property()}
+                  otherDateEnd={() => otherDateEnd(property())}
+                  saveOtherDateEnd={(end, value) =>
+                    saveOne(end, { valueType: 'DATE', value })
+                  }
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
                       property().propertyDefinitionId
@@ -584,6 +610,12 @@ function SidePanelPropertyRow(props: {
   onRemovePendingProperty: (property: Property) => void;
   onPropertyPinned?: (propertyId: string) => void;
   property: Property;
+  /** The other end of a Start Date or Due Date row that opens both. */
+  otherDateEnd?: () => DateProperty | undefined;
+  saveOtherDateEnd?: (
+    property: DateProperty,
+    value: Date | null
+  ) => Promise<unknown>;
 }) {
   const ctx = usePropertiesContext();
   const t = () => props.property.valueType;
@@ -656,12 +688,31 @@ function SidePanelPropertyRow(props: {
                     </PropertyRowActions.Provider>
                   </Match>
                 </Switch>
-                <PropertyNS.PopoverEditor
-                  entitySelfFilter={{
-                    entityType: ctx.entityType,
-                    blockId: props.entityId,
-                  }}
-                />
+                <Show
+                  when={props.otherDateEnd?.()}
+                  fallback={
+                    <PropertyNS.PopoverEditor
+                      entitySelfFilter={{
+                        entityType: ctx.entityType,
+                        blockId: props.entityId,
+                      }}
+                    />
+                  }
+                >
+                  {(other) => (
+                    <StartDueEditor
+                      field={
+                        dateFieldOf(props.property.propertyDefinitionId) ??
+                        'due'
+                      }
+                      other={() => props.otherDateEnd?.() ?? other()}
+                      saveOther={(end, value) =>
+                        props.saveOtherDateEnd?.(end, value) ??
+                        Promise.resolve()
+                      }
+                    />
+                  )}
+                </Show>
               </>
             )}
           </PropertyNS.Root>

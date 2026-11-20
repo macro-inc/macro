@@ -1,6 +1,9 @@
 vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
+vi.mock('@property/hooks/useStartDateEnabled', () => ({
+  useStartDateEnabled: () => () => false,
+}));
 vi.mock('@notifications/mark-row-seen', () => ({
   markRowNotificationsSeenOnOpen: vi.fn(),
 }));

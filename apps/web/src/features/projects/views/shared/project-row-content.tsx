@@ -5,7 +5,15 @@ import {
 } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Entity, MultiSelectCheckbox } from '@entity';
+import { buildStartDateDefaultProperty } from '@entity/extractors-property';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
+import { usePropertiesContext } from '@property/context/PropertiesContext';
+import { startDueEditorFor } from '@property/editors/popover/start-due-editor-for';
+import { useStartDateEnabled } from '@property/hooks/useStartDateEnabled';
+import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import type { Property } from '@property/types';
+import { isDateProperty } from '@property/utils';
+import { formatStartDue, startDueOf } from '@property/utils/start-due';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
@@ -64,6 +72,31 @@ export function ProjectRowColumns(
       (property) => property.propertyDefinitionId === id
     ) ??
     props.definitions?.find((property) => property.propertyDefinitionId === id);
+  // The due date cell reads as the range and sets the start too.
+  const context = usePropertiesContext();
+  const startDateEnabled = useStartDateEnabled();
+  const startDate = () => {
+    const property =
+      propertyFor(SYSTEM_PROPERTY_IDS.START_DATE) ??
+      buildStartDateDefaultProperty();
+    return isDateProperty(property) ? property : undefined;
+  };
+  const dueDatesText = (property: Property) => {
+    if (
+      !startDateEnabled() ||
+      property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.DUE_DATE
+    ) {
+      return undefined;
+    }
+    return formatStartDue(startDueOf(startDate(), property));
+  };
+  const dueDatesEditor = startDueEditorFor({
+    field: 'due',
+    enabled: startDateEnabled,
+    other: startDate,
+    saveOther: (property, value) =>
+      context.saveHandler.saveProperty(property, { valueType: 'DATE', value }),
+  });
   const updated = () => {
     const date = new Date(props.row.project.updatedAt);
     return Number.isNaN(date.getTime())
@@ -112,6 +145,8 @@ export function ProjectRowColumns(
                 <ListPropertyValue
                   entityId={props.row.project.id}
                   property={property()}
+                  valueText={dueDatesText(property())}
+                  editor={column.id === 'dueDate' ? dueDatesEditor : undefined}
                 />
               )}
             </Show>

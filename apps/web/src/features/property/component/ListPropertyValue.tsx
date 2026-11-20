@@ -4,6 +4,7 @@ import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 import { formatDate } from '../utils/formatting';
@@ -16,6 +17,10 @@ export function ListPropertyValue(props: {
   class?: string;
   /** Offers "Filter by <name>" for each person in the value's hover card. */
   onFilterByUser?: (userId: string) => void;
+  /** Text shown with the date icon in place of the value, such as a range. */
+  valueText?: string;
+  /** The editor the cell opens instead of the property's own. */
+  editor?: typeof Property.PopoverEditor;
 }) {
   const context = usePropertiesContext();
   const isInlineType = () =>
@@ -62,6 +67,8 @@ export function ListPropertyValue(props: {
           entityId={props.entityId}
           class={props.class}
           onFilterByUser={props.onFilterByUser}
+          valueText={props.valueText}
+          editor={props.editor}
         />
       )}
     </Property.Root>
@@ -73,6 +80,8 @@ function ListPropertyCell(props: {
   entityId: string;
   class?: string;
   onFilterByUser?: (userId: string) => void;
+  valueText?: string;
+  editor?: typeof Property.PopoverEditor;
 }) {
   const context = usePropertiesContext();
   const isUserEntity = () =>
@@ -82,9 +91,10 @@ function ListPropertyCell(props: {
     if (!isUserEntity()) return 0;
     return getEntityValues(props.property()).length;
   };
-  const isEmpty = () => !hasValue(props.property());
+  const isEmpty = () => !hasValue(props.property()) && !props.valueText;
   const label = () => {
     const property = props.property();
+    if (props.valueText) return `${property.displayName}: ${props.valueText}`;
     if (property.valueType === 'DATE' && property.value) {
       return `${property.displayName}: ${formatDate(property.value)}`;
     }
@@ -184,20 +194,34 @@ function ListPropertyCell(props: {
                   />
                 </Match>
               </Switch>
-              <Property.Text
-                property={props.property()}
-                hideIcon={props.property().specificEntityType === 'INITIATIVE'}
-                resolveSingleEntity={
-                  props.property().specificEntityType === 'INITIATIVE'
+              <Show
+                when={props.valueText}
+                fallback={
+                  <Property.Text
+                    property={props.property()}
+                    hideIcon={
+                      props.property().specificEntityType === 'INITIATIVE'
+                    }
+                    resolveSingleEntity={
+                      props.property().specificEntityType === 'INITIATIVE'
+                    }
+                    class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:sr-only"
+                  />
                 }
-                class="min-w-0 max-w-full flex-1 @max-[840px]/u-list:sr-only"
-              />
+              >
+                {(text) => (
+                  <span class="min-w-0 max-w-full flex-1 truncate @max-[840px]/u-list:sr-only">
+                    {text()}
+                  </span>
+                )}
+              </Show>
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
           </Property.Pill>
         </Layer>
       </Property.Tooltip>
-      <Property.PopoverEditor
+      <Dynamic
+        component={props.editor ?? Property.PopoverEditor}
         entitySelfFilter={{
           entityType: context.entityType,
           blockId: props.entityId,
