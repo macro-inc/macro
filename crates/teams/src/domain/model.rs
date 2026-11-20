@@ -594,6 +594,12 @@ pub struct PatchTeamRequest {
     /// unchanged or pass `null` to let each member's browser decide.
     #[serde(default, deserialize_with = "double_option")]
     pub language: Option<Option<Language>>,
+    /// The static file id of the team's logo, shown to every member in place
+    /// of the app rail's create button. Omit to leave unchanged or pass `null`
+    /// to remove it. The file must be a PNG, JPEG, WebP or GIF image the
+    /// caller uploaded.
+    #[serde(default, deserialize_with = "double_option")]
+    pub logo_file_id: Option<Option<uuid::Uuid>>,
 }
 
 /// Request to update the team plan
@@ -690,6 +696,9 @@ pub struct Team {
     /// The interface language for the team's members, unless a member picks
     /// their own. `None` lets each member's browser decide.
     pub(crate) language: Option<Language>,
+    /// The static file id of the team's logo, an image every member sees in
+    /// place of the app rail's create button. `None` when the team has none.
+    pub(crate) logo_file_id: Option<uuid::Uuid>,
 }
 
 impl Team {
@@ -714,6 +723,7 @@ impl Team {
             allow_non_admin_invites: true,
             default_link_share: Some(LinkShare::Team),
             language: None,
+            logo_file_id: None,
         }
     }
 }
@@ -769,6 +779,11 @@ impl Team {
     /// member's browser decides.
     pub fn language(&self) -> Option<Language> {
         self.language
+    }
+
+    /// The static file id of the team's logo, or `None` when it has none.
+    pub fn logo_file_id(&self) -> Option<uuid::Uuid> {
+        self.logo_file_id
     }
 }
 

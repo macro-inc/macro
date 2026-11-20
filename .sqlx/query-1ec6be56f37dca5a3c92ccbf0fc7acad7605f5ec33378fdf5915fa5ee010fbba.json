@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE team\n                SET\n                    name = COALESCE($2, name),\n                    slug = COALESCE($3, slug),\n                    default_link_share = CASE WHEN $4 THEN $5 ELSE default_link_share END,\n                    language = CASE WHEN $6 THEN $7 ELSE language END,\n                    logo_file_id = CASE WHEN $8 THEN $9 ELSE logo_file_id END\n                WHERE id = $1\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Varchar",
+        "Bool",
+        "Text",
+        "Bool",
+        "Text",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ec6be56f37dca5a3c92ccbf0fc7acad7605f5ec33378fdf5915fa5ee010fbba"
+}

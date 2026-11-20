@@ -47,6 +47,7 @@ async fn preference_changes_wait_for_rollout_without_other_patch_effects() {
         user_role_updates: None,
         default_link_share: None,
         language: None,
+        logo_file_id: None,
     };
     assert!(matches!(
         service

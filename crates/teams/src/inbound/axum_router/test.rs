@@ -288,6 +288,8 @@ struct FakeTeamService {
     user_calls: Arc<Mutex<Vec<String>>>,
     team_receipt_calls: Arc<Mutex<Vec<TeamReceiptCall>>>,
     invite_calls: Arc<Mutex<Vec<InviteCall>>>,
+    /// The `logo_file_id` of each `patch_team` call, as the handler parsed it.
+    patch_logo_calls: Arc<Mutex<Vec<Option<Option<uuid::Uuid>>>>>,
 }
 
 impl FakeTeamService {
@@ -295,6 +297,13 @@ impl FakeTeamService {
         self.invite_calls
             .lock()
             .expect("invite calls lock poisoned")
+            .clone()
+    }
+
+    fn patch_logo_calls(&self) -> Vec<Option<Option<uuid::Uuid>>> {
+        self.patch_logo_calls
+            .lock()
+            .expect("patch logo calls lock poisoned")
             .clone()
     }
 
@@ -475,9 +484,13 @@ impl TeamService for FakeTeamService {
     async fn patch_team(
         &self,
         _entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
-        _req: &PatchTeamRequest,
+        req: &PatchTeamRequest,
     ) -> Result<(), TeamError> {
-        panic!("unexpected patch_team call")
+        self.patch_logo_calls
+            .lock()
+            .expect("patch logo calls lock poisoned")
+            .push(req.logo_file_id);
+        Ok(())
     }
 
     async fn set_team_member_plan(
@@ -1112,4 +1125,56 @@ async fn reading_the_join_link_stays_open_and_no_credential_is_unauthorized() {
             assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
         }
     }
+}
+
+fn patch_team_request(body: Value) -> Request<Body> {
+    Request::patch("/")
+        .header(header::AUTHORIZATION, "Bearer valid")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("request should be valid")
+}
+
+#[tokio::test]
+async fn patch_team_tells_a_logo_apart_from_its_removal_and_its_absence() {
+    let logo_file_id = uuid::Uuid::from_u128(7);
+    let service = FakeTeamService::default();
+
+    for body in [
+        json!({ "logo_file_id": logo_file_id.to_string() }),
+        json!({ "logo_file_id": null }),
+        json!({ "name": "Renamed" }),
+    ] {
+        let response = router(
+            service.clone(),
+            FakeEntityAccessService::with_membership(USER_ID, TeamRole::Admin),
+        )
+        .oneshot(patch_team_request(body))
+        .await
+        .expect("router should respond");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    assert_eq!(
+        service.patch_logo_calls(),
+        vec![Some(Some(logo_file_id)), Some(None), None]
+    );
+}
+
+#[tokio::test]
+async fn patch_team_refuses_a_logo_from_a_plain_member() {
+    let service = FakeTeamService::default();
+    let response = router(
+        service.clone(),
+        FakeEntityAccessService::with_membership(USER_ID, TeamRole::Member),
+    )
+    .oneshot(patch_team_request(
+        json!({ "logo_file_id": uuid::Uuid::from_u128(7).to_string() }),
+    ))
+    .await
+    .expect("router should respond");
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert!(service.patch_logo_calls().is_empty());
 }

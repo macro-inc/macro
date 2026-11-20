@@ -11,7 +11,14 @@ event contract (schema, sanitization, delivery semantics).
 
 - `src/domain/team_service.rs`: the main service — creation, invites,
   membership, role changes, auto-join-domain toggle. Team-wide settings
-  (default link share, interface language) are fields on `PatchTeamRequest`.
+  (default link share, interface language, logo) are fields on `PatchTeamRequest`.
+- `src/domain/team_logo.rs`: the team logo (`team.logo_file_id`), a static
+  file every member sees in place of the app rail's create button. Setting it
+  checks the file through the `TeamLogoFiles` port (`outbound/team_logo_files.rs`
+  over the static-file service, wired in `authentication_service`): it must
+  exist, be the caller's upload, and be PNG, JPEG, WebP or GIF (400 otherwise).
+  The default `UnavailableTeamLogoFiles` refuses, so an unwired service can't
+  set one.
 - `src/domain/team_service/invite_link.rs`: the team's shareable invite link
   (`TeamInviteLinkService`) — who may see, create, reset, or turn it off, and
   joining through it via the same direct-join path as domain auto-join.
