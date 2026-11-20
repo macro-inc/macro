@@ -1,7 +1,7 @@
 import '@app/index.css';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
@@ -11,6 +11,7 @@ import {
   useHotkeyDOMScope,
 } from '@core/hotkey/hotkeys';
 import { EntityProvider } from '@entity';
+import { staticChannelDirectory } from '@queries/channel/directory';
 import type { readContactDirectory } from '@queries/contacts/directory';
 import { createContactRecipientSource } from '@queries/contacts/recipient-window';
 import {
@@ -330,7 +331,9 @@ function Fixture() {
           <EntityProvider>
             <UserContextProvider>
               <EmailLinksContextProvider>
-                <ChannelsContextProvider>
+                <ChannelDirectoryProvider
+                  directory={staticChannelDirectory(() => [])}
+                >
                   <QuickAccessProvider>
                     <main class="min-h-screen bg-surface p-4 text-ink">
                       <output data-testid="directory-reads">
@@ -346,7 +349,7 @@ function Fixture() {
                       </ThreadScope>
                     </main>
                   </QuickAccessProvider>
-                </ChannelsContextProvider>
+                </ChannelDirectoryProvider>
               </EmailLinksContextProvider>
             </UserContextProvider>
           </EntityProvider>
