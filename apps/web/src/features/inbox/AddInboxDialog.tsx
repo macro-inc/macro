@@ -1,12 +1,10 @@
 import { useAddInboxFlow } from '@core/email-link';
 import {
   type EmailProvider,
-  EmailProviderDialog,
+  EmailProviderSelectionDialog,
 } from '@core/email-link/ProviderDialog';
-import { fireAndForget } from '@core/util/fireAndForget';
-import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import type { ConsentScopes } from '@service-auth/client';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import { createSignal, onCleanup } from 'solid-js';
 
 type AddInboxRequest = {
   /** The permissions to ask consent for; the mailbox alone when omitted. */
@@ -31,37 +29,12 @@ export const openAddInboxDialog = (options?: AddInboxRequest) =>
 export const isAddInboxDialogOpen = () => request() !== null;
 
 /**
- * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off
- * `useAddInboxFlow`, which navigates the page to the chosen provider's consent screen.
+ * Provider selection before adding an inbox. Confirming starts the selected
+ * consent flow or the IMAP/SMTP server form through `useAddInboxFlow`.
  */
 export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
   const [pending, setPending] = createSignal(false);
-  // Undefined until the providers read settles. The dialog waits for it, so
-  // Outlook never flashes in for a user it isn't offered to, or pops in late.
-  const [availability, setAvailability] = createSignal<{
-    outlook: boolean;
-    imap: boolean;
-  }>();
-  createEffect(() => {
-    if (!isAddInboxDialogOpen()) return;
-    let current = true;
-    setAvailability(undefined);
-    fireAndForget(
-      fetchEmailConnectionProviders()
-        .then((providers) => {
-          if (current) setAvailability(providers);
-        })
-        .catch(() => {
-          if (current) setAvailability({ outlook: false, imap: false });
-        }),
-      'email-providers'
-    );
-    onCleanup(() => {
-      current = false;
-    });
-  });
-
   onCleanup(() => setRequest(null));
 
   const handleConfirm = async (provider: EmailProvider) => {
@@ -78,18 +51,14 @@ export function AddInboxDialog() {
   };
 
   return (
-    <EmailProviderDialog
-      open={isAddInboxDialogOpen() && availability() !== undefined}
+    <EmailProviderSelectionDialog
+      open={isAddInboxDialogOpen()}
       onOpenChange={(open) => {
         if (!open) setRequest(null);
       }}
       onSelect={handleConfirm}
       disabled={pending()}
-      outlookAvailable={availability()?.outlook === true}
-      imapAvailable={
-        availability()?.imap === true &&
-        (!request()?.scopes || request()?.scopes === 'gmail')
-      }
+      mailOnly={!request()?.scopes || request()?.scopes === 'gmail'}
     />
   );
 }

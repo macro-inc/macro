@@ -94,6 +94,10 @@ Google Workspace and enabled Outlook connections offer provider consent.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.
+**Connect new** and **Add another inbox** open the provider chooser immediately.
+If providers cannot load, **Try again** retries the read without starting an
+OAuth flow. Check that retry restores the offered providers and that calendar
+connections never offer IMAP.
 Keep the inbox open after connecting a test account with existing mail: it
 shows **Syncing your inbox**, then imported rows without a reload. After the
 import finishes, deliver another test message and verify it appears in the

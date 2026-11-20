@@ -32,16 +32,22 @@ export function useInitOutlookLink() {
 const adminConsentReturnUrl = () => `${getWebOrigin()}/app/inbox-link-callback`;
 
 /** Per user: Outlook follows the server's `enable-outlook` flag. */
-const emailConnectionProvidersQuery = (account: QueryAccount | undefined) =>
+const emailConnectionProvidersQuery = (
+  account: QueryAccount | undefined,
+  includeAdminConsent = true
+) =>
   queryOptions({
-    queryKey: authKeys.emailConnectionProviders(
-      account?.userId,
-      account?.session
-    ).queryKey,
+    queryKey: [
+      ...authKeys.emailConnectionProviders(account?.userId, account?.session)
+        .queryKey,
+      includeAdminConsent ? 'admin-consent' : 'providers',
+    ],
     queryFn: async () => {
       assertQueryAccount(account);
       const result = await throwOnErr(() =>
-        authServiceClient.emailConnectionProviders(adminConsentReturnUrl())
+        authServiceClient.emailConnectionProviders(
+          includeAdminConsent ? adminConsentReturnUrl() : undefined
+        )
       );
       assertQueryAccount(account);
       return result;
@@ -49,10 +55,14 @@ const emailConnectionProvidersQuery = (account: QueryAccount | undefined) =>
     staleTime: 0,
   });
 
-/** Fetch on opening the chooser, without suspending unrelated application UI. */
+/**
+ * The chooser needs capabilities only, not a signed admin-consent redirect.
+ * Leave its optional callback out so capability discovery works from an
+ * authenticated local proxy as well as from the configured OAuth origin.
+ */
 export function fetchEmailConnectionProviders() {
   return queryClient.fetchQuery(
-    emailConnectionProvidersQuery(currentQueryAccount())
+    emailConnectionProvidersQuery(currentQueryAccount(), false)
   );
 }
 

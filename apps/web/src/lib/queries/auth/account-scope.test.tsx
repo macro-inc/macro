@@ -15,7 +15,10 @@ import {
 import { useUpdateEmailSettingsMutation } from '../email/settings';
 import { currentQueryAccount, resetQueryAccountSession } from './account-scope';
 import { authKeys } from './keys';
-import { useEmailConnectionProviders } from './outlook-link';
+import {
+  fetchEmailConnectionProviders,
+  useEmailConnectionProviders,
+} from './outlook-link';
 
 const api = vi.hoisted(() => ({
   links: vi.fn(),
@@ -375,4 +378,22 @@ it('forgets the previous account’s routine drafts', async () => {
   client.setQueryData(key, [{ id: 'draft-1', state: 'drafting' }]);
   await resetQueryAccountSession();
   expect(client.getQueryData(key)).toBeUndefined();
+});
+
+it('loads chooser capabilities without coupling discovery to an OAuth callback origin', async () => {
+  await resetQueryAccountSession();
+  await client.fetchQuery({
+    queryKey: authKeys.userInfo.queryKey,
+    queryFn: async () => ({ id: viewer(), authenticated: true }),
+    staleTime: 0,
+  });
+  api.providers.mockResolvedValueOnce(
+    ok({ gmail: true, outlook: false, imap: true })
+  );
+  expect(await fetchEmailConnectionProviders()).toEqual({
+    gmail: true,
+    outlook: false,
+    imap: true,
+  });
+  expect(api.providers).toHaveBeenCalledExactlyOnceWith(undefined);
 });

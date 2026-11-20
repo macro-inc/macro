@@ -2059,3 +2059,8 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
   their data source, for both GraphQL and REST. Coalesce bursts, fence deferred
   work by account/session/scope, and catch up on reconnect/visibility. Show
   first-sync progress instead of an empty-inbox claim while selected links sync.
+
+- Open generic email-provider selection immediately with loading and explicit
+  retry on availability errors; never silently start Gmail on a failed read.
+  Chooser capabilities omit the optional admin-consent callback and use a
+  separate account/session cache variant from signed approval links.

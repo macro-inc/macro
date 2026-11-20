@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   Button,
@@ -5,8 +6,9 @@ import {
   type ManagedDialogProps,
   openDialog,
   Panel,
+  Spinner,
 } from '@ui';
-import { type Owner, onCleanup, runWithOwner, Show } from 'solid-js';
+import { createResource, type Owner, Show } from 'solid-js';
 import { OutlookBetaBadge } from './OutlookBetaBadge';
 
 export type EmailProvider = 'GMAIL' | 'OUTLOOK' | 'IMAP';
@@ -21,6 +23,9 @@ export function EmailProviderDialog(
     disabled?: boolean;
     outlookAvailable: boolean;
     imapAvailable?: boolean;
+    loading?: boolean;
+    failed?: boolean;
+    onRetry?: () => void;
   }
 ) {
   return (
@@ -39,7 +44,7 @@ export function EmailProviderDialog(
         <Panel.Body class="p-6 font-sans flex flex-col gap-3">
           <Dialog.Description class="text-ink-muted text-sm/tight">
             <Show
-              when={props.imapAvailable}
+              when={props.imapAvailable || props.loading || props.failed}
               fallback={
                 props.outlookAvailable
                   ? 'Connect Gmail, Outlook.com, or an individual Microsoft 365 account.'
@@ -53,31 +58,50 @@ export function EmailProviderDialog(
             Gmail and Outlook connect email and calendar together. Keep the
             email permissions checked on the provider's screen.
           </p>
-          <Button
-            variant="secondary"
-            disabled={props.disabled}
-            onClick={() => props.onSelect('GMAIL')}
-          >
-            Gmail
-          </Button>
-          <Show when={props.outlookAvailable}>
-            <Button
-              variant="secondary"
-              disabled={props.disabled}
-              onClick={() => props.onSelect('OUTLOOK')}
+          <Show when={props.loading}>
+            <div
+              role="status"
+              class="flex items-center gap-2 text-sm text-ink-muted"
             >
-              Outlook / Microsoft 365
-              <OutlookBetaBadge />
+              <Spinner decorative />
+              Loading email providers…
+            </div>
+          </Show>
+          <Show when={props.failed}>
+            <div role="alert" class="text-sm text-ink-muted">
+              Could not load email providers. Try again.
+            </div>
+            <Button variant="secondary" onClick={props.onRetry}>
+              Try again
             </Button>
           </Show>
-          <Show when={props.imapAvailable}>
+          <Show when={!props.loading && !props.failed}>
             <Button
               variant="secondary"
               disabled={props.disabled}
-              onClick={() => props.onSelect('IMAP')}
+              onClick={() => props.onSelect('GMAIL')}
             >
-              Other email (IMAP / SMTP)
+              Gmail
             </Button>
+            <Show when={props.outlookAvailable}>
+              <Button
+                variant="secondary"
+                disabled={props.disabled}
+                onClick={() => props.onSelect('OUTLOOK')}
+              >
+                Outlook / Microsoft 365
+                <OutlookBetaBadge />
+              </Button>
+            </Show>
+            <Show when={props.imapAvailable}>
+              <Button
+                variant="secondary"
+                disabled={props.disabled}
+                onClick={() => props.onSelect('IMAP')}
+              >
+                Other email (IMAP / SMTP)
+              </Button>
+            </Show>
           </Show>
           <Button
             variant="ghost"
@@ -92,40 +116,42 @@ export function EmailProviderDialog(
   );
 }
 
-/**
- * Cancellation and owner disposal resolve without starting an OAuth attempt.
- * With Gmail the only provider on offer, there is nothing to choose.
- */
+/** Shared loading/error handling for settings, onboarding and another account. */
+export function EmailProviderSelectionDialog(
+  props: ManagedDialogProps & {
+    onSelect: (provider: EmailProvider) => void;
+    mailOnly: boolean;
+    disabled?: boolean;
+  }
+) {
+  const [availability, { refetch }] = createResource(
+    () => props.open,
+    (open) => (open ? fetchEmailConnectionProviders() : undefined)
+  );
+  return (
+    <EmailProviderDialog
+      {...props}
+      loading={availability.loading}
+      failed={!!availability.error}
+      onRetry={() => fireAndForget(refetch(), 'email-providers')}
+      outlookAvailable={!availability.error && availability()?.outlook === true}
+      imapAvailable={
+        !availability.error && props.mailOnly && availability()?.imap === true
+      }
+    />
+  );
+}
+
+/** Cancellation and owner disposal resolve without starting an OAuth attempt. */
 export async function selectEmailProvider(
   owner: Owner | null,
   mailOnly = true
 ): Promise<EmailProvider | undefined> {
-  // Registered before the read: a caller gone by the time it answers must not
-  // be sent to a consent screen.
-  let disposed = false;
-  if (owner)
-    runWithOwner(owner, () =>
-      onCleanup(() => {
-        disposed = true;
-      })
-    );
-  let outlookAvailable = false;
-  let imapAvailable = false;
-  try {
-    const availability = await fetchEmailConnectionProviders();
-    outlookAvailable = availability.outlook;
-    imapAvailable = mailOnly && availability.imap;
-  } catch {
-    /* Gmail remains available when the availability read fails. */
-  }
-  if (disposed) return undefined;
-  if (!outlookAvailable && !imapAvailable) return 'GMAIL';
   let selected: EmailProvider | undefined;
   const handle = openDialog(
-    EmailProviderDialog,
+    EmailProviderSelectionDialog,
     {
-      outlookAvailable,
-      imapAvailable,
+      mailOnly,
       onSelect: (provider) => {
         selected = provider;
         handle.close();
