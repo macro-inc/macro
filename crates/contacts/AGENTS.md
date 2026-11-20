@@ -19,6 +19,7 @@ and kept in sync via the connection gateway.
 - `lookup_contact_ids` also backs the webhook SSE contact audience (`document_storage_service` `stream_contacts` adapter): one exact `(viewer, id)` lookup per subscriber per event.
 - `src/domain/models/list.rs`: the directed, list-aware directory (tables `contact_list_members` and `contact_inbox_members`, replacing `contacts_connections`). `ContactList` keys (`teammates` is computed at read time, never stored; `interacted`, `invited`, `gmail`, `outlook`) and `InboxSource` (owner, `email_links` id, provider).
 - `ContactListIngress` (`src/domain/ports.rs`, implemented by `SqsContactsIngress`) is the producer API: `record_interactions` (mutual, chunked to 10 users × 500 peers per message), `record_inbox_contacts` (directed, 500 per message), `directory_changed` (notify only; more than 500 changed ids are sent as unknown) and `user_deleted`. Each publishes a `DirectoryChange` (`src/domain/models/messages.rs`, tagged by `type`); `ContactsMessage` tries it before the untagged legacy shapes.
+- `src/domain/list_writes.rs`: the rollout gate for list-aware messages. Producers wrap their ingress in `ListWritesGate`, whose `ContactListIngress` calls send nothing until the global PostHog flag `contacts-list-writes` is on (service context `contacts-list-writes`, read at most once a minute; on in a local stack, off without a PostHog key or when a read fails). `ContactsIngress` (legacy messages) passes through ungated. Workers released before `DirectoryChange` delete it as unparseable, so turn the flag on only once every contacts worker runs a release that reads it.
 - `src/outbound/repository/lists.rs` (`ContactListRepository`): idempotent `INSERT … ON CONFLICT DO NOTHING RETURNING` writes that report only added rows; inbox rows are skipped once the `email_links` row is gone. `process_change` in `src/domain/service.rs` notifies only owners whose rows were added, naming those contacts as `changed` (`ContactsInvalidation`, at most 500; a removal is sent unknown). `InboxContacts` also writes the legacy `contacts_connections` edge first, so the old read path stays complete and a retry after a failed write still notifies.
 - `src/domain/ports.rs`: the traits `inbound`/`outbound` implement.
 - `src/inbound/http.rs`: HTTP handlers, router, DTOs, swagger.
@@ -38,7 +39,7 @@ and kept in sync via the connection gateway.
 ## Boundaries
 
 - Depends on: `macro_authorization` (axum feature), `rate_limit`, `sqs_worker`,
-  `macro_user_id`.
+  `macro_user_id`, `feature_flags` and `macro_env` (the list-writes gate).
 - Used by: `graphql_contacts` (paged directory reads), `contacts_service` (composition root), `teams` (backfill on team
   join), `channels`, `ai_tools`, `databases_sql`; also linked into
   `document_storage_service`, `authentication_service`, `email_service`,
