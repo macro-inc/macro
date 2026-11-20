@@ -19,6 +19,10 @@ flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
   nothing.
 - Nothing loads until the channel is open on a non-touch device, outside a
   call panel, with its first rows on screen.
+- Tracing: the first not-done read runs in `channel.active_notifications.read`
+  (channel id, count, limit reached), inside the channel view's trace while
+  that view still loads; the request's `graphql.transport` span sits under it.
+  Marking runs in `channel.notification_stack.mark_done` or `mark_read`.
 - A check sits beside its stack's newest message. A thread's check sits
   beside its newest notified reply, or beside the top-level message while that
   reply is hidden (`views/stack-checks.tsx`).
@@ -32,8 +36,9 @@ flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
 
 - Checks render through `ChannelThread`'s `gutter` slot (`Thread.GutterSlot`)
   and show only when the pane is ≥1008px wide (`@container/channel-pane`, set
-  in `Channel.tsx`). Replies inherit `--thread-gutter-inset`, so every check
-  lines up in one lane.
+  in `Channel.tsx` only while the checks flag is on, on desktop, because a
+  size container also contains layout). Replies inherit
+  `--thread-gutter-inset`, so every check lines up in one lane.
 - The list docks in the gutter when it is ≥240px wide and opens as a popover
   otherwise. Below 72px it hides. When both flags are on, it leaves the checks
   their 44px lane.
@@ -43,4 +48,7 @@ flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
 
 ## Checks
 
-- `bunx vitest run src/features/channel-notification-stacks src/features/channel`
+- `bunx vitest run src/features/channel-notification-stacks src/features/channel src/lib/queries/channel`
+- Backend-free desktop regression over the real checks, list and stacking:
+  `bunx playwright test --config src/features/channel-notification-stacks/browser-test/playwright.config.ts`
+  (`gutter.html?pane=<px>&theme=light|dark` to look at it).
