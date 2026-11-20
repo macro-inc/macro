@@ -168,6 +168,18 @@ struct InboxList {
 }
 
 #[derive(Deserialize)]
+struct ApiKeyList {
+    api_keys: Vec<ListedApiKey>,
+}
+
+#[derive(Deserialize)]
+struct ListedApiKey {
+    key_id: String,
+    #[serde(default)]
+    inbox_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
 struct ApiKey {
     key_id: String,
     key: Option<String>,
@@ -427,6 +439,21 @@ impl MailboxProvisioner for DeadSimple {
             &format!("/v1/api-keys/{}", segment(&grant.0)),
         )?)
         .await
+    }
+
+    #[tracing::instrument(name = "agent_mailbox.deadsimple.revoke_scoped_keys", skip_all, err)]
+    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+        let keys: ApiKeyList =
+            data(self.admin(Method::GET, "/v1/api-keys")?, Operation::Other).await?;
+        // Only keys scoped to exactly this mailbox: never an account-wide key.
+        let scoped = keys
+            .api_keys
+            .into_iter()
+            .filter(|key| key.inbox_ids.as_slice() == std::slice::from_ref(&mailbox.0));
+        for key in scoped {
+            self.revoke_access(&ProviderGrantId(key.key_id)).await?;
+        }
+        Ok(())
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.delete_inbox", skip_all, err)]

@@ -420,7 +420,7 @@ async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_cancelled_send_frees_its_slot_and_pruning_is_bounded(pool: PgPool) {
+async fn a_cancelled_send_frees_its_slot_and_old_records_are_pruned(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
     let id = active_mailbox(&repository).await;
     let limits = SendLimits {
@@ -458,17 +458,17 @@ async fn a_cancelled_send_frees_its_slot_and_pruning_is_bounded(pool: PgPool) {
             .await
             .unwrap();
     }
-    let first_batch = repository
-        .prune_sends(now + Duration::seconds(1), 2)
+    let pruned = repository
+        .prune_sends(now + Duration::seconds(1))
         .await
         .unwrap();
-    let second_batch = repository
-        .prune_sends(now + Duration::seconds(1), 2)
+    let nothing_left = repository
+        .prune_sends(now + Duration::seconds(1))
         .await
         .unwrap();
 
-    assert_eq!(first_batch, 2);
-    assert_eq!(second_batch, 1);
+    assert_eq!(pruned, 3);
+    assert_eq!(nothing_left, 0);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -55,8 +55,10 @@ CREATE UNIQUE INDEX agent_mailboxes_provider_mailbox_idx
     WHERE provider_mailbox_id IS NOT NULL;
 
 -- The sweep's work: stalled provisioning, releases, and paused mailboxes.
+-- Ordered by updated_at so the sweep's ORDER BY ... LIMIT reads it in order
+-- and stops early.
 CREATE INDEX agent_mailboxes_sweep_idx
-    ON agent_mailboxes (state, updated_at)
+    ON agent_mailboxes (updated_at)
     WHERE state IN ('provisioning', 'releasing', 'paused');
 
 -- Sends from an agent mailbox: idempotency and the per-mailbox caps. A row

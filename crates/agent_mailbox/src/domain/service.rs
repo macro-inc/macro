@@ -57,7 +57,7 @@ pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
 /// outcome is unknown is retried only inside this, with a margin.
 pub const PROVIDER_REPLAY_WINDOW: Duration = Duration::hours(23);
 
-/// Send records the sweep prunes per round.
+/// Send records the sweep prunes per round (the literal in the repository's query).
 pub const PRUNE_BATCH: u32 = 1000;
 
 /// Mailboxes the sweep moves on per round.
@@ -173,9 +173,11 @@ where
         ) {
             self.advance(mailbox.id).await?;
         }
+        // The request's own mailbox, whatever happened to it since: a retry of
+        // an old request never answers with a newer mailbox.
         let mailbox = self
             .repository
-            .live_mailbox(&request.agent)
+            .mailbox(mailbox.id)
             .await
             .map_err(internal)?
             .ok_or(AgentMailboxError::NotFound)?;
@@ -498,17 +500,6 @@ where
                     return Ok(());
                 }
 
-                if let Some(grant) = &mailbox.grant {
-                    self.vendor
-                        .revoke_access(&grant.id)
-                        .await
-                        .map_err(mail_error)?;
-                    self.repository
-                        .clear_grant(mailbox.id, token)
-                        .await
-                        .map_err(internal)?;
-                }
-
                 // A create whose response was lost may still have made a mailbox.
                 let provider_mailbox = match mailbox.provider_mailbox_id {
                     Some(id) => Some(id),
@@ -519,6 +510,28 @@ where
                         .map_err(mail_error)?
                         .map(|found| found.id),
                 };
+
+                // Every credential scoped to the mailbox, not only the stored
+                // one: a credential minted but never stored (a failed
+                // encryption, a lost response, a mint after the replay
+                // window) is found by its scope and revoked too.
+                if let Some(grant) = &mailbox.grant {
+                    self.vendor
+                        .revoke_access(&grant.id)
+                        .await
+                        .map_err(mail_error)?;
+                }
+                if let Some(provider_mailbox) = &provider_mailbox {
+                    self.vendor
+                        .revoke_all_access(provider_mailbox)
+                        .await
+                        .map_err(mail_error)?;
+                }
+                self.repository
+                    .clear_grant(mailbox.id, token)
+                    .await
+                    .map_err(internal)?;
+
                 if let Some(provider_mailbox) = provider_mailbox {
                     self.vendor
                         .delete_mailbox(&provider_mailbox)
@@ -577,7 +590,7 @@ where
         }
 
         self.repository
-            .prune_sends(now - SEND_RECORD_RETENTION, PRUNE_BATCH)
+            .prune_sends(now - SEND_RECORD_RETENTION)
             .await
             .map_err(internal)?;
 

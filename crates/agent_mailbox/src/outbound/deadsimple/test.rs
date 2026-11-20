@@ -329,3 +329,37 @@ async fn without_a_provisioning_key_nothing_reaches_the_provider() {
     assert!(matches!(error, ProviderError::NotConfigured));
     assert!(server.received_requests().await.unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn revoking_all_access_revokes_only_keys_scoped_to_exactly_that_mailbox() {
+    let (server, adapter) = adapter().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/api-keys"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "data": {"api_keys": [
+                {"key_id": "scoped", "inbox_ids": [inbox_id().0]},
+                {"key_id": "account-wide", "inbox_ids": []},
+                {"key_id": "other", "inbox_ids": ["other-inbox"]},
+                {"key_id": "shared", "inbox_ids": [inbox_id().0, "other-inbox"]},
+            ], "count": 4}
+        })))
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/v1/api-keys/scoped"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    adapter.revoke_all_access(&inbox_id()).await.unwrap();
+
+    let deletes = server
+        .received_requests()
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|request| request.method == wiremock::http::Method::DELETE)
+        .count();
+    assert_eq!(deletes, 1);
+}

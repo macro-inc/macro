@@ -137,3 +137,26 @@ async fn a_revoked_key_reads_nothing() {
 
     assert!(matches!(read, Err(ProviderError::NotFound)));
 }
+
+#[tokio::test]
+async fn revoking_all_access_finds_keys_by_their_scope() {
+    let adapter = adapter_against_fake().await;
+    let mailbox = adapter.create_mailbox(&create("ada", 1)).await.unwrap();
+    let (_, first) = adapter
+        .grant_access(&mailbox.id, Uuid::from_u128(1))
+        .await
+        .unwrap();
+    let (_, second) = adapter
+        .grant_access(&mailbox.id, Uuid::from_u128(2))
+        .await
+        .unwrap();
+
+    adapter.revoke_all_access(&mailbox.id).await.unwrap();
+
+    for key in [first, second] {
+        let read = adapter
+            .list_messages(&mailbox.id, &key, &MessagePage::default())
+            .await;
+        assert!(matches!(read, Err(ProviderError::NotFound)));
+    }
+}

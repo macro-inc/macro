@@ -189,6 +189,23 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         }
     }
 
+    async fn mailbox(&self, id: AgentMailboxId) -> Result<Option<AgentMailbox>, Self::Err> {
+        let row = sqlx::query_as!(
+            MailboxRow,
+            r#"
+            SELECT id, request_id, user_id, provider, requested_local_part, display_name,
+                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,
+                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
+            FROM agent_mailboxes
+            WHERE id = $1
+            "#,
+            id.0,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(AgentMailbox::try_from).transpose()
+    }
+
     async fn live_mailbox(
         &self,
         agent: &MacroUserIdStr<'_>,
@@ -608,21 +625,25 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(())
     }
 
-    async fn prune_sends(&self, before: DateTime<Utc>, limit: u32) -> Result<u64, Self::Err> {
-        // Bounded per round, so a backlog after downtime drains over several
-        // rounds instead of one long delete.
+    async fn prune_sends(&self, before: DateTime<Utc>) -> Result<u64, Self::Err> {
+        // At most PRUNE_BATCH rows a round, oldest first, so a backlog after
+        // downtime drains over several rounds. The limit is a literal so a
+        // generic plan still probes the primary key per expired row instead
+        // of scanning the ledger.
         let result = sqlx::query!(
             r#"
-            DELETE FROM agent_mailbox_sends
-            WHERE (mailbox_id, idempotency_key) IN (
+            DELETE FROM agent_mailbox_sends AS sends
+            USING (
                 SELECT mailbox_id, idempotency_key
                 FROM agent_mailbox_sends
                 WHERE created_at < $1
-                LIMIT $2
-            )
+                ORDER BY created_at
+                LIMIT 1000
+            ) AS expired
+            WHERE sends.mailbox_id = expired.mailbox_id
+              AND sends.idempotency_key = expired.idempotency_key
             "#,
             before,
-            i64::from(limit),
         )
         .execute(&self.pool)
         .await?;

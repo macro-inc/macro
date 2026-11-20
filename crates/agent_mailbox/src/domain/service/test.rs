@@ -219,6 +219,30 @@ impl MailboxProvisioner for FakeVendor {
         Ok(())
     }
 
+    async fn revoke_all_access(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
+        let mut state = self.0.lock().unwrap();
+        let scoped: Vec<String> = state
+            .keys
+            .iter()
+            .filter(|(_, inbox)| *inbox == &mailbox.0)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in scoped {
+            state.keys.remove(&key);
+            let grants: Vec<String> = state
+                .grants
+                .iter()
+                .filter(|(_, granted)| **granted == key)
+                .map(|(grant, _)| grant.clone())
+                .collect();
+            for grant in grants {
+                state.grants.remove(&grant);
+                state.revoked_grants.push(grant);
+            }
+        }
+        Ok(())
+    }
+
     async fn delete_mailbox(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
         let mut state = self.0.lock().unwrap();
         if let Some(error) = Self::take_failure(&mut state, "delete") {
@@ -319,7 +343,11 @@ impl MailboxClient for FakeVendor {
 }
 
 /// Binds the plaintext to the mailbox and agent, as KMS's encryption context does.
-struct FakeCipher;
+#[derive(Clone, Default)]
+struct FakeCipher {
+    /// The next encryption fails, as an unavailable KMS would.
+    fail_next_encrypt: Arc<std::sync::atomic::AtomicBool>,
+}
 
 impl MailboxKeyCipher for FakeCipher {
     type Err = FakeError;
@@ -330,6 +358,12 @@ impl MailboxKeyCipher for FakeCipher {
         agent: &MacroUserIdStr<'_>,
         key: &MailboxKey,
     ) -> Result<EncryptedMailboxKey, FakeError> {
+        if self
+            .fail_next_encrypt
+            .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(FakeError);
+        }
         Ok(EncryptedMailboxKey {
             ciphertext: format!("{mailbox}|{agent}|{}", key.expose()).into_bytes(),
             kms_key_id: "fake-kms".to_owned(),
@@ -462,6 +496,15 @@ impl AgentMailboxRepository for FakeRepository {
             next_sweep_at: None,
         });
         Ok(Reservation::New(mailbox))
+    }
+
+    async fn mailbox(&self, id: AgentMailboxId) -> Result<Option<AgentMailbox>, FakeError> {
+        let state = self.0.lock().unwrap();
+        Ok(state
+            .rows
+            .iter()
+            .find(|row| row.mailbox.id == id)
+            .map(|row| row.mailbox.clone()))
     }
 
     async fn live_mailbox(
@@ -752,7 +795,7 @@ impl AgentMailboxRepository for FakeRepository {
         Ok(())
     }
 
-    async fn prune_sends(&self, before: DateTime<Utc>, _limit: u32) -> Result<u64, FakeError> {
+    async fn prune_sends(&self, before: DateTime<Utc>) -> Result<u64, FakeError> {
         let mut state = self.0.lock().unwrap();
         let count = state.sends.len();
         state.sends.retain(|send| send.at >= before);
@@ -778,15 +821,17 @@ struct World {
     service: Service,
     repository: FakeRepository,
     vendor: FakeVendor,
+    cipher: FakeCipher,
 }
 
 fn world() -> World {
     let repository = FakeRepository::default();
     let vendor = FakeVendor::default();
+    let cipher = FakeCipher::default();
     let service = AgentMailboxService::new(
         repository.clone(),
         vendor.clone(),
-        FakeCipher,
+        cipher.clone(),
         FakeDirectory {
             agents: vec![ADA.to_owned(), BEN.to_owned()],
         },
@@ -797,6 +842,7 @@ fn world() -> World {
         service,
         repository,
         vendor,
+        cipher,
     }
 }
 
@@ -1671,4 +1717,65 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
         Err(AgentMailboxError::SendOutcomeUnknown)
     ));
     assert_eq!(world.vendor.0.lock().unwrap().send_calls, 2);
+}
+
+#[tokio::test]
+async fn retrying_an_old_request_answers_with_its_own_released_mailbox() {
+    let world = world();
+    let first = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+    let second = world
+        .service
+        .provision(request(ADA, 2, "ada-two"))
+        .await
+        .unwrap();
+
+    let replayed = world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    assert_ne!(first.id, second.id);
+    assert_eq!(replayed.id, first.id);
+    assert_eq!(replayed.state, MailboxState::Released);
+}
+
+#[tokio::test]
+async fn a_credential_minted_but_never_stored_is_revoked_on_release() {
+    let world = world();
+    world
+        .cipher
+        .fail_next_encrypt
+        .store(true, std::sync::atomic::Ordering::SeqCst);
+    let failed = world.service.provision(request(ADA, 1, "ada")).await;
+    assert!(matches!(failed, Err(AgentMailboxError::Internal(_))));
+
+    // A mint after the replay window: a second credential nobody stored.
+    let mailbox = world
+        .repository
+        .live_mailbox(&user(ADA))
+        .await
+        .unwrap()
+        .unwrap();
+    let inbox = mailbox.provider_mailbox_id.clone().unwrap();
+    world
+        .vendor
+        .grant_access(&inbox, Uuid::from_u128(99))
+        .await
+        .unwrap();
+    assert_eq!(world.vendor.0.lock().unwrap().keys.len(), 2);
+
+    world.service.release(&user(ADA), Utc::now()).await.unwrap();
+
+    let vendor = world.vendor.0.lock().unwrap();
+    assert!(
+        vendor.keys.is_empty(),
+        "every credential scoped to the mailbox is revoked"
+    );
+    assert_eq!(vendor.revoked_grants.len(), 2);
 }

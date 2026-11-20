@@ -75,6 +75,12 @@ pub trait MailboxProvisioner: Send + Sync + 'static {
         grant: &ProviderGrantId,
     ) -> impl Future<Output = Result<(), ProviderError>> + Send;
 
+    /// Revoke every credential scoped to this mailbox, stored or not.
+    fn revoke_all_access(
+        &self,
+        mailbox: &ProviderMailboxId,
+    ) -> impl Future<Output = Result<(), ProviderError>> + Send;
+
     /// Delete a mailbox and its mail. Deleting one already gone succeeds.
     fn delete_mailbox(
         &self,
@@ -176,6 +182,12 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         request: &ProvisionRequest,
         id: AgentMailboxId,
     ) -> impl Future<Output = Result<Reservation, Self::Err>> + Send;
+
+    /// One mailbox by id, in any state.
+    fn mailbox(
+        &self,
+        id: AgentMailboxId,
+    ) -> impl Future<Output = Result<Option<AgentMailbox>, Self::Err>> + Send;
 
     /// The agent's mailbox that is not released.
     fn live_mailbox(
@@ -315,11 +327,11 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         idempotency_key: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete up to `limit` send records created before `before`; they no
-    /// longer count toward a cap or dedupe a retry. Returns how many went.
+    /// Delete up to [`PRUNE_BATCH`](crate::domain::service::PRUNE_BATCH) send
+    /// records created before `before`, oldest first; they no longer count
+    /// toward a cap or dedupe a retry. Returns how many went.
     fn prune_sends(
         &self,
         before: DateTime<Utc>,
-        limit: u32,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 }

@@ -96,7 +96,7 @@ impl FakeVendor {
             .route("/v1/inboxes", post(create_inbox).get(list_inboxes))
             .route("/v1/inboxes/{inbox_id}", delete(delete_inbox))
             .route("/v1/inboxes/{inbox_id}/guardrails", put(set_guardrails))
-            .route("/v1/api-keys", post(create_api_key))
+            .route("/v1/api-keys", post(create_api_key).get(list_api_keys))
             .route("/v1/api-keys/{key_id}", delete(revoke_api_key))
             .route(
                 "/v1/inboxes/{inbox_id}/messages",
@@ -281,7 +281,6 @@ async fn delete_inbox(
     state
         .messages
         .retain(|message| message.inbox_id != inbox_id);
-    state.scoped_keys.retain(|_, (_, inbox)| inbox != &inbox_id);
     StatusCode::NO_CONTENT.into_response()
 }
 
@@ -322,6 +321,23 @@ async fn create_api_key(
         state.replays.insert(replay_key, created.clone());
     }
     data(StatusCode::CREATED, created)
+}
+
+/// Scoped keys, without their secrets, as the real API lists them.
+async fn list_api_keys(State(vendor): State<FakeVendor>, headers: HeaderMap) -> Response {
+    if !vendor.is_admin(&headers) {
+        return error(StatusCode::UNAUTHORIZED, "unauthorized");
+    }
+    let state = vendor.lock();
+    let keys: Vec<Value> = state
+        .scoped_keys
+        .values()
+        .map(|(key_id, inbox_id)| json!({"key_id": key_id, "inbox_ids": [inbox_id]}))
+        .collect();
+    data(
+        StatusCode::OK,
+        json!({"api_keys": keys, "count": keys.len()}),
+    )
 }
 
 async fn revoke_api_key(
