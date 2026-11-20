@@ -49,6 +49,15 @@ export interface EventFormProps {
     values: EventEditorSubmitValues,
     scope?: CalendarUpdateScope
   ) => void;
+  /**
+   * Replaces the event with the form's unsaved edits, for a meeting the
+   * provider keeps on an existing event once the person turns it off. Without
+   * it the meeting cannot be turned off.
+   */
+  onReplace?: (
+    values: EventEditorSubmitValues,
+    scope?: CalendarUpdateScope
+  ) => void;
 }
 
 /**
@@ -139,6 +148,13 @@ export function createEventForm(props: EventFormProps) {
     ['microsoft_teams', 'existing'].includes(
       controller.initialConferenceChoice()
     );
+  // Outlook cannot remove Teams from an existing event: once the person turns
+  // it off, only a replacement saves the form.
+  const conferenceRemovalPending = () =>
+    conferenceLocked() &&
+    state().conference !== controller.initialConferenceChoice();
+  const undoConferenceRemoval = () =>
+    controller.setField('conference', controller.initialConferenceChoice());
   const isOutOfOffice = () => controller.isOutOfOffice();
   // The decline settings of an edited event are unknown until picked, and the
   // disclosure must not claim behavior nobody chose.
@@ -203,13 +219,18 @@ export function createEventForm(props: EventFormProps) {
   });
   createEffect(() => props.onDirtyChange?.(controller.isDirty()));
 
+  const submittedScope = () =>
+    props.showRecurringEditNotice ? editScope() : undefined;
   const submit = () => {
     const values = controller.submitValues();
     if (!values || formIsDisabled() || calendarFirstSync()) return;
-    props.onSubmit(
-      values,
-      props.showRecurringEditNotice ? editScope() : undefined
-    );
+    if (conferenceRemovalPending()) return;
+    props.onSubmit(values, submittedScope());
+  };
+  const replace = () => {
+    const values = controller.submitValues();
+    if (!values || formIsDisabled()) return;
+    props.onReplace?.(values, submittedScope());
   };
 
   return {
@@ -232,6 +253,8 @@ export function createEventForm(props: EventFormProps) {
     recurrenceDescribedBy,
     capabilities,
     conferenceLocked,
+    conferenceRemovalPending,
+    undoConferenceRemoval,
     isOutOfOffice,
     outOfOfficeNotice,
     showsDeclineMessage,
@@ -239,6 +262,7 @@ export function createEventForm(props: EventFormProps) {
     guests,
     guestPolicy,
     submit,
+    replace,
   };
 }
 

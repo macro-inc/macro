@@ -10,8 +10,8 @@ use progress::{ImportCompleted, ImportTally};
 use std::future::Future;
 use std::time::Instant;
 use telemetry::{
-    claim_failed, elapsed_ms, record_abandoned, record_deferred, record_done, record_failed,
-    span_int,
+    claim_failed, elapsed_ms, enumerate_span, is_gate_refusal, record_abandoned, record_deferred,
+    record_done, record_failed, span_int,
 };
 use tracing::{Instrument, Span};
 use uuid::Uuid;
@@ -283,6 +283,10 @@ pub trait MailboxSyncRepository: Send + Sync + 'static {
         &self,
         lease: &CatalogLease,
     ) -> impl Future<Output = Result<u32, MailboxError>> + Send;
+    /// Claims the longest-due stream of `kind`, except that a mail folder's
+    /// import round goes ahead of finished folders that came due less than
+    /// five minutes before it, so its next page is read once its mailbox has
+    /// room instead of behind every poll.
     fn claim_stream(
         &self,
         lease_id: Uuid,
@@ -553,37 +557,30 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
 
     /// Process one bounded provider page. Notifications only make streams due;
     /// periodic polling recovers missed, duplicate and out-of-order notifications.
+    ///
+    /// An import round that waits for room in its mailbox's import (paced, or
+    /// refused by the request gate) reads nothing, so the claim moves on to
+    /// the next due stream. Import rounds are claimed ahead of finished
+    /// folders, and a waiting round is due again seconds later: without
+    /// moving on, a large mailbox's waiting rounds would take the turns every
+    /// other mailbox's new mail needs.
     pub async fn enumerate_once(&self) -> Result<bool, MailboxError> {
-        let Some(lease) = self
-            .claim_folder_stream()
-            .await
-            .map_err(|error| claim_failed("enumerate", error))?
-        else {
-            return Ok(false);
-        };
-        let span = tracing::info_span!(
-            "outlook.sync.enumerate",
-            mailbox.link_id = %lease.mailbox.link_id,
-            mailbox.sync_generation = lease.mailbox.sync_generation,
-            outlook.stream_kind = lease.pass.kind().as_str(),
-            outlook.stream_id = %lease.id,
-            outlook.page_items = tracing::field::Empty,
-            outlook.rows_queued = tracing::field::Empty,
-            outlook.live_pass_opened = tracing::field::Empty,
-            outlook.delta_advanced = tracing::field::Empty,
-            outlook.folder_initial_complete = tracing::field::Empty,
-            outlook.cursor_reset = tracing::field::Empty,
-            outlook.notification_wait_ms = lease
-                .notification
-                .as_ref()
-                .map(|notification| telemetry::since_ms(notification.received_at)),
-            outlook.outcome = tracing::field::Empty,
-            outlook.defer_reason = tracing::field::Empty,
-            outlook.defer_seconds = tracing::field::Empty,
-            otel.status_description = tracing::field::Empty,
-        );
-        adopt_notification_trace(&span, lease.notification.as_ref());
-        self.enumerate(&lease).instrument(span).await
+        for _ in 0..PACED_CLAIMS_PER_TURN {
+            let Some(lease) = self
+                .claim_folder_stream()
+                .await
+                .map_err(|error| claim_failed("enumerate", error))?
+            else {
+                return Ok(false);
+            };
+            let span = enumerate_span(&lease);
+            adopt_notification_trace(&span, lease.notification.as_ref());
+            // Only an import round waiting for room comes back without reading.
+            if self.enumerate(&lease).instrument(span).await? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// New mail goes first: a due live pass is claimed before any folder.
@@ -683,8 +680,18 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                 }
             }
             Err(MailboxError::Provider(error)) => {
+                // The request gate refuses an import round's page while its
+                // mailbox's own message reads hold the import slots, which
+                // is a wait for room like pacing: the round waits as long,
+                // and the claim moves on to the next stream.
                 let delay = retry_seconds(&error);
                 let error = MailboxError::from(error);
+                let import_busy = !lease.initial_complete && is_gate_refusal(&error);
+                let delay = if import_busy {
+                    delay.max(IMPORT_PACE_SECONDS)
+                } else {
+                    delay
+                };
                 record_stream(&span, delta_advanced, folder_initial_complete, cursor_reset);
                 self.repo
                     .release_stream(lease, delay)
@@ -693,6 +700,9 @@ impl<R: MailboxSyncRepository, P: MailboxGateway, I: MailboxIngest> MailboxSyncS
                         record_failed(&span, lease.mailbox.link_id, release);
                     })?;
                 record_deferred(&span, lease.mailbox.link_id, &error, delay);
+                if import_busy {
+                    return Ok(false);
+                }
                 return Err(error);
             }
             Err(error) => Err(error),
@@ -939,6 +949,11 @@ const IMPORT_PACE_SECONDS: u32 = 10;
 /// longest it waits: the 12 h a working subscription waits for renewal.
 const NO_MAILBOX_FIRST_PROBE_SECONDS: u32 = 30;
 const NO_MAILBOX_PROBE_MAX_SECONDS: u32 = 12 * 60 * 60;
+
+/// Waiting import rounds one `enumerate_once` passes over before it gives up
+/// its turn. Each costs a claim, a count or a gate check, and a release, and
+/// no Graph request.
+const PACED_CLAIMS_PER_TURN: u32 = 8;
 
 /// Claims after which a message the provider keeps refusing outright
 /// (malformed, forbidden), or whose data the database refuses, is abandoned:

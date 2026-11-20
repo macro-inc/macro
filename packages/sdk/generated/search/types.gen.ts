@@ -2629,7 +2629,7 @@ export type UnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     /**
-     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
      */
     429: ErrorResponse;
     500: ErrorResponse;
@@ -2663,7 +2663,7 @@ export type SimpleUnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     /**
-     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     * The caller's other searches kept every slot of its lane busy for 20 seconds, or the account's user API keys used their shared search allowance (200 at once, then one a second); retry after `Retry-After` seconds.
      */
     429: ErrorResponse;
     500: ErrorResponse;

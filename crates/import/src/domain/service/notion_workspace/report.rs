@@ -3,6 +3,10 @@
 
 use std::collections::HashMap;
 
+use crate::domain::ports::{
+    FolderSeparation, Result, TaskImportNoticeCount, TaskImportNoticeReason,
+};
+
 use crate::domain::models::{
     ImportEntity, ImportKind, ImportRun, ImportStatus, NotionDecision, NotionDocMeta,
     NotionImportReport, NotionImporter, NotionReportItem, RunStatus,
@@ -21,35 +25,12 @@ const REPORT_LIST_LIMIT: usize = 50;
 pub(in crate::domain::service) fn report(
     run: Option<&ImportRun>,
     rows: &[ImportEntity],
-) -> NotionImportReport {
-    let planned: Vec<(&ImportEntity, NotionDocMeta)> = rows
-        .iter()
-        .filter_map(|row| {
-            let meta: NotionDocMeta = serde_json::from_value(row.metadata.clone()).ok()?;
-            meta.plan.as_ref()?;
-            Some((row, meta))
-        })
-        .collect();
-    // A plan still being made is presented by the review its run records;
-    // rows left from earlier plans belong to earlier reviews.
-    let review_id = match run {
-        Some(run) if run.status == RunStatus::Running => run.review_id,
-        _ => planned
-            .iter()
-            .filter(|(row, _)| row.review_id.is_some())
-            .max_by_key(|(row, _)| row.updated_at)
-            .and_then(|(row, _)| row.review_id),
-    };
-    let current: Vec<&(&ImportEntity, NotionDocMeta)> = planned
-        .iter()
-        .filter(|(row, _)| match review_id {
-            Some(review) => {
-                row.review_id == Some(review)
-                    || (row.review_id.is_none() && row.status == ImportStatus::Staged)
-            }
-            None => true,
-        })
-        .collect();
+    notices: &[TaskImportNoticeCount],
+) -> Result<NotionImportReport> {
+    let CurrentPlan {
+        review_id,
+        items: current,
+    } = current_plan(run, rows);
 
     let mut report = NotionImportReport {
         status: run.map(|run| run.status),
@@ -74,6 +55,54 @@ pub(in crate::domain::service) fn report(
             }
         }
         let Some(plan) = &meta.plan else { continue };
+        if !plan.shared
+            && row
+                .metadata
+                .get("personalFolderId")
+                .and_then(serde_json::Value::as_str)
+                .is_some()
+        {
+            report.warnings.push(format!(
+                "{} was kept in Notion (personal) to avoid inherited folder sharing.",
+                meta.title
+            ));
+        }
+
+        let separation = row.metadata.get("separateFolder");
+        let reason = match separation.and_then(|separation| separation.get("reason")) {
+            Some(reason) => Some(serde_json::from_value::<FolderSeparation>(reason.clone())?),
+            // Older records have only visibility. New writes always record the typed reason.
+            None => match separation
+                .and_then(|separation| separation.get("visibility"))
+                .and_then(serde_json::Value::as_str)
+            {
+                Some("shared") => Some(FolderSeparation::SharedFromPersonal),
+                Some("personal") => Some(FolderSeparation::PersonalFromShared),
+                _ => None,
+            },
+        };
+        match reason {
+            Some(FolderSeparation::SharedAfterGrantRemoval) => {
+                report.warnings.push(format!(
+                    "{}: created a separate shared folder because the existing folder's sharing was removed.",
+                    meta.title,
+                ));
+            }
+            Some(FolderSeparation::SharedFromPersonal) => {
+                report.warnings.push(format!(
+                    "{}: created a separate shared folder because the existing one holds personal items.",
+                    meta.title,
+                ));
+            }
+            Some(FolderSeparation::PersonalFromShared) => {
+                report.warnings.push(format!(
+                    "{}: created a separate personal folder to keep it apart from the existing shared folder.",
+                    meta.title,
+                ));
+            }
+            None => {}
+        }
+
         match row.kind {
             ImportKind::DataSource => report.data_sources += 1,
             ImportKind::Issue | ImportKind::JiraIssue => report.issues += 1,
@@ -156,6 +185,32 @@ pub(in crate::domain::service) fn report(
             ImportStatus::Discarded => {}
         }
     }
+    let personal: std::collections::HashSet<_> = current
+        .iter()
+        .filter_map(|(row, meta)| {
+            meta.plan
+                .as_ref()
+                .filter(|plan| !plan.shared)
+                .map(|_| row.id)
+        })
+        .collect();
+    let omitted: u64 = notices
+        .iter()
+        .filter(|notice| personal.contains(&notice.import_id))
+        .map(|notice| match notice.reason {
+            TaskImportNoticeReason::PersonalAssigneeOmitted => u64::from(notice.count),
+        })
+        .sum();
+    if omitted > 0 {
+        let assignees = if omitted == 1 {
+            "assignee"
+        } else {
+            "assignees"
+        };
+        report.warnings.push(format!(
+            "{omitted} teammate {assignees} omitted to keep tasks owner-only."
+        ));
+    }
     let mut importers: Vec<NotionImporter> = importers
         .into_iter()
         .map(|(by, count)| NotionImporter {
@@ -165,5 +220,58 @@ pub(in crate::domain::service) fn report(
         .collect();
     importers.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.by.cmp(&b.by)));
     report.already_imported_by = importers;
-    report
+    Ok(report)
+}
+
+struct CurrentPlan<'a> {
+    review_id: Option<uuid::Uuid>,
+    items: Vec<(&'a ImportEntity, NotionDocMeta)>,
+}
+
+fn current_plan<'a>(run: Option<&ImportRun>, rows: &'a [ImportEntity]) -> CurrentPlan<'a> {
+    let planned: Vec<(&ImportEntity, NotionDocMeta)> = rows
+        .iter()
+        .filter_map(|row| {
+            let meta: NotionDocMeta = serde_json::from_value(row.metadata.clone()).ok()?;
+            meta.plan.as_ref()?;
+            Some((row, meta))
+        })
+        .collect();
+    // A plan still being made is presented by the review its run records;
+    // rows left from earlier plans belong to earlier reviews.
+    let review_id = match run {
+        Some(run) if run.status == RunStatus::Running => run.review_id,
+        _ => planned
+            .iter()
+            .filter(|(row, _)| row.review_id.is_some())
+            .max_by_key(|(row, _)| row.updated_at)
+            .and_then(|(row, _)| row.review_id),
+    };
+    let current: Vec<(&ImportEntity, NotionDocMeta)> = planned
+        .into_iter()
+        .filter(|(row, _)| match review_id {
+            Some(review) => {
+                row.review_id == Some(review)
+                    || (row.review_id.is_none() && row.status == ImportStatus::Staged)
+            }
+            None => true,
+        })
+        .collect();
+
+    CurrentPlan {
+        review_id,
+        items: current,
+    }
+}
+
+/// Read notice counts only for Personal items in the same review the report describes.
+pub(in crate::domain::service) fn notice_import_ids(
+    run: Option<&ImportRun>,
+    rows: &[ImportEntity],
+) -> Vec<uuid::Uuid> {
+    current_plan(run, rows)
+        .items
+        .into_iter()
+        .filter_map(|(row, meta)| meta.plan.filter(|plan| !plan.shared).map(|_| row.id))
+        .collect()
 }
