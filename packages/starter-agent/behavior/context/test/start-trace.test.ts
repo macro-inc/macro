@@ -209,3 +209,32 @@ test('malformed launcher timings are ignored', () => {
     ended: 3,
   });
 });
+
+test("the launcher's steps come before the process's own first steps, all under the start", async () => {
+  exporter.reset();
+  const processStart = Date.now() - process.uptime() * 1000;
+  const micros = (ms: number) => String(Math.round(ms * 1000));
+  const timings = `started:${micros(processStart - 500)},settings:${micros(processStart - 500)}:${micros(processStart - 400)},exec:${micros(processStart - 10)}`;
+
+  await traceStart(
+    { [launchTimingsVariable]: timings },
+    async () => undefined,
+    [{ name: 'agent.start.load', end: processStart + 100 }]
+  );
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const start = spans['agent.start'];
+  const launch = spans['agent.launch'];
+  const load = spans['agent.start.load'];
+  for (const child of [launch, load])
+    expect(child?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  expect(milliseconds(start?.startTime ?? [0, 0])).toBeCloseTo(
+    processStart - 500,
+    0
+  );
+  expect(milliseconds(launch?.endTime ?? [0, 0])).toBeLessThanOrEqual(
+    milliseconds(load?.startTime ?? [0, 0])
+  );
+});
