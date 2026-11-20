@@ -1334,7 +1334,10 @@ caches every channel the viewer joined with the fields a channel list needs
 (`ChannelDirectoryFields` in `channel-directory.graphql`): members, bots in
 `botParticipants`, team, agent DM and latest messages. The channel filter has no
 updated-at watermark, so every run is a full pass (`refreshAll`), 100 channels
-a page with 250 ms between pages.
+a page with 250 ms between pages. It pages by creation time (`CREATED_AT`),
+which never changes: by updated or viewed time, activity or a view on another
+device could move a channel the pass had not reached ahead of its cursor, and
+the pass would never return it.
 
 The lane's page fetcher (`queries/channel/directory-reconcile.ts`) also removes
 what a pass proves stale. When a pass that started at its first page finishes,

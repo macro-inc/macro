@@ -100,7 +100,10 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   input: {
     limit: PAGE_LIMIT,
     expand: true,
-    sortMethod: 'VIEWED_UPDATED',
+    // A channel's creation time never changes. Activity and views move a
+    // channel by updated or viewed time, so a channel the pass has not reached
+    // yet could move ahead of its cursor and be skipped.
+    sortMethod: 'CREATED_AT',
     emailView: 'ALL',
     filters: {
       calendarEventFilter: { literal: { id: EXCLUDED_ENTITY_ID } },
