@@ -12,7 +12,7 @@ import DropIcon from '@icon/system/regular/tray-arrow-down.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
-import { usePropertyEntityDisplay } from '@property/hooks';
+import { usePropertyEntityLink } from '@property/hooks/usePropertyEntityLink';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues } from '@property/utils';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
@@ -27,8 +27,10 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   Show,
   type Signal,
+  Switch,
 } from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
@@ -364,10 +366,6 @@ function EntityCollectionPropertyBody(props: {
                     'property-collection-remove'
                   )
                 }
-                onEdit={(anchor) => {
-                  if (isReadOnly() || props.loading || isSaving()) return;
-                  propertyCtx.openEditor(anchor);
-                }}
               />
             )}
           </For>
@@ -403,6 +401,10 @@ function EntityCollectionPropertyBody(props: {
   );
 }
 
+/**
+ * One value of a collection. Its name opens the item (Shift: a new split) and
+ * never the picker, which belongs to the row's Add button.
+ */
 function NonUserEntityChip(props: {
   property: Property;
   entityId: string;
@@ -412,37 +414,35 @@ function NonUserEntityChip(props: {
   canEdit?: boolean;
   pendingLabel?: string;
   onRemove?: () => void;
-  onEdit?: (anchor?: HTMLElement) => void;
 }) {
-  let containerRef: HTMLDivElement | undefined;
-  const { name, icon } = usePropertyEntityDisplay(
-    () => props.entityId,
-    () => props.entityType,
-    {
-      specificMessageId: () => props.specificMessageId,
-    }
-  );
+  const { display, canOpen, open } = usePropertyEntityLink(() => ({
+    entity_id: props.entityId,
+    entity_type: props.entityType,
+    specific_message_id: props.specificMessageId,
+  }));
+  const { name, icon } = display;
   const previewBlockType = () =>
     getDocumentPreviewFallbackBlockType(props.entityType);
   const isDocumentPreviewEntity = () =>
     props.entityType === 'DOCUMENT' || props.entityType === 'TASK';
-
-  const openEditor = (event: MouseEvent) => {
-    if (!props.canEdit || !props.onEdit) return;
-    event.stopPropagation();
-    props.onEdit(containerRef);
-  };
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
 
   return (
     <Layer depth={3}>
       <div
-        ref={containerRef}
         class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 touch:h-9 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
-        <Show
-          when={!props.pending}
+        <Switch
           fallback={
+            // Nothing to open: a person, a call record, a calendar event.
+            <span class="flex min-w-0 max-w-full items-center gap-1.5 px-2">
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </span>
+          }
+        >
+          <Match when={props.pending}>
             <span class="flex min-w-0 items-center gap-1.5 px-2 text-ink-muted">
               <span class="shrink-0 flex items-center">{icon()}</span>
               <span class="min-w-0 truncate">
@@ -453,48 +453,44 @@ function NonUserEntityChip(props: {
                 aria-hidden="true"
               />
             </span>
-          }
-        >
-          <Show
-            when={isDocumentPreviewEntity()}
-            fallback={
-              <button
-                type="button"
-                class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-                onClick={openEditor}
-                disabled={!props.canEdit}
-              >
-                <span class="shrink-0 flex items-center">{icon()}</span>
-                <span class="min-w-0 truncate">{name()}</span>
-              </button>
-            }
-          >
+          </Match>
+          <Match when={isDocumentPreviewEntity()}>
             <DocumentEntityChipButton
               entityId={props.entityId}
               fallbackBlockType={previewBlockType()}
               icon={icon()}
               name={name()}
             />
-          </Show>
-          <Show when={props.canEdit && props.onRemove}>
-            {/* Overlays the name's end on hover; on touch it is always shown, so it
-                takes its own space instead of covering the name. */}
-            <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
-              <Button
-                variant="ghost"
-                type="button"
-                size="icon-sm"
-                class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onRemove?.();
-                }}
-                aria-label={`Remove ${name()}`}
-              >
-                <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
-              </Button>
-            </div>
-          </Show>
+          </Match>
+          <Match when={canOpen()}>
+            <button
+              type="button"
+              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+              {...navHandlers}
+            >
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </button>
+          </Match>
+        </Switch>
+        <Show when={!props.pending && props.canEdit && props.onRemove}>
+          {/* Overlays the name's end on hover; on touch it is always shown, so it
+              takes its own space instead of covering the name. */}
+          <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
+            <Button
+              variant="ghost"
+              type="button"
+              size="icon-sm"
+              class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onRemove?.();
+              }}
+              aria-label={`Remove ${name()}`}
+            >
+              <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
+            </Button>
+          </div>
         </Show>
       </div>
     </Layer>

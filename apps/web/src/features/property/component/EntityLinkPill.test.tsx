@@ -14,11 +14,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@core/component/LexicalMarkdown/component/core/BlockLink', () => ({
   openDocument: mocks.openDocument,
 }));
+vi.mock('@app/features/projects/open-project', () => ({
+  openProject: vi.fn(),
+}));
+vi.mock('@components/app/split-layout/layout', () => ({
+  useSplitLayout: () => 'layout',
+}));
 vi.mock('../hooks/usePropertyEntityDisplay', () => ({
   usePropertyEntityDisplay: () => ({
     name: () => 'Acme',
     icon: () => null,
     blockOrFileType: () => mocks.blockType(),
+    nativeProjectId: () => undefined,
     isLoading: () => mocks.loading,
     linkParams: () => undefined,
   }),

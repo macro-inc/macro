@@ -176,6 +176,16 @@ Saved-item remove controls overlay the chip's right edge on hover or keyboard
 focus and remain visible on touch. They reserve no layout space or change chip
 width. Chip backgrounds use `bg-surface` at `Layer depth={3}`.
 
+A saved chip's name opens its item: a contact, company, task, document,
+channel, chat, email, folder or project. Document and task chips read their
+block from their own preview; the other types open through
+`hooks/usePropertyEntityLink.ts`, which `EntityLinkPill` shares: the
+mention-link navigation, a new split on Shift, and `openProject` for a project.
+A chip never opens the picker: that is the row's Add button, and a chip's
+remove control removes that one value. A value the hook has nothing to open
+for (a person, a call record, a calendar event, a database row) is plain text.
+Viewers who cannot edit still open values.
+
 Collection drop handling and save callbacks stay in the property callers.
 
 The empty dedicated Tags section shows one compact, tag-icon Add tags outline button,
