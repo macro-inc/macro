@@ -106,9 +106,14 @@ fn error(error: AgentMailboxesError) -> MailboxError {
             | AgentMailboxErrorCode::AlreadyProvisioned
             | AgentMailboxErrorCode::NotFound
             | AgentMailboxErrorCode::ConfirmationRequired
+            | AgentMailboxErrorCode::SendOutcomeUnknown
             | AgentMailboxErrorCode::SendLimit,
         ) => return MailboxError::Rejected,
-        Some(AgentMailboxErrorCode::ProviderUnavailable | AgentMailboxErrorCode::Internal)
+        Some(
+            AgentMailboxErrorCode::ProviderUnavailable
+            | AgentMailboxErrorCode::Busy
+            | AgentMailboxErrorCode::Internal,
+        )
         | None => {}
     }
     unavailable(match error {
@@ -191,7 +196,12 @@ impl AgentMailboxes for EmailServiceMailboxes {
             Ok(()) => Ok(()),
             Err(refused) if is_missing(&refused) => Ok(()),
             // Left releasing: email_service's sweep finishes it.
-            Err(refused) if refused.code() == Some(AgentMailboxErrorCode::ProviderUnavailable) => {
+            Err(refused)
+                if matches!(
+                    refused.code(),
+                    Some(AgentMailboxErrorCode::ProviderUnavailable | AgentMailboxErrorCode::Busy)
+                ) =>
+            {
                 Ok(())
             }
             Err(refused) => Err(error(refused)),
