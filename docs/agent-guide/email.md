@@ -91,6 +91,9 @@ keyboard focus skips it.
 Compose via the `Email` button (or `Create` → `Email E`). A fresh account
 shows **Connect your email** or offers the verified sign-in address. Gmail,
 Google Workspace and enabled Outlook connections offer provider consent.
+When availability succeeds with just one consent provider and no IMAP choice,
+consent starts directly. A failed availability read keeps the retry action and
+never starts a provider automatically.
 When IMAP is available, open the incoming/outgoing server form, confirm both
 servers, enter the password or app password, then choose **Connect inbox**.
 Phones show the same fields full-screen.

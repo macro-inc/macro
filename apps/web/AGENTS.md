@@ -2110,6 +2110,8 @@ holds only the import id. See the [Passwords walkthrough](../../docs/agent-guide
 
 - Open generic email-provider selection immediately with loading and explicit
   retry on availability errors; never silently start Gmail on a failed read.
+  Once availability succeeds, start the sole consent provider directly when
+  IMAP is not offered; retain the chooser when there are multiple choices.
   Chooser capabilities omit the optional admin-consent callback and use a
   separate account/session cache variant from signed approval links.
 

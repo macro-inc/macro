@@ -8,7 +8,13 @@ import {
   Panel,
   Spinner,
 } from '@ui';
-import { createResource, type Owner, Show } from 'solid-js';
+import {
+  createEffect,
+  createResource,
+  type Owner,
+  Show,
+  untrack,
+} from 'solid-js';
 import { OutlookBetaBadge } from './OutlookBetaBadge';
 
 export type EmailProvider = 'GMAIL' | 'OUTLOOK' | 'IMAP';
@@ -22,6 +28,7 @@ export function EmailProviderDialog(
     onSelect: (provider: EmailProvider) => void;
     disabled?: boolean;
     outlookAvailable: boolean;
+    gmailAvailable?: boolean;
     imapAvailable?: boolean;
     loading?: boolean;
     failed?: boolean;
@@ -76,13 +83,15 @@ export function EmailProviderDialog(
             </Button>
           </Show>
           <Show when={!props.loading && !props.failed}>
-            <Button
-              variant="secondary"
-              disabled={props.disabled}
-              onClick={() => props.onSelect('GMAIL')}
-            >
-              Gmail
-            </Button>
+            <Show when={props.gmailAvailable !== false}>
+              <Button
+                variant="secondary"
+                disabled={props.disabled}
+                onClick={() => props.onSelect('GMAIL')}
+              >
+                Gmail
+              </Button>
+            </Show>
             <Show when={props.outlookAvailable}>
               <Button
                 variant="secondary"
@@ -128,12 +137,41 @@ export function EmailProviderSelectionDialog(
     () => props.open,
     (open) => (open ? fetchEmailConnectionProviders() : undefined)
   );
+  let automaticallySelected = false;
+  createEffect(() => {
+    if (!props.open) {
+      automaticallySelected = false;
+      return;
+    }
+    if (
+      availability.loading ||
+      availability.error ||
+      props.disabled ||
+      automaticallySelected
+    )
+      return;
+    const offered = availability();
+    // A failed or pending read never authorizes a provider. IMAP keeps its
+    // explicit chooser and server-confirmation flow even when it is alone.
+    if (!offered || (props.mailOnly && offered.imap)) return;
+    const choices: EmailProvider[] = [];
+    if (offered.gmail !== false) choices.push('GMAIL');
+    if (offered.outlook) choices.push('OUTLOOK');
+    const [single] = choices;
+    if (choices.length !== 1 || !single) return;
+    automaticallySelected = true;
+    fireAndForget(
+      untrack(() => props.onSelect(single)),
+      'email-provider-selection'
+    );
+  });
   return (
     <EmailProviderDialog
       {...props}
       loading={availability.loading}
       failed={!!availability.error}
       onRetry={() => fireAndForget(refetch(), 'email-providers')}
+      gmailAvailable={!availability.error && availability()?.gmail !== false}
       outlookAvailable={!availability.error && availability()?.outlook === true}
       imapAvailable={
         !availability.error && props.mailOnly && availability()?.imap === true

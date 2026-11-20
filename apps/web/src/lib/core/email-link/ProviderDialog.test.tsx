@@ -70,3 +70,46 @@ it('keeps IMAP hidden when connecting a calendar even when enrollment is enabled
     screen.queryByRole('button', { name: 'Other email (IMAP / SMTP)' })
   ).toBeNull();
 });
+
+it.each([
+  { gmail: true, outlook: false, expected: 'GMAIL' },
+  { gmail: false, outlook: true, expected: 'OUTLOOK' },
+])(
+  'starts the sole $expected provider directly without another click',
+  async ({ gmail, outlook, expected }) => {
+    providers.mockResolvedValue({ gmail, outlook, imap: false });
+    const selected = vi.fn();
+    render(() => (
+      <EmailProviderSelectionDialog
+        open
+        onOpenChange={() => {}}
+        mailOnly
+        onSelect={selected}
+      />
+    ));
+    await vi.waitFor(() =>
+      expect(selected).toHaveBeenCalledExactlyOnceWith(expected)
+    );
+  }
+);
+
+it('waits for a successful retry before starting a sole Gmail provider', async () => {
+  providers
+    .mockRejectedValueOnce(new Error('availability unavailable'))
+    .mockResolvedValueOnce({ gmail: true, outlook: false, imap: false });
+  const selected = vi.fn();
+  render(() => (
+    <EmailProviderSelectionDialog
+      open
+      onOpenChange={() => {}}
+      mailOnly
+      onSelect={selected}
+    />
+  ));
+  await screen.findByRole('alert');
+  expect(selected).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+  await vi.waitFor(() =>
+    expect(selected).toHaveBeenCalledExactlyOnceWith('GMAIL')
+  );
+});
