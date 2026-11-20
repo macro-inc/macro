@@ -155,7 +155,7 @@ pkgs.testers.runNixOSTest {
         machine.fail("systemctl start macro-agent-apply.service")
         machine.succeed("journalctl -u macro-agent-apply.service | grep -F 'refusing an agent environment on a person computer'")
         machine.fail("test -e /var/lib/macrod/agent.env")
-        machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
+        machine.succeed("test ! -e /run/macro-agent-inbox/agent.env")
         machine.succeed("rm -r /run/macro-agent-inbox")
 
     with subtest("a drive the host grows grows its mounted filesystem"):
@@ -189,7 +189,7 @@ pkgs.testers.runNixOSTest {
         machine.wait_until_succeeds("grep -Fx 'MACRO_AGENT_NAME=\"Applied\"' /var/lib/macrod/agent.env", timeout=60)
         machine.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
         machine.wait_until_succeeds("journalctl -u macro-agent.service -o cat | grep -F 'Started Macro agent teammate'")
-        machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
+        machine.succeed("test ! -e /run/macro-agent-inbox/agent.env")
 
     with subtest("macro's own write to the inbox is installed the same way"):
         # The fake Macro sends ApplyAgent again on every reconnect, which
@@ -202,7 +202,7 @@ pkgs.testers.runNixOSTest {
         machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         machine.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
-        machine.succeed("test ! -s /run/macro-agent-inbox/agent.env")
+        machine.succeed("test ! -e /run/macro-agent-inbox/agent.env")
         # The setup trace is installed root-owned and read-only, once.
         machine.succeed(f"grep -x {trace} /run/macrod/agent-traceparent")
         machine.succeed("stat -c '%U %a' /run/macrod/agent-traceparent | grep -x 'root 644'")

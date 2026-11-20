@@ -76,7 +76,12 @@ in
       systemd.paths.macro-agent-apply = {
         description = "Watch for an agent environment from macrod";
         wantedBy = [ "macro-agent.target" ];
-        pathConfig.PathChanged = inbox;
+        # PathExists too: one staged after the unit's last claim, which
+        # PathChanged doesn't see once the unit is running, starts it again.
+        pathConfig = {
+          PathChanged = inbox;
+          PathExists = inbox;
+        };
       };
       systemd.services.macro-agent-apply = {
         description = "Install the agent environment macrod received";
@@ -87,6 +92,9 @@ in
         serviceConfig = {
           Type = "oneshot";
           UMask = "0077";
+          # A FIFO macro plants as agent.env must not hold the unit (and every
+          # later environment) forever.
+          TimeoutStartSec = "30s";
         };
         # The inbox is macro's, so root never opens anything in it: macro
         # claims the staged file by renaming it (a symlink is moved, not
@@ -107,8 +115,11 @@ in
           }
           role=${role}
           for _ in 1 2 3 4 5 6 7 8; do
-            if ! as_macro mv --force --no-target-directory "$inbox" "$claimed" 2> /dev/null; then
+            if ! as_macro test -e "$inbox" && ! as_macro test -L "$inbox"; then
               exit 0
+            fi
+            if ! as_macro mv --force --no-target-directory "$inbox" "$claimed"; then
+              refuse "macro cannot claim its inbox's agent.env"
             fi
             if [ "$role" != agent ]; then
               refuse "refusing an agent environment on a $role computer"

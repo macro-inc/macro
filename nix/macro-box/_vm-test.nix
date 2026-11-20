@@ -374,8 +374,8 @@ pkgs.testers.runNixOSTest {
           # The previous environment had the credentialed URL.
           agent.wait_until_succeeds("grep -Fx 'MACRO_REPO_URL=\"http://127.0.0.1:8080/repo.git\"' /var/lib/macrod/agent.env")
           agent.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
-          # Emptied just after the install.
-          agent.wait_until_succeeds("test ! -s /run/macro-agent-inbox/agent.env")
+          # Removed just after the install.
+          agent.wait_until_succeeds("test ! -e /run/macro-agent-inbox/agent.env")
           agent.wait_until_succeeds("journalctl -u macro-agent.service | grep -F 'starting the runtime at'")
           agent.wait_until_succeeds("pgrep -u macro -f 'bun /home/macro/agent/workspace/cli.ts run'")
           agent.succeed("[ $(systemctl show macro-agent.service --property=User --value) = macro ]")
