@@ -222,7 +222,7 @@ async function startLoad(page: Page, channels: string[], noise: string[]) {
             else await go(`/channels/${id}/participants`, 'GET');
             w.__loadOps! += 1;
           }
-        })();
+        })().catch(() => undefined);
       }
     },
     { channels, noise, origin: ORIGIN }

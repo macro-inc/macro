@@ -437,7 +437,7 @@ async function startLoad() {
             else await go(`/channels/${id}/participants`, 'GET');
             w.__loadOps! += 1;
           }
-        })();
+        })().catch(() => undefined);
       }
     },
     { ids, extra, origin: ORIGIN }
