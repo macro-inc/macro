@@ -247,8 +247,13 @@ pub fn is_valid_hex_color(color: &str) -> bool {
 pub enum SetPropertyValue {
     /// Boolean true/false value
     Boolean { value: bool },
-    /// Date and time value
-    Date { value: DateTime<Utc> },
+    /// Date value. Without `has_time` it stands for the whole day it falls
+    /// on where it was picked; with it, for the exact instant.
+    Date {
+        value: DateTime<Utc>,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        has_time: bool,
+    },
     /// Date range value
     DateRange { value: DateRange },
     /// Numeric value

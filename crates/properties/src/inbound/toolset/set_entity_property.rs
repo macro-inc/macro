@@ -160,7 +160,10 @@ impl SetEntityProperty {
             return Ok(Some(SetPropertyValue::Boolean { value: v }));
         }
         if let Some(v) = self.date_value {
-            return Ok(Some(SetPropertyValue::Date { value: v }));
+            return Ok(Some(SetPropertyValue::Date {
+                value: v,
+                has_time: false,
+            }));
         }
         if let Some(v) = &self.date_range_value {
             return Ok(Some(SetPropertyValue::DateRange {

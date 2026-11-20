@@ -83,7 +83,12 @@ pub struct EntityPropertyResponse {
 /// Property value that matches JSONB structure - supports single or multi-select.
 /// Uses serde's tag/content pattern to create discriminated unions.
 #[derive(ToSchema, Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "type", content = "value")]
+#[serde(
+    tag = "type",
+    content = "value",
+    from = "crate::shared::stored_value::StoredValue",
+    into = "crate::shared::stored_value::StoredValue"
+)]
 pub enum PropertyValue {
     /// Boolean value
     /// Serializes as: {"type": "Boolean", "value": true}
@@ -97,9 +102,9 @@ pub enum PropertyValue {
     /// Serializes as: {"type": "String", "value": "text"}
     #[serde(rename = "String")]
     Str(String),
-    /// Date/timestamp value
-    /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}
-    Date(DateTime<Utc>),
+    /// Date value, with or without a time of day
+    /// Serializes as: {"type": "Date", "value": "2025-01-01T00:00:00Z"}, plus "has_time": true when a time was set
+    Date(#[schema(inline)] crate::shared::DateValue),
     /// Date range value
     /// Serializes as: {"type": "DateRange", "value": {"start": "2025-01-01T00:00:00Z", "end": "2025-01-31T00:00:00Z"}}
     DateRange(crate::shared::DateRange),
@@ -141,3 +146,15 @@ pub struct EntityPropertiesResponse {
 
 /// Response for bulk entity properties endpoint.
 pub type BulkEntityPropertiesResponse = HashMap<String, EntityPropertiesResponse>;
+
+impl From<crate::shared::stored_value::StoredValue> for PropertyValue {
+    fn from(stored: crate::shared::stored_value::StoredValue) -> Self {
+        crate::service::property_value::PropertyValue::from(stored).into()
+    }
+}
+
+impl From<PropertyValue> for crate::shared::stored_value::StoredValue {
+    fn from(value: PropertyValue) -> Self {
+        crate::service::property_value::PropertyValue::from(value).into()
+    }
+}

@@ -454,7 +454,7 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
         PropertyValue::Str(text) => CellValue::Text(text.clone()),
         PropertyValue::Num(number) => CellValue::Number(*number),
         PropertyValue::Bool(checked) => CellValue::Boolean(*checked),
-        PropertyValue::Date(date) => CellValue::Date(*date),
+        PropertyValue::Date(date) => CellValue::Date(date.at()),
         PropertyValue::DateRange(range) => CellValue::DateRange(DateRange {
             start: range.start(),
             end: range.end(),

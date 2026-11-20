@@ -1958,7 +1958,10 @@ impl ToolEntityCreator {
                             &principal,
                             task_id,
                             SystemPropertyKey::DueDate.uuid(),
-                            Some(SetPropertyValue::Date { value }),
+                            Some(SetPropertyValue::Date {
+                                value,
+                                has_time: false,
+                            }),
                         )
                         .await
                     {

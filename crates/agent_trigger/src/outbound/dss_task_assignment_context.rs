@@ -135,7 +135,7 @@ fn selected_option(property: &EntityPropertyInfo) -> Option<String> {
 
 fn date(property: &EntityPropertyInfo) -> Option<DateTime<Utc>> {
     match property.value {
-        Some(PropertyValue::Date(date)) => Some(date),
+        Some(PropertyValue::Date(date)) => Some(date.at()),
         _ => None,
     }
 }

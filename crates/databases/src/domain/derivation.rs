@@ -99,7 +99,7 @@ impl Derivation {
             .filter_map(|(definition, value)| {
                 let cell = match value {
                     PropertyValue::Num(number) => Cell::Number(*number),
-                    PropertyValue::Date(date) => Cell::Date(*date),
+                    PropertyValue::Date(date) => Cell::Date(date.at()),
                     _ => return None,
                 };
                 Some((*definition, cell))
@@ -110,7 +110,9 @@ impl Derivation {
             .map(|(definition, formula)| {
                 let value = match formula::evaluate(&self.table, formula, &cells, |id| id) {
                     Some(Cell::Number(number)) => Some(PropertyValue::Num(number)),
-                    Some(Cell::Date(date)) => Some(PropertyValue::Date(date)),
+                    Some(Cell::Date(date)) => Some(PropertyValue::Date(
+                        models_properties::shared::DateValue::new(date),
+                    )),
                     _ => None,
                 };
                 (*definition, value)

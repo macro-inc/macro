@@ -213,7 +213,7 @@ fn task_snapshot(
                 task.priority = option_label(property, ids);
             }
             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(due))) => {
-                task.due = Some(*due);
+                task.due = Some(due.at());
             }
             (Some(SystemPropertyKey::Assignees), Some(PropertyValue::EntityRef(references))) => {
                 task.assignees = references

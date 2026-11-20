@@ -313,7 +313,7 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
                                     refs.into_iter().map(|entity| entity.entity_id).collect()
                             }
                             (Some(SystemPropertyKey::DueDate), Some(PropertyValue::Date(date))) => {
-                                snapshot.due_date = Some(date)
+                                snapshot.due_date = Some(date.at())
                             }
                             _ => (),
                         }

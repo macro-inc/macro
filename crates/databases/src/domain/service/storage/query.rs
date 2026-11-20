@@ -25,7 +25,7 @@ pub(super) fn row(row: &RowRef, cells: &HashMap<uuid::Uuid, PropertyValue>) -> R
                         PropertyValue::Bool(value) => Cell::Bool(*value),
                         PropertyValue::Num(value) => Cell::Number(*value),
                         PropertyValue::Str(value) => Cell::Text(value.clone()),
-                        PropertyValue::Date(value) => Cell::Date(*value),
+                        PropertyValue::Date(value) => Cell::Date(value.at()),
                         PropertyValue::DateRange(range) => Cell::DateRange(DateRange {
                             start: range.start(),
                             end: range.end(),
