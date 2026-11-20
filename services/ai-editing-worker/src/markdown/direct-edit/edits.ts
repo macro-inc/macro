@@ -172,11 +172,27 @@ function joinedMarkdown(list: Entry[]): string {
   return list.map((entry) => entry.markdown).join('\n\n');
 }
 
-/** Whether `old` also occurs across a block boundary, beside `inBlocks` hits. */
-function spansBlocks(list: Entry[], old: string, inBlocks: number): boolean {
-  return (
-    old.includes('\n') && occurrences(joinedMarkdown(list), old) > inBlocks
-  );
+/** Whether `old` also occurs across a block boundary (overlapping matches count). */
+function spansBlocks(list: Entry[], old: string): boolean {
+  if (!old.includes('\n')) return false;
+  const joined = joinedMarkdown(list);
+  // Each boundary is the blank line before block i, at offsets[i] - 2.
+  const boundaries: number[] = [];
+  let offset = 0;
+  list.forEach((entry, i) => {
+    if (i) boundaries.push(offset - 2);
+    offset += entry.markdown.length + 2;
+  });
+  for (
+    let at = joined.indexOf(old);
+    at >= 0;
+    at = joined.indexOf(old, at + 1)
+  ) {
+    const end = at + old.length;
+    if (boundaries.some((boundary) => at < boundary + 2 && end > boundary))
+      return true;
+  }
+  return false;
 }
 
 /**
@@ -247,7 +263,7 @@ function applyReplace(
     .map((i) => ({ i, count: occurrences(list[i].markdown, edit.old) }))
     .filter((hit) => hit.count > 0);
   const total = hits.reduce((sum, hit) => sum + hit.count, 0);
-  if (total > 0 && !edit.block_id && spansBlocks(list, edit.old, total))
+  if (total > 0 && !edit.block_id && spansBlocks(list, edit.old))
     throw new EditRefusal(
       'ambiguous_match',
       `edit ${n}: old occurs inside a block and across blocks; add block_id or include more surrounding text`,

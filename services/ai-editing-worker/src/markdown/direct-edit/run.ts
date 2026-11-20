@@ -61,6 +61,7 @@ import {
   applyEdits,
   type DirectEdit,
   EditRefusal,
+  type RefusalCode,
   type RequestedBlock,
   requestedMarkdown,
   toRequested,
@@ -168,31 +169,50 @@ function namedIds(edit: DirectEdit): string[] {
 
 /**
  * Refuse a batch naming positional ids when they may point elsewhere now: the
- * block lists of the base and the current document differ.
+ * block lists of the base and the current document differ, or a named
+ * position holds different markdown (a block moved).
  */
 export function checkPositionalIds(
   edits: DirectEdit[],
   base: DocumentView,
   current: DocumentView
 ): void {
+  const ids = (view: DocumentView) => view.blocks.map((block) => block.id);
+  const sameLists = ids(base).join('\n') === ids(current).join('\n');
   const k = edits.findIndex((edit) =>
-    namedIds(edit).some((id) => id.startsWith(POSITIONAL_ID_PREFIX))
+    namedIds(edit).some(
+      (id) =>
+        id.startsWith(POSITIONAL_ID_PREFIX) &&
+        (!sameLists ||
+          base.blocks.find((block) => block.id === id)?.markdown !==
+            current.blocks.find((block) => block.id === id)?.markdown)
+    )
   );
   if (k < 0) return;
-  const ids = (view: DocumentView) => view.blocks.map((block) => block.id);
-  if (ids(base).join('\n') === ids(current).join('\n')) return;
   throw new DirectEditConflict(
-    `edit ${k + 1} names a block by position, and blocks were added or removed since the base revision; read the document again`,
+    `edit ${k + 1} names a block by position, and blocks were added, removed or moved since the base revision; read the document again`,
     { edit: k + 1 }
   );
 }
+
+/** Refusals a concurrent change can cause; the rest are the batch's own. */
+const CHANGE_REFUSALS = new Set<RefusalCode>([
+  'no_match',
+  'ambiguous_match',
+  'unknown_block',
+  'frozen_media',
+  'opaque_edit',
+  'comment_loss',
+  'mass_delete',
+]);
 
 /**
  * A refusal found only on the current document, where the batch planned
  * cleanly at the base: the concurrent change caused it, so it is a conflict.
  */
 function asConflict(error: unknown): unknown {
-  if (!(error instanceof EditRefusal)) return error;
+  if (!(error instanceof EditRefusal) || !CHANGE_REFUSALS.has(error.code))
+    return error;
   return new DirectEditConflict(
     `the document changed since the base revision and ${error.message} (${error.code}); read it again`,
     { edit: error.edit }
@@ -263,7 +283,7 @@ interface AtBase {
 }
 
 /** What stays the same across a request's attempts. */
-interface Request {
+interface DirectEditRun {
   documentId: string;
   request: DirectEditRequest;
   options: {
@@ -301,7 +321,7 @@ async function requestPeerId(
 
 /** Compute the batch at the base revision, once per request. */
 async function computeAtBase(
-  context: Request,
+  context: DirectEditRun,
   doc: LoroDoc,
   baseRevision: string
 ): Promise<AtBase> {
@@ -332,7 +352,7 @@ async function computeAtBase(
   return context.atBase;
 }
 
-async function planAttempt(context: Request): Promise<Planned> {
+async function planAttempt(context: DirectEditRun): Promise<Planned> {
   const { documentId, request, options, storage, signal, span } = context;
   const { snapshot, revision } = await span.span('edit.direct.load', () =>
     storage.load(signal)
@@ -428,18 +448,20 @@ async function planAttempt(context: Request): Promise<Planned> {
   }
 }
 
-const backoff = (signal: AbortSignal) =>
-  new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(resolve, Math.random() * MAX_BACKOFF_MS);
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timer);
-        reject(signal.reason);
-      },
-      { once: true }
-    );
+function backoff(signal: AbortSignal): Promise<void> {
+  signal.throwIfAborted();
+  return new Promise<void>((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', abort);
+      resolve();
+    }, Math.random() * MAX_BACKOFF_MS);
+    signal.addEventListener('abort', abort, { once: true });
   });
+}
 
 /** Apply a batch of direct edits; see the module comment. */
 export async function runDirectEdit(
@@ -452,7 +474,7 @@ export async function runDirectEdit(
   span.setAttr('edit.count', request.edits.length);
   span.setAttr('edit.dry_run', request.dryRun ?? false);
   span.setAttr('edit.at_base', request.baseRevision !== undefined);
-  const context: Request = {
+  const context: DirectEditRun = {
     documentId,
     request,
     options: {
