@@ -8,6 +8,7 @@ import {
   lookupChannel,
 } from '@queries/channel/directory';
 import type { DirectoryChannel } from '@queries/channel/directory-core';
+import { channelUuid } from '@queries/channel/tests/channel-uuid';
 import {
   directoryChannel,
   directoryParticipant,
@@ -76,10 +77,10 @@ function setupCanCall(channelId: string) {
 
 describe('useChannelCanCall', () => {
   it('waits for the directory, then refuses an agent DM', () => {
-    const { fill, value } = setupCanCall('dm');
+    const { fill, value } = setupCanCall(channelUuid('dm'));
     expect(value()).toBe('undefined');
     fill([
-      directoryChannel('dm', {
+      directoryChannel(channelUuid('dm'), {
         channelType: 'direct_message',
         agentDm: { botId: 'bot', name: 'Agent', avatarUrl: null },
       }),
@@ -88,20 +89,20 @@ describe('useChannelCanCall', () => {
   });
 
   it('allows a joined channel that is not an agent DM', () => {
-    const { fill, value } = setupCanCall('team');
-    fill([directoryChannel('team', { channelType: 'team' })]);
+    const { fill, value } = setupCanCall(channelUuid('team'));
+    fill([directoryChannel(channelUuid('team'), { channelType: 'team' })]);
     expect(value()).toBe('true');
   });
 
   it('allows a channel the complete directory does not have', () => {
-    const { fill, value } = setupCanCall('public');
-    fill([directoryChannel('other')]);
+    const { fill, value } = setupCanCall(channelUuid('public'));
+    fill([directoryChannel(channelUuid('other'))]);
     expect(value()).toBe('true');
   });
 
   it('answers for a channel a partial directory already holds', () => {
-    const { setChannels, value } = setupCanCall('team');
-    setChannels([directoryChannel('team')]);
+    const { setChannels, value } = setupCanCall(channelUuid('team'));
+    setChannels([directoryChannel(channelUuid('team'))]);
     expect(value()).toBe('true');
   });
 });
