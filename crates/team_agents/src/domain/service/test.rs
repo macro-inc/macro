@@ -1166,7 +1166,7 @@ async fn an_agent_invited_moments_ago_without_a_computer_yet_is_provisioning() {
     let (service, _) = service(true, FakeComputers::default());
     service.repository.agents.lock().unwrap().push((
         agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(1)),
-        "invite-1".to_owned(),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     ));
 
     let listed = service.list(receipt()).await.unwrap();
@@ -1181,7 +1181,7 @@ async fn an_agent_still_without_a_computer_long_after_its_invite_failed() {
     let (service, _) = service(true, FakeComputers::default());
     service.repository.agents.lock().unwrap().push((
         agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(11)),
-        "invite-1".to_owned(),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     ));
 
     let listed = service.list(receipt()).await.unwrap();
