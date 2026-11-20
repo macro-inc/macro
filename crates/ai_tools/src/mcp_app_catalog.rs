@@ -1,4 +1,4 @@
-//! Pipedream app directory used when an agent pins MCP servers, and the
+//! The connector catalog consulted when an agent pins MCP servers, and the
 //! connector backends (Pipedream plus Macro Connect) built from the
 //! environment.
 
@@ -8,13 +8,14 @@ use anyhow::Context;
 use bots::domain::ports::{BotError, McpAppCatalog};
 use macro_env::Environment;
 use macro_env_var::maybe_env_var;
-use pipedream_mcp::domain::ports::ConnectRollout;
+use pipedream_mcp::domain::ports::{ConnectRollout, ConnectorOverlays};
 use pipedream_mcp::outbound::api::{
     DEFAULT_API_URL, DEFAULT_MCP_URL, PipedreamClient, PipedreamConfig,
 };
 use pipedream_mcp::outbound::connect::{ConnectAdapter, ConnectConfig};
 
 use pipedream_mcp::outbound::dispatch::ConnectorBackends;
+use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -203,22 +204,38 @@ pub fn pipedream_client_from_env() -> anyhow::Result<Option<Arc<PipedreamClient>
     Ok(Some(Arc::new(client)))
 }
 
-/// Confirms agent MCP slugs against Pipedream's app directory.
+/// Confirms agent MCP slugs against the connector catalog.
 ///
-/// With no client, every slug is refused: an unverified app is not stored.
+/// An app overlaid onto the native MCP stack (`mcp_overlays`, e.g. `github`)
+/// is connectable without Pipedream, so it is accepted from the overlay table
+/// alone. Any other slug is asked of Pipedream's app directory; with no
+/// Pipedream client it is refused, because an unverified app is not stored.
 #[derive(Clone)]
-pub struct PipedreamMcpAppCatalog {
+pub struct PipedreamMcpAppCatalog<O = PgConnectionRepo> {
     client: Option<Arc<PipedreamClient>>,
+    overlays: O,
 }
 
-impl PipedreamMcpAppCatalog {
-    /// Consult `client`, or refuse every slug when Pipedream is not configured.
-    pub fn new(client: Option<Arc<PipedreamClient>>) -> Self {
-        Self { client }
+impl<O> PipedreamMcpAppCatalog<O> {
+    /// Accept the apps `overlays` lists and consult `client` for the rest,
+    /// refusing them when Pipedream is not configured.
+    pub fn new(client: Option<Arc<PipedreamClient>>, overlays: O) -> Self {
+        Self { client, overlays }
     }
 }
 
-impl std::fmt::Debug for PipedreamMcpAppCatalog {
+impl PipedreamMcpAppCatalog {
+    /// The catalog this process can consult: overlays from `pool`, and
+    /// Pipedream when its credentials are in the environment.
+    pub fn from_env(pool: sqlx::PgPool) -> anyhow::Result<Self> {
+        Ok(Self::new(
+            pipedream_client_from_env()?,
+            PgConnectionRepo::new(pool),
+        ))
+    }
+}
+
+impl<O> std::fmt::Debug for PipedreamMcpAppCatalog<O> {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
             .debug_struct("PipedreamMcpAppCatalog")
@@ -227,8 +244,18 @@ impl std::fmt::Debug for PipedreamMcpAppCatalog {
     }
 }
 
-impl McpAppCatalog for PipedreamMcpAppCatalog {
+impl<O: ConnectorOverlays> McpAppCatalog for PipedreamMcpAppCatalog<O> {
     async fn is_connectable_app(&self, slug: &str) -> Result<bool, BotError> {
+        match self.overlays.overlay(slug).await {
+            Ok(Some(_)) => return Ok(true),
+            Ok(None) => {}
+            Err(error) => {
+                tracing::warn!(%slug, error = ?error, "MCP overlay lookup failed");
+                return Err(BotError::Unavailable(format!(
+                    "could not verify MCP app {slug}"
+                )));
+            }
+        }
         let Some(client) = &self.client else {
             return Err(BotError::Unavailable(format!(
                 "cannot verify MCP app {slug}: Pipedream is not configured"

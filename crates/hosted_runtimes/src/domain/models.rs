@@ -89,6 +89,9 @@ pub struct Computer {
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
+    /// When overcommit relief hibernated it, until it wakes. A hibernated
+    /// guest runs no macrod but stays `Running` to its team: a prompt wakes it.
+    pub hibernated_at: Option<DateTime<Utc>>,
     /// When the team finished the guided setup after buying it.
     pub setup_completed_at: Option<DateTime<Utc>>,
     /// The coding agent the computer came with, once created. Bots are
@@ -507,12 +510,100 @@ pub struct SizeOffer {
     pub vcpus: u32,
     /// Memory in GiB.
     pub memory_gb: u32,
-    /// Root disk size in GiB.
+    /// Whole disk quota in GiB: root and `/home` together.
     pub disk_gb: u32,
     /// Price for one computer.
     pub quote: Quote,
     /// Whether no host can currently sell this size.
     pub sold_out: bool,
+}
+
+/// What the buy dialog shows before a purchase: each size with what buying
+/// it charges today, when the full price bills from, and the card charged.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PurchaseOffers {
+    /// Every size some host can run awake.
+    pub sizes: Vec<PurchaseSizeOffer>,
+    /// When the current billing period ends: each computer bills its full
+    /// `quote.amount` every `quote.interval` from then.
+    pub renews_at: DateTime<Utc>,
+    /// The card purchases are charged to; `None` when there is no card on
+    /// file, the team pays another way, or it is comped.
+    pub card: Option<PaymentCard>,
+}
+
+/// A size on sale and what buying it charges today.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PurchaseSizeOffer {
+    /// The size, its price and availability, as `/team/computers/offers` lists it.
+    #[serde(flatten)]
+    pub offer: SizeOffer,
+    /// The prorated rest of the current period, invoiced at purchase, in the
+    /// currency's smallest unit, less the team's credit balance; 0 when the
+    /// team is comped. The charge itself is prorated to the second it is
+    /// bought.
+    pub due_today: i64,
+}
+
+/// A card as its owner recognizes it: "Visa ending 4242".
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PaymentCard {
+    /// Card network.
+    pub brand: CardBrand,
+    /// Last four digits.
+    pub last4: String,
+}
+
+/// A card network.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, strum::Display)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum CardBrand {
+    /// American Express.
+    Amex,
+    /// Diners Club.
+    Diners,
+    /// Discover.
+    Discover,
+    /// eftpos Australia.
+    EftposAu,
+    /// JCB.
+    Jcb,
+    /// Mastercard.
+    Mastercard,
+    /// UnionPay.
+    Unionpay,
+    /// Visa.
+    Visa,
+    /// A network the payment provider doesn't name.
+    Unknown,
+}
+
+/// What buying each of some sizes would charge a team now, read in one go.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurchaseTerms {
+    /// One per size asked for, in order.
+    pub quotes: Vec<PurchaseQuote>,
+    /// When the current billing period ends.
+    pub renews_at: DateTime<Utc>,
+    /// The card purchases are charged to.
+    pub card: Option<PaymentCard>,
+}
+
+/// The price of one computer of a size and what buying it charges today.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PurchaseQuote {
+    /// Its recurring price.
+    pub quote: Quote,
+    /// In the currency's smallest unit.
+    pub due_today: i64,
 }
 
 /// Why a purchase was refused, as a stable code the buy and add-agent dialogs
@@ -535,6 +626,18 @@ pub enum PurchaseRefusalCode {
     InviteInProgress,
 }
 
+/// An agent teammate's computer as the team roster sees it.
+#[derive(Debug, Clone)]
+pub struct RosterStatus {
+    /// The computer's status.
+    pub status: ComputerStatus,
+    /// The fleet's current availability.
+    pub attachment: FleetAttachment,
+    /// Its first start waits on the agent reporting online. False for
+    /// computers bought before agents reported, which are up once ready.
+    pub awaiting_agent: bool,
+}
+
 /// The coarse status the team sees.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -548,6 +651,10 @@ pub enum ComputerStatusKind {
     WaitingForCapacity,
     /// Guest is connected and ready.
     Ready,
+    /// Past setup but not answering: macrod was missing at a fleet check
+    /// while the guest runs, or the guest crashed and is restarting. It
+    /// comes back by itself; only a give-up is [`Self::Failed`].
+    Unhealthy,
     /// Guest is starting.
     Starting,
     /// Guest is shutting down.
@@ -721,9 +828,41 @@ impl Computer {
             | Phase::Stopped
             | Phase::Destroying => None,
         };
+        // Before the first connection the same signs are setup still going.
+        // A missed check, not the disconnect itself, so a reconnect flap
+        // stays ready; a hibernated guest is asleep, not missing. Crashes
+        // count inside the lifecycle's own window: the list is pruned only on
+        // the next crash.
+        let unhealthy = self.enrolled_at.is_some()
+            && match self.state.phase {
+                Phase::Running => {
+                    self.hibernated_at.is_none()
+                        && !self.state.macrod_connected
+                        && self.state.macrod_misses >= 1
+                }
+                Phase::Crashed { retry: Some(_), .. } => true,
+                // Restarting after a crash, or a boot whose macrod has
+                // already missed a check. A retry clears the crashes and
+                // reads Starting; so does a power-on or a move with no crash
+                // inside the window.
+                Phase::Booting => {
+                    self.state.macrod_misses >= 1
+                        || self
+                            .state
+                            .recent_crashes
+                            .iter()
+                            .any(|at| now - *at < crate::domain::lifecycle::CRASH_WINDOW)
+                }
+                Phase::Provisioning { .. }
+                | Phase::Crashed { retry: None, .. }
+                | Phase::Stopping
+                | Phase::Stopped
+                | Phase::Destroying => false,
+            };
         let status = match self.state.phase {
             _ if waiting_for_capacity => ComputerStatusKind::WaitingForCapacity,
             _ if setup_step.is_some() => ComputerStatusKind::SettingUp,
+            _ if unhealthy => ComputerStatusKind::Unhealthy,
             Phase::Running => ComputerStatusKind::Ready,
             Phase::Booting | Phase::Crashed { retry: Some(_), .. } => ComputerStatusKind::Starting,
             Phase::Stopped if self.state.power_on_requested => ComputerStatusKind::Starting,

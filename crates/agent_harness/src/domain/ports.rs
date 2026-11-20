@@ -153,29 +153,7 @@ pub trait CodingAgentSource: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<bool>>> + Send;
 }
 
-/// One dial of a harness's runtime; a redial is a new connection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RuntimeConnectionId(macro_uuid::Uuid);
-
-impl RuntimeConnectionId {
-    /// Mint the identity of a new dial.
-    #[must_use]
-    pub fn generate() -> Self {
-        Self(macro_uuid::generate_uuid_v7())
-    }
-
-    /// The raw uuid, for persistence.
-    #[must_use]
-    pub fn as_uuid(self) -> macro_uuid::Uuid {
-        self.0
-    }
-}
-
-impl std::fmt::Display for RuntimeConnectionId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
+pub use agent_session::domain::connection::RuntimeConnectionId;
 
 /// What recording a runtime's connection did to the agents bound to it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -184,6 +162,16 @@ pub enum ConnectionRecorded {
     AgentsUnchanged,
     /// An agent was bound to the harness (a Macro computer's first agent).
     AgentBound,
+}
+
+/// The optional messages a runtime said, when it dialed, that it accepts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RuntimeAccepts {
+    /// `ToRuntimeMessage::AgentsChanged`.
+    pub agents_changed: bool,
+    /// `ToRuntimeMessage::ApplyAgent`: without it the runtime can't run an
+    /// agent teammate.
+    pub apply_agent: bool,
 }
 
 /// Durable attach/detach bookkeeping for harness runtime connections.
@@ -195,12 +183,13 @@ pub enum ConnectionRecorded {
 /// Methods take `Arc<Self>` and return owned futures so the registry can fire
 /// them from its own background tasks.
 pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness. Says whether recording it bound
-    /// an agent to the harness.
+    /// A runtime attached for this harness, accepting the optional messages
+    /// in `accepts`. Says whether recording it bound an agent to the harness.
     fn connected(
         self: Arc<Self>,
         harness: HarnessId,
         connection: RuntimeConnectionId,
+        accepts: RuntimeAccepts,
     ) -> Pin<Box<dyn Future<Output = ConnectionRecorded> + Send>>;
 
     /// This connection closed. Other connections of the harness are unaffected.
@@ -476,6 +465,9 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 
     /// Whether this process currently holds `harness`'s physical runtime socket.
     fn is_connected(&self, harness: HarnessId) -> bool;
+
+    /// The dial `harness`'s runtime is connected on in this process, if any.
+    fn connection_of(&self, harness: HarnessId) -> Option<RuntimeConnectionId>;
 
     /// The sessions a runtime dialing in for `harness` reported as live, as
     /// [`HarnessBindings::sessions_on_harness`] resolves them.

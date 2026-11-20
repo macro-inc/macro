@@ -9,7 +9,9 @@ use documents::domain::markdown_backfill::{
     MarkdownBackfillStats, MarkdownObjectReadError, MarkdownObjectReader,
 };
 use documents::domain::models::DocumentError;
-use documents::domain::ports::markdown::MarkdownInitializationPort;
+use documents::domain::ports::markdown::{
+    MarkdownInitializationOptions, MarkdownInitializationPort,
+};
 use documents::outbound::markdown_init::LexicalSyncMarkdownInitializer;
 use documents::outbound::pg_document_repo::PgMarkdownBackfillRepo;
 use documents::outbound::s3_markdown_source::S3MarkdownObjectReader;
@@ -225,6 +227,7 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
         &self,
         document_id: &str,
         markdown: &str,
+        options: MarkdownInitializationOptions,
     ) -> Result<Vec<u8>, DocumentError> {
         match self {
             Self::Disabled => Err(DocumentError::Internal(anyhow::anyhow!(
@@ -232,7 +235,7 @@ impl MarkdownInitializationPort for OptionalMarkdownInitializer {
             ))),
             Self::Enabled(initializer) => {
                 initializer
-                    .initialize_existing_markdown(document_id, markdown)
+                    .initialize_existing_markdown(document_id, markdown, options)
                     .await
             }
         }

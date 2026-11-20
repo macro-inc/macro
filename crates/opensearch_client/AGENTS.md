@@ -14,6 +14,9 @@ projects.
   entity type — the shape each indexer must produce.
 - `src/search/builder.rs` + `src/search/unified.rs`: the cross-entity search
   request builder and the unified result model.
+- `src/chat_message_repair.rs`: paging the chats index's message documents
+  by message id and deleting them by id, for the deleted chat message repair
+  in `services/search_processing_service`.
 - `examples/`: runnable usage beyond the README.
 
 ## Scope
@@ -43,6 +46,25 @@ projects.
 
 - `cargo test -p opensearch_client` (`SQLX_OFFLINE` unset; needs a running
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
+- A change to the content or name search builders (`src/search`, or the
+  `opensearch_query_builder` queries they use) merges only with
+  `tests/content_search` passing. It seeds documents, chats and calls
+  through the upsert paths, runs `search_unified`, and compares each search
+  with the matches its rules select over `_analyze` tokens (`oracle.rs`; the
+  cases and the rule each checks are in `fixtures.rs`). A new matching
+  rule changes its oracle in the same change. It needs an OpenSearch whose
+  search indices are empty, so plain `cargo test` skips it (`test = false`);
+  CI runs it whenever this crate is selected. Locally, on a free port:
+  `docker build -t search-opensearch infra/local/opensearch`, `docker run -d
+  -p 127.0.0.1:<port>:9200 -e discovery.type=single-node search-opensearch`,
+  then in `infra/stacks/opensearch/helpers` `bun install --frozen-lockfile`
+  and `ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL=http://127.0.0.1:<port>
+  OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin bun run
+  scripts/create_indices.ts` (the node has no security plugin; the helper
+  only needs the credentials set), and
+  `SEARCH_TEST_OPENSEARCH_URL=http://127.0.0.1:<port> cargo test -p
+  opensearch_client --test content_search`. A search the test keeps for a
+  known bug is `#[ignore = "known bug: ..."]`; the fix removes the ignore.
 
 ## Gotchas
 
@@ -78,6 +100,12 @@ projects.
   events stalls their partition. A delete-by-query that only met conflicts
   deleted nothing and so forces no refresh either: refresh before failing on
   them, or the caller's retry meets the same stale documents.
+- OpenSearch answers `_bulk` with 200 while failing items, for a full write
+  queue (429) as for a mapping error. Classify every bulk answer item by item
+  (`upsert::classify_bulk_response`): any failed item fails the call with
+  `BulkItemsFailed`. `OpensearchClientError::refusal()` tells a caller to back
+  off; it also reads the status and `error.type` from the body an `Unknown`
+  error keeps.
 - Agent-session writes never wait for a refresh. A search sees only refreshed
   documents, so delete what you know by id first and leave those ids out of
   the sweep's search, which finds the leftovers to delete by id. The parent's
@@ -92,6 +120,13 @@ projects.
   and a backfill stops and is rerun. A delete creates a missing index even with `require_alias`, so
   the reconcile and the session delete first read the parent, which fails on a
   missing index or alias.
+- Chat messages and call segments carry their own id in `entity_id` and no
+  parent fields such as `channel_id`; only their join field names the
+  parent. A delete or update of a chat or call reaches its children with
+  `parent_id` (or `has_parent` on a parent field), never a term on the
+  parent's `entity_id`. The ignored tests in `delete/chat/test.rs` and
+  `delete/call_record/test.rs` check this on a scratch copy of the live
+  `chats` and `call_records` mappings.
 - The request-level `_source` filter does not reach `has_child` inner hits:
   each one returns the child's whole document unless its `InnerHits` names
   `source_fields`. Every join query names the fields its hit's `_source`
@@ -103,6 +138,21 @@ projects.
   (`INNER_HITS_PER_RESULT`, divided by `split_inner_hits_budget`), so a
   result carries at most that many matches, not every match; do not give
   each term its own.
+- Build a `has_child` clause's per-term query with `query::child_content_query`
+  and any other field's with `query::create_query`. A partial term that is
+  one word (by the UAX #29 word boundaries the standard tokenizer uses) of
+  three or more characters matches as `match_bool_prefix` of that word, not
+  `match_phrase_prefix`: OpenSearch expands a phrase prefix again for every
+  inner hit of every returned parent, and keeps only the first
+  `max_expansions` terms of the shard, so words past them never match. Pass
+  the word, not the term: `match_bool_prefix` reads a last token followed by
+  punctuation (`con.`) as finished. A word counts as one only with nothing
+  but ASCII punctuation around it and at most 255 characters (the
+  tokenizer's longest token). Several words (`e-mail`, a Thai run the
+  tokenizer keeps whole but UAX #29 splits), a word next to an emoji, and,
+  outside content, words under three characters keep the capped
+  `match_phrase_prefix`; OpenSearch has no phrase prefix that keeps every
+  match.
 - Document content has two matching shapes (`DocumentTermMatching`). `All`
   is one `has_child` per term: every term somewhere in the document, each a
   prefix. `Dynamic` is one `has_child` for queries of three or more terms:

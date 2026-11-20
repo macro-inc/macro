@@ -90,7 +90,11 @@ and ACP `session/list`, and `AgentHarnessService::reattach_live_sessions` runs
 `HarnessCommand::Reattach` for the listed sessions bound to that harness,
 restoring each (`session/load` or `session/resume`) without a prompt, then
 dispatching whatever its durable queue still holds when no turn is running;
-attached, archived and managed sessions are skipped. A dial always restores sessions
+archived and managed sessions are skipped, and so are sessions already attached on
+the runtime's current connection. A session whose actor is still on the socket the
+redial displaced (each `RuntimeConnection` has a `RuntimeConnectionId`, which its
+sessions' attachments carry) is closed first, waiting for its `disconnected` frame,
+then attached to the new connection. A dial always restores sessions
 with a command in flight here, an unfinished turn (`has_unfinished_turn`: open, or
 open when the session disconnected, from `agent_session.turn_interrupted`), or a
 durable queue, however many; it fills the rest of `MAX_EAGER_PER_DIAL` (50) with
@@ -193,7 +197,11 @@ first connect), the registry sends the runtime `ToRuntimeMessage::AgentsChanged`
 and macrod re-reads its agents and reopens its trigger stream at once instead
 of at its next poll. It goes only to a runtime that listed `agents-changed` in
 the `x-macro-runtime-accepts` dial header (`RuntimeAccepts`, read by
-`inbound/runtime_gateway.rs`), so older runtimes never see it.
+`inbound/runtime_gateway.rs`), so older runtimes never see it. Presence
+gets the `RuntimeAccepts` too: a Macro computer's macrod that doesn't list
+`apply-agent` can't take `ToRuntimeMessage::ApplyAgent`, so an agent
+teammate's computer fails its start at once (hosted_runtimes
+`Failure::AgentUnsupported`).
 
 Only directly authenticated users with edit access may answer ACP permissions or
 elicitations (`agent_session::ControlEvent::authorized`). Agent runs may deny or

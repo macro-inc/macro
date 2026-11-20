@@ -7,8 +7,10 @@ import {
 import { createInboxUnread } from '@app/features/notifications-inbox/queries/inbox-unread';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
+  enableNavigationUnreadCounts,
   enablePasswords,
   enableUnifiedNotifications,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
@@ -47,6 +49,7 @@ const COUNTED_SECTIONS: Record<string, { rowTypes?: readonly InboxRowType[] }> =
   {
     home: {},
     notifications: {},
+    'new-home': {},
     channels: { rowTypes: CHANNEL_ROW_TYPES },
     mail: { rowTypes: MAIL_ROW_TYPES },
   };
@@ -82,9 +85,8 @@ function useCountedUnread(options: NavigationUnreadOptions): NavigationUnread {
 }
 
 /**
- * Unread state for the navigation's sections. With the unified
- * Notifications view it is counted from that view's rows; without it, the
- * sections keep their presence dots and show no numbers.
+ * Unified notifications use unread rows for dots and opt-in numbers.
+ * Legacy navigation uses presence dots.
  */
 export function useNavigationUnread(
   options: NavigationUnreadOptions = {}
@@ -105,6 +107,9 @@ export function useNavigationUnread(
 
   return {
     has: (id) => source()?.has(id) ?? false,
-    count: (id) => source()?.count(id),
+    count: (id) =>
+      isFeatureEnabled(enableNavigationUnreadCounts)
+        ? source()?.count(id)
+        : undefined,
   };
 }

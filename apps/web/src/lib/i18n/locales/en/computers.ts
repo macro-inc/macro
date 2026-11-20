@@ -80,15 +80,30 @@ export default {
   waitingForCapacityHint:
     'Turn off or release another computer on this host to make room',
   starting: 'Starting…',
+  unhealthy: 'Not responding',
+  unhealthyHint:
+    "It's back once it reconnects; Macro restarts it if it doesn't",
   stopping: 'Turning off',
   stopped: 'Powered off',
   failed: 'Failed',
   failedBecause: 'Setup failed: {{reason}}',
   failedHint: 'Macro is looking into it. Contact support if it stays failed.',
   retry: 'Retry',
+  retrying: 'Retrying…',
   retryFailed: "Couldn't retry. Try again.",
   releasedStatus: 'Released',
   offerSpecs: '{{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
+  usageCpu: 'CPU',
+  usageMemoryName: 'Memory',
+  usagePercent: '{{percent}}%',
+  usageMemory: '{{used}} of {{total}} GB',
+  usageIdle: 'idle',
+  usageMeasuring: '–',
+  usageCpuChart: 'CPU use over the last day',
+  usageMemoryChart:
+    'Memory this computer uses on its own over the last day, not counting memory shared with its system image',
+  usageMemoryHint:
+    "Memory this computer uses on its own. Memory it shares with its system image isn't counted.",
   computerSpecs: '{{size}} · {{cpus}} vCPU · {{memory}} GB · {{disk}} GB',
   priceMonthly: '{{amount}}/month',
   priceYearly: '{{amount}}/year',
@@ -236,6 +251,7 @@ export default {
   noPaidPlan:
     'Computers need a paid Macro plan. Your team does not have one yet.',
   rolloutDisabled: "Computers aren't available for this account yet.",
+  errorForbidden: "You can't change this computer. Ask a team owner or admin.",
   trialBillingAction: 'Go to Billing',
   errorPurchaseConflict:
     'That size just sold out, or an earlier attempt is still being confirmed.',

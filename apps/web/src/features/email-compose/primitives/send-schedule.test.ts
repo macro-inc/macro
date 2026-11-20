@@ -883,8 +883,36 @@ describe('send and schedule ordering', () => {
     }
   });
 
-  it('keeps a newer reply when undoing an older scheduled reply', async () => {
+  it('reopens the scheduled reply without treating its original edits as newer', async () => {
     const composeContext = createComposeContext();
+    const state = mountReplyComposer(composeContext);
+    try {
+      state.edit('Original reply');
+      state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      await state.sendEmail();
+      expect(state.savedDraftId()).toBe('draft');
+      expect(state.editingDisabled()).toBe(true);
+      const scheduledNotice = undoOffer(composeContext);
+
+      scheduledNotice?.[1]?.actions
+        ?.find(({ kind }) => kind === 'undo')
+        ?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(state.savedDraftId()).toBe('draft');
+      expect(state.editingDisabled()).toBe(false);
+      expect(composeContext.notices.feedback.alert).not.toHaveBeenCalled();
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('keeps a reply edited while cancellation restores the scheduled draft', async () => {
+    const composeContext = createComposeContext();
+    const restore = Promise.withResolvers<void>();
+    vi.mocked(composeContext.drafts.restoreDraft).mockReturnValueOnce(
+      restore.promise
+    );
     const state = mountReplyComposer(composeContext);
     try {
       state.edit('Older scheduled reply');
@@ -894,10 +922,13 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email scheduled');
 
-      state.edit('Newer reply that must survive');
       scheduledNotice?.[1]?.actions
         ?.find(({ kind }) => kind === 'undo')
         ?.onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(state.editingDisabled()).toBe(false);
+      state.edit('Newer reply that must survive');
+      restore.resolve();
       await vi.advanceTimersByTimeAsync(0);
 
       expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(

@@ -11,6 +11,8 @@ pub struct WatchLease {
     pub mailbox: MailboxKey,
     pub lease_id: Uuid,
     pub revision: i64,
+    /// Upkeep runs in a row that failed before this one.
+    pub failures: i32,
 }
 pub struct WatchAttempt {
     pub id: Uuid,
@@ -73,10 +75,14 @@ pub trait MailboxWatchRepository: Send + Sync + 'static {
         lease: &WatchLease,
         id: Uuid,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
+    /// Puts the upkeep back for `delay` seconds with `failures` failed runs
+    /// in a row. A revision bump during the lease (a reconnect, a lifecycle
+    /// event) makes it due at once with none.
     fn release_watch(
         &self,
         lease: &WatchLease,
         delay: u32,
+        failures: i32,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
     fn notification_binding(
         &self,
@@ -238,6 +244,7 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
             outlook.outcome = tracing::field::Empty,
             outlook.defer_reason = tracing::field::Empty,
             outlook.defer_seconds = tracing::field::Empty,
+            outlook.upkeep_failures = tracing::field::Empty,
             otel.status_description = tracing::field::Empty,
         );
         async {
@@ -247,12 +254,14 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
             })
             .await;
             span.record("outlook.subscriptions_removed", removed);
-            let delay = match &result {
-                Ok(()) => 12 * 60 * 60,
-                Err(MailboxError::Provider(e)) => super::retry_seconds(e),
-                _ => 30,
+            let (delay, failures) = match &result {
+                Ok(()) => (UPKEEP_SECONDS, 0),
+                Err(error) => upkeep_retry(error, lease.failures),
             };
-            self.repository.release_watch(&lease, delay).await?;
+            span.record("outlook.upkeep_failures", i64::from(failures));
+            self.repository
+                .release_watch(&lease, delay, failures)
+                .await?;
             match &result {
                 Ok(()) => span.record("outlook.outcome", "done"),
                 Err(error) => {
@@ -340,6 +349,36 @@ impl<R: MailboxWatchRepository, G: MailboxWatchGateway> MailboxWatchService<R, G
             .await?;
         record_subscription(&span, "created", &subscription);
         self.repository.bind_watch(lease, id, &subscription).await
+    }
+}
+
+/// How long a working subscription waits for its next renewal.
+const UPKEEP_SECONDS: u32 = 12 * 60 * 60;
+
+/// When a failed upkeep run tries again, and how many failed runs in a row
+/// that makes. Throttling and credential failures belong to the mailbox's
+/// requests, not its subscription, so they keep their own delays and are not
+/// counted. Anything else Graph answers waits 30 s, doubling with each failed
+/// run: up to 30 minutes for a transient failure (5xx, no answer), which an
+/// outage gives every mailbox, and up to the 12 hours a working subscription
+/// waits for a refusal (403, 404, any other 4xx), which Graph gives the same
+/// way every time. The mailbox keeps syncing by polling meanwhile.
+fn upkeep_retry(error: &MailboxError, failures: i32) -> (u32, i32) {
+    let backoff = |cap: u32| {
+        let doublings = failures.clamp(0, 11).unsigned_abs();
+        ((30_u32 << doublings).min(cap), failures.saturating_add(1))
+    };
+    match error {
+        MailboxError::Provider(
+            error @ (EmailApiError::RateLimited { .. }
+            | EmailApiError::CredentialsUnavailable { .. }
+            | EmailApiError::AuthRequired),
+        ) => (super::retry_seconds(error), failures),
+        MailboxError::Provider(EmailApiError::Transient { .. }) => {
+            backoff(super::MAX_BACKOFF_SECONDS)
+        }
+        MailboxError::Provider(_) => backoff(UPKEEP_SECONDS),
+        _ => (30, failures),
     }
 }
 

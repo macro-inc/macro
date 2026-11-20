@@ -5,6 +5,7 @@ fragment SavedViewFields on GraphqlSavedView {
   config
   sharedTeamId
   revision
+  appearance
   createdAt
   updatedAt
 }

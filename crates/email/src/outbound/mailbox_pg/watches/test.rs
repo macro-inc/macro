@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::live_pass::StreamKind;
 use email_api_client::domain::models::EmailApiError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sha2::{Digest, Sha256};
@@ -62,7 +63,12 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
     .await
     .unwrap();
     assert_eq!(row.provider_id.as_deref(), Some("sub"));
-    assert!(repo.claim_stream(Uuid::new_v4()).await.unwrap().is_some());
+    assert!(
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some()
+    );
     ingress
         .receive(
             id,
@@ -84,7 +90,11 @@ async fn only_a_matching_verifier_can_bind_an_unknown_create_and_wake_the_mailbo
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: PgPool) {
     let (repo, _, _, id) = setup(&db).await;
-    let stream = repo.claim_stream(Uuid::new_v4()).await.unwrap().unwrap();
+    let stream = repo
+        .claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     MailboxWatchNotifications(repo.clone())
         .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
         .await
@@ -93,7 +103,10 @@ async fn notification_during_a_delta_page_is_not_erased_by_its_checkpoint(db: Pg
         .await
         .unwrap();
     assert!(
-        repo.claim_stream(Uuid::new_v4()).await.unwrap().is_some(),
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_some(),
         "the authenticated wakeup must survive the page commit"
     );
 }
@@ -107,7 +120,7 @@ async fn lifecycle_event_during_renewal_survives_worker_release(db: PgPool) {
         )
         .await
         .unwrap();
-    repo.release_watch(&lease, 43200).await.unwrap();
+    repo.release_watch(&lease, 43200, 0).await.unwrap();
     assert!(repo.claim_watch(Uuid::new_v4()).await.unwrap().is_some());
 }
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -205,7 +218,9 @@ impl MailboxWatchGateway for Gateway {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn subscription_upkeep_records_what_it_did_and_a_failed_renewal_is_an_error(db: PgPool) {
+async fn subscription_upkeep_records_what_it_did_and_failed_renewals_back_off_until_one_works(
+    db: PgPool,
+) {
     let telemetry = crate::telemetry_capture::Telemetry::default();
     let _guard = telemetry.install();
     let (repo, link) = super::super::test::fixture(&db).await;
@@ -239,11 +254,28 @@ async fn subscription_upkeep_records_what_it_did_and_a_failed_renewal_is_an_erro
     renewals_fail.store(true, std::sync::atomic::Ordering::SeqCst);
     make_due().await.unwrap();
     assert!(service.execute_once().await.is_err());
+    make_due().await.unwrap();
+    assert!(service.execute_once().await.is_err());
+    renewals_fail.store(false, std::sync::atomic::Ordering::SeqCst);
+    make_due().await.unwrap();
+    assert!(service.execute_once().await.unwrap());
 
     let spans = telemetry.spans("outlook.subscription.maintain");
-    let [created, renewed, failed] = spans.as_slice() else {
-        panic!("expected three upkeep spans, got {spans:?}");
+    let [created, renewed, failed, failed_again, recovered] = spans.as_slice() else {
+        panic!("expected five upkeep spans, got {spans:?}");
     };
+    assert_eq!(failed_again["outlook.defer_seconds"], "60");
+    assert_eq!(recovered["outlook.outcome"], "done");
+    // A renewal that works clears the failures, so the next refusal waits
+    // 30 s again.
+    let failures = sqlx::query_scalar!(
+        "SELECT failures FROM email_mailbox_watch_work WHERE link_id = $1",
+        link
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(failures, 0);
     assert_eq!(created["mailbox.link_id"], link.to_string());
     assert_eq!(created["outlook.subscription_action"], "created");
     assert!(created.contains_key("outlook.subscription_expires_at"));
@@ -294,4 +326,138 @@ async fn lifecycle_events_are_logged_with_the_mailbox_and_counted_on_the_span(db
     assert_eq!(missed["link_id"], link.to_string());
     assert_eq!(*reauthorize_level, tracing::Level::INFO);
     assert_eq!(reauthorize["lifecycle_event"], "reauthorizationRequired");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_change_notification_makes_a_folders_live_pass_due(db: PgPool) {
+    let (repo, link, _, id) = setup(&db).await;
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,initial_complete,next_run_at) VALUES ($1,$2,1,'mail_folder_live','folder',true,now() + interval '2 minutes')",
+        macro_uuid::generate_uuid_v7(),
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxWatchNotifications(repo.clone())
+        .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
+        .await
+        .unwrap();
+
+    let pass = repo
+        .claim_stream(Uuid::new_v4(), StreamKind::LivePass)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(pass.folder.as_str(), "folder");
+    assert!(pass.notification.is_some());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn subscription_writes_behind_a_share_locked_link_fail_fast(db: PgPool) {
+    let (repo, link, lease, id) = setup(&db).await;
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at=now()+interval '1 hour' WHERE link_id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    // A CRM contact population holds the link this way for its whole transaction.
+    let mut population = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id=$1 FOR SHARE", link)
+        .fetch_one(&mut *population)
+        .await
+        .unwrap();
+
+    let bound = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        repo.bind_watch(
+            &lease,
+            id,
+            &MailboxSubscription {
+                id: ProviderId::new("sub").unwrap(),
+                expires_at: Utc::now() + chrono::Duration::days(2),
+            },
+        ),
+    )
+    .await;
+    assert!(
+        matches!(
+            &bound,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{bound:?}"
+    );
+    let notified = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        MailboxWatchNotifications(repo.clone())
+            .receive(id, vec![notification("secret", "sub", WatchHint::Changed)]),
+    )
+    .await;
+    assert!(
+        matches!(
+            &notified,
+            Ok(Err(MailboxError::Database(DatabaseFailure::Sqlstate(code)))) if code == "55P03"
+        ),
+        "{notified:?}"
+    );
+    population.rollback().await.unwrap();
+
+    let row = sqlx::query!(
+        "SELECT provider_id FROM email_provider_subscriptions WHERE id=$1",
+        id
+    )
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert!(row.provider_id.is_none());
+    assert!(
+        repo.claim_stream(Uuid::new_v4(), StreamKind::MailFolder)
+            .await
+            .unwrap()
+            .is_none(),
+        "a notification that failed must not wake the mailbox"
+    );
+}
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notification_keeps_a_due_folder_ahead_of_folders_due_after_it(db: PgPool) {
+    let (repo, link, _, id) = setup(&db).await;
+    sqlx::query!(
+        "UPDATE email_sync_streams SET next_run_at=now()-interval '5 minutes' WHERE link_id=$1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    let other = macro_uuid::generate_uuid_v7();
+    sqlx::query!(r#"
+        INSERT INTO email_links (id,macro_id,fusionauth_user_id,email_address,provider,grant_generation)
+        VALUES ($1,'macro|other@example.com','other-owner','other@example.com','OUTLOOK',1)
+    "#,other).execute(&db).await.unwrap();
+    sqlx::query!(
+        "INSERT INTO email_sync_streams (id,link_id,generation,kind,scope_id,next_run_at) VALUES ($1,$2,1,'mail_folder','folder',now()-interval '1 minute')",
+        macro_uuid::generate_uuid_v7(),
+        other
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+
+    MailboxWatchNotifications(repo.clone())
+        .receive(id, vec![notification("secret", "sub", WatchHint::Changed)])
+        .await
+        .unwrap();
+
+    let claimed = repo
+        .claim_stream(macro_uuid::generate_uuid_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        claimed.mailbox.link_id, link,
+        "a notified mailbox's folder, due longest, must not wait behind another mailbox's"
+    );
 }

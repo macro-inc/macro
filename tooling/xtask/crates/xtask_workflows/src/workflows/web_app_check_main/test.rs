@@ -264,7 +264,7 @@ fn generated_code_alone_keeps_a_cargo_target() {
             );
             if workflow.file_name == "web-app-check-main.yml" {
                 assert_eq!(
-                    text.contains(vars::CARGO_TARGET_VOLUME_DIR),
+                    text.contains(&vars::cargo_target_volume_dir()),
                     owner,
                     "web job {id}: only generated-code mounts a cargo target"
                 );
@@ -287,7 +287,7 @@ fn generated_code_builds_without_debug_info_for_every_step() {
         "the job env turns debug info off: {header}"
     );
     assert!(
-        header.contains("RUSTFLAGS: '-C link-arg=-fuse-ld=mold'"),
+        header.contains("RUSTFLAGS: -C link-arg=-fuse-ld=mold"),
         "the job links with mold like the Rust jobs: {header}"
     );
     for flag in ["CARGO_PROFILE_DEV_DEBUG", "RUSTFLAGS", "--config"] {
@@ -437,7 +437,7 @@ fn test_job_shards_vitest_after_building_its_wasm() {
     let yaml = web_app_check_main().to_string().expect("workflow yaml");
     let test_job = test_job(&yaml);
     let vitest = test_job
-        .find("bun run test --shard=${{ matrix.shard }}/6")
+        .find(r#"bun run test --shard="${SHARD}/6""#)
         .expect("vitest step runs one shard");
     for build in ["just build-agent-fold-wasm", "just build-natural-time-wasm"] {
         let wasm = test_job
@@ -919,7 +919,7 @@ fn path_check_fetches_no_blobs_up_front() {
     let path_check = job(&yaml, "path-check", "android-native-check");
     assert!(path_check.contains("filter: blob:none"), "{path_check}");
     assert!(
-        path_check.contains("sparse-checkout: '.github'"),
+        path_check.contains("sparse-checkout: .github"),
         "{path_check}"
     );
 }

@@ -8,6 +8,7 @@ type Flag = { enabled: boolean; loading: boolean; payload: undefined };
 const mocks = vi.hoisted(() => ({
   unified: undefined as unknown as () => Flag,
   passwords: undefined as unknown as () => Flag,
+  numbersEnabled: true,
   counts: undefined as unknown as () => readonly InboxUnreadCount[] | undefined,
   countStreams: 0,
   presenceSources: 0,
@@ -15,8 +16,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
+  enableNavigationUnreadCounts: 'navigation-unread-counts',
   enableUnifiedNotifications: 'unified',
   enablePasswords: 'passwords',
+  isFeatureEnabled: (flag: string) =>
+    flag === 'navigation-unread-counts' && mocks.numbersEnabled,
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: string) =>
@@ -57,6 +61,7 @@ afterEach(() => {
 function setup(options: {
   unified: Flag;
   passwords?: boolean;
+  numbersEnabled?: boolean;
   counts?: readonly InboxUnreadCount[];
   homeIsNotifications?: boolean;
 }) {
@@ -66,6 +71,7 @@ function setup(options: {
     const [counts, setCounts] = createSignal(options.counts);
     mocks.unified = unified;
     mocks.passwords = () => flag(options.passwords ?? false);
+    mocks.numbersEnabled = options.numbersEnabled ?? true;
     mocks.counts = counts;
     return {
       unread: useNavigationUnread({
@@ -84,6 +90,29 @@ const row = (
 ): InboxUnreadCount => ({ type, passwordRequests, count });
 
 describe('useNavigationUnread with the unified Notifications view', () => {
+  it.each([false, true])(
+    'keeps live dots with numbers off (Home is Notifications: %s)',
+    (homeIsNotifications) => {
+      const { unread, setCounts } = setup({
+        unified: flag(true),
+        numbersEnabled: false,
+        counts: [row('email', 4), row('channel_mention', 1)],
+        homeIsNotifications,
+      });
+
+      for (const section of ['home', 'notifications', 'channels', 'mail']) {
+        expect(unread.has(section)).toBe(true);
+        expect(unread.count(section)).toBeUndefined();
+      }
+      expect(mocks.countStreams).toBe(1);
+      expect(mocks.presenceSources).toBe(0);
+
+      setCounts([]);
+      expect(unread.has('home')).toBe(false);
+      expect(unread.has('mail')).toBe(false);
+    }
+  );
+
   it('counts each section from its kinds of inbox row', () => {
     const { unread } = setup({
       unified: flag(true),

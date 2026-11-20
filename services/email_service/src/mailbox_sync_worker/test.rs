@@ -2,7 +2,8 @@ use super::*;
 use email::domain::mailbox::MailboxKey;
 use email::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::domain::models::{
-    MailFolder, MailboxChangePage, MailboxMessage, ProviderId, StreamPosition, StreamToken,
+    MailFolder, MailFolderCatalog, MailboxChangePage, MailboxMessage, ProviderId, RoundStart,
+    StreamPosition, StreamToken,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
@@ -19,14 +20,15 @@ struct Provider {
 }
 
 impl MailboxGateway for Provider {
-    async fn folders(&self, _: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
-        Ok(Vec::new())
+    async fn folders(&self, _: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
+        Ok(MailFolderCatalog::Folders(Vec::new()))
     }
     async fn changes(
         &self,
         _: MailboxKey,
         folder: &ProviderId,
         _: Option<&StreamToken>,
+        _: RoundStart,
     ) -> Result<MailboxChangePage, EmailApiError> {
         self.reads.lock().unwrap().push(folder.as_str().to_owned());
         let position = if folder.as_str() == "importing" {
@@ -92,9 +94,10 @@ async fn mailbox(db: &PgPool, folder: &str, synced: bool, due: &str) -> Uuid {
 async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_a_cycle(
     db: PgPool,
 ) {
-    let importing = mailbox(&db, "importing", false, "1 minute").await;
-    // Due after the importing folder's first page and before its next one.
-    mailbox(&db, "synced", true, "1 second").await;
+    let importing = mailbox(&db, "importing", false, "7 minutes").await;
+    // Due after the importing folder's first page and before its next one,
+    // which is claimed as if due five minutes earlier than it is.
+    mailbox(&db, "synced", true, "6 minutes").await;
     // Each queued message is read once more and then recorded as gone.
     sqlx::query!(
         r#"
@@ -121,4 +124,30 @@ async fn new_mail_in_a_synced_folder_waits_behind_one_queued_import_message_not_
     let reads = provider.reads.lock().unwrap().clone();
     let before_synced: Vec<_> = reads.iter().take_while(|read| *read != "synced").collect();
     assert_eq!(before_synced, ["importing", "message"], "{reads:?}");
+}
+
+#[tokio::test]
+async fn the_live_import_pass_follows_its_flag_and_is_off_while_the_flag_cannot_be_read() {
+    use feature_flags::outbound::fake::FakeFeatureFlags;
+    use feature_flags::{FlagSnapshot, FlagValue};
+
+    let switch = LiveImportPass::default();
+    let mut on = FakeFeatureFlags::default();
+    on.set_service(
+        LIVE_IMPORT_PASS_CONTEXT,
+        Ok(FlagSnapshot::new([(
+            LIVE_IMPORT_PASS_FLAG.to_owned(),
+            FlagValue::Boolean(true),
+        )])),
+    );
+    let mut failing = FakeFeatureFlags::default();
+    failing.set_service(
+        LIVE_IMPORT_PASS_CONTEXT,
+        Err("PostHog is unavailable".into()),
+    );
+
+    assert!(refresh_live_import_pass(&on, &switch, false).await);
+    assert!(switch.enabled());
+    assert!(!refresh_live_import_pass(&failing, &switch, false).await);
+    assert!(!switch.enabled());
 }

@@ -112,6 +112,31 @@ pub struct RateLimitConfig {
     pub window: Duration,
 }
 
+/// A token bucket: up to `capacity` actions at once, then one more every
+/// `refill_interval`, so bursts pass while the sustained rate is bounded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenBucketConfig {
+    /// Most tokens the bucket holds, and how many a new bucket starts with.
+    pub capacity: u64,
+    /// How long the bucket takes to gain one token.
+    pub refill_interval: Duration,
+}
+
+/// What taking one token from a bucket came to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenBucketResult {
+    /// A token was taken, and `remaining` are left.
+    Taken {
+        /// Tokens left after this one.
+        remaining: u64,
+    },
+    /// The bucket was empty; it gains its next token after `retry_after`.
+    Empty {
+        /// How long until the bucket gains a token.
+        retry_after: Duration,
+    },
+}
+
 impl RateLimitConfig {
     /// Create a new rate limit config.
     pub fn new(max_count: u64, window: Duration) -> Self {

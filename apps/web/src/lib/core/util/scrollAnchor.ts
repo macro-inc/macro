@@ -99,7 +99,7 @@ export function captureScrollAnchor(
  * block above the viewport, which matters when this runs as the reader scrolls
  * a long document.
  */
-function firstBlockBelow(blocks: HTMLCollection, top: number) {
+function firstBlockBelow(blocks: ArrayLike<Element>, top: number) {
   let low = 0;
   let high = blocks.length;
   while (low < high) {
@@ -110,13 +110,36 @@ function firstBlockBelow(blocks: HTMLCollection, top: number) {
   return low;
 }
 
-/** Scrolls so the anchor is back at the viewport offset it was captured at. */
+/**
+ * Anchors on the first of `elements`, in document order, that reaches into
+ * the scroller's view: the message a reader is looking at, say, rather than
+ * whatever else sits above it, which may go away as rows load.
+ */
+export function captureFirstVisibleScrollAnchor(
+  scroller: HTMLElement,
+  elements: ArrayLike<Element>
+): ScrollAnchor | undefined {
+  const view = scroller.getBoundingClientRect();
+  const element = elements[firstBlockBelow(elements, view.top)];
+  if (!element) return undefined;
+  const { top } = element.getBoundingClientRect();
+  if (top >= view.bottom) return undefined;
+  return relativeTo(scroller, view, top, () =>
+    element.isConnected ? element.getBoundingClientRect().top : undefined
+  );
+}
+
+/**
+ * Scrolls so the anchor is back at the viewport offset it was captured at.
+ * An anchor still in place, to within half a pixel, writes nothing: WebKit
+ * ends momentum scrolling on any scrollTop write.
+ */
 export function restoreScrollAnchor(
   scroller: HTMLElement,
   anchor: ScrollAnchor
 ) {
   const top = anchor.measure();
-  if (top === undefined) return;
+  if (top === undefined || Math.abs(top - anchor.top) < 0.5) return;
   scroller.scrollTop += top - anchor.top;
 }
 

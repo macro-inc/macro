@@ -164,14 +164,22 @@ function useHomeFilters() {
     });
   };
 
+  // Recent has no Status: its rows are the viewer's own work, not a queue.
+  // The saved Status stays old Home's, which shares these filters.
+  const hasStatus = () => state.tab !== 'recent';
   const activeCount = () =>
     TYPE_IDS.length -
     selectedHomeTypes(state.facets.type, TYPE_IDS).length +
-    (state.facets.read?.length ? 1 : 0);
+    (hasStatus() && state.facets.read?.length ? 1 : 0);
 
   return {
+    groups: () =>
+      hasStatus()
+        ? HOME_FILTER_GROUPS
+        : HOME_FILTER_GROUPS.filter((group) => group.id !== 'read'),
     activeCount,
-    clear: () => setFacets({}),
+    clear: () =>
+      setFacets(hasStatus() ? {} : { read: state.facets.read ?? [] }),
     isGroupActive: (groupId: string) =>
       groupId === 'type'
         ? selectedHomeTypes(state.facets.type, TYPE_IDS).length <
@@ -228,7 +236,7 @@ export function HomeFilterDropdown() {
           <CountBadge count={filters.activeCount()} />
         </Dropdown.Trigger>
       }
-      groups={HOME_FILTER_GROUPS}
+      groups={filters.groups()}
       open={open()}
       onOpenChange={setOpen}
       isSelected={filters.isSelected}

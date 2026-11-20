@@ -14,9 +14,12 @@ Each image version is booted once per sold shape (vCPUs, memory) until the
 guest settles, unenrolled: the golden. The agent pauses it and keeps a Full
 snapshot. A new computer is a restore of that snapshot, not a boot:
 
-1. Reflink the golden's rootfs into the computer's rootfs (XFS, a few ms),
-   grow it to the sold root disk; create `/home` empty, or reuse the one a
-   lost VM left; grow both, never shrink.
+1. Take a ready disk set from the spare pool, or `zfs clone` the golden's
+   latest snapshot (ZFS, ~45 ms): the clone holds the golden's rootfs and an
+   empty `/home` of every sold size, of which the computer keeps its own (new
+   filesystem UUID) and deletes the rest. On XFS the rootfs and `/home` are
+   reflinks of the golden's and of a per-size template. Reuse the disks a
+   lost VM left; grow both to the sold sizes, never shrink.
 2. Take a pre-created netns slot.
 3. Jailer: own uid/gid, chroot, new pid namespace, cgroup v2 leaf with cpu,
    memory (`oom.group`) and pids limits, default seccomp filter.
@@ -54,15 +57,44 @@ every state and action is `domain::power::plan`, a pure function.
 
 ## Storage
 
-One durable XFS filesystem with reflink (a persistent disk) holds everything:
-records, disks, goldens, hibernation snapshots and the jails
-(`outbound::layout`). One filesystem because computers' rootfs are reflinks
-of the goldens' and jails hard-link snapshot files; a cold wake from the
-persistent disk measured as fast as from local NVMe. If the host stops,
-computers come back stopped or hibernated, never lost.
+One durable pool (a persistent disk) holds everything: records, disks,
+goldens, hibernation snapshots and the jails (`outbound::layout`). If the
+host stops, computers come back stopped or hibernated, never lost.
 
-`Disks` is the storage port: XFS reflink files today; a ZFS implementation
-returns zvols, which the jail turns into device nodes owned by the VM user.
+`Disks` (`outbound::disks`) is the storage port, over one of two backends:
+
+- **ZFS** (the default): a dataset per golden and per computer under one
+  parent. A golden's snapshot holds its rootfs, memory, device state and an
+  empty, lazily formatted `/home` of every sold size (a few MiB each); a size
+  sold later is added to every golden in a new snapshot. A computer is a
+  `zfs clone` of the latest snapshot, so it shares the golden's blocks and a
+  move sends only its own (`zfs send -i`). Spare disk sets (clones made
+  ahead) make a create a rename.
+- **XFS** with reflink: computers' rootfs and `/home` are reflinks of the
+  golden's and of per-size templates.
+
+Block cloning (ZFS BRT, `copy_file_range` across datasets) is not used to
+create computers. It remains in three places, all on file moves the guest
+never sees during a restore:
+
+- **Hibernation, Diff**: the loaded memory (the golden's, or the last
+  hibernation's) is cloned into the jail, and Firecracker writes the dirty
+  pages into the clone.
+- **Hibernation publish**: the snapshot files move from the jail into the
+  computer's hibernation directory (clone, then delete).
+- **Golden build**: the golden's memory and device state move from the jail
+  into its dataset (clone, then delete).
+
+So the agent refuses to start on ZFS unless the module is OpenZFS 2.4.1 or
+later (2.2.x shipped block cloning with corruption bugs), the pool's
+`feature@block_cloning` is on, and `zfs_bclone_enabled` and
+`zfs_bclone_wait_dirty` are 1. A known cost: `zfs send` expands cloned
+blocks, so a hibernated computer's move carries a full copy of the memory
+it was cloned from (~350 MiB, lz4, for an 8 GiB golden) on top of its dirty
+pages. Hibernating in place in the computer's own clone would remove it;
+deferred until moving hibernated computers matters. Every clone runs on the
+blocking pool: a clone walks every block in the kernel and would stall the
+async workers.
 
 ## Network
 
@@ -97,3 +129,12 @@ MMDS.
 `nix/hosts/_nixos/firecracker-host.nix` declares a host: pinned Firecracker
 and jailer, the agent unit, TLS as root-only credentials, host nftables. Its
 NixOS test is `checks.firecracker-host`.
+
+With `macro.firecrackerHost.alloy.enable`, Grafana Alloy on the host
+(`firecracker-host.alloy`) reads host metrics (CPU, memory, pressure, swap,
+KSM) and each computer's CPU, memory and disk IO from its VM's cgroup
+(`<unit>/vms/c-<id>`, labelled `computer_id`), and writes them every 30 s to
+Macro's Mimir in the observability cluster (`infra/k8s/observability`), where the **Macro
+computers fleet** dashboard shows capacity, noisy neighbours and overcommit
+in use. Nothing runs in guests. The Datadog agent stays for the agent's
+spans, its `firecracker_host.*` metrics and the monitors.

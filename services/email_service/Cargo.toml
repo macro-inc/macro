@@ -97,7 +97,7 @@ sfs_delete = []
 
 [dependencies]
 agent_correlation = { path = "../../crates/agent_correlation", features = ["http", "postgres"] }
-calendar_events = { path = "../../crates/calendar_events", features = ["google", "inbound", "postgres", "schema"] }
+calendar_events = { path = "../../crates/calendar_events", features = ["gateway-refresh", "google", "inbound", "postgres", "schema"] }
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
@@ -122,6 +122,7 @@ entity_access_management = { path = "../../crates/entity_access_management" }
 email_api_client = { path = "../../crates/email_api_client", features = ["ports", "outbound-gmail", "outbound-outlook", "microsoft-gate"] }
 email_db_client = { path = "../../crates/email_db_client" }
 email_utils = { path = "../../crates/email_utils" }
+feature_flags = { path = "../../crates/feature_flags" }
 frecency = { path = "../../crates/frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../../crates/gmail_client" }
@@ -148,6 +149,7 @@ notification = { path = "../../crates/notification" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 mime_guess = "2.0.5"
+nom = { workspace = true }
 channels = { path = "../../crates/channels", features = ["outbound"] }
 contacts = { path = "../../crates/contacts" }
 generic_email_domains = { path = "../../crates/generic_email_domains" }
@@ -210,3 +212,4 @@ tracing-opentelemetry = { workspace = true }
 tracing-subscriber = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
 macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+wiremock = { workspace = true }

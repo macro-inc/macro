@@ -5,14 +5,12 @@ import { enableAgentTeammates } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { computerKeys } from '@queries/computers/keys';
-import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { teamAgentKeys } from '@queries/team-agents/keys';
 import { useTeamAgentsQuery } from '@queries/team-agents/team-agents';
 import { computersClient } from '@service-auth/computers';
 import type { TeamAgent } from '@service-auth/team-agents';
 import { type Accessor, createSignal } from 'solid-js';
-import { agentComputerHarness } from '../core/team-agent-claude';
 import {
   type TeamAgentRunState,
   teamAgentRunState,
@@ -20,9 +18,9 @@ import {
 
 /**
  * Whether the agent teammate `userId` names can answer, from the same
- * sources as its row in Members: the team's agents (its computer's state)
- * and the harness list (whether macrod is connected). `agent` is undefined
- * for anyone who is not one of the team's agent teammates.
+ * source as its row in Members: the team's agents (its computer's state).
+ * `agent` is undefined for anyone who is not one of the team's agent
+ * teammates.
  */
 export function useTeamAgentStatus(userId: Accessor<string | undefined>) {
   const flag = useFeatureFlag(enableAgentTeammates);
@@ -33,7 +31,6 @@ export function useTeamAgentStatus(userId: Accessor<string | undefined>) {
     () => (team.isSuccess ? (team.data?.team.id ?? '') : ''),
     enabled
   );
-  const harnesses = useHarnessesQuery();
 
   const agent = (): TeamAgent | undefined => {
     if (!enabled() || !agents.isSuccess) return undefined;
@@ -43,11 +40,7 @@ export function useTeamAgentStatus(userId: Accessor<string | undefined>) {
   const state = (): TeamAgentRunState | undefined => {
     const current = agent();
     if (!current) return undefined;
-    const harness = agentComputerHarness(
-      current.computerId,
-      harnesses.isSuccess ? harnesses.data : undefined
-    );
-    return teamAgentRunState(current, harness);
+    return teamAgentRunState(current);
   };
 
   return { agent, state };

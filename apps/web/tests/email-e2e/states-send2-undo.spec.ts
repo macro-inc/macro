@@ -95,13 +95,10 @@ test('undo of a reply keeps a newer reply being written and says so', async ({
   await expect(replyBody(page)).toHaveText('Newer.');
 });
 
-// When this fails, Undo of a scheduled reply says a newer reply was kept
-// and the earlier message not reopened, while there is no newer reply and
-// the composer shows the earlier one, reopened (handoff
-// undo-schedule-claims-newer-reply).
-test('known bug: undo-schedule-claims-newer-reply: undo of a scheduled reply reopens it without claiming a newer reply @known-bug', {
-  tag: '@known-bug',
-}, async ({ page, mailbox }) => {
+test('undo of a scheduled reply reopens it without claiming a newer reply', async ({
+  page,
+  mailbox,
+}) => {
   const subject = 'Dinner plan';
   await replyTo(page, mailbox, subject);
   await replyBody(page).click();
@@ -123,10 +120,14 @@ test('known bug: undo-schedule-claims-newer-reply: undo of a scheduled reply reo
   await replyBody(page).click();
   await page.keyboard.type('Newer.');
   await expect(replyBody(page)).toHaveText('Noted.');
+  await expect(replyBody(page)).not.toBeEditable();
   await scheduledNotice(page).getByRole('button', { name: 'Undo' }).click();
+  did('AC-055');
   await expect(notice(page, /^Schedule cancelled\.$/)).toBeVisible();
+  saw('STC-065');
+  await expect(replyBody(page)).toBeEditable();
   await expect(replyBody(page)).toHaveText('Noted.');
-  // The claim is queued before "Schedule cancelled." is raised and times
-  // out like any notice, so it is counted once, now, not waited away.
+  // The restore callback is queued before the cancellation notice. Check for
+  // the false claim while it would still be visible.
   expect(await notice(page, KEPT).count()).toBe(0);
 });

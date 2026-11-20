@@ -9,7 +9,7 @@ use serde_json::json;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use uuid::Uuid;
 
-use super::{ADA, BOB, id, message_id, start, token};
+use super::{ADA, BOB, folders, id, message_id, start, token};
 use crate::{Fault, FaultError, Route};
 
 const TWO_MAILBOXES: &str = r#"
@@ -129,9 +129,9 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     // Bob reads it with the real client, attachment included.
     let bob = token(&emulator, BOB);
     let received = message_id(&emulator, BOB, "Plan");
-    let folders = api.folders(&bob).await.unwrap();
+    let bob_folders = folders(&api, &bob).await;
     let read = api
-        .message(&bob, Uuid::now_v7(), &received, &folders)
+        .message(&bob, Uuid::now_v7(), &received, &bob_folders)
         .await
         .unwrap()
         .unwrap();
@@ -149,9 +149,9 @@ async fn sending_a_draft_delivers_it_to_the_recipients_mailbox() {
     assert_eq!(bytes, b"the plan");
 
     // Ada's copy reads as sent, by the flag that survives folder moves.
-    let folders = api.folders(&ada).await.unwrap();
+    let ada_folders = folders(&api, &ada).await;
     let own = api
-        .message(&ada, Uuid::now_v7(), &draft.id, &folders)
+        .message(&ada, Uuid::now_v7(), &draft.id, &ada_folders)
         .await
         .unwrap()
         .unwrap();

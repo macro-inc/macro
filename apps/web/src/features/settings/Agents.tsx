@@ -5,6 +5,8 @@ import {
 } from '@app/features/agents-view/core/agent-kind';
 import { AGENTS_TOUR } from '@app/features/agents-view/tour';
 import { t } from '@app/lib/i18n';
+import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import {
@@ -20,6 +22,7 @@ import {
 import { MACRO_NEW_BOT_ID } from '@core/constant/macroNew';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import MacroLogo from '@icon/macro-logo.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
@@ -1241,6 +1244,16 @@ function AgentEditorPage(props: {
     close();
   };
 
+  const panel = useSplitPanel();
+  if (isTouchDevice()) {
+    useSplitBackInterceptor(() => {
+      if (panel && !panel.isPanelActive()) return false;
+      if (busy()) return true;
+      if (setup()) finishSetup();
+      else close();
+      return true;
+    });
+  }
   return (
     <Switch>
       <Match when={setup() === 'cursor'}>

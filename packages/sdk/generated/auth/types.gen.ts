@@ -136,6 +136,11 @@ export type BillingInterval = 'month' | 'year';
 export type BillingStatus = 'purchasing' | 'active' | 'past_due' | 'ending' | 'ended' | 'comped';
 
 /**
+ * A card network.
+ */
+export type CardBrand = 'amex' | 'diners' | 'discover' | 'eftpos_au' | 'jcb' | 'mastercard' | 'unionpay' | 'visa' | 'unknown';
+
+/**
  * Request body for switching plans
  */
 export type ChangePlanRequest = {
@@ -415,7 +420,24 @@ export type ComputerStatus = {
 /**
  * The coarse status the team sees.
  */
-export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+export type ComputerStatusKind = 'setting_up' | 'needs_attention' | 'waiting_for_capacity' | 'ready' | 'unhealthy' | 'starting' | 'stopping' | 'stopped' | 'failed' | 'purchasing' | 'released';
+
+/**
+ * A computer's CPU and memory over the last day.
+ */
+export type ComputerUsage = {
+    /**
+     * The computer.
+     */
+    computerId: string;
+    latest?: null | UsagePoint;
+    /**
+     * The last 24 hours in 15-minute steps, oldest first: average CPU and
+     * highest memory of each step, absent where the computer has no
+     * reading (it did not run).
+     */
+    points: Array<null | UsagePoint>;
+};
 
 export type CreateAccountMergeRequest = {
     /**
@@ -1676,6 +1698,20 @@ export type PatchUserTutorialRequest = {
     tutorialComplete: boolean;
 };
 
+/**
+ * A card as its owner recognizes it: "Visa ending 4242".
+ */
+export type PaymentCard = {
+    /**
+     * Card network.
+     */
+    brand: CardBrand;
+    /**
+     * Last four digits.
+     */
+    last4: string;
+};
+
 export type Permission = {
     /**
      * The description of the permission
@@ -1825,11 +1861,41 @@ export type PurchaseBody = {
 };
 
 /**
+ * What the buy dialog shows before a purchase: each size with what buying
+ * it charges today, when the full price bills from, and the card charged.
+ */
+export type PurchaseOffers = {
+    card?: null | PaymentCard;
+    /**
+     * When the current billing period ends: each computer bills its full
+     * `quote.amount` every `quote.interval` from then.
+     */
+    renewsAt: string;
+    /**
+     * Every size some host can run awake.
+     */
+    sizes: Array<PurchaseSizeOffer>;
+};
+
+/**
  * Why a purchase was refused, as a stable code the buy and add-agent dialogs
  * show their own way. One vocabulary for `/team/computers` and
  * `/team_agents`.
  */
 export type PurchaseRefusalCode = 'team_on_trial' | 'payment_declined' | 'no_room' | 'invite_in_progress';
+
+/**
+ * A size on sale and what buying it charges today.
+ */
+export type PurchaseSizeOffer = SizeOffer & {
+    /**
+     * The prorated rest of the current period, invoiced at purchase, in the
+     * currency's smallest unit, less the team's credit balance; 0 when the
+     * team is comped. The charge itself is prorated to the second it is
+     * bought.
+     */
+    dueToday: number;
+};
 
 /**
  * Where a purchase stands when its request returns.
@@ -2126,7 +2192,7 @@ export type SetupStep = 'billing' | 'creating' | 'booting' | 'connecting' | 'rea
  */
 export type SizeOffer = {
     /**
-     * Root disk size in GiB.
+     * Whole disk quota in GiB: root and `/home` together.
      */
     diskGb: number;
     /**
@@ -2430,7 +2496,7 @@ export type TeamAgentErrorBody = {
 /**
  * Where an agent teammate is, from its computer.
  */
-export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'failed' | 'released';
+export type TeamAgentStatus = 'provisioning' | 'starting' | 'running' | 'paused' | 'unhealthy' | 'failed' | 'released';
 
 /**
  * A team's agents.
@@ -2683,6 +2749,23 @@ export type UpstreamErrorResponse = {
      * What failed and what to do about it, written for the user.
      */
     message: string;
+};
+
+/**
+ * A computer's use at one point of the graph.
+ */
+export type UsagePoint = {
+    /**
+     * Share of its CPUs in use, 0 to 100. Absent until a second reading
+     * of the same run measures it: a computer's first reading after it
+     * starts or wakes has memory only.
+     */
+    cpuPercent?: number | null;
+    /**
+     * Memory only it holds, in bytes; memory shared with its image is not
+     * counted.
+     */
+    memoryBytes: number;
 };
 
 /**
@@ -4637,6 +4720,29 @@ export type ListTeamComputerOffersResponses = {
 
 export type ListTeamComputerOffersResponse = ListTeamComputerOffersResponses[keyof ListTeamComputerOffersResponses];
 
+export type ListTeamComputerPurchaseOffersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/purchase-offers';
+};
+
+export type ListTeamComputerPurchaseOffersErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    422: ErrorResponse;
+    502: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type ListTeamComputerPurchaseOffersError = ListTeamComputerPurchaseOffersErrors[keyof ListTeamComputerPurchaseOffersErrors];
+
+export type ListTeamComputerPurchaseOffersResponses = {
+    200: PurchaseOffers;
+};
+
+export type ListTeamComputerPurchaseOffersResponse = ListTeamComputerPurchaseOffersResponses[keyof ListTeamComputerPurchaseOffersResponses];
+
 export type GetTeamComputerRolloutData = {
     body?: never;
     path?: never;
@@ -4649,6 +4755,26 @@ export type GetTeamComputerRolloutResponses = {
 };
 
 export type GetTeamComputerRolloutResponse = GetTeamComputerRolloutResponses[keyof GetTeamComputerRolloutResponses];
+
+export type ListTeamComputerUsageData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/computers/usage';
+};
+
+export type ListTeamComputerUsageErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type ListTeamComputerUsageError = ListTeamComputerUsageErrors[keyof ListTeamComputerUsageErrors];
+
+export type ListTeamComputerUsageResponses = {
+    200: Array<ComputerUsage>;
+};
+
+export type ListTeamComputerUsageResponse = ListTeamComputerUsageResponses[keyof ListTeamComputerUsageResponses];
 
 export type UndoCancelTeamComputerData = {
     body?: never;

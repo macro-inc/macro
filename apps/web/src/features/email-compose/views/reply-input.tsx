@@ -79,6 +79,7 @@ type ReplyInputViewProps = Omit<
   | 'hasPaidAccess'
   | 'recordMention'
   | 'focusAfterReplyRequest'
+  | 'initialSavedDraftId'
 > & {
   context: EmailComposeContext;
   onReloadDraft?: () => void;
@@ -99,6 +100,12 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     () => read && initialId,
     async (id) => await read!(id)
   );
+  const initialSavedDraftId = () => {
+    const initial = saved();
+    return initial?.persistence === 'committed'
+      ? initial.draft?.db_id
+      : undefined;
+  };
   const restoredHtml = () => {
     const draft = saved()?.draft;
     if (!draft) return props.preloadedHtml;
@@ -126,6 +133,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         <LoadedReplyInputView
           {...props}
           draft={saved()?.draft ?? props.draft}
+          initialSavedDraftId={initialSavedDraftId()}
           localDraft={saved()?.local}
           localAttachments={saved()?.attachments}
           preloadedHtml={restoredHtml()}
@@ -135,7 +143,9 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   );
 }
 
-function LoadedReplyInputView(props: ReplyInputViewProps) {
+function LoadedReplyInputView(
+  props: ReplyInputViewProps & Pick<ReplyComposerOptions, 'initialSavedDraftId'>
+) {
   const composeContext = props.context;
   const footer = children(() => props.footer);
   const ctx = props.session;
@@ -163,6 +173,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
       replyingTo: props.replyingTo,
       isEditingExisting: props.isEditingExisting,
       draft: props.draft,
+      initialSavedDraftId: props.initialSavedDraftId,
       localDraft: props.localDraft,
       localAttachments: props.localAttachments,
       preloadedHtml: props.preloadedHtml,

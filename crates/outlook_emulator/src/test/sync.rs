@@ -1,10 +1,11 @@
 use email_api_client::domain::models::{
-    EmailApiError, FolderRole, MailboxChangePage, ProviderId, StreamPosition, StreamToken,
+    EmailApiError, FolderRole, MailboxChangePage, ProviderId, RoundStart, StreamPosition,
+    StreamToken,
 };
 use email_api_client::domain::ports::{FolderChangeReader, MailboxContentReader};
 use uuid::Uuid;
 
-use super::{ADA, id, message_id, start, token};
+use super::{ADA, folders, id, message_id, start, token};
 use crate::{MessageChange, NewMessage, OutlookEmulator};
 
 fn seed_with_inbox(count: usize) -> String {
@@ -27,7 +28,7 @@ async fn round(
     let mut pages = Vec::new();
     loop {
         let page = api
-            .folder_changes(token, folder, position.as_ref())
+            .folder_changes(token, folder, position.as_ref(), RoundStart::Unordered)
             .await
             .unwrap();
         let next = page.position.clone();
@@ -184,7 +185,7 @@ async fn an_expired_delta_token_is_an_outdated_cursor() {
     emulator.expire_delta_tokens(ADA).unwrap();
 
     let error = api
-        .folder_changes(&token, &inbox, Some(&checkpoint))
+        .folder_changes(&token, &inbox, Some(&checkpoint), RoundStart::Unordered)
         .await
         .unwrap_err();
     assert!(matches!(error, EmailApiError::OutdatedCursor));
@@ -207,7 +208,7 @@ async fn a_delta_token_outlives_its_lifetime_only_until_the_clock_passes_it() {
 
     let token = super::token(&emulator, ADA);
     let error = api
-        .folder_changes(&token, &inbox, Some(&checkpoint))
+        .folder_changes(&token, &inbox, Some(&checkpoint), RoundStart::Unordered)
         .await
         .unwrap_err();
     assert!(matches!(error, EmailApiError::OutdatedCursor));
@@ -221,7 +222,7 @@ async fn folders_carry_their_roles_and_nested_children() {
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
 
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let role = |name: &str| folders.iter().find(|f| f.name == name).unwrap().role;
     assert_eq!(role("Inbox"), FolderRole::Inbox);
@@ -266,7 +267,7 @@ mailboxes:
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
     let link_id = Uuid::now_v7();
 
     let numbers = message_id(&emulator, ADA, "Quarterly numbers");
@@ -349,7 +350,7 @@ mailboxes:
     );
     let (emulator, api) = start(&seed).await;
     let token = token(&emulator, ADA);
-    let folders = api.folders(&token).await.unwrap();
+    let folders = folders(&api, &token).await;
 
     let recent = api
         .recent_inbox_messages(&token, Uuid::now_v7(), 2, &folders)

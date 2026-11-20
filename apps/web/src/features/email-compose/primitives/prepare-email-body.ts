@@ -10,6 +10,7 @@ import {
   EMAIL_SERVICE_EMBEDDED_HOSTS,
   staticFileReferenceEndpoint,
 } from '@core/constant/servers';
+import { hasLayoutTable } from '@core/email';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
@@ -216,8 +217,9 @@ const $appendPreviousEmail = (
       const htmlNode = $createHtmlRenderNode({
         html: dom.documentElement.innerHTML,
         // Same branch the message view takes: personal or table-less emails
-        // get theme-adapted colors, table-layout emails get a white panel
-        adaptColors: Boolean(isPersonal) || !hasTable,
+        // get theme-adapted colors, table-layout emails get a white panel. A
+        // table inside the signature doesn't count as a table layout.
+        adaptColors: Boolean(isPersonal) || !hasLayoutTable(dom),
       });
       quoteNode.append(htmlNode);
     } else {

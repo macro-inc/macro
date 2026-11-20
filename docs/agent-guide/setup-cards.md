@@ -41,6 +41,16 @@ Every other app opens Pipedream's Connect UI inside the dialog. A connected row
   for replanning while unrelated objects continue.
   If a linked data source disappears after planning, plan and approve again to
   choose its database or task-list format; the old review cannot guess a new shape.
+
+Personal choices create owner-only copies. Personal tasks omit teammate
+assignees because assignment grants access; the import report lists the omitted
+assignee count. For Notion, when an old destination
+folder was explicitly shared, personal copies go into the matching path under
+**Notion (personal)**. The import report lists each relocation; the old shared
+folder stays as it is. A later shared plan uses a separate shared folder when
+reusing the old folder would expose personal contents, and the report explains
+that separation.
+
 - Files also offers **Upload files** and **Upload a folder** (Drive's own
   uploads), and Customers offers **Upload a CSV** (the existing CSV import).
   Each closes the dialog first.
@@ -86,9 +96,13 @@ card sits above **Settings**, outside the scrolling list.
   team** is hidden for members of a team that limits invites to admins
   (Settings → Team would offer nothing to do).
 - **Calendar**: "Connect more calendars", shown only with multi-inbox enabled.
-  If a connected account lacks calendar access the button is **Turn on
-  calendar**, and if its grant expired, **Reconnect calendar**; both rerun that
-  account's consent like the calendar settings menu. Otherwise **Connect a
+  While a connected account needs attention the card names it instead, in the
+  calendar view's and the toast's words, and its button reruns that account's
+  consent like the calendar settings menu: **Enable calendar** with **Turn on
+  calendar** for calendar access never granted (or turned off), **Calendar
+  stopped syncing** with **Reconnect calendar** for one that lost its access
+  (shown even after the card was dismissed), and **Reconnect calendar** for an
+  expired grant, with or without calendar access. Otherwise **Connect a
   calendar** adds another account (mail and calendar, like **Connect another
   account**; plans without multi-inbox see the paywall) through the provider
   chooser, which offers Google, and Microsoft when the server offers this user
@@ -157,7 +171,8 @@ permanent and per account: `POST /onboarding/prompts/<id>/dismiss` stores it
 server-side, so the card stays gone on every device and browser. If
 `GET /onboarding/prompts` fails, the browser's own record of dismissals is
 used. Ids are `import:<files|tasks|crm|channels>`, `home-setup`,
-`calendar-accounts`, and `pull-request-repositories`. Account deletion removes
+`calendar-accounts` (`calendar-accounts:stopped` for a calendar that stopped
+syncing), and `pull-request-repositories`. Account deletion removes
 them.
 
 ## Rendering on view switches
