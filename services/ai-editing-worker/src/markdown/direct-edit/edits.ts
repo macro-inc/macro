@@ -2,6 +2,7 @@
  * Direct edits applied, in order, to a document's block list. The result is
  * the requested block list the committer reconciles into the document.
  */
+import * as z from 'zod';
 import {
   type DocumentBlock,
   type DocumentView,
@@ -11,16 +12,34 @@ import {
 } from './document';
 import { FrozenMediaError, redactMedia, restoreMedia } from './media';
 
-/** A block id, or the start or end of the document. */
-export type Position = string;
+/** Markdown longer than this is refused; the snapshot limit binds well before. */
+export const MAX_MARKDOWN_CHARS = 1_000_000;
 
-export type DirectEdit =
-  | { block_id?: string; old: string; new: string; replace_all?: boolean }
-  | { insert_after: Position; markdown: string }
-  | { insert_before: Position; markdown: string }
-  | { delete: string }
-  | { move: string; after: string }
-  | { move: string; before: string };
+const blockId = z.string().min(1).max(256);
+/** A block id, or `start` / `end`. */
+const position = blockId;
+const text = z.string().max(MAX_MARKDOWN_CHARS);
+
+/** One direct edit, as the `/markdown` `edit` action takes it. */
+export const DirectEdit = z.union([
+  z
+    .object({
+      block_id: blockId.optional(),
+      old: text,
+      new: text,
+      replace_all: z.boolean().optional(),
+    })
+    .strict(),
+  z.object({ insert_after: position, markdown: text }).strict(),
+  z.object({ insert_before: position, markdown: text }).strict(),
+  z.object({ delete: blockId }).strict(),
+  z.object({ move: blockId, after: position }).strict(),
+  z.object({ move: blockId, before: position }).strict(),
+]);
+export type DirectEdit = z.infer<typeof DirectEdit>;
+
+/** A block id, or the start or end of the document. */
+type Position = string;
 
 export type RefusalCode =
   | 'no_match'
@@ -36,8 +55,8 @@ export type RefusalCode =
   | 'too_large'
   | 'verify_failed';
 
-/** A block an ambiguous or missing `old` might have meant. */
-export interface Candidate {
+/** A block a missing or ambiguous `old` was found in, or is nearest to. */
+export interface MatchingBlock {
   blockId: string;
   /** How often `old` occurs in this block (0 for a no-match suggestion). */
   occurrences: number;
@@ -54,7 +73,7 @@ export class EditRefusal extends Error {
     readonly code: RefusalCode,
     message: string,
     readonly edit?: number,
-    readonly candidates?: Candidate[]
+    readonly blocks?: MatchingBlock[]
   ) {
     super(message);
     this.name = 'EditRefusal';
@@ -84,7 +103,7 @@ interface Entry {
   hints?: string[];
 }
 
-const MAX_CANDIDATES = 5;
+const MAX_MATCHING_BLOCKS = 5;
 
 function occurrences(haystack: string, needle: string): number {
   let count = 0;
@@ -134,7 +153,7 @@ function insertionIndex(
 }
 
 /** Blocks most like `old`, for a no-match refusal. */
-function nearest(list: Entry[], old: string): Candidate[] {
+function nearest(list: Entry[], old: string): MatchingBlock[] {
   return list
     .filter((entry) => entry.id !== undefined && !entry.opaque)
     .map((entry) => ({ entry, score: similarity(entry.markdown, old) }))
@@ -146,6 +165,18 @@ function nearest(list: Entry[], old: string): Candidate[] {
       occurrences: 0,
       markdown: entry.markdown,
     }));
+}
+
+/** The blocks' markdown joined by one blank line, as the agent reads them. */
+function joinedMarkdown(list: Entry[]): string {
+  return list.map((entry) => entry.markdown).join('\n\n');
+}
+
+/** Whether `old` also occurs across a block boundary, beside `inBlocks` hits. */
+function spansBlocks(list: Entry[], old: string, inBlocks: number): boolean {
+  return (
+    old.includes('\n') && occurrences(joinedMarkdown(list), old) > inBlocks
+  );
 }
 
 /**
@@ -216,6 +247,17 @@ function applyReplace(
     .map((i) => ({ i, count: occurrences(list[i].markdown, edit.old) }))
     .filter((hit) => hit.count > 0);
   const total = hits.reduce((sum, hit) => sum + hit.count, 0);
+  if (total > 0 && !edit.block_id && spansBlocks(list, edit.old, total))
+    throw new EditRefusal(
+      'ambiguous_match',
+      `edit ${n}: old occurs inside a block and across blocks; add block_id or include more surrounding text`,
+      n,
+      hits.slice(0, MAX_MATCHING_BLOCKS).map((hit) => ({
+        blockId: list[hit.i].id ?? '(a block this batch inserted)',
+        occurrences: hit.count,
+        markdown: list[hit.i].markdown,
+      }))
+    );
   if (total === 0 && !edit.block_id) {
     const span = crossBlockMatch(list, edit.old, n);
     if (span) {
@@ -264,7 +306,7 @@ function applyReplace(
       'ambiguous_match',
       `edit ${n}: old occurs ${total} times; add block_id, include more surrounding text, or set replace_all`,
       n,
-      hits.slice(0, MAX_CANDIDATES).map((hit) => ({
+      hits.slice(0, MAX_MATCHING_BLOCKS).map((hit) => ({
         blockId: list[hit.i].id ?? '(a block this batch inserted)',
         occurrences: hit.count,
         markdown: list[hit.i].markdown,

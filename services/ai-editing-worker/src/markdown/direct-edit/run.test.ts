@@ -12,7 +12,10 @@ import {
   SyncedDocument,
 } from './fixtures/build';
 import {
+  checkPositionalIds,
+  DirectEditConflict,
   type DirectEditRequest,
+  InvalidBaseRevision,
   readMarkdownBlocks,
   runDirectEdit,
 } from './run';
@@ -363,7 +366,7 @@ describe('refusals leave the document untouched', () => {
     ]);
     expect(error.code).toBe('no_match');
     expect(error.edit).toBe(1);
-    expect(error.candidates[0]).toEqual({
+    expect(error.blocks[0]).toEqual({
       blockId: find(view, 'Closing paragraph').id,
       occurrences: 0,
       markdown: 'Closing paragraph with a final note.',
@@ -377,9 +380,9 @@ describe('refusals leave the document untouched', () => {
     ]);
     expect(error.code).toBe('ambiguous_match');
     expect(error.edit).toBe(2);
-    expect(error.candidates.length).toBeGreaterThan(1);
+    expect(error.blocks.length).toBeGreaterThan(1);
     expect(
-      error.candidates.reduce((n, c) => n + c.occurrences, 0)
+      error.blocks.reduce((sum, block) => sum + block.occurrences, 0)
     ).toBeGreaterThan(1);
   });
 
@@ -643,7 +646,6 @@ describe('review regressions', () => {
       outcome: 'already_applied',
       revision: synced.revision(),
       changes: [],
-      merge: 'base',
     });
     expect(synced.commits).toBe(1);
     const after = await readDocument(DOC, synced.snapshot());
@@ -679,5 +681,74 @@ describe('review regressions', () => {
     expect(retry.outcome).toBe('already_applied');
     const after = await readDocument(DOC, synced.snapshot());
     expect(after.blocks.map((b) => b.markdown)).toEqual(['Hello', 'Added']);
+  });
+});
+
+describe('second review', () => {
+  it('an old that occurs in a block and across blocks is ambiguous', async () => {
+    const synced = new SyncedDocument(
+      await buildSnapshot('One\n\nTwo\n\n```\nOne\n\nTwo\n```')
+    );
+    const error = await runDirectEdit(
+      DOC,
+      { edits: [{ old: 'One\n\nTwo', new: 'Joined' }] },
+      synced,
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(EditRefusal);
+    expect((error as EditRefusal).code).toBe('ambiguous_match');
+    expect(synced.commits).toBe(0);
+  });
+
+  it('a base revision that is not a revision is a bad request', async () => {
+    const error = await runDirectEdit(
+      DOC,
+      {
+        edits: [{ insert_after: 'end', markdown: 'x' }],
+        baseRevision: '%%%',
+      },
+      new SyncedDocument(base),
+      signal(),
+      NOOP_SPAN
+    ).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(InvalidBaseRevision);
+  });
+
+  it('an update sync-service already had is already applied', async () => {
+    const synced = new SyncedDocument(base);
+    synced.commit = async (_revision: string, update: Uint8Array) => {
+      synced.doc.import(update);
+      return { revision: synced.revision(), applied: false };
+    };
+
+    const { response } = await run(
+      { edits: [{ insert_after: 'end', markdown: 'Added' }] },
+      synced
+    );
+
+    expect(response).toEqual({
+      outcome: 'already_applied',
+      revision: synced.revision(),
+      changes: [],
+    });
+  });
+
+  it('a positional id is a conflict once blocks were added or removed', async () => {
+    const shifted: DocumentView = {
+      ...view,
+      blocks: view.blocks.slice(1),
+    };
+    const edits: DirectEdit[] = [{ delete: 'index-3' }];
+
+    expect(() => checkPositionalIds(edits, view, view)).not.toThrow();
+    expect(() => checkPositionalIds(edits, view, shifted)).toThrow(
+      DirectEditConflict
+    );
+    expect(() =>
+      checkPositionalIds([{ delete: view.blocks[0].id }], view, shifted)
+    ).not.toThrow();
   });
 });

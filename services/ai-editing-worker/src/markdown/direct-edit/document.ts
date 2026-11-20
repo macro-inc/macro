@@ -93,51 +93,78 @@ function shape(node: SerializedNode): string {
 }
 
 /** Parse internal markdown into top-level serialized blocks and their renders. */
-export function parseMarkdown(markdown: string): {
+export function parseMarkdown(
+  markdown: string,
+  session = createEditingSession()
+): {
   nodes: SerializedNode[];
   markdowns: string[];
 } {
-  const session = createEditingSession();
   loadMarkdown(session, markdown);
   const nodes = toSnapshot(session).root.children as SerializedNode[];
-  return { nodes, markdowns: blockMarkdown(nodes) };
+  return { nodes, markdowns: blockMarkdown(nodes, session) };
 }
 
-function isOpaque(node: SerializedNode, markdown: string): boolean {
+/**
+ * Whether each block is opaque, by its markdown and shape. One request reads
+ * the same blocks several times (current, base, merged, after), so it shares
+ * one; it lives only as long as the request.
+ */
+export type OpacityCache = Map<string, boolean>;
+
+function isOpaque(
+  node: SerializedNode,
+  markdown: string,
+  scratch: ReturnType<typeof createEditingSession>,
+  cache: OpacityCache
+): boolean {
+  const key = `${shape(node)}\u0000${markdown}`;
+  const known = cache.get(key);
+  if (known !== undefined) return known;
+  let opaque: boolean;
   try {
-    const parsed = parseMarkdown(markdown);
-    return (
+    const parsed = parseMarkdown(markdown, scratch);
+    opaque =
       parsed.nodes.length !== 1 ||
       parsed.markdowns[0] !== markdown ||
-      shape(parsed.nodes[0]) !== shape(node)
-    );
+      shape(parsed.nodes[0]) !== shape(node);
   } catch {
-    return true;
+    opaque = true;
   }
+  cache.set(key, opaque);
+  return opaque;
 }
 
 /** Read a Loro snapshot as top-level blocks. */
 export async function readDocument(
   documentId: string,
-  snapshot: Uint8Array
+  snapshot: Uint8Array,
+  opacity: OpacityCache = new Map()
 ): Promise<DocumentView> {
   const manager = new LoroManager(MARKDOWN_LORO_SCHEMA, { documentId });
   try {
     const session = await sessionFromSnapshot(manager, snapshot);
-    return viewOf(toSnapshot(session));
+    return viewOf(toSnapshot(session), opacity);
   } finally {
     manager.dispose();
   }
 }
 
-export function viewOf(state: SerializedEditorState): DocumentView {
+/** Prefix of the id a block without a stored id gets: its position. */
+export const POSITIONAL_ID_PREFIX = 'index-';
+
+export function viewOf(
+  state: SerializedEditorState,
+  opacity: OpacityCache = new Map()
+): DocumentView {
   const nodes = state.root.children as SerializedNode[];
-  const markdowns = blockMarkdown(nodes);
+  const scratch = createEditingSession();
+  const markdowns = blockMarkdown(nodes, scratch);
   const blocks = nodes.map((node, i) => ({
-    id: String(node.$?.id ?? `index-${i}`),
+    id: String(node.$?.id ?? `${POSITIONAL_ID_PREFIX}${i}`),
     type: node.type,
     markdown: markdowns[i],
-    opaque: isOpaque(node, markdowns[i]),
+    opaque: isOpaque(node, markdowns[i], scratch, opacity),
     commentIds: commentIdsOf(node),
     nodeIds: nodeIdsOf(node),
   }));
