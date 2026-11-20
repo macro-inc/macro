@@ -1,6 +1,7 @@
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
 import { useQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
+import { queryReadyGate } from '../gate';
 import { teamKeys } from './keys';
 
 const NO_TEAMMATES: ReadonlySet<string> = new Set();
@@ -29,8 +30,9 @@ export function useTeammateIds(
     select: rosterIds,
   }));
   return createMemo(
+    // A failed refetch keeps the roster it already had.
     (): ReadonlySet<string> =>
-      enabled() && roster.isSuccess ? new Set(roster.data) : NO_TEAMMATES,
+      enabled() && queryReadyGate(roster) ? new Set(roster.data) : NO_TEAMMATES,
     NO_TEAMMATES,
     { equals: sameIds }
   );

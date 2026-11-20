@@ -73,8 +73,8 @@ export type ContactDirectoryRequest = {
    * takes. */
   localBudgetMs?: number;
   /** Members of the viewer's team. The server does not rank its pages, so a
-   * server page reads the teammates a typed search names and lists them among
-   * the first rows. */
+   * server page reads the teammates a typed search names, up to 500 of them,
+   * and lists them among the first rows. */
   teammates?: readonly string[];
 };
 export type ContactDirectoryPage = {
@@ -82,8 +82,8 @@ export type ContactDirectoryPage = {
   people?: RankedPerson[];
   /** On the first server page of a typed search: the listed people the text
    * names, who lead `users`. `exact` by whole name, first name or address;
-   * `wordStart` are the teammates whose name has a word starting with each
-   * typed word, or whose address starts with the typed part of one. */
+   * `wordStart` by a word of their name starting with each typed word, or by
+   * their address starting with the typed part of one. */
   named?: { exact: string[]; wordStart: string[] };
   query: string;
   source: 'cache' | 'server';
@@ -406,9 +406,11 @@ async function readLateAwareServerWindow(
 const MAX_NAMED_LOOKUP = 500;
 
 /** Reads the people typed text may name, for the first server page: the
- * server's exact matches, and by ID the viewer's teammates and a whole typed
- * address. The exact search scans only the first 2,000 contacts; a lookup by
- * ID finds a person however large the directory is. */
+ * server's exact name matches, and by ID a whole typed address or the viewer's
+ * teammates (the first 500). The exact search scans only the first 2,000
+ * contacts; a lookup by ID finds a person however large the directory is.
+ * These reads only improve the order, so one that fails leaves the page as
+ * the server lists it. */
 async function readNamedPeople(
   typed: TypedText,
   { viewer, request, limit, signal, span }: WindowInput
@@ -418,43 +420,54 @@ async function readNamedPeople(
 }> {
   if (!typed.text) return { exact: [], lookedUp: [] };
 
+  // A whole address names one person; any other text may name a teammate.
   const lookupIds = new Set<string>();
-  for (const id of [typed.identity, ...(request.teammates ?? [])]) {
-    const supported = id && canonicalContactUserId(id);
+  for (const id of typed.identity
+    ? [typed.identity]
+    : (request.teammates ?? [])) {
+    const supported = canonicalContactUserId(id);
     if (supported && lookupIds.size < MAX_NAMED_LOOKUP)
       lookupIds.add(supported);
   }
-  const [exact, lookedUp] = await Promise.all([
-    // A lookup by ID already answers for a whole address.
-    typed.identity
-      ? undefined
-      : span.span('contacts.read_server_exact', () =>
-          fetchContactReferencePage(
-            { limit, search: request.query, matching: 'ANY_NAME' },
-            signal
+  try {
+    const [exact, lookedUp] = await Promise.all([
+      // No name is an address: a whole one is looked up by ID, and nothing
+      // equals part of one.
+      typed.text.includes('@')
+        ? undefined
+        : span.span('contacts.read_server_exact', () =>
+            fetchContactReferencePage(
+              { limit, search: request.query, matching: 'ANY_NAME' },
+              signal
+            )
+          ),
+      lookupIds.size
+        ? span.span('contacts.read_server_named', () =>
+            fetchContactDirectoryByIds([...lookupIds], signal)
           )
-        ),
-    lookupIds.size
-      ? span.span('contacts.read_server_named', () =>
-          fetchContactDirectoryByIds([...lookupIds], signal)
-        )
-      : undefined,
-  ]);
-  if ([exact, lookedUp].some((read) => read && read.user.id !== viewer))
-    throw new ContactDirectoryScopeError();
+        : undefined,
+    ]);
+    if ([exact, lookedUp].some((read) => read && read.user.id !== viewer))
+      throw new ContactDirectoryScopeError();
 
-  const named = {
-    exact: exact?.user.contacts.nodes ?? [],
-    lookedUp: lookedUp?.user.contactsByUserIds ?? [],
-  };
-  if (named.exact.length > limit || named.lookedUp.length > lookupIds.size)
-    throw new Error('Contact response exceeds its window');
-  return named;
+    const named = {
+      exact: exact?.user.contacts.nodes ?? [],
+      lookedUp: lookedUp?.user.contactsByUserIds ?? [],
+    };
+    if (named.exact.length > limit || named.lookedUp.length > lookupIds.size)
+      throw new Error('Contact response exceeds its window');
+    return named;
+  } catch (error) {
+    if (signal.aborted || error instanceof ContactDirectoryScopeError)
+      throw error;
+    span.setAttr('contacts.named_failed', true);
+    return { exact: [], lookedUp: [] };
+  }
 }
 
-/** Lists the people the text names ahead of the server's page, each person
- * once: exact matches, then the looked-up people the text names by a word
- * start, then the page. */
+/** Lists the people the text names ahead of the rest of the server's page,
+ * each person once: the server's exact matches, then everyone read whom the
+ * text names exactly, then those it names by a word start, then the page. */
 function listNamedFirst(
   typed: TypedText,
   people: { exact: IUser[]; lookedUp: IUser[]; page: IUser[] }
@@ -469,12 +482,13 @@ function listNamedFirst(
     }
     return added;
   };
-  const exactlyNamed = people.lookedUp.filter(
-    (user) => namedBy(typed, user) === 'exact'
-  );
+  const read = [...people.lookedUp, ...people.page];
   const named = {
-    exact: add([...people.exact, ...exactlyNamed]),
-    wordStart: add(people.lookedUp.filter((user) => namedBy(typed, user))),
+    exact: add([
+      ...people.exact,
+      ...read.filter((user) => namedBy(typed, user) === 'exact'),
+    ]),
+    wordStart: add(read.filter((user) => namedBy(typed, user))),
   };
   add(people.page);
   return { users: [...listed.values()], named };

@@ -460,7 +460,7 @@ it('reads the server once when a budgeted first page gets no answer from the cac
   vi.useRealTimers();
 });
 
-it('lists the people a typed search names exactly first on a server page, once each', async () => {
+it('lists the people a typed search names first on a server page, once each', async () => {
   // The server pages by contact ID, so the loosely matching rows come first.
   remote.mockResolvedValue(
     contactPage(
@@ -468,6 +468,7 @@ it('lists the people a typed search names exactly first on a server page, once e
         contact('mateo@example.com', 'Mateo Rossi'),
         contact('stevie@example.com', 'Stevie Leon'),
         contact('teo.nys@example.com', 'Teo Nys'),
+        contact('vance@example.com', 'Teodora Vance'),
       ],
       'next'
     )
@@ -487,12 +488,14 @@ it('lists the people a typed search names exactly first on a server page, once e
   expect(page.users.map((user) => user.name)).toEqual([
     'Teo Nys',
     'Teo Park',
+    'Teodora Vance',
     'Mateo Rossi',
     'Stevie Leon',
   ]);
+  // A name on the page that starts with the text is named too, whoever it is.
   expect(page.named).toEqual({
     exact: ['macro|teo.nys@example.com', 'macro|teo.park@example.com'],
-    wordStart: [],
+    wordStart: ['macro|vance@example.com'],
   });
   expect(named).toHaveBeenCalledExactlyOnceWith(
     { limit: 50, search: 'teo', matching: 'ANY_NAME' },
@@ -584,19 +587,23 @@ it('finds the teammates and the whole address a typed search names by ID, wherev
     exact: [],
     wordStart: ['macro|teo.nys@example.com'],
   });
+
+  // An address is never a name, so it starts no exact scan. Part of one
+  // names the teammates whose address it starts.
+  named.mockClear();
   expect((await read('ted@ex')).named).toEqual({
     exact: [],
     wordStart: ['macro|ted@example.com'],
   });
+  expect(lookedUp).toHaveBeenLastCalledWith(teammates, expect.anything());
 
-  // A whole address is looked up itself, teammate or not, without a scan.
-  named.mockClear();
+  // A whole address is looked up alone, teammate or not.
   expect((await read('Vendor@Example.org')).named).toEqual({
     exact: ['macro|vendor@example.org'],
     wordStart: [],
   });
   expect(lookedUp).toHaveBeenLastCalledWith(
-    ['macro|vendor@example.org', ...teammates],
+    ['macro|vendor@example.org'],
     expect.anything()
   );
   expect((await read('teo.nys@example.com')).named).toEqual({
@@ -613,10 +620,61 @@ it('finds the teammates and the whole address a typed search names by ID, wherev
     )
   ).toEqual(['Ana Teodoro', 'Mateo Rossi']);
 
+  // One lookup asks for at most 500 people.
+  await readContactDirectory(
+    VIEWER,
+    undefined,
+    {
+      query: 'teo',
+      teammates: Array.from(
+        { length: 600 },
+        (_, index) => `macro|mate${index}@example.com`
+      ),
+    },
+    signal()
+  );
+  expect(lookedUp.mock.lastCall?.[0]).toHaveLength(500);
+
   lookedUp.mockResolvedValue({
     user: { id: 'macro|other@example.com', contactsByUserIds: [] },
   });
   await expect(read('teo')).rejects.toBeInstanceOf(ContactDirectoryScopeError);
+});
+it('lists the server page as it came when a read of who the text names fails', async () => {
+  remote.mockResolvedValue(
+    contactPage([
+      contact('mateo@example.com', 'Mateo Rossi'),
+      contact('teo.nys@example.com', 'Teo Nys'),
+    ])
+  );
+  named.mockRejectedValue(new Error('exact search timed out'));
+  lookedUp.mockRejectedValue(new Error('lookup failed'));
+  const page = await readContactDirectory(
+    VIEWER,
+    undefined,
+    { query: 'teo', teammates: ['macro|teo.nys@example.com'] },
+    signal()
+  );
+  // The page's own rows are still read for who the text names.
+  expect(page.users.map((user) => user.name)).toEqual([
+    'Teo Nys',
+    'Mateo Rossi',
+  ]);
+
+  // The page itself failing, or the read being cancelled, still fails.
+  remote.mockRejectedValue(new Error('denied'));
+  await expect(
+    readContactDirectory(VIEWER, undefined, { query: 'teo' }, signal())
+  ).rejects.toThrow('denied');
+  remote.mockResolvedValue(contactPage([]));
+  const cancelled = new AbortController();
+  named.mockImplementation(async () => {
+    cancelled.abort();
+    throw new DOMException('Aborted', 'AbortError');
+  });
+  await expect(
+    readContactDirectory(VIEWER, undefined, { query: 'teo' }, cancelled.signal)
+  ).rejects.toMatchObject({ name: 'AbortError' });
 });
 it('binds continuations to query, policy, account and storage; rejects changed core versions', async () => {
   const cache = host();

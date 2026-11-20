@@ -245,7 +245,8 @@ On the first page of a typed search it has two more, read in parallel:
 `contacts.read_server_named`, the lookup by ID of the viewer's teammates and of
 a whole typed address. That window records `contacts.named_exact_count` and
 `contacts.named_word_start_count`, how many of the listed people the text
-names.
+names, and `contacts.named_failed` when one of the two extra reads failed and
+the page was listed without them.
 
 ## Agent sessions
 

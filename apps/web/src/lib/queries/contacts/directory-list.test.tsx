@@ -365,8 +365,14 @@ it('orders the first server page by who the viewer works with, and leaves later 
   expect(names()?.slice(-2)).toEqual(['Mateo Rossi', 'Otto Tennel']);
 
   // A roster that changes reads page one again and orders it anew.
+  const reads = reader.mock.calls.length;
   setTeammates(new Set(['macro|aaron@example.com']));
   await vi.advanceTimersByTimeAsync(0);
+  expect(reader.mock.calls).toHaveLength(reads + 1);
+  expect(reader.mock.lastCall?.[2]).toMatchObject({
+    cursor: undefined,
+    teammates: ['macro|aaron@example.com'],
+  });
   expect(names()?.slice(3, 6)).toEqual([
     'Teo Aaron',
     'Teo Nys',
