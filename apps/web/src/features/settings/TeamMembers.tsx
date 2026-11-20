@@ -187,116 +187,130 @@ function MemberRow(props: {
     const e = email();
     return e && e !== displayName();
   };
+  const showCrmAccess = () =>
+    props.canManageCrm && props.member.role === TeamRole.member;
 
   return (
-    <div data-team-member={props.member.user_id}>
-      <div class="flex items-center justify-between gap-2 px-4 py-4">
-        <div class="flex items-center gap-3 min-w-0 flex-1">
-          <div class="shrink-0">
-            <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
-          </div>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 min-w-0">
-              <div class="text-sm font-medium text-ink truncate">
-                {displayName()}
-                {props.isCurrentUser && (
-                  <span class="text-ink-muted font-normal"> (you)</span>
-                )}
-              </div>
-              <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
-                <AgentTag />
-              </Show>
-            </div>
-            <Show when={showEmail()}>
-              <div class="text-xs text-ink-muted truncate">{email()}</div>
-            </Show>
-          </div>
+    <div
+      data-team-member={props.member.user_id}
+      class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-4"
+    >
+      {/* With the CRM switch the avatar and name keep 12rem, so on phones the
+          controls wrap below the name; other rows keep one line as before. */}
+      <div
+        data-member-identity
+        class="flex min-w-0 grow items-center gap-3"
+        classList={{
+          'basis-48': showCrmAccess(),
+          'basis-0': !showCrmAccess(),
+        }}
+      >
+        <div class="shrink-0">
+          <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <Show when={props.showPlan}>
-            <Show
-              when={props.canEditPlan}
-              fallback={
-                <span class="text-xs text-ink-muted capitalize">
-                  {memberPlan(props.member)}
-                </span>
-              }
-            >
-              <TeamSeatPlanSelect
-                value={memberPlan(props.member)}
-                onChange={props.onPlanChange}
-                disabled={props.planPending}
-                aiUsageBilling
-                pendingDowngrade={props.pendingDowngrade}
-              />
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1.5 min-w-0">
+            <div data-member-name class="text-sm font-medium text-ink truncate">
+              {displayName()}
+              {props.isCurrentUser && (
+                <span class="text-ink-muted font-normal"> (you)</span>
+              )}
+            </div>
+            <Show when={isAgentAccount(tryMacroId(props.member.user_id))}>
+              <AgentTag />
             </Show>
-          </Show>
-          <Show
-            when={props.isOwner && !isMemberOwner()}
-            fallback={
-              <span class="text-xs text-ink-muted capitalize">
-                {props.member.role}
-              </span>
-            }
-          >
-            <RoleSelect
-              value={props.member.role}
-              onChange={props.onRoleChange}
-            />
-          </Show>
-          <Show when={props.canManageRemovals}>
-            <Show
-              when={props.canRemove}
-              fallback={
-                <Tooltip
-                  label={
-                    isMemberOwner()
-                      ? 'Cannot remove team owner'
-                      : 'Cannot remove yourself'
-                  }
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled
-                    class="opacity-50 cursor-not-allowed"
-                  >
-                    <TrashIcon class="size-4" />
-                  </Button>
-                </Tooltip>
-              }
-            >
-              <Tooltip label="Remove member">
-                <Button variant="ghost" size="sm" onClick={props.onRemove}>
-                  <TrashIcon class="size-4" />
-                </Button>
-              </Tooltip>
-            </Show>
+          </div>
+          <Show when={showEmail()}>
+            <div class="text-xs text-ink-muted truncate">{email()}</div>
           </Show>
         </div>
       </div>
-      <Show when={props.canManageCrm}>
-        <SettingsRow
-          label={t('crm.memberAccess')}
-          description={
-            props.member.role !== TeamRole.member
-              ? t('crm.memberAccessAlways')
-              : undefined
-          }
-        >
-          <Show when={props.member.role === TeamRole.member}>
-            <ToggleSwitch
-              size="md"
-              label={t('crm.memberAccessFor', { name: displayName() })}
-              labelClass="sr-only"
-              class="touch:min-h-11 touch:min-w-11 justify-center"
-              checked={props.crmAccess}
-              disabled={props.crmPending}
-              onChange={props.onCrmAccessChange}
+      <div
+        data-member-controls
+        class="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
+      >
+        <Show when={props.showPlan}>
+          <Show
+            when={props.canEditPlan}
+            fallback={
+              <span class="text-xs text-ink-muted capitalize">
+                {memberPlan(props.member)}
+              </span>
+            }
+          >
+            <TeamSeatPlanSelect
+              value={memberPlan(props.member)}
+              onChange={props.onPlanChange}
+              disabled={props.planPending}
+              aiUsageBilling
+              pendingDowngrade={props.pendingDowngrade}
             />
           </Show>
-        </SettingsRow>
-      </Show>
+        </Show>
+        <Show
+          when={props.isOwner && !isMemberOwner()}
+          fallback={
+            <span class="text-xs text-ink-muted capitalize">
+              {props.member.role}
+            </span>
+          }
+        >
+          <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
+        </Show>
+        <Show when={showCrmAccess()}>
+          <ToggleSwitch
+            size="sm"
+            label={
+              <>
+                <span aria-hidden="true">{t('crm.memberAccessShort')}</span>
+                <span class="sr-only">
+                  {t('crm.memberAccessFor', { name: displayName() })}
+                </span>
+              </>
+            }
+            labelClass="text-xs text-ink"
+            class="touch:-my-1 touch:min-h-11 touch:min-w-11"
+            checked={props.crmAccess}
+            disabled={props.crmPending}
+            onChange={props.onCrmAccessChange}
+          />
+        </Show>
+        <Show when={props.canManageRemovals}>
+          <Show
+            when={props.canRemove}
+            fallback={
+              <Tooltip
+                label={
+                  isMemberOwner()
+                    ? 'Cannot remove team owner'
+                    : 'Cannot remove yourself'
+                }
+              >
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled
+                  aria-label={`Remove ${displayName()}`}
+                  class="opacity-50 cursor-not-allowed"
+                >
+                  <TrashIcon class="size-4" />
+                </Button>
+              </Tooltip>
+            }
+          >
+            <Tooltip label="Remove member">
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove ${displayName()}`}
+                onClick={props.onRemove}
+              >
+                <TrashIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
+        </Show>
+      </div>
     </div>
   );
 }
@@ -324,6 +338,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const patchTeamMutation = usePatchTeamMutation();
   const crmAccessMutation = usePatchTeamMutation();
   const crmAccessChanges = useFeatureFlag(enableCrmMemberAccessChanges);
+  const canManageCrm = () => isAdminOrOwner() && crmAccessChanges().enabled;
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
@@ -632,9 +647,7 @@ export function TeamMembers(props: { team: TeamSummary }) {
                         teamQuery.data?.crm_member_access?.[member.user_id] !==
                           false
                       }
-                      canManageCrm={
-                        isAdminOrOwner() && crmAccessChanges().enabled
-                      }
+                      canManageCrm={canManageCrm()}
                       crmPending={crmAccessMutation.isPending}
                       onCrmAccessChange={(enabled) => {
                         crmAccessMutation.mutate({
@@ -711,6 +724,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                 </For>
               </SettingsCard>
             </Show>
+          </Show>
+          <Show when={canManageCrm()}>
+            <p class="text-xs text-ink-muted">{t('crm.memberAccessAlways')}</p>
           </Show>
         </SettingsSection>
 
