@@ -77,6 +77,39 @@ fn a_handed_agent_environment_with_an_unsafe_name_or_value_is_refused() {
     assert!(!path.exists());
 }
 
+/// The file is `MACRO_API_KEY="<value>"\n`: 17 bytes around the value.
+#[test]
+fn an_environment_up_to_what_a_computer_installs_is_staged_and_a_larger_one_refused() {
+    let (_dir, path) = inbox();
+    let fits = [(
+        "MACRO_API_KEY".to_owned(),
+        "x".repeat(AGENT_ENV_MAX_BYTES - 17),
+    )]
+    .into_iter()
+    .collect();
+    let over = [(
+        "MACRO_API_KEY".to_owned(),
+        "x".repeat(AGENT_ENV_MAX_BYTES - 16),
+    )]
+    .into_iter()
+    .collect();
+
+    let refused = stage_agent_env(&path, &installed(&path), &over).unwrap_err();
+    assert!(!path.exists());
+    assert!(
+        refused
+            .to_string()
+            .contains("over the 65536 a computer installs"),
+        "{refused}"
+    );
+
+    stage_agent_env(&path, &installed(&path), &fits).unwrap();
+    assert_eq!(
+        std::fs::metadata(&path).unwrap().len(),
+        AGENT_ENV_MAX_BYTES as u64
+    );
+}
+
 /// A person's computer has no inbox, so an environment sent to it is
 /// refused rather than written anywhere.
 #[test]

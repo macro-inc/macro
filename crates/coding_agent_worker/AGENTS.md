@@ -84,8 +84,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   credentials: on an agent teammate's computer the control plane hands the
   agent's environment over macrod's socket (`ToRuntimeMessage::ApplyAgent`),
   and `src/agent_env.rs` stages it whole at `/run/macro-agent-inbox/agent.env`
-  (0600) for the guest's root `macro-agent-apply` unit to install as
-  `/var/lib/macrod/agent.env`. A computer with no inbox refuses it.
+  (0600, at most `AGENT_ENV_MAX_BYTES`, 64 KiB, the guest's cap) for the
+  guest's root `macro-agent-apply` unit to install as
+  `/var/lib/macrod/agent.env`. Only an agent's computer has the inbox, on
+  every backend (`nix/macro-box/_agent-inbox.nix`); a computer with none
+  refuses it.
 - `src/computer.rs`: the one Macro-computer hook in sessions. On an enrolled Macro
   computer only (the marker exists), each Claude Code session's env: `ANTHROPIC_BASE_URL` (the
   session's `macro_internal` MCP URL with `/mcp/internal` → `/anthropic`),

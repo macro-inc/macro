@@ -46,7 +46,9 @@ Team admins and owners can read the repo with their Macro credential.
    fails a purchase: if it fails, what was made is undone and a plain computer
    is bought, which gets today's default coding agent.
 2. **The computer is created** from the agent image, because it has an agent.
-3. **Enrollment** writes `agent.env` as the agent service's systemd credential.
+3. **The service hands macrod the agent's environment** (`ApplyAgent`) once
+   it connects; the guest installs it as `agent.env`, the agent service's
+   systemd credential.
 4. **The launcher** clones the repo into the workspace, sets the agent's git
    identity and credential helper, links the image's packages (muppet, the
    SDK and the template's locked dependencies), checks that the code needs no

@@ -50,6 +50,10 @@ let
       MACRO_AGENT_USER_ID="macro|ada@example.com"
       MACRO_AGENT_NAME="Ada"
     '';
+  # What the service would send an agent's computer, sent to a person's.
+  refusedAgentEnvironment = pkgs.writeText "agent-environment.json" (
+    builtins.toJSON { MACRO_AGENT_NAME = "Refused"; }
+  );
   goodAgentEnvironment = agentEnvironment "http://127.0.0.1:8080/repo.git";
   credentialedAgentEnvironment = agentEnvironment "http://agent:test-token@127.0.0.1:8080/repo.git";
   # The repo agent_git renders: the starter agent without its packages.
@@ -156,7 +160,9 @@ pkgs.testers.runNixOSTest {
     };
     systemd.services.fake-macro = {
       wantedBy = [ "multi-user.target" ];
-      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-fake-macro.py} 41009";
+      # It hands this person's computer an agent environment, which macrod
+      # must refuse.
+      serviceConfig.ExecStart = "${pkgs.python3}/bin/python3 ${./files/test-fake-macro.py} 41009 ${refusedAgentEnvironment}";
     };
     # network-online.target is never reached.
     systemd.services.systemd-networkd-wait-online.serviceConfig = {
@@ -177,6 +183,10 @@ pkgs.testers.runNixOSTest {
       with subtest("enrollment fails with a reason when the enrollment is missing"):
           machine.wait_until_fails("systemctl is-active --quiet macrod-enroll.service")
           machine.succeed("journalctl -u macrod-enroll.service | grep -F 'enrollment file /run/macro/enrollment.json is missing'")
+
+      with subtest("a person's image has no agent inbox"):
+          machine.fail("test -e /run/macro-agent-inbox")
+          machine.fail("systemctl cat macro-agent-apply.service")
 
       with subtest("macrod runs as macro after enrollment"):
           after = machine.succeed("systemctl show macrod.service --property=After --value")
@@ -284,6 +294,12 @@ pkgs.testers.runNixOSTest {
           agent.fail("su - macro -c 'sudo -n true'")
           agent.fail("su - macro -c 'docker info'")
 
+      with subtest("an agent image has the agent's inbox from boot"):
+          # Its role is the image's, as on a Docker computer: no restore
+          # decides it.
+          agent.succeed("stat -c '%U %G %a' /run/macro-agent-inbox | grep -x 'macro macro 700'")
+          agent.succeed("systemctl is-active --quiet macro-agent.target macro-agent-apply.path")
+
       with subtest("the agent does not run without an agent environment"):
           agent.succeed("systemctl is-active --quiet macro-agent.path")
           agent.fail("systemctl is-active --quiet macro-agent.service")
@@ -352,8 +368,14 @@ pkgs.testers.runNixOSTest {
           # Rejected before git sends any request.
           agent.fail("test -e /srv/git/traceparents")
 
-      with subtest("a rewritten agent environment restarts the agent, which clones and runs"):
-          agent.succeed("install -m 0600 -o macro -g macro ${goodAgentEnvironment} /var/lib/macrod/agent.env")
+      with subtest("an environment staged in the inbox restarts the agent, which clones and runs"):
+          # What macrod does with ApplyAgent, as macro: written aside, renamed in whole.
+          agent.succeed("runuser -u macro -- sh -c 'umask 077 && cat ${goodAgentEnvironment} > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
+          # The previous environment had the credentialed URL.
+          agent.wait_until_succeeds("grep -Fx 'MACRO_REPO_URL=\"http://127.0.0.1:8080/repo.git\"' /var/lib/macrod/agent.env")
+          agent.succeed("stat -c '%U %a' /var/lib/macrod/agent.env | grep -x 'macro 600'")
+          # Removed just after the install.
+          agent.wait_until_succeeds("test ! -e /run/macro-agent-inbox/agent.env")
           agent.wait_until_succeeds("journalctl -u macro-agent.service | grep -F 'starting the runtime at'")
           agent.wait_until_succeeds("pgrep -u macro -f 'bun /home/macro/agent/workspace/cli.ts run'")
           agent.succeed("[ $(systemctl show macro-agent.service --property=User --value) = macro ]")
@@ -478,6 +500,12 @@ pkgs.testers.runNixOSTest {
               ordering = enrolled.succeed(f"systemctl show {unit} --property=After,Wants --value")
               assert "network-online.target" not in ordering, f"{unit}: {ordering}"
           enrolled.succeed("[ \"$(sed -n 2p /var/lib/macrod/enrolled)\" = 1 ]")
+
+      with subtest("a person's computer refuses an agent environment"):
+          enrolled.wait_until_succeeds("journalctl -u fake-macro -o cat | grep -F 'sent applyAgent'")
+          enrolled.wait_until_succeeds("journalctl -u macrod.service -o cat | grep -F '/run/macro-agent-inbox is absent: this computer runs no agent'")
+          enrolled.fail("test -e /run/macro-agent-inbox")
+          enrolled.fail("test -e /var/lib/macrod/agent.env")
           print(enrolled.succeed("journalctl -b -o short-monotonic -u fake-macro"))
     '';
 }
