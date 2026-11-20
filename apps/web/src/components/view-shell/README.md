@@ -84,19 +84,25 @@ Breakpoint transitions own host changes; pin changes only animate the active
 host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
 
-A view whose aside is its entity list (Notifications) passes `asideList`.
+A view whose aside is its entity list (Notifications, desktop Chat) passes
+`asideList`.
 Narrow, it bypasses the overlay: the list fills the shell over an inert Main
 until `open`, then Main fills it and `ViewNavigationControls` shows Back,
 calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
+`aside.fillsShell()` is true while the list fills the shell, so a list that
+follows the keyboard into a preview can wait for Enter instead.
 
 `ViewBreadcrumbs.Outlet` accepts `activeItem` to replace the current breadcrumb
 with a title control while retaining parent navigation. `EntityDetailTopBar`
 uses this slot for its title menu; appending the title as outlet children would
 render the same entity twice.
 Workspace layouts share a 720px container breakpoint. Desktop navigation docks
-above it and overlays below it. Wide touch has two compositions:
+above it and overlays below it, in every split: only that breakpoint hides it
+automatically. A split other than the first starts with navigation shown and
+keeps its own Hide/Show choice across the views it shows; only the first split
+reads and writes the saved preference. Wide touch has two compositions:
 
 - A list aside (Chat, Agents, Notifications) stays left of its detail.
 - A collection (Mail, Drive, Tasks, CRM, Calls, Reviews) passes

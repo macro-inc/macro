@@ -6,17 +6,14 @@ import { Toast } from '@kobalte/core/toast';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui/utils/classname';
 import {
-  createEffect,
   createSignal,
   ErrorBoundary,
   type JSX,
-  onCleanup,
   Show,
   Suspense,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { createMobileToastSwipe } from './create-mobile-toast-swipe';
-import { publishDesktopToastInset } from './desktop-toast-inset';
 
 const ImportJobsTray = lazyNamed(
   () => import('@app/features/import-jobs/import-jobs'),
@@ -54,20 +51,6 @@ export function ToastRegion() {
   const [mobileTransientStack, setMobileTransientStack] =
     createSignal<HTMLDivElement>();
   const mobileTransientSize = createElementSize(mobileTransientStack);
-  const [desktopStack, setDesktopStack] = createSignal<HTMLDivElement>();
-  const desktopStackSize = createElementSize(desktopStack);
-
-  // Publishes how far the desktop stack reaches up from the window's bottom
-  // edge, 0 while it shows nothing, to the controls that follow it
-  // (`followDesktopToastInset`). The height changes in every frame of a
-  // toast's animation; empty regions collapse, so it tracks what is visible.
-  createEffect(() => {
-    const height = desktopStackSize.height ?? 0;
-    publishDesktopToastInset(
-      height > 0 ? `calc(${height}px + 1.25rem)` : '0px'
-    );
-  });
-  onCleanup(() => publishDesktopToastInset(undefined));
 
   return (
     <Portal>
@@ -75,10 +58,7 @@ export function ToastRegion() {
         Desktop stack, bottom-right. Persistent prompts get their own region
         capped at one visible card. Ordinary notices form an expandable three-card stack. Background imports, upload progress, then background work, sit nearest the corner.
       */}
-      <div
-        ref={setDesktopStack}
-        class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4"
-      >
+      <div class="fixed bottom-5 right-5 m-0 w-[380px] max-w-[calc(100vw-32px)] list-none outline-none pointer-events-none z-toast-region flex flex-col items-stretch gap-4">
         <Toast.Region
           class="macro-toast-region"
           regionId="reminder-region"

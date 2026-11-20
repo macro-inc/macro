@@ -84,6 +84,7 @@ const mocks = vi.hoisted(() => ({
     collapsed: false,
     canCollapse: true,
     expand: vi.fn(),
+    fillsShell: false,
   },
   hotkeys: new Map<string, () => unknown>(),
   realRenderer: false,
@@ -172,6 +173,7 @@ vi.mock('@app/components/view-shell', async () => ({
   useViewTabHotkeys: vi.fn(),
   useViewShell: () => ({
     aside: {
+      fillsShell: () => mocks.shell.fillsShell,
       isCollapsed: () => mocks.shell.collapsed,
       canCollapse: () => mocks.shell.canCollapse,
       expand: mocks.shell.expand,
@@ -258,6 +260,12 @@ vi.mock('@queries/channel/notification-selection', () => ({
 vi.mock('@queries/channel/selection-by-id', () => ({
   fetchChannelSelectionById: mocks.fetchChannel,
 }));
+vi.mock(
+  '@notifications/primitives/create-channel-notification-settings',
+  () => ({
+    createChannelNotificationSettings: () => ({ enabled: () => false }),
+  })
+);
 vi.mock('@queries/notification/unsubscribes', () => ({
   useBulkNotificationPreferencesMutation: () => ({
     mutateAsync: mocks.bulkPreferences,
@@ -622,6 +630,7 @@ beforeEach(() => {
   mocks.select.mockReturnValue(true);
   mocks.hydrate.mockReturnValue(hydrated);
   mocks.shell.collapsed = false;
+  mocks.shell.fillsShell = false;
   mocks.shell.canCollapse = true;
 });
 afterEach(() => {
@@ -1306,6 +1315,26 @@ describe('composer focus on opening a conversation', () => {
     });
     vi.advanceTimersByTime(150);
     expect(mocks.select).toHaveBeenCalledExactlyOnceWith(channel);
+  });
+
+  it('keeps a rail that fills a narrow split on screen while arrowing', () => {
+    vi.useFakeTimers();
+    document.documentElement.dataset.modality = 'keyboard';
+    mocks.shell.fillsShell = true;
+    mount();
+    mocks.onNavigate({
+      result: {
+        item: {
+          kind: 'conversation',
+          id: 'channel:one',
+          scope: 'channels',
+          localIndex: 0,
+          channel,
+        },
+      },
+    });
+    vi.advanceTimersByTime(150);
+    expect(mocks.select).not.toHaveBeenCalled();
   });
 });
 

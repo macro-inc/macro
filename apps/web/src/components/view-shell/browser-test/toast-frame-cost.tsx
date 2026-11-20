@@ -1,6 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import '@app/index.css';
-import { followDesktopToastInset } from '@core/component/Toast/desktop-toast-inset';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import { Button } from '@ui';
@@ -75,14 +74,6 @@ function Fixture() {
       <main class="min-h-0 flex-1 overflow-y-auto">
         <For each={MESSAGES}>{(index) => <Message index={index} />}</For>
       </main>
-      {/* Like the calendar's setup pill: rides above the desktop stack. */}
-      <div
-        ref={followDesktopToastInset}
-        data-testid="inset-follower"
-        class="fixed right-[420px] bottom-[calc(0.5rem+var(--desktop-toast-inset-bottom,0px))] rounded-full border border-edge-muted bg-surface px-3 py-1 text-xs text-ink-muted"
-      >
-        Rides above the toasts
-      </div>
       <ToastRegion />
     </div>
   );

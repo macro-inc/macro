@@ -1,6 +1,7 @@
 import { analytics } from '@app/lib/analytics';
 import type { CodeFileExtension } from '@block-code/util/languageSupport';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { invalidateUserQuota } from '@queries/auth';
@@ -51,6 +52,7 @@ type CreateMarkdownFileArgs = {
 export async function createMarkdownFile(
   args?: CreateMarkdownFileArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createMarkdownDocument({
     documentName: args?.title ?? '',
     markdown: args?.content ?? '',
@@ -63,13 +65,18 @@ export async function createMarkdownFile(
 
   const { documentId, documentMetadata, token } = result.value;
 
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -142,6 +149,7 @@ async function createTaskResponse(
   args?: CreateTaskArgs,
   account?: QueryAccount
 ) {
+  const generation = cacheSessionGeneration.capture();
   // Ensure status is always set, defaulting to NOT_STARTED
   const existingPropertyValues = args?.propertyValues ?? [];
   const hasStatus = existingPropertyValues.some(
@@ -176,13 +184,18 @@ async function createTaskResponse(
 
   const { documentId, documentMetadata, token, initialSnapshot } = result.value;
 
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -230,6 +243,7 @@ type CreateSnippetArgs = {
 export async function createSnippet(
   args?: CreateSnippetArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createSnippet({
     snippetName: args?.title ?? '',
     markdown: args?.content ?? '',
@@ -243,6 +257,7 @@ export async function createSnippet(
   const { documentId } = result.value;
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args?.title ?? '',
@@ -280,6 +295,7 @@ type CreateSkillArgs = {
 export async function createSkill(
   args: CreateSkillArgs
 ): Promise<string | undefined> {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createSkill({
     skillName: args.title ?? '',
     description: args.description,
@@ -294,6 +310,7 @@ export async function createSkill(
   const { documentId } = result.value;
 
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args.title ?? '',
@@ -328,6 +345,7 @@ export async function createCodeFileFromText({
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
   const sha = await contentHash(buffer);
@@ -393,6 +411,7 @@ export async function createCodeFileFromText({
     'create-entity'
   );
   setPreviewOnCreate({
+    generation,
     itemId: document.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Code File',
@@ -416,6 +435,7 @@ export async function createCanvasFile(args: {
   projectId?: string;
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const result = await storageServiceClient.createCanvasDocument({
     documentName: args.title ?? 'New Canvas',
     projectId: args.projectId,
@@ -423,12 +443,17 @@ export async function createCanvasFile(args: {
   fireAndForget(invalidateUserQuota(), 'create-entity');
   if (result.isErr()) return { error: 'Canvas creation failed.' };
   const { documentId, documentMetadata, token } = result.value;
-  seedDocumentLoadBundle(documentId, {
-    documentMetadata,
-    userAccessLevel: AccessLevel.owner,
-    token,
-  });
+  seedDocumentLoadBundle(
+    documentId,
+    {
+      documentMetadata,
+      userAccessLevel: AccessLevel.owner,
+      token,
+    },
+    generation
+  );
   setPreviewOnCreate({
+    generation,
     itemId: documentId,
     itemType: 'document',
     name: args.title ?? 'New Canvas',
@@ -451,6 +476,7 @@ export async function createCanvasFileFromJsonString(args: {
   /** UI surface the creation originated from, for analytics. */
   source?: string;
 }) {
+  const generation = cacheSessionGeneration.capture();
   const { json, title, projectId, source } = args;
   const encoder = new TextEncoder();
   const buffer = encoder.encode(json);
@@ -480,6 +506,7 @@ export async function createCanvasFileFromJsonString(args: {
     'create-entity'
   );
   setPreviewOnCreate({
+    generation,
     itemId: canvas.metadata.documentId,
     itemType: 'document',
     name: title ?? 'New Canvas',

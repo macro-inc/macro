@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/version: 13.0.9
+    helm.sh/chart: grafana-14.4.2
+  name: grafana-headless
+  namespace: observability
+spec:
+  clusterIP: None
+  ports:
+    - name: gossip-tcp
+      port: 9094
+      targetPort: gossip-tcp
+  selector:
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/name: grafana
+  type: ClusterIP

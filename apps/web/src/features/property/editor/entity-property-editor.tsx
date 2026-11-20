@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { peopleBeforeAgents } from '@core/user/people-before-agents';
 import type { ListNavActions } from '@core/util/useListKeyBindings';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import { usePinnedContactUsers } from '@queries/contacts/use-directory';
 import { useTeamMembers } from '@queries/team/members';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
@@ -51,7 +52,7 @@ function selectedEntityRefs(
   property: Property | PropertyDefinitionDomain
 ): EntityReference[] {
   if (!('value' in property) || property.valueType !== 'ENTITY') return [];
-  return property.value ?? [];
+  return copyEntityReferences(property.value ?? []);
 }
 
 export function EntityPropertyEditor(props: {

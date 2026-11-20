@@ -146,3 +146,86 @@ async fn promotion_refuses_a_departing_inbox_and_writes_nothing(db: PgPool) {
             .unwrap();
     }
 }
+
+/// Holds the link the way a CRM contact population does for its whole
+/// transaction.
+async fn population(db: &PgPool, link: Uuid) -> sqlx::Transaction<'static, sqlx::Postgres> {
+    let mut tx = db.begin().await.unwrap();
+    sqlx::query!("SELECT id FROM email_links WHERE id = $1 FOR SHARE", link)
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+    tx
+}
+
+fn is_busy<T>(result: &Result<T, ConnectionError>) -> bool {
+    matches!(
+        result,
+        Err(ConnectionError::MailboxInitialization(
+            email::domain::mailbox::initialization::InitializationError::Contended
+        ))
+    )
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_promotion_behind_a_population_is_busy_then_promotes(db: PgPool) {
+    let actor = account(&db, "actor@example.com").await;
+    let owner = account(&db, "owner@example.com").await;
+    let inbox = held_inbox(&db, &owner).await;
+    let transactions = PgConnectionTransactions(db.clone());
+
+    let held = population(&db, inbox.id).await;
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        transactions.promote(&actor, "team@example.com", &inbox),
+    )
+    .await
+    .expect("the promotion waited past its lock timeout");
+    assert!(is_busy(&blocked), "{:?}", blocked.err());
+    assert_eq!(
+        sqlx::query_scalar!("SELECT macro_id FROM email_links WHERE id = $1", inbox.id)
+            .fetch_one(&db)
+            .await
+            .unwrap(),
+        owner
+    );
+    held.rollback().await.unwrap();
+
+    transactions
+        .promote(&actor, "team@example.com", &inbox)
+        .await
+        .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_gmail_reconnect_behind_a_population_is_busy_then_reconnects(db: PgPool) {
+    let owner = account(&db, "owner@example.com").await;
+    let inbox = held_inbox(&db, &owner).await;
+    let transactions = PgConnectionTransactions(db.clone());
+    let histories = || async {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_gmail_histories WHERE link_id = $1"#,
+            inbox.id
+        )
+        .fetch_one(&db)
+        .await
+        .unwrap()
+    };
+
+    let held = population(&db, inbox.id).await;
+    let blocked = tokio::time::timeout(
+        std::time::Duration::from_secs(10),
+        transactions.create(&owner, inbox.clone(), "history-1"),
+    )
+    .await
+    .expect("the reconnect waited past its lock timeout");
+    assert!(is_busy(&blocked), "{:?}", blocked.err());
+    assert_eq!(histories().await, 0);
+    held.rollback().await.unwrap();
+
+    transactions
+        .create(&owner, inbox.clone(), "history-1")
+        .await
+        .unwrap();
+    assert_eq!(histories().await, 1);
+}

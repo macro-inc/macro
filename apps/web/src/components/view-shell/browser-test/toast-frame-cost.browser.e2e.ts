@@ -56,12 +56,12 @@ async function trace(page: Page, run: () => Promise<void>) {
 test.use({ viewport: { width: 1440, height: 900 } });
 
 // The desktop stack's height changes in every frame of a toast's entrance,
-// exit, and the older card tucking. Publishing it on <html> restyled every
-// element of the page in each of those frames (25 ms a frame in a channel),
-// and the toast's own measurement then forced that pass synchronously. Count
-// style passes, not milliseconds: a whole-page pass touches the page's
-// thousands of elements, a toast's own pass a few dozen.
-test('a toast animating over a heavy page restyles only the toasts and what follows them', async ({
+// exit, and the older card tucking. Anything that follows it with a custom
+// property on <html> restyles every element of the page in each of those
+// frames (25 ms a frame in a channel). Count style passes, not milliseconds:
+// a whole-page pass touches the page's thousands of elements, a toast's own
+// pass a few dozen.
+test('a toast animating over a heavy page restyles only the toasts', async ({
   page,
 }) => {
   // A dev server serving a heavy page to a busy machine.
@@ -72,29 +72,8 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
     () => document.getElementsByTagName('*').length
   );
   const toasts = page.locator('[data-macro-toast]');
-  const follower = page.getByTestId('inset-follower');
   const show = page.getByRole('button', { name: 'Show toast', exact: true });
   const dismiss = page.getByRole('button', { name: 'Dismiss toasts' });
-  const inset = (element: 'follower' | 'root') =>
-    page.evaluate(
-      (which) =>
-        (which === 'root'
-          ? document.documentElement
-          : document.querySelector<HTMLElement>(
-              '[data-testid="inset-follower"]'
-            )!
-        ).style.getPropertyValue('--desktop-toast-inset-bottom'),
-      element
-    );
-
-  // The follower's bottom edge sits its own 0.5rem above the stack's top.
-  const expectAboveStack = async () => {
-    const tops = await toasts.evaluateAll((cards) =>
-      cards.map((card) => card.getBoundingClientRect().top)
-    );
-    const box = (await follower.boundingBox())!;
-    expect(Math.min(...tops) - (box.y + box.height)).toBeCloseTo(8, 0);
-  };
 
   // Warm up the toast modules so the trace holds only the animations.
   await show.click();
@@ -120,23 +99,13 @@ test('a toast animating over a heavy page restyles only the toasts and what foll
     await show.click();
     await expect(toasts).toHaveCount(1);
     await settle(page);
-    await expectAboveStack();
     // A second notice tucks the first behind it.
     await show.click();
     await expect(toasts).toHaveCount(2);
     await settle(page);
-    // The control above the stack still follows it.
-    await expectAboveStack();
-    const raised = await follower.boundingBox();
-    expect(await inset('follower')).toMatch(
-      /^calc\(\d+(\.\d+)?px \+ 1\.25rem\)$/
-    );
-    expect(await inset('root')).toBe('');
     await dismiss.click();
     await expect(toasts).toHaveCount(0);
     await settle(page);
-    await expect.poll(() => inset('follower')).toBe('0px');
-    expect((await follower.boundingBox())!.y).toBeGreaterThan(raised!.y);
   });
 
   const passes = stylePasses(events);

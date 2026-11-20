@@ -312,6 +312,87 @@ it('retains a created single-select definition when the definition query fails',
   }
 });
 
+it('holds a value for a property the host edits itself without giving it a pill', async () => {
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [
+      definition(SYSTEM_PROPERTY_IDS.CONTACTS, { data_type: 'ENTITY' }),
+      definition('notes'),
+    ],
+    refetch: mock.refetch,
+  });
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({
+      initialValues: {},
+      initialVisiblePropertyIds: [],
+      hiddenPropertyIds: [SYSTEM_PROPERTY_IDS.CONTACTS],
+      allDefinitions: true,
+    }),
+    dispose,
+  }));
+
+  try {
+    await composer.addProperty(SYSTEM_PROPERTY_IDS.CONTACTS);
+    await composer.addProperty('notes');
+    expect(composer.visiblePropertyIds()).toEqual(['notes']);
+
+    const contact = {
+      valueType: 'ENTITY' as const,
+      refs: [{ entity_type: 'CONTACT' as const, entity_id: 'contact-1' }],
+    };
+    composer.setPropertyValues(SYSTEM_PROPERTY_IDS.CONTACTS, contact);
+    expect(composer.propertyValues[SYSTEM_PROPERTY_IDS.CONTACTS]).toEqual(
+      contact
+    );
+    expect(
+      composer.properties().map((property) => property.propertyDefinitionId)
+    ).toEqual(['notes']);
+  } finally {
+    dispose();
+  }
+});
+
+it('gives editors the draft value of a property the host edits itself', async () => {
+  mock.listProperties.mockReturnValue({
+    isSuccess: true,
+    data: [
+      definition(SYSTEM_PROPERTY_IDS.CONTACTS, { data_type: 'ENTITY' }),
+      definition('notes'),
+    ],
+    refetch: mock.refetch,
+  });
+  const linked = [{ entity_type: 'CONTACT' as const, entity_id: 'contact-1' }];
+  const { composer, dispose } = createRoot((dispose) => ({
+    composer: createTaskComposerProperties({
+      initialValues: {
+        [SYSTEM_PROPERTY_IDS.CONTACTS]: { valueType: 'ENTITY', refs: linked },
+      },
+      initialVisiblePropertyIds: ['notes'],
+      hiddenPropertyIds: [SYSTEM_PROPERTY_IDS.CONTACTS],
+      allDefinitions: true,
+    }),
+    dispose,
+  }));
+
+  try {
+    // An editor opened on the hidden property replaces its whole value, so it
+    // has to start from the contacts the draft already links.
+    expect(
+      composer
+        .draftProperties()
+        .map((property) => [property.propertyDefinitionId, property.value])
+    ).toEqual([
+      ['notes', null],
+      [SYSTEM_PROPERTY_IDS.CONTACTS, linked],
+    ]);
+    expect(
+      composer.properties().map((property) => property.propertyDefinitionId)
+    ).toEqual(['notes']);
+  } finally {
+    dispose();
+  }
+});
+
 it('lets the composer own failed-create feedback without silencing other callers', async () => {
   mock.create.mockResolvedValue(null);
   expect(

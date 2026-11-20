@@ -113,7 +113,7 @@ export type ViewShellRootProps = Omit<
   /**
    * Sticky navigation visibility and width, scoped to this app type rather
    * than an entry. Only the first split follows the saved visibility; other
-   * splits start collapsed. Every split opens at the last saved width; a drag
+   * splits start open. Every split opens at the last saved width; a drag
    * in one split leaves the others' current widths alone.
    */
   asidePreferenceKey?: string;
@@ -173,15 +173,16 @@ function Root(props: ViewShellRootProps) {
   ]);
 
   const panel = useContext(SplitPanelContext);
-  // A view opened beside another split starts without navigation, then keeps
-  // that split's choice as the split moves between views; only the primary
-  // split follows, and writes, the saved preference.
+  // A view opened beside another split starts with navigation, as any split
+  // above the layout breakpoint does, then keeps that split's choice as the
+  // split moves between views; only the primary split follows, and writes,
+  // the saved preference.
   const secondarySplit =
     local.asidePreferenceKey !== undefined &&
     panel !== undefined &&
     !untrack(panel.handle.isFirst);
   const [wideAsideCollapsed, setWideAsideCollapsed] = secondarySplit
-    ? (panel?.navigationCollapsed ?? createSignal(true))
+    ? (panel?.navigationCollapsed ?? createSignal(false))
     : local.asidePreferenceKey
       ? usePreference(asideCollapsedPreferenceKey(local.asidePreferenceKey), {
           default: false,
@@ -465,6 +466,7 @@ function Root(props: ViewShellRootProps) {
         !narrowList(),
       isOverlay: asideOverlay,
       isSheet: navigationSheet,
+      fillsShell: () => narrowList() === 'list',
       collapse: () => setAsideOpen(false),
       expand: () => setAsideOpen(true),
       toggle: () => {

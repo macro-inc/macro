@@ -1,0 +1,129 @@
+// The cluster's own telemetry, collected by one Alloy per node: the node's
+// host metrics, its kubelet and cAdvisor metrics, and the logs of the pods on
+// it. Where they go is set in alloy-node.nix (`macro.alloyNode`); the
+// placeholders below are filled from there.
+
+// Host metrics, read from the node's /proc and /sys mounted read-only.
+// Network collectors are off: the pod has its own network namespace, so they
+// would report the pod's interfaces; cAdvisor's root container has the
+// node's. The filesystem collector is off because it needs the node's whole
+// root mounted, which would let Alloy read every pod's service account token;
+// the kubelet reports node disk usage instead.
+prometheus.exporter.unix "node" {
+  procfs_path        = "/host/proc"
+  sysfs_path         = "/host/sys"
+  disable_collectors = ["arp", "filesystem", "netdev", "netstat", "sockstat", "softnet"]
+}
+
+prometheus.scrape "node" {
+  targets    = prometheus.exporter.unix.node.targets
+  job_name   = "node"
+  forward_to = [@METRICS@]
+}
+
+// This node's kubelet, through the node object (InternalIP:10250).
+discovery.kubernetes "node" {
+  role = "node"
+
+  selectors {
+    role  = "node"
+    field = "metadata.name=" + sys.env("K8S_NODE_NAME")
+  }
+}
+
+discovery.relabel "kubelet" {
+  targets = discovery.kubernetes.node.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_node_name"]
+    target_label  = "node"
+  }
+}
+
+// Kubelet serving certificates are self-signed on EKS nodes; the token is
+// what authorizes (nodes/metrics).
+prometheus.scrape "kubelet" {
+  targets           = discovery.relabel.kubelet.output
+  job_name          = "kubelet"
+  scheme            = "https"
+  bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+  tls_config {
+    insecure_skip_verify = true
+  }
+  forward_to = [@METRICS@]
+}
+
+prometheus.scrape "cadvisor" {
+  targets           = discovery.relabel.kubelet.output
+  job_name          = "cadvisor"
+  metrics_path      = "/metrics/cadvisor"
+  scheme            = "https"
+  bearer_token_file = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+  tls_config {
+    insecure_skip_verify = true
+  }
+  forward_to = [@METRICS@]
+}
+
+// Logs of the pods on this node, from the container runtime's files.
+discovery.kubernetes "pods" {
+  role = "pod"
+
+  selectors {
+    role  = "pod"
+    field = "spec.nodeName=" + sys.env("K8S_NODE_NAME")
+  }
+}
+
+discovery.relabel "pod_logs" {
+  targets = discovery.kubernetes.pods.targets
+
+  rule {
+    source_labels = ["__meta_kubernetes_namespace"]
+    target_label  = "namespace"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_name"]
+    target_label  = "pod"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_container_name"]
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+    target_label  = "app"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_node_name"]
+    target_label  = "node"
+  }
+
+  rule {
+    source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+    separator     = "/"
+    target_label  = "__path__"
+    replacement   = "/var/log/pods/*$1/*.log"
+  }
+}
+
+local.file_match "pod_logs" {
+  path_targets = discovery.relabel.pod_logs.output
+}
+
+loki.source.file "pod_logs" {
+  targets    = local.file_match.pod_logs.targets
+  forward_to = [loki.process.pod_logs.receiver]
+}
+
+loki.process "pod_logs" {
+  stage.cri { }
+
+  forward_to = [@LOGS@]
+}

@@ -1,10 +1,12 @@
 use super::*;
-use crate::workflows::{email_e2e, email_e2e_browser, email_e2e_full_stack};
+use crate::workflows::{
+    channels_e2e, email_e2e, email_e2e_browser, email_e2e_full_stack, render_gh_workflow,
+};
 
 /// A workflow's file name and its builder.
 type Build = (&'static str, fn() -> gh_workflow::Workflow);
 
-/// The three workflows, rendered as they are committed.
+/// The workflows with the job, rendered as they are committed.
 fn workflows() -> Vec<(&'static str, serde_yaml::Value)> {
     let builds: [Build; 3] = [
         ("email_e2e", email_e2e::email_e2e),
@@ -14,15 +16,17 @@ fn workflows() -> Vec<(&'static str, serde_yaml::Value)> {
             email_e2e_full_stack::email_e2e_full_stack,
         ),
     ];
+    let parse = |yaml: String| serde_yaml::from_str(&yaml).expect("the workflow parses");
     builds
         .into_iter()
         .map(|(name, build)| {
             let yaml = email_e2e::render(build).expect("the workflow renders");
-            (
-                name,
-                serde_yaml::from_str(&yaml).expect("the workflow parses"),
-            )
+            (name, parse(yaml))
         })
+        .chain([(
+            "channels_e2e",
+            parse(render_gh_workflow(channels_e2e::channels_e2e)().expect("the workflow renders")),
+        )])
         .collect()
 }
 
@@ -117,7 +121,7 @@ fn a_workflows_runs_queue_without_cancelling_the_one_running() {
     }
     groups.sort_unstable();
     groups.dedup();
-    assert_eq!(groups.len(), 3, "two workflows share a queue: {groups:?}");
+    assert_eq!(groups.len(), 4, "two workflows share a queue: {groups:?}");
 }
 
 /// The script reads the job and its steps by the names the workflow gives

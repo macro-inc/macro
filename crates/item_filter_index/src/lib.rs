@@ -648,6 +648,37 @@ fn proves_none<T>(expr: &Expr<T>, is_positive_nil_id: impl Fn(&T) -> bool + Copy
     }
 }
 
+/// Prove that a Soup filter excludes CRM records and CRM-derived email grants.
+/// Missing broad filters and negated exclusions cannot establish this proof.
+pub fn excludes_crm_content(ast: &EntityFilterAst) -> bool {
+    ast.crm_association.is_none()
+        && ast.email_filter.crm_scope.is_none()
+        && ast.email_filter.tree.as_deref().is_some_and(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, EmailLiteral::ThreadId(id) if id.is_nil()),
+            )
+        })
+        && ast.crm_company_filter.as_deref().is_some_and(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, CrmCompanyLiteral::Id(id) if id.is_nil()),
+            )
+        })
+        && ast.crm_contact_filter.as_deref().is_none_or(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, CrmContactLiteral::Id(id) if id.is_nil()),
+            )
+        })
+        && ast.database_row_filter.as_deref().is_none_or(|expr| {
+            proves_none(
+                expr,
+                |literal| matches!(literal, DatabaseRowLiteral::Id(id) if id.is_nil()),
+            )
+        })
+}
+
 fn supported_expr<T>(expr: Option<&Expr<T>>, supported: impl Fn(&T) -> bool + Copy) -> bool {
     match expr {
         None => true,
