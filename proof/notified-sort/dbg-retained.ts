@@ -2,6 +2,7 @@
 // pages each time, on main's REST reader, the branch's reader, and main's
 // GraphQL reader (update-time sort). Prints the rows each read returned and
 // whether the second read's first rows are the first read's.
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { launchBrowser, openLane, probeRead, startApp, stopApp, type ReadSpec } from './lib/browser.ts';
 import { entityKey } from './lib/compare.ts';
@@ -11,6 +12,7 @@ import { stackFromEnv } from './lib/stack.ts';
 const here = import.meta.dirname;
 const seed = Number(process.env.PROOF_SEED ?? 1701);
 const out = join(here, 'out/dbg-retained');
+mkdirSync(out, { recursive: true });
 const stack = stackFromEnv();
 const env = { backendProxy: stack.proxyUrl, routes: process.env.PROOF_ROUTES ?? '', caPem: process.env.PROOF_CA_PEM ?? '', hostname: process.env.PROOF_HOSTNAME ?? 'localhost' };
 const seeded = await seedWorld(stack, {
