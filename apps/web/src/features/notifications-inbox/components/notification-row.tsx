@@ -72,7 +72,7 @@ export function NotificationRow(props: NotificationRowProps) {
       data-stack={isStack() ? '' : undefined}
       data-unfolded={isOpen() ? '' : undefined}
       class={cn(
-        'group/notification relative w-full min-w-0 flex-1 transition-opacity',
+        'group/notification relative w-full min-w-0 flex-1',
         // The list's hover and active tints laid over the panel, opaque so the
         // avatar's badge can cut itself out in the same color.
         'bg-(--inbox-row-surface) [--inbox-row-surface:var(--color-panel)]',
