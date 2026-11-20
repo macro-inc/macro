@@ -12290,6 +12290,7 @@ dependencies = [
  "agent_fold",
  "anyhow",
  "base64 0.22.1",
+ "macro_service_urls",
  "macro_tower_layers",
  "messages",
  "reqwest 0.13.4",

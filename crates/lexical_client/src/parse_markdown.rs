@@ -9,6 +9,7 @@ use trigger_context::TriggerContext;
 use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
+use macro_service_urls::AppServiceUrl;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -25,8 +26,11 @@ struct LexicalResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MarkdownSnapshotRequest<'a> {
     markdown: &'a str,
+    /// Links to Macro entities on this web app origin become mention chips.
+    app_origin: &'a str,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -35,8 +39,12 @@ struct MarkdownResponse {
 }
 
 #[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 struct MentionsRequest<'a> {
     markdown: &'a str,
+    /// Links to Macro entities on this web app origin count as mentions.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    app_origin: Option<&'a str>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -610,13 +618,19 @@ impl LexicalClient {
         self.get_json(&url).await
     }
 
+    /// Converts `markdown` to a new document's Loro snapshot. Links to Macro
+    /// entities on this environment's web app become mention chips.
     #[tracing::instrument(skip(self, markdown), err)]
     pub async fn markdown_to_loro_snapshot(&self, markdown: &str) -> Result<Vec<u8>> {
         let url = format!("{}/snapshot/markdown", self.url);
+        let app_origin = AppServiceUrl::new()?;
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&MarkdownSnapshotRequest { markdown })
+                .json(&MarkdownSnapshotRequest {
+                    markdown,
+                    app_origin: app_origin.as_ref(),
+                })
                 .send()
                 .await?,
         )
@@ -648,11 +662,32 @@ impl LexicalClient {
     /// mentions it contains.
     #[tracing::instrument(skip(self, markdown), err)]
     pub async fn extract_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
+        self.mentions(markdown, None).await
+    }
+
+    /// Like [`Self::extract_mentions`], but links to Macro entities on this
+    /// environment's web app count as mentions too, matching the chips a
+    /// document created from `markdown` gets. Not for channel messages, whose
+    /// references share their targets with the channel.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn extract_document_mentions(&self, markdown: &str) -> Result<Vec<ExtractedMention>> {
+        let app_origin = AppServiceUrl::new()?;
+        self.mentions(markdown, Some(app_origin.as_ref())).await
+    }
+
+    async fn mentions(
+        &self,
+        markdown: &str,
+        app_origin: Option<&str>,
+    ) -> Result<Vec<ExtractedMention>> {
         let url = format!("{}/mentions", self.url);
         let response = check_response(
             self.client
                 .post(&url)
-                .json(&MentionsRequest { markdown })
+                .json(&MentionsRequest {
+                    markdown,
+                    app_origin,
+                })
                 .send()
                 .await?,
         )

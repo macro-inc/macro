@@ -1,12 +1,15 @@
+import { extractChannelMentionsFromMarkdown } from '@macro-inc/lexical-core/utils/markdown-mentions';
 import { OpenAPIRoute } from 'chanfana';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { handleEndpointError } from '../lib/error-handler';
 import { standardErrorResponses } from '../lib/schemas';
-import { extractChannelMentionsFromMarkdown } from '@macro-inc/lexical-core/utils/markdown-mentions';
 
 const mentionsRequest = z.object({
   markdown: z.string(),
+  // The environment's web app origin: links to Macro entities on it count as
+  // mentions, as they do when a document is created. Channel messages omit it.
+  appOrigin: z.string().optional(),
 });
 
 const mentionsResponse = z.object({
@@ -48,7 +51,9 @@ export class MentionsEndpoint extends OpenAPIRoute {
   async handle(c: Context) {
     try {
       const { body } = await this.getValidatedData<typeof this.schema>();
-      const mentions = extractChannelMentionsFromMarkdown(body.markdown);
+      const mentions = extractChannelMentionsFromMarkdown(body.markdown, {
+        appOrigin: body.appOrigin,
+      });
       return c.json({ mentions });
     } catch (error) {
       return handleEndpointError(error, c);

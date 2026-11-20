@@ -27,7 +27,7 @@ to read or render document content.
 
 ## Boundaries
 
-- Depends on: `agent_fold`, `messages`, `trigger_context`.
+- Depends on: `agent_fold`, `macro_service_urls`, `messages`, `trigger_context`.
 - Used by: `documents`, `collab_surface`, `email`, `ai_tools`, `agent_harness`,
   `agent_trigger`, `channel_bots`, `image_generation`,
   `lexical_mention_extractor`, `memory`, `skills`, `task_dedup`.
@@ -48,6 +48,10 @@ to read or render document content.
 - The internal-access header name (`x-internal-auth-key`) must match what
   `lexical_service` expects; it's not read from `macro_auth`'s header
   constants.
+
+- `markdown_to_loro_snapshot` and `extract_document_mentions` send the
+  environment's `AppServiceUrl` as `appOrigin`, so links to Macro entities on
+  it become chips and mentions; `extract_mentions` (channel messages) doesn't.
 
 ## Related
 
