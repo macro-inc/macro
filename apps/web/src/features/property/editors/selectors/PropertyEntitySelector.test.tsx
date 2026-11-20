@@ -20,6 +20,7 @@ const sources = vi.hoisted(() => ({
   companySearches: [] as string[],
   companyError: undefined as Error | undefined,
   companyRetries: 0,
+  addCompanyPage: undefined as (() => void) | undefined,
 }));
 
 function companyEntity(id: string, name: string, domain: string) {
@@ -50,36 +51,54 @@ function contactItem(
 }
 
 // The search service matches companies Quick Access does not hold.
-vi.mock('@app/features/crm/crm-search', () => ({
-  useCrmCompanySearchSource: (
-    search: () => string,
-    enabled: () => boolean
-  ) => ({
-    companies: () => {
-      if (!enabled()) return [];
-      sources.companySearches.push(search());
-      return 'northwind traders | northwind.example.com'.includes(
-        search().toLowerCase()
-      )
-        ? [
+vi.mock('@app/features/crm/crm-search', async () => {
+  const { createSignal } =
+    await vi.importActual<typeof import('solid-js')>('solid-js');
+  return {
+    useCrmCompanySearchSource: (
+      search: () => string,
+      enabled: () => boolean
+    ) => {
+      const [pages, setPages] = createSignal(1);
+      sources.addCompanyPage = () => setPages((count) => count + 1);
+      return {
+        companies: () => {
+          if (!enabled()) return [];
+          sources.companySearches.push(search());
+          const loaded = [
             companyEntity(
               'company-old',
               'Northwind Traders',
               'northwind.example.com'
             ),
-          ]
-        : [];
+            ...(pages() > 1
+              ? [
+                  companyEntity(
+                    'company-later',
+                    'Northwind Logistics',
+                    'northwind-logistics.example.com'
+                  ),
+                ]
+              : []),
+          ];
+          return loaded.filter((company) =>
+            `${company.name} | ${company.domains[0]?.domain}`
+              .toLowerCase()
+              .includes(search().toLowerCase())
+          );
+        },
+        hasMore: () => false,
+        isLoading: () => false,
+        isLoadingMore: () => false,
+        loadMore: async () => {},
+        error: () => sources.companyError,
+        retry: async () => {
+          sources.companyRetries += 1;
+        },
+      };
     },
-    hasMore: () => false,
-    isLoading: () => false,
-    isLoadingMore: () => false,
-    loadMore: async () => {},
-    error: () => sources.companyError,
-    retry: async () => {
-      sources.companyRetries += 1;
-    },
-  }),
-}));
+  };
+});
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: sources.contactSearchDisabled }),
 }));
@@ -246,6 +265,7 @@ afterEach(() => {
   sources.companySearches.length = 0;
   sources.companyError = undefined;
   sources.companyRetries = 0;
+  sources.addCompanyPage = undefined;
 });
 
 function renderSelector(
@@ -396,6 +416,18 @@ describe('a company selector', () => {
       expect(sources.companySearches).toContain('initech.example')
     );
     expect(screen.getByText('Initech')).toBeTruthy();
+  });
+
+  it('keeps listed server rows mounted when another page arrives', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('northwind');
+    const row = (await screen.findByText('Northwind Traders')).closest(
+      '[data-entity-index]'
+    );
+    sources.addCompanyPage?.();
+    expect(await screen.findByText('Northwind Logistics')).toBeTruthy();
+    expect(row?.isConnected).toBe(true);
   });
 
   it('offers Retry when a server company page fails', async () => {

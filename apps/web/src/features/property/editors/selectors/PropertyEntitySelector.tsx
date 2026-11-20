@@ -8,6 +8,7 @@ import { disableCrmContactSearch } from '@core/constant/featureFlags';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { QuickAccessItem } from '@core/context/quickAccess';
 import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
+import { keepUnchangedRows } from '@core/context/quickAccess/unchanged-rows';
 import { useEmail, useUserId } from '@core/context/user';
 import { emailToId, useAugmentUserWithDmActivity } from '@core/user';
 import {
@@ -286,12 +287,14 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   const companySearchPending = () =>
     typedCompanySearchValid() &&
     (typedCompanySearch() !== companySearch() || serverCompanies.isLoading());
-  // Rows answering an earlier search stay only while they still match.
-  const serverCompanyEntities = createMemo((): CombinedEntity[] => {
+  // Rows answering an earlier search stay only while they still match. A row
+  // keeps its object while its company is unchanged, so a further page does
+  // not remount the rows already listed.
+  const serverCompanyEntities = createMemo((previous: CombinedEntity[]) => {
     if (!companySearchEnabled()) return [];
     const term = typedCompanySearch();
     const settled = companySearch() === term;
-    return serverCompanies
+    const rows = serverCompanies
       .companies()
       .map(
         (company): CombinedEntity => ({
@@ -304,7 +307,8 @@ export function PropertyEntitySelector(props: EntityInputProps) {
         (entity) =>
           settled || matchesTokenSubsequences(getEntitySearchText(entity), term)
       );
-  });
+    return keepUnchangedRows(previous, rows);
+  }, []);
 
   // Fetch emails for browsing whenever threads are allowed: THREAD alone,
   // among several kinds, or any kind.
