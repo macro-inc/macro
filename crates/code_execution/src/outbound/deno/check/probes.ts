@@ -15,9 +15,27 @@ function fromMacro(node: Deno.lint.Node): boolean {
 	return current.type === "Identifier" && current.name === "macro";
 }
 
-/** The name of a non-computed property access, such as `create` in `macro.create`. */
+/**
+ * The property a member access names: `create` in `macro.create` and in
+ * `macro["create"]`, but nothing for `macro[name]`, whose value isn't known.
+ */
 function propertyName(node: Deno.lint.MemberExpression): string | undefined {
-	return node.property.type === "Identifier" ? node.property.name : undefined;
+	if (!node.computed)
+		return node.property.type === "Identifier" ? node.property.name : undefined;
+	return node.property.type === "Literal" &&
+		typeof node.property.value === "string"
+		? node.property.value
+		: undefined;
+}
+
+/** The key a destructured property takes, such as `readTextFile` in `{ readTextFile: read }`. */
+function keyName(property: Deno.lint.Property): string | undefined {
+	if (!property.computed && property.key.type === "Identifier")
+		return property.key.name;
+	return property.key.type === "Literal" &&
+		typeof property.key.value === "string"
+		? property.key.value
+		: undefined;
 }
 
 /** `Deno` APIs that read files, which would only find the sandbox's bundle. */
@@ -51,6 +69,22 @@ const plugin: Deno.lint.Plugin = {
 							context.report({ node, message: `Deno.${name}` });
 						}
 					},
+					// `const { readTextFile } = Deno` takes the reader out first.
+					VariableDeclarator(node) {
+						if (
+							node.id.type !== "ObjectPattern" ||
+							node.init?.type !== "Identifier" ||
+							node.init.name !== "Deno"
+						)
+							return;
+						for (const property of node.id.properties) {
+							if (property.type !== "Property") continue;
+							const name = keyName(property);
+							if (name !== undefined && SANDBOX_READS.test(name)) {
+								context.report({ node: property, message: `Deno.${name}` });
+							}
+						}
+					},
 				};
 			},
 		},
@@ -81,13 +115,15 @@ const plugin: Deno.lint.Plugin = {
 						)
 							return;
 						const name = propertyName(callee);
+						const owner = callee.object.name;
 						if (
 							name !== undefined &&
-							(REFLECTION[callee.object.name] ?? []).includes(name)
+							Object.hasOwn(REFLECTION, owner) &&
+							REFLECTION[owner]?.includes(name)
 						) {
 							context.report({
 								node,
-								message: `${callee.object.name}.${name}`,
+								message: `${owner}.${name}`,
 							});
 						}
 					},
