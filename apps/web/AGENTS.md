@@ -235,8 +235,8 @@ New task is the project's own floating `+ Task` pill on every project tab,
 which replaces the Tasks view's (that one creates outside any project and stays
 hidden on project routes), and read-only viewers get none. Its backend-free
 regression renders the real row and float host with a stand-in for the task
-filters (the real phone filter trigger, one button on desktop) and for the
-Tasks view's pill:
+filters (the real phone filter trigger, which `?filters=12` gives a two-digit
+count, one button on desktop) and for the Tasks view's pill:
 `bunx playwright test --config src/features/projects/browser-test/tasks-header/playwright.config.ts`.
 
 The Reviews list header (the real `ReviewsListHeader`, status tabs, New and

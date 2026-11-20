@@ -5,6 +5,7 @@
 
 import ChatCircle from '@icon/system/regular/chat-circle.svg';
 import Play from '@icon/system/regular/play.svg';
+import { CountBadge } from '@ui/components/Badge';
 import { Button } from '@ui/components/Button';
 import { Show } from 'solid-js';
 
@@ -15,32 +16,25 @@ export function CommentButton(props: {
   return (
     <Show when={props.comments}>
       {(c) => (
-        <div class="relative">
-          <Button
-            aria-label="Comment (C)"
-            variant="ghost"
-            size="icon-md"
-            aria-pressed={c().active}
-            class={
-              c().active
-                ? 'rounded-lg bg-accent text-accent-contrast'
-                : 'rounded-lg'
-            }
-            tooltip="Comment · C"
-            data-testid="fig-tool-comment"
-            onClick={() => c().onToggle()}
-          >
-            <ChatCircle class="size-4 touch:size-6 shrink-0 pointer-events-none" />
-          </Button>
-          <Show when={c().unread > 0}>
-            <span
-              class="pointer-events-none absolute top-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-accent px-0.5 font-semibold text-[9px] text-accent-contrast"
-              data-testid="fig-comments-unread"
-            >
-              {c().unread}
-            </span>
-          </Show>
-        </div>
+        <Button
+          aria-label={
+            c().unread > 0 ? `Comment (C), ${c().unread} unread` : 'Comment (C)'
+          }
+          variant="ghost"
+          size={c().unread > 0 ? 'md' : 'icon-md'}
+          aria-pressed={c().active}
+          class={
+            c().active
+              ? 'rounded-lg bg-accent text-accent-contrast'
+              : 'rounded-lg'
+          }
+          tooltip="Comment · C"
+          data-testid="fig-tool-comment"
+          onClick={() => c().onToggle()}
+        >
+          <ChatCircle class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+          <CountBadge count={c().unread} data-testid="fig-comments-unread" />
+        </Button>
       )}
     </Show>
   );
