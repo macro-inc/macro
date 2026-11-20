@@ -283,6 +283,7 @@ impl IntoResponse for EgressError {
             Self::InsecureUpstream(_) => StatusCode::BAD_GATEWAY,
             Self::Upstream(_) => StatusCode::BAD_GATEWAY,
             Self::RateLimited { .. } => StatusCode::TOO_MANY_REQUESTS,
+            Self::NeedsReconnect => StatusCode::CONFLICT,
             Self::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
@@ -309,6 +310,9 @@ impl IntoResponse for EgressError {
             Self::InsecureUpstream(_) => "That upstream is misconfigured and cannot be reached.",
             Self::Upstream(_) => "The upstream could not be reached.",
             Self::RateLimited { .. } => "The upstream is rate limiting this account; retry later.",
+            Self::NeedsReconnect => {
+                "This account's connection to the app has expired; ask the user to reconnect it."
+            }
             Self::Internal(_) => "Egress failed.",
         };
 

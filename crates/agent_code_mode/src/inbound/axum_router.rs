@@ -154,6 +154,9 @@ impl IntoResponse for CodeExecutionApiError {
             error @ CodeModeError::ConnectedAppUnreachable => {
                 (StatusCode::BAD_GATEWAY, error.to_string()).into_response()
             }
+            CodeModeError::ConnectedAppNeedsReconnect(message) => {
+                (StatusCode::CONFLICT, message).into_response()
+            }
             CodeModeError::ConnectedAppRateLimited { retry_after } => {
                 let message = CodeModeError::ConnectedAppRateLimited { retry_after }.to_string();
                 let seconds = retry_after

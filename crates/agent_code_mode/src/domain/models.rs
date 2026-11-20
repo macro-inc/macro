@@ -242,6 +242,11 @@ pub enum CodeModeError {
         /// How long the app last asked callers to wait.
         retry_after: Option<std::time::Duration>,
     },
+    /// The account's connection to a connected app has expired, so the app
+    /// was not called. The message, which tells the program what to say to
+    /// the user and carries the reconnect markup, is the caller's to show.
+    #[error("{0}")]
+    ConnectedAppNeedsReconnect(String),
     /// A submitted identity cannot replay an execution or replace its journal.
     #[error("execution_id was already used; execution was not started")]
     Duplicate,

@@ -32,7 +32,7 @@ describe('connector continuation', () => {
     expect(deps.connect).toHaveBeenCalledTimes(1);
     expect(deps.resume).not.toHaveBeenCalled();
     finish('connected');
-    await pending;
+    expect(await pending).toBe(true);
     expect(deps.resume).toHaveBeenCalledExactlyOnceWith(app);
     expect(flow.disabled()).toBe(false);
     dispose();
@@ -44,7 +44,7 @@ describe('connector continuation', () => {
       const { deps, flow, finish, dispose } = setup();
       const pending = flow.connect(app);
       finish(outcome);
-      await pending;
+      expect(await pending).toBe(false);
       expect(deps.resume).not.toHaveBeenCalled();
       dispose();
     }
@@ -64,6 +64,20 @@ describe('connector continuation', () => {
       if (state !== 'unmounted') dispose();
     }
   );
+
+  it('reports a connection that worked even when continuing failed', async () => {
+    const { deps, flow, finish, dispose } = setup();
+    deps.resume = vi.fn(async () => {
+      throw new Error('continuation failed');
+    });
+    const pending = flow.connect(app);
+    finish('connected');
+    expect(await pending).toBe(true);
+    expect(deps.notify).toHaveBeenCalledExactlyOnceWith(
+      'Linear connected. Send a message to continue.'
+    );
+    dispose();
+  });
 
   it('reports registration failure without sending a continuation', async () => {
     const { deps, flow, dispose } = setup();

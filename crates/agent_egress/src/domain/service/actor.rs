@@ -3,8 +3,8 @@
 use super::*;
 use crate::domain::approval::{InProcessCall, refusal};
 use crate::domain::model::{
-    AgentSessionId, SessionGrant, disconnected_text, not_connected_text, tool_error_result,
-    tool_result_response,
+    AgentSessionId, SessionGrant, disconnected_text, not_connected_text, reconnect_text,
+    tool_error_result, tool_result_response,
 };
 use agent_session::domain::model::TurnPrompter;
 use ai_toolset::actor::{ToolActor, add_actor_schema};
@@ -84,7 +84,6 @@ where
             .actor_mcp
             .clone()
             .ok_or(EgressError::Unauthenticated("actor transport unavailable"))?;
-        let session_id = grant.session;
         let acting_user = user.clone();
         if !listing {
             let current = self.sessions.authorize(token).await?;
@@ -97,7 +96,7 @@ where
         }
         exchange_result(
             transport.as_ref(),
-            session_id,
+            grant,
             acting_user,
             upstream,
             destination,
@@ -210,10 +209,11 @@ where
             Ok(result) => Ok(result),
             // Refused before it ran: the caller paces and retries it.
             Err(error @ EgressError::RateLimited { .. }) => Err(error),
-            Err(error) if !listing => {
-                tracing::warn!(?error, "actor MCP exchange failed");
-                Ok(tool_error_result(UNKNOWN_OUTCOME.into()))
-            }
+            Err(error) if !listing => Ok(tool_error_result(failed_call_text(
+                grant,
+                destination,
+                error,
+            ))),
             Err(error) => Err(error),
         }
     }
@@ -320,7 +320,8 @@ async fn traced_exchange(
     let result = transport
         .exchange(session, actor, upstream, request)
         .instrument(span.clone())
-        .await;
+        .await
+        .map_err(|error| reconnect_only_for_connected_apps(error, destination));
     match &result {
         Ok(value) => {
             if traced {
@@ -336,16 +337,33 @@ async fn traced_exchange(
         Err(error) => {
             // The limiter's own `mcp.call_budget` span, inside this one,
             // records its waits, attempts and refusals.
-            let outcome = if matches!(error, EgressError::RateLimited { .. }) {
-                "rate_limited"
-            } else {
-                "upstream_error"
+            let outcome = match error {
+                EgressError::RateLimited { .. } => "rate_limited",
+                EgressError::NeedsReconnect => "needs_reconnect",
+                _ => "upstream_error",
             };
             span.record("mcp.outcome", outcome);
             span.record("otel.status_code", "ERROR");
         }
     }
     result
+}
+
+/// A connected app's 409 means its grant needs reauthorizing (Macro Connect's
+/// gateway answers so; a Pipedream-provider row is read the same way); a
+/// custom server's, Macro's or a preview's 409 is its own failure, not a
+/// reason to reconnect.
+fn reconnect_only_for_connected_apps(
+    error: EgressError,
+    destination: &McpDestination,
+) -> EgressError {
+    match (error, destination) {
+        (EgressError::NeedsReconnect, McpDestination::Connected(_)) => EgressError::NeedsReconnect,
+        (EgressError::NeedsReconnect, _) => {
+            EgressError::Upstream(rootcause::report!("upstream answered HTTP 409"))
+        }
+        (error, _) => error,
+    }
 }
 
 /// The length of `value` as JSON, without keeping the text.
@@ -368,9 +386,27 @@ fn json_bytes(value: &Value) -> i64 {
 /// What a failed call says: it may have run upstream before failing.
 const UNKNOWN_OUTCOME: &str = "The selected account's tool could not complete. Its outcome may be unknown; check state before retrying writes.";
 
+/// What a `tools/call` the upstream failed says. A connected app refused for
+/// a grant that needs reconnecting (Macro Connect answers so before calling
+/// the vendor) says so with a reconnect button; every other failure may have
+/// run.
+fn failed_call_text(
+    grant: &SessionGrant,
+    destination: &McpDestination,
+    error: EgressError,
+) -> String {
+    if matches!(error, EgressError::NeedsReconnect)
+        && let McpDestination::Connected(slug) = destination
+    {
+        return reconnect_text(slug, &grant.display_name(slug));
+    }
+    tracing::warn!(?error, "actor MCP exchange failed");
+    UNKNOWN_OUTCOME.into()
+}
+
 async fn exchange_result(
     transport: &dyn crate::domain::ports::ActorMcpTransport,
-    session: crate::domain::model::AgentSessionId,
+    grant: &SessionGrant,
     actor: macro_user_id::user_id::MacroUserIdStr<'static>,
     upstream: UpstreamCall,
     destination: &McpDestination,
@@ -379,18 +415,26 @@ async fn exchange_result(
 ) -> Result<ProxyResponse, EgressError> {
     let macro_tools = matches!(destination, McpDestination::Macro);
     let id = request["id"].clone();
-    let mut result =
-        match traced_exchange(transport, session, actor, upstream, destination, request).await {
-            Ok(result) => result,
-            Err(EgressError::RateLimited { .. }) if !listing => {
-                return Ok(tool_result_response(id, RATE_LIMITED.into()));
-            }
-            Err(error) if !listing => {
-                tracing::warn!(?error, "actor MCP exchange failed");
-                return Ok(tool_result_response(id, UNKNOWN_OUTCOME.into()));
-            }
-            Err(error) => return Err(error),
-        };
+    let mut result = match traced_exchange(
+        transport,
+        grant.session,
+        actor,
+        upstream,
+        destination,
+        request,
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(EgressError::RateLimited { .. }) if !listing => {
+            return Ok(tool_result_response(id, RATE_LIMITED.into()));
+        }
+        Err(error) if !listing => {
+            let text = failed_call_text(grant, destination, error);
+            return Ok(tool_result_response(id, text));
+        }
+        Err(error) => return Err(error),
+    };
     if listing && let Some(tools) = result["tools"].as_array_mut() {
         tools.retain(|tool| {
             !tool["inputSchema"]["properties"]
