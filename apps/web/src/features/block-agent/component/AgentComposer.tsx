@@ -91,17 +91,19 @@ export function AgentComposer(props: {
   const readOnly = () => session()?.canEdit === false;
 
   // The fold speculates the action the moment it is issued, so success is
-  // observed there; only a refusal needs saying here.
+  // observed there; only a refusal needs saying here. Resolves whether the
+  // harness took the action, so a refused prompt can go back to the draft.
   const act = async (action: AgentAction, failure: string) => {
-    if (readOnly()) return;
+    if (readOnly()) return false;
     try {
       const result = await issue(action);
+      if (!result?.isErr()) return true;
       // A stopped agent says why in the transcript instead.
-      if (result?.isErr() && !result.error.some(isNoRuntimeAccessError))
-        toast.failure(failure);
+      if (!result.error.some(isNoRuntimeAccessError)) toast.failure(failure);
     } catch {
       toast.failure(failure);
     }
+    return false;
   };
 
   const [configuring, setConfiguring] = createSignal(false);
@@ -229,11 +231,33 @@ export function AgentComposer(props: {
     const prompt = [markdown, notes]
       .filter((part) => part.length > 0)
       .join('\n\n');
-    fireAndForget(
-      act(promptActionOf(prompt, attachments), 'The message could not be sent'),
-      'agent-composer'
-    );
+    // The composer clears at once, as a sent message reads as sent; the
+    // fold shows it pending. A refusal retracts that bubble, so the message
+    // comes back here rather than vanishing.
     attachmentTracker.clearAttachments();
+    const sent = await act(
+      promptActionOf(prompt, attachments),
+      'The message could not be sent'
+    );
+    if (!sent) restoreUnsent(prompt, attachments);
+  };
+
+  // Put a refused message back in front of whatever was typed meanwhile, and
+  // its files back beside any attached since.
+  const restoreUnsent = (
+    prompt: string,
+    attachments: InputAttachmentData[]
+  ) => {
+    const typed = persistedDraft.draft();
+    persistedDraft.setDraft(
+      [prompt, typed].filter((part) => part.trim().length > 0).join('\n\n')
+    );
+    const current = attachmentTracker.attachments();
+    const missing = attachments.filter(
+      (attachment) => !current.some((kept) => kept.id === attachment.id)
+    );
+    if (missing.length > 0)
+      attachmentTracker.setAttachments([...missing, ...current]);
   };
 
   // Focus plumbing between the input and the queue list above it: Up at the

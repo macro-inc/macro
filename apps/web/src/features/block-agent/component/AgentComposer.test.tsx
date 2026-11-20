@@ -1,6 +1,8 @@
+import type { InputAttachmentData } from '@channel/Input';
 import { setPreferredSpeed } from '@core/component/AI/signal/speed';
 import type { TurnState } from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
+import { err, ok } from 'neverthrow';
 import { createSignal, mergeProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UnifiedModelSelectorState } from '../../agents-view/components/unified-model-selector/root';
@@ -34,6 +36,7 @@ const mocks = vi.hoisted(() => ({
   steerQueued: vi.fn(),
   upload: vi.fn(),
   consumeNotes: vi.fn(),
+  toastFailure: vi.fn(),
   metadata: () =>
     undefined as { model: string; configOptions: unknown[] } | undefined,
   input: undefined as AgentInputProps | undefined,
@@ -44,15 +47,33 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/changes/context/changes-controller', () => ({
   useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
-vi.mock('@channel/Input', () => ({
-  createInputAttachmentTracker: () => ({
-    attachments: () => [],
-    clearAttachments: vi.fn(),
-    removeAttachment: vi.fn(),
-  }),
-  uploadInputAttachments: mocks.upload,
+vi.mock('@channel/Input', async () => {
+  const { createSignal } = await import('solid-js');
+  return {
+    createInputAttachmentTracker: () => {
+      const [attachments, setAttachments] = createSignal<InputAttachmentData[]>(
+        []
+      );
+      return {
+        attachments,
+        hasPending: () => false,
+        addAttachment: (attachment: InputAttachmentData) =>
+          setAttachments((current) => [...current, attachment]),
+        removeAttachment: (id: string) =>
+          setAttachments((current) =>
+            current.filter((attachment) => attachment.id !== id)
+          ),
+        setAttachmentPending: vi.fn(),
+        setAttachments,
+        clearAttachments: () => setAttachments([]),
+      };
+    },
+    uploadInputAttachments: mocks.upload,
+  };
+});
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
 }));
-vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
 vi.mock('../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
@@ -292,5 +313,101 @@ it('allows another prompt after a failed turn', () => {
   expect(mocks.issue).toHaveBeenCalledWith({
     type: 'prompt',
     prompt: 'Try again',
+  });
+});
+
+describe('a message the harness does not take', () => {
+  const attachment: InputAttachmentData = {
+    id: 'file-1',
+    name: 'notes.txt',
+    kind: 'document',
+  };
+
+  // The real input clears itself before handing the message over.
+  const sendFromInput = (
+    text: string,
+    attachments: InputAttachmentData[] = []
+  ) => {
+    mocks.input?.onDraftChange?.('');
+    mocks.input?.onSend(text, attachments);
+  };
+
+  beforeEach(() => {
+    mocks.session = () => ({ canEdit: true, harness: 'macrod' });
+  });
+
+  it('keeps the draft when the agent has no runtime to run it on', async () => {
+    mocks.issue.mockResolvedValue(
+      err([
+        {
+          code: 'NO_RUNTIME_ACCESS',
+          message: 'The agent is not connected to a computer',
+        },
+      ])
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+    // The transcript says why; a toast would say it twice.
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
+  });
+
+  it('keeps the draft and says so when the send fails', async () => {
+    mocks.issue.mockResolvedValue(err([{ code: 'HTTP_ERROR' }]));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+    expect(mocks.toastFailure).toHaveBeenCalledWith(
+      'The message could not be sent'
+    );
+  });
+
+  it('keeps the draft when the request throws', async () => {
+    mocks.issue.mockRejectedValue(new Error('offline'));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests');
+
+    await vi.waitFor(() => expect(mocks.input?.draft).toBe('Run the tests'));
+  });
+
+  it('puts the refused message before what was typed meanwhile', async () => {
+    let answer!: (result: unknown) => void;
+    mocks.issue.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        })
+    );
+    render(() => <AgentComposer />);
+    sendFromInput('First message');
+    mocks.input?.onDraftChange?.('Second thought');
+    answer(err([{ code: 'HTTP_ERROR' }]));
+
+    await vi.waitFor(() =>
+      expect(mocks.input?.draft).toBe('First message\n\nSecond thought')
+    );
+  });
+
+  it('gives back the files that rode the refused message', async () => {
+    mocks.issue.mockResolvedValue(err([{ code: 'HTTP_ERROR' }]));
+    render(() => <AgentComposer />);
+    sendFromInput('With a file', [attachment]);
+
+    await vi.waitFor(() =>
+      expect(mocks.input?.attachments).toEqual([attachment])
+    );
+  });
+
+  it('leaves the composer empty once the message is taken', async () => {
+    mocks.issue.mockResolvedValue(ok({ status: 'accepted', actionId: 'a' }));
+    render(() => <AgentComposer />);
+    sendFromInput('Run the tests', [attachment]);
+
+    await vi.waitFor(() => expect(mocks.issue).toHaveBeenCalled());
+    await Promise.resolve();
+    expect(mocks.input?.draft).toBe('');
+    expect(mocks.input?.attachments).toEqual([]);
   });
 });
