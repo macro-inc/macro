@@ -14,6 +14,8 @@ AI editors, lexical, and notification text.
   notification bodies, digests, and search.
 - `src/serialize.rs`: writes mentions as chip XML.
 - `src/tests.rs`: round-trip parse/serialize cases.
+- `<m-agent-activity>` (an agent reply's steps) is parsed for its row labels only, so
+  notification text says what the agent did; its cards are ignored.
 
 ## Scope
 

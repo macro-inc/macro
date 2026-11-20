@@ -5,7 +5,10 @@ import {
   entityDiscussionVerb,
   isEntityDiscussionEvent,
 } from '@notifications/entity-discussion';
-import { getNotificationAction } from '@notifications/notification-metadata';
+import {
+  agentTurnEnding,
+  getNotificationAction,
+} from '@notifications/notification-metadata';
 import {
   getNotificationAgentSender,
   getUniqueAgentSenders,
@@ -37,6 +40,8 @@ function actionFor(
 ): string {
   const metadata = notification?.notification_metadata;
   if (isEntityDiscussionEvent(metadata)) return entityDiscussionVerb(metadata);
+  if (metadata?.tag === 'agent_session_settled')
+    return agentTurnEnding(metadata.content.stopReason);
   if (
     notification &&
     (metadata?.tag === 'agent_sign_in_expiry' ||

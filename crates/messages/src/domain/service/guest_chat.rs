@@ -3,9 +3,10 @@ use super::*;
 use chrono::{DateTime, Utc};
 use macro_user_id::email::ReadEmailParts;
 use mention_utils::parse::{
-    ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention, ParsedDateMention,
-    ParsedDocumentMention, ParsedGroupMention, ParsedLink, ParsedPullRequestMention,
-    ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment, XmlFormatter,
+    ParsedAgentActivity, ParsedAgentSessionMention, ParsedBookingLinkMention, ParsedContactMention,
+    ParsedDateMention, ParsedDocumentMention, ParsedGroupMention, ParsedLink,
+    ParsedPullRequestMention, ParsedUserMention, ParsedXmlText, PlainTextFormatter, TextSegment,
+    XmlFormatter,
 };
 use mention_utils::serialize::ExternalLink;
 use std::collections::HashMap;
@@ -241,6 +242,13 @@ impl XmlFormatter for GuestTextFormatter {
         f: &mut Formatter<'_>,
     ) -> std::fmt::Result {
         PlainTextFormatter::format_agent_session(session, f)
+    }
+
+    fn format_agent_activity(
+        activity: &ParsedAgentActivity<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
+        PlainTextFormatter::format_agent_activity(activity, f)
     }
 
     fn format_pull_request(

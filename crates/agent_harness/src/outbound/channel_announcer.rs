@@ -20,9 +20,11 @@ use std::sync::Arc;
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
 use agent_fold::domain::model::{ActivityStatus, ProjectedSegment, SegmentKind, TurnId, TurnPhase};
 use agent_session::domain::model::AgentSessionId;
+use agent_trigger::domain::processing::ChannelTypeLookup;
 use bot_id::BotId;
+use channels::domain::models::ChannelType;
 use entity_access::domain::{
-    models::{BotAccessScope, EntityAccessReceipt},
+    models::{BotAccessScope, EntityAccessReceipt, EntityType},
     ports::EntityAccessService,
 };
 use lexical_client::LexicalClient;
@@ -76,6 +78,7 @@ fn chat_reply(session_id: AgentSessionId, body: AgentChatReplyBody) -> AgentChat
         session_id: session_id.to_string(),
         body,
         link: None,
+        label: None,
     }
 }
 
@@ -301,28 +304,32 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
 }
 
 /// Posts as the session bot with the invoking user's current parent capability.
-pub struct MessageAnnouncer<Access> {
+pub struct MessageAnnouncer<Access, Channels> {
     messages: Arc<dyn MessageCommands>,
     access: Arc<Access>,
+    channels: Arc<Channels>,
     lexical: LexicalClient,
 }
 
-impl<Access> MessageAnnouncer<Access> {
-    /// Compose the common message service, authorization service, and Markdown composer.
+impl<Access, Channels> MessageAnnouncer<Access, Channels> {
+    /// Compose the common message service, authorization service, channel
+    /// facts, and Markdown composer.
     pub fn new(
         messages: Arc<dyn MessageCommands>,
         access: Arc<Access>,
+        channels: Arc<Channels>,
         lexical: LexicalClient,
     ) -> Self {
         Self {
             messages,
             access,
+            channels,
             lexical,
         }
     }
 }
 
-impl<Access: EntityAccessService> MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Channels: ChannelTypeLookup> MessageAnnouncer<Access, Channels> {
     /// The bot's capability to write into `parent`, minted on the invoking
     /// user's current one: an author who may no longer write there gets
     /// nothing posted or patched in their name.
@@ -342,23 +349,107 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
     }
+
+    /// What the reply's link reads as where it is shown as text: the
+    /// session's name only when everyone who can read the thread can open
+    /// the session, else the generic label. Push and search text reach every
+    /// thread reader, and the name is session content. One audience lookup
+    /// per side, whatever the size of the thread; a failed lookup or a
+    /// publicly readable parent keeps the name out. Public and team channels
+    /// are read by people with no participant row, calls by guests with no
+    /// account, and initiatives by the owner's team through a team link share
+    /// (which grants no access to the session), so they never list their whole
+    /// audience. The label is decided once, when the reply is written:
+    /// later joins, renames or unshares do not change it.
+    async fn link_label(
+        &self,
+        session_id: AgentSessionId,
+        session_name: Option<String>,
+        parent: &MessageParent,
+    ) -> Option<String> {
+        let span = tracing::Span::current();
+        let Some(name) = session_name else {
+            span.record("reply_link_label", "default_name");
+            return None;
+        };
+        let listed = match parent {
+            MessageParent::Call(_) | MessageParent::Initiative(_) => false,
+            MessageParent::Channel(channel_id) => {
+                match self.channels.channel_type(*channel_id).await {
+                    Ok(channel_type) => matches!(
+                        channel_type,
+                        Some(ChannelType::Private | ChannelType::DirectMessage)
+                    ),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, %session_id, "could not read the thread's channel type; labelling the reply's link generically");
+                        false
+                    }
+                }
+            }
+            MessageParent::Document(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => true,
+        };
+        if !listed {
+            span.record("reply_link_label", "generic");
+            return None;
+        }
+        let parent_id = parent.entity_id();
+        let parent_type = parent.access_entity_type();
+        let shared = async {
+            if self
+                .access
+                .get_access_level(None, &parent_id, parent_type)
+                .await?
+                .is_some()
+            {
+                return Ok::<_, entity_access::domain::models::AccessError>(false);
+            }
+            let session_readers: std::collections::HashSet<_> = self
+                .access
+                .get_users_by_entity(&session_id.to_string(), EntityType::AgentSession)
+                .await?
+                .into_iter()
+                .collect();
+            Ok(self
+                .access
+                .get_users_by_entity(&parent_id, parent_type)
+                .await?
+                .iter()
+                .all(|reader| session_readers.contains(reader)))
+        }
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, %session_id, "could not compare the thread's and the session's readers; labelling the reply's link generically");
+        })
+        .unwrap_or(false);
+        span.record("reply_link_label", if shared { "named" } else { "generic" });
+        shared.then_some(name)
+    }
 }
 
-impl<Access> MessageAnnouncer<Access> {
-    /// A chat agent's reply saying `body`, composed by Lexical.
+impl<Access, Channels> MessageAnnouncer<Access, Channels> {
+    /// A chat agent's reply saying `body`, composed by Lexical, its link
+    /// reading as `label` where the reply is shown as text.
     async fn compose_reply(
         &self,
         session_id: AgentSessionId,
+        label: Option<String>,
         body: AgentChatReplyBody,
     ) -> Result<String> {
         self.lexical
-            .compose_agent_chat_reply(&chat_reply(session_id, body))
+            .compose_agent_chat_reply(&AgentChatReply {
+                label,
+                ..chat_reply(session_id, body)
+            })
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))
     }
 }
 
-impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Channels: ChannelTypeLookup> SessionAnnouncer
+    for MessageAnnouncer<Access, Channels>
+{
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let access = self
             .bot_write(
@@ -430,6 +521,15 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
         })
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            session_id = %resolution.session_id,
+            message_id = %resolution.message_id,
+            reply_link_label = tracing::field::Empty,
+        ),
+        err
+    )]
     async fn resolve(&self, resolution: ResolvedReply) -> Result<()> {
         if resolution.is_coding {
             return Ok(());
@@ -462,7 +562,16 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             content: Some(content),
             ..Default::default()
         };
-        let content = self.compose_reply(resolution.session_id, body).await?;
+        let label = self
+            .link_label(
+                resolution.session_id,
+                resolution.session_name.clone(),
+                &resolution.origin_parent,
+            )
+            .await;
+        let content = self
+            .compose_reply(resolution.session_id, label.clone(), body)
+            .await?;
         let patched = match self
             .messages
             .patch(access.clone(), message_id, patch(content))
@@ -476,6 +585,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 let content = self
                     .compose_reply(
                         resolution.session_id,
+                        label,
                         AgentChatReplyBody::Markdown {
                             markdown: UNSHAREABLE_ANSWER.to_owned(),
                         },
@@ -577,6 +687,7 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
                 session_id: presentation.session_id.to_string(),
                 body,
                 link: Some(presentation.link),
+                label: None,
             })
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;

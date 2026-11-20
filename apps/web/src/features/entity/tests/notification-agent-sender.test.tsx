@@ -158,3 +158,29 @@ describe('agent-authored comment notifications', () => {
     expect(container.textContent).toBe('Macro: 2 replies');
   });
 });
+
+describe('agent session notifications', () => {
+  it('says how the turn ended rather than that it finished', () => {
+    const settled = {
+      id: crypto.randomUUID(),
+      sender_id: null,
+      notification_event_type: 'agent_session_settled',
+      notification_metadata: {
+        tag: 'agent_session_settled',
+        content: {
+          sessionId: 'session-1',
+          sessionName: 'Fix the flaky test',
+          botId: 'bot-1',
+          botName: 'Macro',
+          turn: 1,
+          stopReason: 'error',
+        },
+      },
+    } as unknown as Notification;
+    const { container } = render(() => (
+      <NotificationDescription notification={settled} />
+    ));
+    expect(container.textContent).toContain('ran into an error');
+    expect(container.textContent).not.toContain('finished');
+  });
+});

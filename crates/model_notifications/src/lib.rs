@@ -12,7 +12,7 @@ pub use device::DeviceType;
 pub use metadata::{
     AgentProvider, AgentSessionMentionedMetadata, AgentSessionNotificationRef,
     AgentSessionOriginParent, AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
-    AgentSignInExpiryMetadata, AgentSignInExpiryStage, AiResponseMetadata,
+    AgentSignInExpiryMetadata, AgentSignInExpiryStage, AgentTurnStopReason, AiResponseMetadata,
     CalendarEventJoinRequestMetadata, CalendarEventReminderMetadata, CallStartedMetadata,
     ChannelAccessRequestedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
     ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
