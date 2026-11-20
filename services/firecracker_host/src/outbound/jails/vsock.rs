@@ -16,24 +16,29 @@ use super::GuestLinkError;
 #[cfg(test)]
 mod test;
 
-/// How long one handshake may take before it is given up and tried again.
-/// Firecracker answers at once (`OK`, or a close when nothing listens), so
-/// a handshake this slow is stuck, and a fresh one is the way out.
+/// How long a first handshake may take before it is given up and tried
+/// again. Firecracker answers at once (`OK`, or a close when nothing
+/// listens), so a handshake this slow is stuck and a fresh one is the way
+/// out; each timeout doubles the next attempt's limit, in case the guest is
+/// only slow (a restore faulting its memory in from disk).
 pub const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(3);
 /// The pause after a first failed attempt; it doubles up to
-/// [`RETRY_DELAY_MAX`].
+/// [`RETRY_DELAY_MAX`]. No attempt is given less than this.
 const RETRY_DELAY_MIN: Duration = Duration::from_millis(10);
 /// The longest pause between attempts, so a boot is noticed within it.
 const RETRY_DELAY_MAX: Duration = Duration::from_millis(100);
 
 /// Connect to `port` through `socket`, retrying until `deadline`: the guest
 /// agent starts listening some time into a boot, and the vsock gives no
-/// signal. Each attempt gets at most `handshake_timeout`.
+/// signal. The first attempt gets at most `handshake_timeout`. A failed
+/// attempt is routine while a guest boots, so the span keeps only the
+/// count and the last error; a handshake that times out warns.
 #[tracing::instrument(
     name = "firecracker_host.vsock_connect",
     skip_all,
-    fields(port = port, attempts = Empty),
-    err
+    fields(port = port, attempts = Empty, last_error = Empty),
+    // The callers' spans carry the error too.
+    err(level = "warn")
 )]
 pub async fn connect_until(
     socket: &Path,
@@ -43,48 +48,41 @@ pub async fn connect_until(
 ) -> Result<UnixStream, GuestLinkError> {
     let mut attempt: u32 = 0;
     let mut delay = RETRY_DELAY_MIN;
+    let mut handshake_limit = handshake_timeout;
     let outcome = loop {
         attempt += 1;
-        // Never less than the first pause, so an attempt made at the
-        // deadline still has a chance.
-        let limit = handshake_timeout
+        let limit = handshake_limit
             .min(deadline.saturating_duration_since(Instant::now()))
             .max(RETRY_DELAY_MIN);
-        match connect_once(socket, port, attempt, limit).await {
-            Ok(stream) => break Ok(stream),
-            Err(error) if Instant::now() >= deadline => break Err(error),
+        let error = match tokio::time::timeout(limit, handshake(socket, port)).await {
+            Ok(Ok(stream)) => break Ok(stream),
+            Ok(Err(error)) => error,
             Err(_) => {
-                tokio::time::sleep_until((Instant::now() + delay).min(deadline)).await;
-                delay = (delay * 2).min(RETRY_DELAY_MAX);
+                tracing::warn!(
+                    attempt,
+                    limit_ms = limit.as_millis(),
+                    "vsock handshake got no answer; trying again"
+                );
+                handshake_limit = handshake_limit.saturating_mul(2);
+                GuestLinkError::HandshakeTimedOut(limit)
             }
+        };
+        // An attempt that could only get less than the shortest limit would
+        // report its own timeout instead of what failed all along.
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining < RETRY_DELAY_MIN * 2 {
+            break Err(error);
         }
+        tracing::debug!(attempt, error = %error, "vsock connect failed; trying again");
+        tokio::time::sleep(delay.min(remaining - RETRY_DELAY_MIN)).await;
+        delay = (delay * 2).min(RETRY_DELAY_MAX);
     };
-    tracing::Span::current().record("attempts", attempt);
-    outcome
-}
-
-/// One handshake, given up after `limit`. A failed attempt is routine while
-/// a guest boots, so it is logged at debug and kept as the span's `error`.
-#[tracing::instrument(
-    name = "firecracker_host.vsock_connect_attempt",
-    skip_all,
-    fields(attempt = attempt, error = Empty),
-    err(level = "debug")
-)]
-async fn connect_once(
-    socket: &Path,
-    port: u32,
-    attempt: u32,
-    limit: Duration,
-) -> Result<UnixStream, GuestLinkError> {
-    let result = match tokio::time::timeout(limit, handshake(socket, port)).await {
-        Ok(result) => result,
-        Err(_) => Err(GuestLinkError::HandshakeTimedOut(limit)),
-    };
-    if let Err(error) = &result {
-        tracing::Span::current().record("error", tracing::field::display(error));
+    let span = tracing::Span::current();
+    span.record("attempts", attempt);
+    if let Err(error) = &outcome {
+        span.record("last_error", tracing::field::display(error));
     }
-    result
+    outcome
 }
 
 async fn handshake(socket: &Path, port: u32) -> Result<UnixStream, GuestLinkError> {

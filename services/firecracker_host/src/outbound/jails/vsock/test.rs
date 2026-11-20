@@ -83,7 +83,7 @@ async fn a_connect_is_retried_until_the_guest_agent_listens() {
     assert!(accepted.recv().await.is_some());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_handshake_that_hangs_is_given_up_and_tried_again() {
     let dir = tempfile::tempdir().unwrap();
     let socket = socket_in(&dir);
@@ -106,7 +106,7 @@ async fn a_handshake_that_hangs_is_given_up_and_tried_again() {
     assert_eq!(lines.recv().await.as_deref(), Some("CONNECT 52"));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn a_guest_that_never_answers_fails_at_the_deadline_with_the_handshake_timeout() {
     let dir = tempfile::tempdir().unwrap();
     let socket = socket_in(&dir);
@@ -135,6 +135,39 @@ async fn a_guest_that_never_answers_fails_at_the_deadline_with_the_handshake_tim
         attempts >= 3,
         "only {attempts} attempts before the deadline"
     );
+}
+
+#[tokio::test(start_paused = true)]
+async fn each_handshake_timeout_doubles_the_next_attempts_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = socket_in(&dir);
+    let (_lines, _accepted) = firecracker(&socket, vec![Answer::Hang, Answer::Hang, Answer::Ok]);
+
+    let started = Instant::now();
+    let deadline = started + Duration::from_secs(10);
+    let stream = connect_until(&socket, PORT, deadline, HANDSHAKE).await;
+
+    assert!(stream.is_ok(), "{stream:?}");
+    // 100 ms, a 10 ms pause, 200 ms, a 20 ms pause.
+    assert!(
+        started.elapsed() >= Duration::from_millis(330),
+        "the second attempt was not given twice the first's limit: {:?}",
+        started.elapsed()
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_guest_agent_that_never_listens_fails_with_the_refusal_not_a_timeout() {
+    let dir = tempfile::tempdir().unwrap();
+    let socket = socket_in(&dir);
+    let (_lines, _accepted) = firecracker(&socket, vec![Answer::Close]);
+
+    let deadline = Instant::now() + Duration::from_millis(75);
+    let error = connect_until(&socket, PORT, deadline, HANDSHAKE)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, GuestLinkError::Refused(_)), "{error:?}");
 }
 
 #[tokio::test]
