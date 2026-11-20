@@ -74,6 +74,9 @@ const REPEATABLE = new Set([
 ]);
 /** How many harness calls were lost and made again, by method (see px). */
 export const lostCalls: Record<string, number> = {};
+/** Harness calls that had not answered after PX_CALL_TIMEOUT_MS, by method. */
+export const hungCalls: Record<string, number> = {};
+const CALL_TIMEOUT_MS = Number(process.env.PX_CALL_TIMEOUT_MS ?? 180_000);
 
 /**
  * Calls `window.__px[method]` in the page, loading the harness first. Chromium
@@ -88,7 +91,7 @@ export async function px<T>(
 ): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await pxOnce<T>(page, method, args);
+      return await answerWithin(pxOnce<T>(page, method, args), method);
     } catch (error) {
       const lost = String(error).includes('garbage collected');
       if (lost && REPEATABLE.has(method) && attempt < 3) {
@@ -97,6 +100,26 @@ export async function px<T>(
       }
       throw new Error(`px ${method}: ${String(error).split('\n')[0]}`);
     }
+  }
+}
+
+/**
+ * A call the page never answers (a write waiting on something that never
+ * settles) fails, named and counted, instead of stalling the run.
+ */
+async function answerWithin<T>(work: Promise<T>, method: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      hungCalls[method] = (hungCalls[method] ?? 0) + 1;
+      reject(new Error(`no answer within ${CALL_TIMEOUT_MS} ms`));
+    }, CALL_TIMEOUT_MS);
+  });
+  work.catch(() => undefined);
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

@@ -21,6 +21,7 @@ import {
   dss,
   gotoRetrying,
   lit,
+  hungCalls,
   lostCalls,
   ORIGIN,
   px,
@@ -181,6 +182,8 @@ const counts = {
   selfNavigations: 0,
   /** Harness calls Chromium dropped and the driver made again (driver/stack.ts px). */
   lostCalls,
+  /** Harness calls the page never answered (driver/stack.ts px). */
+  hungCalls,
   /** Failed requests in the viewers' pages, by kind and error. */
   requestFailed: {} as Record<string, Record<string, number>>,
   /** Per channel and set of rows with tied join times: how many distinct orders each side showed across reads. */
