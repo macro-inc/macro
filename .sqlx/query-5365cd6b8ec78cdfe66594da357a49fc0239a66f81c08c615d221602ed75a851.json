@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE computer_screen_driver_leases\n            SET expires_at = now() + make_interval(secs => $3)\n            WHERE computer_id = $1 AND session_id = $2 AND expires_at > now()\n            RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "computer_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "session_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "driver_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "agent_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "5365cd6b8ec78cdfe66594da357a49fc0239a66f81c08c615d221602ed75a851"
+}

@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE computer_screen_drives SET ended_at = now(), end_reason = 'lapsed'\n                WHERE computer_id = $1 AND ended_at IS NULL\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbb901e079a8b9efd64a285554cadadea9398938213c0ed59a274f9a41e105a3"
+}

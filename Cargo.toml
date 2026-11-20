@@ -112,6 +112,7 @@ members = [
   "crates/graphql_work_feed",
   "crates/gtm_invite",
   "crates/computer_id",
+  "crates/computer_screen",
   "crates/pairing_id",
   "crates/harness_id",
   "crates/harness_token",

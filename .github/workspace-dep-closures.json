@@ -1006,6 +1006,7 @@
       "crates/collab_surface",
       "crates/comms_db_client",
       "crates/computer_id",
+      "crates/computer_screen",
       "crates/computer_types",
       "crates/connect_client",
       "crates/connection",
@@ -4702,6 +4703,14 @@
     ],
     "computer_id": [
       "crates/computer_id",
+      "crates/workspace-hack"
+    ],
+    "computer_screen": [
+      "crates/computer_id",
+      "crates/computer_screen",
+      "crates/cowlike",
+      "crates/harness_id",
+      "crates/macro_user_id",
       "crates/workspace-hack"
     ],
     "computer_types": [
