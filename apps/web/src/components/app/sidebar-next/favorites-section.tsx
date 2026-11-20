@@ -9,7 +9,7 @@ import {
 } from '@app/util/favorites';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { For, Show } from 'solid-js';
+import { For, Show, Suspense } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
 
 /** The single sidebar lists this many favorites, in the user's order. */
@@ -33,7 +33,9 @@ function FavoriteRow(props: { favorite: Favorite }) {
           <FavoriteIcon favorite={props.favorite} />
         </ViewSidebar.Icon>
         <span class="min-w-0 flex-1 truncate">{name()}</span>
-        <FavoriteUnreadIndicator favorite={props.favorite} />
+        <Suspense>
+          <FavoriteUnreadIndicator favorite={props.favorite} />
+        </Suspense>
       </ViewSidebar.Item>
     </FavoriteContextMenu>
   );

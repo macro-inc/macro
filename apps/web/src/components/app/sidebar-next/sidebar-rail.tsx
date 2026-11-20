@@ -6,7 +6,6 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { TOKENS } from '@core/hotkey/tokens';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import { Button } from '@ui';
 import { For, Match, Show, Suspense, Switch } from 'solid-js';
@@ -77,11 +76,7 @@ export const SidebarRail = (props: {
             size="icon-md"
             class="size-10 rounded-xl"
             aria-label={t('nav.expandSidebar')}
-            tooltip={{
-              content: t('nav.expandSidebar'),
-              placement: 'right',
-              hotkey: TOKENS.sidebar.toggleSingleSidebar,
-            }}
+            tooltip={{ content: t('nav.expandSidebar'), placement: 'right' }}
             onClick={() => expand()()}
           >
             <SidebarIcon class="size-5" />

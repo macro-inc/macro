@@ -72,6 +72,7 @@ const HOSTED_RECENT_LIMIT = 10;
 
 export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
+  const hosted = useIsHostedNavigation();
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [conversationsOpen, setConversationsOpen] = createSignal(true);
   const [openPullRequestsOpen, setOpenPullRequestsOpen] = createSignal(true);
@@ -125,7 +126,8 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
     enabled: panel.isPanelActive,
     search: {
       description: t('agentWork.searchAgentChats'),
-      condition: () => props.activePage !== 'routines',
+      // The single sidebar's list has no search field to open.
+      condition: () => !hosted() && props.activePage !== 'routines',
       run: () => {
         changeSearchOpen(true);
         return true;
@@ -152,14 +154,16 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
       )}
     </Key>
   );
-  // In the single sidebar Agents is a short list of recent conversations,
-  // waiting ones first; search, sorting and the archive stay in the view.
-  const hosted = useIsHostedNavigation();
-  const recent = () =>
-    [...listState.waiting(), ...listState.conversations()].slice(
+  // In the single sidebar Agents is a short list of recent conversations:
+  // waiting ones, then open pull requests, then the rest.
+  const recent = () => {
+    const waiting = listState.waiting().slice(0, HOSTED_RECENT_LIMIT);
+    const rest = [...openPullRequests(), ...listState.conversations()].slice(
       0,
-      HOSTED_RECENT_LIMIT
+      HOSTED_RECENT_LIMIT - waiting.length
     );
+    return { waiting, rest };
+  };
   const emptyText = () => {
     if (props.search.trim())
       return t('agentWork.noSearchMatches', { query: props.search.trim() });
@@ -181,12 +185,19 @@ export function DesktopAgentsSidebar(props: DesktopAgentsSidebarProps) {
                 aria-label={t('agentWork.conversations')}
                 aria-busy={props.loading}
               >
-                {renderRows(recent())}
-                <Show when={props.loading && recent().length === 0}>
+                {renderRows(recent().waiting, true)}
+                {renderRows(recent().rest)}
+                <Show when={props.loading && visibleCount() === 0}>
                   <ConversationSkeleton rows={3} />
+                </Show>
+                <Show when={props.error}>
+                  <Button variant="ghost" size="sm" onClick={props.onRetry}>
+                    {t('agentWork.retryLoading')}
+                  </Button>
                 </Show>
               </ViewSidebar.Nav>
             </ViewSidebar.Content>
+            <AgentsSidebarFooter />
           </AgentsSidebarRoot>
         }
       >

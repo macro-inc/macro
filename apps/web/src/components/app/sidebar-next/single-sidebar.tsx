@@ -12,8 +12,17 @@ import { UnreadCount } from '@entity/components/UnreadCount';
 import { UnreadIndicator } from '@entity/components/UnreadIndicator';
 import PhoneCallIcon from '@icon/system/fill/phone-call-fill.svg';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
-import { Button } from '@ui';
-import { For, type JSX, Match, Show, Suspense, Switch } from 'solid-js';
+import { Button, cn } from '@ui';
+import {
+  For,
+  type JSX,
+  Match,
+  onCleanup,
+  type Setter,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { unreadDescription } from '../unread-description';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarNewButton } from './create-button';
@@ -139,10 +148,17 @@ const FavoritesSection = lazyNamed(
  * down from it, so the rows inside line up with the app labels. It fills the
  * room the app rows leave and scrolls inside.
  */
-function NestedNavigation(props: { children: JSX.Element }) {
+function NestedNavigation(props: {
+  children: JSX.Element;
+  /** Takes the room the rows leave, for navigation that scrolls inside. */
+  fill?: boolean;
+}) {
   return (
     <div
-      class="relative -mr-(--sidebar-gutter) ml-[calc(var(--sidebar-item-inset)+var(--sidebar-icon-slot)/2)] flex min-h-40 flex-1 flex-col overflow-hidden before:absolute before:inset-y-1 before:left-0 before:w-px before:bg-edge-muted has-[[data-single-sidebar-slot]:empty]:hidden"
+      class={cn(
+        'relative -mr-(--sidebar-gutter) ml-[calc(var(--sidebar-item-inset)+var(--sidebar-icon-slot)/2)] flex flex-col before:absolute before:inset-y-1 before:left-0 before:w-px before:bg-edge-muted has-[[data-single-sidebar-slot]:empty]:hidden',
+        props.fill ? 'min-h-40 flex-1 overflow-hidden' : 'shrink-0'
+      )}
       data-single-sidebar-nested=""
     >
       {props.children}
@@ -156,11 +172,19 @@ function NestedNavigation(props: { children: JSX.Element }) {
  * navigation fills it absolutely, as a docked split panel does, so the
  * workspace's own list scrolls inside.
  */
-function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
+function NavigationSlot(props: { setSlot: Setter<HTMLElement | undefined> }) {
   return (
-    <NestedNavigation>
+    <NestedNavigation fill>
       <div
-        ref={props.ref}
+        ref={(element) => {
+          props.setSlot(element);
+          // A slot that moves or goes away must not stay the mount point.
+          onCleanup(() =>
+            props.setSlot((current) =>
+              current === element ? undefined : current
+            )
+          );
+        }}
         class="relative min-h-0 flex-1"
         data-single-sidebar-slot=""
       />
@@ -175,7 +199,7 @@ function NavigationSlot(props: { ref: (element: HTMLElement) => void }) {
  */
 export function SingleSidebar(props: {
   /** Receives the element the active workspace's navigation renders into. */
-  setNavigationSlot: (element: HTMLElement) => void;
+  setNavigationSlot: Setter<HTMLElement | undefined>;
   onCollapse: () => void;
 }) {
   const gates = useNavItemGates();
@@ -240,14 +264,14 @@ export function SingleSidebar(props: {
                       conversations instead. */}
                   <Show
                     when={item.id === 'channels'}
-                    fallback={<NavigationSlot ref={props.setNavigationSlot} />}
+                    fallback={
+                      <NavigationSlot setSlot={props.setNavigationSlot} />
+                    }
                   >
                     <NestedNavigation>
-                      <div class="min-h-0 flex-1 overflow-y-auto">
-                        <Suspense>
-                          <ChatSections />
-                        </Suspense>
-                      </div>
+                      <Suspense>
+                        <ChatSections />
+                      </Suspense>
                     </NestedNavigation>
                   </Show>
                 </Show>
@@ -258,7 +282,7 @@ export function SingleSidebar(props: {
         <MoreMenu gates={gates()} presentation="row" />
         {/* A workspace reached from More or a link still shows its navigation. */}
         <Show when={!appIsActive()}>
-          <NavigationSlot ref={props.setNavigationSlot} />
+          <NavigationSlot setSlot={props.setNavigationSlot} />
         </Show>
         <Suspense>
           <FavoritesSection />

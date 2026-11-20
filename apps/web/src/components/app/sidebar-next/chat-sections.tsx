@@ -6,6 +6,8 @@ import {
   useChannelsSources,
 } from '@app/features/channels-view/queries';
 import { t } from '@app/lib/i18n';
+import { useSplitRouter } from '@app/lib/split-router';
+import { channelDetailRoute } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import type { ChannelEntity } from '@entity';
@@ -29,6 +31,7 @@ const LISTED_SCOPES: ChannelsSourceScope[] = [
  */
 export function ChatSections() {
   const layout = useSplitLayout();
+  const router = useSplitRouter();
   const notificationSource = useGlobalNotificationSource();
   const sources = useChannelsSources(
     (scope) => LISTED_SCOPES.includes(scope),
@@ -60,10 +63,21 @@ export function ChatSections() {
     );
   const directMessages = () => pick(sources.direct_messages.items());
 
-  const isOpen = (channel: ChannelEntity) => {
-    const content = globalSplitManager()?.activeSplit()?.content();
-    return content?.type === 'channel' && content.id === channel.id;
+  // The split shows a conversation as Chat's route with its id, not as
+  // channel content, so read the active pane's route.
+  const openChannelId = () => {
+    const split = globalSplitManager()?.activeSplit();
+    const pane = router.panes().find((pane) => pane.toString() === split?.id);
+    if (!pane) return undefined;
+    const match = router
+      .entry(pane)
+      ?.location.route.matches.find(
+        (match) => match.id === channelDetailRoute.id
+      );
+    const id = match?.params.channelId;
+    return typeof id === 'string' ? id : undefined;
   };
+  const isOpen = (channel: ChannelEntity) => openChannelId() === channel.id;
 
   const open = (channel: ChannelEntity, event: MouseEvent) => {
     layout.openWithSplit(

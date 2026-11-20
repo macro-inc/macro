@@ -630,14 +630,16 @@ up to eight **Favorites**, and Help and Settings in a row at the bottom. The
 views, Home's list) renders under its app's row, indented to the app labels with
 a line down from the app's icon, and scrolls in the room the rows leave. There
 it drops its title, New button, suggested routines and Watch tutorial rows.
-Agents lists its ten most recent conversations, waiting ones first. Chat has no
+Agents lists its ten most recent conversations (waiting, then open pull
+requests, then the rest) above its Agents, Routines and Archived links. Chat has no
 inner list: under Chat the sidebar lists **Group chats** and **Direct
-messages**, ten each, unread first then most recently active, and its split
+messages**, ten each, unread first then most recently active (the open one
+highlighted), and its split
 shows the conversation list until one opens, then the conversation with Back;
 Notifications works the same way. Other splits show no navigation until they
 become active. **Collapse sidebar** or `Cmd+.` folds the sidebar to the icon
-rail, with no workspace navigation; the rail's top button widens it again, and
-the choice is saved. While the flag loads, the rail shows. Check: open Email,
+rail, and every split gets its own navigation back, as without the flag; the
+rail's top button widens it again, and the choice is saved. While the flag loads, the rail shows. Check: open Email,
 then Tasks in a second split, and click between them: the expanded app follows
 the active split, and arrow keys move through its rows.
 

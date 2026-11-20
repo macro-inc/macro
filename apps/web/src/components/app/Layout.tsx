@@ -294,15 +294,15 @@ export function AppChrome(props: ParentProps) {
   const singleSidebar = () =>
     sidebarVisible() && singleSidebarFlag().enabled === true;
   const [navigationSlot, setNavigationSlot] = createSignal<HTMLElement>();
-  // Collapsed, the single sidebar is the icon rail and shows no workspace
-  // navigation at all: splits keep giving up their columns.
+  // Collapsed, the single sidebar is the icon rail and splits keep their own
+  // navigation, as without the flag.
   const [singleSidebarCollapsed, setSingleSidebarCollapsed] =
     usePreference<boolean>('macro:pref:single-sidebar:collapsed', {
       default: false,
     });
   const navigationHost: NavigationHost = {
-    active: singleSidebar,
-    slot: () => (singleSidebarCollapsed() ? undefined : navigationSlot()),
+    active: () => singleSidebar() && !singleSidebarCollapsed(),
+    slot: navigationSlot,
   };
   registerHotkey({
     hotkey: 'cmd+.',
