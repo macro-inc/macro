@@ -24,6 +24,7 @@
  */
 
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import { codeExecutionReceipt } from './code-execution';
 
 export type PartSegment = {
   kind: 'part' | 'tools';
@@ -54,6 +55,9 @@ const SELF_RENDERING_TOOLS: ReadonlySet<string> = new Set([
 export function rendersOwnView(part: MessagePart | undefined): boolean {
   if (part?.kind !== 'tool_use') return false;
   if (presentedReviewId(part) || part.detail.kind === 'view') return true;
+  // A background job's card outlives its turn: closed in a settled run, a
+  // running job would read as a finished tool call.
+  if (codeExecutionReceipt(part)?.job) return true;
   const macroTool =
     part.detail.kind === 'macro' ||
     (part.detail.kind === 'other' &&
