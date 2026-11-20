@@ -1090,17 +1090,17 @@ gutter, with notifications from another account: new top-level messages, a
 thread reply, and a mention. Then narrow the pane to see the popover and the
 hidden states. Check that:
 
-- A round Mark done button with a bell sits in the gutter left of each
-  stack's newest message. For a thread, it sits beside the newest notified
-  reply, or beside the top-level message while the thread is collapsed.
-  Clicking it removes the button and marks that stack's notifications done in Home.
+- A round check sits in the gutter left of each stack's newest message. For a
+  thread, it sits beside the newest notified reply, or beside the top-level
+  message while the thread is collapsed. Clicking it removes the check and
+  marks that stack's notifications done in Home.
 - A toggle with a count sits at the top left of the gutter. With ≥240px of
   gutter (pane ≥1400px), it opens a list docked in the gutter. Narrower panes
   open the list as a popover. Not done and Unread switch which stacks it
-  lists. Clicking a row scrolls to its message, and the row's bell marks it
+  lists. Clicking a row scrolls to its message, and the row's check marks it
   done (or read, in Unread). While a list's notifications load it says so,
   and if the read fails it offers Retry instead of an empty list.
-- Below 72px of gutter, the toggle hides. Below 1008px, the bells hide.
+- Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
 
 ## Requests to join
 

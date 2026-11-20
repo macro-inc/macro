@@ -1,16 +1,16 @@
 import { t } from '@app/lib/i18n';
-import BellIcon from '@icon/system/regular/bell.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import type { ChannelStack } from '../core/channel-stacks';
 import { StackKindIcon } from './stack-kind-icon';
 import { type SenderName, stackLabel } from './stack-label';
 
-/** What a row's trailing bell does: mark the stack done, or read. */
+/** What a row's trailing check does: mark the stack done, or read. */
 export type StackListAction = 'done' | 'read';
 
 /**
- * One row per stack: its kind and label open it in the channel, and a bell
+ * One row per stack: its kind and label open it in the channel, and a check
  * that shows on hover or keyboard focus marks it done or read.
  */
 export function StackList(props: {
@@ -77,7 +77,7 @@ export function StackList(props: {
                     }
                     onClick={() => props.onAction(stack)}
                   >
-                    <BellIcon class="size-3.5" />
+                    <CheckIcon class="size-3.5" />
                   </Button>
                 </span>
               </li>

@@ -3,9 +3,9 @@
 ## What it is
 
 Chat: the desktop channel gutter, left of the 920px message column. It shows
-a Mark done button (a bell; "checks" in code) beside each not-done
-notification stack, and a toggle that opens a list of the channel's not-done
-or unread stacks. Each part has its own flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
+a Mark done check beside each not-done notification stack, and a toggle that
+opens a list of the channel's not-done or unread stacks. Each part has its own
+flag (`enable-channel-stack-done-checks`, `enable-channel-notification-list`).
 
 ## How it works
 
