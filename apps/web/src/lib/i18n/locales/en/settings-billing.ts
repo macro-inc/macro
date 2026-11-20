@@ -1,8 +1,6 @@
 export default {
   priceBreakdown: 'Price breakdown',
   catalogPrice: 'New computers: {{price}}. Your subscribed price is retained.',
-  proration:
-    'Added to your team subscription, prorated for the rest of this billing period.',
   noCharge: 'No charge is added to your team subscription.',
   invoiceNote:
     'Current recurring charges. Proration, credits and taxes may change your next invoice.',
