@@ -16,7 +16,7 @@ import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, pers
 import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines, withheld, withheldAcross } from './report';
-import { CACHE, type Trigger, generate, prepare } from './run';
+import { CACHE, type Trigger, generate, prepare, workListOf } from './run';
 import { type Attempt, type RunFile, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
@@ -388,6 +388,12 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
       run.attempts.map(async (attempt) => {
         const persona = seatOf(people.get(attempt.persona)!, attempt.seat ?? 1);
         const findsWork = !!run.flags?.[FIND_WORK_FLAG];
+        // The list is read again from the sessions' transcripts, so a fix to reading it reaches runs already made.
+        const transcript = attempt.generation.transcript;
+        if (transcript && existsSync(transcript)) {
+          const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
+          attempt.generation.workList = workListOf(rows);
+        }
         // A build failure keeps its 0: only its work list is judged again, where the run scores one.
         if (attempt.generation.buildFailed ? !listsScored(run.section, persona, findsWork) : attempt.generation.error) {
           // Nothing to judge again; a list judgement its key no longer backs goes.

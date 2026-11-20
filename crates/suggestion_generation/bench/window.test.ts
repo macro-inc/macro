@@ -243,6 +243,16 @@ describe('workListOf', () => {
     expect(workListOf([prompt({ person: 'x', streams: [{ name: 'y' }] })])).toBeUndefined();
   });
 
+  test('reads a list whose brief came with markdown escapes', () => {
+    const escaped = (value: unknown) => ({
+      direction: 'to_runtime',
+      created_at: '2026-11-20 10:00:00+00',
+      content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: briefOf(value).replaceAll('_', '\\_') }] } },
+    });
+    const quoted = { ...list, streams: [{ ...list.streams[0], what: 'Orders "rush\\_" a\\b / c_d' }] };
+    expect(workListOf([escaped(quoted)])).toEqual(quoted);
+  });
+
   test('finds none where no session read a list', () => {
     expect(workListOf([{ direction: 'to_runtime', content: { type: 'acp', method: 'session/prompt', params: { prompt: [{ type: 'text', text: 'Draft routines.\n<untrusted>\nmail\n</untrusted>' }] } } }])).toBeUndefined();
   });

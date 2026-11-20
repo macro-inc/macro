@@ -149,7 +149,8 @@ Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/
 with each attempt's suggestions, the judge's marks, the score and the
 sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
-that stopped first. `run` starts the stand-in if it isn't up and holds the
+that stopped first; `rejudge` reads each work list again from the
+transcripts. `run` starts the stand-in if it isn't up and holds the
 stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just

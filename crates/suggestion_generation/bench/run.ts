@@ -215,6 +215,26 @@ function isWorkList(value: unknown): value is WorkList {
   );
 }
 
+/**
+ * `text` with markdown's backslash escapes undone. The prompt the harness
+ * sends a runtime escapes punctuation (`handled\_by`); JSON escapes only
+ * `"`, `\` and `/` before punctuation, so every other backslash before
+ * punctuation is markdown's.
+ */
+export function unescapeMarkdown(text: string): string {
+  let out = '';
+  for (let i = 0; i < text.length; i++) {
+    const next = text[i + 1];
+    if (text[i] === '\\' && next !== undefined && /^[!-\/:-@\[-`{-~]$/.test(next)) {
+      out += '"\\/'.includes(next) ? text[i] + next : next;
+      i++;
+    } else {
+      out += text[i];
+    }
+  }
+  return out;
+}
+
 /** The work list one brief carried, if it carried one. */
 function listIn(row: TranscriptRow): WorkList | undefined {
   for (const text of strings(row.content?.params)) {
@@ -223,7 +243,7 @@ function listIn(row: TranscriptRow): WorkList | undefined {
     const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
     if (!block) continue;
     try {
-      const list: unknown = JSON.parse(block[1]);
+      const list: unknown = JSON.parse(unescapeMarkdown(block[1]));
       if (isWorkList(list)) return list;
     } catch {
       // Not the list: read on.
