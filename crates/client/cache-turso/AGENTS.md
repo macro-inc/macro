@@ -9,7 +9,9 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 ## Start here
 
 - `src/storage.rs`: `TursoStorage` — implements `cache_core::store::Storage`
-  with the frozen compound-key schema and strict-head mutation leasing.
+  with the frozen compound-key schema and strict-head mutation leasing. Retiring
+  optimistic layers atomically replaces affected projection shadows with the core
+  composition of surviving layers; preserve unrelated shadows and command metadata.
 - `src/driver.rs`: Turso connection/transaction handling, including checked row-at-a-time query visitation.
 - `src/storage/contact_search.rs` / `.sql`: validate the partial `records_contacts_cover_idx` on `records(__typename, id, value)` and explicitly select it after the bound text prefilter. The pinned planner otherwise chooses the extra table lookup. Decode one row at a time for before-limit policy; never add a final SQL limit or collect the corpus. Ordinary search retains its existing covering-only path.
 - `src/storage/people_sql.rs`: local relational reads over contact facts in the existing predicate index, not another database or Rust catalog. Derive facts in record transactions, delete them with records, and rebuild in bounded batches only when the profile/account stamp changes. Generic caller projections cannot override these cache-owned facts. SQL reads only needed attributes and limits final results before decoding; enforce both row and byte budgets. Pin fact joins to document/attribute primary-key seeks: the unhinted Turso plan can choose quadratic attribute scans at 100k. The owned profile's layout version 2 also derives bounded name words and epoch-scoped ranking facts. Delta updates change only differing facts; activity updates must not rewrite name-word postings. Rebuild older derived profiles in bounded batches while preserving authority, queue and generation. The indexed reader serves menu policy 6; there is no remote or old-scoring fallback.
@@ -50,6 +52,7 @@ GraphQL cache — native for tests/Tauri, OPFS-backed on wasm32.
 ## Gotchas
 
 - Email send persistence and cancellation belong to the frontend email journal, not the normalized cache or its mutation queue.
+- Permission retirement pages raw and projection-only keys through covering keys, retaining the distinction between an initial cursor and an empty ID. Whole-projection deletion skips old fact reconstruction but still rebases ordered pending contributions; preserve queue rows, retry metadata, and identity bindings.
 
 - The contact payload index is part of this branch's unpublished schema-12 cutover (tracked `origin/main` baseline: schema 11), not a second migration/version. Older local schema-12 shapes missing the index reject as incompatible; do not silently upgrade or reuse those test files. Fresh/current shape reopen preserves records, queued writes and generation. Benchmark only with fresh synthetic profiles, not user caches.
 - Projection 6 includes the visible local-part fallback in contact matching; storage schema remains 12. It is independent of the context-aware person-policy API.

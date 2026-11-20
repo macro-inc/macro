@@ -1,9 +1,13 @@
 import type { CacheHost } from '@graphql-cache/host/types';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import {
   type AnyVariables,
   type Client,
   CombinedError,
+  createRequest,
+  type DocumentInput,
   type GraphQLRequest,
+  makeOperation,
   type Operation,
   type OperationContext,
   type OperationResult,
@@ -36,6 +40,7 @@ export type FakeMutation = {
 };
 
 export type FakeCacheWrite = {
+  generation?: string;
   variables: Record<string, unknown>;
   data: unknown;
 };
@@ -78,9 +83,20 @@ export function createFakeAttentionFeedClient(
     return subject.source;
   };
 
-  const subscription = (query: unknown, variables: Record<string, unknown>) => {
+  const subscription = (
+    query: DocumentInput,
+    variables: Record<string, unknown>
+  ) => {
     const subject = makeSubject<OperationResult>();
-    const operation = { kind: 'subscription' } as Operation;
+    const operation = makeOperation(
+      'subscription',
+      createRequest(query, variables),
+      {
+        url: 'http://test',
+        requestPolicy: 'network-only',
+        cacheSessionGeneration: cacheSessionGeneration.capture(),
+      }
+    );
     subscriptions.push({
       variables,
       next: (data) => subject.next({ operation, data } as OperationResult),
@@ -122,11 +138,12 @@ export function createFakeAttentionFeedClient(
         : { kind: 'miss' as const };
     },
     writeQuery: async (args: {
+      generation?: string;
       variables?: Record<string, unknown>;
       data: unknown;
     }) => {
       const variables = args.variables ?? {};
-      writes.push({ variables, data: args.data });
+      writes.push({ variables, data: args.data, generation: args.generation });
       const key = variablesKey(variables);
       queries
         .filter((query) => variablesKey(query.variables) === key)

@@ -27,10 +27,11 @@ type DocumentTarget = Extract<EntityDetailTarget, { type: 'document' }>;
  * Its headers are top bars, which carry the shell's navigation controls.
  */
 export function CrmItemDetail(props: { sourceName: string }) {
+  const crm = useCrmContext();
   const route = useCrmWorkspace().host.record;
   const panel = useSplitPanelOrThrow();
   const item = () => route.item()!;
-  const records = route.records;
+  const records = () => (crm.canAccess() ? route.records() : []);
   const value = () => `item:${item().itemType}:${item().itemId}`;
   const target = (): EntityDetailTarget => {
     const current = item();
@@ -67,7 +68,7 @@ export function CrmItemDetail(props: { sourceName: string }) {
     if (!current) return;
     return { documentId: current.target.id, blockAlias: current.blockType };
   });
-  onCleanup(useCrmContext().registerTaskComposerRecord(() => records().at(-1)));
+  onCleanup(crm.registerTaskComposerRecord(() => records().at(-1)));
 
   return (
     <ViewBreadcrumbs.Root

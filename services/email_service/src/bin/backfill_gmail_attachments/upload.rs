@@ -4,7 +4,7 @@ use email_api_client::GmailApiClientRepository;
 use email_api_client::domain::ports::AlwaysAllowRateLimiter;
 use email_api_client::domain::service::EmailApiClientServiceImpl;
 use email_service::outbound::email_api::StaticTokenSource;
-use email_service::util::upload_attachment::determine_file_metadata;
+use email_service::util::upload_attachment::{determine_file_metadata, s3_error_code};
 use model::document::response::CreateDocumentRequest;
 use models_email::email::service::link::Link;
 use models_email::service::attachment::AttachmentUploadMetadata;
@@ -168,15 +168,16 @@ impl AttachmentProcessor {
             .body(data)
             .send()
             .await
+            .map_err(reqwest::Error::without_url)
             .context("HTTP request to presigned URL failed")?;
 
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
             bail!(
-                "Upload to storage failed with status {}. Body: {}",
+                "Upload to storage failed with status {}, code {}",
                 status,
-                body
+                s3_error_code(&body).as_deref().unwrap_or("none")
             );
         }
 
