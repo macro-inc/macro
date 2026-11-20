@@ -54,6 +54,7 @@ outbound = [
   "dep:reqwest",
   "dep:sqlx",
   "dep:sqs_client",
+  "dep:subtle",
   "dep:tokio",
   "dep:url",
   "ports",
@@ -127,6 +128,7 @@ tokio-retry = { workspace = true, optional = true }
 tracing = { workspace = true }
 user_events = { path = "../user_events", optional = true }
 password_events = { path = "../password_events", optional = true }
+subtle = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, optional = true }
@@ -150,4 +152,5 @@ rate_limit = { path = "../rate_limit", default-features = false, features = [
 ] }
 tokio = { workspace = true, features = ["test-util"] }
 tower = { workspace = true }
+wiremock = { workspace = true }
 zeroize = { workspace = true }

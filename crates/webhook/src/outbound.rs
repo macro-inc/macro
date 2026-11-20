@@ -5,6 +5,8 @@ mod address_guard;
 #[cfg(feature = "outbound")]
 pub mod http_delivery;
 #[cfg(feature = "outbound")]
+mod http_mcp_endpoint;
+#[cfg(feature = "outbound")]
 pub mod http_validator;
 #[cfg(feature = "outbound")]
 pub mod pg_delivery_repository;
