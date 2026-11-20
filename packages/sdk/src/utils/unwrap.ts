@@ -120,3 +120,19 @@ export function unwrap<TData, TError>(res: {
     throw apiError(res.response?.status ?? 0, res.error);
   return res.data as TData;
 }
+
+/**
+ * {@link unwrap} for a method whose body renames its camelCase options to
+ * snake_case fields: a 422 names the option behind each field it mentions
+ * ({@link withOptionNames}).
+ */
+export function unwrapNamingOptions<TData, TError>(
+  res: { data?: TData; error?: TError; response?: Response },
+  names: Readonly<Record<string, string>>,
+): TData {
+  try {
+    return unwrap(res);
+  } catch (error) {
+    throw withOptionNames(error, names);
+  }
+}

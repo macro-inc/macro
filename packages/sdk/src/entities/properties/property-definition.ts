@@ -5,9 +5,9 @@ import type {
   PropertyOwner,
 } from '../../../generated/properties/types.gen';
 import { Lazy, unwrap } from '../../utils';
-import { withOptionNames } from '../../utils/unwrap';
 import type { MacroClient } from '../../utils/client';
 import { rejectUnknownOptions } from '../../utils/options';
+import { unwrapNamingOptions } from '../../utils/unwrap';
 import type { CreatePropertyScope, PropertyDataType } from './namespace';
 import {
   PropertyOption,
@@ -58,21 +58,17 @@ export class PropertyDefinition {
       dataType: true,
     });
 
-    const record = await client.properties
-      .createPropertyDefinition({
-        body: {
-          display_name: opts.displayName,
-          scope: opts.scope ?? 'user',
-          data_type: opts.dataType,
-        },
-      })
-      .then(unwrap)
-      .catch((error: unknown) => {
-        throw withOptionNames(error, {
-          display_name: 'displayName',
-          data_type: 'dataType',
-        });
-      });
+    const response = await client.properties.createPropertyDefinition({
+      body: {
+        display_name: opts.displayName,
+        scope: opts.scope ?? 'user',
+        data_type: opts.dataType,
+      },
+    });
+    const record = unwrapNamingOptions(response, {
+      display_name: 'displayName',
+      data_type: 'dataType',
+    });
     return new PropertyDefinition(client, record.id, record);
   }
 
