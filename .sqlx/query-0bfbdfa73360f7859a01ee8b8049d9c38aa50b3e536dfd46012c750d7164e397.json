@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, expires_at <= now() AS \"expired!\", model_calls_used,\n                  model_calls_in_flight, solves_used\n           FROM agent_captcha_runs WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "expired!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "model_calls_used",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "model_calls_in_flight",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "solves_used",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0bfbdfa73360f7859a01ee8b8049d9c38aa50b3e536dfd46012c750d7164e397"
+}
