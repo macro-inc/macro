@@ -49,9 +49,9 @@ impl PendingContacts for RedisPendingContacts {
     async fn record(
         &self,
         link: Uuid,
-        contacts: &[PopulateCrmContactPayload],
-    ) -> anyhow::Result<Vec<Option<Uuid>>> {
-        Ok(self.0.record_crm_population(link, contacts).await?)
+        requests: &[(Uuid, PopulateCrmContactPayload)],
+    ) -> anyhow::Result<Vec<bool>> {
+        self.0.record_crm_population(link, requests).await
     }
     async fn release(
         &self,

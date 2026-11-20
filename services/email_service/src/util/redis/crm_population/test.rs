@@ -26,6 +26,25 @@ fn request(email: &str, at: i64, is_sent: bool, name: Option<&str>) -> PopulateC
     }
 }
 
+/// Records `contacts`, each with a new claim: the claim when it took its
+/// entry, `None` when a queued message absorbed it.
+async fn record(
+    redis: &RedisClient,
+    link: Uuid,
+    contacts: &[PopulateCrmContactPayload],
+) -> anyhow::Result<Vec<Option<Uuid>>> {
+    let requests: Vec<(Uuid, PopulateCrmContactPayload)> = contacts
+        .iter()
+        .map(|contact| (Uuid::now_v7(), contact.clone()))
+        .collect();
+    let held = redis.record_crm_population(link, &requests).await?;
+    Ok(requests
+        .into_iter()
+        .zip(held)
+        .map(|((claim, _), held)| held.then_some(claim))
+        .collect())
+}
+
 fn claimed(claims: &[Option<Uuid>]) -> Uuid {
     claims[0].expect("claimed")
 }
@@ -36,21 +55,20 @@ async fn requests_for_a_queued_correspondent_merge_into_its_hints() {
     let link = mailbox();
     let first = request("buyer@example.com", 200, false, Some("Buyer"));
 
-    let claims = redis
-        .record_crm_population(link, std::slice::from_ref(&first))
+    let claims = record(&redis, link, std::slice::from_ref(&first))
         .await
         .unwrap();
     let claim = claimed(&claims);
-    let absorbed = redis
-        .record_crm_population(
-            link,
-            &[
-                request("buyer@example.com", 100, true, None),
-                request("buyer@example.com", 300, false, Some("Buyer B")),
-            ],
-        )
-        .await
-        .unwrap();
+    let absorbed = record(
+        &redis,
+        link,
+        &[
+            request("buyer@example.com", 100, true, None),
+            request("buyer@example.com", 300, false, Some("Buyer B")),
+        ],
+    )
+    .await
+    .unwrap();
 
     assert_eq!(absorbed, [None, None]);
     assert_eq!(
@@ -81,8 +99,7 @@ async fn a_finished_run_clears_its_entry_so_the_next_request_sends_again() {
     let link = mailbox();
     let contact = request("buyer@example.com", 200, false, None);
     let claim = claimed(
-        &redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        &record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap(),
     );
@@ -104,7 +121,7 @@ async fn a_finished_run_clears_its_entry_so_the_next_request_sends_again() {
             .unwrap(),
         PendingContact::Missing
     );
-    let again = redis.record_crm_population(link, &[contact]).await.unwrap();
+    let again = record(&redis, link, &[contact]).await.unwrap();
     assert!(again[0].is_some(), "a new message is needed");
 }
 
@@ -114,8 +131,7 @@ async fn a_request_during_a_run_hands_the_entry_to_a_new_claim() {
     let link = mailbox();
     let contact = request("buyer@example.com", 200, false, None);
     let claim = claimed(
-        &redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        &record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap(),
     );
@@ -124,10 +140,13 @@ async fn a_request_during_a_run_hands_the_entry_to_a_new_claim() {
         .await
         .unwrap();
 
-    let during = redis
-        .record_crm_population(link, &[request("buyer@example.com", 500, true, None)])
-        .await
-        .unwrap();
+    let during = record(
+        &redis,
+        link,
+        &[request("buyer@example.com", 500, true, None)],
+    )
+    .await
+    .unwrap();
     assert_eq!(during, [None], "the running claim absorbs it");
     let next = Uuid::now_v7();
     let settled = redis
@@ -168,8 +187,7 @@ async fn failures_count_per_claim_and_a_released_claim_is_sent_again() {
     let link = mailbox();
     let contact = request("buyer@example.com", 200, false, None);
     let claim = claimed(
-        &redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        &record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap(),
     );
@@ -200,8 +218,7 @@ async fn failures_count_per_claim_and_a_released_claim_is_sent_again() {
         .release_crm_population(link, &[(claim, contact.clone())])
         .await
         .unwrap();
-    let resent = redis
-        .record_crm_population(link, std::slice::from_ref(&contact))
+    let resent = record(&redis, link, std::slice::from_ref(&contact))
         .await
         .unwrap();
     assert!(resent[0].is_some(), "released entries are claimed again");
@@ -211,7 +228,7 @@ async fn failures_count_per_claim_and_a_released_claim_is_sent_again() {
         live_mail: false,
         ..contact
     };
-    assert!(redis.record_crm_population(link, &[history]).await.unwrap()[0].is_some());
+    assert!(record(&redis, link, &[history]).await.unwrap()[0].is_some());
 }
 
 /// Marks the entry's claim as last taken long ago, as when its message was
@@ -237,15 +254,13 @@ async fn a_claim_whose_message_never_ran_is_taken_over() {
     let link = mailbox();
     let contact = request("buyer@example.com", 200, false, None);
     let orphan = claimed(
-        &redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        &record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap(),
     );
 
     age(&redis, link, &contact).await;
-    let again = redis
-        .record_crm_population(link, std::slice::from_ref(&contact))
+    let again = record(&redis, link, std::slice::from_ref(&contact))
         .await
         .unwrap();
     let replacement = again[0].expect("a stale claim no longer absorbs requests");
@@ -283,8 +298,7 @@ async fn a_discarded_entry_lets_the_next_request_send_again() {
     let link = mailbox();
     let contact = request("buyer@example.com", 200, false, None);
     let claim = claimed(
-        &redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        &record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap(),
     );
@@ -294,8 +308,7 @@ async fn a_discarded_entry_lets_the_next_request_send_again() {
         .await
         .unwrap();
     assert!(
-        redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap()[0]
             .is_none(),
@@ -307,8 +320,7 @@ async fn a_discarded_entry_lets_the_next_request_send_again() {
         .await
         .unwrap();
     assert!(
-        redis
-            .record_crm_population(link, std::slice::from_ref(&contact))
+        record(&redis, link, std::slice::from_ref(&contact))
             .await
             .unwrap()[0]
             .is_some()

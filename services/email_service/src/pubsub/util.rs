@@ -93,6 +93,9 @@ const VISIBILITY_HEARTBEAT: Duration = Duration::from_secs(20);
 /// The backfill and CRM population queues' visibility timeout, restored by
 /// every heartbeat.
 const VISIBILITY_TIMEOUT_SECONDS: i32 = 60;
+/// Longest wait for one heartbeat's answer. The SQS client sets no timeout of
+/// its own, and a heartbeat that never answers must not hold the next one.
+const HEARTBEAT_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Runs `work` while keeping its message hidden from other workers.
 ///
@@ -111,22 +114,43 @@ pub(crate) async fn keep_invisible<F: Future>(
     let Some(receipt_handle) = message.receipt_handle() else {
         return work.await;
     };
-    let mut work = std::pin::pin!(work);
-    let mut heartbeats = tokio::time::interval_at(
+    run_hidden(work, || {
+        sqs_worker.change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
+    })
+    .await
+}
+
+/// Runs `work` beside a heartbeat that hides its message again through
+/// `extend`, so a slow heartbeat never holds the work up.
+async fn run_hidden<F, E, R>(work: F, extend: E) -> F::Output
+where
+    F: Future,
+    E: FnMut() -> R,
+    R: Future<Output = anyhow::Result<()>>,
+{
+    tokio::select! {
+        output = work => output,
+        never = heartbeats(extend) => match never {},
+    }
+}
+
+async fn heartbeats<E, R>(mut extend: E) -> std::convert::Infallible
+where
+    E: FnMut() -> R,
+    R: Future<Output = anyhow::Result<()>>,
+{
+    let mut ticks = tokio::time::interval_at(
         tokio::time::Instant::now() + VISIBILITY_HEARTBEAT,
         VISIBILITY_HEARTBEAT,
     );
     loop {
-        tokio::select! {
-            output = &mut work => return output,
-            _ = heartbeats.tick() => {
-                if let Err(error) = sqs_worker
-                    .change_message_visibility(receipt_handle, VISIBILITY_TIMEOUT_SECONDS)
-                    .await
-                {
-                    tracing::warn!(error = ?error, "failed to keep a running queue operation hidden");
-                }
+        ticks.tick().await;
+        match tokio::time::timeout(HEARTBEAT_REQUEST_TIMEOUT, extend()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => {
+                tracing::warn!(error = ?error, "failed to keep a running queue operation hidden");
             }
+            Err(_) => tracing::warn!("timed out keeping a running queue operation hidden"),
         }
     }
 }

@@ -61,15 +61,16 @@ pub enum SettledContact {
 /// One pending entry per mailbox, address and `live_mail`, holding merged
 /// hints and the claim of the one queued message that will act on them.
 pub trait PendingContacts: Send + Sync + 'static {
-    /// Merges each request into its entry. Returns, in order, a new claim for
-    /// each request no queued message covers yet, or `None` when a queued
-    /// message absorbed it. A request repeated in `contacts` is absorbed by
-    /// its first occurrence.
+    /// Merges each request into its entry, and gives each entry no queued
+    /// message covers yet to its request's claim. Returns, in order, whether
+    /// each claim now holds its entry: `false` when a queued message absorbed
+    /// the request. A request repeated in `requests` is absorbed by its first
+    /// occurrence.
     fn record(
         &self,
         link: Uuid,
-        contacts: &[PopulateCrmContactPayload],
-    ) -> impl Future<Output = anyhow::Result<Vec<Option<Uuid>>>> + Send;
+        requests: &[(Uuid, PopulateCrmContactPayload)],
+    ) -> impl Future<Output = anyhow::Result<Vec<bool>>> + Send;
     /// Gives back claims whose messages may not have been sent, keeping their
     /// hints, so the next request for each sends one.
     fn release(

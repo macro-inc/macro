@@ -18,10 +18,12 @@ impl<P: PendingContacts, Q: PopulationQueue> CrmPopulationRequests<P, Q> {
     /// Asks for each correspondent of `link` to be populated.
     ///
     /// A correspondent whose message is still queued only merges its hints
-    /// into the pending entry. When the entries cannot be read, every request
-    /// is sent with a claim no entry holds: duplicates cost a population each,
-    /// and a missing request would leave the CRM behind until the next mail.
-    /// If sending fails the claims are given back, so a retry sends again.
+    /// into the pending entry. When the record's answer is lost, every request
+    /// is sent with the claim it asked for: one the record gave its entry runs
+    /// as usual, one it absorbed merges into the queued message, and one it
+    /// never recorded runs on its own hints, where a missing request would
+    /// leave the CRM behind until the next mail. If sending fails the claims
+    /// are given back, so a retry sends again.
     #[tracing::instrument(
         name = "crm.population.request",
         skip_all,
@@ -37,18 +39,25 @@ impl<P: PendingContacts, Q: PopulationQueue> CrmPopulationRequests<P, Q> {
             return Ok(());
         }
 
-        let claims = match self.pending.record(link_id, &contacts).await {
-            Ok(claims) => claims,
+        let requests: Vec<(Uuid, PopulateCrmContactPayload)> = contacts
+            .into_iter()
+            .map(|contact| (Uuid::now_v7(), contact))
+            .collect();
+        let claimed: Vec<(Uuid, PopulateCrmContactPayload)> = match self
+            .pending
+            .record(link_id, &requests)
+            .await
+        {
+            Ok(held) => requests
+                .into_iter()
+                .zip(held)
+                .filter_map(|(request, held)| held.then_some(request))
+                .collect(),
             Err(error) => {
                 tracing::warn!(error = ?error, "could not record CRM population requests; sending each");
-                contacts.iter().map(|_| Some(Uuid::now_v7())).collect()
+                requests
             }
         };
-        let claimed: Vec<(Uuid, PopulateCrmContactPayload)> = claims
-            .into_iter()
-            .zip(contacts)
-            .filter_map(|(claim, contact)| claim.map(|claim| (claim, contact)))
-            .collect();
         tracing::Span::current().record("sent", claimed.len());
         if claimed.is_empty() {
             return Ok(());

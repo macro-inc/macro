@@ -196,14 +196,13 @@ impl RedisClient {
     pub async fn record_crm_population(
         &self,
         link: Uuid,
-        contacts: &[PopulateCrmContactPayload],
-    ) -> redis::RedisResult<Vec<Option<Uuid>>> {
-        let claims: Vec<Uuid> = contacts.iter().map(|_| Uuid::now_v7()).collect();
+        requests: &[(Uuid, PopulateCrmContactPayload)],
+    ) -> anyhow::Result<Vec<bool>> {
         let mut invocation = RECORD.prepare_invoke();
         invocation
             .arg(TTL.as_secs())
             .arg(STALE_CLAIM.as_millis().to_string());
-        for (contact, claim) in contacts.iter().zip(&claims) {
+        for (claim, contact) in requests {
             invocation
                 .key(key(link, contact))
                 .arg(claim.to_string())
@@ -214,11 +213,13 @@ impl RedisClient {
         }
         let mut connection = self.inner.get_multiplexed_async_connection().await?;
         let claimed: Vec<u8> = invocation.invoke_async(&mut connection).await?;
-        Ok(claims
-            .into_iter()
-            .zip(claimed)
-            .map(|(claim, claimed)| (claimed == 1).then_some(claim))
-            .collect())
+        anyhow::ensure!(
+            claimed.len() == requests.len(),
+            "the CRM population record answered {} of {} requests",
+            claimed.len(),
+            requests.len()
+        );
+        Ok(claimed.into_iter().map(|claimed| claimed == 1).collect())
     }
 
     /// See [`email::domain::crm_population::PendingContacts::release`].

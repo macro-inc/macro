@@ -67,14 +67,16 @@ pub(super) struct State {
     pub link: Option<Link>,
     pub team: Option<Uuid>,
     pub slot: bool,
-    /// Claims `record` returns; every request is claimed when `None`.
-    pub record: Option<Vec<Option<Uuid>>>,
+    /// Whether `record` gives each request its entry; all when `None`.
+    pub record: Option<Vec<bool>>,
     pub taken: PendingContact,
     pub attempts: u32,
     pub settled: SettledContact,
     pub populate: Option<fn() -> CrmError>,
     pub history: Option<EmailPolicyHistoryPage>,
     pub recorded: Vec<Vec<PopulateCrmContactPayload>>,
+    /// The claims `record` was asked to give, failed or not.
+    pub recorded_claims: Vec<Uuid>,
     pub released: Vec<Uuid>,
     pub sent: Vec<(Uuid, CrmPopulationMessage)>,
     pub populated: Vec<PopulateCrmContactPayload>,
@@ -96,6 +98,7 @@ impl Default for State {
             populate: None,
             history: None,
             recorded: vec![],
+            recorded_claims: vec![],
             released: vec![],
             sent: vec![],
             populated: vec![],
@@ -146,15 +149,26 @@ impl PendingContacts for Fake {
     async fn record(
         &self,
         link: Uuid,
-        contacts: &[PopulateCrmContactPayload],
-    ) -> anyhow::Result<Vec<Option<Uuid>>> {
+        requests: &[(Uuid, PopulateCrmContactPayload)],
+    ) -> anyhow::Result<Vec<bool>> {
         assert_eq!(link, LINK);
+        {
+            let mut state = self.0.lock().unwrap();
+            state.recorded.push(
+                requests
+                    .iter()
+                    .map(|(_, contact)| contact.clone())
+                    .collect(),
+            );
+            state
+                .recorded_claims
+                .extend(requests.iter().map(|(claim, _)| *claim));
+        }
         self.call("record")?;
-        let mut state = self.0.lock().unwrap();
-        state.recorded.push(contacts.to_vec());
+        let state = self.0.lock().unwrap();
         Ok(match &state.record {
-            Some(claims) => claims.clone(),
-            None => contacts.iter().map(|_| Some(Uuid::now_v7())).collect(),
+            Some(held) => held.clone(),
+            None => vec![true; requests.len()],
         })
     }
     async fn release(

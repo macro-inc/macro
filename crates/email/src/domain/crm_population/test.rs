@@ -43,8 +43,7 @@ fn retried_within(disposition: PopulationDisposition, low: Duration, high: Durat
 #[tokio::test]
 async fn requests_send_only_for_correspondents_without_a_queued_message() {
     let fake = Fake::default();
-    let claim = Uuid::from_u128(1);
-    fake.0.lock().unwrap().record = Some(vec![None, Some(claim)]);
+    fake.0.lock().unwrap().record = Some(vec![false, true]);
     let requests = fake.service().requests;
 
     requests
@@ -57,6 +56,7 @@ async fn requests_send_only_for_correspondents_without_a_queued_message() {
 
     assert_eq!(fake.calls(), ["record", "send"]);
     let state = fake.0.lock().unwrap();
+    let claim = state.recorded_claims[1];
     let [(deduplication, CrmPopulationMessage::Contact(sent))] = state.sent.as_slice() else {
         panic!("one message: {:?}", state.sent)
     };
@@ -70,8 +70,7 @@ async fn requests_send_only_for_correspondents_without_a_queued_message() {
 #[tokio::test]
 async fn requests_give_back_their_claims_when_sending_fails() {
     let fake = Fake::default();
-    let claim = Uuid::from_u128(1);
-    fake.0.lock().unwrap().record = Some(vec![Some(claim)]);
+    fake.0.lock().unwrap().record = Some(vec![true]);
     fake.fail("send");
 
     let result = fake
@@ -82,11 +81,12 @@ async fn requests_give_back_their_claims_when_sending_fails() {
 
     assert!(result.is_err());
     assert_eq!(fake.calls(), ["record", "send", "release_claims"]);
-    assert_eq!(fake.0.lock().unwrap().released, [claim]);
+    let state = fake.0.lock().unwrap();
+    assert_eq!(state.released, state.recorded_claims);
 }
 
 #[tokio::test]
-async fn requests_are_all_sent_when_pending_entries_cannot_be_read() {
+async fn requests_are_each_sent_with_the_claim_they_asked_for_when_the_record_answer_is_lost() {
     let fake = Fake::default();
     fake.fail("record");
 
@@ -99,7 +99,11 @@ async fn requests_are_all_sent_when_pending_entries_cannot_be_read() {
         .await
         .unwrap();
 
-    assert_eq!(fake.0.lock().unwrap().sent.len(), 2);
+    // A record that went through gave these claims their entries.
+    let state = fake.0.lock().unwrap();
+    let sent: Vec<Uuid> = state.sent.iter().map(|(claim, _)| *claim).collect();
+    assert_eq!(sent, state.recorded_claims);
+    assert_eq!(sent.len(), 2);
 }
 
 #[tokio::test]
@@ -221,7 +225,7 @@ async fn a_population_the_crm_refuses_is_dropped() {
 async fn a_superseded_message_hands_its_hints_to_the_queued_one_without_populating() {
     let fake = Fake::default();
     fake.0.lock().unwrap().taken = PendingContact::Superseded;
-    fake.0.lock().unwrap().record = Some(vec![None]);
+    fake.0.lock().unwrap().record = Some(vec![false]);
 
     let disposition = fake
         .service()

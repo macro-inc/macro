@@ -43,3 +43,32 @@ fn skips_primaries_that_fail_to_parse() {
     assert!(recipients.contains(&owner));
     assert!(recipients.contains(&id("macro|ok@team.test")));
 }
+
+#[tokio::test(start_paused = true)]
+async fn work_runs_on_while_a_heartbeat_hangs() {
+    let start = tokio::time::Instant::now();
+    let work = async {
+        tokio::time::sleep(std::time::Duration::from_secs(25)).await;
+        "done"
+    };
+
+    let output = super::run_hidden(work, std::future::pending::<anyhow::Result<()>>).await;
+
+    assert_eq!(output, "done");
+    assert_eq!(start.elapsed(), std::time::Duration::from_secs(25));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_heartbeat_that_never_answers_does_not_hold_the_next_one() {
+    let mut heartbeats = 0;
+    let work = tokio::time::sleep(std::time::Duration::from_secs(70));
+
+    super::run_hidden(work, || {
+        heartbeats += 1;
+        std::future::pending::<anyhow::Result<()>>()
+    })
+    .await;
+
+    // One every 20 s: 20, 40 and 60 s in.
+    assert_eq!(heartbeats, 3);
+}

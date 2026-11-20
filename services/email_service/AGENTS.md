@@ -243,8 +243,14 @@ the gateway `/email` prefix.
   last. BackfillMessage only drains operations enqueued before thread writes.
 - Backfill keeps a message hidden while its operation runs
   (`pubsub::util::keep_invisible`, a 20 s heartbeat restoring the queue's 60 s
-  visibility timeout). Without it, a slow thread is delivered to a second
-  worker, which counts the written thread again.
+  visibility timeout, each request bounded to 10 s and run beside the work).
+  Without it, a slow thread is delivered to a second worker, which counts the
+  written thread again. A CRM population whose heartbeats fail can run again
+  beside itself on the redelivered message; that costs a population and loses
+  no request, since its take re-arms the same claim and each settle acts only
+  on its own claim. Never drop a population mid-run to prevent it: a drop
+  between handing its entry to the next claim and sending that claim's message
+  leaves the entry held by a message that doesn't exist for an hour.
 - Each backfill thread write, and each BackfillMessage write still draining,
   holds one of twenty fleet-wide Redis write slots
   (`util/redis/backfill_write_slots.rs`), however many workers and tasks run,
