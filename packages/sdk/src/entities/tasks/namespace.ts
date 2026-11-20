@@ -12,7 +12,7 @@ import { type SimilarTask, Task, type TaskSummary } from './task';
  * Creating a task needs only what the request states; don't research what it
  * describes unless asked.
  *
- * @routing Use when creating, assigning or updating tasks, or reporting on tasks such as open or overdue ones; not reminders, which are routines.
+ * @routing Use when creating, assigning or updating tasks, reporting on open or overdue tasks, or managing reusable task templates; not reminders, which are routines.
  *
  * @agent
  * Never edit, merge or delete the tasks `findSimilar` matches unless the user asks.
@@ -43,7 +43,7 @@ export class TaskNamespace {
     dueDate?: Date;
     /** Scopes the team task number; may be omitted when the creator belongs to exactly one team. */
     team?: Team;
-    /** Defaults to true. */
+    /** Defaults to team sharing, or private when the session cannot share. */
     shareWithTeam?: boolean;
   }): Promise<Task> {
     return Task.create(this.client, opts);
