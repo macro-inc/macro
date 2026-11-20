@@ -840,8 +840,8 @@ Provider Back returns to the combined integrations overview; navigation
 is local to each mounted Integrations page.
 
 Macro agents and external AI clients using Macro's MCP server import through
-code mode's `macro.imports` (`notion`, `linear` and `jira` plan, start, status
-and cancel; `importNotionPage`; and the ledger's `list`, `track` and
+code mode's `macro.imports` (`notion`, `linear` and `jira` plan, status and
+cancel, approved through `DecideReview` or the review card; `importNotionPage`; and the ledger's `list`, `track` and
 `recordImported`) against the user's
 connections saved in Macro. Code mode hides the direct import tools.
 Verify a Notion import returns a document and a repeated import returns the

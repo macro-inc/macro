@@ -460,7 +460,7 @@ pub fn covered_by_code_sdk(name: &str, user_tool: bool) -> bool {
                 | "RenderCanvas"
                 // macro.imports: list(), track(), recordImported(),
                 // importNotionPage(), ImportEntry.decline(), and
-                // notion/linear/jira plan(), start(), status() and cancel().
+                // notion/linear/jira plan(), status() and cancel().
                 | "ListImportEntities"
                 | "CreateImportEntity"
                 | "DeleteImportEntity"
