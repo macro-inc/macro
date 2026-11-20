@@ -25,7 +25,8 @@ CREATE TABLE team_agent_installs (
     failure TEXT CHECK (
         failure IN (
             'image_unavailable', 'image_mismatch', 'engine_refused',
-            'bad_configuration', 'incompatible_runtime', 'crash_loop', 'host_unsupported'
+            'bad_configuration', 'incompatible_runtime', 'crash_loop', 'host_unsupported',
+            'network_isolation_unavailable'
         )
     ),
     -- The runtime image id the latest delivery carried. When the image for

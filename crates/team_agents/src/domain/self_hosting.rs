@@ -218,6 +218,9 @@ pub enum InstallFailure {
     CrashLoop,
     /// The machine can't host teammates.
     HostUnsupported,
+    /// The engine couldn't confine the teammate's network, so it wasn't
+    /// started.
+    NetworkIsolationUnavailable,
 }
 
 impl From<TeammateRunFailure> for InstallFailure {
@@ -230,6 +233,7 @@ impl From<TeammateRunFailure> for InstallFailure {
             TeammateRunFailure::IncompatibleRuntime => Self::IncompatibleRuntime,
             TeammateRunFailure::CrashLoop => Self::CrashLoop,
             TeammateRunFailure::HostUnsupported => Self::HostUnsupported,
+            TeammateRunFailure::NetworkIsolationUnavailable => Self::NetworkIsolationUnavailable,
         }
     }
 }
@@ -349,6 +353,8 @@ pub enum HostIneligibility {
     BelowFloor,
     /// Its security settings block the teammate's inner sandbox.
     InnerSandboxUnavailable,
+    /// Its engine can't confine a teammate's network to the public internet.
+    NetworkIsolationUnavailable,
 }
 
 /// A resource of the hardware floor.
@@ -438,6 +444,9 @@ impl HostEligibility {
             }
             Some(TeammateHostProblem::InnerSandboxUnavailable) => {
                 return Self::not(HostIneligibility::InnerSandboxUnavailable);
+            }
+            Some(TeammateHostProblem::NetworkIsolationUnavailable) => {
+                return Self::not(HostIneligibility::NetworkIsolationUnavailable);
             }
             None => {}
         }

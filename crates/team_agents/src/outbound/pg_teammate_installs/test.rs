@@ -530,3 +530,33 @@ async fn an_inviters_hosts_are_their_own_paired_machines_with_their_reports(pool
         ]
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_start_refused_for_network_isolation_is_stored_with_its_reason(pool: PgPool) {
+    fixture(&pool).await;
+    let installs = PgTeammateInstalls::new(pool.clone());
+    installs
+        .create(&new_install(INSTALL, LAPTOP))
+        .await
+        .unwrap();
+    deliver(&installs, INSTALL, HarnessId::new_from_uuid(LAPTOP), (0, 0)).await;
+
+    assert!(
+        installs
+            .record_status(
+                INSTALL,
+                (1, 1),
+                InstallRunState::Failed,
+                Some(InstallFailure::NetworkIsolationUnavailable),
+            )
+            .await
+            .unwrap()
+    );
+
+    let stored = installs.by_id(INSTALL).await.unwrap().unwrap();
+    assert_eq!(stored.run_state, InstallRunState::Failed);
+    assert_eq!(
+        stored.failure,
+        Some(InstallFailure::NetworkIsolationUnavailable)
+    );
+}

@@ -1,4 +1,6 @@
-use agent_runtime_protocol::domain::schema::v0::ContainerEngine;
+use agent_runtime_protocol::domain::schema::v0::{
+    ContainerEngine, TeammateRunFailure, TeammateRunState,
+};
 
 use super::*;
 
@@ -177,4 +179,46 @@ fn a_malformed_override_is_ignored() {
             "{value}"
         );
     }
+}
+
+#[test]
+fn a_machine_that_cant_isolate_a_teammates_network_is_ineligible_for_that_reason() {
+    let report = TeammateHostReport {
+        problem: Some(TeammateHostProblem::NetworkIsolationUnavailable),
+        ..docker_linux()
+    };
+
+    assert_eq!(
+        HostEligibility::of(true, Some(&report), any_image),
+        HostEligibility {
+            ok: false,
+            reason: Some(HostIneligibility::NetworkIsolationUnavailable),
+            resource: None,
+        }
+    );
+    assert_eq!(
+        serde_json::to_value(HostIneligibility::NetworkIsolationUnavailable).unwrap(),
+        "networkIsolationUnavailable"
+    );
+}
+
+#[test]
+fn a_start_refused_for_network_isolation_is_stored_as_a_failure_and_named_on_the_api() {
+    assert_eq!(
+        install_state(&TeammateRunState::Failed {
+            reason: TeammateRunFailure::NetworkIsolationUnavailable
+        }),
+        (
+            InstallRunState::Failed,
+            Some(InstallFailure::NetworkIsolationUnavailable)
+        )
+    );
+    assert_eq!(
+        InstallFailure::NetworkIsolationUnavailable.as_ref(),
+        "network_isolation_unavailable"
+    );
+    assert_eq!(
+        serde_json::to_value(InstallFailure::NetworkIsolationUnavailable).unwrap(),
+        "networkIsolationUnavailable"
+    );
 }

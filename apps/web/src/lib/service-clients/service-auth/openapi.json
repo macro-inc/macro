@@ -9777,7 +9777,8 @@
           "engineUnreachable",
           "unsupportedPlatform",
           "belowFloor",
-          "innerSandboxUnavailable"
+          "innerSandboxUnavailable",
+          "networkIsolationUnavailable"
         ]
       },
       "HostPlatformArch": {
@@ -9890,7 +9891,8 @@
           "badConfiguration",
           "incompatibleRuntime",
           "crashLoop",
-          "hostUnsupported"
+          "hostUnsupported",
+          "networkIsolationUnavailable"
         ]
       },
       "InstallProblem": {

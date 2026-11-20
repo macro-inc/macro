@@ -21,4 +21,5 @@ export const InstallFailure = {
   incompatibleRuntime: 'incompatibleRuntime',
   crashLoop: 'crashLoop',
   hostUnsupported: 'hostUnsupported',
+  networkIsolationUnavailable: 'networkIsolationUnavailable',
 } as const;

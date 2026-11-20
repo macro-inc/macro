@@ -1480,7 +1480,7 @@ export type HostEngineKind = 'docker' | 'podman';
 /**
  * Why a machine can't host a teammate now.
  */
-export type HostIneligibility = 'offline' | 'notReported' | 'noEngine' | 'engineUnreachable' | 'unsupportedPlatform' | 'belowFloor' | 'innerSandboxUnavailable';
+export type HostIneligibility = 'offline' | 'notReported' | 'noEngine' | 'engineUnreachable' | 'unsupportedPlatform' | 'belowFloor' | 'innerSandboxUnavailable' | 'networkIsolationUnavailable';
 
 /**
  * A CPU architecture, as the Invite dialog shows it.
@@ -1559,7 +1559,7 @@ export type InitOutlookLinkResponse = {
  * Why a machine gave up on an install's generation. Stored snake_case;
  * camelCase on the API.
  */
-export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported';
+export type InstallFailure = 'imageUnavailable' | 'imageMismatch' | 'engineRefused' | 'badConfiguration' | 'incompatibleRuntime' | 'crashLoop' | 'hostUnsupported' | 'networkIsolationUnavailable';
 
 /**
  * What went wrong with an agent on its owner's own machine.

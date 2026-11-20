@@ -20,4 +20,5 @@ export const HostIneligibility = {
   unsupportedPlatform: 'unsupportedPlatform',
   belowFloor: 'belowFloor',
   innerSandboxUnavailable: 'innerSandboxUnavailable',
+  networkIsolationUnavailable: 'networkIsolationUnavailable',
 } as const;
