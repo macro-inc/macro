@@ -1,6 +1,10 @@
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { afterEach, expect, it, vi } from 'vitest';
-import { BackgroundJobCard, elapsedLabel, jobOutcome } from './BackgroundJobCard';
+import {
+  BackgroundJobCard,
+  elapsedLabel,
+  jobOutcome,
+} from './BackgroundJobCard';
 
 afterEach(cleanup);
 
@@ -28,8 +32,8 @@ it('offers Cancel while the job runs and stops offering it once it ends', async 
   const view = render(() => (
     <BackgroundJobCard jobId="job-1" job={job} onCancel={cancel} />
   ));
-  expect(view.getByText('Checking routine')).toBeTruthy();
-  expect(view.getByText('Check routine')).toBeTruthy();
+  expect(view.getAllByText('Checking routine')).not.toHaveLength(0);
+  expect(view.getAllByText('Check routine')).not.toHaveLength(0);
   fireEvent.click(view.getByRole('button', { name: 'Cancel' }));
   expect(cancel).toHaveBeenCalledOnce();
   cleanup();
@@ -41,6 +45,26 @@ it('offers Cancel while the job runs and stops offering it once it ends', async 
       onCancel={cancel}
     />
   ));
-  expect(ended.getByText('Cancelled')).toBeTruthy();
+  expect(ended.getAllByText('Cancelled')).not.toHaveLength(0);
   expect(ended.queryByRole('button', { name: 'Cancel' })).toBeNull();
+});
+
+it('puts Cancel in an overflow menu when the view asks for one', () => {
+  const view = render(() => (
+    <BackgroundJobCard
+      jobId="job-1"
+      job={{
+        title: 'Checking routine',
+        startedAt: new Date().toISOString(),
+        status: 'running',
+        activity: [],
+      }}
+      onCancel={vi.fn()}
+      cancelInMenu
+    />
+  ));
+  expect(view.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  expect(
+    view.getByRole('button', { name: 'Background job actions' })
+  ).toBeTruthy();
 });

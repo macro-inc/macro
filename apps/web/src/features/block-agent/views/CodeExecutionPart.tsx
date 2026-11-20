@@ -19,6 +19,7 @@ import type {
   ToolUsePart,
 } from '../component/parts/shared';
 import { useOptionalAgentSession } from '../context/AgentSessionContext';
+import { useJobReveal } from '../context/job-reveal';
 import { useCodeExecutionRecord } from './code-execution-record';
 
 /** Production wiring; the result components receive only data and context. */
@@ -152,6 +153,7 @@ function BackgroundJob(props: {
         );
     })
   );
+  const jobControls = useJobReveal();
   const canCancel = () =>
     Boolean(
       session?.sessionId() === props.sessionId &&
@@ -169,6 +171,7 @@ function BackgroundJob(props: {
         activity: props.activity,
       }}
       cancelling={cancel.isPending}
+      cancelInMenu={jobControls?.cancelInMenu() ?? false}
       onCancel={
         canCancel()
           ? () =>

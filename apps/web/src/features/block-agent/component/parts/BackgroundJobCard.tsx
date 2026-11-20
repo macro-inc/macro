@@ -1,5 +1,4 @@
 import { t } from '@app/lib/i18n';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import type {
   ExecutionActivity,
@@ -68,6 +67,8 @@ export function BackgroundJobCard(props: {
   /** Absent when the viewer can't stop it (no edit access, or it ended). */
   onCancel?: () => void;
   cancelling?: boolean;
+  /** Cancel in an overflow menu instead of a button, for the mobile view. */
+  cancelInMenu?: boolean;
 }) {
   const running = () => props.job.status === 'running';
   const [now, setNow] = createSignal(Date.now());
@@ -85,7 +86,11 @@ export function BackgroundJobCard(props: {
       </span>
       <Show when={running() && props.onCancel}>
         {(cancel) => (
-          <CancelControl onCancel={cancel()} busy={props.cancelling} />
+          <CancelControl
+            onCancel={cancel()}
+            busy={props.cancelling}
+            inMenu={props.cancelInMenu}
+          />
         )}
       </Show>
     </span>
@@ -130,10 +135,14 @@ export function BackgroundJobCard(props: {
   );
 }
 
-function CancelControl(props: { onCancel: () => void; busy?: boolean }) {
+function CancelControl(props: {
+  onCancel: () => void;
+  busy?: boolean;
+  inMenu?: boolean;
+}) {
   return (
     <Show
-      when={isTouchDevice()}
+      when={props.inMenu}
       fallback={
         <Button
           variant="ghost"
