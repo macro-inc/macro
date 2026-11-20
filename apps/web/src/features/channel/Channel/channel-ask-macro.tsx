@@ -1,28 +1,28 @@
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { t } from '@app/lib/i18n';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
-import { useChannelName, useChannelType } from '@core/context/channels';
+import { useChannelsContext } from '@core/context/channels';
 import { type Accessor, Show } from 'solid-js';
 
 /**
  * Seed for "Ask Macro": a new chat with this channel @mentioned, so the user
  * does not have to create an agent and mention the channel by hand.
- * `fallbackName` names a channel the channels list has not loaded yet.
+ * `fallbackName` names a channel that has no name of its own.
  */
 export function useChannelAskMacroEntity(
-  channelId: string,
+  channelId: Accessor<string>,
   fallbackName?: Accessor<string | undefined>
 ) {
-  const channelName = useChannelName(channelId);
-  const channelType = useChannelType(channelId);
+  const ctx = useChannelsContext();
   return () => {
-    const type = channelType();
-    if (!type) return undefined;
+    const id = channelId();
+    const channel = ctx.channelsById()[id];
+    if (!channel) return undefined;
     return {
       type: 'channel' as const,
-      id: channelId,
-      name: channelName() ?? fallbackName?.() ?? 'New Channel',
-      channelType: type,
+      id,
+      name: channel.name ?? fallbackName?.() ?? 'New Channel',
+      channelType: channel.channel_type,
     };
   };
 }
@@ -36,7 +36,7 @@ export function ChannelAskMacroButton(props: {
   fallbackName?: string;
 }) {
   const entity = useChannelAskMacroEntity(
-    props.channelId,
+    () => props.channelId,
     () => props.fallbackName
   );
   return (

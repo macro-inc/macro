@@ -30,7 +30,7 @@ function useChannelTitleActions(channelId: () => string) {
   };
   const list = toSingleEntityActionListState(entity);
   const askMacroEntity = useChannelAskMacroEntity(
-    channelId(),
+    channelId,
     () => channel()?.name
   );
   const askMacro = () => {

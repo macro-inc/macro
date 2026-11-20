@@ -190,7 +190,7 @@ function NewTop(props: { channelId: string }) {
     },
   });
 
-  const askMacroEntity = useChannelAskMacroEntity(props.channelId);
+  const askMacroEntity = useChannelAskMacroEntity(() => props.channelId);
 
   // The drawer owns the icon column, just as desktop tabs own their icon slot.
   const mobileViews = () => ({
@@ -290,7 +290,7 @@ function NewTop(props: { channelId: string }) {
         <SplitHeaderRight>
           {/* Desktop only: phones keep Ask Macro in the title drawer. Shares
               Invite's contribution so it always lands before Invite. */}
-          <Show when={!isMobile()}>
+          <Show when={!isMobile() && askMacroEntity()}>
             <HeaderIsland class="px-1">
               <ChannelAskMacroButton channelId={props.channelId} />
             </HeaderIsland>

@@ -96,6 +96,7 @@ vi.mock('@core/context/channels', () => ({
   useChannelCanCall: () => () => true,
   useChannelName: () => () => 'channel-name',
   useChannelType: () => () => 'private',
+  useChannelsContext: () => ({ channelsById: () => ({}) }),
 }));
 vi.mock('@queries/channel/channel-participants', () => ({
   useChannelParticipantsQuery: () => ({ isSuccess: false, data: undefined }),
