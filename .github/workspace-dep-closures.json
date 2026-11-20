@@ -6008,6 +6008,7 @@
       "crates/system_properties",
       "crates/system_skills",
       "crates/task_dedup",
+      "crates/task_templates",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -7982,6 +7983,9 @@
     "generic_email_domains": [
       "crates/generic_email_domains",
       "crates/workspace-hack"
+    ],
+    "gh_workflow": [
+      "tooling/xtask/crates/gh_workflow"
     ],
     "git_patch": [
       "crates/git_patch",
@@ -16468,6 +16472,13 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
+    "task_templates": [
+      "crates/document_sub_type",
+      "crates/macro_uuid",
+      "crates/models_properties",
+      "crates/task_templates",
+      "crates/workspace-hack"
+    ],
     "team_agents": [
       "crates/activity",
       "crates/agent",
@@ -17656,6 +17667,7 @@
       "tooling/xtask/crates/xtask_ports"
     ],
     "xtask_workflows": [
+      "tooling/xtask/crates/gh_workflow",
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_workflows"
     ]

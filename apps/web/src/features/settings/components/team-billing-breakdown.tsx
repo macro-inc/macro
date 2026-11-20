@@ -20,6 +20,7 @@ function computerStatus(status: ComputerStatusKind | null | undefined): string {
   return match(status)
     .with('ready', () => t('settingsBilling.alive'))
     .with('starting', () => t('settingsBilling.starting'))
+    .with('unhealthy', () => t('settingsBilling.unhealthy'))
     .with('purchasing', 'setting_up', () => t('settingsBilling.settingUp'))
     .with('waiting_for_capacity', () => t('computers.waitingForCapacity'))
     .with('needs_attention', () => t('computers.needsAttention'))

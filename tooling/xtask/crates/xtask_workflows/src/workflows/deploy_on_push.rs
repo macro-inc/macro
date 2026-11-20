@@ -33,11 +33,21 @@
 //! The called workflows' groups are still what serialize these push deploys
 //! against manual dispatches of the individual pipelines.
 
-use anyhow::Result;
-use gh_workflow::{Concurrency, Event, Expression, Job, Push, Workflow};
+use gh_workflow::expr::typed::{JobHandle, github};
+use gh_workflow::{CallJob, Concurrency, Event, Push, Workflow};
+
+use crate::workflows::actions::{
+    CallBuildWebApp, CallDeployAllServices, CallDeployMcpChatgptWorker, CallDeploySyncService,
+    CallDeployWebApp,
+};
+use crate::workflows::vars;
 
 #[cfg(test)]
 mod test;
+
+pub(crate) const DEPLOY_CLOUD_STORAGE: JobHandle<()> = JobHandle::new("deploy-cloud-storage", ());
+pub(crate) const DEPLOY_SYNC_SERVICE: JobHandle<()> = JobHandle::new("deploy-sync-service", ());
+pub(crate) const BUILD_WEB_APP: JobHandle<()> = JobHandle::new("build-web-app", ());
 
 /// Prepended to the generated YAML, under the "do not edit" header. The
 /// no-gating decision is the single most likely thing for someone to try to
@@ -67,8 +77,7 @@ pub const NOTICE: &str = indoc::indoc! {"
     #
 "};
 
-/// Build the workflow. The caller jobs' `with:`/`secrets:` are filled in by
-/// [`patch`].
+/// Build the workflow.
 pub fn deploy_on_push() -> Workflow {
     Workflow::new("Deploy on Push")
         .on(Event::default().push(Push::default().add_branch("main")))
@@ -76,144 +85,77 @@ pub fn deploy_on_push() -> Workflow {
             // Never cancel an in-progress deployment — that could leave a
             // stack half-applied. Queued pushes coalesce to the newest, which
             // is only lossless because no stage is path-gated (see module docs).
-            Concurrency::new(Expression::new("${{ github.workflow }}")).cancel_in_progress(false),
+            Concurrency::new(github().workflow().to_string()).cancel_in_progress(false),
         )
-        .add_job("deploy-cloud-storage", deploy_cloud_storage())
-        .add_job("deploy-sync-service", deploy_sync_service())
+        .add_job(DEPLOY_CLOUD_STORAGE, deploy_cloud_storage())
+        .add_job(DEPLOY_SYNC_SERVICE, deploy_sync_service())
         .add_job("deploy-mcp-chatgpt-worker", deploy_mcp_chatgpt_worker())
-        .add_job("build-web-app", build_web_app())
+        .add_job(BUILD_WEB_APP, build_web_app())
         .add_job("deploy-web-app", deploy_web_app())
 }
 
-/// Add the caller jobs' `with:` and explicit `secrets:` maps, and drop the
-/// `runs-on` that `Job::default()` injects (invalid alongside `uses:`).
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let cloud_storage = crate::workflows::job_mut(root, "deploy-cloud-storage")?;
-    cloud_storage.remove("runs-on");
-    cloud_storage.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    cloud_storage.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-            DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            NIX_CACHE_SIGNING_KEY: ${{ secrets.NIX_CACHE_SIGNING_KEY }}
-        "#})?,
-    );
-
-    let sync_service = crate::workflows::job_mut(root, "deploy-sync-service")?;
-    sync_service.remove("runs-on");
-    sync_service.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    sync_service.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        "#})?,
-    );
-
-    let mcp_chatgpt_worker = crate::workflows::job_mut(root, "deploy-mcp-chatgpt-worker")?;
-    mcp_chatgpt_worker.remove("runs-on");
-    mcp_chatgpt_worker.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    mcp_chatgpt_worker.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        "#})?,
-    );
-
-    let web_build = crate::workflows::job_mut(root, "build-web-app")?;
-    web_build.remove("runs-on");
-    web_build.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment("environment: dev")?,
-    );
-    web_build.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        "#})?,
-    );
-
-    let web_app = crate::workflows::job_mut(root, "deploy-web-app")?;
-    web_app.remove("runs-on");
-    web_app.insert(
-        "with".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            notify: false
-            environment: dev
-            prebuilt: true
-        "#})?,
-    );
-    web_app.insert(
-        "secrets".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-            AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-            PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-            DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
-            DD_API_KEY: ${{ secrets.DD_API_KEY }}
-            SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
-            POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
-        "#})?,
-    );
-    Ok(())
-}
-
-fn deploy_cloud_storage() -> Job {
-    Job::default()
+fn deploy_cloud_storage() -> CallJob {
+    CallDeployAllServices::new("dev")
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_nix_cache_signing_key(vars::NIX_CACHE_SIGNING_KEY)
+        .job()
         .name("Deploy Cloud Storage Services")
-        .uses("./.github/workflows/deploy_all_services.yml")
 }
 
 /// The worker calls DSS/SPS, so don't ship it ahead of them — same ordering as
 /// the production release. The implicit `success()` on `needs` is what holds it
 /// back when the backend deploy fails.
-fn deploy_sync_service() -> Job {
-    Job::default()
+fn deploy_sync_service() -> CallJob {
+    CallDeploySyncService::new("dev")
+        .secret_cloudflare_api_token(vars::CLOUDFLARE_API_TOKEN)
+        .job()
         .name("Deploy Sync Service")
-        .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_sync_service.yml")
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
 }
 
 /// The ChatGPT MCP server calls the backend through the SDK and takes its tokens
 /// from the MCP auth broker, so it ships behind them, like the sync worker.
 /// Nothing waits on it: the web app doesn't talk to it.
-fn deploy_mcp_chatgpt_worker() -> Job {
-    Job::default()
+fn deploy_mcp_chatgpt_worker() -> CallJob {
+    CallDeployMcpChatgptWorker::new("dev")
+        .secret_cloudflare_api_token(vars::CLOUDFLARE_API_TOKEN)
+        .job()
         .name("Deploy MCP ChatGPT Worker")
-        .needs(vec!["deploy-cloud-storage".to_string()])
-        .uses("./.github/workflows/deploy_mcp_chatgpt_worker.yml")
+        .needs(vec![DEPLOY_CLOUD_STORAGE.to_string()])
 }
 
 /// No `needs`: the build only reads the commit, so it overlaps the backend's
 /// ~15 minutes instead of adding ~4 after them.
-fn build_web_app() -> Job {
-    Job::default()
+fn build_web_app() -> CallJob {
+    CallBuildWebApp::new("dev")
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Build Web App")
-        .uses("./.github/workflows/build_web_app.yml")
 }
 
 /// Publish only after the worker supports the frontend's sync protocol. The
 /// build remains parallel, but a failed worker deploy must block new clients.
-fn deploy_web_app() -> Job {
-    Job::default()
+fn deploy_web_app() -> CallJob {
+    CallDeployWebApp::new("dev")
+        .notify(false)
+        .prebuilt(true)
+        .secret_aws_access_key(vars::AWS_ACCESS_KEY)
+        .secret_aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .secret_pulumi_access_token(vars::PULUMI_ACCESS_TOKEN)
+        .secret_dd_app_key(vars::DD_APP_KEY)
+        .secret_dd_api_key(vars::DD_API_KEY)
+        .secret_segment_write_key(vars::SEGMENT_WRITE_KEY_PRODUCTION)
+        .secret_posthog_api_key(vars::POSTHOG_API_KEY)
+        .job()
         .name("Deploy Web App")
         .needs(vec![
-            "deploy-cloud-storage".to_string(),
-            "deploy-sync-service".to_string(),
-            "build-web-app".to_string(),
+            DEPLOY_CLOUD_STORAGE.to_string(),
+            DEPLOY_SYNC_SERVICE.to_string(),
+            BUILD_WEB_APP.to_string(),
         ])
-        .uses("./.github/workflows/deploy_web_app.yml")
 }

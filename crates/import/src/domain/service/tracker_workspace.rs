@@ -20,9 +20,9 @@ use crate::domain::models::{
     WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{
-    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportedTaskProperties,
-    NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity, SlackWorkspaceSource,
-    TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
+    CanonicalImportRepo, EntityCreator, ImportError, ImportRepo, ImportVisibility,
+    ImportedTaskProperties, NotionPlanRepo, NotionRunRepo, PlanRow, Result, SharedEntity,
+    SlackWorkspaceSource, TrackerTaskRelations, WorkspaceWriter, WrittenObjects,
 };
 
 mod claim;
@@ -487,12 +487,16 @@ where
                     self.repo
                         .mark_imported(user, row.id, &entity_id, &entity_type, None)
                         .await?;
+                    if matches!(meta.object, TrackerObject::Issue(_)) {
+                        self.repo.clear_task_notices(user, row.id).await?;
+                    }
                     return Ok(());
                 }
                 TeamClaim::Waiting { .. } => return Ok(()),
                 TeamClaim::Held | TeamClaim::Free => {}
             }
         }
+        let visibility = ImportVisibility::from_shared(meta.plan.shared);
         let id = values::target_id(row.id);
         match &meta.object {
             TrackerObject::Group(group) => {
@@ -503,7 +507,7 @@ where
                         id,
                         &group.title,
                         &values::group_body(group),
-                        meta.plan.shared && team.is_some(),
+                        visibility,
                     )
                     .await?;
                 self.repo
@@ -517,19 +521,28 @@ where
                     .await?;
             }
             TrackerObject::Issue(issue) => {
-                self.creator
+                let created = self
+                    .creator
                     .create_tracker_task(
                         user,
                         id,
                         &issue.title,
                         &values::task_body(issue),
                         &values::properties(issue),
-                        false,
+                        visibility,
                     )
                     .await?;
+                if let Some(notice) = created.notice {
+                    self.repo
+                        .record_task_notice(user, row.id, id, notice)
+                        .await?;
+                }
                 self.repo
                     .record_written(user, &[WrittenObject::own(row.id, WrittenKind::Task, id)])
                     .await?;
+                if meta.plan.shared {
+                    self.repo.clear_task_notices(user, row.id).await?;
+                }
             }
         }
         Ok(())

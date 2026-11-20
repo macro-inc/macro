@@ -112,6 +112,13 @@ const failing = async <Value>(
   }
 };
 
+/** A step of the start that ran before its span could: from `start` (the process's start when absent) to `end`, Unix ms. */
+export type EarlierStep = {
+  readonly name: string;
+  readonly start?: number;
+  readonly end: number;
+};
+
 /**
  * Runs the agent's start as one `agent.start` span, from the process's own
  * start (so loading the code counts), under the computer's setup trace when
@@ -121,15 +128,21 @@ const failing = async <Value>(
  */
 export const traceStart = <Value>(
   environment: Environment,
-  run: (phase: StartPhase) => Promise<Value>
+  run: (phase: StartPhase) => Promise<Value>,
+  earlier: readonly EarlierStep[] = []
 ): Promise<Value> => {
   const processStart = Date.now() - process.uptime() * 1000;
   const start = () =>
-    Telemetry.span('agent.start', { startTime: processStart }, (span) =>
-      failing(span, () =>
+    Telemetry.span('agent.start', { startTime: processStart }, (span) => {
+      // Steps that ran before telemetry could record them, backdated.
+      for (const step of earlier)
+        Telemetry.span(step.name, {
+          startTime: step.start ?? processStart,
+        }).end(step.end);
+      return failing(span, () =>
         run((name, step) => span.span(name, (child) => failing(child, step)))
-      )
-    );
+      );
+    });
   const traceparent = environment[setupTraceparentVariable];
   return traceparent === undefined || traceparent === ''
     ? start()

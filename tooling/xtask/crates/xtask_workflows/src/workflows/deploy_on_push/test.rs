@@ -1,12 +1,13 @@
+use anyhow::Result;
+
 use super::*;
 
 #[test]
 fn web_publication_waits_for_sync_protocol_support() -> Result<()> {
-    let dev = crate::workflows::render_patched(deploy_on_push, patch)?;
-    let prod = crate::workflows::render_patched(
+    let dev = crate::workflows::render_gh_workflow(deploy_on_push)()?;
+    let prod = crate::workflows::render_gh_workflow(
         crate::workflows::release_production::release_production,
-        crate::workflows::release_production::patch,
-    )?;
+    )()?;
 
     for (environment, yaml, web_job, build_job) in [
         ("dev", dev, "deploy-web-app", "build-web-app"),
@@ -34,10 +35,9 @@ fn web_publication_waits_for_sync_protocol_support() -> Result<()> {
 
 #[test]
 fn sync_deployment_waits_for_active_objects_before_unblocking_clients() -> Result<()> {
-    let yaml = crate::workflows::render_patched(
+    let yaml = crate::workflows::render_gh_workflow(
         crate::workflows::deploy_sync_service::deploy_sync_service,
-        crate::workflows::deploy_sync_service::patch,
-    )?;
+    )()?;
     let workflow: serde_yaml::Value = serde_yaml::from_str(&yaml)?;
     let steps = workflow["jobs"]["deploy"]["steps"]
         .as_sequence()

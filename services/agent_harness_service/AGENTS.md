@@ -209,7 +209,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (a failed sign-in carries a `code` saying how to recover:
   `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
   `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
-  `computer_busy` 409 a retry; a timeout is a bare 504),
+  `computer_busy` 409 a retry; harnessd's own CLI timeout ends the sign-in
+  and answers `sign_in_expired`, while this service timing out on harnessd
+  is a bare 504 that lets the code be sent again),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly
@@ -318,8 +320,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   page (newest first) without two exact matches goes to the session,
   which also looks up the other kinds. `routine_code.rs` gives the
   session each SDK area it needs
-  (`area_reference`: the area's index, guidance and declarations, then
-  the generated types they import). `scheduling.rs` composes the drafter
+  (`area_reference`: the area's index, guidance and declarations from every
+  namespace in the topic, then the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the
