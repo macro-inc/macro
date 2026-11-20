@@ -1,9 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import type {
-  PaneId,
-  SplitLocation,
-  SplitRouter,
-} from '@app/lib/split-router';
+import type { PaneId, SplitLocation, SplitRouter } from '@app/lib/split-router';
 import { enableMobileParkedDockViews } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
