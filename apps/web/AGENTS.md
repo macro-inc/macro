@@ -426,7 +426,7 @@ service. `TEAM_AGENTS_SCREENSHOT_DIR` also copies its screenshots there. It laun
 `--disable-web-security` because the scripted services answer for other origins:
 `bunx playwright test --config src/features/settings/browser-test/team-agents/playwright.config.ts`.
 
-Give phone member identities a full-width row, wrap addresses at `@`/`.` boundaries with an anywhere fallback for overlong runs, keep `(you)` attached, place role/removal controls below, and use labelled `SettingsRow` switches with matching card insets.
+Keep a member's CRM access switch (visible **CRM**, named `CRM access for <name>`) among the Members row's controls, before Remove, with one note under the list for owners and admins. A row with the switch keeps 12rem for its avatar and name (about 140px of name) and wraps its controls below when the row can't fit both (phones, narrow splits); other rows keep one line, and controls wrap among themselves rather than overflow. The same suite checks this with and without seat plans at 1440, 820 (touch), 390, 360 and 320px.
 
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details), and event details

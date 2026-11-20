@@ -20,6 +20,8 @@ import {
   ALREADY_INITIALIZED_CODE,
   emailClient,
   INBOX_BEING_REMOVED_CODE,
+  INBOX_CHANGED_CODE,
+  INBOX_IDENTITY_CONFLICT_CODE,
   NO_GMAIL_GRANT_CODE,
   SHARED_INBOX_CONFLICT_CODE,
 } from '@service-email/client';
@@ -35,6 +37,8 @@ import {
   announceAlreadyConnected,
   announceConsentCancelled,
   announceLinkedInbox,
+  INBOX_CHANGED_MESSAGE,
+  INBOX_IDENTITY_CONFLICT_MESSAGE,
   type InboxAddition,
 } from './link-outcome';
 import { selectEmailProvider } from './ProviderDialog';
@@ -69,6 +73,10 @@ type EmailInitError =
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   /** The mailbox is still being removed from Macro; retry once that finishes. */
   | { tag: 'InboxBeingRemoved' }
+  /** The Microsoft mailbox signed in at consent is not the one an inbox at that address syncs. */
+  | { tag: 'IdentityConflict' }
+  /** The inbox changed while it was being connected; connecting again works. */
+  | { tag: 'Changed' }
   | { tag: 'FailedToInitialize'; message: string };
 
 function parseSharedInboxConflict(message: string): {
@@ -126,6 +134,14 @@ function initEmailLink(args?: {
       }
       if (initResult.error.some((e) => e.code === INBOX_BEING_REMOVED_CODE)) {
         return err<string, EmailInitError>({ tag: 'InboxBeingRemoved' });
+      }
+      if (
+        initResult.error.some((e) => e.code === INBOX_IDENTITY_CONFLICT_CODE)
+      ) {
+        return err<string, EmailInitError>({ tag: 'IdentityConflict' });
+      }
+      if (initResult.error.some((e) => e.code === INBOX_CHANGED_CODE)) {
+        return err<string, EmailInitError>({ tag: 'Changed' });
       }
       const error: EmailInitError = initResult.error.some(
         (e) => e.code === ALREADY_INITIALIZED_CODE
@@ -306,6 +322,14 @@ export function useAddInboxFlow() {
                 'add-inbox'
               ),
           });
+          return;
+        }
+        if (error.tag === 'IdentityConflict') {
+          toast.failure(INBOX_IDENTITY_CONFLICT_MESSAGE);
+          return;
+        }
+        if (error.tag === 'Changed') {
+          toast.failure(INBOX_CHANGED_MESSAGE);
           return;
         }
         toast.failure('Failed to add inbox');
