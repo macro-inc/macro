@@ -222,6 +222,9 @@ export function useRailPlacement() {
   const facing = () => RAIL_FACING[prefs().position];
   return {
     facing,
+    /** The rail runs as a row along the top or bottom edge. */
+    horizontal: () =>
+      prefs().position === 'top' || prefs().position === 'bottom',
     aligned: (align: 'start' | 'end') => `${facing()}-${align}` as const,
   };
 }

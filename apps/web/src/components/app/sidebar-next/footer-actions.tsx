@@ -126,9 +126,7 @@ export const FooterActions = (props: {
     <div
       class={cn(
         'flex shrink-0 items-center gap-1',
-        placement.facing() === 'top' || placement.facing() === 'bottom'
-          ? 'flex-row'
-          : 'w-full flex-col'
+        placement.horizontal() ? 'flex-row' : 'w-full flex-col'
       )}
     >
       {/* Keyed by id: a new update remounts the button, so its popover opens again. */}

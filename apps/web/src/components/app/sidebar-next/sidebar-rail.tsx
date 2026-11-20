@@ -19,8 +19,8 @@ import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 import {
-  type RailPosition,
   type RailSize,
+  useRailPlacement,
   useSidebarPrefs,
 } from './use-sidebar-prefs';
 
@@ -42,8 +42,20 @@ const RAIL_METRICS = {
   },
 } as const satisfies Record<RailSize, Record<string, string>>;
 
-const isHorizontal = (position: RailPosition) =>
-  position === 'top' || position === 'bottom';
+/**
+ * A row of apps along the top or bottom edge scrolls sideways, which a plain
+ * mouse wheel can't do (and the app hides scrollbars): turn vertical wheel
+ * movement into horizontal scrolling there.
+ */
+function scrollRowWithWheel(event: WheelEvent) {
+  const row = event.currentTarget;
+  if (!(row instanceof HTMLElement)) return;
+  if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+  if (row.scrollWidth <= row.clientWidth) return;
+
+  event.preventDefault();
+  row.scrollLeft += event.deltaY;
+}
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
@@ -74,7 +86,7 @@ export const SidebarRail = () => {
   const unread = useNavigationUnread();
   const [calendarPreferences] = useCalendarPreferences();
   const { prefs } = useSidebarPrefs();
-  const horizontal = () => isHorizontal(prefs().position);
+  const { horizontal } = useRailPlacement();
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -93,8 +105,6 @@ export const SidebarRail = () => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      data-rail-position={prefs().position}
-      data-rail-size={prefs().size}
       style={RAIL_METRICS[prefs().size]}
       class={cn(
         'relative flex shrink-0 items-center gap-1 overflow-hidden bg-page',
@@ -112,6 +122,9 @@ export const SidebarRail = () => {
       {/* The scroller clips at its padding edge, so the padding on the cross
           axis leaves room for unread badges that overhang a button. */}
       <nav
+        onWheel={(event) => {
+          if (horizontal()) scrollRowWithWheel(event);
+        }}
         class={cn(
           horizontal()
             ? 'flex min-w-0 items-center self-stretch overflow-x-auto overflow-y-hidden py-1 pl-4'
