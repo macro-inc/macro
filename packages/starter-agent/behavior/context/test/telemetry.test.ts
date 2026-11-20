@@ -19,11 +19,12 @@ test('the traces URL comes from the standard OTel variables, and is absent when 
   ).toBe('http://traces:4318/v1/traces');
 });
 
-test('a child gets only where to export, never anything else of this process', () => {
+test("a child gets only where to export and the computer's header, never anything else of this process", () => {
   expect(
     telemetryEnvironment({
       OTEL_EXPORTER_OTLP_ENDPOINT: 'http://otel:4318',
-      OTEL_EXPORTER_OTLP_HEADERS: 'x-macro-computer-id=c1',
+      OTEL_EXPORTER_OTLP_HEADERS:
+        'authorization=Bearer%20secret,x-macro-computer-id=c1',
       MACRO_API_KEY: 'mak_secret',
       OTEL_DEPLOYMENT_ENVIRONMENT: 'local',
     })

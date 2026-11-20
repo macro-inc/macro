@@ -51,20 +51,36 @@ export const tracesHeaders = (
 const telemetryVariables = [
   'OTEL_EXPORTER_OTLP_ENDPOINT',
   'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
-  'OTEL_EXPORTER_OTLP_HEADERS',
   'OTEL_DEPLOYMENT_ENVIRONMENT',
 ] as const;
 
-/** The telemetry settings to hand a child, as they are set here. */
+/** The one export header a script gets: the computer's name, never a credential. */
+const computerHeader = 'x-macro-computer-id';
+
+/**
+ * The telemetry settings to hand a child, as they are set here. Of the export
+ * headers only the computer's passes, so an `Authorization` header set for a
+ * self-hosted collector never reaches a script.
+ */
 export const telemetryEnvironment = (
   environment: Environment
-): Readonly<Record<string, string>> =>
-  Object.fromEntries(
-    telemetryVariables.flatMap((name) => {
+): Readonly<Record<string, string>> => {
+  const computer = tracesHeaders(environment)[computerHeader];
+  return Object.fromEntries([
+    ...telemetryVariables.flatMap((name) => {
       const value = environment[name];
       return value === undefined || value === '' ? [] : [[name, value]];
-    })
-  );
+    }),
+    ...(computer === undefined
+      ? []
+      : [
+          [
+            'OTEL_EXPORTER_OTLP_HEADERS',
+            `${computerHeader}=${encodeURIComponent(computer)}`,
+          ],
+        ]),
+  ]);
+};
 
 /** An opaque id for the agent's account, which is an email: never record it as is. */
 export const agentTelemetryId = (agent: string): string =>
