@@ -27,7 +27,7 @@ mod test;
 type Client = rmcp::service::RunningService<rmcp::RoleClient, ClientConfig>;
 type Connection = Arc<OnceCell<Arc<Client>>>;
 
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 struct AccountSession {
     session: AgentSessionId,
     actor: MacroUserIdStr<'static>,
@@ -65,7 +65,7 @@ impl HttpActorMcpTransport {
         session: AgentSessionId,
         actor: MacroUserIdStr<'static>,
         upstream: UpstreamCall,
-    ) -> Result<Arc<Client>, EgressError> {
+    ) -> Result<(AccountSession, Connection, Arc<Client>), EgressError> {
         guarded_http::check_url(self.policy, upstream.url())
             .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?;
         let mut config = StreamableHttpClientTransportConfig::with_uri(upstream.url().to_string());
@@ -103,28 +103,42 @@ impl HttpActorMcpTransport {
                 Arc::clone(connection)
             } else {
                 let cell = Arc::new(OnceCell::new());
-                sessions.put(key, Arc::clone(&cell));
+                sessions.put(key.clone(), Arc::clone(&cell));
                 cell
             }
         };
-        cell.get_or_try_init(|| {
-            async {
-                let transport =
-                    StreamableHttpClientTransport::with_client(self.client.clone(), config);
-                let client = tokio::time::timeout(
-                    std::time::Duration::from_secs(30),
-                    mcp_client::domain::models::client_info().serve(transport),
-                )
-                .await
-                .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
-                .map_err(handshake_error)?;
-                Ok(Arc::new(client))
-            }
-            // A new upstream session's handshake, apart from the call it serves.
-            .instrument(tracing::info_span!("connected_app.mcp_connect"))
-        })
-        .await
-        .cloned()
+        let client = cell
+            .get_or_try_init(|| {
+                async {
+                    let transport =
+                        StreamableHttpClientTransport::with_client(self.client.clone(), config);
+                    let client = tokio::time::timeout(
+                        std::time::Duration::from_secs(30),
+                        mcp_client::domain::models::client_info().serve(transport),
+                    )
+                    .await
+                    .map_err(|error| EgressError::Upstream(rootcause::report!(error).into()))?
+                    .map_err(handshake_error)?;
+                    Ok(Arc::new(client))
+                }
+                // A new upstream session's handshake, apart from the call it serves.
+                .instrument(tracing::info_span!("connected_app.mcp_connect"))
+            })
+            .await
+            .cloned()?;
+        Ok((key, cell, client))
+    }
+
+    /// Drop `cell` from the pool when it still holds `key`'s session, so the
+    /// next request opens a new one.
+    fn evict(&self, key: &AccountSession, cell: &Connection) {
+        if let Ok(mut sessions) = self.sessions.lock()
+            && sessions
+                .peek(key)
+                .is_some_and(|current| Arc::ptr_eq(current, cell))
+        {
+            sessions.pop(key);
+        }
     }
 }
 
@@ -138,8 +152,8 @@ impl ActorMcpTransport for HttpActorMcpTransport {
         upstream: UpstreamCall,
         request: Value,
     ) -> Result<Value, EgressError> {
-        let client = self.connection(session, actor, upstream).await?;
-        match request["method"].as_str() {
+        let (key, cell, client) = self.connection(session, actor, upstream).await?;
+        let result = match request["method"].as_str() {
             Some("tools/list") => client
                 .list_all_tools()
                 .await
@@ -171,7 +185,13 @@ impl ActorMcpTransport for HttpActorMcpTransport {
             _ => Err(EgressError::Unauthenticated(
                 "unsupported actor MCP exchange",
             )),
+        };
+        // A grant that needs reconnecting may come back with a new upstream
+        // session behind it; the retry after a reconnect handshakes again.
+        if matches!(result, Err(EgressError::NeedsReconnect)) {
+            self.evict(&key, &cell);
         }
+        result
     }
 }
 

@@ -430,16 +430,35 @@ pub fn not_connected_text(slug: &McpServerSlug, name: &str) -> String {
 /// for it needs reauthorization: Macro Connect refused it before calling the
 /// vendor, so nothing ran. The chip reconnects the existing connection.
 pub fn reconnect_text(slug: &McpServerSlug, name: &str) -> String {
+    expired_connection_text(
+        slug,
+        name,
+        &format!("{name}'s connection for the selected acting_as account"),
+    )
+}
+
+/// [`reconnect_text`] for a tool listing, which always reads the session
+/// owner's catalog: it is the owner's connection that expired.
+pub fn owner_reconnect_text(slug: &McpServerSlug, name: &str) -> String {
+    expired_connection_text(
+        slug,
+        name,
+        &format!("The session owner's connection to {name}"),
+    )
+}
+
+/// `connection` (who holds it) has expired, with the reconnect chip.
+fn expired_connection_text(slug: &McpServerSlug, name: &str, connection: &str) -> String {
     let payload = serde_json::json!({
         "appSlug": slug.as_str(),
         "name": name,
         "reconnect": true,
     });
     format!(
-        "{name}'s connection for the selected acting_as account has expired, so {name} \
-         was not called and nothing ran. Tell them so, and include this exact markup so \
-         they get a button that reconnects it: <{tag}>{payload}</{tag}> Ask them to say \
-         once they have reconnected it, then try again; nothing else needs to change.",
+        "{connection} has expired, so {name} was not called and nothing ran. Tell them \
+         so, and include this exact markup so they get a button that reconnects it: \
+         <{tag}>{payload}</{tag}> Ask them to say once they have reconnected it, then try \
+         again; nothing else needs to change.",
         tag = CONNECT_APP_TAG,
     )
 }

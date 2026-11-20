@@ -14,7 +14,7 @@ use agent_code_mode::domain::connected_apps::{
 };
 use agent_egress::domain::error::EgressError;
 use agent_egress::domain::model::{
-    CustomMcpServerKey, McpDestination, McpServerSlug, SessionGrant, reconnect_text,
+    CustomMcpServerKey, McpDestination, McpServerSlug, SessionGrant, owner_reconnect_text,
 };
 use agent_egress::domain::service::SessionMcpExchange;
 use agent_harness::outbound::egress::EgressProvisioner;
@@ -306,8 +306,8 @@ fn listed_tools(result: &Value) -> Vec<ConnectedTool> {
 }
 
 /// A failed `tools/list`. A connected app whose grant expired says so with
-/// the same reconnect text a call gets (the egress answers a call with it as
-/// a tool result, but a listing has no result to carry it).
+/// the reconnect text a call gets as a tool result (a listing has no result
+/// to carry it), naming the owner, whose catalog every listing reads.
 fn listing_error(
     grant: &SessionGrant,
     destination: &McpDestination,
@@ -316,7 +316,7 @@ fn listing_error(
     if matches!(error, EgressError::NeedsReconnect)
         && let McpDestination::Connected(slug) = destination
     {
-        return CodeModeError::ConnectedAppNeedsReconnect(reconnect_text(
+        return CodeModeError::ConnectedAppNeedsReconnect(owner_reconnect_text(
             slug,
             &grant.display_name(slug),
         ));

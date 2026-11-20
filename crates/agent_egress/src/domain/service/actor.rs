@@ -349,8 +349,10 @@ async fn traced_exchange(
     result
 }
 
-/// Only Macro Connect answers HTTP 409 for a grant that needs reauthorizing;
-/// any other server's 409 is its own failure, not a reason to reconnect.
+/// A connected app's 409 means its grant needs reauthorizing (Macro Connect's
+/// gateway answers so; a Pipedream-provider row is read the same way); a
+/// custom server's, Macro's or a preview's 409 is its own failure, not a
+/// reason to reconnect.
 fn reconnect_only_for_connected_apps(
     error: EgressError,
     destination: &McpDestination,

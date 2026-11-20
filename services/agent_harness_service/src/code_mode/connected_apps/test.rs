@@ -49,6 +49,10 @@ fn a_listing_refused_for_an_expired_grant_tells_the_program_to_offer_reconnect()
         ),
         "{message}"
     );
+    assert!(
+        message.starts_with("The session owner's connection"),
+        "{message}"
+    );
 }
 
 #[test]
