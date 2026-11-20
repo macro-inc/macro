@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, LOWER(email) AS \"email!\", manually_created\n            FROM crm_contacts\n            WHERE team_id = $1\n              AND company_id IS NULL\n              AND LOWER(email) > COALESCE($2, '')\n            ORDER BY LOWER(email)\n            LIMIT $3\n            ",
+  "query": "\n            SELECT id, LOWER(email) AS \"email!\", manually_created, hidden\n            FROM crm_contacts\n            WHERE team_id = $1\n              AND company_id IS NULL\n              AND LOWER(email) > COALESCE($2, '')\n            ORDER BY LOWER(email)\n            LIMIT $3\n            ",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "ordinal": 2,
         "name": "manually_created",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "hidden",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -29,8 +34,9 @@
     "nullable": [
       false,
       null,
+      false,
       false
     ]
   },
-  "hash": "bc112db86c24413cfc7bdc819643cec0d9a1c541243b9e06650edd9805df2b8f"
+  "hash": "d000b0667ec8a02a3fd9b96a90e1ff8ba84ca6e36501433ee2235e86514cd832"
 }

@@ -475,6 +475,15 @@ impl CompaniesRepository for StubRepo {
         unimplemented!()
     }
 
+    async fn get_company_by_domain_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _domain: &str,
+        _include_hidden: bool,
+    ) -> Result<Option<CrmCompanyWithContacts>, CrmError> {
+        unimplemented!()
+    }
+
     async fn get_company_for_team(
         &self,
         _team_id: &uuid::Uuid,
