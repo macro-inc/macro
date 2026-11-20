@@ -56,7 +56,7 @@ pub enum ImportError {
     #[error(
         "who should see this import was not chosen: ask whether to share it with the team, keep it personal, or let AI decide"
     )]
-    NotionSharingRequired,
+    SharingRequired,
     /// The import is not in a state that allows this; the message says why.
     #[error("{0}")]
     NotReady(&'static str),

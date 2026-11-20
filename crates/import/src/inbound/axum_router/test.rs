@@ -74,7 +74,7 @@ impl NotionWorkspaceImporter for FakeImportService {
         assert_eq!(user.as_ref(), TEST_USER);
         self.notion_plans.lock().unwrap().push((scope, sharing));
         if sharing.is_none() {
-            return Err(ImportError::NotionSharingRequired);
+            return Err(ImportError::SharingRequired);
         }
         Ok(NotionImportReport {
             status: Some(crate::domain::models::RunStatus::Running),
@@ -290,6 +290,31 @@ fn other_errors_remain_internal() {
 }
 
 #[tokio::test]
+async fn errors_the_caller_can_fix_answer_409_with_their_code() {
+    for (error, code) in [
+        (ImportError::SharingRequired, "sharing_required"),
+        (ImportError::NotionNotConnected, "not_connected"),
+        (
+            ImportError::Tracker(import_tracker::domain::model::TrackerError::NotConnected),
+            "not_connected",
+        ),
+        (
+            ImportError::NotReady("This plan has nothing left to import."),
+            "not_ready",
+        ),
+    ] {
+        let message = error.to_string();
+        let response = error_response(error);
+        assert_eq!(response.status(), StatusCode::CONFLICT);
+        let body = axum::body::to_bytes(response.into_body(), 4096)
+            .await
+            .unwrap();
+        let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(body, serde_json::json!({ "code": code, "error": message }));
+    }
+}
+
+#[tokio::test]
 async fn cancelling_a_notion_import_cancels_it_for_the_caller_and_reports_where_it_stopped() {
     let (router, service) = discovery_router(Ok(true));
     let response = router
@@ -329,7 +354,7 @@ impl WorkspaceImporter for FakeImportService {
     ) -> Result<NotionImportReport> {
         self.calls.lock().unwrap().push((user.clone(), source));
         if sharing.is_none() {
-            return Err(ImportError::NotionSharingRequired);
+            return Err(ImportError::SharingRequired);
         }
         Ok(NotionImportReport {
             status: Some(crate::domain::models::RunStatus::Ready),

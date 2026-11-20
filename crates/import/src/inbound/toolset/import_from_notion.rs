@@ -96,7 +96,7 @@ impl<T: NotionWorkspaceImporter> AsyncTool<ImportToolContext<T>> for ImportFromN
             },
         }
         .map_err(|error| match error {
-            ImportError::NotionSharingRequired => tool_error(
+            ImportError::SharingRequired => tool_error(
                 "The user is on a team, so `sharing` is required for `plan`. Ask them whether the import should be shared with their team, kept to themselves, or left to AI to decide per page, then plan again with their answer.".to_string(),
                 error,
             ),

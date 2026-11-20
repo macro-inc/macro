@@ -240,7 +240,7 @@ pub struct PlanWorkspaceImportRequest {
     ),
     tag = "import"
 )]
-#[tracing::instrument(skip(service, user, body), fields(user_id = %user.authorization.user.macro_user_id, roots = body.roots.len(), sharing = ?body.sharing))]
+#[tracing::instrument(skip(service, user, body), fields(roots = body.roots.len(), sharing = ?body.sharing))]
 pub async fn plan_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
     State(service): State<Arc<T>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -321,7 +321,7 @@ pub struct ImportErrorBody {
 fn error_response(e: ImportError) -> Response {
     let code = match &e {
         ImportError::Admission(error) => return error.into_response(),
-        ImportError::NotionSharingRequired => ImportErrorCode::SharingRequired,
+        ImportError::SharingRequired => ImportErrorCode::SharingRequired,
         ImportError::NotionNotConnected | ImportError::Tracker(TrackerError::NotConnected) => {
             ImportErrorCode::NotConnected
         }

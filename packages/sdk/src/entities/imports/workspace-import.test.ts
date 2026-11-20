@@ -132,4 +132,28 @@ describe('workspace imports', () => {
 
     expect(submitted).toEqual(['linear-review']);
   });
+
+  test('start refuses a review with no drafts or a draft that is not an import', async () => {
+    let submitted = 0;
+    const review = (id: string, drafts: unknown[]) =>
+      ({
+        id,
+        items: async () => drafts.map((draft) => ({ draft })),
+        submitAll: async () => {
+          submitted += 1;
+        },
+      }) as unknown as SessionReview;
+    const imports = new ImportNamespace({} as MacroClient);
+
+    await expect(
+      imports.notion.start(review('empty-review', [])),
+    ).rejects.toThrow('does not present a notion import');
+    await expect(
+      imports.notion.start(
+        review('email-review', [{ to: ['user@example.com'], subject: 'Hi' }]),
+      ),
+    ).rejects.toThrow('does not present a notion import');
+
+    expect(submitted).toBe(0);
+  });
 });

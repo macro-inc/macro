@@ -70,8 +70,9 @@ export abstract class WorkspaceImport {
   /**
    * Start writing the plan the import review presents, once the user said
    * yes: approves the review, with any changes they made on its card, and
-   * reports where the import stands. Refused while the plan is still being
-   * made.
+   * reports where the import stands. Approving moves the import to
+   * `importing` before it returns, so the report shows the write under way.
+   * Refused while the plan is still being made.
    * @write
    * @openworld
    */

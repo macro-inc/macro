@@ -16,13 +16,17 @@ under), and an optional `review_id`; a team keeps one `importing`/`imported`
 row per Notion or Linear object (`import_entity_team_object_key`), with a
 separate equivalent Jira index.
 
-Notion workspace imports go through a reviewed plan: `ImportFromNotion`
-(`plan`) reads the workspace over Notion's REST API (`import_notion`, through
-the user's Pipedream grant), asks the decision model what to do with each page
-and data source (copy, tasks, skip, or by hand), and stages the plan as ledger
-rows. The agent presents it with `PresentReview` (kind `import`) and asks
-"Should I kick it off?"; the owner approves on the card or by saying yes, which
-has the agent submit it with `DecideReview`. `plan` returns after a short wait
+Notion workspace imports go through a reviewed plan. Agent sessions run code
+mode, which plans with `macro.imports.notion.plan()` (`POST
+/import/workspaces/{source}/plan`); hosts with direct tools use
+`ImportFromNotion` (`plan`). Planning reads the workspace over Notion's REST
+API (`import_notion`, through the user's Pipedream grant), asks the decision
+model what to do with each page and data source (copy, tasks, skip, or by
+hand), and stages the plan as ledger rows. The agent presents it as an import
+review (`execution.reviews.create` in code mode, `PresentReview` with direct
+tools) and asks "Should I kick it off?"; the owner approves on the card or by
+saying yes, which has the agent submit it (`macro.imports.notion.start(review)`
+or `DecideReview`). `plan` returns after a short wait
 (`PLAN_WAIT`), usually while the run is still `running`, and the agent
 presents the review at once: the harness ties the staged rows and the
 `running` run (`import_run.review_id`) to the review, so rows staged later
@@ -44,7 +48,7 @@ The Notion run row tracks it
 Every plan carries the user's `sharing` (`team`, `personal`, or `ai`, where
 the decision model also answers `shared` per object), stored on the run so an
 adopted plan keeps it. A user on a team must choose it
-(`ImportError::NotionSharingRequired` tells the agent to ask); a user without
+(`ImportError::SharingRequired` tells the agent to ask); a user without
 one plans `personal` without being asked, and the report's `onTeam` says
 which. Each
 plan item records `shared`, `sharedReason` and `shareable`
@@ -229,7 +233,8 @@ from this import's other databases into it are not linked.
 
 ## Issue tracker workspace imports
 
-`ImportFromLinear` and `ImportFromJira` use the same reviewed lifecycle as Notion.
+Linear and Jira (`macro.imports.linear|jira` in code mode, `ImportFromLinear`
+and `ImportFromJira` with direct tools) use the same reviewed lifecycle as Notion.
 Hosts register their read-only `import_linear`/`import_jira` connections with
 `with_tracker_connections`. `WorkspaceImporter` scopes every operation to the
 selected source; `/import/workspaces/{source}` and its `/cancel` route back the

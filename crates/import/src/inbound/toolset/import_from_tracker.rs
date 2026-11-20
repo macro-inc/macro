@@ -116,7 +116,7 @@ async fn call<T: WorkspaceImporter>(
             Err(error) => Err(error),
         },
     }.map_err(|error| match error {
-        ImportError::NotionSharingRequired => tool_error("The user is on a team. Ask whether to share with their team, keep everything personal, or let AI choose per group, then plan with their answer.".into(), error),
+        ImportError::SharingRequired => tool_error("The user is on a team. Ask whether to share with their team, keep everything personal, or let AI choose per group, then plan with their answer.".into(), error),
         other => import_error(&format!("{} import failed", source.label()), other),
     })?;
     let message = message(source, action, &report);
