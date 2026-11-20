@@ -14,7 +14,7 @@ use agent_code_mode::domain::connected_apps::{
 };
 use agent_egress::domain::error::EgressError;
 use agent_egress::domain::model::{
-    CustomMcpServerKey, McpDestination, McpServerSlug, SessionGrant,
+    CustomMcpServerKey, McpDestination, McpServerSlug, SessionGrant, reconnect_text,
 };
 use agent_egress::domain::service::SessionMcpExchange;
 use agent_harness::outbound::egress::EgressProvisioner;
@@ -192,7 +192,7 @@ where
                 .egress
                 .exchange_as(&settled.grant, &settled.user, &destination, request)
                 .await
-                .map_err(egress_error)?;
+                .map_err(|error| listing_error(&settled.grant, &destination, error))?;
             tools.extend(listed_tools(&result));
 
             cursor = result
@@ -305,13 +305,32 @@ fn listed_tools(result: &Value) -> Vec<ConnectedTool> {
         .collect()
 }
 
+/// A failed `tools/list`. A connected app whose grant expired says so with
+/// the same reconnect text a call gets (the egress answers a call with it as
+/// a tool result, but a listing has no result to carry it).
+fn listing_error(
+    grant: &SessionGrant,
+    destination: &McpDestination,
+    error: EgressError,
+) -> CodeModeError {
+    if matches!(error, EgressError::NeedsReconnect)
+        && let McpDestination::Connected(slug) = destination
+    {
+        return CodeModeError::ConnectedAppNeedsReconnect(reconnect_text(
+            slug,
+            &grant.display_name(slug),
+        ));
+    }
+    egress_error(error)
+}
+
 fn egress_error(error: EgressError) -> CodeModeError {
     match error {
         EgressError::Unauthenticated(_) | EgressError::SessionClosed => CodeModeError::Forbidden,
         EgressError::UnknownServer(_)
         | EgressError::UnknownCustomServer(_)
         | EgressError::Unroutable(_) => CodeModeError::NotFound,
-        EgressError::Upstream(_) => {
+        EgressError::Upstream(_) | EgressError::NeedsReconnect => {
             tracing::warn!(%error, "a connected app could not be reached");
             CodeModeError::ConnectedAppUnreachable
         }
