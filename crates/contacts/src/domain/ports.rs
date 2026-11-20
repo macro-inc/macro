@@ -1,3 +1,6 @@
+use crate::domain::models::backfill::{
+    ChannelMember, ChannelRecord, ChannelSnapshot, InboxContact, InboxOwner, LegacyEdge,
+};
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::invalidation::ContactsInvalidation;
 use crate::domain::models::list::InboxSource;
@@ -8,6 +11,7 @@ use crate::domain::models::messages::{
 use crate::domain::models::page::{ContactCursor, ContactIdPage, ContactPageSize};
 use crate::domain::models::people::{PeopleSearchLimit, PeopleSearchQuery, PersonMatch};
 use crate::domain::models::query::{ContactLookup, ContactSearch};
+use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use std::collections::HashSet;
@@ -358,4 +362,62 @@ pub(crate) trait ContactsBackfillOutboxRepo: Send + Sync + 'static {
         &self,
         id: u64,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+}
+
+/// Reads the legacy directory and the sources the backfill derives lists
+/// from. Every read is one bounded page; callers page by the cursor each
+/// returns.
+pub trait LegacyDirectorySource: Send + Sync + 'static {
+    /// Channels with an id after `after`, in id order.
+    fn channel_page(
+        &self,
+        after: Uuid,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelRecord>, Report>> + Send;
+
+    /// The Macro members of these channels, without bots or deleted accounts.
+    fn channel_members(
+        &self,
+        channels: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<ChannelMember>, Report>> + Send;
+
+    /// `contacts_backfill_outbox` rows with an id after `after`, in id order.
+    fn snapshot_page(
+        &self,
+        after: i32,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<ChannelSnapshot>, Report>> + Send;
+
+    /// The DMs among `channels` with a message from a person, sent at or
+    /// after `since` when given.
+    fn direct_messages_with_person_message(
+        &self,
+        channels: &[Uuid],
+        since: Option<DateTime<Utc>>,
+    ) -> impl Future<Output = Result<Vec<Uuid>, Report>> + Send;
+
+    /// Inbox owners after `after`, in owner order.
+    fn inbox_owner_page(
+        &self,
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<InboxOwner>, Report>> + Send;
+
+    /// The owner's legacy contacts after `after`, in either direction and in
+    /// contact order, each with the `inboxes` that know them.
+    fn inbox_contact_page(
+        &self,
+        owner: &str,
+        inboxes: &[Uuid],
+        after: &str,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<InboxContact>, Report>> + Send;
+
+    /// Legacy edges with an id after `after`, in id order, with the evidence
+    /// the database holds for each direction.
+    fn legacy_edge_page(
+        &self,
+        after: i32,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<LegacyEdge>, Report>> + Send;
 }
