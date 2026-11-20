@@ -6,6 +6,7 @@ const AGENT: Uuid = Uuid::from_u128(0xA9E7);
 
 fn lanes() -> Arc<SearchLanes> {
     Arc::new(SearchLanes::new(LanePolicy {
+        app_concurrency: 2,
         concurrency: 2,
         max_wait: Duration::from_secs(20),
     }))
@@ -220,6 +221,7 @@ async fn a_search_cancelled_while_waiting_gives_up_its_place() {
 #[tokio::test(start_paused = true)]
 async fn dropping_idle_lanes_keeps_a_busy_one() {
     let lanes = Arc::new(SearchLanes::new(LanePolicy {
+        app_concurrency: 1,
         concurrency: 1,
         max_wait: Duration::from_secs(20),
     }));
@@ -241,4 +243,41 @@ async fn dropping_idle_lanes_keeps_a_busy_one() {
         .unwrap_err();
     assert_eq!(refused.waited, Duration::from_secs(20));
     assert!(lanes.lanes.lock().unwrap().len() < MAX_LANES);
+}
+
+#[tokio::test(start_paused = true)]
+async fn the_person_in_the_app_runs_three_searches_at_once_and_programs_two() {
+    let lanes = Arc::new(SearchLanes::new(LanePolicy::DEFAULT));
+    let _first = lanes
+        .take_turn(agent_of("macro|a@example.com"))
+        .await
+        .unwrap();
+    let _second = lanes
+        .take_turn(agent_of("macro|a@example.com"))
+        .await
+        .unwrap();
+    let refused = lanes
+        .take_turn(agent_of("macro|a@example.com"))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.waited, Duration::from_secs(20));
+
+    let app = || SearchCaller::new("macro|a@example.com", SearchActor::App);
+    let mut held = Vec::new();
+    for _ in 0..3 {
+        let turn = lanes.take_turn(app()).await.unwrap();
+        assert!(!turn.queued);
+        held.push(turn);
+    }
+    let mut fourth = tokio::spawn({
+        let lanes = Arc::clone(&lanes);
+        async move { lanes.take_turn(app()).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_secs(1), &mut fourth)
+            .await
+            .is_err()
+    );
+    held.pop();
+    assert!(fourth.await.unwrap().unwrap().queued);
 }

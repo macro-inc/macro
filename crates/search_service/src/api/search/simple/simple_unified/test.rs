@@ -959,6 +959,7 @@ fn agent_of_caller() -> MacroUserAuthentication {
 
 fn one_at_a_time() -> SearchLanes {
     SearchLanes::new(crate::domain::search_lanes::LanePolicy {
+        app_concurrency: 1,
         concurrency: 1,
         max_wait: std::time::Duration::from_secs(20),
     })

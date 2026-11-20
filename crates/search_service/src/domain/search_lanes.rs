@@ -30,19 +30,34 @@ const MAX_LANES: usize = 1024;
 /// How many searches one caller may run at once, and how long the rest wait.
 #[derive(Clone, Copy, Debug)]
 pub struct LanePolicy {
-    /// Most searches in flight at once.
+    /// Most searches in flight at once for the person in the app.
+    pub app_concurrency: usize,
+    /// Most searches in flight at once for every other caller.
     pub concurrency: usize,
     /// Longest a search waits for its turn before it is refused.
     pub max_wait: Duration,
 }
 
 impl LanePolicy {
-    /// Two searches at once per process, and at most 20 seconds' wait, inside
-    /// a code execution's 30-second lifetime.
+    /// Per process: three searches at once for the person in the app, whose
+    /// mention menu sends three one-type searches per term, two for every
+    /// other caller, and at most 20 seconds' wait, inside a code execution's
+    /// 30-second lifetime.
     pub const DEFAULT: Self = Self {
+        app_concurrency: 3,
         concurrency: 2,
         max_wait: Duration::from_secs(20),
     };
+
+    fn concurrency_of(&self, actor: SearchActor) -> usize {
+        match actor {
+            SearchActor::App => self.app_concurrency,
+            SearchActor::Service
+            | SearchActor::Api
+            | SearchActor::Agent(_)
+            | SearchActor::Routine(_) => self.concurrency,
+        }
+    }
 }
 
 /// Who a search runs for: a person, or a program acting with their access.
@@ -129,10 +144,11 @@ impl SearchLanes {
         if lanes.len() >= MAX_LANES {
             lanes.retain(|_, lane| Arc::strong_count(lane) > 1);
         }
+        let concurrency = self.policy.concurrency_of(caller.actor);
         Arc::clone(
             lanes
                 .entry(caller)
-                .or_insert_with(|| Arc::new(Semaphore::new(self.policy.concurrency))),
+                .or_insert_with(|| Arc::new(Semaphore::new(concurrency))),
         )
     }
 

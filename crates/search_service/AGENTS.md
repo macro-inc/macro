@@ -60,8 +60,10 @@ per-entity-type search plus a unified search across them — mounted into
   reads back; add a field there, not by instrumenting the request.
 - A unified search (`/search`, `/search/simple`, on both DSS mounts) waits
   for its caller's turn in `domain::search_lanes` once the request is
-  validated and before it reads anything: two searches in flight per caller
-  per process, the rest waiting in arrival order, and one still waiting after
+  validated and before it reads anything: per process, three searches in
+  flight for the person's app session (the mention menu sends three one-type
+  searches per term) and two for every other caller, the rest waiting in
+  arrival order, and one still waiting after
   20 s answered 429 (`SearchError::Busy`, `Retry-After`). OpenSearch has few
   search threads per node, and one caller's burst of heavy searches filled
   them for everyone. The caller (`api::search::caller::search_caller`) is the
