@@ -152,6 +152,7 @@ agent's service.
 | `CREDENTIALS_DIRECTORY` | set by systemd | Hidden from Claude Code and scripts with bubblewrap (`bwrap` on PATH). |
 | `HARNESSD_STATE_DIRECTORY` | yes (with systemd credentials) | harnessd's Claude sign-in, read-only inside the sandbox; the `claude` wrapper on PATH reads it. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | no | Where spans go; none means none are exported. |
+| `MACRO_LAUNCH_TIMINGS` | no | The image's `start-agent` steps, `started:<µs>,<step>:<µs>:<µs>,…,exec:<µs>` (Unix microseconds): `agent.start` begins at `started` and has them as `agent.launch.*`. Malformed is ignored. |
 | `MACRO_SETUP_TRACEPARENT` | no | The computer's setup trace (W3C `traceparent`): the agent's start (`agent.start`) and its online report join it. The image exports it for the first start only, from `/run/macrod/agent-traceparent` (which macrod stages), never from `agent.env`. |
 
 `agent.env` holds `MACRO_API_KEY`, `MACRO_GATEWAY`, the `OVERRIDE_*` service

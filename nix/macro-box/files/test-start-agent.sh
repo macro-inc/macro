@@ -26,6 +26,7 @@ cat >"$root/bin/bun" <<EOF
 echo "\$*" >>"$root/bun.ran"
 echo "\${MACRO_SETUP_TRACEPARENT-unset}" >"$root/bun.trace"
 echo "\${OTEL_EXPORTER_OTLP_ENDPOINT-unset}" >"$root/bun.otlp"
+echo "\${MACRO_LAUNCH_TIMINGS-unset}" >"$root/bun.launch"
 EOF
 chmod +x "$root/bin/bun"
 export PATH=$root/bin:$PATH
@@ -187,5 +188,15 @@ fresh
 echo 'OTEL_EXPORTER_OTLP_ENDPOINT="https://intake.test/i/otlp"' >>"$root/case/agent.env"
 start
 check 'B10 the runtime exports where agent.env says' bash -c "[[ \$(cat '$root/bun.otlp') == https://intake.test/i/otlp ]]"
+
+# --- B11: the runtime gets the times of start-agent's steps -------------------
+step='[0-9]{16}:[0-9]{16}'
+first="^started:[0-9]{16},settings:$step,clone:$step,configure:$step,rollback:$step,packages:$step,exec:[0-9]{16}\$"
+again="^started:[0-9]{16},settings:$step,configure:$step,rollback:$step,packages:$step,exec:[0-9]{16}\$"
+fresh
+start
+check 'B11 a first start times each step, the clone included' bash -c "[[ \$(cat '$root/bun.launch') =~ $first ]]"
+start
+check 'B11 a restart has no clone step' bash -c "[[ \$(cat '$root/bun.launch') =~ $again ]]"
 
 exit "$failed"

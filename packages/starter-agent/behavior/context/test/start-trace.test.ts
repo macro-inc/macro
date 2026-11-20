@@ -13,7 +13,12 @@ import {
   InMemorySpanExporter,
   SimpleSpanProcessor,
 } from '@opentelemetry/sdk-trace-base';
-import { setupTraceparentVariable, traceStart } from '../telemetry.ts';
+import {
+  launchTimings,
+  launchTimingsVariable,
+  setupTraceparentVariable,
+  traceStart,
+} from '../telemetry.ts';
 
 const exporter = new InMemorySpanExporter();
 const contextManager = new AsyncLocalStorageContextManager();
@@ -130,4 +135,49 @@ test('the start ends while the event loop it began keeps running', async () => {
   expect(exporter.getFinishedSpans().map((span) => span.name)).toEqual([
     'agent.start',
   ]);
+});
+
+const milliseconds = ([seconds, nanoseconds]: readonly [number, number]) =>
+  seconds * 1000 + nanoseconds / 1e6;
+
+test("the launcher's steps are agent.launch spans under the start, which begins with the launcher", async () => {
+  exporter.reset();
+  const timings =
+    'started:1795000000000000,clone:1795000000010000:1795000000250000,lockfile:1795000000250000:1795000000300500,exec:1795000000301000';
+
+  await traceStart({ [launchTimingsVariable]: timings }, async (phase) =>
+    phase('agent.start.checks', async () => undefined)
+  );
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const start = spans['agent.start'];
+  const launch = spans['agent.launch'];
+  expect(milliseconds(start?.startTime ?? [0, 0])).toBe(1795000000000);
+  expect(launch?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  expect(milliseconds(launch?.startTime ?? [0, 0])).toBe(1795000000000);
+  expect(milliseconds(launch?.endTime ?? [0, 0])).toBe(1795000000301);
+  const clone = spans['agent.launch.clone'];
+  expect(clone?.parentSpanContext?.spanId).toBe(launch?.spanContext().spanId);
+  expect(milliseconds(clone?.startTime ?? [0, 0])).toBe(1795000000010);
+  expect(milliseconds(clone?.endTime ?? [0, 0])).toBe(1795000000250);
+  expect(
+    milliseconds(spans['agent.launch.lockfile']?.endTime ?? [0, 0])
+  ).toBeCloseTo(1795000000300.5, 3);
+  expect(spans['agent.start.checks']?.parentSpanContext?.spanId).toBe(
+    start?.spanContext().spanId
+  );
+});
+
+test('malformed launcher timings are ignored', () => {
+  expect(launchTimings(undefined)).toBeUndefined();
+  expect(launchTimings('')).toBeUndefined();
+  expect(launchTimings('started:1,exec:x')).toBeUndefined();
+  expect(launchTimings('started:1,clone:2,exec:3')).toBeUndefined();
+  expect(launchTimings('started:1000,exec:3000')).toEqual({
+    started: 1,
+    steps: [],
+    ended: 3,
+  });
 });

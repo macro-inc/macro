@@ -27,7 +27,8 @@ an agent teammate lasts until the agent reports online ([Macro computers: Observ
 | `computer.agent.deliver` → `computers.agent_enrollment.issue` | agent_harness_service, authentication_service | The hand-off: the agent's environment issued and sent down macrod's socket. |
 | `macrod.agent.apply` | macrod | macrod staging the environment (and the setup `traceparent`) for the guest. |
 | `computer.setup.agent_start` | agent_harness_service | Hand-off until the agent reports online: guest install, `start-agent` (clone, lock check), the runtime's start. |
-| `agent.start` → `agent.start.*`, `agent.online.report` | macro-agent | The agent process's start, from its own process start, and its online report (`team_agents.agent_online` joins). |
+| `agent.start` → `agent.launch` → `agent.launch.*` | macro-agent | `start-agent`'s steps (`settings`, `clone` on a first start, `configure`, `rollback`, `packages`) until it execs the runtime; the script times them and the runtime exports them. |
+| `agent.start` → `agent.start.*`, `agent.online.report` | macro-agent | The agent's start, from `start-agent`'s start, and its online report (`team_agents.agent_online` joins). |
 
 The control-plane wait spans are exported with their recorded start and end
 times when the next milestone arrives, so a still-running wait is not visible

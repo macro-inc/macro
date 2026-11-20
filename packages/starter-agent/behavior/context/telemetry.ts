@@ -83,6 +83,59 @@ export const trace: Trace = (name, run) =>
 /** Where the image puts the computer's setup trace, so the agent's start joins it. */
 export const setupTraceparentVariable = 'MACRO_SETUP_TRACEPARENT';
 
+/** Where the image's launcher (`start-agent`) passes the times of its steps. */
+export const launchTimingsVariable = 'MACRO_LAUNCH_TIMINGS';
+
+/** The launcher's run, in Unix milliseconds: from its start to its exec of the runtime. */
+export type LaunchTimings = {
+  readonly started: number;
+  readonly steps: readonly {
+    readonly name: string;
+    readonly start: number;
+    readonly end: number;
+  }[];
+  readonly ended: number;
+};
+
+const microseconds = (digits: string): number => Number(digits) / 1000;
+
+/**
+ * Reads the launcher's timings, `started:<µs>,<step>:<µs>:<µs>,…,exec:<µs>`
+ * (Unix microseconds, bash's EPOCHREALTIME). Anything else is ignored: the
+ * start is then timed from the process alone.
+ */
+export const launchTimings = (
+  raw: string | undefined
+): LaunchTimings | undefined => {
+  const items = (raw ?? '').split(',');
+  const first = /^started:(\d+)$/.exec(items[0] ?? '');
+  const last = /^exec:(\d+)$/.exec(items.at(-1) ?? '');
+  if (first?.[1] === undefined || last?.[1] === undefined || items.length < 2)
+    return undefined;
+  const steps = items.slice(1, -1).map((item) => {
+    const [, name, start, end] = /^([a-z_]+):(\d+):(\d+)$/.exec(item) ?? [];
+    return name === undefined || start === undefined || end === undefined
+      ? undefined
+      : { name, start: microseconds(start), end: microseconds(end) };
+  });
+  if (steps.some((step) => step === undefined)) return undefined;
+  return {
+    started: microseconds(first[1]),
+    steps: steps.filter((step) => step !== undefined),
+    ended: microseconds(last[1]),
+  };
+};
+
+/** The launcher's run as `agent.launch`, a child of the active span, with a child per step. */
+const recordLaunch = ({ started, steps, ended }: LaunchTimings): void => {
+  const launch = Telemetry.span('agent.launch', { startTime: started });
+  launch.run(() => {
+    for (const { name, start, end } of steps)
+      Telemetry.span(`agent.launch.${name}`, { startTime: start }).end(end);
+  });
+  launch.end(ended);
+};
+
 /** Times one step of the agent's start as a child span of it. */
 export type StartPhase = <Value>(
   name: string,
@@ -103,9 +156,10 @@ const failing = async <Value>(
 };
 
 /**
- * Runs the agent's start as one `agent.start` span, from the process's own
- * start (so loading the code counts), under the computer's setup trace when
- * the image passes one. Work begun inside, such as the greeting, joins it;
+ * Runs the agent's start as one `agent.start` span, from the launcher's start
+ * when it passes its timings (its steps become `agent.launch.*`), otherwise
+ * from the process's own start (so loading the code counts), under the
+ * computer's setup trace when the image passes one. Work begun inside, such as the greeting, joins it;
  * the event loop must start outside (a context captured before this), so
  * each wake stays a trace of its own.
  */
@@ -114,11 +168,17 @@ export const traceStart = <Value>(
   run: (phase: StartPhase) => Promise<Value>
 ): Promise<Value> => {
   const processStart = Date.now() - process.uptime() * 1000;
+  const launch = launchTimings(environment[launchTimingsVariable]);
   const start = () =>
-    Telemetry.span('agent.start', { startTime: processStart }, (span) =>
-      failing(span, () =>
-        run((name, step) => span.span(name, (child) => failing(child, step)))
-      )
+    Telemetry.span(
+      'agent.start',
+      { startTime: launch?.started ?? processStart },
+      (span) => {
+        if (launch !== undefined) recordLaunch(launch);
+        return failing(span, () =>
+          run((name, step) => span.span(name, (child) => failing(child, step)))
+        );
+      }
     );
   const traceparent = environment[setupTraceparentVariable];
   return traceparent === undefined || traceparent === ''

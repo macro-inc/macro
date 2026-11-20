@@ -117,7 +117,9 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
   never stops the environment's install), and `start-agent` exports it as
   `MACRO_SETUP_TRACEPARENT` for the first start only (it records the one used
-  in `~macro/agent/state/setup-traceparent`).
+  in `~macro/agent/state/setup-traceparent`). It times its own steps and
+  passes them as `MACRO_LAUNCH_TIMINGS`, which the runtime exports as
+  `agent.launch.*` spans (the script has no exporter).
 - `macrod.service` loads `/var/lib/macrod/telemetry.env` (written by
   `macrod enroll` from the enrollment's telemetry intake) when present, so
   macrod's setup spans export there.
