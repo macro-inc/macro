@@ -15,9 +15,10 @@ macro_env_var::maybe_env_vars! {
 /// `macrod.service` loads. Root's, like the enrollment marker beside it.
 pub const TELEMETRY_ENV: &str = "/var/lib/macrod/telemetry.env";
 
-/// The header a computer names itself in to its telemetry intake, which
-/// rate-limits each computer on its own instead of by the egress IP
-/// computers share (`services/analytics-proxy/src/limit.ts`).
+/// The header a computer names itself in to its telemetry intake, so the
+/// intake can limit each computer on its own instead of by the egress IP
+/// computers share. Unauthenticated, so the analytics proxy ignores it until
+/// the id is signed.
 pub const COMPUTER_HEADER: &str = "x-macro-computer-id";
 
 /// How spans leave this process.

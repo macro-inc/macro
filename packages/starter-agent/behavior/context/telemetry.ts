@@ -27,7 +27,7 @@ export const tracesUrl = (environment: Environment): string | undefined => {
 /**
  * The export's extra headers, from the standard `OTEL_EXPORTER_OTLP_HEADERS`
  * (`key=value,…`, values URL-encoded): the image names the computer there,
- * which the intake rate-limits by. A malformed entry is skipped.
+ * for a per-computer limit at the intake. A malformed entry is skipped.
  */
 export const tracesHeaders = (
   environment: Environment

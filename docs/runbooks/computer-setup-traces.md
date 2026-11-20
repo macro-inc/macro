@@ -59,13 +59,12 @@ histograms (by `phase`) for distributions.
 ## Rate limit at the intake
 
 Deployed computers export through the analytics proxy
-(`services/analytics-proxy`), which rate-limits by client IP. macrod and the
-agent send `x-macro-computer-id`, so a computer counts against its own limit
-(100 requests / 10 s) and its egress IP's fleet ceiling (3000 / 10 s), not a
-browser's 300 / 10 s that computers behind one IP would share. The header is
-not authenticated; the fleet ceiling bounds what a client gets by rotating ids.
-A 429 there drops spans: look for missing guest spans across many computers of
-one host.
+(`services/analytics-proxy`), which rate-limits by client IP (300 requests /
+10 s). Computers behind one egress IP share that budget. macrod and the agent
+already send `x-macro-computer-id`, but the proxy ignores it: the header is
+unauthenticated, so honouring it would let any client raise its own limit.
+A per-computer limit waits on a signed id. A 429 there drops spans: look for
+missing guest spans across many computers of one host.
 
 ## Local collector
 

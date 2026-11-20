@@ -146,8 +146,8 @@ fi
 finish packages
 
 # Where the runtime's spans go: agent.env's, not a credential. The intake
-# rate-limits each computer by the id it sends, not by the egress IP that
-# computers share.
+# can limit each computer by the id it sends, not by the egress IP that
+# computers share, once the id is signed.
 endpoint=$(setting "$credentials" OTEL_EXPORTER_OTLP_ENDPOINT)
 if [[ -n $endpoint ]]; then
   export OTEL_EXPORTER_OTLP_ENDPOINT=$endpoint

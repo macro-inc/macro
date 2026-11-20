@@ -2,7 +2,6 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { COMPUTER_HEADER, limitsFor } from './limit';
 
 // The OTLP traces intake needs a server-side Datadog API key the browser must
 // never hold, so it lives as a Worker secret (set via
@@ -168,13 +167,8 @@ app.use('*', async (c, next) => {
     (isLocalhost ? 'local-development' : null);
   if (!clientIp) return c.text('Missing CF-Connecting-IP', 400);
 
-  for (const { limiter, key } of limitsFor(
-    clientIp,
-    c.req.header(COMPUTER_HEADER)
-  )) {
-    const { success } = await c.env[limiter].limit({ key });
-    if (!success) return c.text('Too Many Requests', 429);
-  }
+  const { success } = await c.env.RATE_LIMITER.limit({ key: clientIp });
+  if (!success) return c.text('Too Many Requests', 429);
 
   await next();
 });
