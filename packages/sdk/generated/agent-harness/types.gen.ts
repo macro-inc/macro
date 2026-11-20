@@ -1963,6 +1963,7 @@ export type ExecutionRecord = {
      * Execution identity.
      */
     executionId: ExecutionId;
+    job?: null | JobInfo;
     /**
      * JSON returned by the program, if successful.
      */
@@ -1984,7 +1985,7 @@ export type ExecutionRecord = {
 /**
  * The recorded outcome of a program.
  */
-export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out';
+export type ExecutionStatus = 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timed_out' | 'interrupted';
 
 /**
  * The provider-side identity of an externally-served session.
@@ -2156,6 +2157,29 @@ export type IntentScore = {
      * Independent probability between zero and one.
      */
     score: number;
+};
+
+/**
+ * What asking a job to stop did.
+ */
+export type JobCancel = 'requested' | 'already_settled';
+
+/**
+ * A background job's facts, kept on its execution record.
+ */
+export type JobInfo = {
+    /**
+     * When it stops at the latest.
+     */
+    deadline: string;
+    /**
+     * When it was launched.
+     */
+    startedAt: string;
+    /**
+     * What the agent called it, shown on its card.
+     */
+    title: string;
 };
 
 /**
@@ -4159,6 +4183,34 @@ export type GetCodeExecutionResponses = {
 };
 
 export type GetCodeExecutionResponse = GetCodeExecutionResponses[keyof GetCodeExecutionResponses];
+
+export type CancelCodeExecutionJobData = {
+    body?: never;
+    path: {
+        /**
+         * Owning session
+         */
+        session_id: string;
+        /**
+         * The background job's execution id
+         */
+        execution_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/code-executions/{execution_id}/cancel';
+};
+
+export type CancelCodeExecutionJobErrors = {
+    401: unknown;
+    403: unknown;
+    404: unknown;
+};
+
+export type CancelCodeExecutionJobResponses = {
+    200: JobCancel;
+};
+
+export type CancelCodeExecutionJobResponse = CancelCodeExecutionJobResponses[keyof CancelCodeExecutionJobResponses];
 
 export type ListExecutionConnectedAppsData = {
     body?: never;
