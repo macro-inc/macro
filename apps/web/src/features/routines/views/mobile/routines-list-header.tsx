@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
@@ -36,8 +37,7 @@ export function MobileRoutinesListHeader(props: {
         </>
       }
     >
-      <MobileHeader.Back onBack={props.onBack} />
-      <MobileHeader.Title label={t('agentWork.routines')} />
+      <ViewSidebar.Toggle action="expand" presentation="pill" />
     </MobileHeader>
   );
 }

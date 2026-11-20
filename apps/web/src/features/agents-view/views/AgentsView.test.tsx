@@ -208,12 +208,23 @@ vi.mock('./agents-sidebar/agents-sidebar', async () => ({
   DesktopAgentsSidebar: (await import('../components/AgentsSidebar'))
     .AgentsSidebar,
 }));
+vi.mock('../phone-sidebar', () => ({
+  PhoneAgentsSidebar: (props: {
+    onOpenPage: (page: 'new' | 'archived' | 'agents' | 'routines') => void;
+    onCreateAgent: () => void;
+  }) => (
+    <div>
+      <button onClick={() => props.onOpenPage('new')}>Conversations</button>
+      <button onClick={() => props.onOpenPage('archived')}>Archived</button>
+      <button onClick={() => props.onOpenPage('agents')}>Roster</button>
+      <button onClick={() => props.onOpenPage('routines')}>Routines</button>
+      <button onClick={props.onCreateAgent}>New agent</button>
+    </div>
+  ),
+}));
 vi.mock('../phone-list', () => ({
   PhoneAgentsList: (props: {
     archived: boolean;
-    onCreateAgent: () => void;
-    onOpenPage: (page: 'archived' | 'agents' | 'routines') => void;
-    onBack: () => void;
     onOpenConversation: (conversation: {
       id: string;
       type: 'agent_session';
@@ -221,9 +232,6 @@ vi.mock('../phone-list', () => ({
   }) => (
     <div>
       <span>{props.archived ? 'Archived page' : 'Agents list'}</span>
-      <button onClick={() => props.onOpenPage('archived')}>Archived</button>
-      <button onClick={() => props.onOpenPage('agents')}>Roster</button>
-      <button onClick={() => props.onOpenPage('routines')}>Routines</button>
       <button
         onClick={() =>
           props.onOpenConversation({ id: 'session', type: 'agent_session' })
@@ -231,8 +239,6 @@ vi.mock('../phone-list', () => ({
       >
         Session
       </button>
-      <button onClick={props.onBack}>List back</button>
-      <button onClick={props.onCreateAgent}>New agent</button>
     </div>
   ),
 }));
@@ -560,9 +566,7 @@ it.each([
         label === 'Routines' ? 'routines' : 'agents'
       );
     expect(history).toHaveLength(2);
-    if (label === 'Archived')
-      fireEvent.click(screen.getByRole('button', { name: 'List back' }));
-    else state.back.current();
+    state.back.current();
     expect(screen.getByText('Agents list')).toBeTruthy();
     expect(history).toHaveLength(1);
   }
@@ -636,7 +640,7 @@ it('restores a phone composer request without replacing its history entry', () =
   expect(replace).not.toHaveBeenCalled();
 });
 
-it('replaces a direct Archived entry with the list when no earlier page exists', () => {
+it('opens Conversations from the drawer on a direct Archived entry', () => {
   state.touch = true;
   state.width = () => 390;
   const [entry, setEntry] = createSignal<FakeEntry>({
@@ -653,9 +657,15 @@ it('replaces a direct Archived entry with the list when no earlier page exists',
   state.replace.current = replace;
   render(() => <AgentsView />);
   expect(screen.getByText('Archived page')).toBeTruthy();
-  fireEvent.click(screen.getByRole('button', { name: 'List back' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Conversations' }));
   expect(screen.getByText('Agents list')).toBeTruthy();
-  expect(replace).toHaveBeenCalledWith({ type: 'component', id: 'agents' });
+  expect(replace).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'component',
+      id: 'agents',
+      params: expect.objectContaining({ agentPage: 'new' }),
+    })
+  );
 });
 
 it('retains the phone New agent creation intent through the history entry', () => {

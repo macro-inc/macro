@@ -1,4 +1,4 @@
-import { useViewShell, ViewShell } from '@app/components/view-shell';
+import { ViewShell } from '@app/components/view-shell';
 import { useInlinePreviewLayout } from '@app/components/view-shell/use-inline-preview-layout';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AgentSettings } from '@app/features/settings/AgentSettings';
@@ -40,7 +40,10 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { routineContent } from '../../routines/routine-navigation';
+import {
+  routineContent,
+  routineIdFromContent,
+} from '../../routines/routine-navigation';
 import { RoutinesPage } from '../../routines/routines-page';
 import '../agents-view.css';
 
@@ -79,6 +82,7 @@ import {
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { PhoneAgentsList } from '../phone-list';
+import { PhoneAgentsSidebar } from '../phone-sidebar';
 import { createPersistedComposerDraft } from '../primitives/composer-draft';
 import { createConversationListView } from '../primitives/conversation-list-view';
 import { mobileAgentRequest } from '../primitives/mobile-agent-request';
@@ -115,16 +119,13 @@ function LoadingComposer() {
 }
 
 function AgentsMobileList(props: { children: JSX.Element }) {
-  const shell = useViewShell();
   return (
-    <Show when={!shell.aside.isOverlay()}>
-      <div
-        class="size-full min-h-0 pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)]"
-        style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
-      >
-        {props.children}
-      </div>
-    </Show>
+    <div
+      class="size-full min-h-0"
+      style={{ 'padding-bottom': `${FloatRegions.hostHeight()}px` }}
+    >
+      {props.children}
+    </div>
   );
 }
 
@@ -144,6 +145,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
   // A coding agent another surface asked the composer to start with.
   const [requestedAgent, setRequestedAgent] = createSignal<AgentRequest>();
   const listView = createConversationListView(userId());
+  const archivedListView = createConversationListView(
+    userId(),
+    'agents-archived-list-view-v1'
+  );
+  const phoneListView = () =>
+    page() === 'archived' ? archivedListView : listView;
   const conversationSort = () =>
     isTouchDevice() ? ('updated' as const) : listView.sort();
   const [creatingKind, setCreatingKind] = createSignal<AgentKind>();
@@ -607,6 +614,7 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
       actions={actions}
     />
   );
+
   const sidebar = () => (
     <AgentsSidebar
       filters={listView.filters()}
@@ -666,15 +674,44 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
           asidePreferenceKey="agents"
           class="bg-panel"
           resizable
-          aside={
-            isTouchDevice() && mobileLayout()
-              ? false
-              : { min: 224, max: 380, preserveDuringResize: false }
-          }
+          aside={{ min: 224, max: 380, preserveDuringResize: false }}
           main={{ min: 280, preferredWidth: 640 }}
         >
           <ViewShell.Aside>
             <Switch>
+              <Match when={isTouchDevice() && mobileLayout()}>
+                <PhoneAgentsSidebar
+                  activePage={page()}
+                  activeRoutineId={routineIdFromContent(panel.handle.content())}
+                  archivedCount={
+                    !query.hasNextPage && !query.isPending && !query.error
+                      ? allArchived().length
+                      : undefined
+                  }
+                  onOpenPage={(next) => {
+                    const interaction = beginInteraction('agents.page.open');
+                    try {
+                      openPage(next);
+                    } finally {
+                      interaction.end();
+                    }
+                  }}
+                  onCreateAgent={() => openPage('agents', 'agent')}
+                  onCreateRoutine={() =>
+                    layout.popoverSplit({
+                      type: 'component',
+                      id: 'routine-compose',
+                    })
+                  }
+                  onOpenRoutine={(id) =>
+                    layout.openWithSplit(routineContent(id), {
+                      handle: panel.handle,
+                      activate: true,
+                      search: {},
+                    })
+                  }
+                />
+              </Match>
               <Match when={mobileLayout()}>{null}</Match>
               <Match when={isTouchDevice()}>{sidebar()}</Match>
               <Match when={true}>{desktopSidebar()}</Match>
@@ -871,15 +908,20 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                     'updated'
                   )}
                   archivedTotalCount={allArchived().length}
+                  conversationTotalCount={
+                    partitionArchived(allConversations()).conversations.length
+                  }
                   roster={rosterSource.roster()}
                   rosterLoading={rosterSource.loading()}
                   search={page() === 'archived' ? archivedSearch() : search()}
                   onSearchChange={
                     page() === 'archived' ? setArchivedSearch : setSearch
                   }
-                  filters={listView.filters()}
-                  onFilterChange={listView.setSelected}
-                  onClearFilters={listView.clear}
+                  filters={phoneListView().filters()}
+                  onFilterChange={(category, value, selected) =>
+                    phoneListView().setSelected(category, value, selected)
+                  }
+                  onClearFilters={() => phoneListView().clear()}
                   showUnlistedRuns={showUnlistedRuns()}
                   onShowUnlistedRunsChange={setShowUnlistedRuns}
                   modeForConversation={modeForConversation}
@@ -898,18 +940,12 @@ function AgentsWorkspace(props: { route?: AgentsRoute }) {
                       'agents-view'
                     )
                   }
-                  onOpenPage={(next) =>
-                    next === 'new' ? setMobileList(true) : openSidebarPage(next)
-                  }
-                  onBack={() => {
-                    backToPreviousPage();
-                    setArchivedSearch('');
-                  }}
                   onOpenConversation={openListedConversation}
                   onSelectAgent={(agent) =>
                     mobileAgentRequest.select(userId(), agent.id, agent.kind)
                   }
                   onCreateAgent={() => openPage('agents', 'agent')}
+                  onFocusComposer={() => mobileAgentRequest.focus(userId())}
                   actions={actions}
                 />
               </AgentsMobileList>
