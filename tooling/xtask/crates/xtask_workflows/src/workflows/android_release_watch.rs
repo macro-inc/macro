@@ -16,14 +16,12 @@
 //! events created with the workflow token never start workflows. The iOS
 //! counterpart is [`super::ios_release_watch`].
 
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, github};
 use gh_workflow::{
-    Event, Expression, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow,
-    WorkflowDispatch,
+    Event, Job, Level, Permissions, Run, Schedule, Step, Use, Workflow, WorkflowDispatch,
 };
 
 use crate::workflows::{runners, steps};
-
-const HAS_PRS: &str = "steps.prs.outputs.count != '0'";
 
 /// Build the workflow.
 pub fn android_release_watch() -> Workflow {
@@ -47,8 +45,8 @@ fn watch_job() -> Job {
         .name("Re-run the Android Native Check once the Play release is live")
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(15u32)
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
         .add_step(find_prs())
         .add_step(steps::checkout(false, false).if_condition(gated()))
         .add_step(setup_bun())
@@ -56,9 +54,25 @@ fn watch_job() -> Job {
         .add_step(rerun_live_checks())
 }
 
-fn gated() -> Expression {
-    Expression::new(HAS_PRS)
+fn gated() -> Expr<Bool> {
+    FIND_PRS.outputs.count.read().ne("0")
 }
+
+struct FindPrsOutputs {
+    /// The open PRs found, as a JSON array of `{number, sha, merge}`.
+    prs: StepOutput<Str>,
+    /// How many PRs `prs` holds.
+    count: StepOutput<Str>,
+}
+
+/// The [`find_prs`] step.
+const FIND_PRS: StepHandle<FindPrsOutputs> = StepHandle::new(
+    "prs",
+    FindPrsOutputs {
+        prs: StepOutput::new("prs", "prs"),
+        count: StepOutput::new("prs", "count"),
+    },
+);
 
 fn find_prs() -> Step<Run> {
     Step::new("Find PRs waiting on a Play release")
@@ -72,7 +86,7 @@ fn find_prs() -> Step<Run> {
             echo "prs=${prs}" >> "$GITHUB_OUTPUT"
             echo "count=${count}" >> "$GITHUB_OUTPUT"
         "#})
-        .id("prs")
+        .id(FIND_PRS.id())
         .shell("bash")
 }
 
@@ -90,9 +104,9 @@ fn rerun_live_checks() -> Step<Run> {
         ))
         .shell("bash")
         .if_condition(gated())
-        .add_env(("PRS", "${{ steps.prs.outputs.prs }}"))
+        .add_env(("PRS", FIND_PRS.outputs.prs.read()))
         .add_env((
             "GOOGLE_PLAY_ACCESS_TOKEN",
-            "${{ steps.auth.outputs.access_token }}",
+            steps::GOOGLE_PLAY_AUTH.outputs.access_token.read(),
         ))
 }

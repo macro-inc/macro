@@ -3,14 +3,11 @@
 //! changed, and `CI gate` reads the call's result, so it has no path-check or
 //! roll-up job of its own.
 
-use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall};
+use gh_workflow::{Event, Job, Run, Step, Use, Workflow, WorkflowCall, ZizmorRule};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{
-    runners,
-    steps::{self, FluentBuilder},
-    vars,
-};
+use crate::workflows::actions::ActionsCheckout;
+use crate::workflows::{attestation, runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -34,7 +31,8 @@ fn infra_runner() -> String {
 /// Build the workflow.
 pub fn code_check_infra() -> Workflow {
     Workflow::new("infra code check")
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("biome-check", biome_check())
         .add_job("check", check())
 }
@@ -55,6 +53,7 @@ fn biome_check() -> Job {
 
 fn check() -> Job {
     Job::default()
+        .cond(attestation::not_attested("infra/check"))
         .timeout_minutes(15u32)
         .runs_on(infra_runner())
         .add_step(checkout(false))
@@ -67,16 +66,17 @@ fn check() -> Job {
 }
 
 fn checkout(full_history: bool) -> Step<Use> {
-    steps::abort_stalled_fetch(Step::new("Checkout Repo").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    )) // v6
+    let checkout = ActionsCheckout::new("Checkout Repo");
     // `biome --changed` needs the merge base, not old blobs.
-    .when(full_history, |step| {
-        step.add_with(("fetch-depth", 0))
-            .add_with(("filter", "blob:none"))
-    })
+    let checkout = if full_history {
+        checkout.fetch_depth(0).filter("blob:none")
+    } else {
+        checkout
+    };
+    checkout.step().zizmor_ignore(
+        ZizmorRule::Artipacked,
+        "bun and Pulumi tooling run from the checkout",
+    )
 }
 
 fn run_biome() -> Step<Run> {

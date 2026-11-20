@@ -3118,9 +3118,11 @@ struct UpsertedCalendar {
     team_ooo_changed: bool,
     /// The provider gives the account another role on the calendar than the
     /// stored one.
+    #[cfg(feature = "outlook")]
     role_changed: bool,
     /// The calendar was not certified for team reads, or holds a source
     /// written since its last committed sync under another role.
+    #[cfg(feature = "outlook")]
     needs_verification: bool,
 }
 
@@ -3272,7 +3274,9 @@ async fn upsert_calendar_tx(
     Ok(UpsertedCalendar {
         row,
         team_ooo_changed: visibly_changed || reminders_invalidated || access_changed,
+        #[cfg(feature = "outlook")]
         role_changed,
+        #[cfg(feature = "outlook")]
         needs_verification,
     })
 }

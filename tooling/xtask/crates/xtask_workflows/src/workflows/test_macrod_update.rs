@@ -10,7 +10,8 @@
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::actions::ActionsSetupNode;
+use crate::workflows::{attestation, runners, steps, vars};
 
 #[cfg(test)]
 mod test;
@@ -34,7 +35,7 @@ pub fn test_macrod_update() -> Workflow {
         })
         .on(Event::default()
             .workflow_dispatch(gh_workflow::WorkflowDispatch::default())
-            .workflow_call(WorkflowCall::default()))
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("linux", linux_job())
         .add_job("macos", macos_job())
         .add_job("windows", windows_job())
@@ -43,6 +44,7 @@ pub fn test_macrod_update() -> Workflow {
 /// Builds musl like the release workflow, in the same minimal Nix shell.
 fn linux_job() -> Job {
     Job::default()
+        .cond(attestation::not_attested("macrod-update/linux"))
         .timeout_minutes(20u32)
         .name("macrod update (linux)")
         .runs_on(runners::Runner::RustCi.to_string())
@@ -122,9 +124,9 @@ fn windows_job() -> Job {
                 ))
                 .shell("pwsh"),
         )        .add_step(
-            Step::new("Setup Node")
-                .uses("actions", "setup-node", "v4")
-                .add_with(("node-version", "24")),
+            ActionsSetupNode::new("Setup Node")
+                .node_version("24")
+                .step(),
         )
         .add_step(
             Step::new("Claude Code from npm")

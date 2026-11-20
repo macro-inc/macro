@@ -87,6 +87,8 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+Task-template rows cascade with personal users or teams; nullable creator attribution clears on account deletion while team-owned content remains.
+
 `password_import_activity` stores only per-batch source format and counts; its
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
@@ -128,15 +130,33 @@ data checks and explicit vault purge. It does not depend on a successful item.
 - `item_access::get_accessible_items::get_user_accessible_items` (cached 10 s)
   and `call_record::get::get_accessible_call_ids` (uncached) share one run of
   their queries between concurrent identical callers through `single_flight`.
+  The accessible-items run uses `run_to_completion`: it finishes when every
+  caller has gone away (a cancelled search), so its document checks are kept
+  for the next search, and a caller arriving meanwhile joins it.
   The unit tests compile with the cache off; `tests/coalesced_access_lookups.rs`
   covers the cached path and needs its own user ids per test.
-- `get_user_accessible_items` counts the caller's document grants first, up to
-  `DOCUMENT_GRANTS_LOOKED_UP_BY_ID`. At or under it, `documents_by_grant.sql`
-  looks each granted document up by id behind `OFFSET 0` fences; above it the
+- `get_user_accessible_items` reads the caller's document grants first, up to
+  `DOCUMENT_GRANTS_LOOKED_UP_BY_ID`. At or under it, `documents_by_id.sql`
+  looks each granted document up by id behind an `OFFSET 0` fence; above it the
   planner chooses. Left alone, the planner scans every live document for a
   caller with many small sources, because it estimates each at the table's
-  average grant count. Keep the fences, and re-measure both paths on a
+  average grant count. Keep the fence, and re-measure both paths on a
   production-size seed before changing the limit.
+- Each of those lookups costs a random read per granted document whose pages
+  are not cached, and for callers holding thousands of grants they are cold
+  again minutes after their last search. So `checked_documents` keeps, per
+  process and caller, what the lookups found about each granted document (it
+  exists, and whether the caller owns it) for `CHECKS_KEPT_FOR`, and reads
+  `Document` only for granted ids not checked within it. Grants are read on
+  every lookup, and Trash state too (`trashed_by_id.sql`, through
+  `idx_document_trashed_id_owner`, which holds only trashed rows and stays
+  cached): a revoked or new share, a move to or from the Trash, and a purge
+  (which removes the grants) count at once; only a document given to another
+  owner counts once its check expires. The checks are on in unit tests too,
+  keyed by database and caller.
+- `idx_document_trashed_id_owner` (migration `20261120081501`) is built
+  concurrently. If the build is interrupted, inspect `pg_index.indisvalid` and
+  drop only the invalid index before retrying.
 - `recents::deleted` (the Trash list) pages by `("deletedAt", id)` through the
   partial trash indexes on `Document`, `Chat` and `Project`. A folder trash or
   batch move gives thousands of items one `"deletedAt"`, so the id tiebreak must

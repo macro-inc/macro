@@ -64,7 +64,7 @@ describe('the company search', () => {
     expect(request.include_crm).toBe(true);
     expect(request.search_on).toBe('name');
     expect(request.filters.crm_company_filters).toEqual({ hidden: false });
-    expect(request.filters.call_filters.channel_ids).toEqual([NIL]);
+    expect(request.filters.call_filters.call_ids).toEqual([NIL]);
     expect(request.filters.document_filters.document_ids).toEqual([NIL]);
     expect(request.filters.email_filters.email_thread_ids).toEqual([NIL]);
     expect(request.filters.channel_filters.channel_ids).toEqual([NIL]);

@@ -12,7 +12,7 @@
 use gh_workflow::{Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
-use crate::workflows::{runners, steps, vars};
+use crate::workflows::{attestation, runners, steps, vars};
 
 /// Files whose change makes `PR CI` call this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -41,12 +41,14 @@ pub fn code_check_conventions() -> Workflow {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("ast-grep", ast_grep())
 }
 
 fn ast_grep() -> Job {
     Job::default()
+        .cond(attestation::not_attested("conventions/ast-grep"))
         .timeout_minutes(15u32)
         .name("ast-grep Conventions")
         .runs_on(conventions_runner())

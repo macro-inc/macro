@@ -24,13 +24,22 @@
 //! post a result. Fork PRs get a read-only token, so `ci_gate_fork` removes
 //! their label and sets their status.
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{
+    Bool, Expr, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, github, needs, steps,
+    to_json, whole_needs,
+};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    CallJob, Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step,
+    Use, Workflow,
 };
 use xtask_paths::RepoGlob;
 
+use crate::workflows::actions::{
+    CallCargoDeny, CallCargoWorkspaceDependencyCheck, CallCheckGenerated, CallCheckNodeModulesNix,
+    CallCheckTauriLockfiles, CallCodeCheckCloudStorage, CallCodeCheckConventions,
+    CallCodeCheckInfra, CallObservabilityAws, CallObservabilityCluster, CallObservabilityImage,
+    CallSdkCheck, CallTestMacrodUpdate, CallWebAppCheckMain, DornyPathsFilter,
+};
 use crate::workflows::{
     attestation, cargo_deny, cargo_workspace_dependency_check, check_generated,
     check_node_modules_nix, check_tauri_lockfiles, code_check_conventions, code_check_infra,
@@ -51,21 +60,65 @@ pub const GATE_CONTEXT: &str = "CI gate";
 pub const GATE_DOCS_URL: &str =
     "https://github.com/macro-inc/macro/blob/main/.agents/skills/run-ci/SKILL.md";
 
-const REQUESTED: &str = "github.event.label.name == 'run-ci'";
+fn requested() -> Expr<Bool> {
+    github().event::<Str>("label.name").eq(RUN_LABEL)
+}
 
-/// The id of the job whose outputs gate the calls.
-const START_ID: &str = "start";
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
+}
 
 /// Job names the fork step reads back from a finished run (`ci_gate.ts`).
-const START_JOB: &str = "Start";
-const GATE_JOB: &str = "CI gate";
+pub const START_JOB: &str = "Start";
+pub const GATE_JOB: &str = "CI gate";
+
+/// What [`START`] decided about the head's attestations
+/// ([`attestation`]).
+struct Attestations<Output> {
+    /// The checks whose jobs this run skips, a JSON list of ids.
+    attested: Output,
+    /// The accepted checks this run runs anyway, a JSON list of ids.
+    audited: Output,
+    /// The tree of the merge commit the run tests.
+    tree: Output,
+}
+
+/// Takes the request, reads the head's attestations and path-filters the
+/// calls. Besides these, its outputs are one flag per path-filtered call,
+/// named by [`output_name`] at run time.
+const START: JobHandle<Attestations<JobOutput<Str>>> = JobHandle::new(
+    "start",
+    Attestations {
+        attested: JobOutput::new("start", "attested"),
+        audited: JobOutput::new("start", "audited"),
+        tree: JobOutput::new("start", "tree"),
+    },
+);
+/// The step of [`START`] that accepts attestations and draws the audits.
+const ATTESTATIONS: StepHandle<Attestations<StepOutput<Str>>> = StepHandle::new(
+    "attestations",
+    Attestations {
+        attested: StepOutput::new("attestations", "attested"),
+        audited: StepOutput::new("attestations", "audited"),
+        tree: StepOutput::new("attestations", "tree"),
+    },
+);
+/// The path filter in [`START`]; one output per path-filtered call.
+const FILTER: StepHandle<()> = StepHandle::new("filter", ());
+
+/// The checks [`START`] accepted, as a call hands them to its workflow.
+fn attested() -> Expr<Str> {
+    START.outputs.attested.read()
+}
 
 /// A check workflow `PR CI` calls.
 pub(crate) struct Call {
     pub(crate) id: &'static str,
     /// Prefixes the called jobs' check names: `Web App / Typecheck`.
     pub(crate) name: &'static str,
-    pub(crate) file: &'static str,
+    /// A job calling the workflow; [`call_job`] names it and passes secrets.
+    /// A workflow with attested jobs is handed [`attested`].
+    pub(crate) workflow: fn() -> CallJob,
     /// Files that make it run; `None` runs it on every request.
     pub(crate) paths: Option<&'static [RepoGlob<'static>]>,
 }
@@ -74,85 +127,89 @@ pub(crate) const CALLS: &[Call] = &[
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",
-        file: "code_check_cloud_storage.yml",
+        workflow: || CallCodeCheckCloudStorage::new().attested(attested()).job(),
         paths: None,
     },
     Call {
         id: "web-app",
         name: "Web App",
-        file: "web-app-check-main.yml",
+        workflow: || CallWebAppCheckMain::new().job(),
         paths: None,
     },
     Call {
         id: "infra",
         name: "Infra",
-        file: "code_check_infra.yml",
+        workflow: || CallCodeCheckInfra::new().attested(attested()).job(),
         paths: Some(code_check_infra::PATHS),
     },
     Call {
         id: "conventions",
         name: "Conventions",
-        file: "code_check_conventions.yml",
+        workflow: || CallCodeCheckConventions::new().attested(attested()).job(),
         paths: Some(code_check_conventions::PATHS),
     },
     Call {
         id: "cargo-deny",
         name: "cargo deny",
-        file: "cargo_deny.yml",
+        workflow: || CallCargoDeny::new().job(),
         paths: Some(cargo_deny::PATHS),
     },
     Call {
         id: "workspace-dependencies",
         name: "Workspace dependencies",
-        file: "cargo_workspace_dependency_check.yml",
+        workflow: || {
+            CallCargoWorkspaceDependencyCheck::new()
+                .attested(attested())
+                .job()
+        },
         paths: Some(cargo_workspace_dependency_check::PATHS),
     },
     Call {
         id: "generated-workflows",
         name: "Generated workflows",
-        file: "check_generated.yml",
+        workflow: || CallCheckGenerated::new().attested(attested()).job(),
         paths: Some(check_generated::PATHS),
     },
     Call {
         id: "node-modules-nix",
         name: "node_modules nix",
-        file: "check_node_modules_nix.yml",
+        workflow: || CallCheckNodeModulesNix::new().attested(attested()).job(),
         paths: Some(check_node_modules_nix::PATHS),
     },
     Call {
         id: "tauri-lockfiles",
         name: "Tauri lockfiles",
-        file: "check_tauri_lockfiles.yml",
+        workflow: || CallCheckTauriLockfiles::new().job(),
         paths: Some(check_tauri_lockfiles::PATHS),
     },
     Call {
         id: "sdk",
         name: "SDK",
-        file: "sdk-check.yml",
+        workflow: || CallSdkCheck::new().attested(attested()).job(),
         paths: Some(sdk_check::PATHS),
     },
     Call {
         id: "observability-aws",
         name: "Observability AWS layer",
-        file: "observability_aws.yml",
+        workflow: || CallObservabilityAws::new().job(),
         paths: Some(observability_aws::PATHS),
     },
     Call {
         id: "observability-image",
         name: "Observability image",
-        file: "observability_image.yml",
+        workflow: || CallObservabilityImage::new().attested(attested()).job(),
         paths: Some(observability_image::PATHS),
     },
     Call {
         id: "observability-cluster",
         name: "Observability cluster",
-        file: "observability_cluster.yml",
+        workflow: || CallObservabilityCluster::new().job(),
         paths: Some(observability_cluster::PATHS),
     },
     Call {
         id: "macrod-update",
         name: "macrod update",
-        file: "test_macrod_update.yml",
+        workflow: || CallTestMacrodUpdate::new().attested(attested()).job(),
         paths: Some(test_macrod_update::PATHS),
     },
 ];
@@ -168,12 +225,14 @@ pub fn pr_ci() -> Workflow {
         .concurrency(
             // One group per PR for requests, so a newer request cancels the
             // older run; a group per run for every other label.
-            Concurrency::new(Expression::new(format!(
-                "pr-ci-${{{{ github.event.pull_request.number }}}}-${{{{ {REQUESTED} && 'requested' || github.run_id }}}}"
-            )))
+            Concurrency::new(format!(
+                "pr-ci-{}-{}",
+                pr_number(),
+                requested().then_else("requested", github().run_id())
+            ))
             .cancel_in_progress(true),
         )
-        .add_job(START_ID, start().expect("the attested checks render"));
+        .add_job(START, start());
 
     CALLS
         .iter()
@@ -181,22 +240,6 @@ pub fn pr_ci() -> Workflow {
             workflow.add_job(call.id, call_job(call))
         })
         .add_job("gate", gate())
-}
-
-/// Fill in what gh-workflow can't express on a reusable-workflow call.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    for call in CALLS {
-        let job = crate::workflows::job_mut(root, call.id)?;
-        job.remove("runs-on");
-        job.insert("secrets".into(), "inherit".into());
-        if attestation::calls_attested(call) {
-            job.insert(
-                "with".into(),
-                crate::workflows::yaml_fragment("attested: ${{ needs.start.outputs.attested }}")?,
-            );
-        }
-    }
-    Ok(())
 }
 
 /// The output that says whether a path-filtered call runs.
@@ -212,27 +255,34 @@ pub(crate) fn gate_step(name: &str, mode: &str) -> Step<Run> {
         .add_env(("CI_GATE_MODE", mode))
         .add_env(("CI_GATE_CONTEXT", GATE_CONTEXT))
         .add_env(("CI_GATE_LABEL", RUN_LABEL))
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
+        .add_env(("GH_TOKEN", github().token()))
 }
 
 /// The PR facts the start and gate steps act on.
 fn with_pull_request(step: Step<Run>) -> Step<Run> {
-    step.add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    step.add_env(("PR_NUMBER", pr_number()))
+        .add_env(("HEAD_SHA", github().event::<Str>("pull_request.head.sha")))
         .add_env((
             "SAME_REPO",
-            "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
+            github()
+                .event::<Str>("pull_request.head.repo.full_name")
+                .eq(github().repository()),
         ))
         .add_env((
             "RUN_URL",
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+            format!(
+                "{}/{}/actions/runs/{}",
+                github().server_url(),
+                github().repository(),
+                github().run_id()
+            ),
         ))
 }
 
-fn start() -> Result<Job> {
+fn start() -> Job {
     let job = Job::default()
         .name(START_JOB)
-        .cond(Expression::new(REQUESTED))
+        .cond(requested())
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
@@ -244,31 +294,34 @@ fn start() -> Result<Job> {
         })
         .add_step(
             with_pull_request(gate_step("Take the request", "start"))
-                .add_env(("MERGE_SHA", "${{ github.sha }}")),
+                .add_env(("MERGE_SHA", github().sha())),
         )
         .add_step(
             with_pull_request(gate_step("Read the head's attestations", "attestations"))
-                .id("attestations")
-                .add_env(("MERGE_SHA", "${{ github.sha }}"))
-                .add_env(("ATTESTABLE_CHECKS", attestation::start_checks()?))
+                .id(ATTESTATIONS.id())
+                .add_env(("MERGE_SHA", github().sha()))
+                .add_env(("ATTESTABLE_CHECKS", start_checks()))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
                 .add_env(("AUDIT_ONE_IN", attestation::AUDIT_ONE_IN.to_string())),
         )
         .add_step(paths_filter())
-        .add_output("attested", "${{ steps.attestations.outputs.attested }}")
-        .add_output("audited", "${{ steps.attestations.outputs.audited }}")
-        .add_output("tree", "${{ steps.attestations.outputs.tree }}");
+        .add_output(
+            START.outputs.attested.name(),
+            ATTESTATIONS.outputs.attested.read(),
+        )
+        .add_output(
+            START.outputs.audited.name(),
+            ATTESTATIONS.outputs.audited.read(),
+        )
+        .add_output(START.outputs.tree.name(), ATTESTATIONS.outputs.tree.read());
 
-    Ok(CALLS
+    CALLS
         .iter()
         .filter(|call| call.paths.is_some())
         .fold(job, |job, call| {
             let output = output_name(call);
-            job.add_output(
-                output.clone(),
-                format!("${{{{ steps.filter.outputs.{output} }}}}"),
-            )
-        }))
+            job.add_output(output.clone(), steps(FILTER.id()).output(&output))
+        })
 }
 
 /// One filter per path-filtered call, from the same list its push trigger uses.
@@ -286,27 +339,19 @@ fn paths_filter() -> Step<Use> {
         })
         .collect();
 
-    Step::new("Filter changed paths")
-        .uses(
-            "dorny",
-            "paths-filter",
-            "d1c1ffe0248fe513906c8e24db8ea791d46f8590",
-        ) // v3.0.3
-        .id("filter")
-        .add_with(("filters", filters))
+    DornyPathsFilter::new("Filter changed paths", filters)
+        .step()
+        .id(FILTER.id())
 }
 
-fn call_job(call: &Call) -> Job {
-    let job = Job::default()
+fn call_job(call: &Call) -> CallJob {
+    let job = (call.workflow)()
         .name(call.name)
-        .needs(vec!["start".to_string()])
-        .uses(format!("./.github/workflows/{}", call.file));
+        .add_needs(START)
+        .inherit_secrets();
 
     match call.paths {
-        Some(_) => job.cond(Expression::new(format!(
-            "needs.start.outputs.{} == 'true'",
-            output_name(call)
-        ))),
+        Some(_) => job.cond(needs(START.id()).output(&output_name(call)).is_true()),
         None => job,
     }
 }
@@ -314,41 +359,38 @@ fn call_job(call: &Call) -> Job {
 /// Runs unless the run was cancelled (a newer request superseded it) or was
 /// never a request. A skipped call is a path filter that didn't match.
 fn gate() -> Job {
-    let needs = std::iter::once("start")
+    let needed = std::iter::once(START.id())
         .chain(CALLS.iter().map(|call| call.id))
         .map(str::to_string)
         .collect::<Vec<_>>();
 
     Job::default()
         .name(GATE_JOB)
-        .needs(needs)
-        .cond(Expression::new(
-            "!cancelled() && needs.start.result != 'skipped'",
-        ))
+        .needs(needed)
+        .cond((!cancelled()).and(START.result().ne("skipped")))
         .runs_on(runners::Runner::TinyNoCache.to_string())
         .timeout_minutes(5u32)
         .permissions(Permissions {
-            // To find the attested checks' jobs in this run.
-            actions: Some(Level::Read),
-            // To set the gate, and to read the head's attestations again.
             statuses: Some(Level::Write),
             ..Default::default()
         })
         .add_step(
             with_pull_request(gate_step("Set the CI gate status", "finish"))
-                .add_env(("NEEDS", "${{ toJSON(needs) }}"))
-                .add_env(("ATTESTED", "${{ needs.start.outputs.attested }}"))
-                .add_env(("AUDITED", "${{ needs.start.outputs.audited }}"))
-                .add_env(("TREE", "${{ needs.start.outputs.tree }}"))
-                .add_env((
-                    "ATTESTABLE_CHECKS",
-                    attestation::start_checks().expect("the attested checks render"),
-                ))
+                .add_env(("NEEDS", to_json(whole_needs())))
+                .add_env(("ATTESTED", START.outputs.attested.read()))
+                .add_env(("AUDITED", START.outputs.audited.read()))
+                .add_env(("TREE", START.outputs.tree.read()))
+                .add_env(("ATTESTABLE_CHECKS", start_checks()))
                 .add_env(("ATTESTED_PREFIX", attestation::STATUS_PREFIX))
                 .add_env((
                     "GATE_CHECKS",
                     attestation::gate_checks().expect("the attested checks render"),
                 ))
-                .add_env(("RUN_ID", "${{ github.run_id }}")),
+                .add_env(("RUN_ID", github().run_id())),
         )
+}
+
+/// The attestable checks and their fingerprints, for the gate script.
+fn start_checks() -> String {
+    attestation::start_checks().expect("the attested checks render")
 }

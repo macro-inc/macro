@@ -285,6 +285,8 @@ export type AppEvents = {
       | 'payment_required'
       | 'no_gmail_grant'
       | 'inbox_being_removed'
+      | 'identity_conflict'
+      | 'changed'
       | 'gmail_not_granted'
       | 'failed'
       | 'exception'

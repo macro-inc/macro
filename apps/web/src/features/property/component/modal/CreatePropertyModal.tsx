@@ -8,7 +8,12 @@ import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import { useCreatePropertyDefinitionMutation } from '@queries/properties/definitions';
+import { queryReadyGate } from '@queries/gate';
+import {
+  isPropertyNameReserved,
+  useCreatePropertyDefinitionMutation,
+  useListPropertiesQuery,
+} from '@queries/properties/definitions';
 import { useAddEntityPropertyMutation } from '@queries/properties/entity';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { CreatePropertyScope } from '@service-properties/generated/schemas/createPropertyScope';
@@ -16,6 +21,7 @@ import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from '@service-properties/generated/schemas/propertyDefinitionResponse';
 import {
   addCtrlJKMenuNavigation,
   Button,
@@ -33,8 +39,10 @@ import {
   createSignal,
   Index,
   type JSX,
+  Match,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 import { useMaybePropertiesContext } from '../../context/PropertiesContext';
 import {
@@ -43,8 +51,11 @@ import {
   parseEntityType,
   usePropertyNameFocus,
 } from '../../utils';
-import { builtInPropertySuggestion } from '../../utils/builtInSuggestion';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import {
+  builtInPropertyNamed,
+  builtInPropertySuggestion,
+} from '../../utils/builtInSuggestion';
+import { builtInNameMessage, ERROR_MESSAGES } from '../../utils/errorHandling';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<
@@ -166,6 +177,25 @@ const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
   );
 };
 
+function definitionOf(item: PropertyDefinitionResponse): PropertyDefinition {
+  return 'definition' in item ? item.definition : item;
+}
+
+/** A note under the name field, aligned with the form's inputs. */
+function NameNote(props: { children: JSX.Element }) {
+  return (
+    <div class="flex gap-5 px-4 pb-3">
+      <div class="w-22 shrink-0" />
+      <div
+        role="status"
+        class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-md bg-accent-bg px-3 py-2 text-sm text-ink"
+      >
+        {props.children}
+      </div>
+    </div>
+  );
+}
+
 interface CreatePropertyModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -235,10 +265,47 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
         props.onClose();
       }
     },
-    onError: () => {
-      setError(ERROR_MESSAGES.PROPERTY_CREATE);
+    onError: (error, variables) => {
+      setError(
+        isPropertyNameReserved(error)
+          ? builtInNameMessage(variables.body.display_name)
+          : ERROR_MESSAGES.PROPERTY_CREATE
+      );
     },
   });
+
+  // The server refuses a property that reuses a built-in property's name.
+  const builtInDefinitionsQuery = useListPropertiesQuery(
+    () => ({ scope: 'system', includeOptions: false }),
+    () => props.isOpen
+  );
+  const reservedBuiltIn = createMemo(() =>
+    queryReadyGate(builtInDefinitionsQuery)
+      ? builtInPropertyNamed(
+          newPropertyName(),
+          builtInDefinitionsQuery.data.map(definitionOf)
+        )
+      : undefined
+  );
+  // A built-in property is offered only where it applies to this entity.
+  // Without an entity type the query below shares its key with the one above,
+  // so its cached answer would list every built-in property.
+  const offersBuiltIns = () =>
+    props.onUseBuiltIn !== undefined && entityType() !== undefined;
+  const usableBuiltInsQuery = useListPropertiesQuery(
+    () => ({
+      scope: 'system',
+      includeOptions: false,
+      forEntityType: entityType(),
+    }),
+    () => props.isOpen && offersBuiltIns()
+  );
+  const canUseBuiltIn = (propertyDefinitionId: string) =>
+    offersBuiltIns() &&
+    queryReadyGate(usableBuiltInsQuery) &&
+    usableBuiltInsQuery.data.some(
+      (item) => definitionOf(item).id === propertyDefinitionId
+    );
 
   createEffect(() => {
     if (props.isOpen) {
@@ -551,7 +618,8 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     }
   };
 
-  const canSubmit = () => newPropertyName().trim().length > 0 && !pending();
+  const canSubmit = () =>
+    newPropertyName().trim().length > 0 && !pending() && !reservedBuiltIn();
 
   const close = () => {
     if (pending()) return;
@@ -621,14 +689,32 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
               />
             </EditorRow>
 
-            <Show when={builtInSuggestion()}>
-              {(suggestion) => (
-                <div class="flex gap-5 px-4 pb-3">
-                  <div class="w-22 shrink-0" />
-                  <div
-                    role="status"
-                    class="flex min-w-0 flex-1 flex-col items-start gap-2 rounded-md bg-accent-bg px-3 py-2 text-sm text-ink"
-                  >
+            <Switch>
+              <Match when={reservedBuiltIn()}>
+                {(builtIn) => (
+                  <NameNote>
+                    <p>{builtInNameMessage(builtIn().display_name)}</p>
+                    <Show when={canUseBuiltIn(builtIn().id)}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={pending()}
+                        onClick={() =>
+                          fireAndForget(
+                            switchToBuiltIn(builtIn().id),
+                            'property-create'
+                          )
+                        }
+                      >
+                        Use {builtIn().display_name}
+                      </Button>
+                    </Show>
+                  </NameNote>
+                )}
+              </Match>
+              <Match when={builtInSuggestion()}>
+                {(suggestion) => (
+                  <NameNote>
                     <p>
                       The built-in {suggestion().name} property already links
                       items to CRM {suggestion().records}, and they show on each{' '}
@@ -639,7 +725,9 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                         CRM records.
                       </Show>
                     </p>
-                    <Show when={props.onUseBuiltIn}>
+                    <Show
+                      when={canUseBuiltIn(suggestion().propertyDefinitionId)}
+                    >
                       <Button
                         variant="secondary"
                         size="sm"
@@ -654,10 +742,10 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                         Use {suggestion().name}
                       </Button>
                     </Show>
-                  </div>
-                </div>
-              )}
-            </Show>
+                  </NameNote>
+                )}
+              </Match>
+            </Switch>
 
             <EditorRow label="Type">
               <Select<DataTypeOption>

@@ -9,7 +9,10 @@
 //!   (`xtask_attest`) execute the same text. A step that needs more than a
 //!   shell (a condition, an expression, an action) fails generation instead of
 //!   being imitated;
-//! - the skip clause on the job, and what `Start` and the gate need;
+//! - what `Start` and the gate need. The job itself says it can be skipped:
+//!   its condition ends with [`not_attested`] and its workflow declares the
+//!   input with [`takes_attestations`]; generation fails when a listed job
+//!   lacks either;
 //! - the paths whose change makes `PR CI` run the job ([`triggers`]), which
 //!   tell a machine which checks a branch needs.
 //!
@@ -37,6 +40,8 @@
 use std::collections::BTreeMap;
 
 use anyhow::{Context, Result, bail};
+use gh_workflow::expr::typed::{Bool, Expr, Json, Str, from_json, input};
+use gh_workflow::{WorkflowCall, WorkflowInput};
 use lazy_regex::regex;
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -51,6 +56,10 @@ pub const STATUS_PREFIX: &str = "attested/";
 
 /// An accepted check runs on a runner anyway in one request out of this many.
 pub const AUDIT_ONE_IN: u32 = 10;
+
+/// The input a called workflow takes: a JSON list of the checks `PR CI`
+/// accepted an attestation for, by id.
+pub const INPUT: &str = "attested";
 
 /// Written next to the workflows; read by `cargo x attest`.
 pub const MANIFEST_FILE: &str = "attestable-checks.json";
@@ -174,6 +183,12 @@ pub const CHECKS: &[Check] = &[
             "verify workflows are up to date",
             "verify kafka cluster topics are up to date",
         ],
+        local_env: &[],
+    },
+    Check {
+        call: "generated-workflows",
+        job: "lint-workflows",
+        steps: &["actionlint", "zizmor"],
         local_env: &[],
     },
     Check {
@@ -381,29 +396,34 @@ pub struct Described {
     pub fingerprint: String,
 }
 
-fn checks_of(file_name: &str) -> impl Iterator<Item = &'static Check> {
-    CHECKS
-        .iter()
-        .filter(move |check| call_of(check.call).is_some_and(|call| call.file == file_name))
-}
-
 fn call_of(id: &str) -> Option<&'static pr_ci::Call> {
     pr_ci::CALLS.iter().find(|call| call.id == id)
 }
 
 /// Whether `PR CI` hands this called workflow its attestations.
+#[cfg(test)]
 pub fn calls_attested(call: &pr_ci::Call) -> bool {
-    checks_of(call.file).next().is_some()
+    CHECKS.iter().any(|check| check.call == call.id)
 }
 
-fn job<'a>(
-    root: &'a serde_yaml::Value,
-    id: &str,
-    file_name: &str,
-) -> Result<&'a serde_yaml::Value> {
+/// The generated workflow a call runs.
+fn workflow_of(call: &pr_ci::Call) -> Result<&'static crate::workflows::WorkflowFile> {
+    let uses = (call.workflow)().uses;
+    crate::workflows::WORKFLOWS
+        .iter()
+        .find(|workflow| uses == format!("./.github/workflows/{}", workflow.file_name))
+        .with_context(|| {
+            format!(
+                "`{}` calls {uses}, which is not a generated workflow",
+                call.id
+            )
+        })
+}
+
+fn job<'a>(root: &'a serde_yaml::Value, id: &str, call: &str) -> Result<&'a serde_yaml::Value> {
     root.get("jobs")
         .and_then(|jobs| jobs.get(id))
-        .with_context(|| format!("{file_name} has no job `{id}`"))
+        .with_context(|| format!("the workflow `{call}` calls has no job `{id}`"))
 }
 
 fn scalar(value: &serde_yaml::Value) -> Option<String> {
@@ -472,7 +492,7 @@ pub fn triggers(root: &serde_yaml::Value, call: &pr_ci::Call, job_id: &str) -> R
     let patterns: Vec<String> = match call.paths {
         Some(paths) => paths.iter().map(|path| path.as_str().to_owned()).collect(),
         None => {
-            let condition = job(root, job_id, call.file)?["if"]
+            let condition = job(root, job_id, call.id)?["if"]
                 .as_str()
                 .unwrap_or_default()
                 .to_owned();
@@ -583,64 +603,50 @@ fn plain_job(definition: &serde_yaml::Value, id: &str) -> Result<()> {
     Ok(())
 }
 
-/// What an attestation entry looks like where the job's condition reads it.
-fn skip_clause(id: &str) -> String {
-    format!("!contains(fromJSON(inputs.attested || '[]'), '{id}')")
+/// Declares [`INPUT`] on a called workflow that holds attested jobs.
+pub fn takes_attestations(call: WorkflowCall) -> WorkflowCall {
+    call.add_input(
+        INPUT,
+        WorkflowInput::string()
+            .description("JSON list of the checks PR CI accepted an attestation for, by id")
+            .default("[]"),
+    )
 }
 
-/// Make the attested jobs of a called workflow skippable: declare the
-/// `attested` input and add the skip clause to each job's condition. Other
-/// workflows come back unchanged.
-pub fn patch(file_name: &str, yaml: String) -> Result<String> {
-    let checks: Vec<&Check> = checks_of(file_name).collect();
-    if checks.is_empty() {
-        return Ok(yaml);
+/// True unless `PR CI` accepted an attestation for the check `id`
+/// (`<call>/<job>`). An attested job's condition ends with it. A run that is
+/// not a call has no input, which reads as no attestation.
+pub fn not_attested(id: &str) -> Expr<Bool> {
+    !from_json::<Json>(input::<Str>(INPUT).or_else("[]")).contains(id)
+}
+
+/// The workflow a call runs, as generated.
+fn rendered(call: &pr_ci::Call) -> Result<serde_yaml::Value> {
+    let workflow = workflow_of(call)?;
+    let yaml = (workflow.render_yaml)()?;
+    serde_yaml::from_str(&yaml).with_context(|| format!("parsing {}", workflow.file_name))
+}
+
+/// A listed job must skip on its own entry, and its workflow must take the
+/// list: without either, `Start` would accept a pass and the job would run
+/// anyway, or not be handed the list at all.
+fn skips_when_attested(
+    root: &serde_yaml::Value,
+    definition: &serde_yaml::Value,
+    id: &str,
+) -> Result<()> {
+    let clause = not_attested(id).condition().0;
+    let condition = definition["if"].as_str().unwrap_or_default();
+    if condition != clause && !condition.ends_with(&format!(" && {clause}")) {
+        bail!("{id}: its condition must end with `attestation::not_attested(\"{id}\")`");
     }
-
-    let mut root: serde_yaml::Value =
-        serde_yaml::from_str(&yaml).with_context(|| format!("re-parsing {file_name}"))?;
-
-    let call = root
-        .get_mut("on")
-        .and_then(|on| on.get_mut("workflow_call"))
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .with_context(|| format!("{file_name} has no workflow_call trigger"))?;
-    call.insert(
-        "inputs".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            attested:
-              description: 'JSON list of the checks PR CI accepted an attestation for, by id'
-              type: string
-              required: false
-              default: '[]'
-        "#})?,
-    );
-
-    for check in &checks {
-        let clause = skip_clause(&check.id());
-        let job = crate::workflows::job_mut(&mut root, check.job)?;
-        let condition = match job.get("if").and_then(serde_yaml::Value::as_str) {
-            Some(own) => format!("({own}) && {clause}"),
-            None => clause,
-        };
-        job.insert("if".into(), condition.into());
+    if root["on"]["workflow_call"]["inputs"].get(INPUT).is_none() {
+        bail!("{id}: its workflow must declare the input with `attestation::takes_attestations`");
     }
-
-    serde_yaml::to_string(&root).with_context(|| format!("serializing {file_name}"))
+    Ok(())
 }
 
-/// The workflow a call runs: as its module builds it, or as generated.
-fn rendered(file_name: &str, patched: bool) -> Result<serde_yaml::Value> {
-    let workflow = crate::workflows::WORKFLOWS
-        .iter()
-        .find(|workflow| workflow.file_name == file_name)
-        .with_context(|| format!("{file_name} is not a generated workflow"))?;
-    let own = (workflow.render_yaml)()?;
-    let yaml = if patched { patch(file_name, own)? } else { own };
-    serde_yaml::from_str(&yaml).with_context(|| format!("parsing {file_name}"))
-}
-
-/// What identifies the check a pass was for: the job as its module builds it,
+/// What identifies the check a pass was for: the job as generated,
 /// the workflow's environment, the steps that are the check, and what a
 /// machine sets in a runner's place.
 fn fingerprint(root: &serde_yaml::Value, check: &Check) -> Result<String> {
@@ -658,9 +664,10 @@ fn describe(check: &Check) -> Result<Described> {
     let id = check.id();
     let call =
         call_of(check.call).with_context(|| format!("PR CI has no call `{}`", check.call))?;
-    let root = rendered(call.file, false)?;
-    let definition = job(&root, check.job, call.file)?;
+    let root = rendered(call)?;
+    let definition = job(&root, check.job, call.id)?;
     plain_job(definition, &id)?;
+    skips_when_attested(&root, definition, &id)?;
 
     let own_name = definition["name"].as_str().unwrap_or(check.job);
     if own_name.contains("${{") {
@@ -724,7 +731,7 @@ fn describe(check: &Check) -> Result<Described> {
         triggers: triggers(&root, call, check.job)?,
         id,
         call: check.call,
-        workflow: call.file,
+        workflow: workflow_of(call)?.file_name,
         job: check.job,
         name: format!("{} / {own_name}", call.name),
         dev_shell,
@@ -733,7 +740,7 @@ fn describe(check: &Check) -> Result<Described> {
     })
 }
 
-/// Every check, read from the workflows as their modules build them.
+/// Every check, read from the workflows as generated.
 pub fn described() -> Result<Vec<Described>> {
     CHECKS.iter().map(describe).collect()
 }

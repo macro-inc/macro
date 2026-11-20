@@ -50,15 +50,14 @@ const searchTypes: readonly SearchType[] = [
  *
  * Use macro.search.all(query) when the request does not name one kind of item, and keep any scope the user gives (types, inbox, tags) on follow-ups and retries. Per-type searches remain for one kind: macro.documents.search returns document handles, macro.email.search email threads, macro.tasks.search tasks. SearchOpts and SearchOptions select searchOn: 'name', 'content', or 'name_content'. These iterators auto-paginate; bound the work explicitly and record when you stop before exhaustion.
  *
- * Every search, this one and every entity's, is a heavy request that everyone else's searches queue behind. Run searches one after another, never with Promise.all or Promise.allSettled over queries or kinds, and search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each.
+ * Every search, this one and every entity's, is a heavy request that often takes seconds; code mode sends at most four at once and queues the rest in call order. Search less rather than one at a time: search several kinds with one macro.search.all(query), passing types only for kinds the user named, rather than one per-type search each, don't split one question into near-duplicate queries, and run the independent searches that remain together with Promise.all or Promise.allSettled.
  *
  * For activity rather than keywords ("what happened today", "catch me up", my recent or favorite items, tasks updated this week), browse with macro.workspace.page or macro.workspace.list, filtered by type, time, tags or inbox; for a sample of several kinds, fetch one small page per type concurrently. Read an AI chat's messages with macro.chats.byId(id).history(), or chat.history() on a search or workspace result.
  *
  * ```typescript
  * export async function main({macro}: CodeContext) {
  *   const queries = ['launch decision', 'release readiness'];
- *   const outcomes = [];
- *   for (const query of queries) {
+ *   const outcomes = await Promise.all(queries.map(async query => {
  *     const evidence = [];
  *     let stoppedEarly = false;
  *     try {
@@ -67,11 +66,11 @@ const searchTypes: readonly SearchType[] = [
  *         evidence.push({type:result.type, id:result.entity.id, name:'name' in result.hit ? result.hit.name : undefined,
  *           text: result.type === 'document' ? (await result.entity.content()).slice(0,3000) : undefined});
  *       }
- *       outcomes.push({query,evidence,stoppedEarly});
+ *       return {query,evidence,stoppedEarly};
  *     } catch (error) {
- *       outcomes.push({query,evidence,error:String(error)});
+ *       return {query,evidence,error:String(error)};
  *     }
- *   }
+ *   }));
  *   return {data: outcomes, reviews:[]};
  * }
  * ```

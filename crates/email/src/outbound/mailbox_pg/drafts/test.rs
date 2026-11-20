@@ -1195,3 +1195,31 @@ async fn restoring_a_conversation_leaves_a_reply_waiting_to_send_in_drafts(db: P
     both.sort();
     assert_eq!(restored().await, both, "sent correspondence is restored");
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_link_graph_serves_no_mailbox_for_holds_its_drafts(db: PgPool) {
+    let (sync, _, input, link) = setup(&db, true).await;
+    sqlx::query!("INSERT INTO email_scheduled_messages (link_id,message_id,send_time,actor_id,processing) VALUES ($1,$2,now(),$3,true)",link,input.db_id,ACTOR).execute(&db).await.unwrap();
+    let claim = || {
+        sync.claim_draft(
+            Uuid::now_v7(),
+            crate::domain::mailbox::drafts::models::DraftClaimMode::All,
+        )
+    };
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(claim().await.unwrap().is_none());
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = NULL WHERE id = $1",
+        link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    assert!(claim().await.unwrap().is_some());
+}

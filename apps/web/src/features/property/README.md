@@ -61,6 +61,16 @@ fixed-size child in a smaller wrapper shifts the icon below the label.
 Empty Source values use the same link glyph; unsupported references retain the
 ordinary property editor.
 
+Every other single-value entity row in the side panel splits the same way once
+it has a value: `EntityLinkPill` puts the item behind the name and the picker
+behind the caret, and `ProjectLinkPill` does it for a project value, whichever
+property holds it. A viewer who cannot edit gets the name alone. An empty
+value, a person, and a value `usePropertyEntityLink` has nothing to open for
+keep the one pill that opens the picker. Both pills take the name's click
+through `useSplitNavigationHandler`, as mention links and collection chips do:
+a press that moved focus to the name would hand activation back to its own
+split after the click brings forward another split that already shows the item.
+
 `EntityRowTags.collapse` connects to the host's shared priority-overflow controller.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
@@ -90,6 +100,17 @@ height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document
 title-row tags retain their compact height.
 
+## Property editor
+
+`PropertyEditorModal` is the editor that list rows and a multi-row selection,
+CRM stage, owner and revenue actions, an open item's commands, inline title
+pills and the side panel's **Add property** open; the task composer renders its
+`PropertyEditorDialog` directly. The dialog has no title row for the items it
+edits. When the modal saves a value for the selected items, a toast names only
+the property (`entityActions.toastPropertySet`: "Companies set", or "Companies
+set on 3 items" for several). Tag assignment shows no toast, and the composer
+writes to its draft without one.
+
 ## Creating a property
 
 `CreatePropertyModal` names the built-in property when the typed name duplicates
@@ -105,9 +126,20 @@ in `properties` (the composer's `draftProperties`): the picker starts from that
 value and adds to it, and without it a pick would replace what the draft
 already links. Whichever way the create dialog closes, the editor's search
 field takes focus back on desktop: left on the page, the next keys would reach
-the app's shortcuts. The note never disables **Create**. Add a name there
+the app's shortcuts. That note never disables **Create**. Add a name there
 only for a built-in property whose look-alike breaks something a person would
 expect, not for every system property.
+
+A name that is a built-in property's own (the whole name, any case) is
+different: the server refuses it with a 409, because built-in names are reserved
+for user and team properties. The dialog reads the built-in definitions
+(`scope: 'system'`), says the name is taken, and disables **Create**. It offers
+**Use …** only when that property applies to the entity being edited, which it
+learns from the same list narrowed by `forEntityType`; `PropertyEditorDialog`
+passes the type the selected entities share, and a draft host supplies it
+through its `PropertiesProvider`. If the list has not loaded and the request
+goes out, the refusal (`isPropertyNameReserved`) shows the same sentence in
+place of the generic create error.
 
 ## Assignee selection
 

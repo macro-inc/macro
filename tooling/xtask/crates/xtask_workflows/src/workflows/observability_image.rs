@@ -7,7 +7,7 @@ use gh_workflow::{Event, Job, Level, Permissions, Workflow, WorkflowCall};
 use xtask_paths::RepoGlob;
 
 use crate::workflows::deploy_observability::{CACHE_TAG, build_image, nix_steps};
-use crate::workflows::{runners, steps};
+use crate::workflows::{attestation, runners, steps};
 
 /// Everything the image is built from (`deploy/image-key.ts`), plus this workflow.
 pub const PATHS: &[RepoGlob<'static>] = &[
@@ -25,13 +25,15 @@ pub fn observability_image() -> Workflow {
             contents: Some(Level::Read),
             ..Default::default()
         })
-        .on(Event::default().workflow_call(WorkflowCall::default()))
+        .on(Event::default()
+            .workflow_call(attestation::takes_attestations(WorkflowCall::default())))
         .add_job("build-image", build_image_job())
 }
 
 fn build_image_job() -> Job {
     nix_steps(
         Job::default()
+            .cond(attestation::not_attested("observability-image/build-image"))
             .name("Build observability image")
             .runs_on(runners::Runner::Mid.with_cache_tag(CACHE_TAG))
             // Measured builds took under 6 minutes, but none bumped nixpkgs or
