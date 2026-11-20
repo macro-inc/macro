@@ -1110,6 +1110,49 @@ async fn get_or_create_dm_returns_get_for_existing_pair() {
 }
 
 #[tokio::test]
+async fn find_direct_message_reads_the_dm_get_or_create_would_reuse() {
+    let channel_id = Uuid::new_v4();
+    let actor = macro_id("macro|actor@example.com");
+    let recipient = macro_id("macro|recipient@example.com");
+    let mut repo = MockChannelRepo::new();
+    // The same lookup get-or-create runs first; a mock with no `ensure_dm`
+    // expectation fails the test if anything tries to create one.
+    repo.expect_maybe_get_dm()
+        .once()
+        .withf(|user, other| {
+            user.as_ref() == "macro|actor@example.com"
+                && other.as_ref() == "macro|recipient@example.com"
+        })
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let found = service.find_direct_message(actor, recipient).await.unwrap();
+
+    assert_eq!(found, Some(channel_id));
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn find_direct_message_with_yourself_is_none() {
+    let user = macro_id("macro|same@example.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm().never();
+    let service = ChannelServiceImpl::new(repo);
+
+    let found = service
+        .find_direct_message(user.clone(), user)
+        .await
+        .unwrap();
+
+    assert_eq!(found, None);
+}
+
+#[tokio::test]
 async fn create_private_channel_allows_no_invited_participants() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");

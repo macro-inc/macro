@@ -11026,6 +11026,13 @@ type GraphqlUser {
 		matching: GraphqlContactMatching
 	): GraphqlContactPage!
 	"""
+	The id of the authenticated user's direct message with `userId`, the
+	one a first message to them would reuse: the oldest channel of the two
+	of them alone. Null when they have none, or when `userId` is the
+	authenticated user. Asking never creates one.
+	"""
+	directMessageChannelId(userId: ID!): ID
+	"""
 	Every calendar visible across owned and delegated inboxes, primaries
 	and writables first.
 	"""

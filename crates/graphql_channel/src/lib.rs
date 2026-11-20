@@ -1,22 +1,22 @@
-//! GraphQL inbound mutation adapter for channel activity.
+//! GraphQL inbound adapter for channel activity and the viewer's channel reads.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
 #[cfg(test)]
 mod test;
 
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_graphql::{Context, Enum, ID, InputObject, Object};
 use channels::domain::{
     models::{Activity, ActivityType},
-    ports::{ChannelMutationErr, ChannelService},
+    ports::{ChannelMessagesErr, ChannelMutationErr, ChannelService},
 };
 use entity_access::domain::{
     models::{AccessError, EntityAccessReceipt, EntityType, MemberParticipantRole},
     ports::EntityAccessService,
 };
-use graphql_common::{parse_id, require_authenticated_user};
+use graphql_common::{parse_id, parse_macro_user_id, require_authenticated_user};
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
@@ -201,5 +201,107 @@ where
             .map_err(|error| async_graphql::Error::new(error.to_string()))?;
 
         Ok(GraphqlChannelActivity(activity))
+    }
+}
+
+/// Domain-facing capability behind the viewer's direct-message lookup.
+pub trait DirectMessageFinder: Send + Sync + 'static {
+    /// The direct message between `user_id` and `recipient_id` that
+    /// get-or-create would reuse, without creating one.
+    fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send;
+}
+
+impl<S> DirectMessageFinder for S
+where
+    S: ChannelService,
+{
+    fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send {
+        ChannelService::find_direct_message(self, user_id, recipient_id)
+    }
+}
+
+/// A boxed read, so the context needs no schema type parameter.
+type ReadFuture<'a, T> = Pin<Box<dyn Future<Output = Result<T, ChannelMessagesErr>> + Send + 'a>>;
+
+/// Object-safe form of [`DirectMessageFinder`].
+trait ChannelQueryReads: Send + Sync {
+    /// See [`DirectMessageFinder::find_direct_message`].
+    fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> ReadFuture<'_, Option<Uuid>>;
+}
+
+/// Erases a [`DirectMessageFinder`].
+struct ServiceReads<S>(Arc<S>);
+
+impl<S: DirectMessageFinder> ChannelQueryReads for ServiceReads<S> {
+    fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> ReadFuture<'_, Option<Uuid>> {
+        Box::pin(self.0.find_direct_message(user_id, recipient_id))
+    }
+}
+
+/// Request data for the viewer's channel fields, type-erased so the schema
+/// gains no type parameter.
+#[derive(Clone)]
+pub struct ChannelQueryContext {
+    /// The channel reads behind the fields.
+    reads: Arc<dyn ChannelQueryReads>,
+}
+
+impl ChannelQueryContext {
+    /// Compose the channel reads from the domain service.
+    pub fn new<S: DirectMessageFinder>(service: Arc<S>) -> Self {
+        Self {
+            reads: Arc::new(ServiceReads(service)),
+        }
+    }
+}
+
+/// The authenticated user's channel fields, flattened into the viewer.
+pub struct GraphqlChannelUserQuery {
+    /// The authenticated user.
+    user_id: MacroUserIdStr<'static>,
+}
+
+impl GraphqlChannelUserQuery {
+    /// Fields for the authenticated `user_id`.
+    pub fn new(user_id: MacroUserIdStr<'static>) -> Self {
+        Self { user_id }
+    }
+}
+
+#[Object]
+impl GraphqlChannelUserQuery {
+    /// The id of the authenticated user's direct message with `userId`, the
+    /// one a first message to them would reuse: the oldest channel of the two
+    /// of them alone. Null when they have none, or when `userId` is the
+    /// authenticated user. Asking never creates one.
+    async fn direct_message_channel_id(
+        &self,
+        ctx: &Context<'_>,
+        user_id: ID,
+    ) -> async_graphql::Result<Option<ID>> {
+        let recipient_id = parse_macro_user_id(user_id.to_string(), "userId")?;
+        let context = ctx.data::<ChannelQueryContext>()?;
+        let channel_id = context
+            .reads
+            .find_direct_message(self.user_id.clone(), recipient_id)
+            .await
+            .map_err(|error| async_graphql::Error::new(error.to_string()))?;
+        Ok(channel_id.map(|id| ID(id.to_string())))
     }
 }

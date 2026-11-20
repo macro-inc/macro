@@ -1253,6 +1253,25 @@ where
         ChannelServiceImpl::get_or_create_dm(self, actor, req).await
     }
 
+    #[tracing::instrument(err, skip_all, fields(found = tracing::field::Empty))]
+    async fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<Uuid>, ChannelMessagesErr> {
+        // There is no DM with yourself; get-or-create refuses to make one.
+        if user_id == recipient_id {
+            return Ok(None);
+        }
+        let channel_id = self
+            .repo
+            .maybe_get_dm(user_id, recipient_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        tracing::Span::current().record("found", channel_id.is_some());
+        Ok(channel_id)
+    }
+
     async fn get_or_create_private(
         &self,
         actor: Sender,

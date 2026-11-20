@@ -118,3 +118,104 @@ async fn record_channel_activity_authorizes_and_delegates_only_channel_activity(
         ),]
     );
 }
+
+/// Answers one DM and records who asked about whom.
+#[derive(Default)]
+struct FakeFinder {
+    calls: Mutex<Vec<(String, String)>>,
+}
+
+impl DirectMessageFinder for FakeFinder {
+    async fn find_direct_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        recipient_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<Uuid>, ChannelMessagesErr> {
+        let found = (recipient_id.as_ref() == "macro|known@example.com").then_some(DM_ID);
+        self.calls
+            .lock()
+            .unwrap()
+            .push((user_id.to_string(), recipient_id.to_string()));
+        Ok(found)
+    }
+}
+
+const DM_ID: Uuid = Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_00d0);
+
+/// The viewer root the composed schema flattens the channel fields into.
+struct ViewerRoot {
+    user_id: MacroUserIdStr<'static>,
+}
+
+#[Object]
+impl ViewerRoot {
+    /// An object needs a field of its own beside the flattened ones.
+    async fn health(&self) -> bool {
+        true
+    }
+
+    #[graphql(flatten)]
+    async fn channels(&self) -> GraphqlChannelUserQuery {
+        GraphqlChannelUserQuery::new(self.user_id.clone())
+    }
+}
+
+async fn ask_direct_message(finder: Arc<FakeFinder>, user_id: &str) -> async_graphql::Response {
+    let viewer = MacroUserIdStr::try_from_email("viewer@example.com").unwrap();
+    Schema::build(
+        ViewerRoot { user_id: viewer },
+        async_graphql::EmptyMutation,
+        EmptySubscription,
+    )
+    .data(ChannelQueryContext::new(finder))
+    .finish()
+    .execute(format!(
+        r#"{{ directMessageChannelId(userId: "{user_id}") }}"#
+    ))
+    .await
+}
+
+#[tokio::test]
+async fn direct_message_channel_id_asks_for_the_viewer_and_the_named_person() {
+    let finder = Arc::new(FakeFinder::default());
+
+    let known = ask_direct_message(finder.clone(), "macro|known@example.com").await;
+    assert!(known.errors.is_empty(), "{:?}", known.errors);
+    assert_eq!(
+        known.data.into_json().unwrap()["directMessageChannelId"],
+        DM_ID.to_string()
+    );
+
+    let stranger = ask_direct_message(finder.clone(), "macro|stranger@example.com").await;
+    assert!(stranger.errors.is_empty(), "{:?}", stranger.errors);
+    assert!(stranger.data.into_json().unwrap()["directMessageChannelId"].is_null());
+
+    assert_eq!(
+        finder.calls.lock().unwrap().as_slice(),
+        [
+            (
+                "macro|viewer@example.com".to_string(),
+                "macro|known@example.com".to_string()
+            ),
+            (
+                "macro|viewer@example.com".to_string(),
+                "macro|stranger@example.com".to_string()
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn direct_message_channel_id_rejects_a_malformed_user_id_without_reading() {
+    let finder = Arc::new(FakeFinder::default());
+
+    let response = ask_direct_message(finder.clone(), "not-a-user").await;
+
+    assert_eq!(response.errors.len(), 1, "{:?}", response.errors);
+    assert!(
+        response.errors[0].message.contains("invalid userId"),
+        "{:?}",
+        response.errors
+    );
+    assert!(finder.calls.lock().unwrap().is_empty());
+}

@@ -978,6 +978,12 @@ where
         graphql_contacts::GraphqlContactsQuery::new(self.user_id.clone())
     }
 
+    /// Authenticated user channel fields supplied by `graphql_channel`.
+    #[graphql(flatten)]
+    async fn channels(&self) -> graphql_channel::GraphqlChannelUserQuery {
+        graphql_channel::GraphqlChannelUserQuery::new(self.user_id.clone())
+    }
+
     /// Authenticated user calendar fields supplied by `graphql_calendar`.
     #[graphql(flatten)]
     async fn calendar(&self) -> GraphqlCalendarQuery {

@@ -2898,7 +2898,15 @@ impl ChannelRepo for PgChannelsRepo {
         recipient_id: MacroUserIdStr<'_>,
     ) -> Result<Option<Uuid>, Self::Err> {
         let pair = crate::domain::dm::DmPair::new(user_id, recipient_id)?;
-        historical::find_dm(&mut *self.pool.acquire().await?, &pair).await
+        // The read follows both people's memberships; bound it a little above
+        // the 12 s timeout of the GraphQL clients that ask.
+        let mut tx = self.pool.begin().await?;
+        sqlx::query!("SET LOCAL statement_timeout = '15s'")
+            .execute(&mut *tx)
+            .await?;
+        let channel_id = historical::find_dm(&mut tx, &pair).await?;
+        tx.commit().await?;
+        Ok(channel_id)
     }
 
     async fn maybe_get_private_channel(

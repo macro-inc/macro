@@ -608,6 +608,21 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
+    /// The direct message between `user_id` and `recipient_id` that
+    /// [`Self::get_or_create_dm`] would reuse, without creating one: `None`
+    /// when they have none, or when they are the same person.
+    fn find_direct_message(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        _recipient_id: MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Option<Uuid>, ChannelMessagesErr>> + Send {
+        async move {
+            Err(ChannelMessagesErr::Repo(anyhow::anyhow!(
+                "find_direct_message is not configured"
+            )))
+        }
+    }
+
     /// Get or create a private channel.
     fn get_or_create_private(
         &self,
