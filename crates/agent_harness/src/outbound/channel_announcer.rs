@@ -356,9 +356,10 @@ impl<Access: EntityAccessService, Channels: ChannelTypeLookup> MessageAnnouncer<
     /// thread reader, and the name is session content. One audience lookup
     /// per side, whatever the size of the thread; a failed lookup or a
     /// publicly readable parent keeps the name out. Public and team channels
-    /// are read by people with no participant row, and calls by guests with
-    /// no account, so only private and direct-message channels can list their
-    /// whole audience. The label is decided once, when the reply is written:
+    /// are read by people with no participant row, calls by guests with no
+    /// account, and initiatives by the owner's team through a team link share
+    /// (which grants no access to the session), so they never list their whole
+    /// audience. The label is decided once, when the reply is written:
     /// later joins, renames or unshares do not change it.
     async fn link_label(
         &self,
@@ -372,7 +373,7 @@ impl<Access: EntityAccessService, Channels: ChannelTypeLookup> MessageAnnouncer<
             return None;
         };
         let listed = match parent {
-            MessageParent::Call(_) => false,
+            MessageParent::Call(_) | MessageParent::Initiative(_) => false,
             MessageParent::Channel(channel_id) => {
                 match self.channels.channel_type(*channel_id).await {
                     Ok(channel_type) => matches!(
@@ -386,7 +387,6 @@ impl<Access: EntityAccessService, Channels: ChannelTypeLookup> MessageAnnouncer<
                 }
             }
             MessageParent::Document(_)
-            | MessageParent::Initiative(_)
             | MessageParent::CrmCompany(_)
             | MessageParent::CrmContact(_) => true,
         };
