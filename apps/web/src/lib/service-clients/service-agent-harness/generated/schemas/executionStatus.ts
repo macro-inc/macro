@@ -18,4 +18,5 @@ export const ExecutionStatus = {
   failed: 'failed',
   cancelled: 'cancelled',
   timed_out: 'timed_out',
+  interrupted: 'interrupted',
 } as const;
