@@ -14,6 +14,7 @@ import { abortedBy } from '@core/util/abort-signal';
 import { deepEqual } from '@core/util/compareUtils';
 import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -116,6 +117,10 @@ const CONFIRM_RENDER_MS = 250;
 // stopped mid-pass, or a request hung), and the directory pages the network
 // itself rather than stay partial.
 const LANE_STALL_MS = 30_000;
+/** How long the network fallback waits for the cache to write the pages it
+ * read before reading them back: each channel the cache still lacks then
+ * waits on a by-id read. */
+const FALLBACK_PERSIST_WAIT_MS = 10_000;
 const CHANNEL_SEARCH_BUCKET_LIST: readonly string[] = CHANNEL_SEARCH_BUCKETS;
 
 /** One channel as the directory can answer for it now. */
@@ -339,6 +344,17 @@ type UrqlQuery = Pick<Client, 'query'>;
 type DirectoryPage = {
   channels: DirectoryChannel[];
   nextCursor: string | null;
+  /** Settles, never rejecting, once the cache wrote the page; undefined
+   * when the answer did not come from the network through the cache. */
+  persisted: Promise<unknown> | undefined;
+};
+
+/** Every joined channel paged from the network, and the cache's writes of
+ * those pages. */
+export type JoinedChannelsWalk = {
+  channels: DirectoryChannel[];
+  /** Settles, never rejecting, once the cache wrote every page. */
+  persisted: Promise<unknown>;
 };
 
 type DirectoryPageSettled =
@@ -390,24 +406,28 @@ async function fetchDirectoryPage(
   if (result.error) throw result.error;
   const soup = result.data?.user.soup;
   if (!soup) throw new Error('Channel directory page returned no data');
+  const metadata = normalizedCacheResultMetadata(result);
   return {
     channels: soup.items.flatMap((item) =>
       item.__typename === 'GraphqlSoupChannel' ? [toDirectoryChannel(item)] : []
     ),
     nextCursor: soup.nextCursor,
+    persisted:
+      metadata?.source === 'live-network' ? metadata.persistence : undefined,
   };
 }
 
 /** Pages every joined channel from the network, the lane's input to its
- * last page. */
-export async function fetchJoinedChannels(
+ * last page. The cache writes each page after answering it. */
+export async function pageJoinedChannels(
   client: UrqlQuery,
   signal?: AbortSignal
-): Promise<DirectoryChannel[]> {
+): Promise<JoinedChannelsWalk> {
   return Telemetry.span('channel_directory.page_all', async (span) => {
     // Each page after the first starts after an await, outside the span.
     const context = Telemetry.captureContext();
     const channels = new Map<string, DirectoryChannel>();
+    const writes: Promise<unknown>[] = [];
     let input: GraphqlSoupInput = { initial: CHANNEL_DIRECTORY_INPUT };
     let pages = 0;
     for (;;) {
@@ -416,6 +436,7 @@ export async function fetchJoinedChannels(
         fetchDirectoryPage(client, input, signal)
       );
       pages += 1;
+      if (page.persisted) writes.push(page.persisted);
       // A channel that moved up while the pages were read is kept once.
       for (const channel of page.channels) channels.set(channel.id, channel);
       if (!page.nextCursor) break;
@@ -429,8 +450,48 @@ export async function fetchJoinedChannels(
     }
     span.setAttr('channel_directory.pages', pages);
     span.setAttr('channel_directory.channels', channels.size);
-    return [...channels.values()];
+    return { channels: [...channels.values()], persisted: Promise.all(writes) };
   });
+}
+
+/** `pageJoinedChannels`'s channels, for a reader that does not read them
+ * back from the cache. */
+export async function fetchJoinedChannels(
+  client: UrqlQuery,
+  signal?: AbortSignal
+): Promise<DirectoryChannel[]> {
+  const { channels } = await pageJoinedChannels(client, signal);
+  return channels;
+}
+
+/** Whether `work` settled within `timeoutMs`; false at once when
+ * `signal` aborts. `work` must never reject. */
+async function settledWithin(
+  work: Promise<unknown>,
+  timeoutMs: number,
+  signal: AbortSignal
+): Promise<boolean> {
+  const listening = new AbortController();
+  const settled = async () => {
+    await work;
+    return true;
+  };
+  const late = async () => {
+    await promiseTimeout(timeoutMs);
+    return false;
+  };
+  const aborted = new Promise<boolean>((resolve) => {
+    if (signal.aborted) resolve(false);
+    signal.addEventListener('abort', () => resolve(false), {
+      once: true,
+      signal: listening.signal,
+    });
+  });
+  try {
+    return await Promise.race([settled(), late(), aborted]);
+  } finally {
+    listening.abort();
+  }
 }
 
 /** Reads channels by id from the network: joined ones, and public or team
@@ -753,8 +814,12 @@ type CachedDirectoryDeps = {
   /** Every joined channel, for `readComplete` before the directory is
    * complete; may answer from a recent read. */
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
-  /** Every joined channel, paged from the network now, for the fallback. */
-  pageAll: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
+  /** Every joined channel, paged from the network now, for the fallback,
+   * and the cache's writes of its pages. */
+  pageAll: (signal: AbortSignal) => Promise<{
+    channels: readonly DirectoryChannel[];
+    persisted: Promise<unknown>;
+  }>;
   /** Writes a recorded view onto the channel's cached record. */
   stampView: (channelId: string, viewedAt: string) => Promise<boolean>;
 };
@@ -1248,14 +1313,19 @@ export function createCachedChannelDirectory(
     Telemetry.span('channel_directory.fallback', async (span) => {
       span.setAttr('channel_directory.fallback_reason', reason);
       try {
-        const channels = await deps.pageAll(signal);
+        const walk = await deps.pageAll(signal);
         if (signal.aborted || run !== fallbackRun) return;
-        // The walk wrote its pages into the cache. Read them back first, so
-        // the cache holds every channel it can and a removal reaches it; only
-        // the rest wait for a by-id read.
+        // The walk wrote its pages into the cache. Read them back first, once
+        // written, so the cache holds every channel it can and a removal
+        // reaches it; only the rest wait for a by-id read.
+        span.setAttr(
+          'channel_directory.fallback_persisted',
+          await settledWithin(walk.persisted, FALLBACK_PERSIST_WAIT_MS, signal)
+        );
+        if (signal.aborted || run !== fallbackRun) return;
         await refresh();
         if (signal.aborted || run !== fallbackRun) return;
-        fallback = { status: 'loaded', channels };
+        fallback = { status: 'loaded', channels: walk.channels };
         render();
       } catch (error) {
         if (signal.aborted || run !== fallbackRun) return;
@@ -1628,11 +1698,11 @@ export function createAppChannelDirectory(): ChannelDirectory {
         return channels.filter(({ isParticipant }) => isParticipant);
       },
       pageAll: async (signal) => {
-        const channels = await fetchJoinedChannels(
-          getGraphqlSoupClient(),
-          signal
-        );
-        return channels.filter(({ isParticipant }) => isParticipant);
+        const walk = await pageJoinedChannels(getGraphqlSoupClient(), signal);
+        return {
+          channels: walk.channels.filter(({ isParticipant }) => isParticipant),
+          persisted: walk.persisted,
+        };
       },
       stampView: (channelId, viewedAt) =>
         stampCachedChannelView(cache, channelId, viewedAt),

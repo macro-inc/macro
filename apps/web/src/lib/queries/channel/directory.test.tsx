@@ -40,6 +40,7 @@ import {
   fetchCurrentDirectoryPages,
   fetchJoinedChannels,
   lookupChannel,
+  pageJoinedChannels,
   refreshChannelDirectory,
   settledChannelLookup,
   staticChannelDirectory,
@@ -406,6 +407,42 @@ describe('fetchJoinedChannels', () => {
     expect(channels[1]?.name).toBe('moved');
   });
 
+  it('settles its writes once the cache wrote every page it read', async () => {
+    const written: (() => void)[] = [];
+    const pages = [
+      page([channelRecord('a')], '1'),
+      page([channelRecord('b')], null),
+    ].map((answer) => ({
+      ...answer,
+      extensions: {
+        __macroNormalizedCache: {
+          source: 'live-network',
+          persistence: new Promise<void>((done) => {
+            written.push(done);
+          }),
+        },
+      },
+    }));
+    const client = fakeClient(
+      vi.fn(() => ({ toPromise: async () => pages.shift() ?? {} }))
+    );
+
+    const walk = await pageJoinedChannels(client);
+    const settled = vi.fn();
+    const waiting = (async () => {
+      await walk.persisted;
+      settled();
+    })();
+
+    expect(ids(walk.channels)).toEqual(['a', 'b']);
+    written[0]?.();
+    await new Promise((done) => setTimeout(done));
+    expect(settled).not.toHaveBeenCalled();
+    written[1]?.();
+    await waiting;
+    expect(settled).toHaveBeenCalledOnce();
+  });
+
   it('stops when aborted', async () => {
     const network = fakeNetwork([channelRecord('a')]);
     const controller = new AbortController();
@@ -584,6 +621,9 @@ type CachedDirectoryOptions = {
   fetchAll?: () => Promise<readonly DirectoryChannel[]>;
   /** The network's joined channels, paged once the lane gave up. */
   pageAll?: (signal: AbortSignal) => Promise<readonly DirectoryChannel[]>;
+  /** Settles once the cache wrote the pages `pageAll` read; at once when
+   * left out. */
+  persisted?: Promise<unknown>;
   /** Ids a by-id read returns without a readable record. */
   unreadable?: readonly string[];
   /** By-id reads answer once this settles. */
@@ -657,7 +697,10 @@ function mountCachedDirectory(
       userId: VIEWER,
       hydrate,
       fetchAll,
-      pageAll,
+      pageAll: async (signal) => ({
+        channels: await pageAll(signal),
+        persisted: options.persisted ?? Promise.resolve(),
+      }),
       stampView,
     });
   });
@@ -1473,6 +1516,35 @@ describe('cached channel directory', () => {
     });
   });
 
+  describe('a fallback whose pages the cache does not write', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads the cache back after waiting ten seconds for the writes', async () => {
+      const { directory, hydrate } = mountCachedDirectory(
+        [channelRecord('a')],
+        {
+          persisted: new Promise(() => {}),
+          pageAll: async () => [directoryChannel('a')],
+        }
+      );
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(directory.channels()).toEqual([]);
+      expect(hydrate).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(2_000);
+
+      expect(hydrate).toHaveBeenCalledOnce();
+      expect(ids(directory.channels())).toEqual(['a']);
+      expect(directory.complete()).toBe(true);
+    });
+  });
+
   it('never calls the rows of a fallback waiting on by-id reads complete as the storage resets', async () => {
     let walks = 0;
     const { directory, hydrate, pageAll, resetStorage } = mountCachedDirectory(
@@ -1574,11 +1646,19 @@ describe('cached channel directory', () => {
   });
 
   it('reads back what the network walk wrote into the cache before reading any channel by id', async () => {
+    let persist!: () => void;
+    const persisted = new Promise<void>((done) => {
+      persist = done;
+    });
     const { cache, directory, hydrate } = mountCachedDirectory([], {
+      persisted,
       pageAll: async () => {
-        // The walk's pages land in the cache as it reads them.
-        cache.put(channelRecord('a'));
-        cache.put(channelRecord('b'));
+        // The cache writes the walk's pages after it answered them.
+        setTimeout(() => {
+          cache.put(channelRecord('a'));
+          cache.put(channelRecord('b'));
+          persist();
+        });
         return [directoryChannel('a'), directoryChannel('b')];
       },
     });

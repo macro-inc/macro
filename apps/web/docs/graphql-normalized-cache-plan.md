@@ -1399,9 +1399,12 @@ directory lacks is pending, and the lookup reads it by id (batched, 100 ids
 or 25 ms, two batches at a time), then rereads only the records that read
 wrote; it is missing once that read returns nothing for it or the directory
 completes without it. A returned id whose record cannot be read yet is read
-again, and so is one a read without complete evidence did not return; an id
-that failed twice stays pending, and the failed ids are tried again together
-at most every 30 seconds. Readers that decide from absence (section
+again, and so is one a read without complete evidence did not return. A read
+answers only for the record cached then, so a channel whose record lost a
+field after a read returned it, or arrived after a read found it absent, is
+read again. An id that failed twice stays pending, and the failed ids are read
+again together at most every 30 seconds without anyone asking, once the tab
+is visible. Readers that decide from absence (section
 membership, notification bulk actions, scope checks, built-in section mute)
 wait for `complete()` or call `readComplete()`, which pages the network while
 the cache is still filling. When the lane gives up in a generation, the backfill marks it
@@ -1419,9 +1422,16 @@ shows only once a by-id read returns it, and a listed channel the cache never
 held is dropped once a by-id read finds it absent. Those reads decide only
 with complete evidence (a cached record cannot vouch for a channel the viewer
 may have lost), and the directory is complete only once each has returned
-its channel or found it absent. The walk writes its pages into the cache, so
-the directory reads the cache again before showing them: what the walk wrote
-counts as held, and only the rest wait for a by-id read. A storage reset or a
+its channel or found it absent; until then a lookup of a channel one of them
+decides is pending. A channel such a read found absent that the cache writes
+again (the viewer may have rejoined it) is read again. The rows, the walk's
+status and the reads still open are published as one value, so `complete()`
+never pairs one with another's older state, and a read that settles without
+adding or removing a row (it failed, or returned a listed channel) changes
+only which reads are open. The cache writes the walk's pages after answering
+them, so the directory waits for those writes (at most 10 seconds) and then
+reads the cache again before showing them: what the walk wrote counts as
+held, and only the rest wait for a by-id read. A storage reset or a
 change of viewer under the walk starts it again, since what it saw went with
 the old cache. A lane pass that finishes later stops the walk and makes the
 cache answer alone again. `failed()` says
