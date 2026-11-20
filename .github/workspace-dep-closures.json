@@ -1393,6 +1393,10 @@
       "crates/agent_mailbox",
       "crates/cowlike",
       "crates/email_validator",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_service_urls",
+      "crates/macro_tower_layers",
       "crates/macro_user_id",
       "crates/workspace-hack"
     ],

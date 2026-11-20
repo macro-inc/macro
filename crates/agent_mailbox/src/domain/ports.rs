@@ -49,6 +49,13 @@ pub trait MailboxProvisioner: Send + Sync + 'static {
         request: &CreateMailbox,
     ) -> impl Future<Output = Result<ProvisionedMailbox, ProviderError>> + Send;
 
+    /// Set the provider's own send cap on a mailbox, behind Macro's. Repeatable.
+    fn apply_guardrails(
+        &self,
+        mailbox: &ProviderMailboxId,
+        max_sends_per_hour: u32,
+    ) -> impl Future<Output = Result<(), ProviderError>> + Send;
+
     /// The mailbox an earlier, possibly lost, create made for this owner tag.
     fn find_mailbox(
         &self,

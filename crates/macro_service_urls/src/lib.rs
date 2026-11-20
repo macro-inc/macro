@@ -818,6 +818,17 @@ service_url! {
 }
 
 service_url! {
+    /// deadsimple.email's REST API, the temporary host of agent mailboxes.
+    /// The provider's host in every environment; override it to run against
+    /// the `agent_mailbox` crate's fake vendor.
+    pub struct DeadSimpleApiUrl {
+        local: "https://api.deadsimple.email",
+        dev: "https://api.deadsimple.email",
+        prod: "https://api.deadsimple.email",
+    }
+}
+
+service_url! {
     /// Gemini API host, where the agent's model router sends GenerateContent
     /// requests. Google's host in every environment; override it to run
     /// against `crates/model_emulator`.

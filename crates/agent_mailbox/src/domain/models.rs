@@ -258,8 +258,6 @@ pub struct CreateMailbox {
     pub local_part: Option<LocalPart>,
     /// The sender's display name.
     pub display_name: Option<String>,
-    /// The provider-side guardrail, behind Macro's own caps.
-    pub max_sends_per_hour: u32,
 }
 
 /// Whether a message came in or went out.

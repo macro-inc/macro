@@ -187,6 +187,15 @@ where
             },
         };
 
+        // Before the credential exists, so no send can precede the provider's cap.
+        if let Err(error) = self
+            .vendor
+            .apply_guardrails(&provisioned.id, self.limits.per_hour)
+            .await
+        {
+            return self.stop(mailbox, error).await;
+        }
+
         // The mailbox id is the grant's idempotency key, so a retry within the
         // provider's replay window gets the same credential back.
         let (grant_id, key) = match self
@@ -244,7 +253,6 @@ where
             owner_tag: mailbox.id,
             local_part: mailbox.requested_local_part.clone(),
             display_name: mailbox.display_name.clone(),
-            max_sends_per_hour: self.limits.per_hour,
         };
         match self.vendor.create_mailbox(&request).await {
             Err(ProviderError::AddressTaken) => {

@@ -39,6 +39,7 @@ struct VendorState {
     granted_by_key: HashMap<Uuid, (String, String)>,
     sent_by_key: HashMap<Uuid, SentMessage>,
     taken_addresses: Vec<String>,
+    guardrails: HashMap<String, u32>,
     create_calls: usize,
     send_calls: usize,
     /// Errors the next calls of an operation return, in order.
@@ -157,6 +158,18 @@ impl MailboxProvisioner for FakeVendor {
             id: ProviderMailboxId(id),
             address,
         })
+    }
+
+    async fn apply_guardrails(
+        &self,
+        mailbox: &ProviderMailboxId,
+        max_sends_per_hour: u32,
+    ) -> Result<(), ProviderError> {
+        let mut state = self.0.lock().unwrap();
+        state
+            .guardrails
+            .insert(mailbox.0.clone(), max_sends_per_hour);
+        Ok(())
     }
 
     async fn find_mailbox(
@@ -710,6 +723,7 @@ async fn provision_creates_the_mailbox_and_a_credential_scoped_to_it() {
     assert_eq!(view.vendor_mode, VendorMode::Fake);
     let state = world.vendor.0.lock().unwrap();
     assert_eq!(state.keys.values().collect::<Vec<_>>(), vec!["inbox-1"]);
+    assert_eq!(state.guardrails.get("inbox-1"), Some(&10));
     let stored = world.repository.0.lock().unwrap();
     let grant = stored.rows[0].mailbox.grant.clone().unwrap();
     assert!(!String::from_utf8(grant.key.ciphertext).unwrap().is_empty());
