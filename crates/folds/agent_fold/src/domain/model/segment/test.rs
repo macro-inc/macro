@@ -143,6 +143,37 @@ fn code_execution_steps_show_observed_sdk_operations_without_source_or_results()
 }
 
 #[test]
+fn a_background_job_launch_reads_as_the_work_it_started() {
+    let part = MessagePart::ToolUse {
+        id: ToolUseId("code-job".into()),
+        name: ToolName::Mcp {
+            server: "macro_internal".into(),
+            tool: "ExecuteCode".into(),
+        },
+        status: ToolStatus::Completed,
+        detail: ToolDetail::Macro {
+            input: serde_json::json!({}),
+            output: Some(serde_json::json!({
+                "status": "running",
+                "activity": [],
+                "job": {"title": "Checking routine", "startedAt": "2026-11-19T10:00:00Z", "deadline": "2026-11-19T10:10:00Z"},
+            })),
+            error: None,
+        },
+    };
+    assert_eq!(
+        segments(&[part], true)[0].rows,
+        [ActivityRow {
+            id: "code-job".to_owned(),
+            label: "Checking routine".to_owned(),
+            detail: Some("Running in the background".to_owned()),
+            status: ActivityStatus::Completed,
+            card: None,
+        }]
+    );
+}
+
+#[test]
 fn code_without_observed_requests_reads_as_workspace_work() {
     let part = MessagePart::ToolUse {
         id: ToolUseId("code-2".into()),

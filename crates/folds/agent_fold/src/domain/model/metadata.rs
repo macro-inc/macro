@@ -1,5 +1,6 @@
 //! Session-level state derived from the log.
 
+use agent_runtime_protocol::domain::job::JobUpdatedNotification;
 use agent_runtime_protocol::domain::review::ReviewUpdatedNotification;
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -55,6 +56,9 @@ pub struct SessionMetadata {
     /// The newest saved revision of each review the log announced, in the
     /// order they were first announced.
     pub review_revisions: Vec<ReviewUpdatedNotification>,
+    /// The latest state of each background job the log announced, in the
+    /// order they started.
+    pub jobs: Vec<JobUpdatedNotification>,
     /// The last notification turn whose entire answer was suppressed.
     pub noop_turn: Option<u32>,
     /// The agent that produced the log. See [`Harness`].
