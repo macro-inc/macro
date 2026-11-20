@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use hosted_runtimes::domain::ids::ComputerId;
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncWrite};
+use tokio_util::task::TaskTracker;
 use tracing::Instrument as _;
 
 #[cfg(test)]
@@ -127,15 +128,17 @@ pub trait ScreenWaker: Send + Sync + 'static {
     ) -> Pin<Box<dyn Future<Output = Result<ComputerPower, TunnelError>> + Send + '_>>;
 }
 
-/// [`GuestTunnel`] over a [`GuestExec`].
+/// [`GuestTunnel`] over a [`GuestExec`]; the tasks that end tunnels which
+/// outlived their sessions run on `tasks`.
 pub struct FleetTunnel {
     exec: Arc<dyn GuestExec>,
+    tasks: TaskTracker,
 }
 
 impl FleetTunnel {
-    /// Tunnel through `exec`.
-    pub fn new(exec: Arc<dyn GuestExec>) -> Self {
-        Self { exec }
+    /// Tunnel through `exec`; reap on `tasks`.
+    pub fn new(exec: Arc<dyn GuestExec>, tasks: TaskTracker) -> Self {
+        Self { exec, tasks }
     }
 }
 
@@ -153,6 +156,12 @@ const FAILURE_OUTPUT_BYTES: usize = 512;
 /// killed: socat stops `-t 1` after its stdin ends, when the fleet passes
 /// that end on.
 const EXIT_GRACE: Duration = Duration::from_secs(2);
+/// How long the kill of a lingering tunnel may take.
+const KILL_TIMEOUT: Duration = Duration::from_secs(10);
+/// Kill pid `$1` only if it is still this tunnel's socat to port `$2`: a
+/// pid the guest reused in the meantime belongs to another program, whose
+/// command line differs.
+const KILL_SCRIPT: &str = r#"[ "$(tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null)" = "socat -t 1 STDIO TCP:127.0.0.1:$2,nodelay " ] && kill "$1""#;
 /// The tunnel: say it runs and its pid (`exec` keeps it), then become
 /// `socat` to the port in `$1`. nodelay: input is many tiny writes, which
 /// Nagle would hold back.
@@ -185,34 +194,52 @@ impl TunnelExited {
 /// Dropped before the program ended, it makes sure the program ends.
 struct ExitChecked {
     stdout: Pin<Box<dyn AsyncRead + Send>>,
-    exit: Option<Pin<Box<dyn Future<Output = Result<i32, String>> + Send>>>,
+    exit: Option<ProgramExit>,
     reaper: Reaper,
 }
+
+/// How a guest program exits, as the fleet tells it.
+type ProgramExit = Pin<Box<dyn Future<Output = Result<i32, String>> + Send>>;
 
 /// Ends a tunnel's guest program that outlived its session: not every
 /// fleet passes a closed stdin on to the program in the guest, and the
 /// fleet's exec ending (Docker's client exits when its stdin closes) says
 /// nothing about the program.
+#[derive(Clone)]
 struct Reaper {
     exec: Arc<dyn GuestExec>,
+    tasks: TaskTracker,
     computer: ComputerId,
+    port: GuestPort,
     pid: u32,
 }
 
 impl Reaper {
-    /// Give the program [`EXIT_GRACE`] to finish on its own, then kill it
-    /// whatever the fleet said (a program already gone just makes `kill`
-    /// fail).
-    async fn reap(self, exit: Pin<Box<dyn Future<Output = Result<i32, String>> + Send>>) {
+    /// Give the program [`EXIT_GRACE`] to finish on its own, then end it
+    /// whatever the fleet said, if its pid is still this tunnel's socat
+    /// ([`KILL_SCRIPT`]); at most [`KILL_TIMEOUT`].
+    async fn reap(self, exit: ProgramExit) {
         let mut exit = exit;
         let exited = tokio::time::timeout(EXIT_GRACE, &mut exit).await.is_ok();
         let pid = self.pid.to_string();
-        match self.exec.exec(self.computer, &["kill", pid.as_str()]).await {
-            Ok(kill) => {
-                drop(kill.stdin);
-                let _ = kill.exit.await;
-            }
-            Err(error) => tracing::warn!(error = %error, "could not end a screen tunnel"),
+        let port = self.port.port().to_string();
+        let killed = tokio::time::timeout(KILL_TIMEOUT, async {
+            let kill = self
+                .exec
+                .exec(
+                    self.computer,
+                    &["sh", "-c", KILL_SCRIPT, "sh", pid.as_str(), port.as_str()],
+                )
+                .await?;
+            drop(kill.stdin);
+            let _ = kill.exit.await;
+            Ok::<_, TunnelError>(())
+        })
+        .await;
+        match killed {
+            Ok(Ok(())) => {}
+            Ok(Err(error)) => tracing::warn!(error = %error, "could not end a screen tunnel"),
+            Err(_) => tracing::warn!("ending a screen tunnel timed out"),
         }
         if !exited && tokio::time::timeout(EXIT_GRACE, exit).await.is_err() {
             tracing::warn!(pid = self.pid, "a screen tunnel outlived its kill");
@@ -257,14 +284,10 @@ impl Drop for ExitChecked {
         // The program is still running: its stdin closes with this stream;
         // give it a moment to exit, then end it.
         if let Some(exit) = self.exit.take()
-            && let Ok(runtime) = tokio::runtime::Handle::try_current()
+            && tokio::runtime::Handle::try_current().is_ok()
         {
-            let reaper = Reaper {
-                exec: Arc::clone(&self.reaper.exec),
-                computer: self.reaper.computer,
-                pid: self.reaper.pid,
-            };
-            runtime.spawn(reaper.reap(exit).in_current_span());
+            let reaper = self.reaper.clone();
+            self.reaper.tasks.spawn(reaper.reap(exit).in_current_span());
         }
     }
 }
@@ -347,7 +370,9 @@ impl GuestTunnel for FleetTunnel {
                     exit: Some(process.exit),
                     reaper: Reaper {
                         exec: Arc::clone(&self.exec),
+                        tasks: self.tasks.clone(),
                         computer,
+                        port,
                         pid,
                     },
                 });

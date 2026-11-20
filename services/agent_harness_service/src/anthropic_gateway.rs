@@ -397,11 +397,11 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     })?;
     let model = GatewayModel::parse(&shape.model)?;
     span.record("gen_ai.request.model", model.request_id());
-    let body = match (&brain_agent, &state.screens) {
+    let (body, carried_notices) = match (&brain_agent, &state.screens) {
         (Some(agent), Some(screens)) if endpoint == Endpoint::Messages => {
             screen_notices::deliver(body, screens, agent).await
         }
-        _ => body,
+        _ => (body, Vec::new()),
     };
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
@@ -429,6 +429,14 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
 
     let status = upstream.status();
     span.record("http.response.status_code", i64::from(status.as_u16()));
+    // The model has the notices only once it accepted the request; a
+    // refused one leaves them for the next.
+    if status.is_success()
+        && let Some(screens) = &state.screens
+        && let Err(error) = screens.notices_delivered(&carried_notices).await
+    {
+        tracing::warn!(error = ?error, "could not mark screen notices delivered");
+    }
     if status.is_success() {
         span.record("anthropic_gateway.outcome", "forwarded");
     } else {

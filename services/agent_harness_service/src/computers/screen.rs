@@ -1,39 +1,32 @@
 //! Watching and driving an agent teammate's computer screen.
 //!
-//! `POST /computers/{harness_id}/screen/tickets` authorizes the caller
-//! (`View` to watch, `Manage` to drive) and returns a single-use ticket;
-//! `GET /computers/{harness_id}/screen/ws?ticket=…` opens the screen socket
-//! with it. Media reaches the guest only through [`tunnel::GuestTunnel`]s;
-//! the domain (tickets, lease, audit, the agent hold) is
-//! `crates/computer_screen`.
+//! `POST /computers/{harness_id}/screen/tickets` returns a single-use ticket
+//! when the domain's checks pass (`View` to watch, `Manage` to drive, never
+//! a program or an agent account); `GET /computers/{harness_id}/screen/ws?ticket=…`
+//! opens the screen socket with it. Media reaches the guest only through
+//! [`tunnel::GuestTunnel`]s; the domain (tickets, lease, audit, the agent
+//! hold) is `crates/computer_screen`.
 
 use std::sync::Arc;
 
 use axum::extract::{FromRef, Path, Query, State, WebSocketUpgrade};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use computer_screen::domain::models::{Mode, ScreenGrant, Surface, TicketSecret, Transport};
-use computer_screen::domain::service::ScreenService;
+use computer_screen::domain::models::{Mode, Surface, TicketRequest, TicketSecret, Transport};
+use computer_screen::domain::service::{ScreenError, ScreenService};
 use computer_screen::outbound::lease_changes::PgLeaseChanges;
 use computer_screen::outbound::pg::PgScreenRepo;
 use harness_id::HarnessId;
-use harnesses::domain::models::HarnessPermission;
-use harnesses::domain::ports::HarnessService;
-use hosted_runtimes::domain::agent::ComputerAgents as _;
-use hosted_runtimes::domain::ids::ComputerId;
-use hosted_runtimes::outbound::pg::PgComputerAgents;
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AccountHolderOrInternal, MacroAuthorizationExtractor, MacroAuthorizationService,
+    MacroAuthorizationState, is_program_run,
 };
-use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
-use tracing::field::Empty;
 
-use super::claude::ComputerRouteError;
-
+pub mod access;
 pub mod guest_files;
 pub mod media;
 mod rfb;
@@ -47,7 +40,13 @@ use socket::{SocketDeps, Viewers};
 const MAX_VIEWER_MESSAGE_BYTES: usize = 1 << 20;
 
 /// The screen service this process runs.
-pub type Screens = ScreenService<PgScreenRepo, guest_files::GuestFiles, PgLeaseChanges>;
+pub type Screens = ScreenService<
+    PgScreenRepo,
+    guest_files::GuestFiles,
+    PgLeaseChanges,
+    access::HarnessScreenAccess,
+    access::MacroPeople,
+>;
 
 /// One media path per transport.
 #[derive(Clone)]
@@ -65,83 +64,105 @@ impl ScreenMedias {
 }
 
 /// State for the screen routes.
-pub struct ScreenState<Harnesses, Auth> {
-    harnesses: Arc<Harnesses>,
+pub struct ScreenState<Auth> {
     screens: Arc<Screens>,
-    agents: PgComputerAgents,
     tunnel: Arc<dyn tunnel::GuestTunnel>,
     waker: Arc<dyn tunnel::ScreenWaker>,
     medias: ScreenMedias,
     viewers: Arc<Viewers>,
-    rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     shutdown: CancellationToken,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<Harnesses, Auth> Clone for ScreenState<Harnesses, Auth> {
+impl<Auth> Clone for ScreenState<Auth> {
     fn clone(&self) -> Self {
         Self {
-            harnesses: Arc::clone(&self.harnesses),
             screens: Arc::clone(&self.screens),
-            agents: self.agents.clone(),
             tunnel: Arc::clone(&self.tunnel),
             waker: Arc::clone(&self.waker),
             medias: self.medias.clone(),
             viewers: Arc::clone(&self.viewers),
-            rollout: self.rollout.clone(),
             shutdown: self.shutdown.clone(),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<Harnesses, Auth> FromRef<ScreenState<Harnesses, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &ScreenState<Harnesses, Auth>) -> Self {
+impl<Auth> FromRef<ScreenState<Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &ScreenState<Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// What the screen routes are built from.
-pub struct ScreenRoutes<Harnesses, Auth> {
-    pub harnesses: Arc<Harnesses>,
+pub struct ScreenRoutes<Auth> {
     pub screens: Arc<Screens>,
-    pub agents: PgComputerAgents,
     pub tunnel: Arc<dyn tunnel::GuestTunnel>,
     pub waker: Arc<dyn tunnel::ScreenWaker>,
     pub medias: ScreenMedias,
-    pub rollout: hosted_runtimes::domain::rollout::ComputerRollout,
     pub shutdown: CancellationToken,
     pub authorization_state: MacroAuthorizationState<Auth>,
 }
 
 /// Build the screen routes.
-pub fn router<Harnesses, Auth>(routes: ScreenRoutes<Harnesses, Auth>) -> Router
+pub fn router<Auth>(routes: ScreenRoutes<Auth>) -> Router
 where
-    Harnesses: HarnessService,
     Auth: MacroAuthorizationService,
 {
     let state = ScreenState {
-        harnesses: routes.harnesses,
         screens: routes.screens,
-        agents: routes.agents,
         tunnel: routes.tunnel,
         waker: routes.waker,
         medias: routes.medias,
         viewers: Arc::new(Viewers::default()),
-        rollout: routes.rollout,
         shutdown: routes.shutdown,
         authorization_state: routes.authorization_state,
     };
     Router::new()
         .route(
             "/computers/{harness_id}/screen/tickets",
-            post(ticket_handler::<Harnesses, Auth>),
+            post(ticket_handler::<Auth>),
         )
         .route(
             "/computers/{harness_id}/screen/ws",
-            get(socket_handler::<Harnesses, Auth>),
+            get(socket_handler::<Auth>),
         )
         .with_state(state)
+}
+
+/// Why a ticket was refused, as the browser sees it.
+#[derive(Debug, thiserror::Error)]
+#[error(transparent)]
+pub struct TicketError(#[from] ScreenError);
+
+impl IntoResponse for TicketError {
+    fn into_response(self) -> Response {
+        let (status, code) = match &self.0 {
+            ScreenError::RolloutDisabled => (StatusCode::FORBIDDEN, Some("rollout_disabled")),
+            ScreenError::ProgramRefused
+            | ScreenError::AgentRefused
+            | ScreenError::NoAccess
+            | ScreenError::DriveNotAllowed => (StatusCode::FORBIDDEN, None),
+            ScreenError::NotFound => (StatusCode::NOT_FOUND, None),
+            ScreenError::NotAComputer => (StatusCode::BAD_REQUEST, None),
+            ScreenError::TooManyTickets | ScreenError::TooManySockets => {
+                (StatusCode::TOO_MANY_REQUESTS, None)
+            }
+            ScreenError::Internal(report) => {
+                tracing::error!(error = ?report, "screen ticket failed");
+                (StatusCode::INTERNAL_SERVER_ERROR, None)
+            }
+        };
+        let message = match &self.0 {
+            ScreenError::Internal(_) => "something went wrong".to_owned(),
+            error => error.to_string(),
+        };
+        let mut body = serde_json::json!({ "message": message });
+        if let Some(code) = code {
+            body["code"] = serde_json::Value::from(code);
+        }
+        (status, Json(body)).into_response()
+    }
 }
 
 /// Harness path.
@@ -176,13 +197,6 @@ pub struct ScreenTicket {
     pub url: String,
 }
 
-fn permission_for(mode: Mode) -> HarnessPermission {
-    match mode {
-        Mode::View => HarnessPermission::View,
-        Mode::Drive => HarnessPermission::Manage,
-    }
-}
-
 /// Issue a ticket to watch, or drive, a computer's screen.
 #[utoipa::path(
     post,
@@ -191,43 +205,31 @@ fn permission_for(mode: Mode) -> HarnessPermission {
     path = "/computers/{harness_id}/screen/tickets",
     params(("harness_id" = String, Path, description = "Harness ID")),
     request_body = ScreenTicketRequest,
-    responses((status = 200, body = ScreenTicket), (status = 403), (status = 404), (status = 503))
+    responses((status = 200, body = ScreenTicket), (status = 400), (status = 403), (status = 404), (status = 429))
 )]
-pub async fn ticket_handler<Harnesses, Auth>(
-    State(state): State<ScreenState<Harnesses, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn ticket_handler<Auth>(
+    State(state): State<ScreenState<Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, AccountHolderOrInternal>,
+    headers: HeaderMap,
     Path(path): Path<HarnessPath>,
     Json(body): Json<ScreenTicketRequest>,
-) -> Result<Json<ScreenTicket>, ComputerRouteError>
+) -> Result<Json<ScreenTicket>, TicketError>
 where
-    Harnesses: HarnessService,
     Auth: MacroAuthorizationService,
 {
     let span = tracing::info_span!(
         "computer.screen.ticket",
         harness.id = %path.harness_id,
-        computer.id = Empty,
         screen.transport = %body.transport,
         screen.surface = %body.surface,
         screen.mode = %body.mode,
     );
     async move {
-        let user = caller.authorization.user.macro_user_id.clone();
-        let computer_id = state
-            .authorize(user.clone(), path.harness_id, permission_for(body.mode))
-            .await?;
-        tracing::Span::current().record("computer.id", tracing::field::display(computer_id));
-        let agent_user_id = state
-            .agents
-            .agent_of(computer_id)
-            .await
-            .map_err(|error| ComputerRouteError::Internal(rootcause::report!("{error}")))?;
-
-        let grant = ScreenGrant {
+        let user = &caller.authorization.user;
+        let request = TicketRequest {
             harness_id: path.harness_id,
-            computer_id,
-            agent_user_id,
-            user_id: user,
+            user_id: user.macro_user_id.clone(),
+            program: is_program_run(user.attribution(), &headers),
             transport: body.transport,
             surface: body.surface,
             mode: body.mode,
@@ -235,9 +237,8 @@ where
         let traceparent = hosted_runtimes::domain::telemetry::traceparent();
         let issued = state
             .screens
-            .issue_ticket(&grant, traceparent.as_deref())
-            .await
-            .map_err(|error| ComputerRouteError::Internal(rootcause::report!("{error:?}")))?;
+            .issue_ticket(request, traceparent.as_deref())
+            .await?;
         Ok(Json(ScreenTicket {
             ticket: issued.secret.expose().to_owned(),
             expires_at: issued.expires_at,
@@ -256,14 +257,13 @@ pub struct SocketQuery {
 
 /// Open the screen socket with a ticket. Browsers can't set headers on a
 /// WebSocket, so the ticket is the credential.
-async fn socket_handler<Harnesses, Auth>(
-    State(state): State<ScreenState<Harnesses, Auth>>,
+async fn socket_handler<Auth>(
+    State(state): State<ScreenState<Auth>>,
     Path(path): Path<HarnessPath>,
     Query(query): Query<SocketQuery>,
     upgrade: WebSocketUpgrade,
 ) -> Response
 where
-    Harnesses: HarnessService,
     Auth: MacroAuthorizationService,
 {
     let redeemed = match state.screens.redeem(&TicketSecret::new(query.ticket)).await {
@@ -277,19 +277,23 @@ where
     let grant = redeemed.grant;
     let media = state.medias.of(grant.transport);
 
+    // The rollout and the harness's permissions, every 30 s.
     let reauthorize: socket::Reauthorize = {
-        let harnesses = Arc::clone(&state.harnesses);
-        let user = grant.user_id.clone();
-        let harness = grant.harness_id;
-        let permission = permission_for(grant.mode);
+        let screens = Arc::clone(&state.screens);
+        let grant = grant.clone();
         Arc::new(move || {
-            let harnesses = Arc::clone(&harnesses);
-            let user = user.clone();
+            let screens = Arc::clone(&screens);
+            let grant = grant.clone();
             Box::pin(async move {
-                harnesses
-                    .authorize_harness(user, harness, permission)
+                screens
+                    .reauthorize(&grant)
                     .await
-                    .is_ok()
+                    .inspect_err(
+                        |error| tracing::warn!(error = ?error, "could not recheck screen access"),
+                    )
+                    // A lookup that failed keeps the socket: access is
+                    // checked again in 30 s.
+                    .unwrap_or(true)
             })
         })
     };
@@ -300,35 +304,11 @@ where
         media,
         viewers: Arc::clone(&state.viewers),
         reauthorize,
+        reauthorize_every: socket::REAUTHORIZE_EVERY,
         shutdown: state.shutdown.clone(),
     };
     let traceparent = redeemed.traceparent;
     upgrade
         .max_message_size(MAX_VIEWER_MESSAGE_BYTES)
         .on_upgrade(move |socket| socket::serve(socket, grant, deps, traceparent))
-}
-
-impl<Harnesses, Auth> ScreenState<Harnesses, Auth>
-where
-    Harnesses: HarnessService,
-{
-    /// The computer behind the harness, when `user` has `access` and it is
-    /// a Macro computer. The same checks as the Claude sign-in routes.
-    async fn authorize(
-        &self,
-        user: MacroUserIdStr<'static>,
-        harness_id: HarnessId,
-        access: HarnessPermission,
-    ) -> Result<ComputerId, ComputerRouteError> {
-        if !self.rollout.enabled(&user).await {
-            return Err(ComputerRouteError::RolloutDisabled);
-        }
-        let harness = self
-            .harnesses
-            .authorize_harness(user, harness_id, access)
-            .await?;
-        harness.computer_id.ok_or_else(|| {
-            ComputerRouteError::BadRequest("this runtime is not a Macro computer".to_owned())
-        })
-    }
 }

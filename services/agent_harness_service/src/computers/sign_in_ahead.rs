@@ -58,8 +58,7 @@ impl<Harnesses: HarnessService> SignInAhead<Harnesses> {
         };
         // The agent reads its harness id from its home; written only when
         // it changed.
-        super::screen::guest_files::GuestFiles::new(Some(Arc::clone(&self.operator) as _))
-            .record_harness(computer_id, harness)
+        super::screen::guest_files::record_harness(self.operator.as_ref(), computer_id, harness)
             .await;
         let setup_completed = match self.operator.setup_completed(harness).await {
             Ok(Some(completed)) => completed,

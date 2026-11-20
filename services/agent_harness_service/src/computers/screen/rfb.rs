@@ -98,8 +98,9 @@ impl RfbGate {
         let mut forward = Vec::with_capacity(pending.len());
         let mut input_passed = false;
         let mut start = 0;
-        while let Some((length, verdict)) = self.next(&pending[start..])? {
-            let message = &pending[start..start + length];
+        while let Some((length, verdict)) = self.next(pending.get(start..).unwrap_or_default())? {
+            // `next` only sizes messages that are wholly in `pending`.
+            let message = pending.get(start..start + length).unwrap_or_default();
             match verdict {
                 Verdict::Pass => forward.extend_from_slice(message),
                 Verdict::Input if driving => {
@@ -410,7 +411,7 @@ impl RfbInjector {
         Ok(Self {
             writer,
             held: 0,
-            drain: drain,
+            drain,
         })
     }
 

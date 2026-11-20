@@ -4,6 +4,8 @@ use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _, DuplexStream};
 use tokio::sync::{Notify, oneshot};
 use uuid::Uuid;
 
+use tokio_util::task::TaskTracker;
+
 use super::*;
 
 const COMPUTER: ComputerId = ComputerId::new_from_uuid(Uuid::from_u128(0xC0));
@@ -69,7 +71,7 @@ impl GuestExec for FakeExec {
 async fn the_tunnel_runs_socat_to_the_port_with_nodelay() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
-    let _stream = FleetTunnel::new(exec.clone())
+    let _stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -94,7 +96,7 @@ async fn only_what_follows_the_ready_line_is_media() {
         .write_all(b"macro-screen-tunnel-ready 4242\nRFB 003.008\n")
         .await
         .unwrap();
-    let mut stream = FleetTunnel::new(exec)
+    let mut stream = FleetTunnel::new(exec, TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -113,7 +115,10 @@ async fn a_fleet_error_instead_of_the_ready_line_is_never_media() {
         .unwrap();
     drop(guest);
 
-    let Err(error) = FleetTunnel::new(exec).open(COMPUTER, GuestPort::Rfb).await else {
+    let Err(error) = FleetTunnel::new(exec, TaskTracker::new())
+        .open(COMPUTER, GuestPort::Rfb)
+        .await
+    else {
         panic!("the tunnel did not start");
     };
     let TunnelError::Failed(output) = error else {
@@ -132,7 +137,9 @@ async fn a_ready_line_without_a_pid_is_refused() {
     drop(guest);
 
     assert!(matches!(
-        FleetTunnel::new(exec).open(COMPUTER, GuestPort::Rfb).await,
+        FleetTunnel::new(exec, TaskTracker::new())
+            .open(COMPUTER, GuestPort::Rfb)
+            .await,
         Err(TunnelError::Failed(_))
     ));
 }
@@ -141,7 +148,7 @@ async fn a_ready_line_without_a_pid_is_refused() {
 async fn a_tunnel_whose_socat_fails_reads_as_an_error_not_the_end() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
-    let mut stream = FleetTunnel::new(exec)
+    let mut stream = FleetTunnel::new(exec, TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -161,7 +168,7 @@ async fn a_tunnel_that_exits_cleanly_is_the_port_closing() {
         .write_all(b"macro-screen-tunnel-ready 4242\nbye")
         .await
         .unwrap();
-    let mut stream = FleetTunnel::new(exec.clone())
+    let mut stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -180,7 +187,7 @@ async fn a_tunnel_that_exits_cleanly_is_the_port_closing() {
 async fn a_closed_session_whose_tunnel_lingers_kills_it() {
     let (exec, mut guest, _exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
-    let stream = FleetTunnel::new(exec.clone())
+    let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -195,7 +202,14 @@ async fn a_closed_session_whose_tunnel_lingers_kills_it() {
 
     assert_eq!(
         exec.calls().last().unwrap(),
-        &vec!["kill".to_owned(), "4242".to_owned()]
+        &vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            KILL_SCRIPT.to_owned(),
+            "sh".to_owned(),
+            "4242".to_owned(),
+            "5901".to_owned(),
+        ]
     );
 }
 
@@ -203,7 +217,7 @@ async fn a_closed_session_whose_tunnel_lingers_kills_it() {
 async fn a_tunnel_whose_exec_ended_but_whose_program_may_not_is_killed_too() {
     let (exec, mut guest, exit) = FakeExec::new();
     guest.write_all(READY).await.unwrap();
-    let stream = FleetTunnel::new(exec.clone())
+    let stream = FleetTunnel::new(exec.clone(), TaskTracker::new())
         .open(COMPUTER, GuestPort::Rfb)
         .await
         .unwrap();
@@ -219,6 +233,37 @@ async fn a_tunnel_whose_exec_ended_but_whose_program_may_not_is_killed_too() {
 
     assert_eq!(
         exec.calls().last().unwrap(),
-        &vec!["kill".to_owned(), "4242".to_owned()]
+        &vec![
+            "sh".to_owned(),
+            "-c".to_owned(),
+            KILL_SCRIPT.to_owned(),
+            "sh".to_owned(),
+            "4242".to_owned(),
+            "5901".to_owned(),
+        ]
     );
+}
+
+#[test]
+fn the_kill_spares_a_pid_the_guest_gave_another_program() {
+    // A program that took the tunnel's pid after it exited: not socat to
+    // the tunnel's port, so the kill leaves it alone.
+    let mut other = std::process::Command::new("sleep")
+        .arg("30")
+        .spawn()
+        .unwrap();
+    let pid = other.id().to_string();
+
+    let status = std::process::Command::new("sh")
+        .args(["-c", KILL_SCRIPT, "sh", pid.as_str(), "5901"])
+        .status()
+        .unwrap();
+
+    assert!(!status.success());
+    assert!(
+        other.try_wait().unwrap().is_none(),
+        "the other program was killed"
+    );
+    other.kill().unwrap();
+    other.wait().unwrap();
 }

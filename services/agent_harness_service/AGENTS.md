@@ -73,11 +73,14 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   While a person drives the agent's computer, `HeldBrains` (around the one
   `BrainAuthenticator` every `/brain/*` route shares) holds each request until
   the hand-back, woken by `computer_screen`'s lease notifications, for at most
-  5 minutes, then answers 503 `overloaded_error` with `Retry-After: 10`.
-  Take-over and hand-back notices go into the last user message of the next
-  `/brain/anthropic/v1/messages` request as
-  `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks
-  (`anthropic_gateway/screen_notices.rs`).
+  5 minutes, then answers 503 `overloaded_error` with `Retry-After: 10`. The
+  hold gates the next request only: tool calls of an answer the agent already
+  has still run. Take-over and hand-back notices (the driver by name, never
+  their id) go last in the last user message of the next
+  `/brain/anthropic/v1/messages` request, after its `tool_result` blocks, as
+  `<macro-runtime-notice>{json}</macro-runtime-notice>` text blocks with `<`,
+  `>` and `&` escaped (`anthropic_gateway/screen_notices.rs`), and count as
+  delivered only when upstream answered 2xx.
 - `src/speech_gateway.rs` + `src/speech_gateway/`: `/brain/inference/stt` and
   `/brain/inference/tts` WebSockets on the egress listener, for agent
   teammates' calls (`MACRO_SPEECH_URL` in the enrollment). Same brain key,
@@ -175,12 +178,19 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
 - `src/computers/screen.rs` + `src/computers/screen/`: agent screens over
   VNC (domain in `crates/computer_screen`). `POST
   /computers/{harness_id}/screen/tickets` `{transport: vnc, surface: desktop,
-  mode}` → `{ticket, expiresAt, url}` checks like Claude sign-in (rollout,
-  `View` to watch, `Manage` to drive) and mints a single-use 60 s ticket;
+  mode}` → `{ticket, expiresAt, url}` takes the account holder's own
+  credential (`AccountHolderOrInternal`), refuses programs
+  (`is_program_run`) and agent accounts, checks the rollout and the harness
+  (`View` to watch, `Manage` to drive; `access.rs` adapts both, and people's
+  names, to the domain's ports), limits tickets per person, and mints a
+  single-use 60 s ticket;
   `GET /computers/{harness_id}/screen/ws?ticket=` redeems it and runs the
   socket (`socket.rs`): binary frames are raw RFB both ways, text frames JSON
   control (`takeOver`, `handBack`, `input`, `stop`; server `state`/`error`/
-  `ended`), with access re-checked and the socket marked seen every 30 s.
+  `ended`), with access (rollout included) re-checked and the socket marked
+  seen every 30 s; a driver who loses access releases the lease at once. A
+  person opens at most 4 sockets on a computer and a computer 16
+  (`tooManySockets`). The `viewers` count in `state` is this replica's.
   Before the first frame the socket wakes a hibernated computer
   (`state.waking`). One driver lease per computer, renewed by driver input at
   most every 15 s; a take-over by the same user moves it to the new socket,
@@ -188,15 +198,18 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   driver may hand back. `media.rs` `VncMedia` relays raw RFB from Xvnc (5901)
   through `rfb.rs` `RfbGate`, which drops input unless this socket drives
   and fails closed on anything it can't parse; typed `input` goes through
-  `RfbInjector`'s own RFB connection. Xvnc is reached only by a `socat`
+  `RfbInjector`'s own RFB connection (handshake and each input bounded to
+  10 s). Xvnc is reached only by a `socat`
   tunnel over `tunnel.rs` `GuestExec` (the operator's `Fleet::exec`,
   implemented in `computers.rs`): nothing before its ready line is media,
-  and a tunnel still running 2 s after its session closed is killed. When
+  and a tunnel still running 2 s after its session closed is killed (on the
+  computer tasks' tracker, only if the pid is still that socat). When
   media stops short, the operator says whether the computer runs, which
   picks `computerOff` or a named error (`tunnelFailed`, `sourceUnavailable`).
   Screens count as in use for hibernation (`in_use.rs`). `guest_files.rs`
-  keeps `/home/macro/agent/state/screen-driver` (`human:<userId>` while
-  someone drives) and `state/harness-id` (written from `sign_in_ahead.rs`).
+  keeps `/home/macro/agent/state/screen-driver` (`human` while someone
+  drives; written by one queued worker, never on a request path) and
+  `state/harness-id` (written from `sign_in_ahead.rs`).
   Spans: `computer.screen.ticket`/`.session`/`.wake`/`.tunnel`/`.driver_file`.
 - `src/computers/claude_expiry.rs`: the notices of the operator's
   `ClaudeSignIns` pass (every 60 s), whose sign-ins come from

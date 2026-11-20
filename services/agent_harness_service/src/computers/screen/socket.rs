@@ -35,7 +35,7 @@ mod test;
 
 /// How often a viewer's access is checked again, and its socket marked as
 /// still open.
-const REAUTHORIZE_EVERY: Duration = computer_screen::domain::service::SESSION_TOUCH_EVERY;
+pub const REAUTHORIZE_EVERY: Duration = computer_screen::domain::service::SESSION_TOUCH_EVERY;
 /// How often driver input renews the lease at most.
 const RENEW_EVERY: Duration = Duration::from_secs(15);
 /// Frames buffered between media and a slow viewer.
@@ -43,6 +43,8 @@ const MEDIA_BUFFER: usize = 32;
 /// How long a wake may take before the viewer is told the computer is
 /// waking: an awake computer answers well within it.
 const WAKING_NOTICE_AFTER: Duration = Duration::from_millis(300);
+/// How long the injector's handshake with Xvnc, or one input, may take.
+const INJECTOR_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 /// The longest hand-back note kept, in characters.
 const MAX_NOTE_CHARS: usize = 2000;
 
@@ -83,6 +85,8 @@ pub enum ErrorCode {
     InputFailed,
     /// The computer runs, but its screen couldn't be reached.
     TunnelFailed,
+    /// Too many screens are open on the computer, or by this person on it.
+    TooManySockets,
 }
 
 /// A control message to the viewer.
@@ -180,6 +184,9 @@ pub struct SocketDeps {
     pub media: Arc<dyn ScreenMedia>,
     pub viewers: Arc<Viewers>,
     pub reauthorize: Reauthorize,
+    /// How often access is checked again and the socket marked seen:
+    /// [`REAUTHORIZE_EVERY`] outside tests.
+    pub reauthorize_every: Duration,
     pub shutdown: CancellationToken,
 }
 
@@ -240,6 +247,27 @@ async fn serve_in_span(
 ) {
     let session = match deps.screens.open_session(&grant).await {
         Ok(session) => session,
+        Err(ScreenError::TooManySockets) => {
+            span.record("screen.end_reason", EndReason::Error.as_ref());
+            let (mut sender, _) = socket.split();
+            let _ = send(
+                &mut sender,
+                &ServerMessage::Error {
+                    code: ErrorCode::TooManySockets,
+                    message: "too many screens are open on this computer",
+                },
+            )
+            .await;
+            let _ = send(
+                &mut sender,
+                &ServerMessage::Ended {
+                    reason: EndReason::Error,
+                },
+            )
+            .await;
+            let _ = sender.close().await;
+            return;
+        }
         Err(error) => {
             tracing::error!(error = ?error, "could not open the screen audit row");
             span.record("otel.status_code", "ERROR");
@@ -417,8 +445,8 @@ impl Connection {
         let mut injector: Option<RfbInjector> = None;
         let mut last_renew = tokio::time::Instant::now();
         let mut reauthorize = tokio::time::interval_at(
-            tokio::time::Instant::now() + REAUTHORIZE_EVERY,
-            REAUTHORIZE_EVERY,
+            tokio::time::Instant::now() + self.deps.reauthorize_every,
+            self.deps.reauthorize_every,
         );
 
         // The state, with its surface, goes out before the first frame.
@@ -539,9 +567,11 @@ impl Connection {
                                         activity.notify_one();
                                         Ok(())
                                     }
-                                    Err(message) => {
+                                    Err(error) => {
                                         injector = None;
-                                        Self::error(sender, ErrorCode::InputFailed, &message).await
+                                        // The fleet's words stay in the log.
+                                        tracing::warn!(error = %error, "could not type a driver's input");
+                                        Self::error(sender, ErrorCode::InputFailed, "the computer didn't take the input").await
                                     }
                                 }
                             }
@@ -608,6 +638,13 @@ impl Connection {
 
                 _ = reauthorize.tick() => {
                     if !(self.deps.reauthorize)().await {
+                        // A driver who lost access stops holding the agent now,
+                        // not when the lease lapses.
+                        if lease.as_ref().is_some_and(|lease| may_hand_back(Some(lease), &self.grant.user_id))
+                            && let Err(error) = self.deps.screens.hand_back(computer, self.grant.user_id.clone(), None).await
+                        {
+                            tracing::warn!(error = ?error, "could not release a revoked driver's lease");
+                        }
                         return Ending::plain(EndReason::AccessRevoked);
                     }
                     // Still here: keeps the computer from hibernating.
@@ -632,18 +669,21 @@ impl Connection {
                 .open(self.grant.computer_id, GuestPort::Rfb)
                 .await
                 .map_err(|error| error.to_string())?;
-            *injector = Some(
-                RfbInjector::connect(stream)
+            // An Xvnc that accepts but never speaks must not stall the
+            // socket's loop.
+            let connected =
+                tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, RfbInjector::connect(stream))
                     .await
-                    .map_err(|error| error.to_string())?,
-            );
+                    .map_err(|_| "the computer's display did not answer".to_owned())?
+                    .map_err(|error| error.to_string())?;
+            *injector = Some(connected);
         }
         let Some(connected) = injector.as_mut() else {
             return Err("the computer's display is not connected".to_owned());
         };
-        connected
-            .send(event)
+        tokio::time::timeout(INJECTOR_HANDSHAKE_TIMEOUT, connected.send(event))
             .await
+            .map_err(|_| "the computer's display did not take the input in time".to_owned())?
             .map_err(|error| error.to_string())
     }
 }

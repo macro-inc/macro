@@ -82,7 +82,7 @@ fn messages_split_across_frames_are_judged_whole() {
 #[test]
 fn input_follows_the_lease_mid_stream() {
     let mut gate = RfbGate::new();
-    gate.filter(HANDSHAKE, false).unwrap().forward;
+    gate.filter(HANDSHAKE, false).unwrap();
 
     assert_eq!(
         gate.filter(&KEY_A_DOWN, false).unwrap().forward,
@@ -97,7 +97,7 @@ fn input_follows_the_lease_mid_stream() {
 #[test]
 fn the_gate_closes_on_what_it_cannot_frame() {
     let mut unknown = RfbGate::new();
-    unknown.filter(HANDSHAKE, true).unwrap().forward;
+    unknown.filter(HANDSHAKE, true).unwrap();
     assert_eq!(
         unknown.filter(&[7, 0, 0], true),
         Err(GateError::UnknownMessage(7))
@@ -116,7 +116,7 @@ fn the_gate_closes_on_what_it_cannot_frame() {
     );
 
     let mut huge = RfbGate::new();
-    huge.filter(HANDSHAKE, true).unwrap().forward;
+    huge.filter(HANDSHAKE, true).unwrap();
     assert_eq!(
         huge.filter(&[6, 0, 0, 0, 0x7f, 0xff, 0xff, 0xff], true),
         Err(GateError::TooLarge)

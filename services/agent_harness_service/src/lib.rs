@@ -1478,6 +1478,8 @@ pub async fn run() -> anyhow::Result<()> {
             computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
             computers::screen::guest_files::GuestFiles::new(
                 computer_operator.clone().map(|operator| operator as _),
+                &computer_tasks,
+                service_shutdown.clone(),
             ),
             computer_screen::outbound::lease_changes::PgLeaseChanges::listen(
                 pool.clone(),
@@ -1485,6 +1487,16 @@ pub async fn run() -> anyhow::Result<()> {
                 service_shutdown.clone(),
             )
             .await,
+            computers::screen::access::HarnessScreenAccess::new(
+                Arc::new(computers::harness_service(&pool)),
+                feature_flags
+                    .clone()
+                    .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                    .unwrap_or_default()
+                    .with_allowlist(config.computer_rollout_allowlist()?),
+                hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+            ),
+            computers::screen::access::MacroPeople::new(pool.clone()),
         ));
     // Every /brain/* route authenticates through this one, held while a
     // person drives the agent's computer.
@@ -2272,30 +2284,23 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
-    let screen_router = match &computer_operator {
-        Some(operator) => Some(computers::screen::router(computers::screen::ScreenRoutes {
-            harnesses: Arc::new(computers::harness_service(&pool)),
+    let screen_router = computer_operator.as_ref().map(|operator| {
+        computers::screen::router(computers::screen::ScreenRoutes {
             screens: Arc::clone(&screens),
-            agents: hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
             tunnel: Arc::new(computers::screen::tunnel::FleetTunnel::new(
                 Arc::clone(operator) as _,
+                computer_tasks.clone(),
             )),
             waker: Arc::clone(operator) as _,
             medias: computers::screen::ScreenMedias {
                 vnc: Arc::new(computers::screen::media::VncMedia),
             },
-            rollout: feature_flags
-                .clone()
-                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-                .unwrap_or_default()
-                .with_allowlist(config.computer_rollout_allowlist()?),
             shutdown: service_shutdown.clone(),
             authorization_state: MacroAuthorizationState::new(Arc::new(
                 authorization_service.clone(),
             )),
-        })),
-        None => None,
-    };
+        })
+    });
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
