@@ -139,7 +139,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (a failed sign-in carries a `code` saying how to recover:
   `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
   `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
-  `computer_busy` 409 a retry; a timeout is a bare 504),
+  `computer_busy` 409 a retry; harnessd's own CLI timeout ends the sign-in
+  and answers `sign_in_expired`, while this service timing out on harnessd
+  is a bare 504 that lets the code be sent again),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly
