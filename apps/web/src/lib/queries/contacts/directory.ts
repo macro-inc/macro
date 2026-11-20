@@ -60,6 +60,10 @@ export type ContactDirectoryRequest = {
   limit?: number;
   cursor?: ContactDirectoryCursor;
   policy?: ContactPeoplePolicy;
+  /** How long a first page waits for the local cache before the server is
+   * read instead. Without it the read waits for the cache however long it
+   * takes. */
+  localBudgetMs?: number;
 };
 export type ContactDirectoryPage = {
   users: IUser[];
@@ -68,6 +72,9 @@ export type ContactDirectoryPage = {
   source: 'cache' | 'server';
   sync: 'cold' | 'partial' | 'snapshot' | 'unavailable';
   offline: boolean;
+  /** The server answered because the cache did not within the request's
+   * budget; the cache may still be usable for a later read. */
+  localLate?: boolean;
   nextCursor: ContactDirectoryCursor | null;
 };
 export type ContactDirectoryHost = Pick<
@@ -136,9 +143,17 @@ export async function readContactDirectory(
     const local =
       request.cursor?.source === 'server'
         ? undefined
-        : await readLocalWindow(host, input);
-    if (!local && !online) throw new ContactDirectoryUnavailableError();
-    const page = local ?? (await readServerWindow(input));
+        : await readLocalWithinBudget(host, input);
+    const localLate = local === 'late' || local === 'failed';
+    if (localLate) span.setAttr('contacts.local', local);
+    if ((!local || localLate) && !online)
+      throw new ContactDirectoryUnavailableError();
+    // The read may have been superseded while it waited for the cache.
+    signal.throwIfAborted();
+    const page =
+      local && !localLate
+        ? local
+        : { ...(await readServerWindow(input)), localLate };
     span.setAttr('contacts.source', page.source);
     span.setAttr('contacts.sync', page.sync);
     span.setAttr('contacts.result_count', page.users.length);
@@ -185,6 +200,40 @@ type WindowInput = {
   online: boolean;
   span: Span;
 };
+
+/** The local window, unless a first page with a budget gets no answer from
+ * the cache in time: a busy cache, or one changing owner, can hold a read for
+ * many seconds or fail it, and the caller reads the server instead. The
+ * abandoned read still finishes in the engine. */
+async function readLocalWithinBudget(
+  host: ContactDirectoryHost | undefined,
+  input: WindowInput
+): Promise<ContactDirectoryPage | undefined | 'late' | 'failed'> {
+  const budget = input.request.localBudgetMs;
+  if (budget === undefined || input.request.cursor)
+    return readLocalWindow(host, input);
+
+  const settle = async () => {
+    try {
+      return { page: await readLocalWindow(host, input) };
+    } catch (error) {
+      return { error };
+    }
+  };
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<'late'>((resolve) => {
+    timer = setTimeout(() => resolve('late'), budget);
+  });
+  const first = await Promise.race([settle(), late]);
+  clearTimeout(timer);
+  if (first === 'late') return 'late';
+  if (!('error' in first)) return first.page;
+  // A continuation or scope mismatch, and a superseded read, are not the
+  // cache failing to answer.
+  if (first.error instanceof ContactDirectoryScopeError || input.signal.aborted)
+    throw first.error;
+  return 'failed';
+}
 
 /** Reads the local ranked projection. Returns undefined when this tab has no
  * usable cache for the viewer: no host, a retired or unsupported host, an

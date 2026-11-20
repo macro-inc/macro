@@ -353,3 +353,59 @@ it('counts as an open contact reader once its first page settles, while enabled 
   expect(readersOpen()).toBe(false);
   client.clear();
 });
+
+it('keeps rows the server listed for a late cache until the input changes', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  const client = new QueryClient();
+  let changed: CacheChangeListener | undefined;
+  const host: CacheHost = {
+    ...createNoopCacheHost(),
+    disabled: false,
+    onCacheChanged: (callback) => {
+      changed = callback;
+      return () => {};
+    },
+  };
+  const reader = vi.fn<typeof readContactDirectory>(
+    async (_viewer, _host, request): Promise<ContactDirectoryPage> => ({
+      source: 'server',
+      sync: 'unavailable',
+      offline: false,
+      localLate: true,
+      query: request.query,
+      nextCursor: null,
+      users: [{ id: 'macro|a@example.com', email: 'a@example.com', name: 'A' }],
+    })
+  );
+  const [search, setSearch] = createSignal('');
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  function Harness() {
+    window = createContactDirectoryWindow(
+      () => ({ userId: 'macro|viewer@example.com', host }),
+      reader,
+      () => true,
+      { search, debounceMs: 0, localBudgetMs: 2_000 }
+    );
+    return null;
+  }
+  render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(0);
+  expect(window!.data()?.localLate).toBe(true);
+  expect(reader).toHaveBeenCalledOnce();
+  expect(reader.mock.calls[0][2].localBudgetMs).toBe(2_000);
+
+  // The cache answering afterwards would rank the rows on screen again.
+  changed!(parseCacheRevision('2'), { searchChangedBuckets: ['person'] });
+  await vi.advanceTimersByTimeAsync(300);
+  expect(reader).toHaveBeenCalledOnce();
+
+  setSearch('a');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(reader).toHaveBeenCalledTimes(2);
+  client.clear();
+});

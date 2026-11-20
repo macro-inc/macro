@@ -1044,6 +1044,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                 <MentionLoadingRows
                                   count={count()}
                                   label={t('common.loadingPeople')}
+                                  blank={!userMention.showsLoading()}
                                 />
                               )}
                             </Show>

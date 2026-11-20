@@ -1913,9 +1913,14 @@ person (Macro) and keeps its People preview's rows as loading rows (`holdsRows`;
 with other sections also when no agent matches, `peopleHolding`), holding the highlighted
 row meanwhile; phones list nothing below them yet. On desktop, Booking Links, which arrive
 from the network, are a section below People; phones pin People rows above the rest. The hold ends at `UNANSWERED_SEARCH_LIMIT_MS`, when
-Cmd+K stops saying "Searching…". The menu reads a failed people window again once by
-itself, holding the rows meanwhile, and offers Retry only when that read fails too
-(`peopleFailed`).
+Cmd+K stops saying "Searching…". The held rows stay blank for `LOADING_ROWS_DELAY_MS`
+before they shimmer, so an ordinary open shows no loading state. The menu's directory
+read gives the cache `PEOPLE_CACHE_BUDGET_MS` (`peopleLocalBudgetMs`), then reads the
+server's window once for that query; those rows are ranked by the menu and are not
+re-read on cache changes, so the cache answering later never reorders them. The menu
+reads a failed people window again once by itself, holding the rows meanwhile, and
+offers Retry when that read fails too or a read is still pending when the hold ends
+(`peopleFailed`): People never disappears without saying why.
 
 ### Tag picker selection and creation
 

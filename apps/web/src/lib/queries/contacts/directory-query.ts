@@ -88,6 +88,9 @@ export function createContactDirectoryWindow(
     /** Wait this long after the last search edit before reading. Callers
      * whose search text is already debounced pass 0. */
     debounceMs?: number;
+    /** Lets a first page read the server when the cache has not answered in
+     * this long; see `ContactDirectoryRequest.localBudgetMs`. */
+    localBudgetMs?: number;
   } = {}
 ) {
   const owner = createUniqueId();
@@ -146,6 +149,9 @@ export function createContactDirectoryWindow(
           ? current.value
           : undefined,
       ...(policy ? { policy } : {}),
+      ...(options.localBudgetMs === undefined
+        ? {}
+        : { localBudgetMs: options.localBudgetMs }),
     };
   });
   /** Who the query reads for: nobody until the window is open and its text
@@ -201,6 +207,10 @@ export function createContactDirectoryWindow(
         () => {
           // Re-read locally as synchronization/context publication progresses.
           if (!enabled()) return;
+          // Rows the server listed because the cache was late keep their
+          // order until the input changes: the cache answering afterwards
+          // would rank them differently under the cursor.
+          if (untrack(data)?.localLate) return;
           const error = untrack(() => query.error);
           if (!error || error instanceof ContactDirectoryUnavailableError) {
             // A reply from before this write must not publish under the same

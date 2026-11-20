@@ -1,7 +1,7 @@
 import type { UserItem } from '@core/context/quickAccess';
 import type { QuickAccessListOptions } from '@core/context/quickAccess/types';
 import type { IUser } from '@core/user';
-import { createRoot, createSignal } from 'solid-js';
+import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { sortMobileMentions } from '../utils/mobileSort';
 import { useUsersMention } from './useUsersMention';
@@ -9,6 +9,8 @@ import { useUsersMention } from './useUsersMention';
 const mocks = vi.hoisted(() => ({
   users: (): UserItem[] => [],
   loading: (): boolean => false,
+  error: (): unknown => undefined,
+  retry: vi.fn<() => Promise<void>>(),
   loadMore: vi.fn<() => Promise<void>>(),
 }));
 vi.mock('@core/context/quickAccess', () => ({
@@ -18,7 +20,8 @@ vi.mock('@core/context/quickAccess', () => ({
       windowKey: () => 'window',
       hasMore: () => true,
       isLoading: () => mocks.loading(),
-      error: () => undefined,
+      error: () => mocks.error(),
+      retry: mocks.retry,
       isLoadingMore: () => false,
       loadMore: mocks.loadMore,
     }),
@@ -93,6 +96,9 @@ beforeEach(() => {
   mocks.loadMore.mockReset();
   mocks.loadMore.mockResolvedValue(undefined);
   mocks.loading = () => false;
+  mocks.error = () => undefined;
+  mocks.retry.mockReset();
+  mocks.retry.mockResolvedValue(undefined);
   mocks.users = () => [
     userItem(sean),
     userItem(alias),
@@ -255,6 +261,64 @@ it('lists only the rows that lead the people until the directory first answers',
   setLoading(false);
   expect(directory.waitingForPeople()).toBe(false);
   expect(ids()).toEqual([macroAgent.id, reviewCodex.id]);
+  dispose();
+});
+
+it('never drops People without a word while its read is pending or restarts', async () => {
+  const [people, setPeople] = createSignal<UserItem[]>([]);
+  const [loading, setLoading] = createSignal(true);
+  const [error, setError] = createSignal<unknown>();
+  mocks.users = people;
+  mocks.loading = loading;
+  mocks.error = error;
+  const { directory, dispose } = createRoot((dispose) => ({
+    directory: useUsersMention({ searchTerm: () => '' }),
+    dispose,
+  }));
+
+  // The held rows stay blank for as long as a healthy cache takes to answer.
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.showsLoading()).toBe(false);
+  vi.advanceTimersByTime(499);
+  expect(directory.showsLoading()).toBe(false);
+  vi.advanceTimersByTime(1);
+  expect(directory.showsLoading()).toBe(true);
+
+  // A read still pending when the wait ends is reported like a failed one.
+  expect(directory.peopleFailed()).toBe(false);
+  vi.advanceTimersByTime(11_500);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  // Retry waits for it again.
+  await directory.retryPeople();
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.peopleFailed()).toBe(false);
+
+  // A read that fails, and fails again when re-read, offers Retry.
+  setError(new Error('cache reads unavailable after owner handoff timeout'));
+  setLoading(false);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mocks.retry).toHaveBeenCalledTimes(2);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  // The cache changing owner restarts the read: the menu waits for it as it
+  // does on opening, and keeps saying so if that read outlasts the wait too.
+  batch(() => {
+    setError(undefined);
+    setLoading(true);
+  });
+  expect(directory.waitingForPeople()).toBe(true);
+  expect(directory.peopleFailed()).toBe(false);
+  vi.advanceTimersByTime(12_000);
+  expect(directory.waitingForPeople()).toBe(false);
+  expect(directory.peopleFailed()).toBe(true);
+
+  setPeople([{ ...userItem(sean), personOrder: 0 }]);
+  setLoading(false);
+  expect(directory.peopleFailed()).toBe(false);
+  expect(directory.users().map((item) => item.id)).toEqual([sean.id]);
   dispose();
 });
 
