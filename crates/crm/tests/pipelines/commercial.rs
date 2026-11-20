@@ -302,3 +302,162 @@ async fn board_moves_cannot_clear_system_fields_even_after_regrouping(pool: PgPo
         );
     }
 }
+
+async fn run_declined_migration(pool: &PgPool) {
+    sqlx::raw_sql(include_str!(
+        "../../../macro_db_client/migrations/20261120183025_crm_pipeline_outcome_declined.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+/// The labels of a pipeline's Outcome options in order, and its table version.
+async fn outcome_options(
+    s: &Service,
+    a: &Access,
+    p: &Pipeline,
+) -> (Vec<String>, databases::domain::models::TableVersion) {
+    let table = s
+        .table(access(a, p.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap();
+    let labels = table
+        .columns
+        .iter()
+        .find(|column| Some(column.column.id) == p.commercial_fields.outcome)
+        .unwrap()
+        .definition
+        .property_options
+        .iter()
+        .map(|option| option.value.as_string().unwrap().to_owned())
+        .collect();
+    (labels, table.table.version)
+}
+
+/// Returns a pipeline's Outcome to the options it had before Declined.
+async fn forget_declined(pool: &PgPool, p: &Pipeline) {
+    sqlx::query!(
+        "DELETE FROM property_options o USING database_columns c
+         WHERE c.id = $1 AND o.property_definition_id = c.property_definition_id
+           AND o.string_value = 'Declined'",
+        p.commercial_fields.outcome.unwrap().into_uuid(),
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn declined_migration_adds_the_option_once_and_skips_pipelines_in_use(pool: PgPool) {
+    let (s, _, a, team, company) = fixture(&pool).await;
+    let idle = create(&s, team, PipelineRecordType::Company).await;
+    let busy = create(&s, team, PipelineRecordType::Company).await;
+    let generic = s
+        .create(
+            team_receipt(team, OWNER),
+            CreatePipeline {
+                name: "Launch".into(),
+                record_type: None,
+                sharing: PipelineSharing::Private,
+            },
+        )
+        .await
+        .unwrap()
+        .pipeline;
+    let outcome = idle.commercial_fields.outcome.unwrap();
+    let won_entry: DatabaseOp = serde_json::from_value(json!({"kind":"rows", "table":idle.table_id,
+        "change":{"kind":"insert", "rows":[[
+            {"column":idle.primary_column_id,"value":{"type":"entities","value":[{"entityType":"COMPANY","entityId":company.to_string()}]}},
+            {"column":outcome,"value":{"type":"options","value":[{"label":"Won"}]}}
+        ]]}})).unwrap();
+    let row = inserted(&write(&s, &a, &idle, vec![won_entry]).await.unwrap());
+    let won = s
+        .read_rows(
+            access(&a, idle.id, EntityType::CrmPipeline, OWNER).await,
+            &[row],
+        )
+        .await
+        .unwrap()[0]
+        .cells
+        .get(&outcome)
+        .cloned();
+    forget_declined(&pool, &idle).await;
+    forget_declined(&pool, &busy).await;
+    let (labels, stale) = outcome_options(&s, &a, &idle).await;
+    assert_eq!(labels, ["Open", "Won", "Lost"]);
+    let generic_version = s
+        .table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
+        .await
+        .unwrap()
+        .table
+        .version;
+
+    // A pipeline read holds its row, so the migration passes it by.
+    let mut reader = pool.begin().await.unwrap();
+    sqlx::query!(
+        "SELECT id FROM crm_pipeline_entities WHERE id = $1 FOR SHARE",
+        busy.id
+    )
+    .fetch_one(&mut *reader)
+    .await
+    .unwrap();
+    run_declined_migration(&pool).await;
+    reader.rollback().await.unwrap();
+
+    let (labels, version) = outcome_options(&s, &a, &idle).await;
+    assert_eq!(labels, ["Open", "Won", "Lost", "Declined"]);
+    assert_eq!(version.0, stale.0 + 1);
+    let journaled = sqlx::query!(
+        r#"SELECT cc.column_id, cc.kind FROM database_changes c
+           JOIN database_change_columns cc ON cc.change_id = c.id
+           WHERE c.table_id = $1 AND c.version > $2"#,
+        idle.table_id.into_uuid(),
+        stale.0,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap();
+    assert_eq!(journaled.len(), 1);
+    assert_eq!(journaled[0].column_id, outcome.into_uuid());
+    assert_eq!(journaled[0].kind, "add_options");
+    let entry = s
+        .read_rows(
+            access(&a, idle.id, EntityType::CrmPipeline, OWNER).await,
+            &[row],
+        )
+        .await
+        .unwrap();
+    assert_eq!(entry[0].cells.get(&outcome).cloned(), won);
+    assert_eq!(
+        outcome_options(&s, &a, &busy).await.0,
+        ["Open", "Won", "Lost"]
+    );
+    assert_eq!(
+        s.table(access(&a, generic.id, EntityType::CrmPipeline, OWNER).await)
+            .await
+            .unwrap()
+            .table
+            .version,
+        generic_version
+    );
+
+    // A rerun reaches the pipeline it passed by and leaves the others alone.
+    run_declined_migration(&pool).await;
+    assert_eq!(
+        outcome_options(&s, &a, &busy).await.0,
+        ["Open", "Won", "Lost", "Declined"]
+    );
+    assert_eq!(
+        outcome_options(&s, &a, &idle).await,
+        (
+            vec![
+                "Open".to_owned(),
+                "Won".to_owned(),
+                "Lost".to_owned(),
+                "Declined".to_owned()
+            ],
+            version
+        )
+    );
+}
