@@ -4,7 +4,7 @@ import type {
   RecordedToolCall,
 } from '@service-agent-harness/generated/schemas';
 import { For, Show } from 'solid-js';
-import { programEnded } from '../../state/code-execution';
+import { activityRuns, programEnded } from '../../state/code-execution';
 import { isToolActive, ToolCard, type ToolStatus } from '../../ui';
 import { MacroToolCall } from './MacroToolCall';
 import type { ToolCallCommon, ToolCallContext } from './shared';
@@ -25,6 +25,7 @@ export function CodeExecutionToolCall(props: {
 }) {
   const calls = () => props.record?.calls ?? [];
   const activity = () => props.record?.activity ?? [];
+  const runs = () => activityRuns(activity());
   const ended = () =>
     programEnded({
       error: props.error,
@@ -45,11 +46,12 @@ export function CodeExecutionToolCall(props: {
           trailing={props.common.trailing}
         />
       </Show>
-      <For each={activity()}>
-        {(item) => (
+      <For each={runs()}>
+        {(run) => (
           <div class="min-h-8 shrink-0">
             <ActivityRow
-              item={item}
+              item={run.item}
+              count={run.count}
               turnActive={isToolActive(props.common.status)}
             />
           </div>
@@ -89,7 +91,11 @@ export function CodeExecutionToolCall(props: {
   );
 }
 
-function ActivityRow(props: { item: ExecutionActivity; turnActive: boolean }) {
+function ActivityRow(props: {
+  item: ExecutionActivity;
+  count: number;
+  turnActive: boolean;
+}) {
   const status = (): ToolStatus => {
     if (props.item.status === 'failed') return 'failed';
     if (props.item.status === 'running' && props.turnActive) return 'running';
@@ -100,12 +106,17 @@ function ActivityRow(props: { item: ExecutionActivity; turnActive: boolean }) {
   const uncertain = () =>
     props.item.status === 'unknown' ||
     (props.item.status === 'running' && !props.turnActive);
+  const trailing = () => {
+    const times = props.count > 1 ? `×${props.count}` : undefined;
+    if (!uncertain()) return times;
+    return times ? `${times} · Outcome unknown` : 'Outcome unknown';
+  };
   return (
     <ToolCard
       title={props.item.label}
       status={status()}
       muted={uncertain()}
-      trailing={uncertain() ? 'Outcome unknown' : undefined}
+      trailing={trailing()}
     />
   );
 }
