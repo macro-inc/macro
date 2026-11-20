@@ -42,6 +42,13 @@ const RAIL_METRICS = {
   },
 } as const satisfies Record<RailSize, Record<string, string>>;
 
+/** Line and page wheels report in those units rather than pixels. */
+function wheelUnitPixels(event: WheelEvent, row: HTMLElement): number {
+  if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) return 16;
+  if (event.deltaMode === WheelEvent.DOM_DELTA_PAGE) return row.clientWidth;
+  return 1;
+}
+
 /**
  * A row of apps along the top or bottom edge scrolls sideways, which a plain
  * mouse wheel can't do (and the app hides scrollbars): turn vertical wheel
@@ -54,7 +61,7 @@ function scrollRowWithWheel(event: WheelEvent) {
   if (row.scrollWidth <= row.clientWidth) return;
 
   event.preventDefault();
-  row.scrollLeft += event.deltaY;
+  row.scrollLeft += event.deltaY * wheelUnitPixels(event, row);
 }
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {

@@ -58,7 +58,10 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
     >
       <Popover.Trigger
         aria-label={t('nav.updateAvailable')}
-        tooltip={t('nav.updateAvailable')}
+        tooltip={{
+          content: t('nav.updateAvailable'),
+          placement: placement.facing(),
+        }}
         as={Button}
         variant="ghost"
         size="icon-md"
