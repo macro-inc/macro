@@ -239,4 +239,5 @@ it('never restores a snapshot another window wrote after the denial was recorded
   expect(profile.disk.has(hashOf(CHANNELS))).toBe(false);
   await later.queryPersistence.restoreQuery(IDENTITY);
   expect(later.queryClient.getQueryData(IDENTITY)).toEqual({ id: 'viewer' });
-});
+  // Three page loads each import the whole query client again.
+}, 30_000);
