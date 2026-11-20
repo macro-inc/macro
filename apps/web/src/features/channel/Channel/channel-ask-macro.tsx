@@ -42,7 +42,7 @@ export function ChannelAskMacroButton(props: {
   return (
     <Show when={entity()}>
       {(seed) => (
-        <HeaderActionGroup label="Agent actions">
+        <HeaderActionGroup label={t('entityActions.agentActions')}>
           <ChatWithAgentButton
             grouped
             entity={seed()}
