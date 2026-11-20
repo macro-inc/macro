@@ -38,8 +38,16 @@ test('keeps the mobile editor focused as forms appear above it and Enter adds a 
   await description.fill(
     'Check notification routing on every device.\n'.repeat(40)
   );
+  // A keyboard leaves 500px above it.
   await page.evaluate(() =>
-    document.documentElement.style.setProperty('--dvh', '5px')
+    (
+      window as unknown as {
+        publishKeyboardViewport: (viewport: {
+          dvh: string;
+          keyboardHeight: number;
+        }) => void;
+      }
+    ).publishKeyboardViewport({ dvh: '5px', keyboardHeight: 0 })
   );
   await page.evaluate(() => new Promise(requestAnimationFrame));
   const fields = page.locator('[data-float-region="accessory"]');

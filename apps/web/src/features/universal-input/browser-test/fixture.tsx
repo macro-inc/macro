@@ -10,6 +10,10 @@ import type {
   QuickAccessListOptions,
 } from '@core/context/quickAccess/types';
 import { attachGlobalDOMScope, useHotKeyRoot } from '@core/hotkey/hotkeys';
+import {
+  followViewportHeight,
+  publishKeyboardViewport,
+} from '@core/mobile/viewport-insets';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { $createUserMentionNode } from '@macro-inc/lexical-core';
 import { useContactRecipientSource } from '@queries/contacts/recipient-source';
@@ -431,6 +435,9 @@ export function UniversalInputFixture(
   const params = new URLSearchParams(window.location.search);
   if (params.has('task-references')) seedTaskReferences(queryClient);
   if (params.has('person-references')) seedInputReferences(queryClient);
+  // Tests squish the phone layout as the keyboard handlers would.
+  if (params.has('mobile-search'))
+    Object.assign(window, { publishKeyboardViewport });
   const [inputPeople, setInputPeople] = createSignal<InputPeople>();
   const [taskValues, setTaskValues] = createSignal<TaskValues>();
   if (!props.embedded) {
@@ -706,13 +713,17 @@ export function UniversalInputFixture(
           <EmailLinksContextProvider>
             <ChannelsContextProvider>
               <main
+                ref={(element) => {
+                  if (params.has('mobile-search'))
+                    followViewportHeight(element);
+                }}
                 class={
                   props.command
                     ? 'contents'
                     : props.embedded
                       ? 'min-w-0'
                       : params.has('mobile-search')
-                        ? 'relative h-[calc(var(--dvh,1dvh)*100)] overflow-hidden bg-page text-ink'
+                        ? 'relative h-dvh overflow-hidden bg-page text-ink'
                         : 'min-h-screen bg-page p-12 text-ink'
                 }
               >
