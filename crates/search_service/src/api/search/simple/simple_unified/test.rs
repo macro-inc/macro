@@ -1099,11 +1099,12 @@ async fn a_unified_search_waits_for_its_callers_turn_before_reading_anything() {
     let refused = perform_unified_search(
         &ctx,
         &agent_of_caller(),
-        None,
+        true,
         no_paging(),
         search_request("quarterly plan"),
     )
-    .await;
+    .await
+    .map(|_| ());
 
     assert!(matches!(refused, Err(SearchError::Busy)), "{refused:?}");
     assert_eq!(started.elapsed(), std::time::Duration::from_secs(20));
@@ -1120,7 +1121,7 @@ async fn a_search_holds_its_callers_turn_while_it_reads() {
             perform_unified_search(
                 &ctx,
                 &agent_of_caller(),
-                None,
+                false,
                 no_paging(),
                 search_request("quarterly plan"),
             )
@@ -1137,11 +1138,12 @@ async fn a_search_holds_its_callers_turn_while_it_reads() {
     let next = perform_unified_search(
         &ctx,
         &agent_of_caller(),
-        None,
+        false,
         no_paging(),
         search_request("quarterly plan"),
     )
-    .await;
+    .await
+    .map(|_| ());
 
     assert!(matches!(next, Err(SearchError::Busy)), "{next:?}");
     assert!(!matches!(reading.await.unwrap(), Err(SearchError::Busy)));
@@ -1162,11 +1164,12 @@ async fn a_malformed_search_fails_at_once_while_its_callers_lane_is_full() {
     let refused = perform_unified_search(
         &ctx,
         &agent_of_caller(),
-        None,
+        false,
         no_paging(),
         search_request("  "),
     )
-    .await;
+    .await
+    .map(|_| ());
 
     assert!(
         matches!(refused, Err(SearchError::EmptyQuery)),
@@ -1177,7 +1180,9 @@ async fn a_malformed_search_fails_at_once_while_its_callers_lane_is_full() {
     let mut crm_filtered = search_request("quarterly plan");
     crm_filtered.filters.email_filters.crm_domains = vec!["example.com".to_string()];
     let refused =
-        perform_unified_search(&ctx, &agent_of_caller(), None, no_paging(), crm_filtered).await;
+        perform_unified_search(&ctx, &agent_of_caller(), false, no_paging(), crm_filtered)
+            .await
+            .map(|_| ());
     assert!(
         matches!(
             refused,

@@ -72,6 +72,7 @@ per-entity-type search plus a unified search across them — mounted into
   service searching for them (`Internal`: the AI tools, an agent's native
   search tools, routine drafting), or an API credential. So a person's app
   searches never wait behind a program's or a service's. The turn covers the
+  CRM membership read (so a receipt is never older than its search) and the
   Postgres and OpenSearch search, not enrichment; the span records
   `search.lane`, `search.lane_wait_ms` and `search.lane_outcome`
   (`immediate`, `queued`, `refused`). Lanes are per process, so a caller's
