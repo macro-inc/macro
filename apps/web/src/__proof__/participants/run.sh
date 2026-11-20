@@ -31,8 +31,8 @@ echo "head $(git rev-parse HEAD) -> $root"
 "$here/check-copies.sh"
 
 differential() {
-  for seed in 1 2; do
-    for load in 0 1; do
+  for seed in ${PX_SEEDS:-1 2}; do
+    for load in ${PX_LOADS:-0 1}; do
       PX_SEED=$seed PX_LOAD=$load PX_SEQS=${PX_SEQS:-50} PX_STEPS=${PX_STEPS:-24} PX_BATCH=${PX_BATCH:-50} \
         PX_RUN=s${seed}$([[ $load == 1 ]] && echo l || echo q)$(date +%s | tail -c 5) \
         PX_OUT="$root/seed$seed-$([[ $load == 1 ]] && echo load || echo quiet)" \
