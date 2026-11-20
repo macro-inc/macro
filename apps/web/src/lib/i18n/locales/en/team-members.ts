@@ -1,0 +1,15 @@
+export default {
+  owner: 'Owner',
+  admin: 'Admin',
+  member: 'Member',
+  proAtRenewal: 'Pro at renewal',
+  settingsFor: 'Settings for {{name}}',
+  plan: 'Plan',
+  keepMax: 'Keep Max',
+  role: 'Role',
+  roleLockedOwner: "The team owner's role can't be changed",
+  roleLockedNotOwner: 'Only the team owner can change roles',
+  remove: 'Remove from team',
+  removeLockedOwner: "The team owner can't be removed",
+  removeLockedSelf: "You can't remove yourself",
+};
