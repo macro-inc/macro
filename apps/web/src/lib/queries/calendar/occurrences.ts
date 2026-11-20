@@ -8,14 +8,15 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import type { CalendarOccurrenceResponse } from '@service-storage/generated/schemas/calendarOccurrenceResponse';
 import { CalendarSyncStatus } from '@service-storage/generated/schemas/calendarSyncStatus';
 import { queryOptions, useQuery, useQueryClient } from '@tanstack/solid-query';
+import { ResultAsync } from 'neverthrow';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
 import {
   markCalendarCacheUnsupported,
   useGraphqlCalendarHost,
 } from './graphql/flag';
-import { readCalendarRange } from './graphql/range';
 import { calendarCacheAnswered } from './graphql/readiness';
 import { activeCalendarSyncController } from './graphql/sync-controller';
+import { readCalendarViewport } from './graphql/viewport';
 import { type CalendarOccurrenceQueryRange, calendarKeys } from './keys';
 
 export type { CalendarOccurrenceQueryRange } from './keys';
@@ -111,6 +112,38 @@ export async function fetchCalendarOccurrences(
   };
 }
 
+/**
+ * Reads a viewport through the cache, from REST whenever the cache cannot
+ * answer, and records which path answered on the calendar load's trace.
+ */
+async function readCachedCalendarOccurrences(
+  host: CacheHost,
+  range: CalendarOccurrenceQueryRange,
+  signal: AbortSignal
+): Promise<CalendarOccurrencesData> {
+  return Telemetry.span(
+    'calendar.occurrences.read',
+    { sampling: 'perf' },
+    async (span) => {
+      const read = await ResultAsync.fromPromise(
+        readCalendarViewport(host, range, {
+          fetchRest: fetchCalendarOccurrences,
+          span,
+          signal,
+        }),
+        (error) => error
+      );
+      if (read.isErr()) {
+        if (!signal.aborted) span.error(read.error);
+        throw read.error;
+      }
+      if (read.value.source === 'rest' && read.value.fallback === 'unsupported')
+        markCalendarCacheUnsupported(host);
+      return read.value.data;
+    }
+  );
+}
+
 // Cached callbacks close over the resolved host, range and flags only.
 function calendarOccurrencesQueryOptions(
   host: CacheHost | undefined,
@@ -134,14 +167,11 @@ function calendarOccurrencesQueryOptions(
       CalendarOccurrencesQueryKey
     >({
       queryKey: keys._ctx.graphql.queryKey,
-      queryFn: async ({ signal }: { signal: AbortSignal }) => {
+      queryFn: ({ signal }: { signal: AbortSignal }) => {
         if (!range) {
           throw new Error('Calendar occurrence range is unavailable');
         }
-        const read = await readCalendarRange(host, range, { signal });
-        if (read.kind === 'range') return read.data;
-        if (read.kind === 'unsupported') markCalendarCacheUnsupported(host);
-        return fetchCalendarOccurrences(range, signal);
+        return readCachedCalendarOccurrences(host, range, signal);
       },
       enabled,
       staleTime,

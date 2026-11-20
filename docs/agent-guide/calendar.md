@@ -141,7 +141,20 @@ cache answers its first calendar read, viewports wait at most a second and then
 read from REST, and writes use REST, so a cache that is slow to start or fails
 ("Local cache unavailable") never leaves the calendar on skeletons. Writes in
 that window behave as on the REST path: offline, they roll back with an error
-instead of replaying.
+instead of replaying. After the cache has answered, a viewport still reads from
+REST whenever the cache cannot answer it: a refused or timed-out cache request
+(another tab handing over the database) reads REST at once, and a cache path
+still running after three seconds (a read, coverage commit or write
+acknowledgement waiting on an owner change) races a REST read that keeps
+whichever answers first. The cache path keeps running, so the week is cached
+once it finishes; while it is overdue, other viewports give the cache only the
+one-second head start before racing REST. If REST fails, the cache gets one
+more deadline to answer before the viewport errors. Retry takes the same path.
+Span `calendar.occurrences.read` records which path answered
+(`calendar.read.source`) and why it fell back (`calendar.read.fallback_reason`,
+`calendar.read.cache_error`); deadline and cache-error fallbacks also log
+`calendar.occurrences.cache_fallback`. A failed GraphQL fetch of an uncovered
+week also reads REST, as `fetch-error`, without that log.
 
 A single period arrow retains its slide. Rapid arrow clicks and period hotkeys
 accumulate against the requested date and interrupt unfinished slides, without

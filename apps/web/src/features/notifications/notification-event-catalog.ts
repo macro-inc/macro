@@ -35,6 +35,9 @@ export type NotificationEventGroup = {
   events: readonly NotificationEventDefinition[];
 };
 
+/** Agent pings: notifications written with `macro.notifications.send`. */
+export const AGENT_PINGS_EVENT_TYPE = 'ping';
+
 export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
   {
     id: 'sharing',
@@ -226,6 +229,11 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
           'When a computer you bought is ready, or could not be set up',
         macroComputers: true,
       },
+      {
+        type: AGENT_PINGS_EVENT_TYPE,
+        label: 'Agent pings',
+        description: 'When an agent or a script pings you',
+      },
     ],
   },
   {
@@ -260,6 +268,22 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
     ],
   },
 ];
+
+/**
+ * The events of `group` a person can set. Agent pings are left out while
+ * `enable-agent-notifications` is off for them, and Macro computer events
+ * while `enable-macro-computers` is.
+ */
+export function listedNotificationEvents(
+  group: NotificationEventGroup,
+  options: { agentNotifications: boolean; macroComputers: boolean }
+): readonly NotificationEventDefinition[] {
+  return group.events.filter(
+    (event) =>
+      (options.agentNotifications || event.type !== AGENT_PINGS_EVENT_TYPE) &&
+      (options.macroComputers || !event.macroComputers)
+  );
+}
 
 export const BLOCKABLE_NOTIFICATION_EVENT_TYPES: readonly string[] =
   NOTIFICATION_EVENT_GROUPS.flatMap((group) =>

@@ -57,6 +57,7 @@ export function CalendarReplacementFixture() {
       <Button onClick={replace}>Replace event…</Button>
       <EventReplacementDialog
         controller={controller}
+        timeFormat="12-hour"
         onOpenUrl={() => {}}
         onDone={() => controller.close()}
       />

@@ -114,7 +114,10 @@ threads, pins, recents, notifications, folders, activity.
   caller's unified searches queue in one lane (`search_service`'s
   `domain::search_lanes`) whichever mount they reach.
   `ApiContext::api_key_search_buckets` is the Redis token bucket behind the
-  API-key search allowance, shared by every process.
+  API-key search allowance, shared by every process. It holds one lazy
+  `ConnectionManager` built at startup, so a burst of draws shares one
+  connection; it connects on the first draw and adds no startup dependency of
+  its own (startup still awaits Redis for `RedisLogStreamConsumer::connect`).
 - The REST `/items` routes and `/search` hide Macro's own sign-in emails from a program (`hide_sign_in_emails_from_programs` in `src/api.rs`), so a code-mode run cannot read a sign-in code from workspace previews or search hits. GraphQL (`/items/soup/graphql` and its websocket) refuses programs outright: a query picks its own fields, so no rewrite can find the email. Nothing program-side calls it.
 - Inject the shared PostHog client into CRM's thread-exclusion gate; missing or
   failed `enable-crm-thread-exclusions` evaluation must refuse API writes.

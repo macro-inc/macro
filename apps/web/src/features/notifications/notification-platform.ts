@@ -8,6 +8,7 @@ import {
   getNotificationAction,
   getNotificationContent,
   getNotificationTargetName,
+  pingedBy,
   shouldShowNotificationTarget,
 } from './notification-metadata';
 import { openNotification } from './notification-navigation';
@@ -73,6 +74,9 @@ async function resolveActorName(
   if (meta.tag === 'agent_sign_in_expiry') {
     return meta.content.computerName;
   }
+  if (meta.tag === 'ping' && meta.content.agent) {
+    return meta.content.agent.name;
+  }
   if ('senderDisplayName' in meta.content && meta.content.senderDisplayName) {
     return meta.content.senderDisplayName;
   }
@@ -124,6 +128,30 @@ export async function toPlatformNotificationData(
     resolveSenderAvatarUrl(notification, resolveUserAvatar),
   ]);
   const actor = actorName ?? USER_NAME_FALLBACK;
+  const sender = actorName
+    ? {
+        id: notification.sender_id ?? actorName,
+        name: actorName,
+        avatarUrl,
+      }
+    : undefined;
+
+  // A ping reads like its push: who pinged and what about, then their words.
+  if (metadata.tag === 'ping') {
+    const about = metadata.content.entityName ?? undefined;
+    const deed = pingedBy(actorName);
+    return {
+      title: about ? `${deed} — ${about}` : deed,
+      options: {
+        body: markdownToPlainText(metadata.content.body),
+        icon,
+      },
+      // macOS titles an alert with its sender and puts the conversation
+      // beneath, so the sender says what they did.
+      sender: sender && { ...sender, name: deed },
+      conversation: { id: notification.entity_id, name: about },
+    };
+  }
 
   // An unresolved target is left out of the title, not shown as a placeholder.
   const targetName =
@@ -144,13 +172,7 @@ export async function toPlatformNotificationData(
       body: content ? markdownToPlainText(content) : action,
       icon,
     },
-    sender: actorName
-      ? {
-          id: notification.sender_id ?? actorName,
-          name: actorName,
-          avatarUrl,
-        }
-      : undefined,
+    sender,
     conversation: {
       id: notification.entity_id,
       name: showTarget ? targetName : undefined,

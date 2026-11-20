@@ -178,6 +178,11 @@ export type { RadioGroupProps, RadioGroupSize } from './components/RadioGroup';
 export { RadioGroup } from './components/RadioGroup';
 export { Scroll } from './components/Scroll';
 export type {
+  SecretInputAutocomplete,
+  SecretInputProps,
+} from './components/SecretInput';
+export { SECRET_MASK, SecretInput } from './components/SecretInput';
+export type {
   SelectContentProps,
   SelectIconProps,
   SelectItemIndicatorProps,

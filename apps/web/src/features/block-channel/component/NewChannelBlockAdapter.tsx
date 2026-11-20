@@ -35,6 +35,10 @@ import {
   useChannelTab,
 } from '@channel/Channel/ChannelTabContext';
 import { ChannelTopBarLiveIndicators } from '@channel/Channel/ChannelTopBarLiveIndicators';
+import {
+  ChannelAskMacroButton,
+  useChannelAskMacroEntity,
+} from '@channel/Channel/channel-ask-macro';
 import { CHANNEL_TAB_ICONS } from '@channel/Channel/channel-tab-icons';
 import {
   type ChannelTabId,
@@ -186,18 +190,7 @@ function NewTop(props: { channelId: string }) {
     },
   });
 
-  // Seed for "Ask Macro": a new chat with this channel @mentioned, so the
-  // user does not have to create an agent and mention the channel by hand.
-  const askMacroEntity = () => {
-    const type = channelType();
-    if (!type) return undefined;
-    return {
-      type: 'channel' as const,
-      id: props.channelId,
-      name: channelName() ?? 'New Channel',
-      channelType: type,
-    };
-  };
+  const askMacroEntity = useChannelAskMacroEntity(() => props.channelId);
 
   // The drawer owns the icon column, just as desktop tabs own their icon slot.
   const mobileViews = () => ({
@@ -295,6 +288,13 @@ function NewTop(props: { channelId: string }) {
       <AgentDmRuntimeStatus botId={channel()?.agent_dm?.bot_id} />
       <Show when={!isActivePhoneCall()}>
         <SplitHeaderRight>
+          {/* Desktop only: phones keep Ask Macro in the title drawer. Shares
+              Invite's contribution so it always lands before Invite. */}
+          <Show when={!isMobile() && askMacroEntity()}>
+            <HeaderIsland class="px-1">
+              <ChannelAskMacroButton channelId={props.channelId} />
+            </HeaderIsland>
+          </Show>
           {/* Only header islands receive taps on touch screens. */}
           <HeaderIsland class="px-1">
             <ChannelInviteButton

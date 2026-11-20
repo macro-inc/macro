@@ -182,7 +182,9 @@ text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion; on a complete typed address,
 Enter or Tab adds that address unless an arrow key picked another row. Type,
 paste, or Tab straight after picking one and check that both recipients stay
-and the input is empty.
+and the input is empty. With no highlighted row and no complete address (text
+that matches no one, or results still loading), Tab moves on and clears the
+text, as a click elsewhere does.
 
 Outlook connections support personal Outlook.com and individual Microsoft 365
 inboxes. Choose the inbox explicitly when testing mixed-provider accounts. The
@@ -970,9 +972,14 @@ In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
 thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
-field, so typing goes there instead of to app shortcuts. `bunx playwright test
+field, so typing goes there instead of to app shortcuts. Tab runs To, Cc and
+Bcc when shown, Subject (new emails only), then the body, and Shift+Tab goes
+back; the new email's Cc and Bcc buttons are left out of it. In the body,
+Shift+Tab outdents while there is something to outdent and otherwise leaves.
+`bunx playwright test
 --config src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts and both buttons in all four composers.
+`apps/web`) checks both shortcuts and both buttons in all four composers, and
+the Tab order (`tab-order.app.e2e.ts`).
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
