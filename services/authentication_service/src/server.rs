@@ -620,8 +620,7 @@ async fn run_server() -> anyhow::Result<()> {
             feature_flags
                 .clone()
                 .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-                .unwrap_or_default()
-                .with_allowlist(config.computer_rollout_allowlist()?),
+                .unwrap_or_default(),
         ),
     );
     let gtm_invite_service = Arc::new(gtm_invite_service);
@@ -726,8 +725,7 @@ async fn run_server() -> anyhow::Result<()> {
     let computer_rollout = feature_flags
         .clone()
         .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
-        .unwrap_or_default()
-        .with_allowlist(config.computer_rollout_allowlist()?);
+        .unwrap_or_default();
     let computer_prices = config.computer_prices()?;
     let computer_repo =
         hosted_runtimes::outbound::pg::PgComputerRepo::new(db.clone(), computer_policy);

@@ -387,9 +387,7 @@ access. Lifecycle, runtime provider connections, billing, and memory stay owner-
 Computer fleets require `COMPUTERS_CONTROL_PLANE_ID` whenever `COMPUTERS_FLEET`
 is `firecracker` or `docker`. Omit the selector and fleet settings when no fleet is attached;
 `disabled`, blank and unknown selections are invalid. PostHog
-`enable-macro-computers` remains the only product rollout gate; dev may add
-`COMPUTERS_ROLLOUT_ALLOWLIST` (Macro user ids admitted without it; refused in
-production).
+`enable-macro-computers` is the only product rollout gate.
 Read the stable identity from Doppler in deployed environments; local stacks
 explicitly set `local-<instance>`. Distinct control planes sharing a host
 must use distinct identities; replicas of one control plane share an identity.

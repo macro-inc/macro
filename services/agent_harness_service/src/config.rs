@@ -164,9 +164,6 @@ pub struct Config {
     pub environment: Environment,
     /// Optional physical fleet selection; absence attaches no computer fleet.
     pub computers_fleet: Option<ComputerFleetKind>,
-    /// Dev only: comma-separated Macro user ids that get computers without the
-    /// PostHog flag. Refused in production.
-    pub computers_rollout_allowlist: Option<String>,
     /// Days a Macro computer whose billing ended keeps its disk before it is
     /// destroyed; the timers the fleet operator fires use it. The same value
     /// authentication_service reads.
@@ -507,17 +504,6 @@ impl Config {
             ));
         }
         Ok(())
-    }
-
-    /// The computers rollout allowlist; refused in production.
-    pub fn computer_rollout_allowlist(
-        &self,
-    ) -> macro_config::MacroConfigResult<hosted_runtimes::domain::rollout::RolloutAllowlist> {
-        hosted_runtimes::outbound::rollout_allowlist::configured(
-            self.computers_rollout_allowlist.as_deref(),
-            self.environment,
-        )
-        .map_err(|error| macro_config::MacroConfigError::Deserialize(error.to_string()))
     }
 
     /// Macro computers' retention and past-due grace.

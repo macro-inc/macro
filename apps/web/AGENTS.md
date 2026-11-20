@@ -987,8 +987,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   described by what each does in Macro; preserve `agent-connections` and `team-connections` as aliases for existing links.
 - Keep Macro computers (`features/settings/computers`) team-only. Gate purchase
   and Claude account surfaces with `useMacroComputersRollout`
-  (`@queries/computers/computers`: the backend's `enable-macro-computers` plus
-  dev allowlist answer, never a client PostHog read); keep existing lists in Runtimes and Billing and
+  (`@queries/computers/computers`: the backend's `enable-macro-computers`
+  answer, never a client PostHog read); keep existing lists in Runtimes and Billing and
   management actions available with rollout off. `useTeamComputers` loads by
   team membership and exposes `canPurchase` separately. Members read; admins
   buy and manage. Show the exact price before buying, send one `purchaseKey`

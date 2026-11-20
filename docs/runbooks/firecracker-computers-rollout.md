@@ -24,7 +24,7 @@ Related: [host agent](../architecture/firecracker-computers.md),
 
 | Flag | Gates | State during rollout |
 | --- | --- | --- |
-| `enable-macro-computers` (PostHog, evaluated by the backend for both the web and purchases) | Settings → Computers, Buy, the computers list and its notifications | Off for everyone except the team testing a host; computers stay behind it until launch. Dev only: `COMPUTERS_ROLLOUT_ALLOWLIST` (auth + harness Doppler dev) admits listed users without it; production refuses it at startup |
+| `enable-macro-computers` (PostHog, evaluated by the backend for both the web and purchases) | Settings → Computers, Buy, the computers list and its notifications | Off for everyone except the users testing a host (PostHog user targeting); computers stay behind it until launch |
 
 There is no backend flag. The fleet is Firecracker whenever a host row exists.
 A host takes purchases only while its row's `admitting` is true, so a new host

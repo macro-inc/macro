@@ -209,9 +209,8 @@ type ComputersRollout = { enabled: boolean; loading: boolean };
 
 /**
  * Whether the computer UI is on for the current user. The backend answers
- * with the same check purchases and offers make (`enable-macro-computers`,
- * plus the dev-only allowlist), so the web never shows computers the backend
- * would refuse. Any failure reads as off.
+ * with the same check purchases and offers make (`enable-macro-computers`),
+ * so the web never shows computers the backend would refuse. Any failure reads as off.
  */
 export function useMacroComputersRollout(): () => ComputersRollout {
   const query = useQuery(() => computerRolloutQueryOptions());
