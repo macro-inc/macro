@@ -195,6 +195,53 @@ pub trait SubjectActivityPresence {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
+/// Whether a person has been using Macro themselves: the check a per-user
+/// background job asks before it spends work on someone who is away.
+///
+/// A person is active in a window when either holds:
+/// - **Seen**: a signed-in Macro client of theirs (web, desktop or mobile)
+///   was open. The connection gateway records it ([`SeenLog`]) when the
+///   client connects and every hour it stays connected, so a seen time is
+///   at most an hour old while Macro is open.
+/// - **Acted**: they changed something themselves: an activity whose actor
+///   is them and that no code-mode invocation made. Views and appearance
+///   changes ([`NON_TOUCH_ACTION_TAGS`]) do not count.
+///
+/// Work done for them does not count: an agent or bot acting for them (its
+/// own actor), a code-mode run under their identity (a correlated activity),
+/// and mail that arrives or syncs (never an activity).
+///
+/// One gap: an activity does not say a routine made it, so a routine step
+/// that runs as its owner, with no agent, counts as the owner acting.
+///
+/// [`NON_TOUCH_ACTION_TAGS`]: super::models::NON_TOUCH_ACTION_TAGS
+pub trait UserActivity {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether `user` was active at or after `since`.
+    fn is_active(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        since: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+}
+
+/// Records that people had a signed-in Macro client open, which
+/// [`UserActivity`] counts as seen.
+pub trait SeenLog {
+    /// The adapter's error type.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Records `users` as seen at `at`. A later time already recorded for a
+    /// user is kept, and an id with no Macro user is passed over.
+    fn record_seen(
+        &self,
+        users: &[MacroUserIdStr<'static>],
+        at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
 /// Reads activities. Rows come back newest-first (`occurred_at DESC, id
 /// DESC` — the stored keyset order), decoded forward-tolerantly: rows whose
 /// action this reader doesn't know surface as

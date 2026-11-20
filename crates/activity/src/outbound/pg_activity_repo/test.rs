@@ -9,6 +9,7 @@ use crate::domain::ports::EntityActivityReads;
 
 mod teammate_feed;
 mod transaction;
+mod user_activity;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sdk_verb_survives_activity_storage_and_read(pool: PgPool) {

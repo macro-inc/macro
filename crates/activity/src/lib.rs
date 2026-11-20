@@ -40,7 +40,8 @@ pub use domain::overview::{
 };
 pub use domain::ports::{ActivityAudienceExpander, ActivityRealtimePublisher};
 pub use domain::ports::{
-    ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap, SubjectActivityPresence,
+    ActivityFeedPage, ActivityRange, ActivityReads, EntityActivityMap, SeenLog,
+    SubjectActivityPresence, UserActivity,
 };
 #[cfg(feature = "realtime")]
 pub use domain::realtime::{
