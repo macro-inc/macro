@@ -328,3 +328,55 @@ async fn a_sender_block_gives_up_behind_a_population(pool: Pool<Postgres>) -> an
     assert_eq!(filters().await?, 1);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../../fixtures", scripts("email_draft"))
+)]
+async fn a_draft_save_recomputes_its_thread_after_another_write_to_it(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    outlook(&pool).await?;
+    // A first save settles the thread, so the next save's recompute reaches
+    // the thread row only in the statement that writes its aggregate.
+    let draft = prepared();
+    EmailPgRepo::new(pool.clone())
+        .insert_message(&draft.message, &draft.contacts, link(), None, true)
+        .await?;
+    // Another write in the thread marks its received message unread and
+    // holds the thread while the draft save runs beside it.
+    let mut other = pool.begin().await?;
+    sqlx::query!(
+        "UPDATE email_messages SET is_read = false WHERE id = 'ee000001-0000-0000-0000-000000000001'"
+    )
+    .execute(&mut *other)
+    .await?;
+    sqlx::query!(
+        "SELECT id FROM email_threads WHERE id = $1 FOR UPDATE",
+        thread()
+    )
+    .fetch_one(&mut *other)
+    .await?;
+    let save = tokio::spawn({
+        let pool = pool.clone();
+        async move {
+            let draft = prepared();
+            EmailPgRepo::new(pool)
+                .insert_message(&draft.message, &draft.contacts, link(), None, true)
+                .await
+                .map(|_| ())
+        }
+    });
+    wait_for_lock_waiters(&pool, 1).await?;
+    other.commit().await?;
+    bounded(save).await??;
+
+    let read = sqlx::query_scalar!("SELECT is_read FROM email_threads WHERE id = $1", thread())
+        .fetch_one(&pool)
+        .await?;
+    assert!(
+        !read,
+        "the save recomputed the thread without the unread message"
+    );
+    Ok(())
+}
