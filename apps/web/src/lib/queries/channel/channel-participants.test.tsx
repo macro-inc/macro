@@ -179,17 +179,44 @@ describe('useChannelParticipantsQuery', () => {
     });
   });
 
-  it('never asks REST while the GraphQL read is pending or failed', async () => {
+  it('never asks REST while the GraphQL read is pending', async () => {
     const { query } = mount();
     expect(query.isPending).toBe(true);
-
-    detail.pending = false;
-    detail.error = new Error('unavailable');
-    for (const listener of detail.listeners) listener();
     await Promise.resolve();
 
     expect(query.isSuccess).toBe(false);
     expect(storage.getChannelParticipants).not.toHaveBeenCalled();
+  });
+
+  it('reads REST when the GraphQL read fails before it has answered', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        {
+          channel_id: 'channel-1',
+          user_id: 'owner',
+          role: 'owner',
+          joined_at: '2026-01-01T00:00:00Z',
+        },
+      ])
+    );
+    const { query, ids } = mount();
+
+    detail.pending = false;
+    detail.error = new Error('unavailable');
+    for (const listener of detail.listeners) listener();
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
+    expect(storage.getChannelParticipants).toHaveBeenCalledWith({
+      channel_id: 'channel-1',
+    });
+
+    // The record wins once the GraphQL read recovers.
+    setDetail([
+      participant('owner', '2026-01-01T00:00:00Z', 'owner'),
+      participant('member', '2026-01-02T00:00:00Z'),
+    ]);
+    expect(ids()).toEqual(['owner', 'member']);
   });
 
   it('has no participants for a channel the viewer cannot read', async () => {
@@ -275,6 +302,8 @@ describe('useChannelParticipantsQuery', () => {
 
     expect(query.isSuccess).toBe(true);
     expect(ids()).toEqual(['owner']);
+    // A record it already read stays authoritative: no REST read.
+    expect(storage.getChannelParticipants).not.toHaveBeenCalled();
   });
 
   it('lets a later change made elsewhere win over a confirmed remove', async () => {
