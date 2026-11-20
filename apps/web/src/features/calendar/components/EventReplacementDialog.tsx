@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { plural } from '@core/util/string';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { EventReplacementController } from '../context/event-replacement-source';
@@ -16,7 +17,9 @@ function ReplacementConfirmation(props: {
     <>
       <p>
         The old invitation will be cancelled and a new invitation sent to{' '}
-        {props.preview.attendeeCount} guest(s). Everyone must respond again.
+        {props.preview.attendeeCount}{' '}
+        {plural('guest', props.preview.attendeeCount)}. Everyone must respond
+        again.
         {props.preview.removeConference
           ? ' The replacement will have no online meeting.'
           : ' A Teams meeting, if present, gets a new link.'}
