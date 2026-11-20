@@ -478,6 +478,11 @@ type ByIdRead = {
   unreadable?: readonly string[];
 };
 
+type ByIdReaderOptions = {
+  /** Runs after reads settle, for an owner that reads `outcomes` untracked. */
+  onSettle?: () => void;
+};
+
 /**
  * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
  * id is read once until `reset`, except that the ids whose reads failed are
@@ -485,7 +490,8 @@ type ByIdRead = {
  * asking for one reads it again within that time of its failure.
  */
 export function createByIdReader(
-  read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>
+  read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
+  options: ByIdReaderOptions = {}
 ) {
   const [outcomes, setOutcomes] = createSignal<
     Readonly<Record<string, ByIdOutcome>>
@@ -510,6 +516,7 @@ export function createByIdReader(
         for (const id of ids) next[id] = true;
         return next;
       });
+    options.onSettle?.();
   };
 
   // Not a debounce: failures that keep arriving would postpone the retry of
@@ -717,28 +724,71 @@ function readLaneProgress(
  * the cache removed it. */
 type ObservedChange = DirectoryChannel | null;
 
+/** What the cache showed after the network's read of the joined channels
+ * began, and what by-id reads found since its pages landed. */
+export type FallbackEvidence = {
+  /** Each record the cache changed or removed since the read began. */
+  changes: ReadonlyMap<string, ObservedChange>;
+  /** Every channel the cache held a record of at some read since. */
+  seen: ReadonlySet<string>;
+  /** How each by-id read since the pages landed ended. */
+  confirmed: Readonly<Record<string, ByIdOutcome>>;
+};
+
 /**
- * The network's joined channels, updated by what the cache saw change after
- * the network's read began. A change the cache saw since is at least as new
- * as the page that listed the channel; a record it did not change is as of
- * before that read, so the network's row wins and a cached channel the
- * network left out stays out.
+ * The network's joined channels, updated by what the cache saw after the
+ * network's read began:
+ *
+ * - A change the cache saw since is at least as new as the page that listed
+ *   the channel.
+ * - A listed record the cache held unchanged is as of before that read, so
+ *   the network's row wins.
+ * - A listed channel the cache never held may have gone since with nothing
+ *   left in the cache for its removal to reach: the network's row stands
+ *   until a by-id read finds the channel absent.
+ * - A channel the network left out stays out, even when the cache changed
+ *   its record (the viewer may have lost it with no removal reaching the
+ *   cache, and a view stamp then rewrites it), unless a by-id read since
+ *   returned it.
  */
 export function fallbackChannels(
   network: readonly DirectoryChannel[],
-  changes: ReadonlyMap<string, ObservedChange>
+  evidence: FallbackEvidence
 ): DirectoryChannel[] {
+  const { changes, seen, confirmed } = evidence;
   const channels: DirectoryChannel[] = [];
   const listed = new Set<string>();
   for (const channel of network) {
     listed.add(channel.id);
     const change = changes.get(channel.id);
-    if (change === undefined) channels.push(channel);
-    else if (change !== null) channels.push(change);
+    if (change !== undefined) {
+      if (change) channels.push(change);
+    } else if (seen.has(channel.id) || confirmed[channel.id] !== 'absent') {
+      channels.push(channel);
+    }
   }
   for (const [id, change] of changes)
-    if (change && !listed.has(id)) channels.push(change);
+    if (change && !listed.has(id) && confirmed[id] === 'returned')
+      channels.push(change);
   return channels;
+}
+
+/** The channels `fallbackChannels` decides by a by-id read: listed ones the
+ * cache never held, and changed ones the network did not list. */
+export function fallbackConfirmations(
+  network: readonly DirectoryChannel[],
+  evidence: FallbackEvidence
+): string[] {
+  const { changes, seen } = evidence;
+  const ids: string[] = [];
+  const listed = new Set<string>();
+  for (const { id } of network) {
+    listed.add(id);
+    if (!seen.has(id) && !changes.has(id)) ids.push(id);
+  }
+  for (const [id, change] of changes)
+    if (change && !listed.has(id)) ids.push(id);
+  return ids;
 }
 
 function recordsById(read: ChannelDirectoryRead | undefined) {
@@ -780,14 +830,22 @@ export function createCachedChannelDirectory(
   // records a by-id read wrote.
   let wantFull = true;
   const wantKeys = new Set<string>();
-  // While the network fallback runs: the records the last read found, and
-  // what changed in the cache after the fallback's read began.
+  // While the network fallback runs: the records the last read found, what
+  // changed in the cache after the fallback's read began, and every channel
+  // the cache held since.
   let observed: Map<string, DirectoryChannel> | undefined;
   let changes: Map<string, ObservedChange> | undefined;
+  let seen: Set<string> | undefined;
   // A fallback read that a later start or stop overtook settles nothing.
   let fallbackRun = 0;
 
-  const reader = createByIdReader(async (ids, signal) => {
+  /** Reads channels by id into the cache and rereads their records. An id
+   * the read returned without a record `hasRecord` sees is unreadable. */
+  const readById = async (
+    ids: string[],
+    signal: AbortSignal,
+    hasRecord: (id: string) => boolean
+  ): Promise<ByIdRead> => {
     const page = await deps.hydrate(
       readableChannelsInput(CHANNEL_DIRECTORY_INPUT, ids),
       { signal }
@@ -796,30 +854,58 @@ export function createCachedChannelDirectory(
     for (const id of ids) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
     await runner();
     const returned = returnedChannelIds(ids, page);
-    const records = untrack(state).records;
     // Without evidence, an id with no record may still be the viewer's.
     if (!returned)
       return {
         returned: undefined,
-        unreadable: ids.filter((id) => !records[id]),
+        unreadable: ids.filter((id) => !hasRecord(id)),
       };
     return {
       returned,
-      unreadable: [...returned].filter((id) => !records[id]),
+      unreadable: [...returned].filter((id) => !hasRecord(id)),
     };
-  });
+  };
+  const reader = createByIdReader((ids, signal) =>
+    readById(ids, signal, (id) => Boolean(untrack(state).records[id]))
+  );
+  // While the network's channels are shown: reads of those the cache cannot
+  // vouch for. Their records land in the cache, so a returned channel reads
+  // as the cache now holds it.
+  const confirm = createByIdReader(
+    (ids, signal) => readById(ids, signal, (id) => observed?.has(id) ?? false),
+    { onSettle: () => render() }
+  );
 
-  /** What the directory holds without a cache read: the network's channels
-   * once the lane gave up and they loaded, else nothing. */
-  const networkState = () => {
+  /** Shows the last read and, once the network's channels loaded, those
+   * channels as the evidence since leaves them. */
+  const render = () => {
     const network = untrack(fallback);
-    return network.status === 'loaded'
-      ? channelDirectoryState(
-          fallbackChannels(network.channels, changes ?? new Map()),
-          [],
-          true
-        )
-      : EMPTY_CHANNEL_DIRECTORY_STATE;
+    if (network.status !== 'loaded') {
+      const next = lastRead
+        ? channelDirectoryState(
+            lastRead.channels,
+            lastRead.incompleteIds,
+            lane.complete
+          )
+        : EMPTY_CHANNEL_DIRECTORY_STATE;
+      if (!sameState(untrack(state), next)) setState(next);
+      return;
+    }
+    const evidence: FallbackEvidence = {
+      changes: changes ?? new Map(),
+      seen: seen ?? new Set(),
+      confirmed: untrack(confirm.outcomes),
+    };
+    const next = channelDirectoryState(
+      fallbackChannels(network.channels, evidence),
+      lastRead?.incompleteIds ?? [],
+      true
+    );
+    if (!sameState(untrack(state), next)) setState(next);
+    // Only this viewer's cache can show what the reads returned.
+    if (generation === undefined) return;
+    for (const id of fallbackConfirmations(network.channels, evidence))
+      confirm.request(id);
   };
 
   /** Notes each record this read found changed or removed since the last,
@@ -836,6 +922,7 @@ export function createCachedChannelDirectory(
     const incomplete = new Set(read.incompleteIds);
     for (const id of observed.keys())
       if (!next.has(id) && !incomplete.has(id)) changes.set(id, null);
+    for (const id of next.keys()) seen?.add(id);
     observed = next;
   };
 
@@ -844,6 +931,8 @@ export function createCachedChannelDirectory(
     fallbackRun += 1;
     observed = undefined;
     changes = undefined;
+    seen = undefined;
+    confirm.reset();
     setFallback({ status: 'idle' });
   };
 
@@ -871,20 +960,7 @@ export function createCachedChannelDirectory(
     restampOlderRecords(read);
     // A finished pass reconciled the cache: it answers alone again.
     if (lane.complete) stopFallback();
-    const network = untrack(fallback);
-    const next =
-      network.status === 'loaded'
-        ? channelDirectoryState(
-            fallbackChannels(network.channels, changes ?? new Map()),
-            read.incompleteIds,
-            true
-          )
-        : channelDirectoryState(
-            read.channels,
-            read.incompleteIds,
-            lane.complete
-          );
-    if (!sameState(untrack(state), next)) setState(next);
+    render();
     // Before the lane finishes it fills these itself. Ids already requested
     // do not count, so ones that keep failing cannot hold back the rest.
     if (lane.complete) {
@@ -903,8 +979,7 @@ export function createCachedChannelDirectory(
       const channels = await deps.pageAll(signal);
       if (signal.aborted || run !== fallbackRun) return;
       setFallback({ status: 'loaded', channels });
-      if (lastRead) publish(lastRead);
-      else setState(networkState());
+      render();
     } catch (error) {
       if (signal.aborted || run !== fallbackRun) return;
       Telemetry.error(error, { surface: 'channel-directory-fallback' });
@@ -917,6 +992,8 @@ export function createCachedChannelDirectory(
     // Changes from here on are at least as new as the pages it reads.
     observed = recordsById(lastRead);
     changes = new Map();
+    seen = new Set(observed.keys());
+    confirm.reset();
     setFallback({ status: 'loading' });
     // Never rejects: a failed read is reported inside.
     fireAndForget(loadFallback(fallbackRun), 'channel-directory-fallback');
@@ -934,7 +1011,7 @@ export function createCachedChannelDirectory(
       // Another viewer's cache: nothing in it is this viewer's.
       lane = LANE_NOT_STARTED;
       lastRead = undefined;
-      setState(networkState());
+      render();
     }
     return scope;
   };
@@ -1015,11 +1092,16 @@ export function createCachedChannelDirectory(
         generation = undefined;
         lane = LANE_NOT_STARTED;
         lastRead = undefined;
-        // What the new storage holds was written since.
-        if (observed) observed = new Map();
+        // What the new storage holds was written since, and what a by-id
+        // read wrote into the old one is gone.
+        if (observed) {
+          observed = new Map();
+          seen = new Set();
+          confirm.reset();
+        }
         reader.reset();
         adopted = undefined;
-        setState(networkState());
+        render();
       }
       refreshNow();
     })

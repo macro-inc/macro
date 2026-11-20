@@ -826,9 +826,10 @@ describe('cached channel directory', () => {
   });
 
   it('completes from the network once the lane gives up', async () => {
-    const { cache, directory, pageAll } = mountCachedDirectory([], {
-      pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
-    });
+    const { cache, directory, pageAll } = mountCachedDirectory(
+      [channelRecord('b')],
+      { pageAll: async () => [directoryChannel('a'), directoryChannel('b')] }
+    );
     cache.put(channelRecord('a', { name: 'cached a' }));
     // Cached when the viewer lost it, and no removal reached the cache.
     cache.put(channelRecord('stale'));
@@ -854,12 +855,15 @@ describe('cached channel directory', () => {
 
   it('follows what the cache changes after the network read began', async () => {
     let answer!: (channels: DirectoryChannel[]) => void;
-    const { cache, directory, reopen } = mountCachedDirectory([], {
-      pageAll: () =>
-        new Promise((resolve) => {
-          answer = resolve;
-        }),
-    });
+    const { cache, directory, reopen } = mountCachedDirectory(
+      [channelRecord('joined')],
+      {
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
     cache.put(channelRecord('kept'));
     cache.put(channelRecord('removed'));
     cache.put(channelRecord('left'));
@@ -883,7 +887,10 @@ describe('cached channel directory', () => {
       directoryChannel('left'),
     ]);
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(ids(directory.channels()).sort()).toEqual(['joined', 'kept']);
+    // The join, which the pages did not list, once a by-id read returns it.
+    await vi.waitFor(() =>
+      expect(ids(directory.channels()).sort()).toEqual(['joined', 'kept'])
+    );
 
     // And after the pages landed.
     cache.put(channelRecord('kept', { name: 'renamed' }), {
@@ -897,8 +904,68 @@ describe('cached channel directory', () => {
     expect(ids(await directory.readComplete())).toEqual(['kept']);
   });
 
+  it('leaves out a cached channel the network did not list, though the cache rewrote it', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    const { cache, directory, reopen } = mountCachedDirectory(
+      [channelRecord('kept')],
+      {
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
+    cache.put(channelRecord('kept'));
+    // Cached when the viewer lost it, and no removal reached the cache.
+    cache.put(channelRecord('stale'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+
+    // A view stamp, or another query's page, rewrites the stale record
+    // while the pages are read.
+    cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
+      sourceHash: 'stale-2',
+    });
+    reopen();
+    await vi.waitFor(() => expect(viewedAt(directory, 'stale')).toBe(VIEWED_2));
+    answer([directoryChannel('kept')]);
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['kept']));
+    expect(directory.lookup('stale').status).toBe('missing');
+  });
+
+  it('leaves out a listed channel the cache never held once a by-id read finds it gone', async () => {
+    let release!: () => void;
+    const byIdGate = new Promise<void>((done) => {
+      release = done;
+    });
+    const { directory } = mountCachedDirectory([channelRecord('a')], {
+      byIdGate,
+      pageAll: async () => [
+        directoryChannel('a'),
+        directoryChannel('gone', { channelType: 'private' }),
+      ],
+    });
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+
+    // As the pages listed them until a read says otherwise.
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'gone']);
+
+    // Deleted after its page was read, while the cache held no record a
+    // removal could reach.
+    release();
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    expect(directory.lookup('gone').status).toBe('missing');
+    expect(ids(await directory.readComplete())).toEqual(['a']);
+  });
+
   it('answers from the cache alone once the lane finishes a pass', async () => {
     const { cache, directory } = mountCachedDirectory([], {
+      // By-id reads would write the listed channels into the cache.
+      byIdGate: new Promise(() => {}),
       pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
     });
     markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
@@ -914,7 +981,7 @@ describe('cached channel directory', () => {
 
   it('fails when the lane gave up and the network fails too, until retried', async () => {
     let attempt = 0;
-    const { directory, pageAll } = mountCachedDirectory([], {
+    const { directory, pageAll } = mountCachedDirectory([channelRecord('a')], {
       pageAll: async () => {
         attempt += 1;
         if (attempt === 1) throw new Error('offline');
