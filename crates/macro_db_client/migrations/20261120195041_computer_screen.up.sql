@@ -42,8 +42,8 @@ CREATE TABLE computer_screen_sessions (
     seen_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX computer_screen_sessions_computer ON computer_screen_sessions (computer_id, started_at DESC);
--- Open sockets per computer, for hibernation's in-use check.
+-- Open sockets per computer: hibernation's in-use check, the socket caps
+-- and the end of rows a gone process left open.
 CREATE INDEX computer_screen_sessions_open ON computer_screen_sessions (computer_id, seen_at)
     WHERE ended_at IS NULL;
 
@@ -60,7 +60,6 @@ CREATE TABLE computer_screen_drives (
     end_reason  TEXT CHECK (end_reason IN ('handBack', 'lapsed'))
 );
 
-CREATE INDEX computer_screen_drives_session ON computer_screen_drives (session_id);
 -- At most one open drive per computer, the one its lease belongs to.
 CREATE UNIQUE INDEX computer_screen_drives_open ON computer_screen_drives (computer_id)
     WHERE ended_at IS NULL;
@@ -82,16 +81,16 @@ CREATE TABLE computer_screen_driver_leases (
 CREATE INDEX computer_screen_driver_leases_agent ON computer_screen_driver_leases (agent_user_id)
     WHERE agent_user_id IS NOT NULL;
 
--- Take-over and hand-back notices, delivered once with the agent's next
--- brain request.
+-- Take-over and hand-back notices, waiting for the agent's next brain
+-- request that succeeds, which deletes them. One an agent hasn't picked up
+-- within a day is swept.
 CREATE TABLE computer_screen_agent_notices (
     id            UUID PRIMARY KEY,
     computer_id   UUID        NOT NULL,
     agent_user_id TEXT        NOT NULL,
     payload       JSONB       NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    delivered_at  TIMESTAMPTZ
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX computer_screen_agent_notices_pending ON computer_screen_agent_notices (agent_user_id, created_at)
-    WHERE delivered_at IS NULL;
+CREATE INDEX computer_screen_agent_notices_pending ON computer_screen_agent_notices (agent_user_id, created_at);
+CREATE INDEX computer_screen_agent_notices_created ON computer_screen_agent_notices (created_at);

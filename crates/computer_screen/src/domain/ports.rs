@@ -5,10 +5,13 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use computer_id::ComputerId;
+use harness_id::HarnessId;
 use macro_user_id::user_id::MacroUserIdStr;
+use uuid::Uuid;
 
 use super::models::{
-    AgentNotice, EndReason, Lease, RedeemedTicket, Release, ScreenGrant, SessionId, TakeOver,
+    Access, EndReason, Lease, Mode, PendingNotice, Person, RedeemedTicket, Release, ScreenGrant,
+    SessionId, TakeOver,
 };
 
 /// The SHA-256 of a ticket secret: all storage ever sees of it.
@@ -112,21 +115,67 @@ pub trait ScreenRepo: Send + Sync + 'static {
         fresh: Duration,
     ) -> impl Future<Output = Result<Vec<ComputerId>, Self::Err>> + Send;
 
-    /// The agent's undelivered notices, oldest first, marked delivered.
-    fn take_notices(
+    /// How many sockets seen within `fresh` are open on `computer`: `user`'s
+    /// and everyone's.
+    fn open_sockets(
+        &self,
+        computer: ComputerId,
+        user: &MacroUserIdStr<'_>,
+        fresh: Duration,
+    ) -> impl Future<Output = Result<(u32, u32), Self::Err>> + Send;
+
+    /// The agent's notices not yet delivered, oldest first, at most a few,
+    /// and none older than `kept`.
+    fn pending_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<AgentNotice>, Self::Err>> + Send;
+        kept: Duration,
+    ) -> impl Future<Output = Result<Vec<PendingNotice>, Self::Err>> + Send;
 
-    /// The user's display name, if their profile has one.
-    fn user_name(
+    /// Forget notices that reached the agent.
+    fn delete_notices(&self, ids: &[Uuid]) -> impl Future<Output = Result<(), Self::Err>> + Send;
+}
+
+/// Who may use a harness's screen: the harness's permissions and the
+/// computer rollout, and which agent its computer runs.
+pub trait ScreenAccess: Send + Sync + 'static {
+    /// Lookup failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Whether the computer rollout admits `user`.
+    fn rollout(&self, user: &MacroUserIdStr<'static>) -> impl Future<Output = bool> + Send;
+
+    /// Whether `user` may use `harness`'s screen in `mode`.
+    fn authorize(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        harness: HarnessId,
+        mode: Mode,
+    ) -> impl Future<Output = Result<Access, Self::Err>> + Send;
+
+    /// The agent teammate `computer` runs, if any.
+    fn agent_of(
+        &self,
+        computer: ComputerId,
+    ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>, Self::Err>> + Send;
+}
+
+/// What the screen needs to know about people, from the crate that owns
+/// their accounts.
+pub trait People: Send + Sync + 'static {
+    /// Lookup failure.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// `user`'s name and kind; `None` when there is no such account.
+    fn person(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Option<String>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Person>, Self::Err>> + Send;
 }
 
 /// Tells the guest who drives, through a file the agent can read. Best
-/// effort: a computer that can't be reached is logged, never an error.
+/// effort and quick: a computer that can't be reached is logged, never an
+/// error, and the caller never waits on the guest.
 pub trait DriverSignal: Send + Sync + 'static {
     /// A person drives `computer` now.
     fn driving(&self, lease: &Lease) -> impl Future<Output = ()> + Send;

@@ -10,8 +10,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentNotice, Driver, EndReason, Lease, NoticeName, RedeemedTicket, Release, ScreenGrant,
-    SessionId, TakeOver,
+    AgentNotice, Driver, EndReason, Lease, NoticeName, PendingNotice, RedeemedTicket, Release,
+    ScreenGrant, SessionId, TakeOver,
 };
 use crate::domain::ports::{ScreenRepo, TicketHash};
 
@@ -99,6 +99,13 @@ impl ScreenRepo for PgScreenRepo {
         // Expired tickets go with each new one; the index keeps it cheap.
         sqlx::query!(
             "DELETE FROM computer_screen_tickets WHERE expires_at < now() - interval '1 hour'"
+        )
+        .execute(&self.pool)
+        .await?;
+        // So do notices no agent picked up within a day (its computer was
+        // released, or it stopped): they are never delivered after that.
+        sqlx::query!(
+            "DELETE FROM computer_screen_agent_notices WHERE created_at < now() - interval '1 day'"
         )
         .execute(&self.pool)
         .await?;
@@ -290,35 +297,13 @@ impl ScreenRepo for PgScreenRepo {
         ttl: Duration,
     ) -> Result<TakeOver, PgScreenError> {
         let mut tx = self.pool.begin().await?;
-        let existing = sqlx::query!(
+        // The upsert only takes a lease that is free, lapsed or this user's:
+        // another user's live lease leaves no row, which is Busy. When no
+        // lease row exists yet, two first take-overs race on the insert and
+        // the second one's guard sees the first's lease.
+        let row = sqlx::query!(
             r#"
-            SELECT user_id, driver_name, expires_at > now() AS "live!"
-            FROM computer_screen_driver_leases
-            WHERE computer_id = $1
-            FOR UPDATE
-            "#,
-            grant.computer_id.as_uuid(),
-        )
-        .fetch_optional(&mut *tx)
-        .await?;
-
-        // Another user's live lease wins. The same user moves the lease to
-        // this socket and keeps its start; a lapsed lease starts over.
-        let continues = match existing {
-            Some(row) if row.live && row.user_id != grant.user_id.as_ref() => {
-                return Ok(TakeOver::Busy(Driver {
-                    user_id: user_id(row.user_id)?,
-                    name: row.driver_name,
-                }));
-            }
-            Some(row) => row.live,
-            None => false,
-        };
-
-        let row = sqlx::query_as!(
-            LeaseRow,
-            r#"
-            INSERT INTO computer_screen_driver_leases
+            INSERT INTO computer_screen_driver_leases AS lease
                 (computer_id, harness_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at)
             VALUES ($1, $2, $3, $4, $5, $6, now(), now() + make_interval(secs => $7))
             ON CONFLICT (computer_id) DO UPDATE SET
@@ -327,9 +312,14 @@ impl ScreenRepo for PgScreenRepo {
                 user_id = EXCLUDED.user_id,
                 driver_name = EXCLUDED.driver_name,
                 agent_user_id = EXCLUDED.agent_user_id,
-                started_at = CASE WHEN $8 THEN computer_screen_driver_leases.started_at ELSE now() END,
+                started_at = CASE
+                    WHEN lease.user_id = EXCLUDED.user_id AND lease.expires_at > now() THEN lease.started_at
+                    ELSE now()
+                END,
                 expires_at = EXCLUDED.expires_at
-            RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at
+            WHERE lease.user_id = EXCLUDED.user_id OR lease.expires_at <= now()
+            RETURNING computer_id, session_id, user_id, driver_name, agent_user_id, started_at, expires_at,
+                      started_at < now() AS "continues!"
             "#,
             grant.computer_id.as_uuid(),
             grant.harness_id.as_uuid(),
@@ -338,10 +328,32 @@ impl ScreenRepo for PgScreenRepo {
             driver_name,
             grant.agent_user_id.as_ref().map(|agent| agent.as_ref()),
             ttl_seconds(ttl),
-            continues,
         )
-        .fetch_one(&mut *tx)
+        .fetch_optional(&mut *tx)
         .await?;
+        let Some(row) = row else {
+            let driver = sqlx::query!(
+                "SELECT user_id, driver_name FROM computer_screen_driver_leases WHERE computer_id = $1",
+                grant.computer_id.as_uuid(),
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+            return Ok(TakeOver::Busy(Driver {
+                user_id: user_id(driver.user_id)?,
+                name: driver.driver_name,
+            }));
+        };
+        // The same user moved the lease to this socket and kept its start.
+        let continues = row.continues;
+        let row = LeaseRow {
+            computer_id: row.computer_id,
+            session_id: row.session_id,
+            user_id: row.user_id,
+            driver_name: row.driver_name,
+            agent_user_id: row.agent_user_id,
+            started_at: row.started_at,
+            expires_at: row.expires_at,
+        };
         let lease = Lease::try_from(row)?;
 
         if continues {
@@ -381,7 +393,7 @@ impl ScreenRepo for PgScreenRepo {
                 &lease,
                 AgentNotice {
                     name: NoticeName::TakeOver,
-                    driver: lease.driver.clone(),
+                    driver_name: lease.driver.name.clone(),
                     started_at: lease.started_at,
                     ended_at: None,
                     note: None,
@@ -477,7 +489,7 @@ impl ScreenRepo for PgScreenRepo {
             &lease,
             AgentNotice {
                 name: NoticeName::HandBack,
-                driver: lease.driver.clone(),
+                driver_name: lease.driver.name.clone(),
                 started_at: lease.started_at,
                 ended_at: Some(Utc::now()),
                 note,
@@ -529,53 +541,70 @@ impl ScreenRepo for PgScreenRepo {
     }
 
     #[tracing::instrument(skip_all, err)]
-    async fn take_notices(
+    async fn pending_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
-    ) -> Result<Vec<AgentNotice>, PgScreenError> {
+        kept: Duration,
+    ) -> Result<Vec<PendingNotice>, PgScreenError> {
         let rows = sqlx::query!(
             r#"
-            WITH pending AS (
-                SELECT id FROM computer_screen_agent_notices
-                WHERE agent_user_id = $1 AND delivered_at IS NULL
-                ORDER BY created_at
-                LIMIT 20
-                FOR UPDATE SKIP LOCKED
-            )
-            UPDATE computer_screen_agent_notices notice
-            SET delivered_at = now()
-            FROM pending
-            WHERE notice.id = pending.id
-            RETURNING notice.id, notice.payload
+            SELECT id, payload FROM computer_screen_agent_notices
+            WHERE agent_user_id = $1 AND created_at > now() - make_interval(secs => $2)
+            ORDER BY created_at, id
+            LIMIT 20
             "#,
             agent.as_ref(),
+            ttl_seconds(kept),
         )
         .fetch_all(&self.pool)
         .await?;
-        // UPDATE … RETURNING has no order; v7 ids sort by creation.
-        let mut rows: Vec<(Uuid, serde_json::Value)> =
-            rows.into_iter().map(|row| (row.id, row.payload)).collect();
-        rows.sort_by_key(|(id, _)| *id);
         rows.into_iter()
-            .map(|(_, payload)| serde_json::from_value(payload).map_err(PgScreenError::from))
+            .map(|row| {
+                Ok(PendingNotice {
+                    id: row.id,
+                    notice: serde_json::from_value(row.payload)?,
+                })
+            })
             .collect()
     }
 
-    #[tracing::instrument(skip_all, err)]
-    async fn user_name(&self, user: &MacroUserIdStr<'_>) -> Result<Option<String>, PgScreenError> {
-        let name = sqlx::query_scalar!(
-            r#"
-            SELECT NULLIF(TRIM(CONCAT_WS(' ', info.first_name, info.last_name)), '') AS name
-            FROM "User" u
-            JOIN macro_user_info info ON info.macro_user_id = u.macro_user_id
-            WHERE u.id = $1
-            "#,
-            user.as_ref(),
+    #[tracing::instrument(skip_all, fields(notices = ids.len()), err)]
+    async fn delete_notices(&self, ids: &[Uuid]) -> Result<(), PgScreenError> {
+        sqlx::query!(
+            "DELETE FROM computer_screen_agent_notices WHERE id = ANY($1)",
+            ids,
         )
-        .fetch_optional(&self.pool)
-        .await?
-        .flatten();
-        Ok(name)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(computer.id = %computer), err)]
+    async fn open_sockets(
+        &self,
+        computer: ComputerId,
+        user: &MacroUserIdStr<'_>,
+        fresh: Duration,
+    ) -> Result<(u32, u32), PgScreenError> {
+        let counts = sqlx::query!(
+            r#"
+            SELECT count(*) FILTER (WHERE user_id = $2) AS "theirs!",
+                   count(*) AS "everyone!"
+            FROM computer_screen_sessions
+            WHERE computer_id = $1
+              AND ended_at IS NULL
+              AND seen_at > now() - make_interval(secs => $3)
+            "#,
+            computer.as_uuid(),
+            user.as_ref(),
+            ttl_seconds(fresh),
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok((
+            u32::try_from(counts.theirs).unwrap_or(u32::MAX),
+            u32::try_from(counts.everyone).unwrap_or(u32::MAX),
+        ))
     }
 }
 

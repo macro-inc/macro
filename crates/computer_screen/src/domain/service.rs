@@ -1,5 +1,7 @@
 //! Tickets, the driver lease and the agent hold.
 
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -10,11 +12,13 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sha2::{Digest as _, Sha256};
 use tokio::sync::broadcast;
 
+use uuid::Uuid;
+
 use super::models::{
-    AgentNotice, EndReason, IssuedTicket, Lease, Mode, RedeemedTicket, Release, ScreenGrant,
-    SessionId, TakeOver, TicketSecret,
+    Access, EndReason, IssuedTicket, Lease, Mode, PendingNotice, RedeemedTicket, Release,
+    ScreenGrant, SessionId, TakeOver, TicketRequest, TicketSecret,
 };
-use super::ports::{DriverSignal, LeaseChanges, ScreenRepo, TicketHash};
+use super::ports::{DriverSignal, LeaseChanges, People, ScreenAccess, ScreenRepo, TicketHash};
 
 #[cfg(test)]
 mod test;
@@ -32,6 +36,18 @@ pub const SESSION_TOUCH_EVERY: Duration = Duration::from_secs(30);
 /// How long a socket counts as open without saying so: a few missed
 /// touches, after which a row a crashed process left open stops counting.
 pub const SESSION_FRESH_FOR: Duration = Duration::from_secs(120);
+/// How long an undelivered notice is kept for its agent: an agent that
+/// makes no brain request for a day (its computer released, say) never
+/// hears it.
+pub const NOTICE_KEPT_FOR: Duration = Duration::from_secs(24 * 60 * 60);
+/// Sockets one person may hold open on one computer (a few tabs).
+pub const MAX_SOCKETS_PER_VIEWER: u32 = 4;
+/// Sockets open on one computer: each costs the guest an RFB client.
+pub const MAX_SOCKETS_PER_COMPUTER: u32 = 16;
+/// Tickets one person may get per [`TICKET_WINDOW`], on each replica.
+pub const MAX_TICKETS_PER_WINDOW: u32 = 30;
+/// The window [`MAX_TICKETS_PER_WINDOW`] counts in.
+pub const TICKET_WINDOW: Duration = Duration::from_secs(60);
 
 /// Why a screen operation failed.
 #[derive(Debug, thiserror::Error)]
@@ -39,7 +55,31 @@ pub enum ScreenError {
     /// A take-over on a view-only ticket.
     #[error("this ticket may only watch")]
     DriveNotAllowed,
-    /// Storage failed.
+    /// A program asked: only a person watches or drives a computer.
+    #[error("a program cannot watch or drive a computer's screen")]
+    ProgramRefused,
+    /// An agent teammate's account asked.
+    #[error("an agent cannot watch or drive a computer's screen")]
+    AgentRefused,
+    /// The computer rollout doesn't admit the caller.
+    #[error("Macro computers are not enabled for this user")]
+    RolloutDisabled,
+    /// The caller may not use this harness's screen.
+    #[error("you cannot do that on this computer")]
+    NoAccess,
+    /// No such harness.
+    #[error("no such runtime")]
+    NotFound,
+    /// The harness is not a Macro computer's.
+    #[error("this runtime is not a Macro computer")]
+    NotAComputer,
+    /// Too many tickets in a short time.
+    #[error("too many screen tickets; try again in a minute")]
+    TooManyTickets,
+    /// Too many sockets open on the computer, or by this person on it.
+    #[error("too many screens are open on this computer")]
+    TooManySockets,
+    /// Storage or a lookup failed.
     #[error("screen storage failed")]
     Internal(rootcause::Report),
 }
@@ -64,42 +104,135 @@ pub enum Hold {
     TimedOut,
 }
 
-/// The screen service over its storage, the guest signal and lease changes.
-pub struct ScreenService<Repo, Signal, Changes> {
+/// The screen service over its storage, the guest signal, lease changes,
+/// who may use a screen, and who people are.
+pub struct ScreenService<Repo, Signal, Changes, Gate, Directory> {
     repo: Repo,
     signal: Signal,
     changes: Changes,
+    gate: Gate,
+    directory: Directory,
+    tickets: TicketLimiter,
 }
 
-impl<Repo, Signal, Changes> ScreenService<Repo, Signal, Changes>
+impl<Repo, Signal, Changes, Gate, Directory> ScreenService<Repo, Signal, Changes, Gate, Directory>
 where
     Repo: ScreenRepo,
     Signal: DriverSignal,
     Changes: LeaseChanges,
+    Gate: ScreenAccess,
+    Directory: People,
 {
     /// Build the service.
-    pub fn new(repo: Repo, signal: Signal, changes: Changes) -> Self {
+    pub fn new(
+        repo: Repo,
+        signal: Signal,
+        changes: Changes,
+        gate: Gate,
+        directory: Directory,
+    ) -> Self {
         Self {
             repo,
             signal,
             changes,
+            gate,
+            directory,
+            tickets: TicketLimiter::default(),
         }
     }
 
-    /// Issue a single-use ticket for an already authorized `grant`.
-    #[tracing::instrument(skip_all, fields(computer.id = %grant.computer_id, screen.mode = %grant.mode), err)]
+    /// Issue a single-use ticket, if the person who asks may watch (or
+    /// drive) the harness's computer. Programs and agent accounts never
+    /// may: a screen is a person's view of an agent's computer.
+    #[tracing::instrument(skip_all, fields(harness.id = %request.harness_id, computer.id = tracing::field::Empty, screen.mode = %request.mode), err)]
     pub async fn issue_ticket(
         &self,
-        grant: &ScreenGrant,
+        request: TicketRequest,
         traceparent: Option<&str>,
     ) -> Result<IssuedTicket, ScreenError> {
+        if request.program {
+            return Err(ScreenError::ProgramRefused);
+        }
+        if !self.gate.rollout(&request.user_id).await {
+            return Err(ScreenError::RolloutDisabled);
+        }
+        let person = self
+            .directory
+            .person(&request.user_id)
+            .await
+            .map_err(ScreenError::internal)?;
+        match person {
+            None => return Err(ScreenError::NoAccess),
+            Some(person) if person.is_agent => return Err(ScreenError::AgentRefused),
+            Some(_) => {}
+        }
+        let computer_id = self
+            .access(&request.user_id, request.harness_id, request.mode)
+            .await?;
+        tracing::Span::current().record("computer.id", tracing::field::display(computer_id));
+        if !self
+            .tickets
+            .admit(&request.user_id, tokio::time::Instant::now())
+        {
+            return Err(ScreenError::TooManyTickets);
+        }
+        let agent_user_id = self
+            .gate
+            .agent_of(computer_id)
+            .await
+            .map_err(ScreenError::internal)?;
+        let grant = ScreenGrant {
+            harness_id: request.harness_id,
+            computer_id,
+            agent_user_id,
+            user_id: request.user_id,
+            transport: request.transport,
+            surface: request.surface,
+            mode: request.mode,
+        };
+
         let secret = TicketSecret::new(URL_SAFE_NO_PAD.encode(rand::random::<[u8; 32]>()));
         let expires_at = Utc::now() + TICKET_TTL;
         self.repo
-            .insert_ticket(ticket_hash(&secret), grant, traceparent, expires_at)
+            .insert_ticket(ticket_hash(&secret), &grant, traceparent, expires_at)
             .await
             .map_err(ScreenError::internal)?;
         Ok(IssuedTicket { secret, expires_at })
+    }
+
+    /// Whether `grant`'s holder may still use the screen as their ticket
+    /// allowed: the rollout and the harness's permissions, again.
+    pub async fn reauthorize(&self, grant: &ScreenGrant) -> Result<bool, ScreenError> {
+        if !self.gate.rollout(&grant.user_id).await {
+            return Ok(false);
+        }
+        match self
+            .access(&grant.user_id, grant.harness_id, grant.mode)
+            .await
+        {
+            Ok(computer) => Ok(computer == grant.computer_id),
+            Err(ScreenError::Internal(report)) => Err(ScreenError::Internal(report)),
+            Err(_) => Ok(false),
+        }
+    }
+
+    async fn access(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        harness: harness_id::HarnessId,
+        mode: Mode,
+    ) -> Result<ComputerId, ScreenError> {
+        match self
+            .gate
+            .authorize(user, harness, mode)
+            .await
+            .map_err(ScreenError::internal)?
+        {
+            Access::Granted(computer) => Ok(computer),
+            Access::Denied => Err(ScreenError::NoAccess),
+            Access::NotFound => Err(ScreenError::NotFound),
+            Access::NotAComputer => Err(ScreenError::NotAComputer),
+        }
     }
 
     /// The grant behind a presented ticket, used up; `None` when it is
@@ -114,7 +247,9 @@ where
             .map_err(ScreenError::internal)
     }
 
-    /// Open the audit row of a new socket.
+    /// Open the audit row of a new socket, unless the computer already has
+    /// [`MAX_SOCKETS_PER_COMPUTER`] open, or this person
+    /// [`MAX_SOCKETS_PER_VIEWER`].
     pub async fn open_session(&self, grant: &ScreenGrant) -> Result<SessionId, ScreenError> {
         let id = SessionId::new();
         // Rows a crashed or redeployed process left open end here, on the
@@ -126,6 +261,14 @@ where
             .map_err(ScreenError::internal)?;
         if lost > 0 {
             tracing::info!(lost, "ended screen sockets a gone process left open");
+        }
+        let (theirs, everyone) = self
+            .repo
+            .open_sockets(grant.computer_id, &grant.user_id, SESSION_FRESH_FOR)
+            .await
+            .map_err(ScreenError::internal)?;
+        if theirs >= MAX_SOCKETS_PER_VIEWER || everyone >= MAX_SOCKETS_PER_COMPUTER {
+            return Err(ScreenError::TooManySockets);
         }
         self.repo
             .start_session(id, grant)
@@ -164,10 +307,11 @@ where
         // recorded before the next one starts.
         self.lease(grant.computer_id).await?;
         let name = self
-            .repo
-            .user_name(&grant.user_id)
+            .directory
+            .person(&grant.user_id)
             .await
-            .map_err(ScreenError::internal)?;
+            .map_err(ScreenError::internal)?
+            .and_then(|person| person.name);
         let outcome = self
             .repo
             .take_over(grant, session, name, LEASE_TTL)
@@ -304,13 +448,25 @@ where
             .map_err(ScreenError::internal)
     }
 
-    /// The agent's undelivered notices, delivered now.
-    pub async fn take_notices(
+    /// The agent's notices not yet delivered. They stay pending until
+    /// [`Self::notices_delivered`] says the request carrying them succeeded.
+    pub async fn pending_notices(
         &self,
         agent: &MacroUserIdStr<'_>,
-    ) -> Result<Vec<AgentNotice>, ScreenError> {
+    ) -> Result<Vec<PendingNotice>, ScreenError> {
         self.repo
-            .take_notices(agent)
+            .pending_notices(agent, NOTICE_KEPT_FOR)
+            .await
+            .map_err(ScreenError::internal)
+    }
+
+    /// The request carrying these notices succeeded: they are delivered.
+    pub async fn notices_delivered(&self, ids: &[Uuid]) -> Result<(), ScreenError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        self.repo
+            .delete_notices(ids)
             .await
             .map_err(ScreenError::internal)
     }
@@ -333,6 +489,31 @@ where
             self.signal.released(lease.computer_id).await;
         }
         Ok(None)
+    }
+}
+
+/// Tickets per person in a sliding window, on this replica: a person with a
+/// stuck reconnect loop can't flood the guest with sockets.
+#[derive(Default)]
+struct TicketLimiter {
+    issued: Mutex<HashMap<String, Vec<tokio::time::Instant>>>,
+}
+
+impl TicketLimiter {
+    fn admit(&self, user: &MacroUserIdStr<'_>, now: tokio::time::Instant) -> bool {
+        let Ok(mut issued) = self.issued.lock() else {
+            return true;
+        };
+        issued.retain(|_, times| {
+            times.retain(|time| now.duration_since(*time) < TICKET_WINDOW);
+            !times.is_empty()
+        });
+        let times = issued.entry(user.as_ref().to_owned()).or_default();
+        if times.len() >= MAX_TICKETS_PER_WINDOW as usize {
+            return false;
+        }
+        times.push(now);
+        true
     }
 }
 

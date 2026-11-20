@@ -8,10 +8,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use super::PgScreenRepo;
+use super::{PgScreenError, PgScreenRepo};
 use crate::domain::models::{
-    Driver, EndReason, Mode, NoticeName, Release, ScreenGrant, SessionId, Surface, TakeOver,
-    Transport,
+    AgentNotice, Driver, EndReason, Mode, NoticeName, Release, ScreenGrant, SessionId, Surface,
+    TakeOver, Transport,
 };
 use crate::domain::ports::ScreenRepo;
 
@@ -30,6 +30,20 @@ fn grant(user: &str, mode: Mode) -> ScreenGrant {
         surface: Surface::Desktop,
         mode,
     }
+}
+
+/// Read the agent's pending notices and acknowledge them, as a brain
+/// request that succeeded does.
+async fn take_notices(
+    repo: &PgScreenRepo,
+    agent: &MacroUserIdStr<'_>,
+) -> Result<Vec<AgentNotice>, PgScreenError> {
+    let pending = repo
+        .pending_notices(agent, Duration::from_secs(3600))
+        .await?;
+    let ids: Vec<Uuid> = pending.iter().map(|pending| pending.id).collect();
+    repo.delete_notices(&ids).await?;
+    Ok(pending.into_iter().map(|pending| pending.notice).collect())
 }
 
 async fn session(repo: &PgScreenRepo, grant: &ScreenGrant) -> SessionId {
@@ -137,7 +151,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
     ));
 
     let agent = alice.agent_user_id.clone().unwrap();
-    let notices = repo.take_notices(&agent).await.unwrap();
+    let notices = take_notices(&repo, &agent).await.unwrap();
     let names: Vec<NoticeName> = notices.iter().map(|notice| notice.name).collect();
     assert_eq!(
         names,
@@ -148,7 +162,7 @@ async fn one_user_drives_until_hand_back(pool: PgPool) {
         ]
     );
     assert_eq!(notices[1].note.as_deref(), Some("signed in for you"));
-    assert!(repo.take_notices(&agent).await.unwrap().is_empty());
+    assert!(take_notices(&repo, &agent).await.unwrap().is_empty());
 
     let drives = sqlx::query!(
         r#"SELECT session_id, end_reason FROM computer_screen_drives ORDER BY started_at"#
@@ -204,8 +218,7 @@ async fn the_same_user_moves_the_lease_to_a_new_tab(pool: PgPool) {
             .is_some()
     );
     // Moving tabs is not a new take-over for the agent.
-    let notices = repo
-        .take_notices(alice.agent_user_id.as_ref().unwrap())
+    let notices = take_notices(&repo, alice.agent_user_id.as_ref().unwrap())
         .await
         .unwrap();
     assert_eq!(notices.len(), 1);
@@ -223,8 +236,7 @@ async fn the_same_user_moves_the_lease_to_a_new_tab(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(released.map(|lease| lease.session_id), Some(second));
-    let notices = repo
-        .take_notices(alice.agent_user_id.as_ref().unwrap())
+    let notices = take_notices(&repo, alice.agent_user_id.as_ref().unwrap())
         .await
         .unwrap();
     assert_eq!(notices.len(), 1);
@@ -418,5 +430,95 @@ async fn rows_a_gone_process_left_open_end_as_lost(pool: PgPool) {
         rows.iter()
             .find(|row| row.id == leaked.as_uuid())
             .is_some_and(|row| row.at_last_seen == Some(true))
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn two_people_taking_over_at_once_never_both_drive(pool: PgPool) {
+    for round in 0..20u128 {
+        let repo = PgScreenRepo::new(pool.clone());
+        let computer = ComputerId::new_from_uuid(Uuid::from_u128(0xD000 + round));
+        let mut alice = grant("alice", Mode::Drive);
+        alice.computer_id = computer;
+        let mut bob = grant("bob", Mode::Drive);
+        bob.computer_id = computer;
+        let alice_session = session(&repo, &alice).await;
+        let bob_session = session(&repo, &bob).await;
+
+        let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+        let race = |grant: ScreenGrant, session: SessionId| {
+            let repo = PgScreenRepo::new(pool.clone());
+            let barrier = std::sync::Arc::clone(&barrier);
+            tokio::spawn(async move {
+                barrier.wait().await;
+                repo.take_over(&grant, session, None, TWO_MINUTES)
+                    .await
+                    .unwrap()
+            })
+        };
+        let first = race(alice.clone(), alice_session);
+        let second = race(bob.clone(), bob_session);
+        let outcomes = [first.await.unwrap(), second.await.unwrap()];
+
+        let taken = outcomes
+            .iter()
+            .filter(|outcome| matches!(outcome, TakeOver::Taken(_)))
+            .count();
+        assert_eq!(taken, 1, "round {round}: {outcomes:?}");
+        let open_drives = sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM computer_screen_drives WHERE computer_id = $1 AND ended_at IS NULL"#,
+            computer.as_uuid(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(open_drives, 1, "round {round}");
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_notice_stays_pending_until_it_is_delivered(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let alice = grant("alice", Mode::Drive);
+    let driving = session(&repo, &alice).await;
+    repo.take_over(&alice, driving, Some("Alice".to_owned()), TWO_MINUTES)
+        .await
+        .unwrap();
+    let agent = alice.agent_user_id.clone().unwrap();
+
+    // A request that failed upstream read it but never acknowledged it.
+    let read = repo.pending_notices(&agent, TWO_MINUTES).await.unwrap();
+    assert_eq!(read.len(), 1);
+    assert_eq!(read[0].notice.driver_name.as_deref(), Some("Alice"));
+    let again = repo.pending_notices(&agent, TWO_MINUTES).await.unwrap();
+    assert_eq!(again, read);
+
+    repo.delete_notices(&[read[0].id]).await.unwrap();
+    assert!(
+        repo.pending_notices(&agent, TWO_MINUTES)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn open_sockets_count_the_person_and_the_computer(pool: PgPool) {
+    let repo = PgScreenRepo::new(pool);
+    let alice = grant("alice", Mode::View);
+    let bob = grant("bob", Mode::View);
+    session(&repo, &alice).await;
+    session(&repo, &alice).await;
+    let gone = session(&repo, &bob).await;
+    session(&repo, &bob).await;
+    repo.end_session(gone, EndReason::Stopped, 0, 0)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.open_sockets(COMPUTER, &alice.user_id, TWO_MINUTES)
+            .await
+            .unwrap(),
+        (2, 3)
     );
 }

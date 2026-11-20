@@ -202,6 +202,56 @@ impl Lease {
     }
 }
 
+/// A notice not yet delivered: acknowledged by its id once the request that
+/// carried it succeeded.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PendingNotice {
+    /// Its row.
+    pub id: Uuid,
+    /// The notice.
+    pub notice: AgentNotice,
+}
+
+/// What the screen needs to know about a person.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Person {
+    /// Their name, when their profile has one.
+    pub name: Option<String>,
+    /// Whether the account is an agent teammate's.
+    pub is_agent: bool,
+}
+
+/// Whether a caller may use a harness's screen, as the harness decides.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Access {
+    /// They may; the harness runs on this computer.
+    Granted(ComputerId),
+    /// They may not.
+    Denied,
+    /// There is no such harness.
+    NotFound,
+    /// The harness is not a Macro computer's.
+    NotAComputer,
+}
+
+/// A request for a ticket, as the caller made it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TicketRequest {
+    /// The harness whose computer to show.
+    pub harness_id: HarnessId,
+    /// Who asks.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Whether a program asks for them (an agent's or a routine's run),
+    /// rather than the person.
+    pub program: bool,
+    /// How the screen reaches the browser.
+    pub transport: Transport,
+    /// What to show.
+    pub surface: Surface,
+    /// Watch or drive.
+    pub mode: Mode,
+}
+
 /// What a take-over came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TakeOver {
@@ -253,15 +303,16 @@ pub enum NoticeName {
     HandBack,
 }
 
-/// A runtime notice for the agent, delivered once with its next brain
-/// request.
+/// A runtime notice for the agent, delivered with its next brain request
+/// that succeeds. It names the driver by name only: their user id is an
+/// email, which the prompt never carries.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentNotice {
     /// Which notice.
     pub name: NoticeName,
-    /// Who drives or drove.
-    pub driver: Driver,
+    /// The driver's name, when their profile has one.
+    pub driver_name: Option<String>,
     /// When they took over.
     pub started_at: DateTime<Utc>,
     /// When they handed back; absent on a take-over.
