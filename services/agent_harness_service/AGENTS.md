@@ -139,7 +139,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   (a failed sign-in carries a `code` saying how to recover:
   `invalid_code` 422 and `sign_in_expired` 410 need a new sign-in,
   `malformed_code` 400 a fresh paste, `computer_unreachable` 503 and
-  `computer_busy` 409 a retry; a timeout is a bare 504),
+  `computer_busy` 409 a retry; harnessd's own CLI timeout ends the sign-in
+  and answers `sign_in_expired`, while this service timing out on harnessd
+  is a bare 504 that lets the code be sent again),
   `POST /harnesses/{id}/claude-sign-out` → `{mode}`, and
   `GET /harnesses/{id}/claude-mode` → `{mode, account?}` (all manage rights).
   The sign-in link must be `https://claude.com` or `claude.ai` at exactly
@@ -450,6 +452,11 @@ replica. Serialize connect/disconnect effects by harness across replicas and che
 durable live connections before emitting a disconnect, so an old socket cannot
 mark its replacement offline. Keep this lock pool separate from repository pools
 to avoid exhausting the connections needed inside the guarded operation.
+Harness presence lease renewals use one more dedicated connection
+(`harness_bindings.rs`, each renewal bounded to 5 s), so a starved shared pool
+can't lapse the leases of live harnesses. A renewal cut off by that bound closes
+its connection instead of returning it: sqlx's unbounded return ping would let a
+silent socket hold the only slot.
 Routine dispatch waits for the shared HTTP listener and calls its loopback
 address, avoiding an ALB/self-startup race. Shutdown stops scheduling intake and
 cognition workers before draining sessions and pending publishes. Preview

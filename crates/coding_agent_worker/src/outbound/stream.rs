@@ -7,6 +7,12 @@
 //! cursor: opening with the last id seen (`Last-Event-ID`) first replays the
 //! events the service still retains after it, so a reconnect loses nothing
 //! published in between.
+//!
+//! A service that heartbeats says so in a response header. Its heartbeats flow
+//! only while its event source is making progress, so a stream that hears
+//! neither an event nor a heartbeat while [`STALL_AFTER_MISSED_HEARTBEATS`]
+//! heartbeats come due ends as stalled, and the caller reopens it from its cursor. A service that
+//! sends no header gets no such deadline: its stream ends only when it closes.
 
 use std::collections::BTreeSet;
 use std::marker::PhantomData;
@@ -18,7 +24,9 @@ use futures::{Stream, StreamExt as _};
 use harnesses::domain::models::{Harness, HarnessAgent, RUNTIME_CONNECTED_HEADER};
 use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
-use webhook::domain::models::{WebhookFilter, WebhookScope};
+use webhook::domain::models::{
+    STREAM_HEARTBEAT_EVENT, STREAM_HEARTBEAT_HEADER, WebhookFilter, WebhookScope,
+};
 
 use crate::config::{HarnessCredentials, MacroApi};
 
@@ -211,12 +219,39 @@ impl EventStreamClient {
             let message = response.text().await.unwrap_or_default();
             rootcause::bail!("the service answered {status} to open the event stream: {message}");
         }
-        Ok(EventStream {
-            events: Box::pin(response.bytes_stream().eventsource()),
-            last_event_id: None,
-            _envelope: PhantomData,
-        })
+        let heartbeat = heartbeat_interval(response.headers());
+        Ok(EventStream::new(response.bytes_stream(), heartbeat))
     }
+}
+
+/// The heartbeat interval the service advertised, if it heartbeats.
+fn heartbeat_interval(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let seconds: u64 = headers
+        .get(STREAM_HEARTBEAT_HEADER)?
+        .to_str()
+        .ok()?
+        .trim()
+        .parse()
+        .ok()?;
+    (seconds > 0).then(|| Duration::from_secs(seconds))
+}
+
+/// How many heartbeats in a row may be missed before a stream counts as
+/// stalled. One or two are a broker reconnecting; three is a service whose
+/// event source stopped.
+pub const STALL_AFTER_MISSED_HEARTBEATS: u32 = 3;
+
+/// How long a stream heartbeating every `interval` may stay silent: until
+/// half an interval after the last allowed miss, so the heartbeat after it,
+/// due exactly then, does not race the deadline.
+fn stall_after(interval: Duration) -> Duration {
+    interval * STALL_AFTER_MISSED_HEARTBEATS + interval / 2
+}
+
+/// When a heartbeating stream counts as stalled.
+struct StallDeadline {
+    interval: Duration,
+    at: Pin<Box<tokio::time::Sleep>>,
 }
 
 /// The SSE header a stream resumes after.
@@ -238,35 +273,95 @@ pub fn cursor_at(time: std::time::SystemTime) -> String {
 type SseEvents =
     Pin<Box<dyn Stream<Item = Result<Event, EventStreamError<reqwest::Error>>> + Send>>;
 
+/// What an open stream yields.
+#[derive(Debug, PartialEq, Eq)]
+pub enum StreamNext<E> {
+    /// A decoded envelope.
+    Event(E),
+    /// The service's event source is alive.
+    Heartbeat,
+}
+
 /// An open SSE response, yielding one decoded envelope at a time.
 pub struct EventStream<E> {
     events: SseEvents,
     last_event_id: Option<String>,
+    /// Pushed back by every event and heartbeat; `None` for a service that
+    /// does not heartbeat.
+    stall: Option<StallDeadline>,
     _envelope: PhantomData<E>,
 }
 
 impl<E: DeserializeOwned> EventStream<E> {
+    /// Read SSE from `body`, stalling after missed heartbeats when the
+    /// service advertised `heartbeat`.
+    fn new<Body, Chunk>(body: Body, heartbeat: Option<Duration>) -> Self
+    where
+        Body: Stream<Item = Result<Chunk, reqwest::Error>> + Send + 'static,
+        Chunk: AsRef<[u8]>,
+    {
+        Self {
+            events: Box::pin(body.eventsource()),
+            last_event_id: None,
+            stall: heartbeat.map(|interval| StallDeadline {
+                interval,
+                at: Box::pin(tokio::time::sleep(stall_after(interval))),
+            }),
+            _envelope: PhantomData,
+        }
+    }
+
+    /// The service's heartbeat interval, when it heartbeats: only then can a
+    /// silent stream be told from a quiet one.
+    pub fn heartbeat_interval(&self) -> Option<Duration> {
+        self.stall.as_ref().map(|stall| stall.interval)
+    }
+
     /// The id of the last event this stream delivered or skipped: where the
     /// next stream resumes.
     pub fn last_event_id(&self) -> Option<&str> {
         self.last_event_id.as_deref()
     }
 
-    /// The next envelope, or `None` when the server closes.
+    /// The next envelope or heartbeat, or `None` when the server closes.
     ///
-    /// Keep-alive comments never surface as events; a `data` payload that
-    /// does not decode as `E` is skipped rather than ending the stream.
-    pub async fn next_event(&mut self) -> rootcause::Result<Option<E>> {
+    /// Keep-alive comments never surface and never count as a sign of life:
+    /// the service's HTTP layer sends them on a timer. A `data` payload that
+    /// does not decode as `E` is skipped rather than ending the stream. Fails
+    /// once a heartbeating stream stalls. Cancel-safe.
+    pub async fn next_event(&mut self) -> rootcause::Result<Option<StreamNext<E>>> {
         loop {
-            let Some(event) = self.events.next().await else {
+            let next = match self.stall.as_mut() {
+                None => self.events.next().await,
+                Some(stall) => tokio::select! {
+                    // What already arrived wins: a caller that was busy
+                    // handling an event may come back after the deadline.
+                    biased;
+                    next = self.events.next() => next,
+                    () = stall.at.as_mut() => {
+                        rootcause::bail!(
+                            "the event stream stalled: {} heartbeats in a row missed",
+                            STALL_AFTER_MISSED_HEARTBEATS
+                        );
+                    }
+                },
+            };
+            let Some(event) = next else {
                 return Ok(None);
             };
             let event = event.context("could not read the event stream")?;
+            if let Some(stall) = self.stall.as_mut() {
+                let at = tokio::time::Instant::now() + stall_after(stall.interval);
+                stall.at.as_mut().reset(at);
+            }
+            if event.event == STREAM_HEARTBEAT_EVENT {
+                return Ok(Some(StreamNext::Heartbeat));
+            }
             if !event.id.is_empty() {
                 self.last_event_id = Some(event.id.clone());
             }
             match serde_json::from_str(&event.data) {
-                Ok(value) => return Ok(Some(value)),
+                Ok(value) => return Ok(Some(StreamNext::Event(value))),
                 Err(error) => {
                     tracing::debug!(error = ?error, id = %event.id, "undecodable SSE data; skipped");
                 }

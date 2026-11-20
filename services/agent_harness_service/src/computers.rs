@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use agent_harness::domain::ports::{
-    ConnectionRecorded, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    ConnectionRecorded, HarnessConnection, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
 };
 use anyhow::Context;
 use harness_id::HarnessId;
@@ -722,8 +722,8 @@ impl<Inner: HarnessPresence> HarnessPresence for ComputerPresence<Inner> {
     }
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
         Arc::clone(&self.inner).renew(live)
     }
 }
