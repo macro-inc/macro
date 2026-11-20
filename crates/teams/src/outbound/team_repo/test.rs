@@ -1649,7 +1649,6 @@ async fn test_patch_team_default_link_share_round_trip(pool: Pool<Postgres>) -> 
 async fn test_patch_team_logo_round_trip(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let team_repo = TeamRepositoryImpl::new(pool);
     let team_id = macro_uuid::string_to_uuid("11111111-1111-1111-1111-111111111111")?;
-    let member_id = MacroUserIdStr::parse_from_str("macro|user2@user.com")?;
     let logo = macro_uuid::string_to_uuid("22222222-2222-2222-2222-222222222222")?;
     let logo_request = |logo_file_id, name| PatchTeamRequest {
         member_crm_access: None,
@@ -1671,7 +1670,12 @@ async fn test_patch_team_logo_round_trip(pool: Pool<Postgres>) -> anyhow::Result
         .await?;
     let team = team_repo.get_team_by_id(&team_id).await?;
     assert_eq!(team.team.logo_file_id(), Some(logo));
-    let member_teams = team_repo.get_user_teams(&member_id).await?;
+    let member = team
+        .members
+        .iter()
+        .find(|member| member.role == TeamRole::Member)
+        .expect("the fixture team should have a plain member");
+    let member_teams = team_repo.get_user_teams(&member.user_id).await?;
     let member_team = member_teams
         .iter()
         .find(|team| team.id() == &team_id)
