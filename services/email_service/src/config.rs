@@ -23,6 +23,12 @@ maybe_env_vars! {
     pub struct PosthogApiKey;
     /// PostHog host; defaults to the project's US region.
     pub struct PosthogHost;
+    /// deadsimple.email provisioning key for agent mailboxes. Absent, agent
+    /// mailboxes answer `not_configured` and nothing reaches the provider.
+    pub struct DeadsimpleApiKey;
+    /// The KMS key agent mailbox credentials are encrypted under; required
+    /// whenever `DEADSIMPLE_API_KEY` is set.
+    pub struct AgentMailboxKmsKeyId;
 }
 
 #[derive(macro_config::MacroConfig)]
@@ -170,11 +176,32 @@ pub struct Config {
 
     /// PostHog host (optional).
     pub posthog_host: PosthogHost,
+
+    /// deadsimple.email provisioning key (optional; see [`DeadsimpleApiKey`]).
+    pub deadsimple_api_key: DeadsimpleApiKey,
+
+    /// KMS key for agent mailbox credentials (optional; see [`AgentMailboxKmsKeyId`]).
+    pub agent_mailbox_kms_key_id: AgentMailboxKmsKeyId,
 }
 
 impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>().context("failed to load config")
+    }
+
+    /// The deadsimple.email provisioning key, when one is configured. A blank
+    /// value counts as none.
+    pub fn deadsimple_api_key(&self) -> Option<&str> {
+        self.deadsimple_api_key
+            .value()
+            .filter(|value| !value.trim().is_empty())
+    }
+
+    /// The agent mailbox KMS key, when one is configured.
+    pub fn agent_mailbox_kms_key_id(&self) -> Option<&str> {
+        self.agent_mailbox_kms_key_id
+            .value()
+            .filter(|value| !value.trim().is_empty())
     }
 
     /// The PostHog project key, when one is configured. A blank value counts

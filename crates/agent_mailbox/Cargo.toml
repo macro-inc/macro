@@ -14,10 +14,11 @@ fake-vendor = ["dep:axum", "dep:clap", "dep:serde_json", "dep:tokio", "outbound"
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:serde",
   "dep:utoipa",
   "macro_user_id/schema",
+  "wire",
 ]
+wire = ["dep:serde", "uuid/serde"]
 outbound = [
   "dep:aws-sdk-kms",
   "dep:http",

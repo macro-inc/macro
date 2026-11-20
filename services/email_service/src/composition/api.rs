@@ -40,6 +40,7 @@ use tokio_util::task::TaskTracker;
 /// Environment-derived dependencies of the production HTTP context.
 pub(crate) struct ApiDependencies {
     pub read_receipts: crate::composition::ReadReceipts,
+    pub agent_mailboxes: Arc<crate::composition::agent_mailboxes::AgentMailboxSvc>,
     pub config: crate::config::Config,
     pub db: sqlx::PgPool,
     pub sqs_client: sqs_client::SQS,
@@ -66,6 +67,7 @@ pub(crate) struct ApiDependencies {
 pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiContext> {
     let ApiDependencies {
         read_receipts,
+        agent_mailboxes,
         config,
         db,
         sqs_client,
@@ -277,6 +279,7 @@ pub(crate) async fn api_context(deps: ApiDependencies) -> anyhow::Result<ApiCont
         failure_observer: crate::api::context::InitFailureObserver,
     });
     Ok(ApiContext {
+        agent_mailboxes,
         gmail_push: Arc::new(email::domain::mailbox::gmail_push::GmailPushService {
             authentication: email::domain::mailbox::gmail_push::GooglePushAuthentication {
                 cache: crate::outbound::gmail_push::GooglePushKeyCache(redis_client.clone()),

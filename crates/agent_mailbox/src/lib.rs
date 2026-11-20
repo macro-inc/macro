@@ -19,3 +19,5 @@ pub mod domain;
 pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;
+#[cfg(feature = "wire")]
+pub mod wire;

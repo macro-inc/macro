@@ -127,8 +127,19 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     });
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
+    let agent_mailboxes = std::sync::Arc::new(
+        crate::composition::agent_mailboxes::agent_mailboxes(&config, db.clone(), &aws_config)?,
+    );
+    let background_tracker = TaskTracker::new();
+    let background_cancel = tokio_util::sync::CancellationToken::new();
+    crate::composition::agent_mailboxes::spawn_sweep(
+        agent_mailboxes.clone(),
+        &background_tracker,
+        background_cancel.clone(),
+    );
     let state = api_context(ApiDependencies {
         read_receipts,
+        agent_mailboxes,
         config,
         db,
         sqs_client,
@@ -146,6 +157,10 @@ async fn run_server() -> anyhow::Result<()> {
     })
     .await?;
     let api_result = api::setup_and_serve(state).await;
+
+    background_cancel.cancel();
+    background_tracker.close();
+    background_tracker.wait().await;
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();

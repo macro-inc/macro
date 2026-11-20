@@ -24,17 +24,17 @@ use macro_authorization::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use serde::Deserialize;
 
 use crate::domain::models::{
-    AgentMailboxError, AgentMailboxView, LocalPart, MailMessage, MessageList, MessagePage,
-    OutgoingMessage, ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage, VendorMode,
+    AgentMailboxError, LocalPart, MailMessage, MessageList, MessagePage, OutgoingMessage,
+    ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage,
 };
 use crate::domain::service::AgentMailboxUseCases;
-
-/// Shown with every mailbox a fake provider serves, so nobody mistakes it for real mail.
-pub const FAKE_VENDOR_NOTICE: &str = "fake vendor, not live";
+use crate::wire::{
+    AgentMailboxErrorBody, AgentMailboxErrorCode, AgentMailboxResponse,
+    ProvisionAgentMailboxRequest, ReplyAgentMessageRequest, SendAgentMessageRequest,
+};
 
 /// Why an agent's program may not send without the owner seeing it first;
 /// the same rule as every other email send from a program.
@@ -65,19 +65,6 @@ impl<Service, Auth> FromRef<AgentMailboxRouterState<Service, Auth>>
     }
 }
 
-/// An error answer: a stable `code`, a message, and when a send fits again.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentMailboxErrorBody {
-    /// Stable, machine-readable reason.
-    pub code: &'static str,
-    /// What happened, for the agent or person reading it.
-    pub message: String,
-    /// For `send_limit`: when a send fits again.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_at: Option<DateTime<Utc>>,
-}
-
 /// A refused request.
 #[derive(Debug, thiserror::Error)]
 pub enum AgentMailboxHttpError {
@@ -99,7 +86,7 @@ impl IntoResponse for AgentMailboxHttpError {
             Self::ConfirmationRequired => {
                 return answer(
                     StatusCode::FORBIDDEN,
-                    "confirmation_required",
+                    AgentMailboxErrorCode::ConfirmationRequired,
                     PROGRAM_SEND_REFUSAL.to_owned(),
                     None,
                 );
@@ -107,26 +94,28 @@ impl IntoResponse for AgentMailboxHttpError {
             Self::BadPath(what) => {
                 return answer(
                     StatusCode::BAD_REQUEST,
-                    "invalid",
+                    AgentMailboxErrorCode::Invalid,
                     format!("invalid {what}"),
                     None,
                 );
             }
         };
-        let (status, code) = match &error {
-            AgentMailboxError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
-            AgentMailboxError::NotAnAgent => (StatusCode::FORBIDDEN, "not_an_agent"),
-            AgentMailboxError::AlreadyProvisioned => (StatusCode::CONFLICT, "already_provisioned"),
-            AgentMailboxError::Paused => (StatusCode::CONFLICT, "paused"),
-            AgentMailboxError::NotReady(_) => (StatusCode::CONFLICT, "not_ready"),
-            AgentMailboxError::SendLimit { .. } => (StatusCode::TOO_MANY_REQUESTS, "send_limit"),
-            AgentMailboxError::Invalid(_) => (StatusCode::BAD_REQUEST, "invalid"),
-            AgentMailboxError::NotConfigured => (StatusCode::SERVICE_UNAVAILABLE, "not_configured"),
-            AgentMailboxError::Rejected => (StatusCode::BAD_GATEWAY, "provider_rejected"),
-            AgentMailboxError::Unavailable => {
-                (StatusCode::SERVICE_UNAVAILABLE, "provider_unavailable")
+        let code = AgentMailboxErrorCode::of(&error);
+        let status = match code {
+            AgentMailboxErrorCode::NotFound => StatusCode::NOT_FOUND,
+            AgentMailboxErrorCode::NotAnAgent | AgentMailboxErrorCode::ConfirmationRequired => {
+                StatusCode::FORBIDDEN
             }
-            AgentMailboxError::Internal(_) => (StatusCode::INTERNAL_SERVER_ERROR, "internal"),
+            AgentMailboxErrorCode::AlreadyProvisioned
+            | AgentMailboxErrorCode::Paused
+            | AgentMailboxErrorCode::NotReady => StatusCode::CONFLICT,
+            AgentMailboxErrorCode::SendLimit => StatusCode::TOO_MANY_REQUESTS,
+            AgentMailboxErrorCode::Invalid => StatusCode::BAD_REQUEST,
+            AgentMailboxErrorCode::NotConfigured | AgentMailboxErrorCode::ProviderUnavailable => {
+                StatusCode::SERVICE_UNAVAILABLE
+            }
+            AgentMailboxErrorCode::ProviderRejected => StatusCode::BAD_GATEWAY,
+            AgentMailboxErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match &error {
             AgentMailboxError::Internal(report) => {
@@ -145,7 +134,7 @@ impl IntoResponse for AgentMailboxHttpError {
 
 fn answer(
     status: StatusCode,
-    code: &'static str,
+    code: AgentMailboxErrorCode,
     message: String,
     retry_at: Option<DateTime<Utc>>,
 ) -> Response {
@@ -167,28 +156,6 @@ fn answer(
     response
 }
 
-/// A mailbox as callers see it, with the fake-provider notice when there is one.
-#[derive(Debug, Serialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct AgentMailboxResponse {
-    /// The mailbox.
-    #[serde(flatten)]
-    pub mailbox: AgentMailboxView,
-    /// `"fake vendor, not live"` when a fake provider serves this deployment.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notice: Option<&'static str>,
-}
-
-impl From<AgentMailboxView> for AgentMailboxResponse {
-    fn from(mailbox: AgentMailboxView) -> Self {
-        let notice = match mailbox.vendor_mode {
-            VendorMode::Live => None,
-            VendorMode::Fake => Some(FAKE_VENDOR_NOTICE),
-        };
-        Self { mailbox, notice }
-    }
-}
-
 /// Which page of messages to list.
 #[derive(Debug, Deserialize, utoipa::IntoParams)]
 #[serde(rename_all = "camelCase")]
@@ -197,51 +164,6 @@ pub struct ListMessagesQuery {
     pub cursor: Option<String>,
     /// 1 to 50; 20 when absent.
     pub limit: Option<u8>,
-}
-
-/// A new message from the agent's mailbox.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct SendAgentMessageRequest {
-    /// Retry-stable: repeating a send with the same key sends once.
-    pub idempotency_key: Uuid,
-    /// Recipients, 1 to 20 with `cc`.
-    pub to: Vec<String>,
-    /// Copied recipients.
-    #[serde(default)]
-    pub cc: Vec<String>,
-    /// Subject line.
-    pub subject: String,
-    /// Plain-text body.
-    pub text_body: String,
-    /// The owner's approval, quoted. Required when an agent's program sends.
-    pub confirmation: Option<String>,
-}
-
-/// A reply from the agent's mailbox.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ReplyAgentMessageRequest {
-    /// Retry-stable: repeating a reply with the same key sends once.
-    pub idempotency_key: Uuid,
-    /// Plain-text body.
-    pub text_body: String,
-    /// The owner's approval, quoted. Required when an agent's program sends.
-    pub confirmation: Option<String>,
-}
-
-/// A request to give an agent a mailbox.
-#[derive(Debug, Deserialize, utoipa::ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct ProvisionAgentMailboxRequest {
-    /// Retry-stable: one request makes at most one mailbox.
-    pub request_id: Uuid,
-    /// The agent's own Macro account.
-    pub agent_user_id: String,
-    /// Shown as the sender's name.
-    pub display_name: Option<String>,
-    /// The local part to ask for: lowercase letters, digits, `.` and `-`.
-    pub requested_local_part: Option<String>,
 }
 
 fn refuse_unconfirmed_program_send(

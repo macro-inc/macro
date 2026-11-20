@@ -8,7 +8,11 @@ use rootcause::Report;
 use tower::ServiceExt;
 
 use super::*;
-use crate::domain::models::{AgentMailboxId, MailboxProvider, MailboxState};
+use crate::domain::models::{
+    AgentMailboxId, AgentMailboxView, MailboxProvider, MailboxState, VendorMode,
+};
+use crate::wire::FAKE_VENDOR_NOTICE;
+use uuid::Uuid;
 
 const AGENT: &str = "macro|ada-1@agents.macro.invalid";
 const INTERNAL_KEY: &str = "internal-key";

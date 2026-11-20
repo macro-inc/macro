@@ -7887,8 +7887,11 @@ name = "email_service"
 version = "0.1.0"
 dependencies = [
  "agent_correlation",
+ "agent_mailbox",
  "anyhow",
  "authentication_service_client",
+ "aws-config",
+ "aws-sdk-kms",
  "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
@@ -7992,14 +7995,19 @@ dependencies = [
 name = "email_service_client"
 version = "0.1.0"
 dependencies = [
+ "agent_mailbox",
  "anyhow",
  "email",
  "macro_tower_layers",
  "models_email",
  "reqwest 0.13.4",
+ "serde",
  "serde_json",
+ "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "urlencoding",
+ "uuid",
  "wiremock",
  "workspace-hack",
 ]

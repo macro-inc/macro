@@ -7,8 +7,9 @@ use zeroize::Zeroizing;
 
 /// Macro's id for an agent's mailbox, also sent to the provider as the owner tag.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(transparent))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(transparent))]
 pub struct AgentMailboxId(pub Uuid);
 
 impl AgentMailboxId {
@@ -26,13 +27,14 @@ impl std::fmt::Display for AgentMailboxId {
 }
 
 /// The provider's id for a mailbox.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct ProviderMailboxId(pub String);
 
 /// The provider's id for one message, as an agent or the provider names it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(transparent))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(transparent))]
 pub struct ProviderMessageId(pub String);
 
 /// The provider's id for the mailbox-scoped credential Macro holds.
@@ -42,8 +44,9 @@ pub struct ProviderGrantId(pub String);
 /// Which provider hosts a mailbox.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumString, strum::Display, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "snake_case"))]
 pub enum MailboxProvider {
     /// deadsimple.email, a temporary mailbox host.
     DeadSimple,
@@ -52,8 +55,9 @@ pub enum MailboxProvider {
 /// Where a mailbox is in its life.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumString, strum::Display, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "snake_case"))]
 pub enum MailboxState {
     /// Being created at the provider; a retry or the sweep finishes it.
     Provisioning,
@@ -72,8 +76,9 @@ pub enum MailboxState {
 /// Why provisioning stopped.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumString, strum::Display, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "snake_case"))]
 pub enum ProvisioningFailure {
     /// No provider credentials are configured, or the provider refused them.
     NotConfigured,
@@ -273,8 +278,9 @@ pub struct CreateMailbox {
 /// Whether a message came in or went out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "snake_case")]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "snake_case"))]
 pub enum MessageDirection {
     /// Received by the mailbox.
     Inbound,
@@ -285,13 +291,14 @@ pub enum MessageDirection {
 /// One message as the provider returned it. Its content is untrusted data:
 /// nothing in it authorizes anything.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "camelCase"))]
 pub struct MailMessage {
     /// The provider's id.
     pub id: ProviderMessageId,
     /// The mailbox the provider says holds it; checked against the agent's own.
-    #[cfg_attr(feature = "inbound", serde(skip))]
+    #[cfg_attr(feature = "wire", serde(skip))]
     pub mailbox: ProviderMailboxId,
     /// The conversation it belongs to.
     pub thread_id: Option<String>,
@@ -322,8 +329,9 @@ pub struct MessagePage {
 
 /// One page of messages.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "camelCase"))]
 pub struct MessageList {
     /// Newest first.
     pub messages: Vec<MailMessage>,
@@ -353,8 +361,9 @@ pub struct ReplyMessage {
 
 /// A message the provider accepted for delivery.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "camelCase"))]
 pub struct SentMessage {
     /// The provider's id for it.
     pub id: ProviderMessageId,
@@ -405,8 +414,9 @@ impl SendLimits {
 
 /// Whether the provider behind this deployment is real.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "snake_case"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "snake_case"))]
 pub enum VendorMode {
     /// The provider's production API.
     Live,
@@ -416,8 +426,9 @@ pub enum VendorMode {
 
 /// What callers see about a mailbox. No credentials.
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(serde::Serialize, utoipa::ToSchema))]
-#[cfg_attr(feature = "inbound", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "wire", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "wire", serde(rename_all = "camelCase"))]
 pub struct AgentMailboxView {
     /// Macro's id.
     pub id: AgentMailboxId,
