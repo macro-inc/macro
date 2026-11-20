@@ -107,10 +107,12 @@ in
           inbox=${inbox}
           claimed=${claimed}
           as_macro() { setpriv --reuid=macro --regid=macro --clear-groups "$@"; }
+          # Best effort: whatever macro claimed (a directory too) is removed,
+          # so the next delivery can be claimed.
           refuse() {
-            rm -f ${installed}.new
-            as_macro rm -f "$claimed"
             echo "macro-agent-apply: $1" >&2
+            rm -f ${installed}.new || true
+            as_macro rm -rf -- "$claimed" || true
             exit 1
           }
           role=${role}

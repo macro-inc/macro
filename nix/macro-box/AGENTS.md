@@ -146,7 +146,9 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   it), refuses one over 64 KiB whole (macrod refuses to stage one), installs
   it as `/var/lib/macrod/agent.env` (0600, macro) and removes what it
   claimed; one staged meanwhile keeps the inbox's name and is installed
-  next. The agent's own path unit then starts it.
+  next (the path unit watches `PathChanged` and `PathExists`, so one staged
+  after the last claim still starts it; the unit times out after 30 s, so a
+  FIFO can't hold it). The agent's own path unit then starts it.
 - `macro-agent.service` is a system unit running as `macro`, the user
   harnessd keeps Claude's sign-in for. It binds that sign-in
   (`macro.box.harnessd.stateDirectory` + `/claude`) read-only and names it
@@ -373,7 +375,7 @@ existing credentials: no new pairing and no Claude login.
   `IsEnabled`; computer-use-linux lists Chromium's
   window, reads its AT-SPI tree and returns a screenshot PNG; the agent rejects a credentialed repo URL without
   contacting the repo; an environment macro stages in the inbox is installed
-  (0600 macro, inbox emptied) and restarts it, and it clones from an
+  (0600 macro, inbox's file removed) and restarts it, and it clones from an
   in-VM git server, links the image's packages and runs, without its
   credentials in its environment or the rest of macro's home in its view;
   neither the agent's unit nor Openbox can reach `systemd-run --user`,

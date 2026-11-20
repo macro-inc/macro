@@ -229,6 +229,15 @@ pkgs.testers.runNixOSTest {
         machine.succeed("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         assert machine.succeed("sha256sum /etc/shadow") == shadow
         machine.succeed("test ! -e /run/macro-agent-inbox/agent.env.claimed")
+        # A directory staged as agent.env is refused and removed, and the next
+        # delivery is installed.
+        machine.succeed("runuser -u macro -- mkdir /run/macro-agent-inbox/agent.env")
+        machine.wait_until_succeeds("test ! -e /run/macro-agent-inbox/agent.env")
+        machine.wait_until_succeeds("test ! -e /run/macro-agent-inbox/agent.env.claimed")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Cy > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
+        machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Cy /var/lib/macrod/agent.env")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
+        machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
         # One over 64 KiB is refused whole, not installed in part.
         machine.succeed("runuser -u macro -- sh -c '{ echo MACRO_AGENT_NAME=Big; head -c 70000 /dev/zero | tr \"\\\\0\" x; } > /run/macro-agent-inbox/agent.partial && mv /run/macro-agent-inbox/agent.partial /run/macro-agent-inbox/agent.env'")
         machine.wait_until_succeeds("journalctl -u macro-agent-apply.service -o cat | grep -F 'refusing an agent environment over 65536 bytes'")
