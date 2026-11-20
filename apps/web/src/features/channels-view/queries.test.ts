@@ -1,6 +1,6 @@
 import type { ChannelEntity } from '@entity/types/entity';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import { createMemo, createRoot, createSignal, onCleanup } from 'solid-js';
+import { createRoot, createSignal, onCleanup } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 const useSoupAstItemsQuery = vi.hoisted(() =>
@@ -59,13 +59,13 @@ import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { resetQueryAccountSession } from '@queries/auth/account-scope';
 import { authKeys } from '@queries/auth/keys';
 import {
+  CHANNEL_LOOKUP_BATCH_SIZE,
   useCachedChannelsByIds,
-  useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
 import { queryClient } from '@queries/client';
 import {
   fetchChannelGroupIds,
-  resolveReferencedChannels,
+  THREAD_CHANNELS_LIMIT,
   useChannelsSources,
 } from './queries';
 
@@ -162,18 +162,16 @@ describe('channel list query selection', () => {
       return dispose;
     });
     try {
-      // Five channel lists, then the Threads rail's threads and their channels.
-      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(7);
+      // Five channel lists, then the Threads rail's threads. Their channels
+      // are looked up only once a thread names one.
+      expect(useSoupAstItemsQuery).toHaveBeenCalledTimes(6);
       for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(0, 5)) {
         expect(options?.().graphqlProjection).toBe('channel-list');
         expect(options?.().staleTime).toBe(30_000);
       }
-      for (const [, options] of useSoupAstItemsQuery.mock.calls.slice(5, 7)) {
-        expect(options?.().staleTime).toBe(30_000);
-      }
-      // The Threads rail's channels, fetched by id, are rail rows too.
-      const [, channelsByIdOptions] = useSoupAstItemsQuery.mock.calls[6];
-      expect(channelsByIdOptions?.().graphqlProjection).toBe('channel-list');
+      const [threadArgs, threadOptions] = useSoupAstItemsQuery.mock.calls[5];
+      expect(threadArgs().params.limit).toBe(THREAD_CHANNELS_LIMIT);
+      expect(threadOptions?.().staleTime).toBe(30_000);
     } finally {
       dispose();
     }
@@ -202,101 +200,36 @@ describe('channel list query selection', () => {
 });
 
 describe('channels resolved by id', () => {
-  it('compiles each by-ID batch once until its membership changes', () => {
+  it('asks for each batch of IDs in one request that cannot leave a next page', () => {
     useSoupAstItemsQuery.mockClear();
-    const { dispose, setIds, reads } = createRoot((dispose) => {
-      const [ids, setIds] = createSignal(
-        Array.from({ length: 500 }, (_, index) => `channel-${index}`)
+    const ids = Array.from(
+      { length: CHANNEL_LOOKUP_BATCH_SIZE + 1 },
+      (_, index) => `channel-${String(index).padStart(4, '0')}`
+    );
+    const dispose = createRoot((dispose) => {
+      useCachedChannelsByIds(
+        () => ids,
+        () => true
       );
-      const reads = vi.fn(ids);
-      useChannelsByIdsQuery(reads);
-      return { dispose, setIds, reads };
+      return dispose;
     });
     try {
-      const [args] = useSoupAstItemsQuery.mock.calls[0];
-      const initial = args();
-      for (let read = 0; read < 20; read += 1) args();
-      expect(reads).toHaveBeenCalledTimes(1);
-      setIds(['replacement']);
-      expect(args()).not.toBe(initial);
-      expect(args().params.limit).toBe(1);
-      expect(reads).toHaveBeenCalledTimes(2);
+      const batches = useSoupAstItemsQuery.mock.calls.map(
+        ([args, options]) => ({
+          args: args(),
+          cacheFirst: options?.().graphqlCacheFirstEntities?.length,
+        })
+      );
+      // Soup returns a cursor whenever a page is full, so a lookup asks for
+      // one row more than it has IDs, within Soup's 500-row page.
+      expect(batches.map((batch) => batch.args.params.limit)).toEqual([500, 2]);
+      expect(batches.map((batch) => batch.cacheFirst)).toEqual([499, 1]);
     } finally {
       dispose();
     }
   });
 
   const resolved = [channelEntity('design'), channelEntity('support')];
-  const settled = {
-    isEnabled: true,
-    isPending: false,
-    error: undefined,
-    data: undefined,
-  };
-
-  it('replaces the previous answer, dropping channels the lookup stops returning', () => {
-    expect(
-      resolveReferencedChannels(resolved, {
-        ...settled,
-        data: {
-          entities: [
-            channelEntity('design'),
-            { id: 'note', type: 'document' } as never,
-          ],
-        },
-      })
-    ).toEqual([channelEntity('design')]);
-  });
-
-  it.each(['disabled', 'pending', 'failed'] as const)(
-    'keeps the previous answer without reading %s query data',
-    (state) => {
-      expect(
-        resolveReferencedChannels(resolved, {
-          isEnabled: state !== 'disabled',
-          isPending: state === 'pending',
-          error: state === 'failed' ? new Error('page failed') : undefined,
-          get data(): { entities: ChannelEntity[] } {
-            throw new Error('An unavailable query resource was read');
-          },
-        })
-      ).toBe(resolved);
-    }
-  );
-
-  it('retains resolved rows while a changed lookup is pending and updates when it settles', () => {
-    const { dispose, result, setPending, setEntities } = createRoot(
-      (dispose) => {
-        const [pending, setPending] = createSignal(false);
-        const [entities, setEntities] = createSignal(resolved);
-        const query = {
-          ...settled,
-          get isPending() {
-            return pending();
-          },
-          get data() {
-            if (pending()) throw new Error('A pending query resource was read');
-            return { entities: entities() };
-          },
-        };
-        const result = createMemo<ChannelEntity[]>(
-          (previous) => resolveReferencedChannels(previous, query),
-          []
-        );
-        return { dispose, result, setPending, setEntities };
-      }
-    );
-    try {
-      const previous = result();
-      setPending(true);
-      setEntities([channelEntity('support')]);
-      expect(result()).toBe(previous);
-      setPending(false);
-      expect(result()).toEqual([channelEntity('support')]);
-    } finally {
-      dispose();
-    }
-  });
 
   it('retains section members during notification refresh without reading pending data', () => {
     const { dispose, result, setPending, setEntities, setIds } = createRoot(
@@ -391,9 +324,6 @@ describe('channels resolved by id', () => {
       useSoupAstItemsQuery.mockReset();
     }
   });
-  it('keeps the previous answer when a settled lookup has no data', () => {
-    expect(resolveReferencedChannels(resolved, settled)).toBe(resolved);
-  });
 });
 
 describe('Threads rail source', () => {
@@ -456,30 +386,113 @@ describe('Threads rail source', () => {
 });
 
 describe('Threads rail paging', () => {
-  it('keeps paging on its own while the list may be too short to scroll', () => {
+  it('reads one bounded page of threads and leaves further pages to scrolling', async () => {
     const fetchNextPage = vi.fn(async () => {});
-    useSoupAstItemsQuery.mockImplementation(
-      () =>
-        ({
-          isEnabled: true,
-          isLoading: false,
-          isFetching: false,
-          error: null,
-          hasNextPage: true,
-          fetchNextPage,
-          data: { entities: [] },
-        }) as never
-    );
-    const dispose = createRoot((dispose) => {
-      useChannelsSources(
+    const threadLimits: (number | null | undefined)[] = [];
+    useSoupAstItemsQuery.mockImplementation((args) => {
+      const { params, body } = args();
+      if (JSON.stringify(body.cthf).includes('Participant'))
+        threadLimits.push(params.limit);
+      return {
+        isEnabled: true,
+        isPending: false,
+        isLoading: false,
+        isFetching: false,
+        error: null,
+        hasNextPage: true,
+        fetchNextPage,
+        data: { entities: [] },
+      } as never;
+    });
+    const { sources, dispose } = createRoot((dispose) => ({
+      dispose,
+      sources: useChannelsSources(
         (scope) => scope === 'threads',
         () => 'updated_at'
-      );
-      return dispose;
+      ),
+    }));
+    try {
+      expect(threadLimits).toEqual([THREAD_CHANNELS_LIMIT]);
+      expect(fetchNextPage).not.toHaveBeenCalled();
+      expect(sources.threads.hasMore()).toBe(true);
+      await sources.threads.loadMore();
+      expect(fetchNextPage).toHaveBeenCalledOnce();
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
+  });
+
+  it('shows cached thread channels while the missing ones are still fetched', () => {
+    const { sources, dispose, setFetched } = createRoot((dispose) => {
+      const [fetched, setFetched] = createSignal(false);
+      useSoupAstItemsQuery.mockImplementation((args, options) => {
+        const isThreadQuery = JSON.stringify(args().body.cthf).includes(
+          'Participant'
+        );
+        if (isThreadQuery) {
+          return {
+            isEnabled: true,
+            isPending: false,
+            isLoading: false,
+            isFetching: false,
+            data: {
+              entities: [
+                { type: 'channel_thread', id: 't1', channelId: 'cached' },
+                { type: 'channel_thread', id: 't2', channelId: 'missing' },
+              ],
+            },
+          } as never;
+        }
+        // The lookup names its channels, so Soup selects cached ones locally.
+        const lookup = options?.().graphqlCacheFirstEntities;
+        if (!lookup) return { isEnabled: false, isPending: true } as never;
+        expect(lookup).toEqual([
+          { entityType: 'CHANNEL', entityId: 'cached' },
+          { entityType: 'CHANNEL', entityId: 'missing' },
+        ]);
+        return {
+          isEnabled: true,
+          isPending: false,
+          isLoading: false,
+          get isFetching() {
+            return !fetched();
+          },
+          get hasPageData() {
+            return fetched();
+          },
+          get data() {
+            return {
+              entities: fetched()
+                ? [channelEntity('cached'), channelEntity('missing')]
+                : [channelEntity('cached')],
+            };
+          },
+        } as never;
+      });
+      return {
+        dispose,
+        setFetched,
+        sources: useChannelsSources(
+          (scope) => scope === 'threads',
+          () => 'updated_at'
+        ),
+      };
     });
-    expect(fetchNextPage).toHaveBeenCalled();
-    dispose();
-    useSoupAstItemsQuery.mockReset();
+    try {
+      expect(sources.threads.items().map(({ id }) => id)).toEqual(['cached']);
+      expect(sources.threads.isLoading()).toBe(false);
+      setFetched(true);
+      expect(
+        sources.threads
+          .items()
+          .map(({ id }) => id)
+          .sort()
+      ).toEqual(['cached', 'missing']);
+    } finally {
+      dispose();
+      useSoupAstItemsQuery.mockReset();
+    }
   });
 });
 
