@@ -286,9 +286,10 @@ export function AppChrome(props: ParentProps) {
   const singleSidebarFlag = useFeatureFlag(enableSingleSidebar);
   const singleSidebar = () =>
     sidebarVisible() && singleSidebarFlag().enabled === true;
-  // Collapsed, the single sidebar is the icon rail again.
+  // Collapsed, the single sidebar is the icon rail again. v2: earlier builds
+  // saved this from a Cmd+. that also toggled each split's own navigation.
   const [singleSidebarCollapsed, setSingleSidebarCollapsed] =
-    usePreference<boolean>('macro:pref:single-sidebar:collapsed', {
+    usePreference<boolean>('macro:pref:single-sidebar:collapsed:v2', {
       default: false,
     });
 
