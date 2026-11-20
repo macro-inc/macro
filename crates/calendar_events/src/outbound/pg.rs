@@ -6,6 +6,7 @@ mod export;
 mod guest_policy;
 mod invitations;
 mod join_requests;
+mod nul_characters;
 #[cfg(feature = "outlook")]
 mod outlook;
 mod replacement;
@@ -252,7 +253,7 @@ impl PgCalendarRepository {
         let mut log = ChangeLogBatch::default();
         let id = upsert_calendar_tx(&mut tx, &mut log, email_link_id, account_id, calendar, None)
             .await?
-            .0
+            .row
             .id;
         log.commit(tx).await?;
         Ok(id)
@@ -868,6 +869,7 @@ impl CalendarRepository for PgCalendarRepository {
             #[cfg(test)]
             CalendarEventWrite::Fixture(upsert) => upsert,
         };
+        nul_characters::remove_from_upsert(&mut upsert);
         let source = upsert.source.details();
         let source_kind = upsert.source.kind();
         let source_link_id = source.email_link_id;
@@ -1777,7 +1779,7 @@ impl CalendarRepository for PgCalendarRepository {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
         let mut log = ChangeLogBatch::default();
-        let (calendar, team_ooo_changed) = upsert_calendar_tx(
+        let upserted = upsert_calendar_tx(
             &mut tx,
             &mut log,
             key.email_link_id,
@@ -1787,7 +1789,7 @@ impl CalendarRepository for PgCalendarRepository {
         )
         .await?;
         log.commit(tx).await?;
-        stored_google_calendar(calendar, team_ooo_changed)
+        stored_google_calendar(upserted.row, upserted.team_ooo_changed)
     }
 
     #[tracing::instrument(skip(self, sync), fields(job_id = %key.job_id), err)]
@@ -3108,6 +3110,22 @@ async fn fence_google_mutation_tx(
     Ok(())
 }
 
+/// A calendar `upsert_calendar_tx` stored, and what the provider's view of it
+/// changed.
+struct UpsertedCalendar {
+    row: StoredCalendarRow,
+    /// Teammates' cached out-of-office rows may no longer hold.
+    team_ooo_changed: bool,
+    /// The provider gives the account another role on the calendar than the
+    /// stored one.
+    #[cfg(feature = "outlook")]
+    role_changed: bool,
+    /// The calendar was not certified for team reads, or holds a source
+    /// written since its last committed sync under another role.
+    #[cfg(feature = "outlook")]
+    needs_verification: bool,
+}
+
 async fn upsert_calendar_tx(
     tx: &mut Transaction<'_, Postgres>,
     log: &mut ChangeLogBatch,
@@ -3115,7 +3133,7 @@ async fn upsert_calendar_tx(
     account_id: Uuid,
     calendar: ProviderCalendar,
     provider_sync: Option<CalendarProvider>,
-) -> Result<(StoredCalendarRow, bool), Report> {
+) -> Result<UpsertedCalendar, Report> {
     // Snapshot the reminder-relevant state before the upsert: a change to the
     // default reminders or the zone that anchors all-day starts invalidates
     // the firing schedule of every event that follows this calendar.
@@ -3163,13 +3181,20 @@ async fn upsert_calendar_tx(
     // The migration preserves old workers' incremental state; this strict
     // worker invalidates it before requesting the verified snapshot.
     // Old sources remain ineligible for team reads until verified.
-    // Outlook maintains its own cursor/coverage state and does not yet certify
-    // snapshots for team sharing. Do not erase its coverage on every discovery
-    // merely because its Google snapshot certificate remains unset.
-    let access_changed = previous.as_ref().is_some_and(|previous| {
-        previous.access_role != calendar.access_role
-            || (provider_sync != Some(CalendarProvider::Outlook) && previous.needs_verification)
-    });
+    // Outlook keeps its coverage while it verifies: its discovery runs apart
+    // from its rounds, and a full scan of a large calendar spans many of them,
+    // so clearing coverage on each discovery would mark the calendar syncing
+    // until that scan ends. Its discovery schedules the full scan instead
+    // (`outlook::rescan_for_verification`), and the round that finishes it
+    // certifies the calendar.
+    let role_changed = previous
+        .as_ref()
+        .is_some_and(|previous| previous.access_role != calendar.access_role);
+    let needs_verification = previous
+        .as_ref()
+        .is_some_and(|previous| previous.needs_verification);
+    let access_changed =
+        role_changed || (provider_sync != Some(CalendarProvider::Outlook) && needs_verification);
     let row = sqlx::query_as!(
         StoredCalendarRow,
         r#"
@@ -3246,10 +3271,14 @@ async fn upsert_calendar_tx(
     if visibly_changed {
         log.record(email_link_id, CalendarChangeOp::UpsertCalendar(row.id));
     }
-    Ok((
+    Ok(UpsertedCalendar {
         row,
-        visibly_changed || reminders_invalidated || access_changed,
-    ))
+        team_ooo_changed: visibly_changed || reminders_invalidated || access_changed,
+        #[cfg(feature = "outlook")]
+        role_changed,
+        #[cfg(feature = "outlook")]
+        needs_verification,
+    })
 }
 
 /// The sync error a calendar shows clients, if any, locking its row for the

@@ -440,3 +440,89 @@ async fn a_refused_read_stops_the_job_at_the_cursor() {
     };
     assert_eq!(cursor.as_deref(), Some("message-b"));
 }
+
+/// Records the fields of every event, as text.
+#[derive(Clone, Default)]
+struct Events(Arc<Mutex<Vec<(tracing::Level, std::collections::BTreeMap<String, String>)>>>);
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Events {
+    fn on_event(&self, event: &tracing::Event<'_>, _: tracing_subscriber::layer::Context<'_, S>) {
+        struct Fields<'a>(&'a mut std::collections::BTreeMap<String, String>);
+        impl tracing::field::Visit for Fields<'_> {
+            fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+                self.0.insert(field.name().to_owned(), value.to_owned());
+            }
+            fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+                self.0.insert(field.name().to_owned(), format!("{value:?}"));
+            }
+        }
+        let mut fields = std::collections::BTreeMap::new();
+        event.record(&mut Fields(&mut fields));
+        self.0
+            .lock()
+            .unwrap()
+            .push((*event.metadata().level(), fields));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn each_page_with_gone_messages_logs_their_sample() {
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let events = Events::default();
+    let _guard =
+        tracing::subscriber::set_default(tracing_subscriber::registry().with(events.clone()));
+    // A first pass registers the callsites; another test thread may have
+    // cached a "never" interest in them before this subscriber existed, so
+    // recompute it and measure a second pass.
+    for _ in 0..2 {
+        tracing::callsite::rebuild_interest_cache();
+        events.0.lock().unwrap().clear();
+        repair(FakeIndex::holding(&INDEXED), rows(), rows())
+            .repair(
+                request(true, 2),
+                Arc::new(JobProgress::detached()),
+                CancellationToken::new(),
+            )
+            .await
+            .unwrap();
+    }
+
+    let logged: Vec<_> = events
+        .0
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|(_, fields)| fields.contains_key("gone_sample"))
+        .cloned()
+        .collect();
+    assert_eq!(
+        logged
+            .iter()
+            .map(|(level, fields)| (
+                *level,
+                fields["gone"].as_str(),
+                fields["gone_sample"].as_str(),
+                fields["gone_with_chat"].as_str(),
+                fields["dry_run"].as_str(),
+            ))
+            .collect::<Vec<_>>(),
+        [
+            (
+                tracing::Level::INFO,
+                "1",
+                "chat-live:message-b",
+                "0",
+                "true"
+            ),
+            (
+                tracing::Level::INFO,
+                "1",
+                "chat-gone:message-d",
+                "1",
+                "true"
+            ),
+        ],
+        "one event per page with gone messages, none for the page without"
+    );
+}

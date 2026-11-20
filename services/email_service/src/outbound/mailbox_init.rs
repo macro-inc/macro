@@ -78,7 +78,12 @@ pub async fn lock_gmail_connection(
     Ok(())
 }
 
-fn unavailable<E: std::fmt::Debug>(error: E) -> InitializationError {
+/// A lock timeout means the inbox was busy, and connecting again succeeds.
+fn unavailable<E: Into<anyhow::Error>>(error: E) -> InitializationError {
+    let error = error.into();
+    if crate::outbound::link_lock::caused_by_lock_timeout(&error) {
+        return InitializationError::Contended;
+    }
     tracing::error!(?error, "mailbox initialization persistence failed");
     InitializationError::Unavailable
 }
@@ -182,12 +187,12 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         request: &InitializeMailbox,
         grant: &VerifiedMailboxGrant,
     ) -> Result<InitializationSnapshot, InitializationError> {
-        snapshot(
-            &mut *self.0.acquire().await.map_err(unavailable)?,
-            request,
-            grant,
-        )
-        .await
+        let mut tx = crate::outbound::link_lock::begin(&self.0)
+            .await
+            .map_err(unavailable)?;
+        let current = snapshot(&mut tx, request, grant).await?;
+        tx.commit().await.map_err(unavailable)?;
+        Ok(current)
     }
 
     async fn commit(
@@ -197,7 +202,9 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         expected: &InitializationSnapshot,
         decision: InitializationDecision,
     ) -> Result<Uuid, InitializationError> {
-        let mut tx = self.0.begin().await.map_err(unavailable)?;
+        let mut tx = crate::outbound::link_lock::begin(&self.0)
+            .await
+            .map_err(unavailable)?;
         sqlx::query!(
             "SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtextextended($1,0))",
             format!("inbox-entitlement:{}", request.actor)
@@ -323,13 +330,42 @@ impl MailboxInitializationRepository for PgMailboxInitialization {
         // inbox ownership is independent and access is always scoped to this link.
         // An explicit, identity-checked reconnect can replace the custodian.
         let link = sqlx::query!(r#"
-            UPDATE email_links SET grant_id = $2,grant_generation = $3,
+            UPDATE email_links l SET grant_id = $2,grant_generation = $3,
                 fusionauth_user_id = $4,email_address = $5,is_sync_active = true,needs_reauth = false,
-                last_sync_error_at = NULL,updated_at = now(),
-                sync_generation = sync_generation + CASE WHEN $6 AND $7 THEN 1 ELSE 0 END
-            WHERE id = $1 RETURNING sync_generation
+                last_sync_error_at = NULL,mailbox_unavailable_at = NULL,updated_at = now(),
+                sync_generation = l.sync_generation + CASE WHEN $6 AND $7 THEN 1 ELSE 0 END
+            FROM (SELECT id,mailbox_unavailable_at FROM email_links WHERE id = $1 FOR UPDATE) previous
+            WHERE l.id = previous.id
+            RETURNING l.sync_generation,previous.mailbox_unavailable_at IS NOT NULL AS "had_no_mailbox!"
         "#,link_id,grant.id,grant.generation,grant.owner.to_string(),grant.email,restart,current.existing.is_some())
             .fetch_one(&mut *tx).await.map_err(unavailable)?;
+        if link.had_no_mailbox && !restart {
+            // The same grant, so no new generation resets the work the mark
+            // held: make it due at once, as the catalog commit that finds the
+            // mailbox does.
+            sqlx::query!(
+                "UPDATE email_sync_streams SET next_run_at = now() WHERE link_id = $1 AND generation = $2 AND next_run_at > now()",
+                link_id,
+                link.sync_generation
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(unavailable)?;
+            sqlx::query!(
+                "UPDATE email_mailbox_watch_work SET next_run_at = now(),revision = revision + 1,failures = 0 WHERE link_id = $1",
+                link_id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(unavailable)?;
+            sqlx::query!(
+                "UPDATE email_mailbox_settings_work SET next_run_at = now() WHERE link_id = $1",
+                link_id
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(unavailable)?;
+        }
         sqlx::query!(r#"INSERT INTO email_mailbox_custodians(link_id,actor_id,fusionauth_user_id,grant_id,grant_generation,granted_scopes)
             VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT(link_id,actor_id) DO UPDATE SET fusionauth_user_id = EXCLUDED.fusionauth_user_id,
                 grant_id = EXCLUDED.grant_id,grant_generation = EXCLUDED.grant_generation,granted_scopes = EXCLUDED.granted_scopes,verified_at = now()"#,

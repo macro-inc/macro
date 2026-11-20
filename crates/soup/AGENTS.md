@@ -111,6 +111,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
   `entity_type = 'DATABASE_ROW' AND values->>'type' = 'EntityReference'` so the
   partial index applies, and join the row by the guarded uuid cast, never
   `r.id::text = ep.entity_id`, which reads every row cell of every database.
+  Keep both of its `OFFSET 0` fences as well: joined plainly, the planner
+  started from every entity definition and compared all of their cells with
+  every record, from about 500 records with fresh statistics and for a single
+  record once they were stale, and the statement ran into its timeout.
+- Property edges reach a task's custom entity properties from the requested
+  records through `idx_ep_crm_record_references_gin`, for a company or contact
+  scope only (`custom_task_properties`; the activity scope reads the built-in
+  properties). Keep that arm's copy of the index predicate, without which the
+  index cannot apply, and both `OFFSET 0` fences: joined plainly, the planner
+  started from every custom entity definition and read all of their values
+  once statistics were stale or the scope named more than about ten records.
+  The arm does not check who owns the property: a task shows every property
+  set on it to whoever can open it, and the document arm still checks access
+  to the task.
 
 - A `crm_domains` (`ecd`) scope that email rejects as not found or not
   permitted (archived company, email sync off) leaves email threads out of the

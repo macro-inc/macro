@@ -734,7 +734,8 @@ enum GraphqlDocumentLiteral {
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
     /// Associated with a CRM record through its Companies or Contacts
-    /// property or a reference to the record. Requires an expanded query
+    /// property or a reference to the record; a task also through a custom
+    /// entity property that names the record. Requires an expanded query
     /// sorted by a timestamp or task due date.
     CrmAssociated(GraphqlCrmAssociation),
     /// Case-insensitive substring of the document name.

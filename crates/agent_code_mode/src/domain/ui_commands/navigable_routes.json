@@ -127,6 +127,7 @@
     {"route":"settings","navigable":false,"segments":["settings"]},
     {"route":"view-routines","navigable":true,"segments":["routines"]},
     {"route":"view-home","navigable":true,"segments":["home"]},
+    {"route":"view-new-home","navigable":false,"segments":["new-home"]},
     {"route":"view-recent","navigable":true,"segments":["recent"]},
     {"route":"view-for-you","navigable":false,"segments":["for-you"]},
     {"route":"view-activity","navigable":true,"segments":["activity"]},

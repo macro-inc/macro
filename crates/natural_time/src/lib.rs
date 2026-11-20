@@ -34,9 +34,18 @@
 //!   [`Pick::End`] takes the end and [`Pick::Start`] the start. `in 2 hours`
 //!   is elapsed time from now, so `in 2 hours for 30 min` ends 150 minutes
 //!   from now.
-//! - Day and month names take common abbreviations (`tues`, `thurs`, `sept`)
-//!   and typos: one in a name of six or seven letters (`fridya`), two from
-//!   eight letters up (`thrsdy`). The closest name wins; a tie isn't read.
+//! - A quantity with neither `in` nor `for` says when if nothing else in
+//!   the phrase does: `2 days` is in two days, `2 hours` two hours from now.
+//!   Beside a date, or an hour count beside a time, it says how long:
+//!   `next monday 2 days`, `3pm 2 hours`. One counted from something else
+//!   (`2 days before friday`, `2 days from monday`, `2 weeks after next`),
+//!   weeks beside a weekday (`friday 2 weeks`), and hours after `at`
+//!   (`at 9 h`) aren't read.
+//! - Names of days, months, units and relations (`next`, `last`) may be cut
+//!   short down to a few letters (`mond`, `tomor`, `nex`, `hou`), and take
+//!   common abbreviations (`thrs`, `tmrw`, `nxt`, `wk`) and typos: one in a
+//!   name of six or seven letters (`fridya`), two from eight letters up
+//!   (`thrsdy`). The closest name wins; a word that could be two isn't read.
 //! - Filler such as `by`, `due`, `on`, `at` and `the` is ignored.
 //! - Repeating phrases (`every friday`) are not read yet.
 #![deny(missing_docs)]

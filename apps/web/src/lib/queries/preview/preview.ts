@@ -2,11 +2,14 @@ import {
   type EntityAppearance,
   sameAppearance,
 } from '@app/features/entity-appearance/core/appearance';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { LOCAL_ONLY } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { cachedUserId } from '@queries/auth/cached-user-id';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
+import { crmAccessAllowed } from '@service-storage/crm-access-authority';
 import { queryOptions, useQuery } from '@tanstack/solid-query';
 import type { Accessor, Setter } from 'solid-js';
 import { createMemo } from 'solid-js';
@@ -92,6 +95,14 @@ function itemPreviewQueryOptions(
   };
 }
 
+function previewDenied(item: ItemEntity): boolean {
+  return (
+    crmSnapshotAuthorization().paused ||
+    (!crmAccessAllowed() &&
+      (item.type === 'crm_company' || item.type === 'crm_contact'))
+  );
+}
+
 function noAccessPreview(item: ItemEntity): PreviewItem {
   return {
     id: item.id,
@@ -105,14 +116,20 @@ export async function getItemPreview(
   item: ItemEntity,
   options?: { requireFresh?: boolean }
 ): Promise<PreviewItem> {
+  if (previewDenied(item)) return noAccessPreview(item);
+  const epoch = crmSnapshotAuthorization().epoch;
+  const stale = () =>
+    !cacheSessionGeneration.isCurrent(epoch) || previewDenied(item);
   if (isGraphqlPreviewItem(item)) {
     try {
       const preview = await getGraphqlItemPreview(item, options);
+      if (stale()) return noAccessPreview(item);
       if (preview) return defaultNameTransform(preview);
     } catch {
       // Preserve the existing access/deletion result through the REST fallback.
     }
     const fallback = await fetchRestPreviewBatch([item]);
+    if (stale()) return noAccessPreview(item);
     // A failed request throws, as the dataloader's read below does.
     const errors = fallback.failed.get(item.id);
     if (errors) throw new ThrownResultError(errors);
@@ -122,6 +139,7 @@ export async function getItemPreview(
   }
 
   const preview = await queryClient.fetchQuery(itemPreviewQueryOptions(item));
+  if (stale()) return noAccessPreview(item);
   return defaultNameTransform(preview);
 }
 
@@ -130,7 +148,12 @@ function useItemPreviewQuery(
   restStaleTime = PREVIEW_STALE_TIME,
   includeProperties = true
 ) {
-  const graphqlQuery = createGraphqlItemPreviewQuery(item, includeProperties);
+  const enabled = () => !previewDenied(item());
+  const graphqlQuery = createGraphqlItemPreviewQuery(
+    item,
+    includeProperties,
+    enabled
+  );
   const usesGraphql = createMemo(
     () => isGraphqlPreviewItem(item()) && !graphqlQuery.shouldFallback()
   );
@@ -140,11 +163,14 @@ function useItemPreviewQuery(
   const restQuery = createMemo(() =>
     usesGraphql()
       ? undefined
-      : useQuery(() => itemPreviewQueryOptions(item(), true, restStaleTime))
+      : useQuery(() =>
+          itemPreviewQueryOptions(item(), enabled(), restStaleTime)
+        )
   );
 
   return {
     data: () => {
+      if (previewDenied(item())) return noAccessPreview(item());
       if (usesGraphql()) return graphqlQuery.data();
       const rest = restQuery();
       return rest && queryReadyGate(rest) ? rest.data : undefined;
@@ -159,6 +185,7 @@ function useItemPreviewQuery(
         : (restQuery()?.isSuccess ?? false),
     usesGraphql,
     refetch: async () => {
+      if (!enabled()) return;
       if (usesGraphql()) await graphqlQuery.refetch();
       else await restQuery()?.refetch();
     },
@@ -228,7 +255,7 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       } as PreviewItem;
     }
     const dataWithName = defaultNameTransform(data);
-    if (channelMessageData) {
+    if (channelMessageData && isAccessiblePreviewItem(dataWithName)) {
       return {
         ...dataWithName,
         messageContext: channelMessageData,
@@ -444,18 +471,21 @@ export function setPreviewName({
  * });
  */
 export function setPreviewOnCreate({
+  generation,
   itemId,
   itemType,
   name,
   fileType,
   subType,
 }: {
+  generation: string;
   itemId: string;
   itemType: Exclude<ItemType, 'calendar_event'>;
   name?: string;
   fileType?: string;
   subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };
 }) {
+  if (!cacheSessionGeneration.isCurrent(generation)) return;
   if (
     itemType === 'document' ||
     itemType === 'chat' ||
@@ -472,7 +502,8 @@ export function setPreviewOnCreate({
             fileType,
             subType,
           },
-          userId
+          userId,
+          generation
         )
       );
     }

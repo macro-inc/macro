@@ -1,8 +1,8 @@
 // Tells the Macro Alerts channel when an email end-to-end workflow turns red
 // on `main`, and when it turns green again. The last job of `email_e2e.yml`,
 // `email_e2e_browser.yml` and `email_e2e_full_stack.yml` runs it after every
-// other job, on a push to `main` and in the daily sweep; never on a run by
-// hand.
+// other job, as does that of `channels_e2e.yml`, on a push to `main` and in
+// the daily sweep; never on a run by hand.
 //
 // A run posts only when its result differs from what the channel was last
 // told about its stream: the workflow's runs on the same branch for the same
@@ -302,7 +302,12 @@ export function readMore(decision: Decision, entries: Entry[], names: Names): bo
   );
 }
 
-type PlaywrightSpec = { title: string; file: string; line: number; tests: { status: string }[] };
+type PlaywrightSpec = {
+  title: string;
+  file: string;
+  line: number;
+  tests: { status: string; expectedStatus?: string }[];
+};
 type PlaywrightSuite = { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] };
 
 /** `file:line title` of each spec that failed in a Playwright JSON report. */
@@ -353,6 +358,30 @@ export function browserFindings(
   };
 }
 
+/** What a message says of a spec marked to fail (`test.fail()`) that passed. */
+const MARKED_TO_FAIL = ' (marked as a known defect, and now passes)';
+
+/**
+ * What the one Playwright report of a suite with no coverage check says failed
+ * (the channels suite's `playwright-report.json`). Its tests for known defects
+ * run in every run, marked to fail, so one that passes fails the run: it is
+ * named with the failed tests, and said to be that.
+ */
+export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
+  const unexpected = (spec: PlaywrightSpec) => spec.tests.filter((test) => test.status === 'unexpected');
+  const walk = (suites: PlaywrightSuite[] = []): string[] =>
+    suites.flatMap((suite) => [
+      ...(suite.specs ?? [])
+        .filter((spec) => unexpected(spec).length > 0)
+        .map((spec) => {
+          const marked = unexpected(spec).some((test) => test.expectedStatus === 'failed');
+          return `${spec.file}:${spec.line} ${spec.title}${marked ? MARKED_TO_FAIL : ''}`;
+        }),
+      ...walk(suite.suites),
+    ]);
+  return { failedTests: walk(report.suites), knownBugsPassing: [], otherProblems: [] };
+}
+
 /** What the coverage report in `dir` says failed, or null when there is none. */
 export function readFindings(dir: string): Findings | null {
   const read = (name: string) => JSON.parse(readFileSync(`${dir}/${name}`, 'utf8'));
@@ -364,6 +393,9 @@ export function readFindings(dir: string): Findings | null {
       .filter((name) => /^playwright-.*\.json$/.test(name))
       .map((name) => ({ name, report: read(name) }));
     return browserFindings(read('ledger.json'), reports);
+  }
+  if (existsSync(`${dir}/playwright-report.json`)) {
+    return suiteFindings(read('playwright-report.json'));
   }
   return null;
 }

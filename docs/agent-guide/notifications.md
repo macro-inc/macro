@@ -7,7 +7,9 @@ on the outer rail (`g i`) opens one list of everything that needs you, newest
 first. The flag is on in dev and comes from PostHog elsewhere;
 `VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
 route redirects to Home once flags load, and `g i` stays on Home; with it on,
-Home keeps `g h`.
+Home keeps `g h`. With `enable-new-home` on (desktop), this route is New Home's
+Notifications tab instead and the rail's bell gives way to New Home; see
+[New Home](home.md#new-home).
 
 With unified notifications on, the outer rail and mobile dock show unread dots
 from the inbox's `notificationInboxUnreadUpdates` subscription. The updates
@@ -77,8 +79,9 @@ focus, and Esc returns to the row; see
 notification live in the URL (`sN.inbox.row`, `sN.inbox.item`), so each opened
 row is a history entry and browser or split back returns to the previous one;
 stepping with `j`/`k` and moving on from a done row replace the entry instead.
-In splits 720px wide or narrower the list fills the split until a row opens,
-which then fills it with **Back** (left arrow) returning to the list.
+On desktop, a new split shows the list beside its empty preview, like any
+split wider than 720px. In splits 720px wide or narrower the list fills the split until a
+row opens, which then fills it with **Back** (left arrow) returning to the list.
 Previewing marks the row seen, including
 notifications the row hides, and drops its unread dot. With a preview open, `j`/`k` move it along the
 list and through unfolded notifications; `l` or the right arrow unfolds the focused
@@ -157,7 +160,9 @@ and inline row buttons; at phone width they have a larger avatar and slightly la
 text; a read row there fades its avatar and mutes its text, so unread rows stand
 out. A tablet keeps the desktop's sizes. Tapping a row or an unfolded notification opens it
 full-screen in place, tapping a stack's caret unfolds it, a left swipe marks it
-done (with the same Undo), and pulling down refreshes. Hover controls and the preview pane are desktop-only. The
+done (with the same Undo), and pulling down refreshes. A done on touch (a swipe, or a
+row button that completes the row) folds the row's height away before the row leaves,
+so the rows below slide up; with reduced motion it leaves at once. Hover controls and the preview pane are desktop-only. The
 dock keeps the bell active while the view shows.
 
 The list updates live, without a reload, and a live change never remounts a row:

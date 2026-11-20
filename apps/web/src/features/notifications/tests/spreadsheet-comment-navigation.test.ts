@@ -116,6 +116,7 @@ vi.mock('@macro-inc/observability', async (importOriginal) => {
     ...actual,
     Telemetry: {
       ...actual.Telemetry,
+      error: vi.fn(),
       span: <T>(name: string, operation: (span: ObservedSpan) => Promise<T>) =>
         runSpan(name, undefined, operation),
     },

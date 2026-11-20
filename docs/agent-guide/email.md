@@ -217,6 +217,8 @@ before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
 inbox that may accept it; a draft with an unfinished move or a conflict stays in
 its inbox until that is resolved.
+With the CRM proof endpoint unavailable, a locally authored draft must still
+save locally and report an offline From-inbox move without waiting for CRM proof.
 A draft opened from Drafts then shows its thread in the destination inbox,
 never the not-found page; a draft in compose stays open there. Keep editing
 after the switch and check that no "This draft changed while saving" notice
@@ -321,11 +323,13 @@ passing stores nothing and pushes nothing, so a follow-up coming due, a
 calendar change whose event ends or importance moving shows at the tab's next
 read. Mark
 Done hides the row at once and archives the thread; Undo brings it back. The
-worker classifies an inbox only while its owner has `enable-email-focus` on; a
-delegated inbox follows its owner's flag, not the reader's. An owner who joins
-the rollout gets a filled tab without new mail: within about 6 minutes the
-worker finds them (it looks at every connected inbox each minute, evaluating
-the flag from definitions it polls from PostHog every 5 minutes) and backfills their inbox,
+worker classifies an inbox only while someone whose tab shows it has
+`enable-email-focus` on: its owner, or a user it is linked to, so a mailbox you
+link is classified while you have the flag even when its own account does not.
+A user who joins the rollout gets a filled tab without new mail: within about
+6 minutes the worker finds them (it looks at every connected inbox each minute,
+evaluating the flag from definitions it polls from PostHog every 5 minutes) and
+backfills their inboxes, linked ones included,
 the last 3 days first, then the rest of the 30 without due dates (an older
 thread gets one with its next mail). With nothing classified the tab
 shows the empty state `You're caught up`, whose **See the rest of your inbox** opens Signal.
@@ -627,6 +631,15 @@ context reopen closed IndexedDB connections. Verify a cached read and a subseque
 write after closing the connection, then clear/logout during recovery: old-account
 entries must not return. These caches retry only transaction creation; persistent
 storage failures still follow the existing cache fallback behavior.
+
+Hold or fail `/crm/member-access` during sign-in, then save an inbox signature,
+mark a thread read and unread, toggle its star, move it to a folder, and move
+another thread to Trash. Open Spam and Trash and verify their message rows,
+then restore a message. Open a thread's reminder menu, wait for its choices to
+be enabled, schedule a reminder, and remove it again. Notices, row state, folder contents, and provider labels
+must update, and cached personal thread messages must remain readable. These
+inbox-authorized operations do not depend on CRM access; CRM-shared thread and
+attachment reads still require their access proof.
 
 Performance check: switch Signal → All twice against a large synchronized cache.
 Dense local pages use bounded sort-index candidates rather than sorting the entire
@@ -1016,10 +1029,15 @@ before suggestions loaded. Name-word prefixes outrank substring matches;
 unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
+A quick click or tap in the message body moves the caret where it lands; check
+it by tapping mid-word and on another line of a two-line body, then typing.
 On a phone, focus the message body to fold populated recipient rows. Tap a
 folded To, Cc, or Bcc summary and check that its address input has focus.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal
 local windows rather than retaining the address book or searching the server.
+Open a composer immediately after sign-in with CRM verification delayed or
+unavailable: personal recipient suggestions must still load. Switching accounts
+while they load must not show the previous account's suggestions.
 Partial synchronization remains visibly incomplete. Each field owns its query;
 scrolling to the end of the suggestions (or PageDown) lists the next page below. Scoped thread addresses remain
 available, but the same address must not appear twice when the directory also
@@ -1470,6 +1488,11 @@ With cached inbox metadata available before viewer information loads, saving a
 new offline draft must still create its Mail thread. The selected inbox supplies
 the owner, including delegated inboxes. If that account metadata is unavailable,
 the save must fail before queueing; retain the editor content for a later retry.
+While an already-visible account catalog is refetching, saving and sending must
+retain the selected inbox's owner and draft setting, including delegated inboxes.
+The primary inbox must remain selected even if it is not first in the catalog.
+Repeat with that refresh unanswered, then switch accounts: the previous viewer's
+inboxes must no longer be available.
 Test this with a previously saved draft as well as a new one: a queued edit must
 block Send and scheduling until a save commits. Reopening a cached draft while
 offline must retain its uploaded attachments and confirmed scheduled time.
