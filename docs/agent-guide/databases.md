@@ -8,7 +8,7 @@ another client appears without reloading. **All** and **Documents** categories
 match its name, including databases with no view history.
 
 Creating from Home immediately shows the table selector with its **+** menu, **Database
-actions**, and **AI** in the top bar; no reload is needed to use them.
+actions**, and **Ask Macro** in the top bar; no reload is needed to use them.
 `/database` immediately shows **Creating database…** at the insertion point while
 the creation module loads. Moving the caret keeps that insertion anchored; removing
 it before the module loads cancels creation.
@@ -47,7 +47,7 @@ Concurrent cache-only misses must not fail an outstanding network row read. A
 successful background read clears an earlier refresh warning; a genuine failed
 read keeps the warning and its Refresh action.
 
-**AI** in the split header opens an agent chat about the database. Its composer
+**Ask Macro** in the split header opens an agent chat about the database. Its composer
 starts with a mention of the database; the schema and table guidance go to the
 agent privately as session instructions, so the sent bubble shows only what you
 typed. Plans that include the database model run the chat on it.
@@ -690,7 +690,7 @@ provisioning, and disabled users receive no starter database.
 
 ## AI questions and live answers
 
-Open **AI** (`Database AI`) at the right of the toolbar to create a native chat in the adjacent split.
+Open **Ask Macro** at the right of the toolbar to create a native chat in the adjacent split.
 Its bottom composer contains a database mention and private context identifying
 this database, its current table, and all its tables. Nothing sends automatically.
 Type a question or requested change and send it using the normal chat controls.
@@ -800,7 +800,7 @@ database) sit at the right of the split header, like other entities. From Drive,
 the row context menu offers the same Share action, plus Rename (edit or owner),
 Favorite, Copy Link, and Delete (owner).
 
-The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
+The toolbar's **Database actions** (`…`) menu, beside **Ask Macro**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
 title in the split header; Delete opens the standard confirmation dialog.
 **Download** offers **Current table as CSV**.
