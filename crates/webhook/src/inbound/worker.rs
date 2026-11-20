@@ -103,12 +103,12 @@ where
 
         let queue_message = match serde_json::from_str::<WebhookEventQueueMessage>(body) {
             Ok(queue_message) => queue_message,
-            // Both kinds refuse unknown fields, so a body parses as one only.
-            Err(_) if let Ok(mcp_message) = serde_json::from_str::<McpEventQueueMessage>(body) => {
-                self.process_mcp_message(mcp_message, &message).await;
-                return;
-            }
             Err(error) => {
+                // Both kinds refuse unknown fields, so a body parses as one only.
+                if let Ok(mcp_message) = serde_json::from_str::<McpEventQueueMessage>(body) {
+                    self.process_mcp_message(mcp_message, &message).await;
+                    return;
+                }
                 tracing::warn!(
                     error = ?error,
                     "acknowledging malformed webhook event message"
