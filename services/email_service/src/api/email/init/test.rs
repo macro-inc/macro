@@ -260,7 +260,8 @@ async fn typed_refusals_keep_the_legacy_payload_status_and_body() {
 
 #[tokio::test]
 async fn a_busy_inbox_is_a_503_never_a_sharing_conflict() {
-    // The web client reads every 409 from this route as a sharing conflict.
+    // Web clients released before the coded 409s read every 409 from this
+    // route as a sharing conflict.
     let response = InitError::from(ConnectionError::MailboxInitialization(
         InitializationError::Contended,
     ))
@@ -269,28 +270,21 @@ async fn a_busy_inbox_is_a_503_never_a_sharing_conflict() {
 }
 
 #[tokio::test]
-async fn both_providers_share_prompts_are_one_coded_conflict_with_their_fields() {
+async fn a_share_conflict_is_coded_and_keeps_its_fields_at_the_top() {
     let link = Uuid::now_v7();
-    for error in [
-        ConnectionError::SharedInboxConflict {
-            email_address: "team@example.com".into(),
-            existing_owner_email: "owner@example.com".into(),
-            existing_link_id: link,
-        },
-        ConnectionError::MailboxInitialization(InitializationError::SharingConfirmation {
-            link_id: link,
-            email: "team@example.com".into(),
-            owner_email: "owner@example.com".into(),
-        }),
-    ] {
-        let response = InitError::from(error).into_response();
-        assert_eq!(response.status(), StatusCode::CONFLICT);
-        let body = body_json(response).await;
-        assert_eq!(body["code"], SHARED_INBOX_CONFLICT_CODE);
-        assert_eq!(body["email_address"], "team@example.com");
-        assert_eq!(body["existing_owner_email"], "owner@example.com");
-        assert_eq!(body["existing_link_id"], link.to_string());
-    }
+    let response = InitError::from(ConnectionError::SharedInboxConflict {
+        email_address: "team@example.com".into(),
+        existing_owner_email: "owner@example.com".into(),
+        existing_link_id: link,
+    })
+    .into_response();
+    assert_eq!(response.status(), StatusCode::CONFLICT);
+    let body = body_json(response).await;
+    assert_eq!(body["code"], "SHARED_INBOX_CONFLICT");
+    // Clients released before the codes read these fields where they were.
+    assert_eq!(body["email_address"], "team@example.com");
+    assert_eq!(body["existing_owner_email"], "owner@example.com");
+    assert_eq!(body["existing_link_id"], link.to_string());
 }
 
 #[tokio::test]
@@ -298,9 +292,9 @@ async fn other_conflicts_carry_their_own_code_and_no_share_fields() {
     for (error, code) in [
         (
             InitializationError::IdentityConflict,
-            INBOX_IDENTITY_CONFLICT_CODE,
+            "INBOX_IDENTITY_CONFLICT",
         ),
-        (InitializationError::Changed, INBOX_CHANGED_CODE),
+        (InitializationError::Changed, "INBOX_CHANGED"),
     ] {
         let response =
             InitError::from(ConnectionError::MailboxInitialization(error)).into_response();

@@ -461,7 +461,7 @@ describe('a conflict that is not a shared inbox', () => {
     [
       'IdentityConflict',
       'identity_conflict',
-      'This inbox is connected to another account',
+      'This address is connected through a different Microsoft account',
     ],
     ['Changed', 'changed', 'Something changed, try again'],
   ] as const)(

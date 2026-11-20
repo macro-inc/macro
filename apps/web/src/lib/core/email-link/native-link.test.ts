@@ -371,7 +371,10 @@ describe('native account linking', () => {
   });
 
   it.each([
-    ['INBOX_IDENTITY_CONFLICT', 'This inbox is connected to another account'],
+    [
+      'INBOX_IDENTITY_CONFLICT',
+      'This address is connected through a different Microsoft account',
+    ],
     ['INBOX_CHANGED', 'Something changed, try again'],
   ])(
     'reports a %s conflict without offering to share',

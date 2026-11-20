@@ -36,6 +36,7 @@ import type {
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  InitConflictResponse,
   InitResponse,
   ListBackfillJobsResponse,
   ListContactsResponse,
@@ -50,7 +51,6 @@ import type {
   ResyncResponse,
   SendMessageRequest,
   SendMessageResponse,
-  SharedInboxConflictResponse,
   ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
@@ -176,8 +176,8 @@ export const NO_GMAIL_GRANT_CODE = 'NO_GMAIL_GRANT' as const;
 export const INBOX_BEING_REMOVED_CODE = 'INBOX_BEING_REMOVED' as const;
 
 /**
- * Error code `init` returns (HTTP 409) when the mailbox signed in at consent is
- * not the one the inbox being reconnected syncs.
+ * Error code `init` returns (HTTP 409) when the Microsoft mailbox signed in at
+ * consent is not the one an inbox at that address syncs.
  */
 export const INBOX_IDENTITY_CONFLICT_CODE = 'INBOX_IDENTITY_CONFLICT' as const;
 
@@ -196,10 +196,10 @@ type InitErrorCode =
   | typeof INBOX_IDENTITY_CONFLICT_CODE
   | typeof INBOX_CHANGED_CODE;
 
-type InitConflictBody = Partial<SharedInboxConflictResponse> & {
-  code?: string;
-  message?: string;
-};
+/** A 409 from `init`; a server released before the codes sends a share conflict's fields alone. */
+type InitConflictBody =
+  | InitConflictResponse
+  | { code?: undefined; email_address?: string; existing_owner_email?: string };
 
 /**
  * Error code `patchSettings` returns (HTTP 422) when a signature has images that
@@ -286,20 +286,20 @@ export const emailClient = {
             body?.code === INBOX_IDENTITY_CONFLICT_CODE ||
             body?.code === INBOX_CHANGED_CODE
           ) {
-            return { code: body.code, message: body.message ?? '' };
+            return { code: body.code, message: body.message };
           }
           // Only a coded conflict offers to share the inbox. A server released
           // before the codes sends a real conflict's fields with no code.
-          const sharing =
+          if (
             body?.code === SHARED_INBOX_CONFLICT_CODE ||
-            (body?.code === undefined && Boolean(body?.email_address));
-          if (sharing) {
+            (body && body.code === undefined && body.email_address)
+          ) {
             return {
               code: SHARED_INBOX_CONFLICT_CODE,
               // The caller formats the prompt; the fields it needs ride along as JSON.
               message: JSON.stringify({
-                emailAddress: body?.email_address ?? '',
-                existingOwnerEmail: body?.existing_owner_email ?? '',
+                emailAddress: body.email_address ?? '',
+                existingOwnerEmail: body.existing_owner_email ?? '',
               }),
             };
           }

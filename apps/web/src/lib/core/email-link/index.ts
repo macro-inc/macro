@@ -73,7 +73,7 @@ type EmailInitError =
   | { tag: 'SharedInboxConflict'; emailAddress: string; ownerEmail: string }
   /** The mailbox is still being removed from Macro; retry once that finishes. */
   | { tag: 'InboxBeingRemoved' }
-  /** The mailbox signed in at consent is not the one this inbox syncs. */
+  /** The Microsoft mailbox signed in at consent is not the one an inbox at that address syncs. */
   | { tag: 'IdentityConflict' }
   /** The inbox changed while it was being connected; connecting again works. */
   | { tag: 'Changed' }

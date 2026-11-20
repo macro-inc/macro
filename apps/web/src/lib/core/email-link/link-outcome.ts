@@ -54,9 +54,12 @@ export function announceConsentCancelled() {
   });
 }
 
-/** Shown when the mailbox signed in at consent is not the one the inbox syncs. */
+/**
+ * Shown when the Microsoft mailbox signed in at consent is not the one an
+ * inbox at that address syncs.
+ */
 export const INBOX_IDENTITY_CONFLICT_MESSAGE =
-  'This inbox is connected to another account';
+  'This address is connected through a different Microsoft account';
 
 /** Shown when the inbox changed while it was being connected. */
 export const INBOX_CHANGED_MESSAGE = 'Something changed, try again';
