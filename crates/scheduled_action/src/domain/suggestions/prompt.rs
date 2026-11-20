@@ -47,6 +47,12 @@ const COUNT: &str = " Most users get 3 to 6 suggestions in all, and leaving a pa
     app without any is often right.";
 /// Likewise, to a session that only drafts: as many as the streams need.
 const COUNT_DRAFTS: &str = " Leaving a part of the app without any is often right.";
+/// Who a drafted routine is for, in a whole session and one that drafts from
+/// the newest mail: work that comes every week.
+const WEEKLY_STREAM: &str = "for a stream they act on every week";
+/// Likewise, drafting from the streams found in a month: the list says how
+/// often each comes, and a monthly one is work too.
+const LISTED_STREAM: &str = "for a stream on the list";
 /// Most routines a session that only drafts is told to draft.
 pub const MAX_DRAFTS: usize = 8;
 
@@ -165,7 +171,13 @@ pub fn brief(data: &BriefData<'_>) -> String {
             CATALOG_KIND.trim_end().replace(" Prefer these.", ""),
             COUNT,
         ),
-        BriefPart::Drafts(Some(_)) => (DRAFTS, DRAFTED_KIND.trim_end().to_owned(), COUNT_DRAFTS),
+        BriefPart::Drafts(Some(_)) => (
+            DRAFTS,
+            DRAFTED_KIND
+                .trim_end()
+                .replace(WEEKLY_STREAM, LISTED_STREAM),
+            COUNT_DRAFTS,
+        ),
         BriefPart::Drafts(None) => (
             DRAFTS_FROM_MAIL,
             DRAFTED_KIND.trim_end().to_owned(),

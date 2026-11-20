@@ -218,7 +218,13 @@ fn a_drafting_session_drafts_for_each_stream_found() {
     assert!(!brief.contains(COUNT));
     assert!(brief.contains("<routines-guide>"));
     assert!(brief.ends_with(&format!("<untrusted>\n{}\n</untrusted>", list.to_brief())));
+    // A monthly stream on the list is work too; the picker reads only the
+    // newest mail, so a stream seen only before it is drafted.
+    assert!(brief.contains(&format!("A routine the catalog lacks, {LISTED_STREAM}:")));
+    assert!(!brief.contains(WEEKLY_STREAM));
+    assert!(brief.contains("only when none of its messages is in that newest mail"));
     let from_mail = part_brief(BriefPart::Drafts(None));
+    assert!(from_mail.contains(&format!("A routine the catalog lacks, {WEEKLY_STREAM}:")));
     assert!(from_mail.contains("each stream of mail they act on"));
     assert!(from_mail.ends_with("</untrusted>"));
     assert!(!from_mail.contains("The streams of work a step found"));
