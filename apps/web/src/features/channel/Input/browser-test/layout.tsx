@@ -6,6 +6,7 @@ import { ChannelsContextProvider } from '@core/context/channels';
 import { QuickAccessProvider } from '@core/context/quickAccess/QuickAccessProvider';
 import { UserContextProvider } from '@core/context/user';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { EntityProvider } from '@entity';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createSignal, For, onCleanup, Show } from 'solid-js';
@@ -79,5 +80,7 @@ function Fixture() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
+// Phones and tablets get the app's touch layout of the composer.
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 initializeLexical();
 render(() => <Fixture />, root);
