@@ -850,3 +850,21 @@ async fn dropping_teams_drops_its_meeting_place_and_counts_guests_without_the_or
         "Microsoft Teams Meeting"
     );
 }
+
+#[test]
+fn a_typed_place_that_mentions_teams_survives_dropping_teams() {
+    let mut meeting = teams_meeting("old");
+    meeting["location"] = json!({"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams","uniqueIdType":"private"});
+    meeting["locations"] = json!([
+        {"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams"},
+        {"displayName":"Microsoft Teams Meeting","uniqueId":"Microsoft Teams Meeting"},
+    ]);
+
+    let body = copy_body(&meeting, true).unwrap();
+
+    assert_eq!(body["location"]["displayName"], "Room 4A / Microsoft Teams");
+    assert_eq!(
+        body["locations"],
+        json!([{"displayName":"Room 4A / Microsoft Teams","uniqueId":"Room 4A / Microsoft Teams"}])
+    );
+}

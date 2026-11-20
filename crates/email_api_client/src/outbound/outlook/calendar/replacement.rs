@@ -7,8 +7,9 @@ use std::collections::{HashMap, HashSet};
 const STEP_ID: &str =
     "String {81f532e3-7ace-4e0b-bae9-312ce0d50c8c} Name MacroCalendarReplacementStep";
 
-/// The product name every language's label for a Teams meeting's place keeps.
-const TEAMS_PRODUCT_NAME: &str = "Microsoft Teams";
+/// The place Outlook sets on a Teams meeting it creates in an English
+/// mailbox. Another language's label stays, like any place the person typed.
+const OUTLOOK_TEAMS_PLACE: &str = "Microsoft Teams Meeting";
 
 fn changed() -> CalendarProviderError {
     unsupported(
@@ -139,14 +140,16 @@ fn copy_body(event: &Value, remove_conference: bool) -> Result<Value, CalendarPr
             locations.retain(|v| v["displayName"].as_str() != Some(join));
         }
     }
-    // Outlook names a Teams meeting's place after it ("Microsoft Teams
-    // Meeting", in the mailbox's language); without the meeting it names
-    // nothing.
+    // Outlook gives a Teams meeting a place named after it; without the
+    // meeting it names nothing. Only that exact entry goes: a place the
+    // person typed that mentions Teams is theirs.
     if remove_conference && event["onlineMeetingProvider"].as_str() == Some("teamsForBusiness") {
         let names_teams = |location: &Value| {
-            location["displayName"]
-                .as_str()
-                .is_some_and(|name| name.contains(TEAMS_PRODUCT_NAME))
+            ["displayName", "uniqueId"].iter().any(|field| {
+                location[*field]
+                    .as_str()
+                    .is_some_and(|name| name.trim() == OUTLOOK_TEAMS_PLACE)
+            })
         };
         if names_teams(&body["location"]) {
             body["location"] = json!({"displayName":""});
