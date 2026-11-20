@@ -1,6 +1,5 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import * as doppler from '@pulumiverse/doppler';
 
 /** Must match `ENCRYPTION_PURPOSE` in `crates/agent_mailbox/src/outbound/kms.rs`. */
 const AGENT_MAILBOX_KMS_PURPOSE = 'agent-mailbox-key';
@@ -9,8 +8,10 @@ const AGENT_MAILBOX_KMS_ACTIONS = ['kms:Encrypt', 'kms:Decrypt'];
 /**
  * The KMS key email_service encrypts agent mailboxes' scoped provider keys
  * with, usable by the service role only for that purpose. MacroConfig reads
- * only Doppler in ECS, so the key reaches the service as
- * `AGENT_MAILBOX_KMS_KEY_ID` in Doppler rather than the container env.
+ * only Doppler in ECS, and this stack has no Doppler provider credentials, so
+ * after a deploy the returned alias is set by hand as `AGENT_MAILBOX_KMS_KEY_ID`
+ * in the email-service Doppler config (as MICROSOFT_TOKEN_KMS_KEY_ID is for the
+ * authentication service). Unset, the service keeps agent mailboxes off.
  */
 export function agentMailboxKms({
   role,
@@ -93,10 +94,5 @@ export function agentMailboxKms({
       ],
     },
   });
-  new doppler.Secret(`email-service-AGENT_MAILBOX_KMS_KEY_ID-${stack}`, {
-    project: 'email-service',
-    config: stack === 'prod' ? 'prd' : 'dev',
-    name: 'AGENT_MAILBOX_KMS_KEY_ID',
-    value: alias.name,
-  });
+  return alias.name;
 }

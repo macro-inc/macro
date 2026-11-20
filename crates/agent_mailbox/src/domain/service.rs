@@ -53,9 +53,11 @@ pub const LEASE_TTL: Duration = Duration::minutes(3);
 /// How long the sweep leaves a mailbox alone after one of its steps failed.
 pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
 
-/// The provider replays an idempotent request for 24 hours; a send whose
-/// outcome is unknown is retried only inside this, with a margin.
-pub const PROVIDER_REPLAY_WINDOW: Duration = Duration::hours(23);
+/// A send whose outcome is unknown is retried under its idempotency key only
+/// this long after its reservation: inside the provider's 24-hour replay
+/// window, and inside the hourly cap's window, so a retry that does send is
+/// still counted in the windows it lands in.
+pub const SEND_RETRY_WINDOW: Duration = Duration::hours(1);
 
 /// Send records the sweep prunes per round (the literal in the repository's query).
 pub const PRUNE_BATCH: u32 = 1000;
@@ -162,7 +164,15 @@ where
             .await
             .map_err(internal)?;
         let mailbox = match reservation {
-            Reservation::New(mailbox) | Reservation::Existing(mailbox) => mailbox,
+            Reservation::New(mailbox) => mailbox,
+            // A request id is the caller's; one reused for another agent is
+            // a caller bug, never that agent's mailbox.
+            Reservation::Existing(mailbox) if mailbox.agent != request.agent => {
+                return Err(AgentMailboxError::Invalid(
+                    "this request id was used for another agent".to_owned(),
+                ));
+            }
+            Reservation::Existing(mailbox) => mailbox,
             Reservation::AgentHasMailbox(_) => return Err(AgentMailboxError::AlreadyProvisioned),
         };
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
@@ -785,7 +795,7 @@ where
     /// the provider definitely refused frees its slot; one whose outcome is
     /// unknown keeps it, and a retry with the same key resends under the same
     /// provider idempotency key while the provider still dedupes it
-    /// ([`PROVIDER_REPLAY_WINDOW`]); after that the outcome stays unknown.
+    /// ([`SEND_RETRY_WINDOW`]); after that the outcome stays unknown.
     async fn with_reserved_send(
         &self,
         mailbox: &AgentMailbox,
@@ -802,7 +812,7 @@ where
                 kind,
                 self.limits,
                 now,
-                now - PROVIDER_REPLAY_WINDOW,
+                now - SEND_RETRY_WINDOW,
             )
             .await
             .map_err(internal)?;

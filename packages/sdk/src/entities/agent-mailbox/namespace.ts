@@ -1,7 +1,4 @@
-import type {
-  AgentMailboxResponse,
-  SentMessage,
-} from '../../../generated/email/types.gen';
+import type { AgentMailboxResponse } from '../../../generated/email/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { AgentMailMessage } from './message';
@@ -79,24 +76,14 @@ export class AgentMailboxNamespace {
   }
 
   /**
-   * A handle to one of the mailbox's messages by id; another mailbox's id
-   * reads as not found.
-   *
-   * @readonly
-   */
-  messageById(id: string): AgentMailMessage {
-    return AgentMailMessage.byId(this.client, id);
-  }
-
-  /**
    * Send a new message from the mailbox, after the owner approved it; quote
    * their approval in `userConfirmation`.
    *
    * @send
    * @openworld
    */
-  async send(options: AgentMailSendOptions): Promise<SentMessage> {
-    return unwrap(
+  async send(options: AgentMailSendOptions): Promise<AgentMailMessage> {
+    const sent = unwrap(
       await this.client.email.sendAgentMailboxMessage({
         body: {
           idempotencyKey: options.idempotencyKey ?? crypto.randomUUID(),
@@ -108,5 +95,6 @@ export class AgentMailboxNamespace {
         },
       }),
     );
+    return AgentMailMessage.fromSent(this.client, sent);
   }
 }

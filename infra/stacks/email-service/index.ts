@@ -426,7 +426,12 @@ const containerEnvVars = [
   },
 ];
 
-agentMailboxKms({ role: emailServiceRole, stack, tags });
+/** Set by hand in Doppler as AGENT_MAILBOX_KMS_KEY_ID after a deploy. */
+export const agentMailboxKmsAlias = agentMailboxKms({
+  role: emailServiceRole,
+  stack,
+  tags,
+});
 
 const dopplerEcsEnvironment = new DopplerEcsEnvironment(pulumi.getProject(), {
   tags,

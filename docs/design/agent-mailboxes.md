@@ -83,7 +83,8 @@ flowchart LR
   the release, so a resume in between wins). A step that fails is set aside
   for five minutes so failing mailboxes never crowd out the rest.
 - A send whose outcome is unknown is retried under the same provider
-  idempotency key only within 23 hours; after that it answers
+  idempotency key only within an hour (inside the provider's 24-hour replay
+  window and the hourly cap); after that it answers
   `send_outcome_unknown` instead of risking a second delivery.
 
 ## Configuration
@@ -91,7 +92,7 @@ flowchart LR
 | Variable | Where | Meaning |
 | --- | --- | --- |
 | `DEADSIMPLE_API_KEY` | Doppler `email-service` (optional) | Provisioning key; absent means `not_configured`. |
-| `AGENT_MAILBOX_KMS_KEY_ID` | Doppler `email-service` (required with the key) | KMS key for scoped keys. |
+| `AGENT_MAILBOX_KMS_KEY_ID` | Doppler `email-service` (required with the key) | KMS key for scoped keys: the stack output `agentMailboxKmsAlias`, set by hand. |
 | `OVERRIDE_DEAD_SIMPLE_API_URL` | process env | Points the adapter at the fake provider locally. |
 
 A deployment whose provider URL is not the provider's real API reports

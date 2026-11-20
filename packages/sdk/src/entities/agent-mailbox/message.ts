@@ -34,6 +34,13 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
     return new AgentMailMessage(client, id);
   }
 
+  /** A handle to a message just sent, seeded with its conversation. */
+  static fromSent(client: MacroClient, sent: SentMessage): AgentMailMessage {
+    return new AgentMailMessage(client, sent.id).withListed({
+      threadId: sent.threadId,
+    });
+  }
+
   /**
    * A handle seeded with what a listing returned. Listings carry no body, so
    * reading it loads the message.
@@ -68,8 +75,8 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
    * @send
    * @openworld
    */
-  async reply(options: AgentMailReplyOptions): Promise<SentMessage> {
-    return unwrap(
+  async reply(options: AgentMailReplyOptions): Promise<AgentMailMessage> {
+    const sent = unwrap(
       await this.client.email.replyAgentMailboxMessage({
         path: { message_id: this.id },
         body: {
@@ -79,5 +86,6 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
         },
       }),
     );
+    return AgentMailMessage.fromSent(this.client, sent);
   }
 }

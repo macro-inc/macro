@@ -43,7 +43,8 @@ behind provider-neutral ports. Design: `docs/design/agent-mailboxes.md`.
   token. Pause, resume and the start of a release are plain state flips that
   win over a running attempt. Only a release revokes a stored credential.
 - A send whose outcome is unknown keeps its cap slot; a retry reuses the
-  provider idempotency key only inside `PROVIDER_REPLAY_WINDOW`, then answers
+  provider idempotency key only inside `SEND_RETRY_WINDOW` (one hour, inside both
+  the provider's replay window and the hourly cap), then answers
   `send_outcome_unknown`. Only a definite refusal cancels the reservation.
 - Every send and reply needs the owner's quoted approval (`OwnerApproval`),
   decided in the domain: the caller is always an agent account, whatever

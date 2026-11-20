@@ -64,6 +64,7 @@ describe('agentMailbox', () => {
       },
     ]);
     expect(sent?.id).toBe('sent-1');
+    expect(await sent?.threadId()).toBe('t-1');
   });
 
   test('a listed message loads its body when the body is read', async () => {

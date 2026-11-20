@@ -1726,7 +1726,7 @@ async fn an_unknown_send_is_not_retried_once_the_provider_stops_deduplicating() 
     );
 
     for send in &mut world.repository.0.lock().unwrap().sends {
-        send.at -= Duration::hours(25);
+        send.at -= Duration::minutes(61);
     }
     let after_window = world
         .service
@@ -1804,4 +1804,22 @@ async fn a_credential_minted_but_never_stored_is_revoked_on_release() {
         "every credential scoped to the mailbox is revoked"
     );
     assert_eq!(vendor.revoked_grants.len(), 2);
+}
+
+#[tokio::test]
+async fn a_request_id_reused_for_another_agent_is_refused() {
+    let world = world();
+    world
+        .service
+        .provision(request(ADA, 1, "ada"))
+        .await
+        .unwrap();
+
+    let reused = world.service.provision(request(BEN, 1, "ben")).await;
+
+    assert!(matches!(reused, Err(AgentMailboxError::Invalid(_))));
+    assert!(matches!(
+        world.service.status(&user(BEN)).await,
+        Err(AgentMailboxError::NotFound)
+    ));
 }
