@@ -116,6 +116,18 @@ vi.mock('@entity', () => ({
     isPending: false,
   }),
 }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: false }),
+}));
+vi.mock('@app/features/crm/record-adapter', () => ({
+  useCrmContactMentionSource: () => ({
+    entities: () => [],
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  }),
+}));
 vi.mock('@queries/soup/search', () => ({
   useSearchSoupQuery: () => ({ status: 'pending', isFetching: false }),
 }));
