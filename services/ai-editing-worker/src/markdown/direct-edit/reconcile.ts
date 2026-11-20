@@ -617,7 +617,7 @@ function spliceRuns(
  */
 function restyleRuns(
   oldGap: Item[],
-  oldChars: { run: number }[],
+  oldChars: { c: string; run: number }[],
   newChars: { format: string }[],
   counters: ReconcileCounters
 ): boolean {
@@ -634,20 +634,23 @@ function restyleRuns(
   runs.forEach((positions, run) => {
     if (!positions.length) return;
     const node = oldGap[run].node as TextNode;
-    const formats = positions.map((k) => Number(newChars[k].format));
+    // Characters are code points; splitText takes UTF-16 offsets.
+    const formats: number[] = [];
     const cuts: number[] = [];
-    for (let i = 1; i < formats.length; i++)
-      if (formats[i] !== formats[i - 1]) cuts.push(i);
-    const pieces = cuts.length ? node.splitText(...cuts) : [node];
     let offset = 0;
-    for (const piece of pieces) {
-      const format = formats[offset];
-      if (piece.getFormat() !== format) {
-        piece.setFormat(format);
+    positions.forEach((k, i) => {
+      const format = Number(newChars[k].format);
+      if (i > 0 && format !== formats.at(-1)) cuts.push(offset);
+      if (i === 0 || format !== formats.at(-1)) formats.push(format);
+      offset += oldChars[k].c.length;
+    });
+    const pieces = cuts.length ? node.splitText(...cuts) : [node];
+    pieces.forEach((piece, i) => {
+      if (piece.getFormat() !== formats[i]) {
+        piece.setFormat(formats[i]);
         counters.textEdits++;
       }
-      offset += piece.getTextContentSize();
-    }
+    });
   });
   return true;
 }
