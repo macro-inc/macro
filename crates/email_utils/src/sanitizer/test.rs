@@ -108,6 +108,18 @@ fn formatting_in_nested_table_cells_counts_per_cell() {
 }
 
 #[test]
+fn style_text_counts_as_written_unescaped() {
+    // A serialization writes `<style>` text raw, so its `&` costs one byte,
+    // not the five of `&amp;`.
+    let html = format!("<style>{}</style><p>Reply</p>", "&".repeat(4 << 20));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(sanitized.contains("Reply"));
+    assert!(!sanitized.contains(CLIPPED_NOTICE));
+}
+
+#[test]
 fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
     // A frameset document has no body, so the fragment parse is cleaned.
     let html = format!(

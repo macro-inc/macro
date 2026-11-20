@@ -262,7 +262,12 @@ impl BoundedSink {
                     if !follows_text {
                         self.count_node();
                     }
-                    self.count_text_bytes(serialized_len(text, false));
+                    let written = if self.writes_text_raw(parent) {
+                        text.len()
+                    } else {
+                        serialized_len(text, false)
+                    };
+                    self.count_text_bytes(written);
                 }
             }
         }
@@ -307,6 +312,28 @@ impl BoundedSink {
         tags.iter()
             .map(|(_, copies)| (*copies).min(IDENTICAL_FORMATTING_COPIES))
             .sum()
+    }
+
+    /// Whether html5ever's serializer writes text in `parent` unescaped, as
+    /// it does in raw-text elements (`<noscript>` with scripting on, its
+    /// default).
+    fn writes_text_raw(&self, parent: NodeId) -> bool {
+        let Some(Node::Element(element)) = self.html.tree.get(parent).map(|node| node.value())
+        else {
+            return false;
+        };
+        &*element.name.ns == HTML_NAMESPACE
+            && matches!(
+                &*element.name.local,
+                "style"
+                    | "script"
+                    | "xmp"
+                    | "iframe"
+                    | "noembed"
+                    | "noframes"
+                    | "plaintext"
+                    | "noscript"
+            )
     }
 
     fn parent_of(&self, node: NodeId) -> Option<NodeId> {
