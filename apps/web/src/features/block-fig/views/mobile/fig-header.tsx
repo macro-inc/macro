@@ -32,7 +32,7 @@ export function MobileFigHeader(props: FigHeaderProps) {
       menuName={name() ?? ''}
       iconType="fig"
       badges={<FileTypeChip />}
-      menuTools={[actions.share]}
+      menuTools={[actions.askMacro, actions.share]}
       ops={ops}
       trailing={<BlockLiveIndicators />}
     />

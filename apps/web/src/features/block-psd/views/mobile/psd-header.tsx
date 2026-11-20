@@ -32,7 +32,7 @@ export function MobilePsdHeader(props: PsdHeaderProps) {
       menuName={name() ?? ''}
       iconType="psd"
       badges={<FileTypeChip />}
-      menuTools={[actions.share]}
+      menuTools={[actions.askMacro, actions.share]}
       ops={ops}
       trailing={<BlockLiveIndicators />}
     />
