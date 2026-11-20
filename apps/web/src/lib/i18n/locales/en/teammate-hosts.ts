@@ -4,6 +4,8 @@ export default {
   ownComputer: 'My own computer',
   ownComputerHint:
     'It runs in a container on one of your computers, with macrod and Docker or Podman. No computer is bought.',
+  egressNote:
+    'An agent on your computer can reach whatever its network can reach, including other machines on it and, on a cloud VM, its metadata service.',
   loadingHosts: 'Looking for your computers…',
   hostsFailed: "Couldn't list your computers.",
   noHosts:
