@@ -333,9 +333,9 @@ async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
     let key = unique_key("bucket_refill");
     let config = TokenBucketConfig {
         capacity: 200,
-        refill_interval: Duration::from_secs(1),
+        refill_interval: Duration::from_secs(60),
     };
-    let emptied_at = redis_now_ms(&client).await - 2_500;
+    let emptied_at = redis_now_ms(&client).await - 150_000;
     let _: () = redis::AsyncCommands::hset_multiple(
         &mut client.get_multiplexed_async_connection().await.unwrap(),
         super::token_bucket_key(&key),
@@ -359,7 +359,7 @@ async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
     match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
         TokenBucketResult::Empty { retry_after } => {
             assert!(!retry_after.is_zero());
-            assert!(retry_after <= Duration::from_millis(500), "{retry_after:?}");
+            assert!(retry_after <= Duration::from_secs(30), "{retry_after:?}");
         }
         TokenBucketResult::Taken { remaining } => {
             panic!("the third token came early, {remaining} left")
@@ -398,9 +398,9 @@ async fn a_full_bucket_starts_its_next_token_from_its_first_take() {
     let key = unique_key("bucket_full_restart");
     let config = TokenBucketConfig {
         capacity: 3,
-        refill_interval: Duration::from_secs(1),
+        refill_interval: Duration::from_secs(60),
     };
-    let full_since = redis_now_ms(&client).await - 1_500;
+    let full_since = redis_now_ms(&client).await - 90_000;
     let _: () = redis::AsyncCommands::hset_multiple(
         &mut client.get_multiplexed_async_connection().await.unwrap(),
         super::token_bucket_key(&key),
@@ -417,7 +417,7 @@ async fn a_full_bucket_starts_its_next_token_from_its_first_take() {
 
     match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
         TokenBucketResult::Empty { retry_after } => {
-            assert!(retry_after > Duration::from_millis(600), "{retry_after:?}");
+            assert!(retry_after > Duration::from_secs(45), "{retry_after:?}");
         }
         TokenBucketResult::Taken { remaining } => {
             panic!("a fourth token came from banked time, {remaining} left")
