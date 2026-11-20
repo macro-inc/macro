@@ -42,8 +42,12 @@ pub fn toolset() -> AsyncToolCollection<CodeModeToolContext> {
 }
 
 /// Names of the session code-mode tools, in [`toolset`]'s order.
-pub const SESSION_CODE_TOOLS: [&str; 4] =
-    ["ExecuteCode", "DescribeCodeTools", "ReadCodeDocs", "CancelJob"];
+pub const SESSION_CODE_TOOLS: [&str; 4] = [
+    "ExecuteCode",
+    "DescribeCodeTools",
+    "ReadCodeDocs",
+    "CancelJob",
+];
 
 /// Facts supplied by an adapter that authenticated a user, not a session.
 #[derive(Clone)]

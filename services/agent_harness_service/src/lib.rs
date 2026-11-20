@@ -981,33 +981,33 @@ pub async fn run() -> anyhow::Result<()> {
     // The session log jobs report to is built after code mode.
     let job_log: Arc<std::sync::OnceLock<Arc<dyn code_mode::jobs::JobLog>>> = Arc::default();
     let code_mode_service = agent_code_mode::domain::CodeModeService::new(
-            code_executor,
-            Arc::new(code_mode::RunCredentials {
-                egress: code_egress.clone(),
-                detach: Arc::new(code_mode::jobs::DetachPolicy {
-                    sessions: session_repo.clone(),
-                    flags: feature_flags.clone(),
-                }),
-                correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
-                signer: MacroApiTokenSigner::new(
-                    pool.clone(),
-                    config.macro_api_token_issuer.as_ref(),
-                    config.macro_api_token_private_secret_key.as_ref(),
-                ),
-                gate: owner_tool_gate.clone(),
-                endpoints: code_mode::sdk_endpoints()?,
-                scopes: Arc::clone(&session_scopes),
+        code_executor,
+        Arc::new(code_mode::RunCredentials {
+            egress: code_egress.clone(),
+            detach: Arc::new(code_mode::jobs::DetachPolicy {
+                sessions: session_repo.clone(),
+                flags: feature_flags.clone(),
             }),
-            execution_store,
-            execution_turns,
-            Arc::new(code_mode::images::StaticFileModelImages(
-                static_file_service_client::StaticFileServiceClient::with_timeout(
-                    config.internal_api_key.clone(),
-                    macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
-                    std::time::Duration::from_secs(10),
-                ),
-            )),
-        );
+            correlations: agent_correlation::outbound::PgCorrelationRepository(pool.clone()),
+            signer: MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            gate: owner_tool_gate.clone(),
+            endpoints: code_mode::sdk_endpoints()?,
+            scopes: Arc::clone(&session_scopes),
+        }),
+        execution_store,
+        execution_turns,
+        Arc::new(code_mode::images::StaticFileModelImages(
+            static_file_service_client::StaticFileServiceClient::with_timeout(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+                std::time::Duration::from_secs(10),
+            ),
+        )),
+    );
     let code_mode_service = match &code_runner {
         Some((_, _, _, _, jobs)) => {
             code_mode_service.with_jobs(agent_code_mode::domain::JobRuntime {

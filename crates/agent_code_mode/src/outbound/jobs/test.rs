@@ -88,7 +88,9 @@ async fn launches_stop_at_the_session_and_account_caps(pool: PgPool) {
             .unwrap();
     }
     assert!(matches!(
-        store.launch(session(1), &owner(), &job(deadline), CAPS).await,
+        store
+            .launch(session(1), &owner(), &job(deadline), CAPS)
+            .await,
         Err(CodeModeError::JobLimit(_))
     ));
     store
@@ -106,7 +108,10 @@ async fn launches_stop_at_the_session_and_account_caps(pool: PgPool) {
             .into_owned(),
         session(2),
     );
-    store.launch(other, &other_owner, &taken, CAPS).await.unwrap();
+    store
+        .launch(other, &other_owner, &taken, CAPS)
+        .await
+        .unwrap();
     assert!(matches!(
         store.launch(other, &other_owner, &taken, CAPS).await,
         Err(CodeModeError::Duplicate)
@@ -118,9 +123,15 @@ async fn launches_stop_at_the_session_and_account_caps(pool: PgPool) {
 async fn a_job_settles_once_with_its_notification(pool: PgPool) {
     let store = store(&pool).await;
     let mut record = job(chrono::Utc::now() + chrono::TimeDelta::minutes(10));
-    store.launch(session(1), &owner(), &record, CAPS).await.unwrap();
+    store
+        .launch(session(1), &owner(), &record, CAPS)
+        .await
+        .unwrap();
     assert_eq!(
-        store.control(session(1), record.execution_id).await.unwrap(),
+        store
+            .control(session(1), record.execution_id)
+            .await
+            .unwrap(),
         JobControl::Running
     );
     record.activity_truncated = true;
@@ -129,11 +140,24 @@ async fn a_job_settles_once_with_its_notification(pool: PgPool) {
     record.status = ExecutionStatus::Succeeded;
     record.result = Some(json!({"data": 1}));
     let event = settled_event(session(1), &record);
-    assert!(store.settle(session(1), &record, Some(&event)).await.unwrap());
-    assert!(!store.settle(session(1), &record, Some(&event)).await.unwrap());
+    assert!(
+        store
+            .settle(session(1), &record, Some(&event))
+            .await
+            .unwrap()
+    );
+    assert!(
+        !store
+            .settle(session(1), &record, Some(&event))
+            .await
+            .unwrap()
+    );
     assert!(store.save_activity(session(1), &record).await.is_err());
     assert_eq!(
-        store.control(session(1), record.execution_id).await.unwrap(),
+        store
+            .control(session(1), record.execution_id)
+            .await
+            .unwrap(),
         JobControl::Settled
     );
     let events = sqlx::query_scalar!(
@@ -162,7 +186,10 @@ async fn a_job_settles_once_with_its_notification(pool: PgPool) {
 async fn a_cancel_is_recorded_on_the_row(pool: PgPool) {
     let store = store(&pool).await;
     let record = job(chrono::Utc::now() + chrono::TimeDelta::minutes(10));
-    store.launch(session(1), &owner(), &record, CAPS).await.unwrap();
+    store
+        .launch(session(1), &owner(), &record, CAPS)
+        .await
+        .unwrap();
     assert_eq!(
         store
             .request_cancel(session(1), record.execution_id)
@@ -171,7 +198,10 @@ async fn a_cancel_is_recorded_on_the_row(pool: PgPool) {
         JobCancel::Requested
     );
     assert_eq!(
-        store.control(session(1), record.execution_id).await.unwrap(),
+        store
+            .control(session(1), record.execution_id)
+            .await
+            .unwrap(),
         JobControl::CancelRequested
     );
     // Another session can't touch it.
@@ -180,7 +210,10 @@ async fn a_cancel_is_recorded_on_the_row(pool: PgPool) {
         Err(CodeModeError::NotFound)
     ));
     assert_eq!(
-        store.control(session(2), record.execution_id).await.unwrap(),
+        store
+            .control(session(2), record.execution_id)
+            .await
+            .unwrap(),
         JobControl::Gone
     );
 }
@@ -191,8 +224,14 @@ async fn overdue_and_listed_jobs(pool: PgPool) {
     let now = chrono::Utc::now();
     let overdue = job(now - chrono::TimeDelta::minutes(5));
     let running = job(now + chrono::TimeDelta::minutes(5));
-    store.launch(session(1), &owner(), &overdue, CAPS).await.unwrap();
-    store.launch(session(1), &owner(), &running, CAPS).await.unwrap();
+    store
+        .launch(session(1), &owner(), &overdue, CAPS)
+        .await
+        .unwrap();
+    store
+        .launch(session(1), &owner(), &running, CAPS)
+        .await
+        .unwrap();
 
     let found = store.overdue(now, 10).await.unwrap();
     assert_eq!(found.len(), 1);
@@ -204,9 +243,11 @@ async fn overdue_and_listed_jobs(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(listed.len(), 2);
-    assert!(store
-        .list(session(2), now - chrono::TimeDelta::hours(1), 10)
-        .await
-        .unwrap()
-        .is_empty());
+    assert!(
+        store
+            .list(session(2), now - chrono::TimeDelta::hours(1), 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
 }

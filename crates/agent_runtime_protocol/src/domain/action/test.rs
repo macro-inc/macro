@@ -631,8 +631,9 @@ fn a_prompts_invocation_context_lists_the_sessions_background_jobs() {
         status: crate::domain::job::JobStatus::Running,
         started_at: "2026-11-19T10:00:00Z".into(),
     }];
-    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) =
-        action.to_runtime(&session_id, turn.to_request_id()).unwrap()
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = action
+        .to_runtime(&session_id, turn.to_request_id())
+        .unwrap()
     else {
         panic!("a prompt translates to an ACP request");
     };

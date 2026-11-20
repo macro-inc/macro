@@ -5,12 +5,12 @@ use agent_runtime_protocol::domain::job::JobUpdatedNotification;
 use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::notifications::PendingNotification;
 use async_trait::async_trait;
-use schemars::JsonSchema;
-use serde::Serialize;
-use utoipa::ToSchema;
 use code_execution::domain::RunEnvironment;
 use macro_user_id::user_id::MacroUserIdStr;
+use schemars::JsonSchema;
+use serde::Serialize;
 use tokio_util::sync::CancellationToken;
+use utoipa::ToSchema;
 
 /// Current session turn, read from shared state on every replica.
 #[async_trait]

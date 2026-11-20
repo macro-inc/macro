@@ -22,7 +22,10 @@ pub trait SessionCodeMode: Send + Sync + 'static {
     /// Execute as the selected account, bound to the originating prompt's turn.
     /// With `background`, it becomes a job that outlives the turn where
     /// that is allowed, and runs in the foreground where it is not.
-    #[expect(clippy::too_many_arguments, reason = "each is an authenticated fact of the call")]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "each is an authenticated fact of the call"
+    )]
     async fn execute(
         &self,
         session: &AgentSession,
@@ -210,7 +213,11 @@ impl CodeModeService {
             self.inner.store.save(identity.session, &record).await?;
             return Ok((receipt(&record), None));
         }
-        let executor = self.inner.executor.as_ref().ok_or(CodeModeError::Unavailable)?;
+        let executor = self
+            .inner
+            .executor
+            .as_ref()
+            .ok_or(CodeModeError::Unavailable)?;
         // A program with type errors stops here, before the owner is asked
         // to approve it or a credential is minted for it.
         if let Err(outcome) = executor
@@ -566,8 +573,10 @@ impl SessionCodeMode for CodeModeService {
                 lifetime: RunLifetime::Foreground,
             };
             match &self.jobs {
-                Some(jobs) => match jobs.launch(self, identity, &request, background, cancel.clone())
-                    .await? {
+                Some(jobs) => match jobs
+                    .launch(self, identity, &request, background, cancel.clone())
+                    .await?
+                {
                     jobs::Launch::Started(receipt) => return Ok(receipt),
                     jobs::Launch::Foreground(reason) => ran_in_foreground = Some(reason),
                 },
@@ -675,8 +684,7 @@ impl SessionCodeMode for CodeModeService {
     async fn jobs(
         &self,
         session: AgentSessionId,
-    ) -> Result<Vec<agent_runtime_protocol::domain::job::BackgroundJobSummary>, CodeModeError>
-    {
+    ) -> Result<Vec<agent_runtime_protocol::domain::job::BackgroundJobSummary>, CodeModeError> {
         match &self.jobs {
             Some(jobs) => jobs.listing(session).await,
             None => Ok(Vec::new()),

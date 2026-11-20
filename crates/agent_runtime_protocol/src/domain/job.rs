@@ -16,9 +16,7 @@ use super::schema::v0::{AcpMessage, ToServerMessage};
 mod test;
 
 /// Where a background job is.
-#[derive(
-    Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, strum::IntoStaticStr,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Type, strum::IntoStaticStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]

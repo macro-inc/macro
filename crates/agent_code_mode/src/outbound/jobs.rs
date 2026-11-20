@@ -225,7 +225,12 @@ impl JobStore for PgJobStore {
         .await
         .map_err(storage)?
         .into_iter()
-        .map(|row| (AgentSessionId::new_from_uuid(row.agent_session_id), row.record.0))
+        .map(|row| {
+            (
+                AgentSessionId::new_from_uuid(row.agent_session_id),
+                row.record.0,
+            )
+        })
         .collect())
     }
 

@@ -147,7 +147,8 @@ pub struct ConnectedAppUse {
 fn refuse_in_job(usage: &ConnectedAppUse) -> Result<(), CodeModeError> {
     if usage.job_turn.is_some() {
         return Err(CodeModeError::Invalid(
-            "A background job can't discover or add connected apps; do that in the foreground.".into(),
+            "A background job can't discover or add connected apps; do that in the foreground."
+                .into(),
         ));
     }
     Ok(())

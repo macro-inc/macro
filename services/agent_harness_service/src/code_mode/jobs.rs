@@ -24,10 +24,12 @@ fn storage(error: impl std::fmt::Display) -> CodeModeError {
 }
 
 /// Why a job may not start, told to the agent with the foreground result.
-const NOT_ENABLED: &str = "Background jobs are not enabled for this account, so this ran in the foreground.";
+const NOT_ENABLED: &str =
+    "Background jobs are not enabled for this account, so this ran in the foreground.";
 const NOT_OWNER: &str = "Background jobs start only in a turn the session owner prompted, so this ran in the foreground.";
 const UNATTENDED: &str = "This session runs unattended, so this ran in the foreground.";
-const STALE_TURN: &str = "The turn that made this call is no longer active, so this ran in the foreground.";
+const STALE_TURN: &str =
+    "The turn that made this call is no longer active, so this ran in the foreground.";
 
 /// Decides whether an execution may detach (MVP rule: the owner prompted the
 /// launching turn and acts as themselves, so a job never needs an approval

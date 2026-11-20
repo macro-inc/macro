@@ -148,8 +148,8 @@ impl Jobs {
             return Ok(Launch::Foreground(reason));
         }
         let now = chrono::Utc::now();
-        let deadline = now
-            + chrono::TimeDelta::from_std(JOB_LIMIT).map_err(|_| CodeModeError::Unavailable)?;
+        let deadline =
+            now + chrono::TimeDelta::from_std(JOB_LIMIT).map_err(|_| CodeModeError::Unavailable)?;
         identity.lifetime = RunLifetime::Job {
             deadline,
             sends: background.sends,
@@ -178,7 +178,12 @@ impl Jobs {
         {
             Ok(()) => {}
             Err(CodeModeError::Duplicate) => {
-                match service.inner.store.get(identity.session, identity.execution).await {
+                match service
+                    .inner
+                    .store
+                    .get(identity.session, identity.execution)
+                    .await
+                {
                     // The same launch again: its job, not a second one.
                     Ok(existing)
                         if existing.job.is_some()
@@ -334,7 +339,8 @@ impl Jobs {
     /// Settle jobs a dead replica left running.
     #[tracing::instrument(name = "agent.job.sweep", skip_all, fields(settled = tracing::field::Empty), err)]
     pub(super) async fn sweep(&self) -> Result<usize, CodeModeError> {
-        let grace = chrono::TimeDelta::from_std(SWEEP_GRACE).map_err(|_| CodeModeError::Unavailable)?;
+        let grace =
+            chrono::TimeDelta::from_std(SWEEP_GRACE).map_err(|_| CodeModeError::Unavailable)?;
         let overdue = self
             .runtime
             .store
@@ -351,7 +357,9 @@ impl Jobs {
                     self.announce(session, &record).await;
                 }
                 Ok(false) => {}
-                Err(error) => tracing::error!(?error, job_id = %record.execution_id, "could not settle an overdue job"),
+                Err(error) => {
+                    tracing::error!(?error, job_id = %record.execution_id, "could not settle an overdue job")
+                }
             }
         }
         tracing::Span::current().record("settled", settled);
@@ -413,7 +421,9 @@ impl JobRun {
         }
         super::activity::finish(&mut self.record.activity);
         let (status, result, error) = match (stop, outcome) {
-            (Stop::Interrupted, _) => (ExecutionStatus::Interrupted, None, Some(INTERRUPTED.into())),
+            (Stop::Interrupted, _) => {
+                (ExecutionStatus::Interrupted, None, Some(INTERRUPTED.into()))
+            }
             (Stop::Cancelled, _) => (ExecutionStatus::Cancelled, None, Some(CANCELLED.into())),
             (Stop::Archived, _) => (ExecutionStatus::Cancelled, None, Some(ARCHIVED.into())),
             (_, Some(Outcome::TimedOut) | None) => {
@@ -438,7 +448,9 @@ impl JobRun {
         match settle_job(self.store.as_ref(), self.session, &self.record).await {
             Ok(true) => announce(self.sessions.as_ref(), self.session, &self.record).await,
             Ok(false) => {}
-            Err(error) => tracing::error!(?error, "could not settle a background job; the sweep will"),
+            Err(error) => {
+                tracing::error!(?error, "could not settle a background job; the sweep will")
+            }
         }
     }
 
@@ -480,7 +492,8 @@ impl JobRun {
                 }
             }
         };
-        wait.instrument(tracing::info_span!("agent.job.queue")).await
+        wait.instrument(tracing::info_span!("agent.job.queue"))
+            .await
     }
 
     /// Run the program, watching its row, its session and this replica.

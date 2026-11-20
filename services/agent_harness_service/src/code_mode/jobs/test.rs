@@ -48,7 +48,11 @@ fn only_the_owners_own_running_turn_may_detach_a_job() {
         Some(NOT_OWNER)
     );
     assert_eq!(
-        refusal(false, Some(&prompter(PrompterKind::System, None)), &identity),
+        refusal(
+            false,
+            Some(&prompter(PrompterKind::System, None)),
+            &identity
+        ),
         Some(NOT_OWNER)
     );
     assert_eq!(
@@ -63,5 +67,8 @@ fn only_the_owners_own_running_turn_may_detach_a_job() {
     let mut later = owner_turn.clone();
     later.action_id = AgentActionId::mint();
     assert_eq!(refusal(false, Some(&later), &identity), Some(STALE_TURN));
-    assert_eq!(refusal(true, Some(&owner_turn), &identity), Some(UNATTENDED));
+    assert_eq!(
+        refusal(true, Some(&owner_turn), &identity),
+        Some(UNATTENDED)
+    );
 }

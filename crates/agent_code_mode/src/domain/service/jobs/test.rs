@@ -81,7 +81,11 @@ impl JobStore for Rows {
         row.1 = record.clone();
         Ok(())
     }
-    async fn control(&self, _: AgentSessionId, job: ExecutionId) -> Result<JobControl, CodeModeError> {
+    async fn control(
+        &self,
+        _: AgentSessionId,
+        job: ExecutionId,
+    ) -> Result<JobControl, CodeModeError> {
         Ok(match self.records.lock().unwrap().get(&job) {
             None => JobControl::Gone,
             Some((_, _, _, true)) => JobControl::Settled,
@@ -179,7 +183,11 @@ struct Foreground(Mutex<HashMap<ExecutionId, ExecutionRecord>>);
 
 #[async_trait]
 impl ExecutionStore for Foreground {
-    async fn create(&self, _: AgentSessionId, record: &ExecutionRecord) -> Result<(), CodeModeError> {
+    async fn create(
+        &self,
+        _: AgentSessionId,
+        record: &ExecutionRecord,
+    ) -> Result<(), CodeModeError> {
         self.0
             .lock()
             .unwrap()
@@ -193,7 +201,11 @@ impl ExecutionStore for Foreground {
             .insert(record.execution_id, record.clone());
         Ok(())
     }
-    async fn get(&self, _: AgentSessionId, execution: ExecutionId) -> Result<ExecutionRecord, CodeModeError> {
+    async fn get(
+        &self,
+        _: AgentSessionId,
+        execution: ExecutionId,
+    ) -> Result<ExecutionRecord, CodeModeError> {
         self.0
             .lock()
             .unwrap()
@@ -212,13 +224,25 @@ struct Journal {
 
 #[async_trait]
 impl ExecutionStore for Journal {
-    async fn create(&self, session: AgentSessionId, record: &ExecutionRecord) -> Result<(), CodeModeError> {
+    async fn create(
+        &self,
+        session: AgentSessionId,
+        record: &ExecutionRecord,
+    ) -> Result<(), CodeModeError> {
         self.foreground.create(session, record).await
     }
-    async fn save(&self, session: AgentSessionId, record: &ExecutionRecord) -> Result<(), CodeModeError> {
+    async fn save(
+        &self,
+        session: AgentSessionId,
+        record: &ExecutionRecord,
+    ) -> Result<(), CodeModeError> {
         self.foreground.save(session, record).await
     }
-    async fn get(&self, session: AgentSessionId, execution: ExecutionId) -> Result<ExecutionRecord, CodeModeError> {
+    async fn get(
+        &self,
+        session: AgentSessionId,
+        execution: ExecutionId,
+    ) -> Result<ExecutionRecord, CodeModeError> {
         if let Some((_, record, ..)) = self.jobs.records.lock().unwrap().get(&execution) {
             return Ok(record.clone());
         }
@@ -265,7 +289,11 @@ impl ExecutionCredentials for Credentials {
 struct NoImages;
 #[async_trait]
 impl ModelImages for NoImages {
-    async fn load_png(&self, _: &StaticFileId, _: &MacroUserIdStr<'_>) -> anyhow::Result<ModelImage> {
+    async fn load_png(
+        &self,
+        _: &StaticFileId,
+        _: &MacroUserIdStr<'_>,
+    ) -> anyhow::Result<ModelImage> {
         anyhow::bail!("no images here")
     }
 }
@@ -373,7 +401,11 @@ fn background(title: &str) -> Option<BackgroundRequest> {
 }
 
 impl Harness {
-    async fn launch(&self, id: ExecutionId, request: ExecuteRequest) -> Result<ExecutionReceipt, CodeModeError> {
+    async fn launch(
+        &self,
+        id: ExecutionId,
+        request: ExecuteRequest,
+    ) -> Result<ExecutionReceipt, CodeModeError> {
         self.service
             .execute(
                 &self.session,
@@ -414,7 +446,10 @@ async fn a_background_execution_returns_at_once_and_settles_into_one_waking_even
             error: None,
         }]
     );
-    assert_eq!(harness.rows.statuses(), [JobStatus::Running, JobStatus::Done]);
+    assert_eq!(
+        harness.rows.statuses(),
+        [JobStatus::Running, JobStatus::Done]
+    );
     let record = harness.rows.record(id);
     assert_eq!(record.status, ExecutionStatus::Succeeded);
     assert_eq!(record.activity.len(), 1);
@@ -432,7 +467,10 @@ async fn a_refused_background_runs_in_the_foreground_and_says_why() {
         refuse: Some("Someone other than the owner prompted this turn.".into()),
         ..Default::default()
     });
-    let receipt = harness.launch(ExecutionId::mint(), check_routine()).await.unwrap();
+    let receipt = harness
+        .launch(ExecutionId::mint(), check_routine())
+        .await
+        .unwrap();
     assert_eq!(receipt.status, ExecutionStatus::Succeeded);
     assert_eq!(receipt.job, None);
     assert_eq!(
@@ -470,7 +508,10 @@ async fn a_resent_launch_is_the_same_job_and_identical_launches_are_two_jobs() {
 async fn a_launch_past_the_session_cap_does_not_run() {
     let harness = harness(Credentials::default());
     for _ in 0..JOB_CAPS.per_session {
-        harness.launch(ExecutionId::mint(), check_routine()).await.unwrap();
+        harness
+            .launch(ExecutionId::mint(), check_routine())
+            .await
+            .unwrap();
     }
     let refused = harness.launch(ExecutionId::mint(), check_routine()).await;
     assert!(matches!(refused, Err(CodeModeError::JobLimit(_))));
@@ -508,7 +549,11 @@ async fn cancelling_a_job_stops_it_and_settles_it_once() {
     harness.launch(id, check_routine()).await.unwrap();
     harness.program.started.notified().await;
     assert_eq!(
-        harness.service.cancel_job(harness.session.id, id).await.unwrap(),
+        harness
+            .service
+            .cancel_job(harness.session.id, id)
+            .await
+            .unwrap(),
         JobCancel::Requested
     );
     harness.rows.settled.notified().await;
@@ -517,7 +562,11 @@ async fn cancelling_a_job_stops_it_and_settles_it_once() {
     assert_eq!(settlements[0].status, JobStatus::Cancelled);
     assert_eq!(settlements[0].error.as_deref(), Some(CANCELLED));
     assert_eq!(
-        harness.service.cancel_job(harness.session.id, id).await.unwrap(),
+        harness
+            .service
+            .cancel_job(harness.session.id, id)
+            .await
+            .unwrap(),
         JobCancel::AlreadySettled
     );
 }
