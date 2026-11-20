@@ -72,6 +72,8 @@ export type ScreenErrorCode =
   | 'sourceUnavailable'
   /** The computer runs but its screen couldn't be reached; the socket then ends with `error`. */
   | 'tunnelFailed'
+  /** Too many screen sockets for this computer; the socket then ends with `error`. */
+  | 'tooManySockets'
   | 'badMessage'
   | 'inputFailed';
 

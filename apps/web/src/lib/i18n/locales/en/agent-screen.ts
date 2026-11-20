@@ -69,6 +69,8 @@ export default {
   noticeInputFailed: 'The computer didn’t accept that input',
   noticeSourceUnavailable: 'The screen closed. Reconnecting…',
   noticeTunnelFailed: 'Couldn’t reach the computer’s screen. Reconnecting…',
+  noticeTooManySockets:
+    'Too many screens are open for this computer. Close one, then try again.',
 
   modeView: 'View',
   modeTouch: 'Touch',

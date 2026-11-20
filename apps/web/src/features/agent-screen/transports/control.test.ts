@@ -72,5 +72,18 @@ describe('parseServerMessage', () => {
       code: 'sourceUnavailable',
       message: 'display closed',
     });
+    expect(
+      parseServerMessage(
+        JSON.stringify({
+          type: 'error',
+          code: 'tooManySockets',
+          message: 'too many sockets',
+        })
+      )
+    ).toEqual({
+      type: 'error',
+      code: 'tooManySockets',
+      message: 'too many sockets',
+    });
   });
 });
