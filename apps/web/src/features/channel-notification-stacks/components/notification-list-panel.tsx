@@ -1,9 +1,10 @@
 import { t } from '@app/lib/i18n';
 import { Button, Tabs } from '@ui';
-import { Show } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import type {
   ChannelStack,
   NotificationListView,
+  StackListStatus,
 } from '../core/channel-stacks';
 import type { SenderName } from './stack-label';
 import { StackList } from './stack-list';
@@ -17,6 +18,8 @@ export function NotificationListPanel(props: {
   view: NotificationListView;
   onViewChange: (view: NotificationListView) => void;
   stacks: readonly ChannelStack[];
+  status: StackListStatus;
+  onRetry: () => void;
   senderName: SenderName;
   onOpen: (stack: ChannelStack) => void;
   onAction: (stack: ChannelStack) => void;
@@ -40,21 +43,40 @@ export function NotificationListPanel(props: {
         value={props.view}
         onChange={props.onViewChange}
       />
-      <div class="min-h-0 overflow-y-auto overscroll-contain">
-        <StackList
-          stacks={props.stacks}
-          senderName={props.senderName}
-          action={isNotDone() ? 'done' : 'read'}
-          empty={
-            isNotDone()
-              ? t('channelNotificationStacks.emptyNotDone')
-              : t('channelNotificationStacks.emptyUnread')
-          }
-          onOpen={props.onOpen}
-          onAction={props.onAction}
-        />
-      </div>
-      <Show when={props.stacks.length > 1}>
+      <Switch>
+        <Match when={props.status === 'loading'}>
+          <p class="px-2 py-1.5 text-[13px] leading-[18px] text-ink-extra-muted">
+            {t('common.loading')}
+          </p>
+        </Match>
+        <Match when={props.status === 'failed'}>
+          <div class="flex flex-col items-start gap-1 px-2 py-1.5">
+            <p class="text-[13px] leading-[18px] text-ink-extra-muted">
+              {t('channelNotificationStacks.loadFailed')}
+            </p>
+            <Button variant="ghost" size="xs" onClick={() => props.onRetry()}>
+              {t('common.retry')}
+            </Button>
+          </div>
+        </Match>
+        <Match when={props.status === 'ready'}>
+          <div class="min-h-0 overflow-y-auto overscroll-contain">
+            <StackList
+              stacks={props.stacks}
+              senderName={props.senderName}
+              action={isNotDone() ? 'done' : 'read'}
+              empty={
+                isNotDone()
+                  ? t('channelNotificationStacks.emptyNotDone')
+                  : t('channelNotificationStacks.emptyUnread')
+              }
+              onOpen={props.onOpen}
+              onAction={props.onAction}
+            />
+          </div>
+        </Match>
+      </Switch>
+      <Show when={props.status === 'ready' && props.stacks.length > 1}>
         <Button
           variant="ghost"
           size="xs"

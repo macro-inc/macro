@@ -114,6 +114,18 @@ test('a new notification keeps focus on the other stacks', async ({ page }) => {
   await expect(toggle(page)).toContainText('3');
 });
 
+test('a failed read offers Retry instead of an empty list', async ({
+  page,
+}) => {
+  await page.goto('/gutter.html?pane=1600&notDone=failed');
+  await expect(list(page)).toContainText('Couldn’t load these notifications');
+  await expect(list(page)).not.toContainText('Nothing left to mark done');
+  await expect(list(page).getByRole('listitem')).toHaveCount(0);
+
+  await list(page).getByRole('button', { name: 'Retry' }).click();
+  await expect(list(page).getByRole('listitem')).toHaveCount(3);
+});
+
 // A narrow split (140px of gutter): the list opens in a popover, and opening
 // a stack from it closes the popover.
 test('a narrow pane opens the list as a popover', async ({ page }) => {

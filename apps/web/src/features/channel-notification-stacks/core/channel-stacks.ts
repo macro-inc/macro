@@ -21,6 +21,12 @@ export type ChannelStackKind = 'messages' | 'thread' | 'mention';
  */
 export type StackAnchor = { messageId: string; threadId?: string };
 
+/**
+ * Whether a list's notifications are known: still loading, failed with nothing
+ * to show, or read (possibly from cache while a refresh fails).
+ */
+export type StackListStatus = 'loading' | 'failed' | 'ready';
+
 /** The notifications a channel shows as one row of the inbox. */
 export type ChannelStack = {
   /** Stable while the stack exists, across new notifications in it. */

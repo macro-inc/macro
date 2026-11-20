@@ -1085,9 +1085,10 @@ notifications along with the other notifications for that thread.
 
 Desktop only. Each part has its own flag: `enable-channel-stack-done-checks`
 and `enable-channel-notification-list`. Both are on in local development.
-Open a channel in a pane at least 1008px wide that has notifications
-from another account: new top-level messages, a thread reply, and a
-mention. Check that:
+Open a channel in a pane at least 1400px wide, so the list docks in the
+gutter, with notifications from another account: new top-level messages, a
+thread reply, and a mention. Then narrow the pane to see the popover and the
+hidden states. Check that:
 
 - A round check sits in the gutter left of each stack's newest message. For a
   thread, it sits beside the newest notified reply, or beside the top-level
@@ -1097,7 +1098,8 @@ mention. Check that:
   gutter (pane ≥1400px), it opens a list docked in the gutter. Narrower panes
   open the list as a popover. Not done and Unread switch which stacks it
   lists. Clicking a row scrolls to its message, and the row's check marks it
-  done (or read, in Unread).
+  done (or read, in Unread). While a list's notifications load it says so,
+  and if the read fails it offers Retry instead of an empty list.
 - Below 72px of gutter, the toggle hides. Below 1008px, the checks hide.
 
 ## Requests to join

@@ -15,6 +15,7 @@ import { render } from 'solid-js/web';
 import type {
   ChannelStack,
   NotificationListView,
+  StackListStatus,
 } from '../core/channel-stacks';
 import { createChannelNotificationStacks } from '../primitives/channel-notification-stacks';
 import { NotificationList } from '../views/notification-list';
@@ -120,6 +121,10 @@ function Fixture() {
   const [records, setRecords] = createSignal(NOTIFICATIONS);
   const [open, setOpen] = createSignal(true);
   const [view, setView] = createSignal<NotificationListView>('not_done');
+  // `?notDone=failed` starts as if the not-done read failed; Retry loads it.
+  const [notDoneStatus, setNotDoneStatus] = createSignal<StackListStatus>(
+    params.get('notDone') === 'failed' ? 'failed' : 'ready'
+  );
 
   const stacks = createChannelNotificationStacks({
     active: records,
@@ -227,6 +232,10 @@ function Fixture() {
         onViewChange={setView}
         notDone={stacks.notDone}
         unread={stacks.unread}
+        status={(listView) =>
+          listView === 'not_done' ? notDoneStatus() : 'ready'
+        }
+        onRetry={() => setNotDoneStatus('ready')}
         senderName={(id) => NAMES[id]}
         onOpenStack={(stack) =>
           window.opened.push(

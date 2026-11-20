@@ -14,6 +14,7 @@ export default {
   markReadFailed: 'Couldn’t mark this read',
   emptyNotDone: 'Nothing left to mark done',
   emptyUnread: 'Nothing unread',
+  loadFailed: 'Couldn’t load these notifications',
 
   // A stack's label: what it holds and who wrote it
   someone: 'Someone',

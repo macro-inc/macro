@@ -16,7 +16,7 @@ import type { UnifiedNotification } from '@notifications/types';
 import { createChannelActiveNotificationsQuery } from '@queries/channel/active-notifications';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { type Accessor, Show, untrack } from 'solid-js';
-import type { ChannelStack } from './core/channel-stacks';
+import type { ChannelStack, StackListStatus } from './core/channel-stacks';
 import { createChannelNotificationStacks } from './primitives/channel-notification-stacks';
 import { createGutterPreferences } from './primitives/gutter-preferences';
 import { NotificationList } from './views/notification-list';
@@ -43,6 +43,9 @@ export function createChannelNotificationGutter(options: {
   ready: Accessor<boolean>;
   /** The channel's unread notifications, read for its own unread markers. */
   unread: Accessor<readonly UnifiedNotification[]>;
+  /** Whether `unread` is known yet. */
+  unreadStatus: Accessor<StackListStatus>;
+  retryUnread: () => void;
   /** The element the message column is centered in. */
   pane: Accessor<HTMLElement | undefined>;
   /** Scroll the channel to a top-level message, or a reply in its thread. */
@@ -86,6 +89,22 @@ export function createChannelNotificationGutter(options: {
 
   const threadGutters = new Map<string, ThreadGutter>();
 
+  // Cached stacks stay listed while a refresh fails.
+  const notDoneStatus = (): StackListStatus => {
+    if (activeQuery.data !== undefined) return 'ready';
+    return activeQuery.isError ? 'failed' : 'loading';
+  };
+  const status = {
+    not_done: notDoneStatus,
+    unread: options.unreadStatus,
+  };
+  const retry = {
+    not_done: () => {
+      fireAndForget(activeQuery.refetch(), 'channel-notification-stacks');
+    },
+    unread: options.retryUnread,
+  };
+
   const openStack = (stack: ChannelStack) => {
     const { messageId, threadId } = stack.anchor;
     if (threadId) options.goToMessage(threadId, messageId);
@@ -115,6 +134,8 @@ export function createChannelNotificationGutter(options: {
     },
     pane: options.pane,
     stacks,
+    status,
+    retry,
     mark,
     openStack,
   };
@@ -153,6 +174,8 @@ function MountedNotificationList(props: { gutter: ChannelNotificationGutter }) {
       onViewChange={preferences.setView}
       notDone={gutter.stacks.notDone}
       unread={gutter.stacks.unread}
+      status={(view) => gutter.status[view]()}
+      onRetry={(view) => gutter.retry[view]()}
       senderName={senderName}
       onOpenStack={gutter.openStack}
       onMarkDone={(stacks) => gutter.mark('done', stacks)}

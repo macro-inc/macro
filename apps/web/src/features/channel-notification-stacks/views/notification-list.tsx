@@ -8,6 +8,7 @@ import type { SenderName } from '../components/stack-label';
 import type {
   ChannelStack,
   NotificationListView,
+  StackListStatus,
 } from '../core/channel-stacks';
 
 /** The gutter the toggle needs: itself plus its inset from the pane's edge. */
@@ -35,6 +36,9 @@ export function NotificationList(props: {
   onViewChange: (view: NotificationListView) => void;
   notDone: Accessor<readonly ChannelStack[]>;
   unread: Accessor<readonly ChannelStack[]>;
+  /** Whether a view's stacks are known yet. */
+  status: (view: NotificationListView) => StackListStatus;
+  onRetry: (view: NotificationListView) => void;
   senderName: SenderName;
   onOpenStack: (stack: ChannelStack) => void;
   onMarkDone: (stacks: readonly ChannelStack[]) => void;
@@ -63,6 +67,8 @@ export function NotificationList(props: {
       view={props.view()}
       onViewChange={props.onViewChange}
       stacks={stacks()}
+      status={props.status(props.view())}
+      onRetry={() => props.onRetry(props.view())}
       senderName={props.senderName}
       onOpen={onOpenStack}
       onAction={markOne}
