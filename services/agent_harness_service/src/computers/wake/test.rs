@@ -1,6 +1,5 @@
 use std::sync::Mutex;
 
-use agent_harness::domain::ports::RuntimeConnectionId;
 use agent_harness::testing::helpers::containers::ContainerMock;
 use uuid::Uuid;
 
