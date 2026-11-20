@@ -167,7 +167,7 @@
                     [ .resource // {} | to_entries[]
                       | select(.key | test("^aws_(security_group|vpc_security_group_(ingress|egress)_rule|security_group_rule)$"))
                       | .value | to_entries[]
-                      | select((.value.description // "") | test("^[a-zA-Z0-9. _:/()#,@\\[\\]+=&;{}!$*-]{0,255}$") | not)
+                      | select((.value.description // "") | test("\\A[a-zA-Z0-9. _:/()#,@\\[\\]+=&;{}!$*-]{0,255}\\z") | not)
                       | .key ]
                     | if length == 0 then true else error("security group descriptions EC2 rejects: \(.)") end
                   ' ${configs.${name}} >/dev/null
