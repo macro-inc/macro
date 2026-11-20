@@ -87,6 +87,48 @@ async fn a_read_not_started_by_its_deadline_is_left_out_untried() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn a_read_still_running_at_its_deadline_is_cut_off() {
+    let tries = Cell::new(0);
+    let started = Instant::now();
+
+    let answer = wait_out_refusals(Some(started + GMAIL_WINDOW_WAIT), || {
+        tries.set(tries.get() + 1);
+        async {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            Ok::<_, EmailApiError>(None::<MessageWithCalendarParts>)
+        }
+    })
+    .await;
+
+    assert!(matches!(
+        answer,
+        Err(EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Local
+        })
+    ));
+    assert_eq!(tries.get(), 1);
+    assert_eq!(started.elapsed(), GMAIL_WINDOW_WAIT);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_wait_that_reaches_the_deadline_is_the_answer() {
+    let tries = Cell::new(0);
+    let started = Instant::now();
+
+    // A wait of the whole window would wake with nothing left to try in.
+    let answer = wait_out_refusals(
+        Some(started + GMAIL_WINDOW_WAIT),
+        read(&tries, 1, Some(GMAIL_WINDOW_WAIT.as_secs())),
+    )
+    .await;
+
+    assert!(matches!(answer, Err(EmailApiError::RateLimited { .. })));
+    assert_eq!(tries.get(), 1);
+    assert_eq!(started.elapsed(), Duration::ZERO);
+}
+
+#[tokio::test(start_paused = true)]
 async fn an_oversized_wait_is_the_answer() {
     let tries = Cell::new(0);
     let started = Instant::now();

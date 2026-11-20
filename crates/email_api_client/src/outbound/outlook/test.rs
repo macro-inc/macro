@@ -1188,3 +1188,67 @@ async fn recent_inbox_messages_stop_at_a_link_already_followed_and_keep_pages_be
 
     assert_eq!(read().await, vec![Some("m1".to_owned())]);
 }
+
+#[tokio::test]
+async fn recent_inbox_messages_read_past_an_empty_page_and_stop_at_page_one_or_a_foreign_link() {
+    let (server, api, token) = setup().await;
+    let message = |id: &str| {
+        json!({
+            "id": id, "conversationId": "c1", "parentFolderId": "inbox",
+            "subject": "Invoice", "isRead": false, "isDraft": false, "flag": {},
+            "receivedDateTime": "2026-10-27T09:00:00Z"
+        })
+    };
+    let inbox = format!("{}/v1.0/me/mailFolders/inbox/messages", server.uri());
+    // An empty first page with more to come.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [],
+            "@odata.nextLink": format!("{inbox}?$skiptoken=page-2")
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // Page 2 links back to page one, spelled another way.
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$skiptoken", "page-2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": format!(
+                "{inbox}?$top=10&$orderby=receivedDateTime%20desc&$select={}",
+                super::messages::RECENT_MESSAGE_FIELDS
+            )
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let read = || async {
+        api.recent_inbox_messages(&token, Uuid::now_v7(), 10, None, &[])
+            .await
+            .unwrap()
+            .iter()
+            .map(|message| message.content.message.provider_id.clone())
+            .collect::<Vec<_>>()
+    };
+
+    assert_eq!(read().await, vec![Some("m1".to_owned())]);
+    server.verify().await;
+
+    // A link to another host is never followed, and what was read stays.
+    server.reset().await;
+    Mock::given(method("GET"))
+        .and(path("/v1.0/me/mailFolders/inbox/messages"))
+        .and(query_param("$top", "10"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "value": [message("m1")],
+            "@odata.nextLink": "https://elsewhere.example/v1.0/me/mailFolders/inbox/messages?$skiptoken=page-2"
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    assert_eq!(read().await, vec![Some("m1".to_owned())]);
+}

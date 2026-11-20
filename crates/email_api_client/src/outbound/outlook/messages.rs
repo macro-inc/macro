@@ -19,7 +19,7 @@ use crate::domain::ports::{MailboxActionWriter, MailboxCalendarClient, MailboxCo
 const MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,changeKey,internetMessageId,subject,bodyPreview,body,from,toRecipients,ccRecipients,bccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime,createdDateTime,lastModifiedDateTime,internetMessageHeaders,webLink";
 
 /// Enough to read who wrote and what about, without bodies or headers.
-const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
+pub(super) const RECENT_MESSAGE_FIELDS: &str = "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,ccRecipients,isRead,isDraft,flag,categories,inferenceClassification,receivedDateTime,sentDateTime";
 
 /// Most pages one recent read follows. Graph answers up to `$top` messages
 /// a page, so a read takes one page unless Graph answers short.
@@ -302,15 +302,17 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 ),
             );
         }
-        // Graph may answer a page short of `$top` with more to come: follow
-        // its pages until the limit, an empty page, a link already followed,
-        // or [`MAX_RECENT_PAGES`]. A message that can't be read is left out
-        // and counted, so one bad message keeps the rest, and a later page
-        // that fails keeps what the earlier ones read.
+        // Graph may answer a page short of `$top`, even empty, with more to
+        // come: follow its pages until the limit, a page it has read already
+        // (however its link is spelled), or [`MAX_RECENT_PAGES`]. A message
+        // that can't be read is left out and counted, so one bad message keeps
+        // the rest, and the limit counts the messages kept. A later page that
+        // fails, or a link to it that can't be followed, keeps what the
+        // earlier ones read.
         let limit = usize::from(limit);
         let mut messages = Vec::new();
         let mut failed = 0usize;
-        let mut followed = std::collections::HashSet::new();
+        let mut followed = std::collections::HashSet::from([page_key(&url)]);
         let mut pages = 0u32;
         loop {
             let page: wire::Page<serde_json::Value> = match self.get(token, url).await {
@@ -322,7 +324,6 @@ impl MailboxContentReader for OutlookApiClientRepository {
                 Err(error) => return Err(error),
             };
             pages += 1;
-            let empty = page.value.is_empty();
             // Each message decodes on its own, so one Graph can't describe
             // leaves the rest of its page; rows past the limit are never read.
             let wanted = limit.saturating_sub(messages.len());
@@ -338,16 +339,17 @@ impl MailboxContentReader for OutlookApiClientRepository {
                     }
                 }
             }
-            match page.next {
-                Some(next)
-                    if messages.len() < limit
-                        && !empty
-                        && pages < MAX_RECENT_PAGES
-                        && followed.insert(next.clone()) =>
-                {
-                    url = self.continuation(&StreamToken::new(next))?;
+            let Some(next) = page.next else { break };
+            if messages.len() >= limit || pages >= MAX_RECENT_PAGES {
+                break;
+            }
+            match self.continuation(&StreamToken::new(next)) {
+                Ok(next) if followed.insert(page_key(&next)) => url = next,
+                Ok(_) => break,
+                Err(error) => {
+                    tracing::warn!(%link_id, error = %error, "stopped reading recent Outlook messages at a link that can't be followed");
+                    break;
                 }
-                _ => break,
             }
         }
         if failed > 0 {
@@ -630,4 +632,12 @@ impl MailboxActionWriter for OutlookApiClientRepository {
             Err(error) => Err(error),
         }
     }
+}
+
+/// What makes two links one page of a list: the same path and the same
+/// query pairs, in any order and however they are encoded.
+fn page_key(url: &url::Url) -> (String, Vec<(String, String)>) {
+    let mut pairs: Vec<(String, String)> = url.query_pairs().into_owned().collect();
+    pairs.sort();
+    (url.path().to_owned(), pairs)
 }

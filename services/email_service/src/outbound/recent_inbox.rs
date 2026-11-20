@@ -176,9 +176,10 @@ impl<R, T, L> ProviderRecentInbox<R, T, L> {
 
 /// Runs `read` until it is not refused. Until `deadline`, a refusal by the
 /// gate or by Gmail's rate limit waits as long as it asks (or
-/// [`GMAIL_REFUSED_RETRY`]) and tries again; a refusal whose wait would pass
-/// the deadline, or any refusal without one, is the answer. A read whose
-/// deadline has passed before it starts is refused without a try.
+/// [`GMAIL_REFUSED_RETRY`]) and tries again; a refusal whose wait would
+/// reach the deadline, or any refusal without one, is the answer. No try
+/// starts at or after the deadline, and one still running then is cut off
+/// (waiting for the gate, a token or Gmail) and refused.
 async fn wait_out_refusals<O, F, Fut>(
     deadline: Option<Instant>,
     mut read: F,
@@ -187,14 +188,19 @@ where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<O, EmailApiError>>,
 {
-    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
-        return Err(EmailApiError::RateLimited {
-            retry_after: None,
-            origin: RateLimitOrigin::Local,
-        });
-    }
+    let refused = || EmailApiError::RateLimited {
+        retry_after: None,
+        origin: RateLimitOrigin::Local,
+    };
     loop {
-        match read().await {
+        let answer = match deadline {
+            Some(deadline) if Instant::now() >= deadline => return Err(refused()),
+            Some(deadline) => tokio::time::timeout_at(deadline, read())
+                .await
+                .unwrap_or_else(|_| Err(refused())),
+            None => read().await,
+        };
+        match answer {
             Err(EmailApiError::RateLimited {
                 retry_after,
                 origin,
@@ -204,7 +210,7 @@ where
                 let left =
                     deadline.map(|deadline| deadline.saturating_duration_since(Instant::now()));
                 match left {
-                    Some(left) if wait <= left => tokio::time::sleep(wait).await,
+                    Some(left) if wait < left => tokio::time::sleep(wait).await,
                     _ => {
                         return Err(EmailApiError::RateLimited {
                             retry_after,

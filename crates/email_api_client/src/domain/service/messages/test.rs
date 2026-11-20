@@ -35,7 +35,7 @@ type Asked = (u32, Option<String>);
 /// Pages a dated list answers, and what each call asked for.
 #[derive(Clone, Default)]
 struct Pages {
-    answers: Arc<Mutex<VecDeque<MessageIdPage>>>,
+    answers: Arc<Mutex<VecDeque<Result<MessageIdPage, EmailApiError>>>>,
     asked: Arc<Mutex<Vec<Asked>>>,
 }
 
@@ -107,12 +107,12 @@ impl MailboxMessageClient for MessageClient {
                 .lock()
                 .unwrap()
                 .push((max_results, page_token.map(str::to_string)));
-            return Ok(pages
+            return pages
                 .answers
                 .lock()
                 .unwrap()
                 .pop_front()
-                .unwrap_or_default());
+                .unwrap_or_else(|| Ok(MessageIdPage::default()));
         }
         Err(self.record(
             access_token,
@@ -374,6 +374,16 @@ async fn list_since(
     answers: Vec<MessageIdPage>,
     limit: u32,
 ) -> (Vec<String>, Vec<Asked>, Vec<Call>) {
+    let (ids, asked, calls) =
+        list_since_answers(answers.into_iter().map(Ok).collect(), limit).await;
+    (ids.unwrap(), asked, calls)
+}
+
+/// [`list_since`] from pages that may fail.
+async fn list_since_answers(
+    answers: Vec<Result<MessageIdPage, EmailApiError>>,
+    limit: u32,
+) -> (Result<Vec<String>, EmailApiError>, Vec<Asked>, Vec<Call>) {
     let calls = call_log();
     let pages = Pages {
         answers: Arc::new(Mutex::new(answers.into())),
@@ -390,8 +400,7 @@ async fn list_since(
     let since = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
     let ids = service
         .list_messages_since(Uuid::nil(), limit, &["INBOX"], since)
-        .await
-        .unwrap();
+        .await;
     let asked = pages.asked.lock().unwrap().clone();
     let calls = calls.lock().unwrap().clone();
     (ids, asked, calls)
@@ -444,8 +453,24 @@ async fn a_dated_list_follows_at_most_its_page_cap() {
 
     let (ids, asked, _) = list_since(answers, 500).await;
 
-    assert_eq!(asked.len(), MAX_LIST_PAGES as usize);
-    assert_eq!(ids.len(), MAX_LIST_PAGES as usize);
+    assert_eq!(asked.len(), 5);
+    assert_eq!(ids.len(), 5);
+}
+
+#[tokio::test]
+async fn a_dated_list_keeps_what_it_listed_when_a_later_page_fails() {
+    let refused = || EmailApiError::RateLimited {
+        retry_after: None,
+        origin: crate::domain::models::RateLimitOrigin::Local,
+    };
+    let (ids, asked, _) =
+        list_since_answers(vec![Ok(page(&["a", "b"], Some("p2"))), Err(refused())], 10).await;
+    assert_eq!(ids.unwrap(), vec!["a", "b"]);
+    assert_eq!(asked.len(), 2);
+
+    // The first page's failure is the answer, for the caller to wait out.
+    let (ids, _, _) = list_since_answers(vec![Err(refused())], 10).await;
+    assert!(matches!(ids, Err(EmailApiError::RateLimited { .. })));
 }
 
 fn label_write_service(

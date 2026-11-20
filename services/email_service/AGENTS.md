@@ -346,9 +346,11 @@ the gateway `/email` prefix.
   client in the `Backfill` share, so sync and user writes keep the slots
   and units held for them. That is more than one 10-second window of the
   share, so a window read waits out the gate's refusals for 45 s from its
-  list; a read not started by then is left out. Outlook pages through
-  `@odata.nextLink` (at most ten pages, never one twice) and keeps what
-  earlier pages read when a later one fails. Don't record message content
+  list; a call not started by then is left out, and one still running then
+  is cut off. A later list page that fails keeps the ids listed before it.
+  Outlook pages through `@odata.nextLink` past empty pages (at most ten
+  pages, never one twice however its link is spelled) and keeps what earlier
+  pages read when a later one, or its link, fails. Don't record message content
   or addresses on its spans; `{user_id}` is an email address, which
   `macro_tower_layers` keeps out of `url.path`.
 - Connecting an inbox writes its `email_links` row, which a CRM contact

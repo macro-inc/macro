@@ -73,7 +73,9 @@ where
     /// `since`, newest first, carrying all requested provider labels. The
     /// provider may answer a page short with more to come, so this follows
     /// up to [`MAX_LIST_PAGES`] pages, each its own admitted provider call,
-    /// and stops at an empty page or a page token it has seen.
+    /// and stops at an empty page or a page token it has seen. A later page
+    /// that fails keeps the ids listed before it; only the first page's
+    /// failure is the answer.
     #[tracing::instrument(skip(self), fields(page_count = tracing::field::Empty))]
     pub async fn list_messages_since(
         &self,
@@ -91,9 +93,17 @@ where
             if wanted == 0 {
                 break;
             }
-            let page = self
+            let page = match self
                 .list_messages_since_page(link_id, wanted, label_ids, since, page_token.as_deref())
-                .await?;
+                .await
+            {
+                Ok(page) => page,
+                Err(error) if pages > 0 => {
+                    tracing::warn!(%link_id, error = %error, listed_count = ids.len(), "kept the message ids listed before a page that failed");
+                    break;
+                }
+                Err(error) => return Err(error),
+            };
             pages += 1;
             let empty = page.ids.is_empty();
             ids.extend(page.ids);
