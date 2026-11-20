@@ -30,12 +30,14 @@ import { MobileSettingsProvider } from '@app/features/settings/context/mobile-se
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
 import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
 import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
-import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
+import { ShowFeatureFlag, useFeatureFlag } from '@app/lib/analytics/posthog';
+import { usePreference } from '@app/preferences/use-preference';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
 import { GoToHotkeys } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
 import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { SingleSidebar } from '@components/app/sidebar-next/single-sidebar';
 import { SidebarPrefsProvider } from '@components/app/sidebar-next/use-sidebar-prefs';
 import { ViewSwitcher } from '@components/app/sidebar-next/view-switcher';
 import {
@@ -45,7 +47,10 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableWhatsappLinked } from '@core/constant/featureFlags';
+import {
+  enableSingleSidebar,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -66,11 +71,13 @@ import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
+  Match,
   onCleanup,
   onMount,
   type ParentProps,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import { DesktopTitleBar } from './DesktopTitleBar';
@@ -275,6 +282,16 @@ export function AppChrome(props: ParentProps) {
     !isTouchDevice() &&
     (isAuthenticated() === true ||
       (isAuthenticated() === undefined && hasLoginCookie()));
+  // Until the flag answers, the rail stays: it is what the boot shell paints.
+  const singleSidebarFlag = useFeatureFlag(enableSingleSidebar);
+  const singleSidebar = () =>
+    sidebarVisible() && singleSidebarFlag().enabled === true;
+  // Collapsed, the single sidebar is the icon rail again. v2: earlier builds
+  // saved this from a Cmd+. that also toggled each split's own navigation.
+  const [singleSidebarCollapsed, setSingleSidebarCollapsed] =
+    usePreference<boolean>('macro:pref:single-sidebar:collapsed:v2', {
+      default: false,
+    });
 
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
@@ -360,9 +377,21 @@ export function AppChrome(props: ParentProps) {
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>
             <ViewSwitcherContext.Provider value={ViewSwitcher}>
-              <Show when={isSidebarVisible()}>
-                <SidebarRail />
-              </Show>
+              <Switch>
+                <Match when={singleSidebar() && !singleSidebarCollapsed()}>
+                  <SingleSidebar
+                    onCollapse={() => setSingleSidebarCollapsed(true)}
+                  />
+                </Match>
+                <Match when={singleSidebar()}>
+                  <SidebarRail
+                    onExpand={() => setSingleSidebarCollapsed(false)}
+                  />
+                </Match>
+                <Match when={isSidebarVisible()}>
+                  <SidebarRail />
+                </Match>
+              </Switch>
               <PageContent>
                 {/* Route loading must not detach the chrome or mobile
                     navigation; the route draws its own loading state. */}

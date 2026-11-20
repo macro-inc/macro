@@ -620,6 +620,22 @@ stay centered and the preview body fills the remaining height below the divider.
 
 The outer sidebar is an icon rail; labels appear in tooltips.
 
+With `enable-single-sidebar` (desktop only; on in dev), a 256px **App
+navigation** sidebar replaces the icon rail; every app keeps its own navigation
+in its split. Top to bottom: **Collapse sidebar**, then **New** (the create
+launcher) and **Search** rows, the pinned apps (Email, Calendar, Tasks and Drive
+until changed; same unread dots, counts, next-meeting badge and open-in-split
+menu as the rail), **More…**, up to eight **Favorites**, **Recents**, and Help
+and Settings at the bottom. More… opens any app that isn't pinned and has a
+**Pin to sidebar** submenu that pins or unpins any app; a pinned row's context
+menu also has **Unpin from sidebar**. Pins are saved per user. Recents lists the
+30 most recently updated items from Home's All tab, opening where each kind of
+item opens; its **Unread only** switch filters them and is remembered.
+Collapse folds the sidebar to the icon rail, whose top button widens it again;
+the choice is saved. While the flag loads, the rail shows. Check: pin Agents
+from More… → Pin to sidebar, reload, and confirm it stays pinned; turn on Unread
+only and confirm read items leave Recents.
+
 Open **More → Customize sidebar** to show, hide, or reorder available apps.
 On desktop, drag an app by its **Reorder <name>** handle; Up/Down on the focused
 handle also moves it. Touch devices offer move buttons. Home stays first and

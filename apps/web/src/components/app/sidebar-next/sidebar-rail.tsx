@@ -1,11 +1,14 @@
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
-import { For, Match, Suspense, Switch } from 'solid-js';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import { Button } from '@ui';
+import { For, Match, Show, Suspense, Switch } from 'solid-js';
 import { useNavigationUnread } from '../use-navigation-unread';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -37,7 +40,10 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
  * separately. Each button's tooltip carries its shortcut, and after `g` is
  * pressed each button shows its destination key in a corner badge.
  */
-export const SidebarRail = () => {
+export const SidebarRail = (props: {
+  /** Shown when the rail is the collapsed single sidebar: widens it again. */
+  onExpand?: () => void;
+}) => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -63,6 +69,20 @@ export const SidebarRail = () => {
       data-ui="sidebar-rail"
       class="relative flex h-full w-14 shrink-0 flex-col items-center gap-1 overflow-hidden bg-page px-2 pb-3 pt-2"
     >
+      <Show when={props.onExpand}>
+        {(expand) => (
+          <Button
+            variant="ghost"
+            size="icon-md"
+            class="size-10 rounded-xl"
+            aria-label={t('nav.expandSidebar')}
+            tooltip={{ content: t('nav.expandSidebar'), placement: 'right' }}
+            onClick={() => expand()()}
+          >
+            <SidebarIcon class="size-5" />
+          </Button>
+        )}
+      </Show>
       <SidebarRailCreateButton />
       <SearchRailButton />
 

@@ -160,6 +160,16 @@ export const enableDesktopTabs = defineFlag({
 });
 
 /**
+ * One desktop sidebar in place of the icon rail and each workspace's own
+ * sidebar: the app list carries the active split's navigation under its app.
+ */
+export const enableSingleSidebar = defineFlag({
+  key: 'enable-single-sidebar',
+  env: 'ENABLE_SINGLE_SIDEBAR',
+  default: onInDev,
+});
+
+/**
  * Agent teammates: team admins invite an AI agent, with its own account and
  * Macro computer, from Settings → Team → Members.
  */

@@ -36,49 +36,44 @@ export type ListNavProps = {
 };
 
 /**
- * A SidebarRail nav button: an icon-only `@ui` Button, plus the behaviour
- * behind it — active detection, navigation, shift-click into a new split, the
- * open-in-split context menu.
- *
- * There is no room for a label in a 40px square, so it lives in the tooltip
- * along with the full `g`-leader shortcut. After `g` is pressed, a small
- * badge in the corner shows the destination key, as the legacy sidebar did.
- *
- * Named for the shape it grows into: each nav is expected to expand into a list
- * of its own live items (Email accounts, Chat channels, Drive files). The slot
- * for that is deliberately absent until there is a data source to fill it.
+ * Whether the active split shows this destination. Split content mirrors the
+ * router's current entry, including the owning workspace for nested details.
+ * Never infer selection from the multi-pane URL.
  */
-export const ListNav = (props: ListNavProps) => {
-  const { hideSidebarItem } = useSidebarPrefs();
+function isNavItemActive(item: SidebarNextNavItem) {
+  const activeContent = globalSplitManager()?.activeSplit()?.content();
+  if (!activeContent) return false;
+  const expected = sidebarContent(item.id, item.params);
+  if (
+    item.id === 'agents' &&
+    activeContent.type === 'component' &&
+    parseAgentsRoute(activeContent.id)
+  )
+    return true;
+  return (
+    activeContent.type === expected.type && activeContent.id === expected.id
+  );
+}
+
+/**
+ * What a nav destination does when pressed, shared by the rail's icon buttons
+ * and the single sidebar's rows: active detection, navigation, Shift-click
+ * into a new split, and preloading on hover.
+ */
+export function useListNavAction(item: () => SidebarNextNavItem) {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const router = useSplitRouter();
 
-  const content = () => sidebarContent(props.item.id, props.item.params);
+  const content = () => sidebarContent(item().id, item().params);
   const preload = () => layout.preloadContent(content());
-
-  // Split content mirrors the router's current entry, including the owning
-  // workspace for nested details. Never infer selection from the multi-pane URL.
-  const isActive = () => {
-    const activeContent = globalSplitManager()?.activeSplit()?.content();
-    if (!activeContent) return false;
-    const expected = content();
-    if (
-      props.item.id === 'agents' &&
-      activeContent.type === 'component' &&
-      parseAgentsRoute(activeContent.id)
-    )
-      return true;
-    return (
-      activeContent.type === expected.type && activeContent.id === expected.id
-    );
-  };
+  const isActive = () => isNavItemActive(item());
 
   const navigate = (event: MouseEvent) => {
     // The row acts on mousedown to beat the focus change, so suppress the
     // default selection/focus behaviour.
     event.preventDefault();
-    analytics.track('sidebar_click', { view: props.item.id });
+    analytics.track('sidebar_click', { view: item().id });
 
     const split = globalSplitManager()?.activeSplit();
     const selected = isActive();
@@ -90,8 +85,8 @@ export const ListNav = (props: ListNavProps) => {
     }
     if (!selected || event.shiftKey) {
       navigateToSidebarView({
-        viewId: props.item.id,
-        params: props.item.params,
+        viewId: item().id,
+        params: item().params,
         shiftKey: event.shiftKey,
         openWithSplit: layout.openWithSplit,
         referredFrom: 'sidebar',
@@ -117,6 +112,28 @@ export const ListNav = (props: ListNavProps) => {
     if (handled && event.detail !== 0) return;
     navigate(event);
   };
+
+  return { content, preload, isActive, onMouseDown, onClick };
+}
+
+/**
+ * A SidebarRail nav button: an icon-only `@ui` Button, plus the behaviour
+ * behind it — active detection, navigation, shift-click into a new split, the
+ * open-in-split context menu.
+ *
+ * There is no room for a label in a 40px square, so it lives in the tooltip
+ * along with the full `g`-leader shortcut. After `g` is pressed, a small
+ * badge in the corner shows the destination key, as the legacy sidebar did.
+ *
+ * Named for the shape it grows into: each nav is expected to expand into a list
+ * of its own live items (Email accounts, Chat channels, Drive files). The slot
+ * for that is deliberately absent until there is a data source to fill it.
+ */
+export const ListNav = (props: ListNavProps) => {
+  const { hideSidebarItem } = useSidebarPrefs();
+  const { content, preload, isActive, onMouseDown, onClick } = useListNavAction(
+    () => props.item
+  );
 
   return (
     <SidebarOpenInSplitMenu

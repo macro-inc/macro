@@ -35,6 +35,17 @@ export default {
   contentAlreadyOpen: 'Content already open',
 
   // Rail buttons
+  appNavigation: 'App navigation',
+  new: 'New',
+  collapseSidebar: 'Collapse sidebar',
+  expandSidebar: 'Expand sidebar',
+  favorites: 'Favorites',
+  recents: 'Recents',
+  unreadOnly: 'Unread only',
+  retryRecents: 'Retry loading recents',
+  moreApps: 'More…',
+  pinToSidebar: 'Pin to sidebar',
+  unpinFromSidebar: 'Unpin from sidebar',
   hideFromSidebar: 'Hide from sidebar',
   unreadItems: 'Unread items',
   unreadNotifications: {

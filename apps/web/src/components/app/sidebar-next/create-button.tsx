@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import {
   createMenuOpen,
   setCreateMenuOpen,
@@ -7,7 +8,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { t } from '@app/lib/i18n';
 import { TOKENS } from '@core/hotkey/tokens';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
+import { Button, Hotkey } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 
 /** The rail and keyboard shortcut open the same desktop launcher. */
@@ -36,5 +37,30 @@ export const SidebarRailCreateButton = () => {
     >
       <PlusIcon class="size-5" />
     </Button>
+  );
+};
+
+/** The single sidebar's New row, opening the same launcher. */
+export const NewSidebarRow = () => {
+  const analytics = useAnalytics();
+  const createMenuTarget = tourTarget(APP_TOUR.createMenu);
+  return (
+    <ViewSidebar.Item
+      ref={createMenuTarget}
+      class="cursor-default"
+      aria-haspopup="dialog"
+      aria-expanded={createMenuOpen()}
+      onClick={() => {
+        if (!createMenuOpen())
+          analytics.track('create_menu_open', { from: 'sidebar' });
+        setCreateMenuOpen((open) => !open);
+      }}
+    >
+      <ViewSidebar.Icon>
+        <PlusIcon />
+      </ViewSidebar.Icon>
+      <span class="min-w-0 flex-1 truncate">{t('nav.new')}</span>
+      <Hotkey token={TOKENS.global.createCommand} />
+    </ViewSidebar.Item>
   );
 };
