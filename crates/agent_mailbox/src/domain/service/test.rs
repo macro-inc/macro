@@ -1142,10 +1142,11 @@ async fn release_revokes_the_credential_and_deletes_the_mailbox() {
     world.service.release(&user(ADA), Utc::now()).await.unwrap();
     world.service.release(&user(ADA), Utc::now()).await.unwrap();
 
-    let vendor = world.vendor.0.lock().unwrap();
-    assert_eq!(vendor.revoked_grants, vec!["grant-1"]);
-    assert!(vendor.keys.is_empty());
-    drop(vendor);
+    {
+        let vendor = world.vendor.0.lock().unwrap();
+        assert_eq!(vendor.revoked_grants, vec!["grant-1"]);
+        assert!(vendor.keys.is_empty());
+    }
     assert_eq!(world.vendor.live_mailbox_count(), 0);
     assert!(matches!(
         world.service.status(&user(ADA)).await,

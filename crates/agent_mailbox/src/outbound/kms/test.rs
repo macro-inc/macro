@@ -9,8 +9,11 @@ use super::*;
 /// decrypt under any other context, as KMS does.
 #[derive(Default)]
 struct FakeKms {
-    sealed: Mutex<Vec<(Vec<u8>, HashMap<String, String>, Vec<u8>)>>,
+    sealed: Mutex<Vec<Sealed>>,
 }
+
+/// One ciphertext, the context it was made under, and its plaintext.
+type Sealed = (Vec<u8>, HashMap<String, String>, Vec<u8>);
 
 impl MailboxKms for FakeKms {
     async fn encrypt(
