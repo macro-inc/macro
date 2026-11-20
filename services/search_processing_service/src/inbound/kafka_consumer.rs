@@ -1441,6 +1441,9 @@ pub(crate) async fn run_event_consumer<L: Lane>(
     }
     .instrument(span)
     .await;
+    // Closing polls librdkafka until it has left the group; both lanes close
+    // at once, so keep that off the runtime's worker threads.
+    let _ = tokio::task::spawn_blocking(move || drop(consumer)).await;
 
     poll_result?;
     if let Some(error) = drained.panic {
