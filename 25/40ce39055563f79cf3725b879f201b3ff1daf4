@@ -1,0 +1,25 @@
+apps/web/src/lib/core/constant/SettingsState.tsx
+  s_56407b867daf8e::t_9a849e22a08e4a 197-198
+  s_56407b867daf8e::t_1aca33b9c94bf5 7,46-48,65-67,215
+apps/web/src/lib/core/constant/SettingsState.close.test.tsx
+  s_56407b867daf8e::t_131dffc6fc7af9 1-149
+apps/web/src/lib/core/constant/SettingsState.test.tsx
+  s_56407b867daf8e::t_a9af1abfe5cc36 25,59-60,319-320,331
+  s_56407b867daf8e::t_022eb89ae3f2c7 57-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "2540ce39055563f79cf3725b879f201b3ff1daf4",
+  "prompts": {},
+  "sessions": {
+    "s_56407b867daf8e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f145b1dc-48dc-48c6-a96a-923fc81e9211",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
