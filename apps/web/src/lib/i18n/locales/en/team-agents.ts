@@ -39,7 +39,8 @@ export default {
     "The runtime {{host}} downloaded didn't match the one Macro sent.",
   failedEngineRefused:
     "{{host}}'s container engine wouldn't start it. Check that it's running.",
-  failedBadConfiguration: "Its settings didn't apply on {{host}}.",
+  failedBadConfiguration:
+    "Its settings didn't apply on {{host}}. Macro sends them once more.",
   failedIncompatibleRuntime:
     'It needs a newer runtime image than {{host}} has.',
   failedCrashLoop: 'It kept crashing on {{host}}.',

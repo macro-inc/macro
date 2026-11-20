@@ -16,7 +16,9 @@ describe('installFailureLine', () => {
     );
     expect(
       installFailureLine('badConfiguration', 'unhealthy', 'demo-laptop')
-    ).toBe("Its settings didn't apply on demo-laptop.");
+    ).toBe(
+      "Its settings didn't apply on demo-laptop. Macro sends them once more."
+    );
     expect(
       installFailureLine('incompatibleRuntime', 'failed', 'demo-laptop')
     ).toBe('It needs a newer runtime image than demo-laptop has.');
