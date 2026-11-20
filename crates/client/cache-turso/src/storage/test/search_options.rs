@@ -81,8 +81,10 @@ fn compare_search_scan_options() {
                                 &mut key_buffer,
                                 &mut |document| {
                                     std::hint::black_box(document);
+                                    rows += 1;
                                 },
                             )?;
+                            return Ok(());
                         } else {
                             let document = parse_search_document(
                                 &row.get_values().cloned().collect::<Vec<_>>(),
