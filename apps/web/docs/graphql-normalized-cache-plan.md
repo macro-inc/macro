@@ -1344,7 +1344,14 @@ what a pass proves stale. When a pass that started at its first page finishes,
 each cached channel it did not return is read again by id; the ones the server
 no longer returns are deleted. A resumed, failed or cancelled pass, a page
 without entity ids, or a cache that belongs to another viewer or generation
-deletes nothing. A by-id read also returns public and team channels the viewer
+deletes nothing. Each delete carries the cache session taken before its
+by-id read, so the cache refuses it once that session has ended (a change of
+viewer or a storage reset). A record the cache rewrote after the read (the
+viewer was added back) is read again instead of deleted, in up to three
+rounds; one still changing after them stays cached and the pass skips the
+shadow comparison. The recheck and the delete are two cache calls, so a write
+landing between them is deleted and returns with the channel's next update or
+pass. A by-id read also returns public and team channels the viewer
 opened without joining (`isParticipant: false`), so the cache holds those too:
 a joined list filters them out.
 
