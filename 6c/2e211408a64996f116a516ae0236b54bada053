@@ -1,0 +1,18 @@
+apps/web/src/features/block-agent/primitives/create-connector-continuation.test.ts
+  h_659b58cf3b37bf 76-78
+apps/web/src/features/block-agent/primitives/create-connector-continuation.ts
+  h_659b58cf3b37bf 54-57,61
+apps/web/src/lib/core/component/LexicalMarkdown/component/decorator/ConnectApp.tsx
+  h_659b58cf3b37bf 33-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "6c2e211408a64996f116a516ae0236b54bada053",
+  "prompts": {},
+  "humans": {
+    "h_659b58cf3b37bf": {
+      "author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
