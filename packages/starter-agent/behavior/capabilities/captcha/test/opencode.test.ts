@@ -15,7 +15,7 @@ import { startRelay } from '../../../context/relay.ts';
 import { driverPorts } from '../../browser/driver.ts';
 import { solveCaptcha } from '../index.ts';
 import { withCurrentPage } from '../page.ts';
-import { startFixture } from './fixture.ts';
+import { standInRunId, startFixture } from './fixture.ts';
 
 const available = Bun.which('chromium') !== null && Bun.which('opencode') !== null;
 const port = 9439;
@@ -97,7 +97,10 @@ test.skipIf(!available)(
       evidence: 'challengeGone',
       next: 'Cleared. Carry on with the page.',
     });
+    const runs = fixture.seen.filter(({ path }) => path === '/brain/captcha/runs');
+    expect(runs.length).toBe(1);
     const solves = fixture.seen.filter(({ path }) => path === '/brain/captcha/solve');
+    expect(solves.map(({ run }) => run)).toEqual([standInRunId]);
     expect(solves.map(({ authorization }) => authorization)).toEqual([
       'Bearer agent-macro-key',
     ]);
@@ -105,6 +108,7 @@ test.skipIf(!available)(
       ({ path }) => path === '/brain/fireworks/v1/chat/completions'
     );
     expect(chats.length).toBe(2);
+    expect(chats.map(({ run }) => run)).toEqual([standInRunId, standInRunId]);
     expect(new Set(chats.map(({ authorization }) => authorization))).toEqual(
       new Set(['Bearer agent-macro-key'])
     );

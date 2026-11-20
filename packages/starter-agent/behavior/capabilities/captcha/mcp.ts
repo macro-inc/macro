@@ -26,8 +26,8 @@ export const mcpVariables = {
   relayUrl: 'MUPPET_RELAY_URL',
   relayToken: 'MUPPET_RELAY_TOKEN',
   browser: 'MUPPET_BROWSER_CDP_URL',
-  /** The run's id, for the log; each attempt is a solve of its own, with a fresh UUID the harness dedupes on. */
-  solveId: 'CAPTCHA_SOLVE_ID',
+  /** The harness's solver run: every solve carries it. Each attempt is a solve of its own, with a fresh UUID the harness dedupes on. */
+  runId: 'CAPTCHA_RUN_ID',
   /** Where each outcome is appended, one JSON line per attempt. */
   record: 'CAPTCHA_RECORD_FILE',
   /** The harness's take-over file: while the owner drives, the solver touches nothing. */
@@ -84,7 +84,7 @@ export const startServer = async (): Promise<void> => {
     token: required(mcpVariables.relayToken),
   };
   const endpoint = required(mcpVariables.browser);
-  const runId = required(mcpVariables.solveId);
+  const runId = required(mcpVariables.runId);
   const record = required(mcpVariables.record);
   const screenDriver = required(mcpVariables.screenDriver);
   const ownerDrivingNow = async () => ownerDriving(await readOrMissing(screenDriver));
@@ -131,7 +131,7 @@ export const startServer = async (): Promise<void> => {
             trace,
             ownerDriving: ownerDrivingNow,
           },
-          { solveId: crypto.randomUUID() }
+          { solveId: crypto.randomUUID(), runId }
         );
         const line: Recorded = { attempt: attempts, outcome };
         await appendFile(record, `${JSON.stringify(line)}\n`);

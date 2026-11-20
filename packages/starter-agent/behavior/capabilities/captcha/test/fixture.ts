@@ -42,7 +42,16 @@ export const fixturePage = (path: string): Response => {
 };
 
 /** What the stand-in brain saw. */
-export type BrainSeen = { readonly path: string; readonly authorization: string | null; readonly body: unknown };
+export type BrainSeen = {
+  readonly path: string;
+  readonly authorization: string | null;
+  /** The solver run header (`x-macro-solver-run`). */
+  readonly run: string | null;
+  readonly body: unknown;
+};
+
+/** The run id the stand-in harness hands out. */
+export const standInRunId = '01a1fa00-0000-7000-8000-00000000c0de';
 
 export type ChatTurn = (body: {
   readonly messages: ReadonlyArray<{ readonly role: string }>;
@@ -100,7 +109,20 @@ export const startFixture = ({
       const { pathname } = new URL(request.url);
       if (!pathname.startsWith('/brain/')) return fixturePage(pathname);
       const body: unknown = await request.json();
-      seen.push({ path: pathname, authorization: request.headers.get('authorization'), body });
+      seen.push({
+        path: pathname,
+        authorization: request.headers.get('authorization'),
+        run: request.headers.get('x-macro-solver-run'),
+        body,
+      });
+      if (pathname === '/brain/captcha/runs')
+        return Response.json({
+          outcome: 'started',
+          runId: standInRunId,
+          expiresAt: '2026-11-20T00:06:00Z',
+          modelCalls: 16,
+          solves: 2,
+        });
       if (pathname === '/brain/captcha/solve') return Response.json(await solve(body));
       if (pathname === '/brain/fireworks/v1/chat/completions' && chat !== undefined) {
         const typed = body as Parameters<ChatTurn>[0] & { readonly model: string };

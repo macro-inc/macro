@@ -5,6 +5,7 @@
  * else of OpenCode's is on: no shell, files, web, subagents, skills or
  * plugins, and none of the computer's own OpenCode configuration.
  */
+import { runHeader } from './brain.ts';
 import { mcpVariables } from './mcp.ts';
 
 /** The model, by Fireworks' id; the harness allows only this one. */
@@ -33,7 +34,8 @@ export const task = 'Clear the human check on the current tab.';
 export type RunPlace = {
   readonly relay: { readonly url: string; readonly token: string };
   readonly browser: string;
-  readonly solveId: string;
+  /** The harness's solver run, which every model call and solve carries. */
+  readonly runId: string;
   /** The MCP server's entry: this module's `mcp.ts`. */
   readonly server: string;
   /** Where the server appends each attempt's outcome. */
@@ -69,9 +71,12 @@ export const openCodeConfig = (place: RunPlace) => {
         options: {
           baseURL: `${base}/${fireworksRoute}`,
           apiKey: place.relay.token,
-          ...(place.traceparent === undefined
-            ? {}
-            : { headers: { traceparent: place.traceparent } }),
+          headers: {
+            [runHeader]: place.runId,
+            ...(place.traceparent === undefined
+              ? {}
+              : { traceparent: place.traceparent }),
+          },
         },
         models: {
           [solverModel]: {
@@ -110,7 +115,7 @@ export const openCodeConfig = (place: RunPlace) => {
           [mcpVariables.relayUrl]: place.relay.url,
           [mcpVariables.relayToken]: place.relay.token,
           [mcpVariables.browser]: place.browser,
-          [mcpVariables.solveId]: place.solveId,
+          [mcpVariables.runId]: place.runId,
           [mcpVariables.record]: place.record,
           [mcpVariables.screenDriver]: place.screenDriver,
           [mcpVariables.agentId]: place.telemetry.agentId,

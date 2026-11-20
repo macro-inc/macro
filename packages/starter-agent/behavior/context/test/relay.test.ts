@@ -117,15 +117,27 @@ describe('relayHandler: brain routes', () => {
         body: '{"model":"accounts/fireworks/models/kimi-k3"}',
       })
     );
-    const solve = await relay(
-      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+    const run = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/runs', {
         method: 'POST',
         headers: { authorization: `Bearer ${capability}` },
         body: '{}',
       })
     );
-    expect([chat.status, solve.status]).toEqual([201, 201]);
-    const [sentChat, sentSolve] = macro.seen;
+    const solve = await relay(
+      new Request('http://127.0.0.1:1/brain/captcha/solve', {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${capability}`,
+          'x-macro-solver-run': 'run-1',
+        },
+        body: '{}',
+      })
+    );
+    expect([chat.status, run.status, solve.status]).toEqual([201, 201, 201]);
+    const [sentChat, sentRun, sentSolve] = macro.seen;
+    expect(sentRun?.url).toBe('https://egress.example/brain/captcha/runs');
+    expect(sentSolve?.headers.get('x-macro-solver-run')).toBe('run-1');
     expect(sentChat?.url).toBe(
       'https://egress.example/brain/fireworks/v1/chat/completions'
     );

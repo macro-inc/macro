@@ -10,6 +10,7 @@ import {
   agentTelemetryId,
   telemetryEnvironment,
 } from '../../context/telemetry.ts';
+import { startRun } from './brain.ts';
 import type { Recorded } from './mcp.ts';
 import { openCodeArgv, openCodeEnvironment } from './opencode.ts';
 import { findChallenge, type Outcome } from './solve.ts';
@@ -96,11 +97,12 @@ const bestOutcome = (attempts: readonly Recorded[]): Outcome | undefined =>
     undefined
   );
 
-/** One OpenCode run, its files in a directory of its own that is removed after. */
-const runSolver = (needs: Needs, solveId: string): Promise<SolveCaptchaResult> =>
+/** One OpenCode run under the harness's solver run, its files in a directory of its own that is removed after. */
+const runSolver = (needs: Needs, runId: string): Promise<SolveCaptchaResult> =>
   needs.trace('captcha.opencode_run', async (span) => {
+    span.set('captcha.run_id', runId);
     const { config } = needs.captcha;
-    const home = needs.join(config.runs, solveId);
+    const home = needs.join(config.runs, runId);
     const record = needs.join(home, 'record.jsonl');
     await mkdir(home, { recursive: true });
     try {
@@ -108,7 +110,7 @@ const runSolver = (needs: Needs, solveId: string): Promise<SolveCaptchaResult> =
       const place = {
         relay,
         browser: needs.captcha.browserEndpoint,
-        solveId,
+        runId,
         server: config.server,
         record,
         screenDriver: needs.captcha.screenDriver,
@@ -175,13 +177,18 @@ export const solveCaptcha = (
     if (!('challenge' in found)) return answer(found);
     span.set('captcha.kind', found.challenge.kind);
 
-    const solveId = crypto.randomUUID();
-    if (!(await needs.captcha.driving.acquire(solveId)))
+    const leaseId = crypto.randomUUID();
+    if (!(await needs.captcha.driving.acquire(leaseId)))
       return answer({ outcome: 'busy' });
     try {
-      return await answer(await runSolver(needs, solveId));
+      // The harness admits the run (one at a time, per-agent caps) and binds every model call and solve to it.
+      const run = await needs.trace('captcha.start_run', async () =>
+        startRun({ relay: await needs.relay(), fetch: needs.captcha.fetch })
+      );
+      if (run.outcome !== 'started') return await answer(run);
+      return await answer(await runSolver(needs, run.runId));
     } finally {
-      await needs.captcha.driving.release(solveId);
+      await needs.captcha.driving.release(leaseId);
     }
   });
 

@@ -60,13 +60,14 @@ test.skipIf(!available)(
   "Turnstile: sends only the challenge's parameters, puts the token in, and sees the page take it",
   async () => {
     await open('/turnstile?next=%2Fsecret-path');
-    const outcome = await solveOnPage(needs, { solveId: 'solve-turnstile' });
+    const outcome = await solveOnPage(needs, { solveId: 'solve-turnstile', runId: 'run-1' });
     expect(outcome).toEqual({ outcome: 'solved', evidence: 'challengeGone' });
 
     const sent = fixture.seen.at(-1);
     expect(sent).toEqual({
       path: '/brain/captcha/solve',
       authorization: 'Bearer relay-capability',
+      run: 'run-1',
       body: {
         solveId: 'solve-turnstile',
         challenge: {
@@ -99,7 +100,7 @@ test.skipIf(!available)(
   "reCAPTCHA v2 with no callback: the token is in the form, and that's all it claims",
   async () => {
     await open('/recaptcha');
-    const outcome = await solveOnPage(needs, { solveId: 'solve-recaptcha' });
+    const outcome = await solveOnPage(needs, { solveId: 'solve-recaptcha', runId: 'run-1' });
     expect(outcome).toEqual({ outcome: 'injected' });
     expect(fixture.seen.at(-1)?.body).toEqual({
       solveId: 'solve-recaptcha',
@@ -119,12 +120,12 @@ test.skipIf(!available)(
   async () => {
     const before = fixture.seen.length;
     await open('/interstitial');
-    expect(await solveOnPage(needs, { solveId: 'solve-interstitial' })).toEqual({
+    expect(await solveOnPage(needs, { solveId: 'solve-interstitial', runId: 'run-1' })).toEqual({
       outcome: 'unsupported',
       provider: 'cloudflareChallenge',
     });
     await open('/plain');
-    expect(await solveOnPage(needs, { solveId: 'solve-plain' })).toEqual({
+    expect(await solveOnPage(needs, { solveId: 'solve-plain', runId: 'run-1' })).toEqual({
       outcome: 'noChallenge',
     });
     expect(fixture.seen.length).toBe(before);
@@ -145,7 +146,7 @@ test.skipIf(!available)(
         });
       });
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-hash' })).toEqual({
+      expect(await solveOnPage(needs, { solveId: 'solve-hash', runId: 'run-1' })).toEqual({
         outcome: 'injected',
       });
     } finally {
@@ -162,7 +163,7 @@ test.skipIf(!available)(
       ownerHasTakenOver = true;
     };
     try {
-      expect(await solveOnPage(needs, { solveId: 'solve-owner' })).toEqual({
+      expect(await solveOnPage(needs, { solveId: 'solve-owner', runId: 'run-1' })).toEqual({
         outcome: 'ownerDriving',
       });
       const field = await withCurrentPage(endpoint, (page) =>

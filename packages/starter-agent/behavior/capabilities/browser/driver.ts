@@ -128,7 +128,9 @@ export const driverPorts = ({
       const current = await driver();
       if (current.kind !== 'agent') return false;
       if (await create(solveId)) return true;
-      // The file is there but dead (stale or unreadable): clear it and try once more.
+      // The file is there. Clear it only if it is still dead (stale or
+      // unreadable) now: a solve may have taken the lease since `driver()`.
+      if ((await driver()).kind !== 'agent') return false;
       await rm(lease, { force: true });
       return create(solveId);
     },

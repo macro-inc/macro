@@ -126,11 +126,13 @@ const forwardAnthropic = async ({
 
 /**
  * The harness's brain routes a script may use, exactly: the CAPTCHA
- * solver's model (Kimi on Fireworks) and its solves. On the relay each is
+ * solver's runs, its model (Kimi on Fireworks) and its solves. The harness
+ * accepts a model call or a solve only under a live run of the agent's. On the relay each is
  * `/brain/<path>`, upstream `<brain>/<path>`, POST only.
  */
 export const brainRoutes = [
   'fireworks/v1/chat/completions',
+  'captcha/runs',
   'captcha/solve',
 ] as const;
 

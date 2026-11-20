@@ -139,7 +139,7 @@ const apply = async (
  */
 export const solveOnPage = (
   needs: SolveNeeds,
-  { solveId }: { readonly solveId: string }
+  { solveId, runId }: { readonly solveId: string; readonly runId: string }
 ): Promise<Outcome> =>
   needs.trace('captcha.solve', async (span) => {
     if (await needs.ownerDriving()) {
@@ -160,6 +160,7 @@ export const solveOnPage = (
     // The harness polls CapSolver for up to two minutes: its own span, joined by the harness's.
     const solved = await needs.trace('captcha.harness_solve', async (call) => {
       const result = await requestSolve(needs, {
+        runId,
         solveId,
         pageUrl: found.pageUrl,
         challenge: found.challenge,
