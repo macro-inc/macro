@@ -53,7 +53,7 @@ async fn a_recaptcha_task_is_ready_with_a_token_on_its_first_result() {
     assert_eq!(emulator.polls(task_id), Some(1));
     let tasks = emulator.created_tasks();
     assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].client_key, "key");
+    assert!(tasks[0].client_key_sent);
     assert_eq!(tasks[0].task["websiteKey"], "site");
 }
 
@@ -134,5 +134,10 @@ async fn the_control_api_scripts_an_outcome() {
         .await
         .unwrap();
     assert_eq!(tasks[0]["taskId"], task_id);
+    assert_eq!(tasks[0]["clientKeySent"], true);
+    assert!(
+        !tasks.to_string().contains("\"key\""),
+        "the control API returned the clientKey: {tasks}"
+    );
     emulator.shutdown().await;
 }

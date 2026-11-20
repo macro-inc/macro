@@ -92,7 +92,7 @@ async fn create_task(
         state.created.remove(0);
     }
     state.created.push(CreatedTask {
-        client_key: request.client_key,
+        client_key_sent: !request.client_key.is_empty(),
         task: request.task,
         task_id: task_id.clone(),
     });

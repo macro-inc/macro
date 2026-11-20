@@ -28,7 +28,9 @@ of a local stack. CapSolver is never called.
   `userAgent`.
 - `/_emulator/…` is the control API: `PUT /_emulator/outcomes/{siteKey}`
   with `{"outcome": "..."}`, `GET /_emulator/tasks` (the last 500
-  `createTask` requests, with the task id each got).
+  `createTask` requests, with the task id each got and `clientKeySent`;
+  the `clientKey` itself is never kept or returned, since a service may
+  send a real key here).
 - A service reaches it through `OVERRIDE_CAPSOLVER_API_URL`
   (`macro_service_urls::CapsolverApiUrl`).
 

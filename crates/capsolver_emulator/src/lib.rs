@@ -66,8 +66,9 @@ pub enum Outcome {
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CreatedTask {
-    /// The `clientKey` it carried.
-    pub client_key: String,
+    /// Whether it carried a non-empty `clientKey`. The key itself is never
+    /// kept: it may be a real CapSolver key.
+    pub client_key_sent: bool,
     /// Its `task` object, as sent.
     pub task: Value,
     /// The id it was given; `None` when `createTask` failed.

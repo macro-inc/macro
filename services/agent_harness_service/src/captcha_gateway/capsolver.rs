@@ -5,6 +5,7 @@
 
 use std::time::Duration;
 
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
 use super::solves::{
@@ -41,7 +42,9 @@ pub(crate) struct Capsolver {
 impl Capsolver {
     pub(crate) fn new(key: &str, base_url: &str) -> Result<Self, reqwest::Error> {
         Ok(Self {
+            // The body carries `clientKey`; a redirect must not resend it.
             client: reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
                 .connect_timeout(CONNECT_TIMEOUT)
                 .timeout(REQUEST_TIMEOUT)
                 .build()?,
@@ -65,16 +68,10 @@ impl Capsolver {
             .inspect_err(|error| tracing::warn!(error = ?error, method, "capsolver request failed"))
             .map_err(|_| SolverError::Vendor(VendorErrorKind::Unavailable))?;
 
-        // Errors come back as 400/401 with the same body shape, so the body
-        // decides, not the status.
+        // Vendor errors come back as 400/401 with the same body shape, so an
+        // error body decides; any other body on a failed status is an error.
         let status = response.status();
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|_| SolverError::Vendor(VendorErrorKind::Unavailable))?;
-        if bytes.len() > MAX_RESPONSE_BYTES {
-            return Err(SolverError::Vendor(VendorErrorKind::Unavailable));
-        }
+        let bytes = read_limited(response).await?;
         let wire: WireResponse = serde_json::from_slice(&bytes).map_err(|_| {
             tracing::warn!(
                 method,
@@ -91,8 +88,31 @@ impl Capsolver {
             tracing::warn!(method, error_code = code, "capsolver refused a call");
             return Err(error_for_code(code));
         }
+        if !status.is_success() {
+            tracing::warn!(
+                method,
+                status = status.as_u16(),
+                "capsolver call failed without an error code"
+            );
+            return Err(SolverError::Vendor(VendorErrorKind::Unavailable));
+        }
         Ok(wire)
     }
+}
+
+/// The body, refused as soon as it passes [`MAX_RESPONSE_BYTES`].
+async fn read_limited(response: reqwest::Response) -> Result<Vec<u8>, SolverError> {
+    let mut body = Vec::new();
+    let mut chunks = response.bytes_stream();
+    while let Some(chunk) = chunks.next().await {
+        let chunk = chunk.map_err(|_| SolverError::Vendor(VendorErrorKind::Unavailable))?;
+        if body.len() + chunk.len() > MAX_RESPONSE_BYTES {
+            tracing::warn!("capsolver response is over the size limit");
+            return Err(SolverError::Vendor(VendorErrorKind::Unavailable));
+        }
+        body.extend_from_slice(&chunk);
+    }
+    Ok(body)
 }
 
 impl CaptchaSolver for Capsolver {

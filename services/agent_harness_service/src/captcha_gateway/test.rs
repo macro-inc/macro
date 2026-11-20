@@ -267,7 +267,7 @@ async fn a_recaptcha_v2_is_solved_from_its_page_without_query_and_billed_once(po
             "taskId": task_id,
         })
     );
-    assert_eq!(tasks[0].client_key, "capsolver-key");
+    assert!(tasks[0].client_key_sent);
     assert_eq!(
         tasks[0].task,
         json!({
@@ -402,14 +402,14 @@ async fn every_unsolved_outcome_is_reported_and_none_is_billed(pool: PgPool) {
     let emulator = CapsolverEmulator::start().await.unwrap();
     emulator.set_outcome("unsolvable", Outcome::Unsolvable);
     emulator.set_outcome("vendor-timeout", Outcome::Timeout);
-    emulator.set_outcome("forever", Outcome::Processing);
     emulator.set_outcome("limited", Outcome::RateLimited);
     emulator.set_outcome("broke", Outcome::ZeroBalance);
+    // Long enough that a slow runner never turns an answer into a timeout.
     let (app, usage) = gateway_on(
         &pool,
         &emulator,
         SolveLimits {
-            max_wait: Duration::from_millis(100),
+            max_wait: Duration::from_secs(60),
             ..FAST
         },
     );
@@ -418,7 +418,6 @@ async fn every_unsolved_outcome_is_reported_and_none_is_billed(pool: PgPool) {
     for (solve, (site_key, expected)) in (1_u128..).zip([
         ("unsolvable", json!({ "outcome": "unsolvable" })),
         ("vendor-timeout", json!({ "outcome": "timeout" })),
-        ("forever", json!({ "outcome": "timeout" })),
         (
             "limited",
             json!({ "outcome": "vendorError", "kind": "rateLimited" }),
@@ -444,7 +443,41 @@ async fn every_unsolved_outcome_is_reported_and_none_is_billed(pool: PgPool) {
         assert_eq!(body, expected, "{site_key}");
     }
 
-    assert_eq!(emulator.created_tasks().len(), 5);
+    assert_eq!(emulator.created_tasks().len(), 4);
+    assert!(usage.events().is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_task_still_processing_at_the_deadline_times_out_unbilled(pool: PgPool) {
+    let _callsites = agents(&pool).await;
+    let emulator = CapsolverEmulator::start().await.unwrap();
+    emulator.set_outcome("forever", Outcome::Processing);
+    let (app, usage) = gateway_on(
+        &pool,
+        &emulator,
+        SolveLimits {
+            max_wait: Duration::from_millis(100),
+            ..FAST
+        },
+    );
+    let run = start_run(&app, "mak_agent").await;
+
+    let (status, body) = answer(
+        &app,
+        solve_request(
+            "mak_agent",
+            &run,
+            json!({
+                "solveId": SOLVE,
+                "challenge": { "kind": "recaptchaV3", "pageUrl": "https://example.com/", "siteKey": "forever" },
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, json!({ "outcome": "timeout" }));
+    assert_eq!(emulator.created_tasks().len(), 1);
     assert!(usage.events().is_empty());
 }
 
