@@ -250,7 +250,8 @@ export function asWritten(persona: Persona, text: string): string {
   // A domain is letters, digits, hyphens and dots: only a dot is special in a pattern.
   const name = domain.replace(/\.example$/, '').replaceAll('.', '\\.');
   // Not inside a longer domain: no letter, digit or hyphen follows, nor a dot and one.
-  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'g'), `@${domain}`);
+  // Any case: an address's domain is case-insensitive, and a model may spell it in capitals.
+  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'gi'), `@${domain}`);
 }
 
 /** The scenario name the seed CLI marks a variant's rows with. */

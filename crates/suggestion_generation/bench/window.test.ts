@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import type { RoutineMark } from './judge';
 import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, variantOf, windowMessages } from './personas';
-import { type Generation, type RoutineRow, workListOf } from './run';
+import { type Generation, readWorkList, type RoutineRow, workListOf } from './run';
 import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
-import { draftableNeeds, inInbox } from './month';
+import { draftableNeeds, inInbox, pooled, sharedFirstName } from './month';
 import { lines, withheldAcross } from './report';
 import { type Attempt, failedScore, marginsOf, type RunFile, scoreRoutines, summary, verdict } from './score';
 import { ANCHOR } from './clock';
@@ -237,10 +237,20 @@ describe('workListOf', () => {
     ).toEqual(share('Orders', 'Quotes', 'Invoices'));
   });
 
-  test('reads only what the harness sent a runtime, in the shape of a list', () => {
+  test('reads only what the harness sent a runtime', () => {
     expect(workListOf([prompt(list, '2026-11-20 10:00:00+00', 'to_server')])).toBeUndefined();
-    expect(workListOf([prompt({})])).toBeUndefined();
-    expect(workListOf([prompt({ person: 'x', streams: [{ name: 'y' }] })])).toBeUndefined();
+  });
+
+  test('fails on a brief that says it carries a list the bench cannot read', () => {
+    // An empty list would score as a step that found nothing; the brief and the bench have drifted apart instead.
+    expect(() => workListOf([prompt({})])).toThrow("hasn't the list's shape");
+    expect(() => workListOf([prompt({ person: 'x', streams: [{ name: 'y' }] })])).toThrow("hasn't the list's shape");
+    const unparsed = { ...prompt(list), content: { ...prompt(list).content, params: { prompt: [{ type: 'text', text: briefOf(list).replace('{"person"', '{person') }] } } };
+    expect(() => workListOf([unparsed])).toThrow("isn't JSON");
+    const bare = { ...prompt(list), content: { ...prompt(list).content, params: { prompt: [{ type: 'text', text: briefOf(list).replace(/<untrusted>\n\{[\s\S]*$/, '') }] } } };
+    expect(() => workListOf([bare])).toThrow('no <untrusted> block');
+    expect(readWorkList([prompt({})])).toEqual({ error: "a brief's work list hasn't the list's shape (finding.ts WORK_LIST)" });
+    expect(readWorkList([prompt(list)])).toEqual({ list });
   });
 
   test('reads a list whose brief came with markdown escapes', () => {
@@ -312,6 +322,9 @@ describe('asWritten', () => {
     expect(asWritten(ana, 'bo@acme-s2-signup.example, cy@acme-signup.example, di@acme-s3.example, ed@acmex.example')).toBe(
       'bo@acme.example, cy@acme.example, di@acme.example, ed@acmex.example',
     );
+  });
+  test('reads a seat address back whatever its case', () => {
+    expect(asWritten(persona(1, 1), 'Bo@ACME-S2-Signup.Example')).toBe('Bo@acme.example');
   });
   test('leaves a longer domain alone, and reads one at the end of a sentence', () => {
     const ana = persona(1, 1);
@@ -441,6 +454,10 @@ describe('the finding score of a run', () => {
     expect(verdict(side, side, margins).wallRatio).toBeNaN();
     const both = [timed('p1'), timed('p2'), heldout('p1', { rep: 2 })];
     expect(verdict(both, both, margins).wallRatio).toBe(1);
+    // Only people timed on both sides: p3, timed in B alone, moves nothing (over all three B's median would be 90 s).
+    const slow = (persona: string) => heldout(persona, { generation: { ...generation([]), status: 'ready', wallMs: 90000 }, score: failedScore(3) });
+    expect(verdict([timed('p1'), timed('p2'), heldout('p3')], [timed('p1'), slow('p2'), slow('p3')], margins).wallRatio).toBe(51000 / 12000);
+    expect(verdict([timed('p1'), heldout('p2'), heldout('p3')], [timed('p1'), slow('p2'), slow('p3')], margins).wallRatio).toBeNaN();
   });
 });
 
@@ -452,5 +469,34 @@ describe('writing a month', () => {
 
   test('counts each need a drafted routine meets once, and none whose routine is blank', () => {
     expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice' }, { id: 'r1', drafted: 'again' }, { id: 'r2', drafted: '  ' }, { id: 'r3' }, { id: 'r4', drafted: 'a lead log' }])).toBe(2);
+  });
+
+  test('starts no job after one fails, and throws once the running ones end', async () => {
+    const started: number[] = [];
+    let running = 0;
+    let endedAfterFailure = false;
+    let failedAt = 0;
+    const jobs = Array.from({ length: 8 }, (_, i) => async () => {
+      started.push(i);
+      running++;
+      await Bun.sleep(i === 1 ? 5 : 20);
+      running--;
+      if (i === 1) {
+        failedAt = Date.now();
+        throw new Error('job 1 failed');
+      }
+      if (failedAt) endedAfterFailure = true;
+      return i;
+    });
+    await expect(pooled(jobs, 3)).rejects.toThrow('job 1 failed');
+    expect(started).toEqual([0, 1, 2]);
+    expect(running).toBe(0);
+    expect(endedAfterFailure).toBe(true);
+    expect(await pooled([async () => 1, async () => 2], 3)).toEqual([1, 2]);
+  });
+
+  test('tells when two people of a workspace share a first name, whatever its case', () => {
+    expect(sharedFirstName({ owner_first: 'Ana', colleagues: [{ first: 'Bo', last: 'A', role: '' }, { first: 'ana', last: 'B', role: '' }] })).toBe(true);
+    expect(sharedFirstName({ owner_first: 'Ana', colleagues: [{ first: 'Bo', last: 'A', role: '' }, { first: 'Cy', last: 'B', role: '' }] })).toBe(false);
   });
 });

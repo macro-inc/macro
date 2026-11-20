@@ -150,7 +150,11 @@ with each attempt's suggestions, the judge's marks, the score and the
 sessions' transcripts beside it. A routines attempt is written as soon as it
 has generated, marked not judged until it is, so `rejudge` can judge a run
 that stopped first; `rejudge` reads each work list again from the
-transcripts. `run` starts the stand-in if it isn't up and holds the
+transcripts (where they were saved, or beside `run.json`). The harness
+sends a brief to its runtime as Markdown, which backslash-escapes characters
+such as `_`; the bench undoes those escapes. A brief that says it carries a
+list the bench still can't parse is that attempt's list error, counted as not
+judged, never an empty list. `run` starts the stand-in if it isn't up and holds the
 stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
@@ -416,7 +420,8 @@ cost nothing beyond the model calls.
   section's flags, and email_service's `/internal/recent_messages/{user}`
   answers with the persona's mailbox (the routines brief reads it from Gmail
   or Outlook, which seeded mail never reaches): the newest 100, or the month
-  for exactly the month read; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
+  for exactly the month read. A person with a month answers any other window
+  with a 400; everything else goes to email_service. The suggestions service trusts a flag for a minute, so the
   bench waits a minute after changing them.
 - **Clean runs.** Every attempt seeds its persona again with the seed CLI's
   `apply`, which replaces the persona's seeded rows. A person signs up

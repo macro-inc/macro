@@ -80,6 +80,8 @@ export type Generation = {
   wallMs?: number;
   /** The work streams a finding step listed, as its drafting session read them; none where no session read a list. */
   workList?: WorkList;
+  /** Why a brief's work list couldn't be read: the bench's fault, so the list goes unjudged rather than scored empty. */
+  listError?: string;
   cost: Cost;
   /** The transcripts, one JSON line per log entry. */
   transcript?: string;
@@ -241,15 +243,26 @@ function listIn(row: TranscriptRow): WorkList | undefined {
     const at = text.indexOf(WORK_LIST_MARK);
     if (at < 0) continue;
     const block = /<untrusted>\n([\s\S]*?)\n<\/untrusted>/.exec(text.slice(at));
-    if (!block) continue;
+    if (!block) throw new Error(`a brief says it carries a work list but has no <untrusted> block after it`);
+    let list: unknown;
     try {
-      const list: unknown = JSON.parse(unescapeMarkdown(block[1]));
-      if (isWorkList(list)) return list;
-    } catch {
-      // Not the list: read on.
+      list = JSON.parse(unescapeMarkdown(block[1]));
+    } catch (error) {
+      throw new Error(`a brief's work list isn't JSON: ${String(error).slice(0, 200)}`);
     }
+    if (!isWorkList(list)) throw new Error("a brief's work list hasn't the list's shape (finding.ts WORK_LIST)");
+    return list;
   }
   return undefined;
+}
+
+/** `workListOf`, with why it couldn't read a list in place of throwing. */
+export function readWorkList(rows: Iterable<unknown>): { list?: WorkList; error?: string } {
+  try {
+    return { list: workListOf(rows) };
+  } catch (error) {
+    return { error: String(error instanceof Error ? error.message : error).slice(0, 300) };
+  }
 }
 
 /**
@@ -257,7 +270,9 @@ function listIn(row: TranscriptRow): WorkList | undefined {
  * their transcript rows. Each session reads its share of the streams in the
  * earliest prompt the harness sent its runtime; the shares put together, in
  * the order the sessions started, are the list (a retried session reads the
- * same share again, which counts once).
+ * same share again, which counts once). A brief that says it carries a list
+ * the bench can't read throws: the drafting brief (the finding PR's
+ * `prompt.rs`) and `WORK_LIST_MARK` have drifted apart.
  */
 export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
   const prompts = [...rows]
@@ -468,7 +483,7 @@ export async function generate(
     );
     if (last?.at) result.lastMs = new Date(last.at).getTime() - start;
     await capture(db, row.id, transcript);
-    result.workList = workListOf(transcript.values());
+    ({ list: result.workList, error: result.listError } = readWorkList(transcript.values()));
     // Usage rows land as each model call settles: give the last ones a moment.
     await Bun.sleep(5000);
     result.cost = await costOf(db, user, new Date(start - 1000), new Date());
@@ -476,7 +491,7 @@ export async function generate(
     result.error = String(error).slice(0, 500);
     // A generation that ran out of time may have briefed its drafting sessions: its list is scored all the same, from the transcript as it stands now.
     if (result.generationId) await capture(db, result.generationId, transcript).catch(() => {});
-    if (transcript.size) result.workList ??= workListOf(transcript.values());
+    if (transcript.size && !result.workList) ({ list: result.workList, error: result.listError } = readWorkList(transcript.values()));
     // A generation that failed or ran out of time may still have spent: count it.
     if (asked !== undefined) {
       result.wallMs ??= Date.now() - asked;

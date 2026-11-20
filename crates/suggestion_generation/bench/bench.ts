@@ -3,7 +3,7 @@
 // scores each section with one number you can hill climb. See README.md.
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { type Stack, call, exclusive, login, sdk, searchIndexer, stack } from '../../scheduled_action/bench/stack';
@@ -16,7 +16,7 @@ import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, pers
 import { shiftDays } from './clock';
 import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines, withheld, withheldAcross } from './report';
-import { CACHE, type Trigger, generate, prepare, workListOf } from './run';
+import { CACHE, type Trigger, generate, prepare, readWorkList } from './run';
 import { type Attempt, type RunFile, type Section, MIN_HELDOUT_PEOPLE, PARTS, contrast, failedScore, marginsOf, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
 import { startStub, stopStub, stubDir, writeFlags } from './stub';
 
@@ -171,6 +171,11 @@ async function judgeWorkList(at: Stack, persona: Persona, attempt: Attempt) {
   attempt.findingMarks = undefined;
   attempt.finding = undefined;
   attempt.findingError = undefined;
+  // A list the bench couldn't read is its own failure, never an empty list.
+  if (attempt.generation.listError) {
+    attempt.findingError = `reading the list: ${attempt.generation.listError}`;
+    return;
+  }
   try {
     attempt.findingMarks = await judgeList(at, persona, attempt.generation.workList ?? NO_LIST, attempt.generation.now);
     attempt.finding = scoreWorkList(persona, attempt.generation.workList, attempt.findingMarks);
@@ -381,19 +386,33 @@ async function rejudge(path: string, values: Record<string, string | undefined>)
     const gaps = judged.flatMap((persona) => (persona.routinesTruth ? keyGaps(persona.routinesTruth) : ['is missing']).map((gap) => `${persona.name}'s routines answer key ${gap}`));
     if (gaps.length) throw new Error(gaps.join('\n'));
   }
+  const findsWork = !!run.flags?.[FIND_WORK_FLAG];
+  // The lists are read again from the sessions' transcripts, so a fix to reading them reaches
+  // runs already made. All are read before judging starts: a transcript that can't be read is
+  // that attempt's list error, never a failure partway through the judging.
+  for (const attempt of run.attempts) {
+    const saved = attempt.generation.transcript;
+    if (!saved || !listsScored(run.section, seatOf(people.get(attempt.persona)!, attempt.seat ?? 1), findsWork)) continue;
+    // Beside the run file too, for a run directory moved with its transcripts.
+    const transcript = [saved, join(dirname(path), basename(saved))].find((file) => existsSync(file));
+    if (!transcript) {
+      console.warn(`${attempt.persona} rep ${attempt.rep}: ${saved} is gone, so its work list is judged as the run first read it`);
+      continue;
+    }
+    try {
+      const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
+      ({ list: attempt.generation.workList, error: attempt.generation.listError } = readWorkList(rows));
+    } catch (error) {
+      attempt.generation.workList = undefined;
+      attempt.generation.listError = `reading ${transcript}: ${String(error).slice(0, 200)}`;
+    }
+  }
   // The judge's cost is read from the grader's usage, so nothing else may judge meanwhile.
   await exclusive(at.instance, 'suggestions bench rejudge', async () => {
     await seedGraders(at.instance);
     await Promise.all(
       run.attempts.map(async (attempt) => {
         const persona = seatOf(people.get(attempt.persona)!, attempt.seat ?? 1);
-        const findsWork = !!run.flags?.[FIND_WORK_FLAG];
-        // The list is read again from the sessions' transcripts, so a fix to reading it reaches runs already made.
-        const transcript = attempt.generation.transcript;
-        if (transcript && existsSync(transcript)) {
-          const rows = readFileSync(transcript, 'utf8').split('\n').filter(Boolean).map((line) => JSON.parse(line) as unknown);
-          attempt.generation.workList = workListOf(rows);
-        }
         // A build failure keeps its 0: only its work list is judged again, where the run scores one.
         if (attempt.generation.buildFailed ? !listsScored(run.section, persona, findsWork) : attempt.generation.error) {
           // Nothing to judge again; a list judgement its key no longer backs goes.
@@ -543,22 +562,29 @@ async function main() {
       if (keyless) throw new Error(`${keyless} of ${people.length} people in set ${values.set} have no streams key: find runs on a month set`);
       if (values.personas) people = people.filter((persona) => values.personas!.split(',').includes(persona.name));
       if (!people.length) throw new Error(`no persona in set ${values.set} is named ${values.personas}`);
+      const reps = Number(values.reps ?? 2);
+      const concurrency = Number(values.concurrency ?? 6);
+      if (![reps, concurrency].every((n) => Number.isInteger(n) && n > 0)) throw new Error('--reps and --concurrency take whole numbers of 1 or more');
       if (people.some((persona) => persona.heldout)) spend(values.set!, 'find', values.label!);
-      await runFinding(stack(values.instance!, values.tempo!), people, {
-        model: values.model!,
-        thinking: values.thinking === 'low' ? 'low' : undefined,
-        reps: Number(values.reps ?? 2),
-        label: values.label!,
-        set: values.set!,
-        prompt: values.prompt,
-        concurrency: Number(values.concurrency ?? 6),
-      });
+      // The step's cost is the author's usage while it runs: nothing else on the instance may write meanwhile.
+      await exclusive(values.instance!, 'suggestions bench find', () =>
+        runFinding(stack(values.instance!, values.tempo!), people, {
+          model: values.model!,
+          thinking: values.thinking === 'low' ? 'low' : undefined,
+          reps,
+          label: values.label!,
+          set: values.set!,
+          prompt: values.prompt,
+          concurrency,
+        }),
+      );
       break;
     }
     case 'heldout':
       if (rest[0] === 'make') {
         if (rest[3] && rest[3] !== 'month') throw new Error('heldout make <name> [count] [month]');
-        await makeHeldout(stack(values.instance!, values.tempo!), rest[1], Number(rest[2] ?? 3), rest[3] === 'month');
+        // Its cost is the author's usage while it writes: nothing else on the instance may write meanwhile.
+        await exclusive(values.instance!, 'suggestions bench heldout make', () => makeHeldout(stack(values.instance!, values.tempo!), rest[1], Number(rest[2] ?? 3), rest[3] === 'month'));
       }
       else console.log(spent().join('\n') || 'no held-out sets');
       break;

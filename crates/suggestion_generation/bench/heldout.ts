@@ -226,7 +226,7 @@ const anchor = new Date(ANCHOR).toISOString();
 export async function makeHeldout(at: Stack, name: string, count: number, month = false) {
   if (!name) throw new Error('heldout make <name> [count] [month]');
   // Loaded here: month.ts builds on this module.
-  const { sketchMonth, writeMonthPersona } = await import('./month');
+  const { sketchMonth, writeMonthPersona, sharedFirstName } = await import('./month');
   const root = join(HELDOUT_DIR, name);
   const sketches = join(root, 'people.json');
   const written = (slug: string) => existsSync(join(root, slug));
@@ -240,6 +240,9 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     // A folder left before its people were saved has nothing else in it: reuse it.
     if (existsSync(root) && readdirSync(root).some((entry) => entry !== 'people.json.partial')) throw new Error(`held-out set ${name} exists; pick a new name`);
     people = (await (month ? sketchMonth(at, count) : sketch(at, count))).slice(0, count);
+    if (people.length < count) throw new Error(`the author sketched ${people.length} of ${count} people; run heldout make again`);
+    const shared = people.filter((person) => 'mail' in person && person.mail === 'month' && sharedFirstName(person as MonthSketch));
+    if (shared.length) throw new Error(`${shared.map((person) => person.slug).join(', ')}: two people of one workspace share a first name, and so an address; run heldout make again`);
     const slugs = people.map((person) => person.slug);
     if (slugs.some((slug) => !/^[a-z]+$/.test(slug)) || new Set(slugs).size !== slugs.length) {
       throw new Error(`the people came back with unusable slugs (${slugs.join(', ')}); run heldout make again`);
@@ -266,7 +269,8 @@ export async function makeHeldout(at: Stack, name: string, count: number, month 
     }
   };
   await Promise.all(Array.from({ length: WRITERS }, writer));
-  await reportCost(at, started, writing - failed.length);
+  // What writing cost is reported when it can be read; the set is ready or not all the same.
+  await reportCost(at, started, writing - failed.length).catch((error) => console.error(`the writing cost could not be read: ${String(error).slice(0, 200)}`));
   if (failed.length) throw new Error(`held-out set ${name}: ${failed.join(', ')} not written; run heldout make ${name} again to finish it`);
   console.log(`held-out set ${name} is ready; run it with --set ${name}. Don't open its files while tuning.`);
 }

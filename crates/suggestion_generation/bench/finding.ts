@@ -242,8 +242,15 @@ export async function runFinding(at: Stack, people: Persona[], opts: { model: st
     }),
   );
   const db = new SQL(at.postgres);
-  const cost: Cost = await costOf(db, userId(AUTHOR), started, new Date());
-  await db.close();
+  // The lists are judged and saved whether or not their cost can be read.
+  let cost: Cost | undefined;
+  try {
+    cost = await costOf(db, userId(AUTHOR), started, new Date());
+  } catch (error) {
+    console.error(`the finding step's cost could not be read: ${String(error).slice(0, 200)}`);
+  } finally {
+    await db.close();
+  }
   const byName = new Map(people.map((p) => [p.name, p]));
   await Promise.all(
     attempts.map(async (attempt) => {
@@ -264,7 +271,7 @@ export async function runFinding(at: Stack, people: Persona[], opts: { model: st
   console.log(`saved ${out}/find.json`);
 }
 
-function report(attempts: FindAttempt[], cost: Cost, people: Persona[], model: string) {
+function report(attempts: FindAttempt[], cost: Cost | undefined, people: Persona[], model: string) {
   const scored = attempts.filter((a) => a.score);
   // An aggregate over one held-out person is that person's result.
   const heldout = new Set(people.filter((persona) => persona.heldout).map((persona) => persona.name));
@@ -288,6 +295,6 @@ function report(attempts: FindAttempt[], cost: Cost, people: Persona[], model: s
     `found ${sum((s) => s.found)} of ${sum((s) => s.work)} work streams (${((100 * sum((s) => s.found)) / Math.max(1, sum((s) => s.work))).toFixed(0)}%), unreal ${(sum((s) => s.unreal) / Math.max(1, scored.length)).toFixed(1)} a list, duplicates ${sum((s) => s.duplicates)}; ${scored.length} of ${attempts.length} lists scored`,
   );
   // The author account may be writing a set at the same time: count only the finding model's spend.
-  const usd = cost.models[model.replace(/^[^/]*\//, "")] ?? 0;
-  console.log(`cost ${(usd / Math.max(1, attempts.length)).toFixed(3)} a list on ${model}; median ${((quantile(ms, 0.5) || 0) / 1000).toFixed(0)} s of ${ms.length} lists`);
+  const usd = cost?.models[model.replace(/^[^/]*\//, "")];
+  console.log(`cost ${usd === undefined && !cost ? 'unknown' : ((usd ?? 0) / Math.max(1, attempts.length)).toFixed(3)} a list on ${model}; median ${((quantile(ms, 0.5) || 0) / 1000).toFixed(0)} s of ${ms.length} lists`);
 }

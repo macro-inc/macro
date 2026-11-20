@@ -427,8 +427,12 @@ export function verdict(a: Attempt[], b: Attempt[], margins: Margins): Verdict {
       : `score moved ${signed(s.delta)}, past the ${s.margin.toFixed(1)} margin`;
   const usd = contrast(a, b, (attempt) => attempt.generation.cost.usd);
   const timed = (attempts: Attempt[]) => scored(attempts).filter((attempt) => attempt.generation.wallMs);
+  // Both medians over the people timed on both sides, so the ratio sets the same people side by side.
+  const timedIn = (attempts: Attempt[]) => new Set(timed(attempts).map((attempt) => attempt.persona));
+  const both = new Set([...timedIn(a)].filter((persona) => timedIn(b).has(persona)));
+  const common = (attempts: Attempt[]) => timed(attempts).filter((attempt) => both.has(attempt.persona));
   // A side's median shows only over two held-out people's times or more.
-  const median = (attempts: Attempt[]) => (aggregate(timed(attempts), attempts) ? quantile(timed(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
+  const median = (attempts: Attempt[]) => (aggregate(common(attempts), attempts) ? quantile(common(attempts).map((attempt) => attempt.generation.wallMs!), 0.5) : NaN);
   return { verdict: result, why, parts, usd: [usd.a, usd.b], usdInterval: usd.interval, wallRatio: median(b) / median(a) };
 }
 

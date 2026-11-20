@@ -49,6 +49,8 @@ export function lines(runs: RunFile[]): string[] {
       else if (s.finding) {
         const errors = s.finding.errors ? ` (${s.finding.errors} more not judged)` : '';
         out.push(`${run.section} (${run.label}): work lists read in ${s.finding.read} of ${s.finding.lists} generations${errors}; they named ${(100 * s.finding.found).toFixed(0)}% of the key's work streams, with ${s.finding.unreal.toFixed(1)} of ${s.finding.listed.toFixed(1)} entries naming none`);
+        // Every finding step failing is possible; a brief whose list the bench no longer finds is likelier.
+        if (!s.finding.read && s.finding.lists) out.push(`${run.section} (${run.label}): no drafting brief carried a list the bench read: check run.ts WORK_LIST_MARK against the drafting brief, then the finding step's failures in the harness log`);
       }
       out.push(`${run.section} (${run.label}): good drafts per generation ${s.goodDrafts.toFixed(2)} of ${s.drafts!.toFixed(2)} drafted, 5 or more in ${s.fiveGoodDrafts} of ${s.scored}; good catalog picks ${s.goodPicks!.toFixed(2)}${aimed}`);
     }

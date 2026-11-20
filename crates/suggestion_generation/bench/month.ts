@@ -108,15 +108,36 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const anchor = iso(ANCHOR);
 const windowStart = ANCHOR - WINDOW_DAYS * DAY_MS;
 
-/** `jobs` run `CALLS` at a time, in order of their results. */
-async function pooled<T>(jobs: (() => Promise<T>)[]): Promise<T[]> {
+/**
+ * `jobs` run `CALLS` at a time, in order of their results. After a job
+ * fails none starts, and the failure is thrown once the running ones end, so
+ * nothing of this person is still being written when the next begins.
+ */
+export async function pooled<T>(jobs: (() => Promise<T>)[], calls = CALLS): Promise<T[]> {
   const results: T[] = new Array(jobs.length);
   let next = 0;
+  let failed = false;
   const worker = async () => {
-    for (let i = next++; i < jobs.length; i = next++) results[i] = await jobs[i]();
+    while (!failed && next < jobs.length) {
+      const i = next++;
+      try {
+        results[i] = await jobs[i]();
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+    }
   };
-  await Promise.all(Array.from({ length: Math.min(CALLS, jobs.length) }, worker));
+  const ended = await Promise.allSettled(Array.from({ length: Math.min(calls, jobs.length) }, worker));
+  const rejected = ended.find((end): end is PromiseRejectedResult => end.status === 'rejected');
+  if (rejected) throw rejected.reason;
   return results;
+}
+
+/** Whether two people of `sketch`'s workspace share a first name: each is written to as first name at the domain. */
+export function sharedFirstName(sketch: Pick<MonthSketch, 'owner_first' | 'colleagues'>): boolean {
+  const firsts = [sketch.owner_first, ...sketch.colleagues.map((colleague) => colleague.first)].map((first) => first.toLowerCase());
+  return new Set(firsts).size !== firsts.length;
 }
 
 export async function sketchMonth(at: Stack, count: number): Promise<MonthSketch[]> {
@@ -217,6 +238,12 @@ It is now ${anchor}. For each, by its number: the first 300 to 500 characters of
 ${listed}`,
         TEXTS,
       );
+      // Exactly this batch's numbers, each once and with text: another batch's number would overwrite its text.
+      const own = batch.map((_, i) => part * TEXTS_PER_CALL + i + 1);
+      const numbers = written.map((t) => t.n).sort((a, b) => a - b);
+      if (numbers.join() !== own.join() || written.some((t) => !t.snippet.trim())) {
+        throw new Error(`${sketch.slug}: texts for ${own[0]}–${own.at(-1)} came back numbered ${numbers.join(', ')}${written.some((t) => !t.snippet.trim()) ? ', some blank' : ''}`);
+      }
       for (const t of written) texts.set(t.n - 1, t.snippet);
     }),
   );
@@ -240,7 +267,9 @@ ${listed}`,
   const streams: MailStream[] = plan
     .map((s) => {
       const own = messages.filter((m) => m.stream === s.id);
-      return { id: s.id, kind: s.kind, name: s.name, senders: s.senders, count: own.length, cadence: s.cadence, what: s.what, action: s.action, labels: s.labels, examples: own.slice(0, 4).map((m) => m.subject) };
+      // The senders of the messages counted, as the finding judge matches entries by them.
+      const senders = [...new Map(own.map((m) => [m.from.email.toLowerCase(), m.from])).values()];
+      return { id: s.id, kind: s.kind, name: s.name, senders, count: own.length, cadence: s.cadence, what: s.what, action: s.action, labels: s.labels, examples: own.slice(0, 4).map((m) => m.subject) };
     })
     .filter((s) => s.count > 0);
   writeFileSync(join(dir, 'streams-truth.json'), `${JSON.stringify({ streams }, null, 1)}\n`);
@@ -271,14 +300,14 @@ ${context}`,
     DECOYS,
   );
   const ids = new Set(streams.map((s) => s.id));
-  const placed = placeAll({ needs, decoys, misfit });
-  placed.needs = placed.needs.map((need) => ({
-    ...need,
-    streams: ((need as { streams?: string[] }).streams ?? []).filter((id) => ids.has(id)),
-    drafted: need.drafted?.trim() || undefined,
-  }));
+  // A need rests on streams that were kept, or no mail shows it. It is left out before
+  // placing, so the catalog keys it named aren't counted as met.
+  const shown = needs
+    .map((need) => ({ ...need, streams: (need.streams ?? []).filter((id) => ids.has(id)), drafted: need.drafted?.trim() || undefined }))
+    .filter((need) => need.streams.length);
+  const placed = placeAll({ needs: shown, decoys, misfit });
   // Five good drafted routines must be within reach.
-  const draftable = draftableNeeds(needs);
+  const draftable = draftableNeeds(shown);
   if (draftable < MIN_DRAFTED_NEEDS) throw new Error(`${sketch.slug}: ${draftable} of ${placed.needs.length} needs can be met by a drafted routine, fewer than ${MIN_DRAFTED_NEEDS}`);
   writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
 
