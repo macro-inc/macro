@@ -137,6 +137,18 @@ Outlook (Microsoft Graph) outbound adapters.
 - `domain::request_count::counted` counts the Graph requests one unit of work
   sends (the transport calls `record_sent`); Outlook token failures surface
   as `EmailApiError::CredentialsUnavailable`, apart from Graph failures.
+- The Outlook sync stores an event's HTML body as Graph returns it and
+  never parses it. A Macro edit of an online meeting's description, and an
+  event replacement, separate the Teams block (the outermost `me-email*`
+  `div`s) from the user's text in `outlook/calendar/conference_body.rs`,
+  which parses the body as received through `email_utils::bounded_html`,
+  since an invitation's body is whatever its sender wrote. A clipped parse
+  refuses the write (`Permanent`, telling the user to edit in Outlook)
+  rather than write back a description cut at the clip, and warns `refused
+  to split an Outlook event body too large to parse whole` with
+  `body_bytes`. Find the blocks in one walk of the tree, never by checking
+  each `div`'s ancestors: that reads an ancestor's classes once per `div`
+  inside it, seconds of CPU for a body within the parse bounds.
 - The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,
   `recurrence.rs`) fails with `Rejected`, which names the Graph property
   path (`recurrence.range.endDate`, `instances.start.dateTime`), built only

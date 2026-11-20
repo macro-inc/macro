@@ -79,7 +79,8 @@ fn only_outermost_provider_blocks_are_split_in_document_order() {
     let second = "<div class=\"me-email-footer\">Options</div>";
     // Inside a provider-owned element that is not a `div`, a block is part
     // of that element rather than a block of its own.
-    let inside_span = "<span class=\"me-email-x\"><div class=\"me-email-text\">Dial in</div></span>";
+    let inside_span =
+        "<span class=\"me-email-x\"><div class=\"me-email-text\">Dial in</div></span>";
     let body = format!("<p>Before</p>{first}<div><p>Notes</p>{second}</div>{inside_span}");
 
     let (description, meeting) = split(&body, JOIN).unwrap();
@@ -99,6 +100,10 @@ fn crafted_bodies() -> Vec<(&'static str, String)> {
     // builds a million nodes.
     let distinct_bold: String = (0..1_000).map(|i| format!("<b id={i}>")).collect();
     vec![
+        (
+            "paragraphs",
+            "<p>x</p>".repeat(bounded_html::MAX_HTML_NODES),
+        ),
         (
             "distinct bold",
             format!("<p>{distinct_bold}{}", "<p>x".repeat(1_000)),
@@ -130,8 +135,9 @@ fn a_crafted_body_is_refused_in_bounded_memory() {
 
         let error = result.unwrap().expect_err(name);
         assert_eq!(error.message(), TOO_LARGE, "{name}");
-        // Parsed whole, these peaked between 240 MB and 1.1 GB; clipped,
-        // none peaks above 64 MB.
+        // Parsed whole, the rebuilt bold peaked at 326 MB and 1.7 GB and the
+        // nested divs took minutes; clipped, the node limit itself peaks at
+        // 69 MB and the rest below 4 MB.
         assert!(
             peak < 96 << 20,
             "{peak} bytes to split {} bytes of {name}",
@@ -145,7 +151,10 @@ fn markup_inside_noscript_stays_text_through_the_split() {
     // With scripting on, as `bounded_html` parses, `<noscript>` holds text:
     // this is one node. A second parse of the raw body with scripting off
     // (html2text's) would build the million nodes the crafted markup asks for.
-    let (_, crafted) = &crafted_bodies()[0];
+    let (_, crafted) = crafted_bodies()
+        .into_iter()
+        .find(|(name, _)| *name == "distinct bold")
+        .unwrap();
     let body = format!("<noscript>{crafted}</noscript>{}", teams_block());
     let mut result = None;
 
@@ -161,9 +170,5 @@ fn markup_inside_noscript_stays_text_through_the_split() {
             crafted.replace('<', "&lt;").replace('>', "&gt;")
         )
     );
-    assert!(
-        peak < 4 << 20,
-        "{peak} bytes to split {} bytes",
-        body.len()
-    );
+    assert!(peak < 4 << 20, "{peak} bytes to split {} bytes", body.len());
 }
