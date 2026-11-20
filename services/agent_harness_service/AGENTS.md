@@ -131,7 +131,7 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   503 `{"error":{"type":"not_configured"}}`). Same brain check; each call takes
   one model call from its solver run (refusals in the OpenAI shape with
   `error.code`); only `accounts/fireworks/models/kimi-k3`, output cap at most
-  8192 (4096 when unset), and a stream gets `stream_options.include_usage`.
+  8192 (4096 when unset or null), and a stream gets `stream_options.include_usage`.
   Usage (cached prompt tokens as `cache_read`) is billed against the agent at
   `kimi-k3` pricing on the legacy recorder, draining a stream whose caller
   hung up (the shared `anthropic_gateway::pump`), and observed in the
@@ -150,8 +150,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   emulator); `--listen` defaults to loopback `127.0.0.1:8490`, since it
   holds real keys behind one bench key. Never deployed.
   `capsolver_live_contract` (ignored) solves the Turnstile and reCAPTCHA v2
-  test keys once each through the real adapter when `CAPSOLVER_API_KEY` is
-  set.
+  test keys once each through the real adapter, and fails when
+  `CAPSOLVER_API_KEY` is unset or blank.
 - `src/voice_gateway.rs`: `GET /voices` and `GET /voices/{model}/sample` for
   team admins behind `enable-agent-teammates` (`team_agents::domain::voice`).
   The Deepgram catalog (Aura-2 only) is cached for a day, and each voice's

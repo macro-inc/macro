@@ -354,6 +354,9 @@ fn pinned_request(body: &[u8]) -> Result<(Vec<u8>, bool), Rejection> {
         return Err(Rejection::invalid_request("n must be 1"));
     }
 
+    // A null cap is unset, as Fireworks reads it.
+    request
+        .retain(|field, value| !(OUTPUT_TOKEN_FIELDS.contains(&field.as_str()) && value.is_null()));
     let mut capped = false;
     for field in OUTPUT_TOKEN_FIELDS {
         let Some(value) = request.get_mut(field) else {

@@ -386,6 +386,53 @@ async fn a_stream_is_capped_asked_for_its_usage_and_passed_through_unchanged(poo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_null_output_cap_is_unset_and_gets_the_default(pool: PgPool) {
+    let run = run(&pool).await;
+    let (upstream_url, seen) = fake_fireworks().await;
+    let (app, _recorded) = gateway(&pool, &upstream_url, true);
+
+    let both_null = app
+        .clone()
+        .oneshot(chat_request(
+            "mak_agent",
+            &run,
+            json!({
+                "model": KIMI_K3,
+                "messages": [],
+                "max_tokens": null,
+                "max_completion_tokens": null,
+            }),
+        ))
+        .await
+        .unwrap();
+    let one_null = app
+        .oneshot(chat_request(
+            "mak_agent",
+            &run,
+            json!({
+                "model": KIMI_K3,
+                "messages": [],
+                "max_tokens": null,
+                "max_completion_tokens": 20000,
+            }),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(both_null.status(), StatusCode::OK);
+    assert_eq!(one_null.status(), StatusCode::OK);
+    let seen = seen.lock().unwrap().clone();
+    assert_eq!(
+        seen[0].body,
+        json!({ "model": KIMI_K3, "messages": [], "max_tokens": 4096 })
+    );
+    assert_eq!(
+        seen[1].body,
+        json!({ "model": KIMI_K3, "messages": [], "max_completion_tokens": 8192 })
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn other_models_paths_and_callers_are_refused_before_fireworks(pool: PgPool) {
     let run = run(&pool).await;
     let (upstream_url, seen) = fake_fireworks().await;
