@@ -1,6 +1,7 @@
 use crate::domain::models::contact::{Contact, ContactName, ContactPage};
 use crate::domain::models::invalidation::ContactsInvalidation;
 use crate::domain::models::list::InboxSource;
+use crate::domain::models::listed::ListedContact;
 use crate::domain::models::messages::{
     ContactConnection, ContactConnections, ContactsNodes, DirectoryChange,
 };
@@ -55,6 +56,46 @@ pub trait ContactListRepository: Send + Sync + 'static {
         &self,
         user: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+}
+
+/// Bounded reads of the directed, list-aware directory: a person is in a
+/// viewer's directory when they are in one of the viewer's stored lists or
+/// inboxes, on the viewer's current team, or the viewer. Ids are canonical, so
+/// pages are in plain byte order. Not read by any caller yet; it replaces
+/// [`ContactsPageRepository`] behind a flag.
+pub trait ContactListReader: Send + Sync + 'static {
+    /// One page of the viewer's directory, including the viewer, in contact-id
+    /// order after the cursor.
+    fn list_directory_page(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
+
+    /// The requested ids that are in the viewer's directory, in request order.
+    fn lookup_listed_contacts(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+
+    /// The viewer's lists each requested contact is in, in request order.
+    /// Contacts in none, including the viewer, are left out.
+    fn contact_lists(
+        &self,
+        viewer: MacroUserIdStr<'_>,
+        lookup: &ContactLookup,
+    ) -> impl Future<Output = Result<Vec<ListedContact>, Report>> + Send;
+
+    /// One page of the users who have `subject` in their directory, including
+    /// the subject, in user-id order after the cursor.
+    fn audience_page(
+        &self,
+        subject: MacroUserIdStr<'_>,
+        after: Option<&ContactCursor>,
+        limit: ContactPageSize,
+    ) -> impl Future<Output = Result<ContactIdPage, Report>> + Send;
 }
 
 /// Bounded directory reads, separate from the deployed full-list API.

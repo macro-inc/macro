@@ -6,6 +6,8 @@ pub mod graph;
 pub mod invalidation;
 /// The lists a contact belongs to, and inbox sources.
 pub mod list;
+/// Which of a viewer's lists each contact is in.
+pub mod listed;
 /// SQS message types for the contacts queue.
 pub mod messages;
 /// Validated limits, cursors, and pages for bounded directory reads.
