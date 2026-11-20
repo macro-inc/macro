@@ -132,6 +132,12 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                 {t('agentScreen.handBack')}
               </Button>
             </Match>
+            <Match when={session.resumingDrive()}>
+              {/* A dropped drive is being won back: still the driver's controls. */}
+              <Button size="sm" variant="primary" disabled>
+                {t('agentScreen.handBack')}
+              </Button>
+            </Match>
             <Match when={session.drivingElsewhere()}>
               {/* The harness takes a hand-back from any tab of the driver. */}
               <Show when={props.model.canDrive()}>

@@ -135,6 +135,12 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
                 {t('agentScreen.handBack')}
               </Button>
             </Match>
+            <Match when={session.resumingDrive()}>
+              {/* A dropped drive is being won back: still the driver's controls. */}
+              <Button size="md" variant="primary" disabled>
+                {t('agentScreen.handBack')}
+              </Button>
+            </Match>
             <Match when={session.drivingElsewhere()}>
               {/* The harness takes a hand-back from any tab of the driver. */}
               <Show when={props.model.canDrive()}>
@@ -191,7 +197,8 @@ export function MobileAgentScreen(props: { model: AgentScreenModel }) {
           </p>
         </Show>
 
-        <Show when={session.drivingMe()}>
+        {/* Kept through a dropped drive's reconnect, so the key bar keeps focus. */}
+        <Show when={session.holdsKeyboard()}>
           <div class="flex items-center gap-2 px-3 py-1 landscape:flex-col landscape:items-stretch">
             <Tabs
               aria-label={t('agentScreen.oneFingerGestures')}

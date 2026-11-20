@@ -2,6 +2,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
+  batch,
   createEffect,
   createSignal,
   on,
@@ -158,7 +159,13 @@ export function createScreenSession(options: ScreenSessionOptions) {
   };
 
   const apply = (step: NextStep, attempt: number) => {
-    setStore({ status: step.status, takingOver: false });
+    // Over for good (stopped, revoked, refused, gave up): there is no drive
+    // to win back, and the keyboard goes back to the app.
+    setStore({
+      status: step.status,
+      takingOver: false,
+      ...(step.kind === 'show' ? { controlLost: false } : {}),
+    });
     if (step.kind === 'show') {
       record('computer.screen.status', { status: step.status.kind });
       return;
@@ -233,19 +240,22 @@ export function createScreenSession(options: ScreenSessionOptions) {
             const driving =
               state.driver?.userId === options.currentUserId() &&
               state.drivingHere !== false;
-            setStore({
-              server: state,
-              takingOver: store.takingOver && !driving,
-              // The server kept our lease across the reconnect.
-              controlLost: store.controlLost && !driving,
+            // One update, so a lease being taken back never shows as lost.
+            batch(() => {
+              setStore({
+                server: state,
+                takingOver: store.takingOver && !driving,
+                // The server kept our lease across the reconnect.
+                controlLost: store.controlLost && !driving,
+              });
+              resumeDriving();
+              // Until the first frame, say the computer is waking while it is.
+              if (store.status.kind !== 'live') {
+                if (state.waking) setStore('status', { kind: 'waking' });
+                else if (store.status.kind === 'waking')
+                  setStore('status', { kind: 'connecting' });
+              }
             });
-            resumeDriving();
-            // Until the first frame, say the computer is waking while it is.
-            if (store.status.kind !== 'live') {
-              if (state.waking) setStore('status', { kind: 'waking' });
-              else if (store.status.kind === 'waking')
-                setStore('status', { kind: 'connecting' });
-            }
           },
           onFrameSize: (size) => {
             if (current === generation) setStore('frame', size);
@@ -261,14 +271,16 @@ export function createScreenSession(options: ScreenSessionOptions) {
             record('computer.screen.ended', { reason });
             endConnectionSpan(reason);
             session = undefined;
-            forgetServer();
             // A session that stayed live a while starts its retries afresh; one
             // that keeps dropping right after going live counts on.
             if (connected && flapping()) connected = false;
             const step = afterSessionEnded(reason, connected ? 0 : attempt);
-            // Over for good (stopped, revoked): there is no control to win back.
-            if (step.kind === 'show') setStore('controlLost', false);
-            apply(step, connected ? 1 : attempt + 1);
+            // One update: nothing (the keyboard, the controls) may see the
+            // in-between of "ended" before "reconnecting".
+            batch(() => {
+              forgetServer();
+              apply(step, connected ? 1 : attempt + 1);
+            });
           },
         },
         abandon.signal
@@ -281,8 +293,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
       session = opened;
       connected = true;
       liveSince = Date.now();
-      setStore({ status: { kind: 'live' }, notice: undefined });
-      resumeDriving();
+      batch(() => {
+        setStore({ status: { kind: 'live' }, notice: undefined });
+        resumeDriving();
+      });
     } catch (error) {
       connectSpan.error(error);
       if (current !== generation || endedByServer) return;
@@ -354,6 +368,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
    */
   function resumeDriving() {
     if (!store.controlLost || !session || store.status.kind !== 'live') return;
+    if (store.takingOver) return;
     if (!store.server || !options.canDrive()) return;
     if (drivingMe()) {
       setStore('controlLost', false);
@@ -363,7 +378,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
     // from another tab) handed back on purpose, and the banner offers it.
     if (!drivingElsewhere()) return;
     record('computer.screen.resume_driving');
-    setStore({ takingOver: true, notice: undefined, controlLost: false });
+    // `controlLost` stays until the server answers: the drive is still
+    // being won back (`resumingDrive`).
+    setStore({ takingOver: true, notice: undefined });
     session.takeOver();
   }
 
@@ -389,13 +406,21 @@ export function createScreenSession(options: ScreenSessionOptions) {
    * the new connection settles the lease, the person is still typing at the
    * remote computer.
    */
-  const holdsKeyboard = () =>
-    drivingMe() || store.takingOver || controlLost()?.kind === 'reconnecting';
+  const holdsKeyboard = () => drivingMe() || resumingDrive();
+
+  /**
+   * A drive this tab lost to a drop is being won back: from the end, through
+   * reconnecting, until the new connection says whose lease it is (and while
+   * taking it back).
+   */
+  const resumingDrive = () =>
+    store.controlLost && (!store.server || store.takingOver);
 
   const controlLost = (): ControlLost | undefined => {
     if (!store.controlLost) return undefined;
     const status = store.status.kind;
     if (
+      resumingDrive() ||
       status === 'reconnecting' ||
       status === 'connecting' ||
       status === 'waking'
@@ -412,6 +437,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
     drivingElsewhere,
     controlLost,
     holdsKeyboard,
+    resumingDrive,
     /** The person read the control-lost banner and closed it. */
     dismissControlLost() {
       setStore('controlLost', false);
