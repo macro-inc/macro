@@ -323,9 +323,9 @@ async fn rank_entities<'a>(
 
 /// Budget for the SDK documentation a turn's prompt carries: the catalog and
 /// the routed entities' indexes and guides, without an attached skill. It
-/// bounds what every turn adds to the prompt. 56 KiB fits a routine that
-/// reads a database and posts in a channel (routines, databases and channels
-/// with the catalog) with room to spare; 48 KiB no longer did.
+/// bounds what every turn adds to the prompt, and fits a routine that reads a
+/// database and posts in a channel (the catalog with routines, databases and
+/// channels) with room to spare.
 const ROUTED_DOCUMENTATION_BYTES: usize = 56 * 1024;
 
 /// Load the entities a request needs, ranked by Jev, at most four: their

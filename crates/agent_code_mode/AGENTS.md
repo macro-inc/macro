@@ -95,8 +95,9 @@ stacks. Process isolation belongs to
   symbol). Jev ranks entities on their descriptions against the latest and
   previous user message (`cognition::domain::RoutingRequest`), in parallel calls of 32
   (`cognition::domain::decide_in_batches`; a late or failed call loses only
-  its own entities), for the per-turn prompt (≥ 0.5, top four, 56 KiB, `ROUTED_DOCUMENTATION_BYTES`) or a
-  `DescribeCodeTools` `task` (every relevant entity, 32 KiB); `ReadCodeDocs`
+  its own entities), for the per-turn prompt (≥ 0.5, top four,
+  `ROUTED_DOCUMENTATION_BYTES`, 56 KiB) or a `DescribeCodeTools` `task`
+  (every relevant entity, 32 KiB); `ReadCodeDocs`
   reads symbol references (32 KiB). `Guidance::Selected` (owners with
   `auto-skills`) loads each entity's guide with its index; otherwise prompts
   carry `inline_guides`. The routines guide carries the Compose Routines system
