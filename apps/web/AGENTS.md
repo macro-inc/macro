@@ -795,6 +795,11 @@ same suite's `swipe-done.browser.e2e.ts` swipes a row in the real
 feed takes it, the row below slides up without a jump, Undo restores it, and
 reduced motion skips the fold.
 
+Its `stacks.browser.e2e.ts` runs the same view with a pointer: an open stack's
+row keeps its toggle in place as Hide (beside the Hide under its last
+notification), hovering a row swaps its time for Mark done without moving
+anything, and an open stack leaves the other rows undimmed, on phones too.
+
 A swipe row folds only what is inside it: draw a row's divider inside its
 `SwipableRow` (as `InboxListEntity` does), or the folded row leaves its line
 behind. A list that can keep a row after a done unfolds it through
