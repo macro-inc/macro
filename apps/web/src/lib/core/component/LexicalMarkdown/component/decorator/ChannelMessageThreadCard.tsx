@@ -1,7 +1,6 @@
-import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { ReadonlyThread } from '@channel/StandaloneThread';
+import { openThreadMessage } from '@channel/StandaloneThread/open-thread-message';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import { Telemetry } from '@macro-inc/observability';
 
 type ChannelMessageThreadCardProps = {
   channelId: string;
@@ -17,14 +16,14 @@ export function ChannelMessageThreadCard(props: ChannelMessageThreadCardProps) {
       messageId={props.messageId}
       onClickMessage={(clickedMessageId, e) => {
         e.stopPropagation();
-        const isReply = clickedMessageId !== props.messageId;
-        navigateToChannelMessage(
+        openThreadMessage(
           orchestrator,
-          props.channelId,
-          clickedMessageId,
-          isReply ? props.messageId : undefined
-        ).catch((error) =>
-          Telemetry.error(error, { surface: 'channel-message-thread-card' })
+          {
+            channelId: props.channelId,
+            threadMessageId: props.messageId,
+            messageId: clickedMessageId,
+          },
+          'channel-message-thread-card'
         );
       }}
     />
