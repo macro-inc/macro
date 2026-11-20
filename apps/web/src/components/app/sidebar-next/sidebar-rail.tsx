@@ -134,7 +134,9 @@ function RailGroup(props: {
       .with('apps', () =>
         cn(
           horizontal() ? 'max-w-full min-w-0' : 'max-h-full min-h-0',
-          !isDockCentered() && (horizontal() ? 'pl-4' : 'pt-4')
+          // With the end group pushed away by an auto margin, this keeps
+          // the 8px before it (two gaps) when the apps overflow.
+          !isDockCentered() && (horizontal() ? 'mr-1' : 'mb-1')
         )
       )
       .with('end', () => {
@@ -223,11 +225,14 @@ export const SidebarRail = () => {
       <RailGroup place="apps">
         <nav
           onWheel={scrollHorizontallyOnWheel}
-          class={
+          class={cn(
             isDockHorizontal()
               ? 'min-w-0 overflow-x-auto'
-              : 'min-h-0 overflow-y-auto'
-          }
+              : 'min-h-0 overflow-y-auto',
+            // Inside the scroller, so scrolled apps pass under the space
+            // after Search rather than being cut off at its edge.
+            !isDockCentered() && (isDockHorizontal() ? 'pl-4' : 'pt-4')
+          )}
         >
           <ul
             class={cn(
