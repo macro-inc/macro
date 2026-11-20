@@ -120,7 +120,10 @@ const DROPPED = `sum:search.index.dropped_events{${PROD}} by {entity_type}.as_co
 // recover the alert every 5 minutes.
 const FAILED_ITEMS = `default_zero(sum:search.index.failed_bulk_items{${PROD}} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300`;
 const OFFSET_RESETS = `sum:kafka.consumer.offset_resets{${PROD}} by {topic}.as_count()`;
-const READINGS = `max:search.index.oldest_pending_ms{${PROD}}.fill(null)`;
+// Per lane: each task reads email and the live topics on separate consumers,
+// and one that stops reporting must not hide behind the other's readings.
+const LIVE_READINGS = `max:search.index.oldest_pending_ms{${PROD},!${EMAIL}}.fill(null)`;
+const EMAIL_READINGS = `max:search.index.oldest_pending_ms{${PROD},${EMAIL}}.fill(null)`;
 // Late and unseen are counted, not timed: a slow round records its seconds
 // only when it ends, so slow rounds leave the minutes between them empty.
 // They judge each entity type's rotation rounds together, one a minute,
@@ -154,7 +157,8 @@ const TITLES = {
   dropped: 'Search events committed without reaching the index',
   failedItems: 'Search bulk index writes keep failing items',
   offsetReset: 'Search indexer reset a Kafka position after an error',
-  silent: 'Search indexer reports no backlog readings',
+  silent: 'Search indexer reports no live backlog readings',
+  emailSilent: 'Search indexer reports no email backlog readings',
   probeLate: 'Search shows changes late end to end',
   probeUnseen: 'Search never showed probe changes',
   probePrefixUnseen: 'Search content prefix search drops matches',
@@ -251,7 +255,12 @@ export const searchFreshnessDashboard = new datadog.Dashboard(
         }),
         thresholdGraph({
           title: TITLES.silent,
-          query: READINGS,
+          query: LIVE_READINGS,
+          critical: '0',
+        }),
+        thresholdGraph({
+          title: TITLES.emailSilent,
+          query: EMAIL_READINGS,
           critical: '0',
         }),
       ]),
@@ -451,11 +460,24 @@ prodMonitor('search-offset-reset', {
 prodMonitor('search-indexer-silent', {
   title: TITLES.silent,
   service: SERVICE,
-  query: `max(last_5m):${READINGS} < 0`,
+  query: `max(last_5m):${LIVE_READINGS} < 0`,
   monitorThresholds: { critical: '0' },
   pages: false,
   description:
-    'No indexer task has reported a backlog reading for 10 minutes: the consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.',
+    "No indexer task has reported a backlog reading for the live topics (every topic but macro.email) for 10 minutes: the live lane's consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.",
+  dashboard,
+  runbook: `${RUNBOOK}#no-readings`,
+  noDataTimeframe: 10,
+});
+
+prodMonitor('search-email-indexer-silent', {
+  title: TITLES.emailSilent,
+  service: SERVICE,
+  query: `max(last_5m):${EMAIL_READINGS} < 0`,
+  monitorThresholds: { critical: '0' },
+  pages: false,
+  description:
+    "No indexer task has reported a backlog reading for macro.email for 10 minutes: the email lane's consumer is down, not running, or not exporting metrics. Its lag is unknown, not zero.",
   dashboard,
   runbook: `${RUNBOOK}#no-readings`,
   noDataTimeframe: 10,

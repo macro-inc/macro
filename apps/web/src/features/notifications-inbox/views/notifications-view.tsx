@@ -500,6 +500,47 @@ export function NotificationsView(props: NotificationsViewProps) {
     },
   });
 
+  // On touch a done first folds its cards away (the swipe row's collapse), so
+  // the rows below slide up instead of jumping into the gap. Desktop mounts no
+  // swipe rows and removes them at once.
+  const [collapseCard, setCollapseCard] =
+    createSignal<(id: string) => Promise<void>>();
+  const [expandCard, setExpandCard] = createSignal<(id: string) => void>();
+  /** Cards folding now; a second done of one (a repeated `e`) is ignored. */
+  const folding = new Set<string>();
+  /** The cards a done takes: each row's and its unfolded notifications'. */
+  const cardIds = (rows: readonly NotificationInboxRow[]) => {
+    const rowIds = new Set(rows.map((row) => row.id));
+    return listItems().flatMap((item) => {
+      const rowId = isInboxStackItem(item) ? item.rowId : item.id;
+      return isInboxNotification(item) && rowIds.has(rowId) ? [item.id] : [];
+    });
+  };
+  /**
+   * Run `remove` once the cards are folded away. A card still listed once
+   * `remove` settles was kept (its row changed while it folded), so it
+   * unfolds again rather than staying folded in the list.
+   */
+  const afterFolding = async <T,>(
+    ids: readonly string[],
+    remove: () => Promise<T>
+  ): Promise<T> => {
+    const collapse = collapseCard();
+    if (!collapse) return remove();
+
+    for (const id of ids) folding.add(id);
+    await Promise.all(ids.map((id) => collapse(id)));
+    for (const id of ids) folding.delete(id);
+    try {
+      return await remove();
+    } finally {
+      const listed = new Set(listItems().map((item) => item.id));
+      for (const id of ids) {
+        if (listed.has(id)) expandCard()?.(id);
+      }
+    }
+  };
+
   const rowActions = createRowActions({
     requests: context.requests,
     open: (row) => list.activate.key(row.id, { reason: 'pointer' }),
@@ -507,13 +548,14 @@ export function NotificationsView(props: NotificationsViewProps) {
       context.openUrl(url);
       markSeen(row);
     },
-    complete: (row) => {
-      stacks.collapse(row.id);
-      const next = selection.afterLeaving([row.id]);
-      if (next === 'none') closePreview({ replace: true });
-      else if (next !== 'stay') preview(next, undefined, { replace: true });
-      return feed.markDone([row]);
-    },
+    complete: (row) =>
+      afterFolding(cardIds([row]), () => {
+        stacks.collapse(row.id);
+        const next = selection.afterLeaving([row.id]);
+        if (next === 'none') closePreview({ replace: true });
+        else if (next !== 'stay') preview(next, undefined, { replace: true });
+        return feed.markDone([row]);
+      }),
     notices: {
       succeeded: (decision) => toast.success(decisionOutcome(decision)),
       failed: (decision) => toast.failure(decisionFailure(decision)),
@@ -533,6 +575,21 @@ export function NotificationsView(props: NotificationsViewProps) {
       markDone([row]);
       return;
     }
+    // A stack left with one notification is listed as its row alone, so the
+    // other unfolded card leaves with this one.
+    const unfolded = listItems().filter(
+      (item) => isInboxStackItem(item) && item.rowId === row.id
+    );
+    const leaving = (
+      row.count <= 2
+        ? unfolded
+        : unfolded.filter(
+            (item) =>
+              isInboxStackItem(item) && item.notificationId === notification.id
+          )
+    ).map((item) => item.id);
+    if (leaving.some((id) => folding.has(id))) return;
+
     if (selection.selectedNotification()?.id === notification.id) {
       const shown = row.content.notifications;
       const index = shown.findIndex(
@@ -543,7 +600,9 @@ export function NotificationsView(props: NotificationsViewProps) {
       else preview(row);
     }
     fireAndForget(
-      inbox.markNotificationDone(row, notification),
+      afterFolding(leaving, () =>
+        inbox.markNotificationDone(row, notification)
+      ),
       'notifications-inbox'
     );
   };
@@ -559,12 +618,18 @@ export function NotificationsView(props: NotificationsViewProps) {
     fireAndForget(inbox.clear(request), 'notifications-inbox');
   };
 
-  const markDone = (done: readonly NotificationInboxRow[]) => {
-    for (const row of done) stacks.collapse(row.id);
-    const next = selection.afterLeaving(done.map((row) => row.id));
-    if (next === 'none') closePreview({ replace: true });
-    else if (next !== 'stay') preview(next, undefined, { replace: true });
-    fireAndForget(inbox.markDone(done), 'notifications-inbox');
+  const markDone = (rows: readonly NotificationInboxRow[]) => {
+    const done = rows.filter((row) => !folding.has(row.id));
+    if (done.length === 0) return;
+
+    const remove = () => {
+      for (const row of done) stacks.collapse(row.id);
+      const next = selection.afterLeaving(done.map((row) => row.id));
+      if (next === 'none') closePreview({ replace: true });
+      else if (next !== 'stay') preview(next, undefined, { replace: true });
+      return inbox.markDone(done);
+    };
+    fireAndForget(afterFolding(cardIds(done), remove), 'notifications-inbox');
   };
 
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
@@ -990,6 +1055,8 @@ export function NotificationsView(props: NotificationsViewProps) {
           />
           <SwipableRowProvider
             container={viewport}
+            setCollapseEntity={setCollapseCard}
+            setExpandEntity={setExpandCard}
             canSwipeLeft={(id) =>
               rowsById().has(id) || stackItemOf(id) !== undefined
             }

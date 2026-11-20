@@ -87,6 +87,8 @@ watchers; its queries and policy belong to `agent_preview`. Leases have a bounde
 TTL, deletion cascades credentials, and sweepers reclaim expired watchers and
 unreferenced replicas. These additive tables do not change agent-session claims.
 
+Task-template rows cascade with personal users or teams; nullable creator attribution clears on account deletion while team-owned content remains.
+
 `password_import_activity` stores only per-batch source format and counts; its
 team foreign key cascades, and the passwords repository includes it in retained
 data checks and explicit vault purge. It does not depend on a successful item.
@@ -196,6 +198,7 @@ foreign keys; the broker deletes expired rows.
 
 - Spam/Trash candidate indexes cover `email_messages(link_id, id)` only for the corresponding positive `mailbox_state` JSON containment predicate; keep query literals aligned with the partial-index predicates.
 - If either concurrent folder-index migration is interrupted, inspect `pg_index.indisvalid` and drop only its invalid index before retrying; `CREATE INDEX IF NOT EXISTS` would silently preserve an unusable index.
+- `idx_ep_crm_record_references_gin` (migration `20261119222316`) holds only the `entity_properties` values that reference a company or contact outside the Companies and Contacts properties and database rows. Soup's CRM property edges use it by repeating its predicate; keep the two in step. If its concurrent build is interrupted, inspect `pg_index.indisvalid` and drop only the invalid index before retrying.
 - `document::get_all_documents::get_documents_to_delete` pages expired trash in `("deletedAt", id)` order through the partial `idx_document_deleted_at_id`, under a 10 s statement timeout; keep its `ORDER BY` and keyset comparison matching that index, or each page reads the whole Document table.
 
 - `agent_correlation` owns invocation mappings; activity and scheduled-email correlation columns remain nullable for older writers. Build the activity correlation index concurrently, outside a transaction.

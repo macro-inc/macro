@@ -103,6 +103,29 @@ afterEach(async () => {
 });
 
 describe('draft queue recovery', () => {
+  it('finalizes the authored journal from a confirmed outcome whose cache snapshot is retired', async () => {
+    const { createSessionGeneration } = await import(
+      '@graphql-cache/session-generation'
+    );
+    const session = createSessionGeneration();
+    const draft = await runtime.saveLocalDraft(input('Authored working copy'));
+    const attempt = await beginSave(draft);
+    await runtime.markDraftAttemptQueued(attempt);
+    const captured = session.capture();
+    await session.transition(async () => {});
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    expect(session.isCurrent(captured)).toBe(false);
+    await lifecycle.onMutationAttemptResult!(claimed(attempt), success, false);
+    await runtime.localDraftQueueLifecycle(host).prepareMutationQueue!();
+    expect(await runtime.readLocalDraft('local')).toMatchObject({
+      status: 'synced',
+      revision: draft.revision,
+      acknowledgedRevision: draft.revision,
+      serverDraftId: 'server',
+      serverThreadId: 'server-thread',
+      content: { subject: 'Authored working copy' },
+    });
+  });
   it('preserves another device working copy when its pre-Undo server generation is rejected', async () => {
     const local = await runtime.saveLocalDraft({
       ...input('Offline edits from device B'),

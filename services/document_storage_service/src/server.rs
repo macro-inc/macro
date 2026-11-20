@@ -2596,6 +2596,9 @@ async fn run_server() -> anyhow::Result<()> {
     ));
     let api_context = ApiContext {
         search_term_matching,
+        search_lanes: Arc::new(search_service::SearchLanes::new(
+            search_service::LanePolicy::DEFAULT,
+        )),
         saved_views,
         sync_sessions,
         dictation_state,

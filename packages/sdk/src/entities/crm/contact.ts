@@ -217,8 +217,9 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   }
 
   /**
-   * Link or switch the company of a contact whose primary address is on a
-   * personal provider. Rejected for a contact on its company's domain.
+   * Link a contact without a company, or switch the company of a contact
+   * whose primary address is on a personal provider. Rejected for a contact
+   * on its company's domain.
    *
    * @write
    * @idempotent

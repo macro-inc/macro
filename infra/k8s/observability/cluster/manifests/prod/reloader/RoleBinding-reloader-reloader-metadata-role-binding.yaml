@@ -1,0 +1,26 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  annotations:
+    meta.helm.sh/release-name: reloader
+    meta.helm.sh/release-namespace: observability
+  labels:
+    app: reloader-reloader
+    app.kubernetes.io/instance: reloader
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: reloader
+    app.kubernetes.io/version: v1.4.24
+    chart: reloader-2.2.20
+    helm.sh/chart: reloader-2.2.20
+    heritage: Helm
+    release: reloader
+  name: reloader-reloader-metadata-role-binding
+  namespace: observability
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: reloader-reloader-metadata-role
+subjects:
+  - kind: ServiceAccount
+    name: reloader-reloader
+    namespace: observability

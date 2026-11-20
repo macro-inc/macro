@@ -1,3 +1,4 @@
+import { TEST_AUTHORITY_GENERATION } from '@graphql-cache/authority-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPeopleCache } from '../people/host';
 import {
@@ -70,7 +71,11 @@ describe('createRetirableCacheHost', () => {
     );
     await expect(host.readQuery(QUERY)).resolves.toEqual({ kind: 'miss' });
     await expect(
-      host.writeQuery({ ...QUERY, data: { user: { id: 'u' } } })
+      host.writeQuery({
+        generation: TEST_AUTHORITY_GENERATION,
+        ...QUERY,
+        data: { user: { id: 'u' } },
+      })
     ).resolves.toMatchObject({ revision: INITIAL_CACHE_REVISION });
     await expect(
       host.search({ profile: 'quick-access-v1', query: '', limit: 10 })
@@ -159,7 +164,9 @@ describe('createRetirableCacheHost', () => {
       kind: 'ready',
       epoch,
     });
-    await expect(people.update(update)).resolves.toBe('1');
+    await expect(
+      people.update(update, TEST_AUTHORITY_GENERATION)
+    ).resolves.toBe('1');
     await expect(people.search(search)).resolves.toEqual(page);
     await expect(people.resolveReferences(references)).resolves.toEqual(
       resolved
@@ -179,7 +186,9 @@ describe('createRetirableCacheHost', () => {
     });
     await expect(contextRead(scope)).resolves.toEqual({ kind: 'unsupported' });
     await expect(searchRead(search)).resolves.toEqual({ kind: 'unsupported' });
-    await expect(write(update)).rejects.toThrow(PEOPLE_UNSUPPORTED);
+    await expect(write(update, TEST_AUTHORITY_GENERATION)).rejects.toThrow(
+      PEOPLE_UNSUPPORTED
+    );
     expect(transport.context).toHaveBeenCalledOnce();
     expect(transport.update).toHaveBeenCalledOnce();
     expect(transport.search).toHaveBeenCalledOnce();
@@ -226,11 +235,14 @@ describe('createRetirableCacheHost', () => {
       })
     ).rejects.toBe(error);
     await expect(
-      people.update({
-        scope,
-        epoch: '00000000-0000-4000-8000-000000000002',
-        action: { kind: 'commit' },
-      })
+      people.update(
+        {
+          scope,
+          epoch: '00000000-0000-4000-8000-000000000002',
+          action: { kind: 'commit' },
+        },
+        TEST_AUTHORITY_GENERATION
+      )
     ).rejects.toBe(error);
     host.dispose();
   });

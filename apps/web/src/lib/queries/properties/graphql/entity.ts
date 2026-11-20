@@ -6,6 +6,7 @@ import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
 } from '@graphql-cache/index';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { propertyValueToApi } from '@property/api/converters';
 import type {
   Property,
@@ -344,7 +345,7 @@ function mutationDisposition(
   if (disposition?.kind === 'committed') {
     return {
       kind: 'committed',
-      property: disposition.data.setEntityProperty,
+      property: disposition.data?.setEntityProperty,
     };
   }
   if (result.error) {
@@ -390,7 +391,8 @@ type EntityPropertyExecution = Parameters<
 async function executeGraphqlEntityPropertyMutation(
   { client, mutation, input, context }: EntityPropertyExecution,
   onEnqueued?: () => void,
-  prepareGrouped?: PrepareGroupedPropertyUpdates
+  prepareGrouped?: PrepareGroupedPropertyUpdates,
+  authorizationEpoch = cacheSessionGeneration.capture()
 ) {
   const args = await prepareMutationArgs(input, prepareGrouped);
   const variables: SetEntityPropertyMutationVariables = {
@@ -410,6 +412,7 @@ async function executeGraphqlEntityPropertyMutation(
         { setEntityProperty: args.optimisticProperty },
         {
           ...args.optimisticCache,
+          authorizationEpoch,
           uuid: entityPropertyOptimisticMutationUuid(args),
           onEnqueued,
         }
@@ -419,7 +422,8 @@ async function executeGraphqlEntityPropertyMutation(
   if (
     disposition.kind === 'queued' &&
     mutationResult.data == null &&
-    args.optimisticProperty
+    args.optimisticProperty &&
+    cacheSessionGeneration.isCurrent(authorizationEpoch)
   ) {
     return {
       ...mutationResult,
@@ -498,6 +502,11 @@ export type BulkSaveEntityPropertiesInput = {
     property: Property | PropertyDefinitionDomain;
     apiValues: PropertyApiValues;
   }>;
+  /**
+   * Runs once every save is accepted locally: written to the cache and queued
+   * for the server. Without a cache it runs when the requests finish.
+   */
+  onAccepted?: () => void;
 };
 
 type GraphqlBulkMutationOptions<Context> = {
@@ -531,6 +540,8 @@ type GraphqlBulkMutationOptions<Context> = {
  * Enqueues every optimistic layer before waiting for HTTP, but keeps the bulk
  * lifecycle pending until queued saves commit or permanently fail. Replayed
  * saves retain their submission payload; settlement events carry no response.
+ * A queued save can wait minutes behind older writes, so callers that lock
+ * their controls release them from the input's `onAccepted`.
  */
 export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
   options: GraphqlBulkMutationOptions<Context> = {}
@@ -544,6 +555,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
     mutation: SetEntityPropertyDocument,
     client: getGraphqlSoupClient(),
     execute: async ({ client, mutation, input, context }) => {
+      const authorizationEpoch = cacheSessionGeneration.capture();
       let latestResult:
         | OperationResult<
             SetEntityPropertyMutation,
@@ -553,6 +565,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
       let permanentError: Error | undefined;
 
       const pending = [];
+      let threw = false;
       const host = getGraphqlCacheHost();
       const prepareGrouped = host
         ? createGroupedPropertyPreparation(host)
@@ -574,7 +587,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
                   context,
                 },
                 acknowledge,
-                prepareGrouped
+                prepareGrouped,
+                authorizationEpoch
               );
               acknowledge();
               const disposition = mutationDisposition(result);
@@ -586,6 +600,7 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
               }
               return { kind: 'result' as const, result };
             } catch (error) {
+              threw = true;
               return {
                 kind: 'error' as const,
                 error:
@@ -600,6 +615,8 @@ export function createGraphqlBulkSaveEntityPropertiesMutation<Context = void>(
           // Preserve layer ordering for relation recipes, not HTTP completion.
           await enqueued;
         }
+        // A save that threw this early was never written or queued.
+        if (!threw) input.onAccepted?.();
         for (const settled of await Promise.all(pending)) {
           if (settled.kind === 'error') {
             permanentError ??= settled.error;
