@@ -120,6 +120,18 @@ fn style_text_counts_as_written_unescaped() {
 }
 
 #[test]
+fn noscript_text_counts_as_written_escaped() {
+    // Scraper serializes with scripting off, which escapes `<noscript>`
+    // text: 4 MiB of `&` is written as 20 MiB of `&amp;`.
+    let html = format!("<noscript>{}</noscript><p>Reply</p>", "&".repeat(4 << 20));
+
+    let sanitized = sanitize_email_html(&html);
+
+    assert!(!sanitized.contains("Reply"));
+    assert!(sanitized.ends_with(CLIPPED_NOTICE));
+}
+
+#[test]
 fn a_bodyless_document_past_the_node_limit_is_clipped_with_a_notice() {
     // A frameset document has no body, so the fragment parse is cleaned.
     let html = format!(

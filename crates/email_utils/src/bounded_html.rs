@@ -315,8 +315,8 @@ impl BoundedSink {
     }
 
     /// Whether html5ever's serializer writes text in `parent` unescaped, as
-    /// it does in raw-text elements (`<noscript>` with scripting on, its
-    /// default).
+    /// it does in raw-text elements. Scraper serializes with scripting off,
+    /// so `<noscript>` text is escaped.
     fn writes_text_raw(&self, parent: NodeId) -> bool {
         let Some(Node::Element(element)) = self.html.tree.get(parent).map(|node| node.value())
         else {
@@ -325,14 +325,7 @@ impl BoundedSink {
         &*element.name.ns == HTML_NAMESPACE
             && matches!(
                 &*element.name.local,
-                "style"
-                    | "script"
-                    | "xmp"
-                    | "iframe"
-                    | "noembed"
-                    | "noframes"
-                    | "plaintext"
-                    | "noscript"
+                "style" | "script" | "xmp" | "iframe" | "noembed" | "noframes" | "plaintext"
             )
     }
 
