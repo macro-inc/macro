@@ -67,6 +67,7 @@ fn a_reused_statement_starts_with_no_bindings_or_metrics() {
     )
     .unwrap();
     query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
     assert_eq!(db.cached_copies(SELECT), 1);
     let statement = prepare(&db, SELECT).unwrap();
     assert_eq!(
@@ -120,6 +121,7 @@ fn a_cached_statement_follows_schema_changes() {
     )
     .unwrap();
     let all = "SELECT * FROM t";
+    query(&db, all, vec![]).unwrap();
     assert_eq!(query(&db, all, vec![]).unwrap()[0].len(), 2);
     assert_eq!(db.cached_copies(all), 1);
     execute(
@@ -136,12 +138,14 @@ fn a_cached_statement_follows_schema_changes() {
 #[test]
 fn a_statement_that_fails_is_not_kept() {
     let db = setup("statement-cache-failure.db");
-    execute(
-        &db,
-        INSERT,
-        vec![Value::from_i64(1), Value::build_text("one")],
-    )
-    .unwrap();
+    for id in [0, 1] {
+        execute(
+            &db,
+            INSERT,
+            vec![Value::from_i64(id), Value::build_text("one")],
+        )
+        .unwrap();
+    }
     assert_eq!(db.cached_copies(INSERT), 1);
     assert!(
         execute(
@@ -160,7 +164,7 @@ fn a_statement_that_fails_is_not_kept() {
     .unwrap();
     assert_eq!(
         ids(&query(&db, SELECT, vec![Value::from_i64(0)]).unwrap()),
-        [1, 2]
+        [0, 1, 2]
     );
 }
 
@@ -176,12 +180,17 @@ fn a_reset_failure_is_not_kept() {
 fn texts_beyond_the_bound_evict_the_least_recently_used() {
     let db = setup("statement-cache-bound.db");
     let text = |n: usize| format!("SELECT id FROM t WHERE id = {n}");
+    let twice = |n: usize| {
+        for _ in 0..2 {
+            query(&db, &text(n), vec![]).unwrap();
+        }
+    };
     for n in 0..CACHED_STATEMENT_TEXTS {
-        query(&db, &text(n), vec![]).unwrap();
+        twice(n);
     }
     // Touch the first so the second is now the oldest.
     query(&db, &text(0), vec![]).unwrap();
-    query(&db, &text(CACHED_STATEMENT_TEXTS), vec![]).unwrap();
+    twice(CACHED_STATEMENT_TEXTS);
     assert_eq!(db.cached_texts(), CACHED_STATEMENT_TEXTS);
     assert_eq!(db.cached_copies(&text(0)), 1);
     assert_eq!(db.cached_copies(&text(1)), 0);
@@ -200,15 +209,18 @@ fn transactions_commit_and_roll_back_through_cached_statements() {
         .map(|_| ())
     })
     .unwrap();
-    let failed: Result<(), _> = write_transaction(&db, || {
-        execute(
-            &db,
-            INSERT,
-            vec![Value::from_i64(2), Value::build_text("two")],
-        )?;
-        Err(TursoStorageError::Database)
-    });
-    assert!(failed.is_err());
+    // Each control text runs twice, so it is kept from its second use.
+    for _ in 0..2 {
+        let failed: Result<(), _> = write_transaction(&db, || {
+            execute(
+                &db,
+                INSERT,
+                vec![Value::from_i64(2), Value::build_text("two")],
+            )?;
+            Err(TursoStorageError::Database)
+        });
+        assert!(failed.is_err());
+    }
     let rows = read_transaction(&db, || query(&db, SELECT, vec![Value::from_i64(0)])).unwrap();
     assert_eq!(ids(&rows), [1]);
     assert_eq!(db.cached_copies("BEGIN"), 1);
@@ -219,10 +231,27 @@ fn transactions_commit_and_roll_back_through_cached_statements() {
 #[test]
 fn releasing_statements_returns_every_connection_reference() {
     let db = setup("statement-cache-release.db");
-    query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    for _ in 0..2 {
+        query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    }
     assert!(Arc::strong_count(&db) > 1);
     db.release_statements();
     assert_eq!(db.cached_texts(), 0);
     assert_eq!(Arc::strong_count(&db), 1);
     db.close().unwrap();
+}
+
+#[test]
+fn a_text_is_kept_only_from_its_second_use() {
+    let db = setup("statement-cache-admission.db");
+    query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    assert_eq!(db.cached_copies(SELECT), 0, "a text run once is not kept");
+    query(&db, SELECT, vec![Value::from_i64(0)]).unwrap();
+    assert_eq!(db.cached_copies(SELECT), 1);
+    let once = |n: usize| format!("SELECT id FROM t WHERE id IN ({n})");
+    for n in 0..CACHED_STATEMENT_TEXTS * 2 {
+        query(&db, &once(n), vec![]).unwrap();
+    }
+    assert_eq!(db.cached_texts(), 1, "one-off texts take no slot");
+    assert_eq!(db.cached_copies(SELECT), 1);
 }

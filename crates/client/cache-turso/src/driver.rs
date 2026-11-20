@@ -1,5 +1,7 @@
 use crate::{PhysicalResetReason, TursoStorageError};
-use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::num::NonZeroUsize;
 use std::sync::{Arc, Mutex};
 use turso_core::{Connection, LimboError, Row, Statement, StepResult, Value};
@@ -9,9 +11,14 @@ pub(crate) type Rows = Vec<Values>;
 
 /// Distinct statement texts kept prepared per connection. Turso parses and
 /// compiles on every `Connection::prepare`; most of the storage's statements
-/// are a fixed set run many times per hydrate and read. Texts built per call
-/// (IN-lists sized to their keys) take further slots and age out first.
-const CACHED_STATEMENT_TEXTS: usize = 192;
+/// are a fixed set of about fifty run many times per hydrate and read. A kept
+/// statement holds tens of KB, and browser memory never shrinks, so the bound
+/// stays near that working set.
+const CACHED_STATEMENT_TEXTS: usize = 96;
+/// Texts remembered as run once. A text is kept only from its second use, so
+/// texts built per call (IN-lists sized to their keys) and one-off schema
+/// reads never take a slot.
+const REMEMBERED_TEXTS: usize = 4096;
 /// Prepared copies kept per text, for a text that runs nested within itself.
 const CACHED_COPIES_PER_TEXT: usize = 2;
 
@@ -79,6 +86,8 @@ impl std::ops::Deref for Db {
 #[derive(Default)]
 struct StatementCache {
     texts: HashMap<String, CachedText>,
+    /// Hashes of texts run once and not kept.
+    seen_once: HashSet<u64>,
     clock: u64,
 }
 
@@ -97,7 +106,11 @@ impl StatementCache {
 
     fn put(&mut self, sql: String, statement: Statement) {
         self.clock += 1;
-        if !self.texts.contains_key(&sql) && self.texts.len() >= CACHED_STATEMENT_TEXTS {
+        let known = self.texts.contains_key(&sql);
+        if !known && !self.seen_before(&sql) {
+            return;
+        }
+        if !known && self.texts.len() >= CACHED_STATEMENT_TEXTS {
             let oldest = self
                 .texts
                 .iter()
@@ -118,8 +131,24 @@ impl StatementCache {
         }
     }
 
+    /// Whether `sql` ran once before; remembers it otherwise.
+    fn seen_before(&mut self, sql: &str) -> bool {
+        let mut hasher = DefaultHasher::new();
+        sql.hash(&mut hasher);
+        let hash = hasher.finish();
+        if self.seen_once.remove(&hash) {
+            return true;
+        }
+        if self.seen_once.len() >= REMEMBERED_TEXTS {
+            self.seen_once.clear();
+        }
+        self.seen_once.insert(hash);
+        false
+    }
+
     fn clear(&mut self) {
         self.texts.clear();
+        self.seen_once.clear();
     }
 
     #[cfg(test)]
