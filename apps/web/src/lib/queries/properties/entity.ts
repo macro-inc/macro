@@ -14,7 +14,10 @@ import { isInstantiatedProperty } from '@property/utils';
 import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
-import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import {
+  getGraphqlSoupClient,
+  hasGraphqlCacheHost,
+} from '@service-storage/graphql-soup';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { type Accessor, batch } from 'solid-js';
 import { propertiesServiceClient } from '../../service-clients/service-properties/client';
@@ -178,6 +181,10 @@ export function useEntityPropertiesQuery(
     refetch() {
       if (entityId().length === 0) return Promise.resolve(undefined);
       return usesGraphql() ? graphqlQuery.refetch() : restQuery.refetch();
+    },
+    /** Whether a saved value reaches this query through the cache's own write. */
+    get isCacheMaintained() {
+      return usesGraphql() && hasGraphqlCacheHost();
     },
   };
 }

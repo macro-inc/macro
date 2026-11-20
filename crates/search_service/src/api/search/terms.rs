@@ -18,8 +18,9 @@ use crate::api::search::simple::SearchError;
 /// Trims a query and rejects one that holds no search term: only whitespace
 /// and the double quotes [`split_search_terms`] strips. One character is
 /// enough: the query builders match a term under three characters as a whole
-/// word in document, chat, call and email content and cap every prefix
-/// expansion, so a short query costs no more than a common longer word.
+/// word in document, chat, call and email content, and expand any other
+/// prefix under three characters to a capped number of terms, so a short
+/// query costs no more than a common longer word.
 pub(in crate::api::search) fn trimmed_query(query: &str) -> Result<&str, SearchError> {
     let query = query.trim();
     if query.chars().all(|c| c.is_whitespace() || c == '"') {

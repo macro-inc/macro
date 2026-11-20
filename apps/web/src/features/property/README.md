@@ -152,13 +152,19 @@ name, values, and dropzone, with bounds refreshed as it resizes.
 Drops append a reference using the same entity-type conversion as the picker,
 ignore duplicate references and the owning entity's type-and-ID pair, and retain
 existing values. Picker saves, drops, chip removal, and row removal share a pending
-state until refresh completes. New references appear immediately as pending
-chips with an inline spinner until saving and refresh finish. Removed references
-disappear immediately; a failed save restores them from the last confirmed values.
-Confirmed edits remain visible if refresh fails, and reconcile when the query
-reflects them. Subsequent edits use these confirmed values rather than stale query
+state only until the save is accepted locally (the bulk save's `onAccepted`:
+written to the cache and queued), never until the server commits it: a queued
+write can wait minutes behind older ones. The save promise the row hands to
+`Property.Root` settles at acceptance too, so an open picker closes then; the
+commit and its reread finish in the background. New references appear immediately as
+pending chips with an inline spinner until then. Removed references
+disappear immediately; a failed save restores the stored values and rereads them
+from the server. Accepted edits stay visible until the query
+reflects them. Subsequent edits use these accepted values rather than stale query
 data. Other values remain visible. Failed saves clear pending additions through
-the existing error flow. Pending chips cannot be opened or removed. Collection rows
+the existing error flow. Pending chips cannot be opened or removed. After a
+committed save the row rereads the server only when the cache does not
+maintain it (REST-backed or uncached clients). Collection rows
 retain their definition identity through query updates so loading state survives
 refreshed property objects. Dropped items use the drag label while preview metadata loads.
 Read-only, metadata, loading, saving, and open-editor states reject drops.
