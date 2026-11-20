@@ -1185,11 +1185,15 @@ fn an_area_reads_its_index_guidance_and_declarations_without_imports() {
     assert_eq!(
         files,
         [
+            "src/entities/task-templates/namespace.d.ts",
             "src/entities/tasks/namespace.d.ts",
+            "src/entities/task-templates/task-template.d.ts",
             "src/entities/tasks/task.d.ts"
         ]
     );
     assert!(reference.contains("class TaskNamespace "));
+    assert!(reference.contains("class TaskTemplateNamespace "));
+    assert!(reference.contains("class TaskTemplate "));
     assert!(!reference.lines().any(|line| line.starts_with("import ")));
     assert!(reference.len() <= ONE_AREA_BYTES + IMPORTED_TYPE_BYTES + 256);
 }

@@ -6024,6 +6024,7 @@
       "crates/system_properties",
       "crates/system_skills",
       "crates/task_dedup",
+      "crates/task_templates",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -16844,6 +16845,13 @@
       "crates/system_properties",
       "crates/task_dedup",
       "crates/trigger_context",
+      "crates/workspace-hack"
+    ],
+    "task_templates": [
+      "crates/document_sub_type",
+      "crates/macro_uuid",
+      "crates/models_properties",
+      "crates/task_templates",
       "crates/workspace-hack"
     ],
     "team_agents": [

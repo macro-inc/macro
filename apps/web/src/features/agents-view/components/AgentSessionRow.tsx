@@ -16,6 +16,8 @@ export function AgentSessionRow(props: {
   state: ConversationState;
   leading: JSX.Element;
   trailing?: JSX.Element;
+  /** Shown at the row's end on hover, above the row's own button. */
+  hoverAction?: JSX.Element;
   timestamp: string;
   unread?: boolean;
   failed?: boolean;
@@ -28,12 +30,13 @@ export function AgentSessionRow(props: {
   onOpen?: (event: MouseEvent) => void;
 }) {
   const metadata = children(() => props.children);
+  const hoverAction = children(() => props.hoverAction);
   return (
     <ViewSidebar.Item
       as="div"
       active={props.active}
       class={cn(
-        'relative text-ink',
+        'group/agent-session relative text-ink',
         props.focused && !props.active && 'not-touch:bg-hover',
         metadata.toArray().length > 0 &&
           'h-auto min-h-12 items-start py-1.5 touch:h-auto',
@@ -74,6 +77,11 @@ export function AgentSessionRow(props: {
         </span>
         {metadata()}
       </span>
+      <Show when={hoverAction()}>
+        <span class="relative hidden shrink-0 group-hover/agent-session:flex">
+          {hoverAction()}
+        </span>
+      </Show>
     </ViewSidebar.Item>
   );
 }

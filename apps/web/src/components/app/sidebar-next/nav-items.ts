@@ -1,5 +1,7 @@
 import { EXTERNAL_VIEW_PATH, LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { homeTabSearch } from '@app/features/home/home-tab-search';
+import type { NewHomeMode } from '@app/features/new-home/core/new-home-mode';
 import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -11,6 +13,7 @@ import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
 import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import HousePlusFillIcon from '@icon/system/fill/house-plus-fill.svg';
 import LightbulbFillIcon from '@icon/system/fill/lightbulb-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import LockFillIcon from '@icon/system/fill/lock-fill.svg';
@@ -26,6 +29,7 @@ import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
 import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
 import HouseIcon from '@icon/system/regular/house.svg';
+import HousePlusIcon from '@icon/system/regular/house-plus.svg';
 import LightbulbIcon from '@icon/system/regular/lightbulb.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import PasswordIcon from '@icon/system/regular/lock.svg';
@@ -45,6 +49,8 @@ import type { SidebarPrefs } from './use-sidebar-prefs';
 export type SidebarNextNavItem = Omit<SidebarItem, 'hotkeyToken'> & {
   /** Only destinations with a registered GoTo shortcut expose a key hint. */
   hotkeyToken?: SidebarItem['hotkeyToken'];
+  /** The view the item opens, when it isn't the item's own id. */
+  viewId?: string;
   icon: NavIcon;
   /** Matching active variant of `icon`, shown while the view is active. */
   iconActive: NavIcon;
@@ -75,6 +81,19 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
     href: LIST_VIEW_PATHS.home,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
+    hotkey: 'h',
+    hotkeyToken: TOKENS.sidebar.goTo.home,
+  },
+  // Right under old Home while both are on the rail; once old Home is off,
+  // New Home is the Home item.
+  {
+    id: 'new-home',
+    get label() {
+      return t('home.newHome');
+    },
+    href: '/new-home',
+    icon: HousePlusIcon,
+    iconActive: HousePlusFillIcon,
     hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.home,
   },
@@ -240,6 +259,8 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
 /** Availability gates for sidebar destinations. */
 export type NavItemGates = {
   showNotifications: boolean;
+  /** Which Homes desktop shows; undefined while its flags load. */
+  homeMode: NewHomeMode | undefined;
   showForYou: boolean;
   showCustomers: boolean;
   showCalls: boolean;
@@ -256,7 +277,10 @@ export const isNavItemAvailable = (
   item: SidebarNextNavItem,
   gates: NavItemGates
 ): boolean => {
-  if (item.id === 'notifications') return gates.showNotifications;
+  if (item.id === 'notifications') {
+    return gates.showNotifications && gates.homeMode === 'off';
+  }
+  if (item.id === 'new-home') return gates.homeMode === 'both';
   if (item.id === 'for-you') return gates.showForYou;
   if (item.id === 'companies') return gates.showCustomers;
   if (item.id === 'calls') return gates.showCalls;
@@ -284,6 +308,30 @@ const withPasswords = (order: readonly string[]): readonly string[] => {
 };
 
 /**
+ * Beside New Home, old Home gives up `g h`, which opens New Home, and opens
+ * on its own tab: New Home's Recent is `/home` too. Once old Home is off,
+ * the Home item opens New Home on the tab it was left on.
+ */
+const withHomeMode = (
+  item: SidebarNextNavItem,
+  gates: NavItemGates
+): SidebarNextNavItem => {
+  if (item.id !== 'home') return item;
+  if (gates.homeMode === 'both') {
+    return {
+      ...item,
+      hotkey: undefined,
+      hotkeyToken: undefined,
+      search: { [homeTabSearch.namespace]: undefined },
+    };
+  }
+  if (gates.homeMode === 'new-only') {
+    return { ...item, viewId: 'new-home', href: '/new-home' };
+  }
+  return item;
+};
+
+/**
  * Apply the user's custom order. Home stays first. Ids absent from `order`
  * keep their relative catalog position after ordered ones.
  */
@@ -301,6 +349,14 @@ export const orderNavItems = (
   if (home) {
     result.push(home);
     used.add('home');
+  }
+
+  // New Home sits right under Home, ahead of an order saved before it
+  // existed, until the person moves it themselves.
+  const newHome = byId.get('new-home');
+  if (newHome && !order.includes('new-home')) {
+    result.push(newHome);
+    used.add('new-home');
   }
 
   // For you sits under Home until the person gives it a place of its own.
@@ -334,7 +390,9 @@ export const customizableNavItems = (
   gates: NavItemGates
 ): SidebarNextNavItem[] =>
   orderNavItems(
-    SIDEBAR_NEXT_NAV_ITEMS.filter((item) => isNavItemAvailable(item, gates)),
+    SIDEBAR_NEXT_NAV_ITEMS.filter((item) =>
+      isNavItemAvailable(item, gates)
+    ).map((item) => withHomeMode(item, gates)),
     gates.prefs.order
   );
 

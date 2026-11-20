@@ -75,7 +75,10 @@ where
     ) -> Result<Vec<CategoryMessage>, EmailApiError> {
         if mailbox.provider == UserProvider::Imap {
             use email::domain::mailbox::MailboxGateway;
-            let folders = self.imap.folders(mailbox.key).await?;
+            let folders = match self.imap.folders(mailbox.key).await? {
+                MailFolderCatalog::Folders(folders) => folders,
+                MailFolderCatalog::NoMailbox { .. } => return Err(EmailApiError::NotFound),
+            };
             let mut result = Vec::new();
             for folder in &folders {
                 let mut position = None;

@@ -1046,6 +1046,8 @@ before suggestions loaded. Name-word prefixes outrank substring matches;
 unlike the name finds the contact, below name matches. Within each name tier, and on empty
 input, personal suggestions are recent-first rather than domain/brevity-weighted.
 A chip shows the name followed by the address in muted ink.
+A quick click or tap in the message body moves the caret where it lands; check
+it by tapping mid-word and on another line of a two-line body, then typing.
 On a phone, focus the message body to fold populated recipient rows. Tap a
 folded To, Cc, or Bcc summary and check that its address input has focus.
 Main new-email and reply/forward To/Cc/Bcc pickers now query bounded personal

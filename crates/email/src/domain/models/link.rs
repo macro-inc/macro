@@ -60,6 +60,9 @@ pub enum EmailSyncStatus {
     Error,
     /// The provider grant must be reauthorized before synchronization can resume.
     NeedsReauth,
+    /// The provider serves no mailbox for the account (an Outlook account
+    /// without an Exchange Online mailbox); synchronization waits for one.
+    MailboxUnavailable,
     /// Synchronization is disabled for the inbox.
     Inactive,
 }
@@ -69,6 +72,7 @@ impl EmailSyncStatus {
     pub fn derive(
         is_sync_active: bool,
         needs_reauth: bool,
+        mailbox_unavailable: bool,
         latest_backfill_status: Option<EmailBackfillStatus>,
     ) -> Self {
         if !is_sync_active {
@@ -77,6 +81,10 @@ impl EmailSyncStatus {
 
         if needs_reauth {
             return Self::NeedsReauth;
+        }
+
+        if mailbox_unavailable {
+            return Self::MailboxUnavailable;
         }
 
         match latest_backfill_status {
@@ -116,6 +124,8 @@ pub struct EmailInboxDetails {
     pub is_sync_active: bool,
     /// Whether the provider grant must be reauthorized.
     pub needs_reauth: bool,
+    /// Whether the provider serves no mailbox for the account.
+    pub mailbox_unavailable: bool,
     /// Inbox signature settings.
     pub settings: UserEmailLinkSettings,
     /// Whether this is the owner's primary inbox.
@@ -189,6 +199,7 @@ impl UserEmailLink {
             sync_status: EmailSyncStatus::derive(
                 details.is_sync_active,
                 details.needs_reauth,
+                details.mailbox_unavailable,
                 details.latest_backfill_status,
             ),
             needs_reauth: details.needs_reauth,

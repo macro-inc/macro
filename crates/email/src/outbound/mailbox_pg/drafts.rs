@@ -152,7 +152,7 @@ impl DraftRepository for PgMailboxSync {
                         ORDER BY d.available_at,d.message_id LIMIT 1)
                     ) scoped ORDER BY scoped.available_at,scoped.message_id LIMIT 1
                 ) head
-                WHERE l.is_sync_active AND l.provider=$2::text::email_user_provider_enum
+                WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider=$2::text::email_user_provider_enum
                 ORDER BY head.available_at,head.message_id LIMIT 1
             "#,mode==DraftClaimMode::All,self.provider.as_str(),&skipped).fetch_optional(&mut *tx).await.map_err(db_error)?;
             let Some(head) = head else {
@@ -162,7 +162,7 @@ impl DraftRepository for PgMailboxSync {
             WITH candidate AS (
                 SELECT d.message_id FROM email_mailbox_drafts d
                 WHERE d.message_id=$4 AND d.state IN ('pending','running','synced')
-                    AND EXISTS(SELECT 1 FROM email_links l WHERE l.id=d.link_id AND l.is_sync_active
+                    AND EXISTS(SELECT 1 FROM email_links l WHERE l.id=d.link_id AND l.is_sync_active AND l.mailbox_unavailable_at IS NULL
                         AND l.provider=$3::text::email_user_provider_enum AND l.sync_generation=d.generation OFFSET 0)
                     AND (d.state IN ('pending','running') OR (d.state = 'synced' AND EXISTS (
                         SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = d.message_id AND s.link_id = d.link_id

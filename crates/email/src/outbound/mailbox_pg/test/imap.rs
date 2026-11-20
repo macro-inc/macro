@@ -4,12 +4,14 @@ use super::*;
 async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_independent_switches(
     db: PgPool,
 ) {
+    use crate::domain::mailbox::progress::MailboxProgressRepository;
+
     let (outlook, outlook_link) = fixture(&db).await;
     let imap_link = Uuid::from_u128(42);
     sqlx::query!("INSERT INTO email_links(id,macro_id,fusionauth_user_id,email_address,provider,grant_generation) VALUES($1,'macro|imap@example.com','imap-owner','imap@example.com','IMAP',1)",imap_link).execute(&db).await.unwrap();
     sqlx::query!("INSERT INTO email_sync_streams(id,link_id,generation,kind,scope_id) VALUES($1,$2,1,'mail_folder','folder')",Uuid::from_u128(43),imap_link).execute(&db).await.unwrap();
     let runtime = runtime::MailboxRuntime::default();
-    let imap = PgMailboxSync::new(db)
+    let imap = PgMailboxSync::new(db.clone())
         .with_provider(crate::domain::models::UserProvider::Imap)
         .with_runtime(runtime.clone());
     assert!(
@@ -31,6 +33,14 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
             .unwrap()
             .is_none()
     );
+    // Graph's missing-mailbox diagnosis must not pause the IMAP inbox.
+    sqlx::query!(
+        "UPDATE email_links SET mailbox_unavailable_at = now() WHERE id = $1",
+        outlook_link
+    )
+    .execute(&db)
+    .await
+    .unwrap();
     runtime.set(true, false);
     let lease = imap
         .claim_stream(Uuid::from_u128(47), StreamKind::MailFolder)
@@ -38,6 +48,10 @@ async fn imap_and_outlook_workers_claim_only_their_own_provider_and_observe_inde
         .unwrap()
         .unwrap();
     assert_eq!(lease.mailbox.link_id, imap_link);
+    let backlogs = imap.backlogs().await.unwrap();
+    assert_eq!(backlogs.len(), 1);
+    assert_eq!(backlogs[0].link_id, imap_link);
+    assert!(!backlogs[0].mailbox_unavailable);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -180,7 +194,10 @@ impl MailboxGateway for MalformedThenValid {
     async fn folders(
         &self,
         _: MailboxKey,
-    ) -> Result<Vec<MailFolder>, email_api_client::domain::models::EmailApiError> {
+    ) -> Result<
+        email_api_client::domain::models::MailFolderCatalog,
+        email_api_client::domain::models::EmailApiError,
+    > {
         unreachable!()
     }
     async fn changes(

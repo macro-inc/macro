@@ -223,6 +223,10 @@ impl AgentApiKeys for FakeApiKeys {
     }
 }
 
+/// A seed with this name fails its repo create after the call went out, as
+/// when the answer is lost: the repo may exist.
+const LOST_REPO_ANSWER: &str = "Lost Answer";
+
 struct FakeRepos(Journal);
 
 impl AgentRepos for FakeRepos {
@@ -233,6 +237,11 @@ impl AgentRepos for FakeRepos {
         seed: &PersonaSeed,
     ) -> Result<AgentRepo, TeamAgentError> {
         self.0.record(format!("repo.create {}", seed.name));
+        if seed.name == LOST_REPO_ANSWER {
+            return Err(TeamAgentError::RepoUnavailable(
+                rootcause::Report::new(std::io::Error::other("answer lost")).into_dynamic(),
+            ));
+        }
         Ok(AgentRepo {
             url: "https://git.example.com/ada.git".to_owned(),
             token: RepoToken::generate(),
@@ -578,6 +587,33 @@ async fn a_refused_purchase_takes_back_the_repo_seat_and_account() {
         ]
     );
     assert!(service.repository.agents.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_repo_create_whose_answer_is_lost_is_still_undone() {
+    let (service, journal) = service(true, FakeComputers::default());
+
+    let result = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                name: LOST_REPO_ANSWER.to_owned(),
+                ..request()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(TeamAgentError::RepoUnavailable(_))));
+    let entries = journal.entries();
+    assert_eq!(
+        entries[entries.len() - 4..],
+        [
+            format!("repo.create {LOST_REPO_ANSWER}"),
+            "repo.delete".to_owned(),
+            "team.undo".to_owned(),
+            "account.delete".to_owned(),
+        ]
+    );
 }
 
 /// Agent teammates on but computers off for the admin: refused before an

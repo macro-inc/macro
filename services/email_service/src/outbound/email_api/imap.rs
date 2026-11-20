@@ -11,6 +11,8 @@ use imap_service_client::{self as models, ImapServiceClient};
 
 mod drafts;
 mod mime;
+#[cfg(test)]
+mod test;
 
 /// The IMAP adapter uses a fenced mailbox binding, never an OAuth token.
 #[derive(Clone)]
@@ -92,9 +94,10 @@ impl ImapMailboxGateway {
 
 impl MailboxGateway for ImapMailboxGateway {
     #[tracing::instrument(skip_all, fields(mailbox.link_id = %mailbox.link_id), err)]
-    async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
+    async fn folders(&self, mailbox: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         let result = self.client.folders(binding(mailbox)).await;
-        self.record(mailbox, result)
+        let folders = self
+            .record(mailbox, result)
             .await?
             .into_iter()
             .map(|folder| {
@@ -116,7 +119,8 @@ impl MailboxGateway for ImapMailboxGateway {
                     total_items: folder.total_items,
                 })
             })
-            .collect()
+            .collect::<Result<Vec<_>, EmailApiError>>()?;
+        Ok(MailFolderCatalog::Folders(folders))
     }
     #[tracing::instrument(skip_all, fields(mailbox.link_id = %mailbox.link_id), err)]
     async fn changes(
