@@ -101,6 +101,30 @@ function missChannel() {
   for (const listener of detail.listeners) listener();
 }
 
+/** The by-id read failed. */
+function failDetail() {
+  detail.pending = false;
+  detail.error = new Error('unavailable');
+  for (const listener of detail.listeners) listener();
+}
+
+function restRow(
+  userId: string,
+  joinedAt: string,
+  role: ChannelParticipant['role'] = 'member'
+) {
+  return {
+    channel_id: 'channel-1',
+    user_id: userId,
+    role,
+    joined_at: joinedAt,
+  };
+}
+
+function restClient() {
+  return testQueryClient.current as QueryClient;
+}
+
 function mount() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -217,6 +241,65 @@ describe('useChannelParticipantsQuery', () => {
       participant('member', '2026-01-02T00:00:00Z'),
     ]);
     expect(ids()).toEqual(['owner', 'member']);
+  });
+
+  it('follows REST while the GraphQL read keeps failing', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+    );
+    const { query, ids } = mount();
+    failDetail();
+    await waitFor(() => expect(ids()).toEqual(['owner']));
+
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([
+        restRow('owner', '2026-01-01T00:00:00Z', 'owner'),
+        restRow('member', '2026-01-02T00:00:00Z'),
+      ])
+    );
+    await restClient().invalidateQueries();
+
+    await waitFor(() => expect(ids()).toEqual(['owner', 'member']));
+    expect(query.isSuccess).toBe(true);
+  });
+
+  it('keeps reading REST for a channel the soup read leaves out when a refresh fails', async () => {
+    let answer!: (value: unknown) => void;
+    storage.getChannelParticipants.mockReturnValue(
+      new Promise((resolve) => {
+        answer = resolve;
+      })
+    );
+    const { query, ids } = mount();
+    missChannel();
+    await waitFor(() =>
+      expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1)
+    );
+
+    failDetail();
+    expect(query.isPending).toBe(true);
+    answer(ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')]));
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
+  });
+
+  it('reads REST when a read that answered before fails after going pending again', async () => {
+    storage.getChannelParticipants.mockResolvedValue(
+      ok([restRow('owner', '2026-01-01T00:00:00Z', 'owner')])
+    );
+    setDetail([participant('owner', '2026-01-01T00:00:00Z', 'owner')]);
+    const { query, ids } = mount();
+    expect(ids()).toEqual(['owner']);
+
+    // A replaced GraphQL client starts its read over.
+    setDetail(undefined);
+    expect(query.isPending).toBe(true);
+    failDetail();
+
+    await waitFor(() => expect(query.isSuccess).toBe(true));
+    expect(ids()).toEqual(['owner']);
+    expect(storage.getChannelParticipants).toHaveBeenCalledTimes(1);
   });
 
   it('has no participants for a channel the viewer cannot read', async () => {

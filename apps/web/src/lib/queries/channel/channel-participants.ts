@@ -205,28 +205,34 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
     }),
     () => queryClient
   );
-  // The channel whose by-id read last answered without an error.
-  const answered = createMemo<string | undefined>((previous) => {
+  // What the channel's by-id read last answered for the open channel.
+  const answered = createMemo<
+    { channelId: string; hasChannel: boolean } | undefined
+  >((previous) => {
+    if (query.isPending) return undefined;
     const id = channelId();
-    if (query.isPending || query.error)
-      return previous === id ? previous : undefined;
-    return id;
-  });
-  // The soup read leaves out public channels the viewer has not joined, which
-  // REST lets them read, so a by-id read that came back without the channel
-  // asks REST. So does one that failed before it ever answered, since nothing
-  // retries a failed read; only a later revalidation reads it again. A failed
-  // refresh keeps what the read answered (see `confirmed`).
-  const missesChannel = () => {
-    const id = channelId();
-    if (!id || query.isPending) return false;
-    if (query.error) return answered() !== id;
-    return !query.data?.entities.some(
+    if (query.error) return previous?.channelId === id ? previous : undefined;
+    const hasChannel = !!query.data?.entities.some(
       (entity) => entity.type === 'channel' && entity.id === id
     );
+    return { channelId: id, hasChannel };
+  });
+  // The soup read leaves out public channels the viewer has not joined, which
+  // REST lets them read, so a read that answered without the channel asks
+  // REST, and keeps asking through failed refreshes. So does a read that
+  // failed before it ever answered, since nothing retries it; REST checks
+  // access itself, as it did when it was the only reader. A failed refresh of
+  // a channel the read returned keeps its roster (see `confirmed`).
+  const missesChannel = () => {
+    if (!channelId() || query.isPending) return false;
+    return answered()?.hasChannel !== true;
   };
   const fallback = useQuery(() =>
-    channelParticipantsRestFallbackOptions(channelId(), missesChannel())
+    channelParticipantsRestFallbackOptions(
+      channelId(),
+      missesChannel(),
+      query.error ? 'channel read failed' : 'channel not in soup'
+    )
   );
   const confirmed = createMemo<
     | { channelId: string; participants: ChannelParticipant[] | undefined }
@@ -234,22 +240,23 @@ export function useChannelParticipantsQuery(channelId: Accessor<string>) {
   >((previous) => {
     if (query.isPending) return undefined;
     const id = channelId();
+    if (missesChannel()) {
+      // A failed REST refetch keeps its last participants. Rows still from the
+      // previous channel's REST read never show for this one.
+      const rows = fallback.isPending ? undefined : fallback.data;
+      const own = rows?.every((participant) => participant.channel_id === id);
+      return { channelId: id, participants: own ? rows : undefined };
+    }
     // A failed refresh keeps the participants on screen.
-    if (
-      query.error &&
-      previous?.channelId === id &&
-      previous.participants !== undefined
-    )
-      return previous;
+    if (query.error)
+      return previous?.channelId === id
+        ? previous
+        : { channelId: id, participants: undefined };
     const entity = query.data?.entities.find(
       (entity): entity is ChannelEntity =>
         entity.type === 'channel' && entity.id === id
     );
-    if (entity) return { channelId: id, participants: entity.participants };
-    // A failed REST refetch keeps its last participants.
-    const fromRest =
-      missesChannel() && !fallback.isPending ? fallback.data : undefined;
-    return { channelId: id, participants: fromRest };
+    return { channelId: id, participants: entity?.participants };
   });
   // Ticks when a succeeded change's time to show runs out.
   const [tick, setTick] = createSignal(0);
