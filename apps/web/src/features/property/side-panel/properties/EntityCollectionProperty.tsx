@@ -12,12 +12,14 @@ import DropIcon from '@icon/system/regular/tray-arrow-down.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
-import { usePropertyEntityDisplay } from '@property/hooks';
+import { usePropertyEntityLink } from '@property/hooks/usePropertyEntityLink';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues } from '@property/utils';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -25,14 +27,20 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   type JSX,
+  Match,
   Show,
   type Signal,
+  Switch,
 } from 'solid-js';
 import { createEntityCollectionDropTarget } from './entity-collection-drop';
 
 type PendingEntityReference = EntityReference & { displayName?: string };
+
+/** A chip keeps its element while its reference object is replaced by a copy. */
+function entityReferenceKey(reference: EntityReference) {
+  return `${reference.entity_type}:${reference.entity_id}:${reference.specific_message_id ?? ''}`;
+}
 
 function sameEntityReference(left: EntityReference, right: EntityReference) {
   return (
@@ -42,12 +50,19 @@ function sameEntityReference(left: EntityReference, right: EntityReference) {
   );
 }
 
+export type CollectionSaveOutcome = 'saved' | 'failed';
+
 export function EntityCollectionProperty(props: {
   entityId: string;
   loading?: boolean;
-  onRefresh: () => Promise<unknown>;
+  onRefresh: (outcome: CollectionSaveOutcome) => Promise<unknown>;
   property: Property;
-  onSave: (property: Property, values: PropertyApiValues) => Promise<void>;
+  /** `onAccepted` runs once the save is accepted locally, before it commits. */
+  onSave: (
+    property: Property,
+    values: PropertyApiValues,
+    onAccepted: () => void
+  ) => Promise<void>;
   saving: Signal<boolean>;
   /** Row actions shown before the add button; the trash goes here. */
   actionsBeforeAdd: JSX.Element;
@@ -89,15 +104,20 @@ export function EntityCollectionProperty(props: {
   const [pendingRemovals, setPendingRemovals] = createSignal<EntityReference[]>(
     []
   );
-  const saveProperty = async (
+  let latestSave = 0;
+  const saveProperty = (
     property: Property,
     values: PropertyApiValues,
     displayName?: string
-  ) => {
+  ): Promise<void> => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
-      return;
-    const currentRefs = getEntityValues(property);
-    const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
+      return Promise.resolve();
+    const currentRefs = copyEntityReferences(getEntityValues(property));
+    const nextRefs = copyEntityReferences(
+      values.valueType === 'ENTITY' ? (values.refs ?? []) : []
+    );
+    latestSave += 1;
+    const save = latestSave;
     batch(() => {
       setPendingReferences(
         nextRefs
@@ -117,17 +137,60 @@ export function EntityCollectionProperty(props: {
       );
       setIsSaving(true);
     });
-    try {
-      await props.onSave(property, values);
-      setConfirmedReferences(nextRefs);
-      await props.onRefresh();
-    } finally {
-      batch(() => {
-        setPendingReferences([]);
-        setPendingRemovals([]);
-        setIsSaving(false);
-      });
-    }
+
+    // The server commit can wait minutes behind older queued writes, so the
+    // row shows the new values and unlocks as soon as the save is accepted
+    // locally, and the returned promise settles then too: an open picker
+    // closes and drops its own copy of the values. The commit finishes in the
+    // background. A later save of this row then owns its state.
+    return new Promise<void>((resolve, reject) => {
+      let accepted = false;
+      const accept = () => {
+        if (accepted) return;
+        accepted = true;
+        if (save === latestSave) {
+          batch(() => {
+            setConfirmedReferences(nextRefs);
+            setPendingReferences([]);
+            setPendingRemovals([]);
+            setIsSaving(false);
+          });
+        }
+        resolve();
+      };
+
+      const commit = async () => {
+        try {
+          await props.onSave(
+            property,
+            values.valueType === 'ENTITY'
+              ? { ...values, refs: nextRefs.length > 0 ? nextRefs : null }
+              : values,
+            accept
+          );
+        } catch (error) {
+          // The save's own error handling has told the user. An accepted row
+          // is already unlocked and may be mid-removal: only its values go
+          // back to what is stored.
+          if (save === latestSave) {
+            batch(() => {
+              setConfirmedReferences(undefined);
+              if (accepted) return;
+              setPendingReferences([]);
+              setPendingRemovals([]);
+              setIsSaving(false);
+            });
+          }
+          reject(error);
+          await props.onRefresh('failed');
+          return;
+        }
+        accept();
+        await props.onRefresh('saved');
+      };
+
+      fireAndForget(commit(), 'property-collection-save');
+    });
   };
 
   return (
@@ -301,29 +364,25 @@ function EntityCollectionPropertyBody(props: {
           )}
           aria-busy={isSaving()}
         >
-          <For each={displayedEntities()}>
+          <Key each={displayedEntities()} by={entityReferenceKey}>
             {(entityRef) => (
               <NonUserEntityChip
                 property={props.property}
-                entityId={entityRef.entity_id}
-                entityType={entityRef.entity_type}
-                specificMessageId={entityRef.specific_message_id}
-                pending={isPending(entityRef)}
-                pendingLabel={pendingReference(entityRef)?.displayName}
+                entityId={entityRef().entity_id}
+                entityType={entityRef().entity_type}
+                specificMessageId={entityRef().specific_message_id}
+                pending={isPending(entityRef())}
+                pendingLabel={pendingReference(entityRef())?.displayName}
                 canEdit={!isReadOnly() && !props.loading && !isSaving()}
                 onRemove={() =>
                   fireAndForget(
-                    handleRemoveEntity(entityRef),
+                    handleRemoveEntity(entityRef()),
                     'property-collection-remove'
                   )
                 }
-                onEdit={(anchor) => {
-                  if (isReadOnly() || props.loading || isSaving()) return;
-                  propertyCtx.openEditor(anchor);
-                }}
               />
             )}
-          </For>
+          </Key>
         </div>
         <span
           class="sr-only"
@@ -356,7 +415,11 @@ function EntityCollectionPropertyBody(props: {
   );
 }
 
-export function NonUserEntityChip(props: {
+/**
+ * One value of a collection. Its name opens the item (Shift: a new split) and
+ * never the picker, which belongs to the row's Add button.
+ */
+function NonUserEntityChip(props: {
   property: Property;
   entityId: string;
   entityType: EntityType;
@@ -365,37 +428,35 @@ export function NonUserEntityChip(props: {
   canEdit?: boolean;
   pendingLabel?: string;
   onRemove?: () => void;
-  onEdit?: (anchor?: HTMLElement) => void;
 }) {
-  let containerRef: HTMLDivElement | undefined;
-  const { name, icon } = usePropertyEntityDisplay(
-    () => props.entityId,
-    () => props.entityType,
-    {
-      specificMessageId: () => props.specificMessageId,
-    }
-  );
+  const { display, canOpen, open } = usePropertyEntityLink(() => ({
+    entity_id: props.entityId,
+    entity_type: props.entityType,
+    specific_message_id: props.specificMessageId,
+  }));
+  const { name, icon } = display;
   const previewBlockType = () =>
     getDocumentPreviewFallbackBlockType(props.entityType);
   const isDocumentPreviewEntity = () =>
     props.entityType === 'DOCUMENT' || props.entityType === 'TASK';
-
-  const openEditor = (event: MouseEvent) => {
-    if (!props.canEdit || !props.onEdit) return;
-    event.stopPropagation();
-    props.onEdit(containerRef);
-  };
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
 
   return (
     <Layer depth={3}>
       <div
-        ref={containerRef}
         class="group/collection-item relative inline-flex min-w-0 max-w-full border h-7 touch:h-9 items-stretch border-edge-muted rounded-md bg-surface text-ink overflow-clip"
         aria-busy={props.pending || undefined}
       >
-        <Show
-          when={!props.pending}
+        <Switch
           fallback={
+            // Nothing to open: a person, a call record, a calendar event.
+            <span class="flex min-w-0 max-w-full items-center gap-1.5 px-2">
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </span>
+          }
+        >
+          <Match when={props.pending}>
             <span class="flex min-w-0 items-center gap-1.5 px-2 text-ink-muted">
               <span class="shrink-0 flex items-center">{icon()}</span>
               <span class="min-w-0 truncate">
@@ -406,48 +467,44 @@ export function NonUserEntityChip(props: {
                 aria-hidden="true"
               />
             </span>
-          }
-        >
-          <Show
-            when={isDocumentPreviewEntity()}
-            fallback={
-              <button
-                type="button"
-                class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
-                onClick={openEditor}
-                disabled={!props.canEdit}
-              >
-                <span class="shrink-0 flex items-center">{icon()}</span>
-                <span class="min-w-0 truncate">{name()}</span>
-              </button>
-            }
-          >
+          </Match>
+          <Match when={isDocumentPreviewEntity()}>
             <DocumentEntityChipButton
               entityId={props.entityId}
               fallbackBlockType={previewBlockType()}
               icon={icon()}
               name={name()}
             />
-          </Show>
-          <Show when={props.canEdit && props.onRemove}>
-            {/* Overlays the name's end on hover; on touch it is always shown, so it
-                takes its own space instead of covering the name. */}
-            <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
-              <Button
-                variant="ghost"
-                type="button"
-                size="icon-sm"
-                class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  props.onRemove?.();
-                }}
-                aria-label={`Remove ${name()}`}
-              >
-                <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
-              </Button>
-            </div>
-          </Show>
+          </Match>
+          <Match when={canOpen()}>
+            <button
+              type="button"
+              class="flex min-w-0 max-w-full items-center gap-1.5 px-2 text-left"
+              {...navHandlers}
+            >
+              <span class="shrink-0 flex items-center">{icon()}</span>
+              <span class="min-w-0 truncate">{name()}</span>
+            </button>
+          </Match>
+        </Switch>
+        <Show when={!props.pending && props.canEdit && props.onRemove}>
+          {/* Overlays the name's end on hover; on touch it is always shown, so it
+              takes its own space instead of covering the name. */}
+          <div class="absolute inset-y-0 right-0 flex shrink-0 border-l border-edge-muted bg-surface pointer-events-none opacity-0 not-touch:group-hover/collection-item:pointer-events-auto not-touch:group-hover/collection-item:opacity-100 group-focus-within/collection-item:pointer-events-auto group-focus-within/collection-item:opacity-100 touch:static touch:pointer-events-auto touch:opacity-100">
+            <Button
+              variant="ghost"
+              type="button"
+              size="icon-sm"
+              class="flex w-6 p-1 h-full shrink-0 rounded-none text-ink-muted not-disabled:hover:text-failure-ink"
+              onClick={(event) => {
+                event.stopPropagation();
+                props.onRemove?.();
+              }}
+              aria-label={`Remove ${name()}`}
+            >
+              <DeleteIcon class="size-3.5 touch:size-4 shrink-0 pointer-events-none" />
+            </Button>
+          </div>
         </Show>
       </div>
     </Layer>

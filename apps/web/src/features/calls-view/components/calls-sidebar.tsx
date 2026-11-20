@@ -6,6 +6,7 @@ import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import { SidebarRoutineSuggestions } from '@app/features/routine-suggestions/routine-suggestions';
+import { t } from '@app/lib/i18n';
 import { usePreference } from '@app/preferences/use-preference';
 import { fireAndForget } from '@core/util/fireAndForget';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
@@ -75,6 +76,7 @@ function Row(props: {
 }
 
 function Section(props: {
+  id: SectionId;
   title: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -82,13 +84,17 @@ function Section(props: {
 }) {
   return (
     <CollapsibleSection.Root
+      sectionId={props.id}
+      sectionLabel={props.title}
       open={props.open}
       onOpenChange={props.onOpenChange}
     >
-      <CollapsibleSection.Trigger>
-        <span class="min-w-0 truncate">{props.title}</span>
-        <CollapsibleSection.Indicator />
-      </CollapsibleSection.Trigger>
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">{props.title}</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+      </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <ViewSidebar.Nav aria-label={props.title}>
           {props.children}
@@ -154,7 +160,7 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
   };
 
   return (
-    <ViewSidebar.Root aria-label="Calls navigation">
+    <ViewSidebar.Root reorderId="calls" aria-label="Calls navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
@@ -167,23 +173,30 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
 
       <ViewSidebar.Content>
         <SidebarRoutineSuggestions surface="calls" />
-        <ViewSidebar.Nav aria-label="Call views">
-          <For each={VIEW_TAB_LISTS.calls}>
-            {(tab) => (
-              <Row
-                active={activeTab() === tab.value}
-                icon={TAB_ICONS[tab.value] ?? PhoneIcon}
-                label={tab.label}
-                onClick={() => {
-                  props.onNavigate();
-                  applyTabPreset('calls', tab.value);
-                }}
-              />
-            )}
-          </For>
-        </ViewSidebar.Nav>
+        <ViewSidebar.Section
+          id="views"
+          label={t('viewMenus.callViews')}
+          headerless
+        >
+          <ViewSidebar.Nav aria-label="Call views">
+            <For each={VIEW_TAB_LISTS.calls}>
+              {(tab) => (
+                <Row
+                  active={activeTab() === tab.value}
+                  icon={TAB_ICONS[tab.value] ?? PhoneIcon}
+                  label={tab.label}
+                  onClick={() => {
+                    props.onNavigate();
+                    applyTabPreset('calls', tab.value);
+                  }}
+                />
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </ViewSidebar.Section>
 
         <Section
+          id="type"
           title="Type"
           open={isOpen('type')}
           onOpenChange={(open) => setOpen('type', open)}
@@ -202,6 +215,7 @@ export function CallsSidebar(props: { onNavigate: () => void }) {
 
         <Show when={channels().length > 0}>
           <Section
+            id="channels"
             title="Channels"
             open={isOpen('channels')}
             onOpenChange={(open) => setOpen('channels', open)}

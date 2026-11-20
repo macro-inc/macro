@@ -3,14 +3,13 @@ import {
   normalizeRGBA,
   type OKLCH,
   parseRGBA,
-  type RGBA,
   rgbaToOklch,
 } from '../core/colors';
 
 interface TextNodeContrast {
   text: string;
   fg: OKLCH | null;
-  bg: OKLCH | null;
+  onBackground: boolean;
   node: Text;
   insideAnchor: boolean;
 }
@@ -43,8 +42,8 @@ export function processEmailColors(root: Node, theme: ThemeColorParams) {
   stripContentBackgrounds(root);
   const textNodeColors = computeTextNodeColor(root);
   textNodeColors.forEach((textNodeColor) => {
-    // if the text has a background color set, trust that the email sender's choices and don't change anything
-    if ((textNodeColor.bg?.a ?? 0) > 0) return;
+    // if the text has a background set, trust that the email sender's choices and don't change anything
+    if (textNodeColor.onBackground) return;
     if (!textNodeColor.fg) return;
     // if the text is inside an anchor tag with a chromatic color, use the accent color;
     // grey/monochrome links fall through to normal text processing
@@ -110,31 +109,70 @@ function setAnchorStyle(node: Node, style: string, value: string) {
 }
 
 const LIGHT_BG_THRESHOLD = 0.85;
+const COLOR_FUNCTION =
+  /\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\([^)]*\)/gi;
+
+function isLightColor(color: string): boolean {
+  if (!color.startsWith('rgb')) return false;
+  const rgba = normalizeRGBA(parseRGBA(color));
+  if (!rgba || rgba.a === 0) return false;
+  const oklch = rgbaToOklch(rgba);
+  return !!oklch && oklch.l > LIGHT_BG_THRESHOLD;
+}
+
+/** A computed background-image made only of gradients whose visible stops are
+ *  all light. Image URLs and colors we can't read keep the sender's design. */
+function isLightGradient(backgroundImage: string): boolean {
+  if (backgroundImage === 'none' || backgroundImage.includes('url(')) {
+    return false;
+  }
+  const stops = backgroundImage.match(COLOR_FUNCTION) ?? [];
+  return (
+    stops.length > 0 &&
+    stops.every((stop) => {
+      const rgba = parseRGBA(stop);
+      return rgba?.a === 0 || isLightColor(stop);
+    })
+  );
+}
+
+/** True when the element paints its own background: an opaque color, a
+ *  gradient, or an image. */
+function hasOwnBackground(style: {
+  backgroundColor: string;
+  backgroundImage: string;
+}): boolean {
+  if (style.backgroundImage !== 'none') return true;
+  const color = normalizeRGBA(parseRGBA(style.backgroundColor));
+  return !!color && color.a > 0;
+}
 
 /** Remove light/white backgrounds from all elements, preserving colored/dark backgrounds (buttons, banners).
+ *  Light gradients count as light backgrounds; background images stay.
  *  Uses getComputedStyle to resolve all color formats (named colors, hex, rgb, etc.) */
 function stripContentBackgrounds(root: Node) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let el = walker.nextNode();
   while (el) {
     if (el instanceof HTMLElement) {
-      const bgColor = getComputedStyle(el).backgroundColor;
-      if (bgColor && bgColor.startsWith('rgb')) {
-        const rgba = normalizeRGBA(parseRGBA(bgColor));
-        if (rgba && rgba.a > 0) {
-          const oklch = rgbaToOklch(rgba);
-          if (
-            oklch &&
-            oklch.l > LIGHT_BG_THRESHOLD &&
-            !hasOpaqueAncestorBackground(el, root)
-          ) {
-            el.style.setProperty(
-              'background-color',
-              'transparent',
-              'important'
-            );
-            el.removeAttribute('bgcolor');
-          }
+      const style = getComputedStyle(el);
+      const lightColor = isLightColor(style.backgroundColor);
+      // A light gradient over the element's own dark color is one layer of
+      // the sender's design; removing it alone would expose the dark color.
+      const ownColor = normalizeRGBA(parseRGBA(style.backgroundColor));
+      const lightGradient =
+        isLightGradient(style.backgroundImage) &&
+        (lightColor || !ownColor || ownColor.a === 0);
+      if (
+        (lightColor || lightGradient) &&
+        !hasOpaqueAncestorBackground(el, root)
+      ) {
+        if (lightColor) {
+          el.style.setProperty('background-color', 'transparent', 'important');
+          el.removeAttribute('bgcolor');
+        }
+        if (lightGradient) {
+          el.style.setProperty('background-image', 'none', 'important');
         }
       }
     }
@@ -144,16 +182,13 @@ function stripContentBackgrounds(root: Node) {
 
 /** True if an ancestor still has an opaque background. Parents are visited
  *  before children, so any remaining opaque ancestor bg is one we kept
- *  (non-light) — a light bg layered on it is content (e.g. a button face
- *  inside a colored border div), not page chrome, and stripping it would
- *  expose the colored bg behind text that wasn't styled to contrast with it. */
+ *  (non-light, or an image) — a light bg layered on it is content (e.g. a
+ *  button face inside a colored border div), not page chrome, and stripping it
+ *  would expose the colored bg behind text that wasn't styled to contrast with it. */
 function hasOpaqueAncestorBackground(el: HTMLElement, root: Node): boolean {
   let ancestor = el.parentElement;
   while (ancestor && ancestor !== root) {
-    const bg = normalizeRGBA(
-      parseRGBA(getComputedStyle(ancestor).backgroundColor)
-    );
-    if (bg && bg.a > 0) return true;
+    if (hasOwnBackground(getComputedStyle(ancestor))) return true;
     ancestor = ancestor.parentElement;
   }
   return false;
@@ -164,8 +199,11 @@ function computeTextNodeColor(root: Node): TextNodeContrast[] {
   // This pass only reads styles; processEmailColors writes after it returns.
   // Snapshot primitives once per element rather than repeatedly resolving every
   // text node's entire ancestor chain. Keep caches local to this presentation.
-  const styles = new Map<Element, { color: string; backgroundColor: string }>();
-  const backgrounds = new Map<Element, RGBA | null>();
+  const styles = new Map<
+    Element,
+    { color: string; backgroundColor: string; backgroundImage: string }
+  >();
+  const backgrounds = new Map<Element, boolean>();
   const readStyle = (element: Element) => {
     const cached = styles.get(element);
     if (cached) return cached;
@@ -173,33 +211,30 @@ function computeTextNodeColor(root: Node): TextNodeContrast[] {
     const value = {
       color: computed.color,
       backgroundColor: computed.backgroundColor,
+      backgroundImage: computed.backgroundImage,
     };
     styles.set(element, value);
     return value;
   };
-  const effectiveBackground = (element: Element): RGBA | null => {
+  const isOnBackground = (element: Element): boolean => {
     const ancestors: Element[] = [];
     let current: Element | null = element;
-    let background: RGBA | null = null;
+    let onBackground = false;
     while (current && current !== root) {
       const cached = backgrounds.get(current);
       if (cached !== undefined) {
-        background = cached;
+        onBackground = cached;
         break;
       }
       ancestors.push(current);
-      const color = readStyle(current).backgroundColor;
-      const parsed = color.startsWith('rgb')
-        ? normalizeRGBA(parseRGBA(color))
-        : null;
-      if (parsed && parsed.a > 0) {
-        background = parsed;
+      if (hasOwnBackground(readStyle(current))) {
+        onBackground = true;
         break;
       }
       current = current.parentElement;
     }
-    for (const ancestor of ancestors) backgrounds.set(ancestor, background);
-    return background;
+    for (const ancestor of ancestors) backgrounds.set(ancestor, onBackground);
+    return onBackground;
   };
 
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
@@ -224,17 +259,16 @@ function computeTextNodeColor(root: Node): TextNodeContrast[] {
       const fg = cs.color.startsWith('rgb')
         ? normalizeRGBA(parseRGBA(cs.color))
         : null;
-      // Walk up ancestors to find the effective background color,
-      // since background-color doesn't inherit in CSS
-      const bgRgba = effectiveBackground(el);
+      // Walk up ancestors to find a painted background, since backgrounds
+      // don't inherit in CSS
+      const onBackground = isOnBackground(el);
       if (fg) {
         const fgOklch = rgbaToOklch(fg);
-        const bgOklch = rgbaToOklch(bgRgba);
         const insideAnchor = el.closest('a') !== null;
         out.push({
           text: n.textContent || '',
           fg: fgOklch,
-          bg: bgOklch,
+          onBackground,
           node: n,
           insideAnchor,
         });

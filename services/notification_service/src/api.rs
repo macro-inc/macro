@@ -15,6 +15,7 @@ pub mod context;
 
 // Routes
 mod health;
+pub(crate) mod notification_settings;
 mod unsubscribe;
 pub(crate) mod user_notification;
 
@@ -91,6 +92,7 @@ fn api_router<S: ::notification::domain::service::NotificationReader>(
         .nest("/user_notifications", user_notification::router())
         .with_state(ingress_state)
         .nest("/unsubscribe", unsubscribe::router())
+        .nest("/notification_settings", notification_settings::router())
         .layer(middleware);
     Router::new()
         .nest("/{version}", internal_router.clone())

@@ -65,9 +65,12 @@ async fn a_calendar_events_property_change_reaches_its_search_document(pool: sql
     .unwrap();
     let (opensearch, requests) = fake_opensearch().await;
 
-    process_entity_property_update(&opensearch, &pool, event_id, EntityType::CalendarEvent)
-        .await
-        .unwrap();
+    let update =
+        process_entity_property_update(&opensearch, &pool, event_id, EntityType::CalendarEvent)
+            .await
+            .unwrap();
+
+    assert_eq!(update, PropertyRefresh::Written);
 
     let requests = requests.lock().unwrap().clone();
     assert_eq!(

@@ -17,11 +17,18 @@ export function PipelineSidebar(props: {
 }) {
   const [open, setOpen] = createSignal(true);
   return (
-    <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-      <CollapsibleSection.Trigger>
-        <span>{t('crm.pipelines')}</span>
-        <CollapsibleSection.Indicator />
-      </CollapsibleSection.Trigger>
+    <CollapsibleSection.Root
+      sectionId="pipelines"
+      sectionLabel={t('crm.pipelines')}
+      open={open()}
+      onOpenChange={setOpen}
+    >
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger>
+          <span>{t('crm.pipelines')}</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+      </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <ViewSidebar.Nav aria-label={t('crm.pipelinesNavigation')}>
           <For each={props.pipelines}>

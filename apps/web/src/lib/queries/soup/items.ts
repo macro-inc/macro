@@ -375,6 +375,8 @@ export type SoupAstItemsQuery = {
   readonly isFetchNextPageError: boolean;
   readonly isEnabled: boolean;
   readonly hasNextPage: boolean;
+  /** A cached or fetched page answered; a local predicate alone is not a page. */
+  readonly hasPageData: boolean;
   readonly transport: SoupAstItemsQueryTransport;
   readonly cacheStatus?: PredicateQueryStatus;
   /** GraphQL reads used by transport-specific revalidation subscribers. */
@@ -495,6 +497,15 @@ export function useSoupAstItemsQuery(
       if (!usesGraphql()) return restQuery.error ?? null;
       const query = activeGraphqlQuery();
       return query.fetchError?.() ?? query.error() ?? null;
+    },
+    get hasPageData() {
+      if (!usesGraphql())
+        return (
+          !restQuery.isPending &&
+          !restQuery.isPlaceholderData &&
+          restQuery.data !== undefined
+        );
+      return activeGraphqlQuery().hasPageData();
     },
     get isPending() {
       if (!usesGraphql()) return restQuery.isPending;

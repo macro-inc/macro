@@ -2,7 +2,9 @@
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
-use crate::inbound::kafka_consumer::{IndexMetrics, KafkaProcessingContext, run_event_consumer};
+use crate::inbound::kafka_consumer::{
+    IndexMetrics, KafkaProcessingContext, publish_lane_backlog, run_event_consumer,
+};
 use crate::{
     api::context::{ApiContext, AuthorizationService},
     config::DatabaseUrlReadonly,
@@ -73,6 +75,12 @@ pub type EmailAttachmentStatusBackfill =
         outbound::document_email::PgLinkedDocuments,
         outbound::email_attachment_search::OpenSearchEmailAttachmentFlags,
     >;
+
+/// Production wiring for the deleted chat message repair.
+pub type DeletedChatMessageRepair = domain::chat_message_repair::DeletedChatMessageRepair<
+    outbound::chat_message_repair::OpenSearchChatMessages,
+    outbound::chat_message_repair::PgChatRows,
+>;
 
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
@@ -285,6 +293,13 @@ async fn main() -> anyhow::Result<()> {
         backfill_gate.clone(),
     ));
 
+    let deleted_chat_message_repair = Arc::new(DeletedChatMessageRepair::new(
+        outbound::chat_message_repair::OpenSearchChatMessages(opensearch_client.clone()),
+        outbound::chat_message_repair::PgChatRows::new(backfill_db.clone()),
+        outbound::chat_message_repair::PgChatRows::new(db.clone()),
+        backfill_gate.clone(),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
@@ -304,12 +319,16 @@ async fn main() -> anyhow::Result<()> {
     let event_broker_tracker = TaskTracker::new();
     #[cfg(feature = "processing")]
     let mailbox_delete_tracker = TaskTracker::new();
+    #[cfg(feature = "processing")]
+    let backlog_tracker = TaskTracker::new();
     let macro_event_broker = MacroEventBrokerService::new(
         KafkaEventPublisher::new(config.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,
         event_broker_tracker.clone(),
     );
 
+    #[cfg(feature = "processing")]
+    let queue_workers = TaskTracker::new();
     #[cfg(feature = "processing")]
     let consumer_supervisor = {
         // Ensures that pdfium binary exists so we can kill the container early on failure
@@ -331,6 +350,8 @@ async fn main() -> anyhow::Result<()> {
             config.queue_max_messages,
             config.queue_wait_time_seconds,
         );
+        let index_metrics = IndexMetrics::global();
+
         let kafka_processing_context = KafkaProcessingContext {
             agent_session_indexer: agent_session_indexer.clone(),
             db: db.clone(),
@@ -344,7 +365,7 @@ async fn main() -> anyhow::Result<()> {
                 mailbox_delete_tracker.clone(),
                 shutdown_token.clone(),
             ),
-            metrics: IndexMetrics::global(),
+            metrics: index_metrics.clone(),
             replays: sqs_client.clone(),
         };
         let search_processing_context = SearchProcessingContext {
@@ -359,7 +380,21 @@ async fn main() -> anyhow::Result<()> {
             backfill_gate: backfill_gate.clone(),
             messages_per_receive: u32::try_from(config.queue_max_messages).unwrap_or(1),
         };
-        run_search_processing_workers(search_processing_context, config.worker_count);
+        run_search_processing_workers(
+            search_processing_context,
+            config.worker_count,
+            shutdown_token.clone(),
+            &queue_workers,
+        );
+        queue_workers.close();
+        backlog_tracker.spawn(publish_lane_backlog(
+            index_metrics,
+            outbound::cloudwatch_backlog::CloudWatchBacklog::new(
+                config.environment,
+                aws_sdk_cloudwatch::Client::new(&aws_config),
+            ),
+            shutdown_token.clone(),
+        ));
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),
             kafka_processing_context,
@@ -389,6 +424,7 @@ async fn main() -> anyhow::Result<()> {
             backfill_service,
             backfill_jobs,
             email_attachment_status_backfill,
+            deleted_chat_message_repair,
             macro_event_broker,
             backfill_control,
             backfill_gate,
@@ -399,10 +435,13 @@ async fn main() -> anyhow::Result<()> {
 
     shutdown_token.cancel();
     backfill_pause_tracker.wait().await;
+    // The queue workers drain beside the Kafka consumer, inside the task's
+    // stop timeout.
     #[cfg(feature = "processing")]
-    let consumer_result = consumer_supervisor
-        .await
-        .context("search processing event consumer supervisor failed");
+    let (consumer_result, ()) = tokio::join!(consumer_supervisor, queue_workers.wait());
+    #[cfg(feature = "processing")]
+    let consumer_result =
+        consumer_result.context("search processing event consumer supervisor failed");
     if let Err(error) = telemetry.force_flush().await {
         tracing::warn!(error = ?error, "could not flush telemetry after the consumer stopped");
     }
@@ -412,6 +451,8 @@ async fn main() -> anyhow::Result<()> {
     {
         mailbox_delete_tracker.close();
         mailbox_delete_tracker.wait().await;
+        backlog_tracker.close();
+        backlog_tracker.wait().await;
     }
 
     tracing::info!("waiting for event broker publishes to drain");

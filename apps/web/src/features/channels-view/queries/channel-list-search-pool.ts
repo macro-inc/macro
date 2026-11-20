@@ -1,5 +1,6 @@
 import { useChannelsContext } from '@core/context/channels';
 import type { ChannelEntity } from '@entity';
+import { mapChannelToEntity } from '@queries/channel/list-entity';
 import { createMemo } from 'solid-js';
 
 /**
@@ -13,16 +14,16 @@ export function useChannelListSearchPool() {
   const { channels } = useChannelsContext();
   return createMemo<ChannelEntity[]>(() =>
     channels().map((channel) => ({
-      id: channel.id,
-      type: 'channel',
+      ...mapChannelToEntity({
+        channel,
+        participants: channel.participants,
+        is_participant: channel.is_participant,
+        latest_message: channel.latest_message,
+        latest_non_thread_message: channel.latest_non_thread_message,
+        viewed_at: channel.viewed_at,
+        interacted_at: channel.interacted_at,
+      }),
       name: channel.agent_dm?.name ?? (channel.name || 'Unknown Channel'),
-      channelType: channel.channel_type,
-      teamId: channel.team_id ?? undefined,
-      ownerId: channel.owner_id,
-      isParticipant: channel.is_participant,
-      participantIds: channel.participants.map(
-        (participant) => participant.user_id
-      ),
     }))
   );
 }
