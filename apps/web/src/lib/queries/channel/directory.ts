@@ -11,7 +11,7 @@
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { deepEqual } from '@core/util/compareUtils';
-import { throttle } from '@core/util/debounce';
+import { debounce, throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -92,6 +92,11 @@ const BY_ID_CONCURRENCY = 2;
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
+// The lane saves its checkpoint after every page, in whichever tab runs it.
+// Silence this long before it finishes means it stalled (that tab closed or
+// stopped mid-pass, or a request hung), and the directory pages the network
+// itself rather than stay partial.
+const LANE_STALL_MS = 30_000;
 const CHANNEL_SEARCH_BUCKET_LIST: readonly string[] = CHANNEL_SEARCH_BUCKETS;
 
 /** One channel as the directory can answer for it now. */
@@ -690,6 +695,9 @@ type LaneFallback =
   | { status: 'loaded'; channels: readonly DirectoryChannel[] }
   | { status: 'failed' };
 
+/** Why the directory paged the network itself. */
+type FallbackReason = 'lane_failed' | 'lane_stalled' | 'retry';
+
 /** What the channel lane's checkpoint says of the current storage
  * generation. */
 type LaneProgress = { complete: boolean; failed: boolean };
@@ -983,26 +991,32 @@ export function createCachedChannelDirectory(
         if (reader.request(id)) queued += 1;
       }
     }
-    if (lane.failed) startFallback();
+    if (lane.failed) startFallback('lane_failed');
   };
 
   /** Pages the network once. It needs no write fence: a write during the
    * walk reaches the cache as a soup update or the mutation's returned
    * record, and `observe` lays every change since the walk began over the
    * pages it returns. */
-  const loadFallback = async (run: number, signal: AbortSignal) => {
-    try {
-      const channels = await deps.pageAll(signal);
-      if (signal.aborted || run !== fallbackRun) return;
-      setFallback({ status: 'loaded', channels });
-      render();
-    } catch (error) {
-      if (signal.aborted || run !== fallbackRun) return;
-      Telemetry.error(error, { surface: 'channel-directory-fallback' });
-      setFallback({ status: 'failed' });
-    }
-  };
-  const startFallback = () => {
+  const loadFallback = (
+    run: number,
+    signal: AbortSignal,
+    reason: FallbackReason
+  ) =>
+    Telemetry.span('channel_directory.fallback', async (span) => {
+      span.setAttr('channel_directory.fallback_reason', reason);
+      try {
+        const channels = await deps.pageAll(signal);
+        if (signal.aborted || run !== fallbackRun) return;
+        setFallback({ status: 'loaded', channels });
+        render();
+      } catch (error) {
+        if (signal.aborted || run !== fallbackRun) return;
+        Telemetry.error(error, { surface: 'channel-directory-fallback' });
+        setFallback({ status: 'failed' });
+      }
+    });
+  const startFallback = (reason: FallbackReason) => {
     if (untrack(fallback).status !== 'idle') return;
     fallbackRun += 1;
     // Changes from here on are at least as new as the pages it reads.
@@ -1015,7 +1029,7 @@ export function createCachedChannelDirectory(
     walk = new AbortController();
     // Never rejects: a failed read is reported inside.
     fireAndForget(
-      loadFallback(fallbackRun, walk.signal),
+      loadFallback(fallbackRun, walk.signal, reason),
       'channel-directory-fallback'
     );
   };
@@ -1106,9 +1120,18 @@ export function createCachedChannelDirectory(
       intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
     })
   );
+  // Rearmed by every save of the lane's checkpoint. `lane` is read as soon
+  // as the cache's scope is known, before the records are, so a slow scan
+  // never pages the network for a lane that finished; a cache that cannot
+  // say whose records it holds for this long does.
+  const laneStalled = debounce(() => {
+    if (!lane.complete) startFallback('lane_stalled');
+  }, LANE_STALL_MS);
   onCleanup(
     host.onCacheGenerationChanged((change) => {
       if (change.storage === 'reset') {
+        // The lane starts over in the new storage.
+        laneStalled();
         // The records read so far went with the storage that held them.
         generation = undefined;
         lane = LANE_NOT_STARTED;
@@ -1131,12 +1154,14 @@ export function createCachedChannelDirectory(
   // up, changes what the directory can answer.
   onCleanup(
     watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID, () => {
+      laneStalled();
       if (generation === undefined) return;
       const next = readLaneProgress(userId, generation);
       if (next.complete !== lane.complete || next.failed !== lane.failed)
         refreshNow();
     })
   );
+  laneStalled();
   refreshNow();
 
   // A complete pass of the lane proves the records it wrote, not those it
@@ -1175,7 +1200,7 @@ export function createCachedChannelDirectory(
     retry() {
       if (untrack(fallback).status !== 'failed') return;
       setFallback({ status: 'idle' });
-      startFallback();
+      startFallback('retry');
     },
     recordView(channelId, viewedAt) {
       if (views.record(channelId, viewedAt)) stampView(channelId, viewedAt);

@@ -915,6 +915,95 @@ describe('cached channel directory', () => {
     expect(fetchAll).toHaveBeenCalledOnce();
   });
 
+  describe('a lane that stalls', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    /** Saves a page of a pass still under way. */
+    const savePage = () =>
+      saveSoupBackfillCheckpoint(
+        {
+          ...initialSoupBackfillCheckpoint(VIEWER, 'g1'),
+          nextCursor: 'next',
+          pagesFetched: 1,
+          scanStartedAt: '2026-11-20T00:00:00Z',
+        },
+        CHANNEL_DIRECTORY_CHECKPOINT_ID
+      );
+
+    it('pages the network once the lane saves nothing for half a minute', async () => {
+      const { cache, directory, pageAll } = mountCachedDirectory([], {
+        pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
+      });
+      cache.put(channelRecord('a'));
+      await vi.advanceTimersByTimeAsync(29_000);
+      expect(ids(directory.channels())).toEqual(['a']);
+      expect(pageAll).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(pageAll).toHaveBeenCalledOnce();
+      expect(directory.complete()).toBe(true);
+      expect(ids(directory.channels())).toEqual(['a', 'b']);
+    });
+
+    it('waits on a lane that keeps saving pages', async () => {
+      const { pageAll } = mountCachedDirectory([], {
+        pageAll: async () => [directoryChannel('a')],
+      });
+      for (let page = 0; page < 4; page += 1) {
+        await vi.advanceTimersByTimeAsync(20_000);
+        savePage();
+      }
+      expect(pageAll).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(pageAll).toHaveBeenCalledOnce();
+    });
+
+    it('waits again for a pass that starts over in new storage', async () => {
+      const { pageAll, resetStorage } = mountCachedDirectory([], {
+        pageAll: async () => [directoryChannel('a')],
+      });
+      await vi.advanceTimersByTimeAsync(20_000);
+      resetStorage('g2');
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(pageAll).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(pageAll).toHaveBeenCalledOnce();
+    });
+
+    it('never pages the network for a finished lane while the cache is slow to list it', async () => {
+      completeLane('g1');
+      const { directory, holdListings, pageAll } = mountCachedDirectory([]);
+      const release = holdListings();
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(pageAll).not.toHaveBeenCalled();
+
+      release();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      expect(directory.complete()).toBe(true);
+      expect(pageAll).not.toHaveBeenCalled();
+    });
+
+    it('never pages the network after the lane finished', async () => {
+      completeLane('g1');
+      const { directory, pageAll } = mountCachedDirectory([]);
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(directory.complete()).toBe(true);
+      expect(pageAll).not.toHaveBeenCalled();
+    });
+  });
+
   it('completes from the network once the lane gives up', async () => {
     const { cache, directory, pageAll } = mountCachedDirectory(
       [channelRecord('b')],
