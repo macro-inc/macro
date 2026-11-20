@@ -1,0 +1,536 @@
+// One differential run: seed a world, start main's app and the branch's app
+// side by side on the same backend, then
+//   1. reads:     generated read cases, both sides at once, compared in full;
+//   2. dom:       Home as the viewer sees it, both sides, compared row by row;
+//   3. sequences: random write sequences, after every step compared
+//                 read-after-write, live (within LIVE_BOUND_MS) and after a
+//                 reload, plus the on-screen Home list every few steps;
+// optionally under concurrent load, optionally with one mutant planted in the
+// branch's reader. Everything lands in out/<run>/ as JSONL plus summary.json.
+//
+// Configuration (environment): PROOF_SEED, PROOF_RUN, PROOF_LANES,
+// PROOF_SIZES, PROOF_READS, PROOF_SEQUENCES, PROOF_STEPS, PROOF_WORKERS,
+// PROOF_DOM, PROOF_LOAD, PROOF_MUTANT, PROOF_PHASES, PROOF_REUSE.
+
+import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runStep, STEP_WEIGHTS, type ActionContext, type StepKind } from './lib/actions.ts';
+import {
+  launchBrowser,
+  loadProbe,
+  openLane,
+  probeOpenLive,
+  probeRead,
+  probeSnapLive,
+  readHomeDom,
+  startApp,
+  stopApp,
+  type AppServer,
+  type Lane,
+  type ProbeResult,
+  type ReadSpec,
+} from './lib/browser.ts';
+import { classify, sameInstant, type Classified } from './lib/classify.ts';
+import { closureOf } from './lib/closed.ts';
+import { compareSnapshots, entityKey, refCheck, type DomRow } from './lib/compare.ts';
+import { compareHomeDom } from './lib/dom.ts';
+import { generateReads, type ReadCase } from './lib/gen.ts';
+import { applyMutant, MUTANTS, revertMutant } from './lib/mutants.ts';
+import { queueNotify } from './lib/notify.ts';
+import { project, rowsDiff, sameRows, type Row } from './lib/project.ts';
+import { Rng } from './lib/rng.ts';
+import { seedWorld, sender } from './lib/setup.ts';
+import { stackFromEnv, type User } from './lib/stack.ts';
+import type { Entity, World } from './lib/world.ts';
+
+const env = process.env;
+const seed = Number(env.PROOF_SEED ?? 1101);
+const runName = env.PROOF_RUN ?? `s${seed}${env.PROOF_LOAD === '1' ? '-load' : ''}${env.PROOF_MUTANT ? `-${env.PROOF_MUTANT}` : ''}`;
+const lanesCount = Number(env.PROOF_LANES ?? 8);
+const sizes = (env.PROOF_SIZES ?? '0,1,100,101,2000').split(',').filter(Boolean).map(Number);
+const readCount = Number(env.PROOF_READS ?? 2000);
+const sequencesPerLane = Number(env.PROOF_SEQUENCES ?? 13);
+const stepsPerSequence = Number(env.PROOF_STEPS ?? 20);
+const workers = Number(env.PROOF_WORKERS ?? 6);
+const domPerViewer = Number(env.PROOF_DOM ?? 6);
+const load = env.PROOF_LOAD === '1';
+const phases = new Set((env.PROOF_PHASES ?? 'reads,dom,sequences').split(','));
+const LIVE_BOUND_MS = Number(env.PROOF_LIVE_BOUND_MS ?? 15_000);
+const DOM_EVERY = 5;
+// Anchors the generated date filters; with the seed it fixes every read case.
+const genNow = Number(env.PROOF_NOW ?? Date.now());
+
+const here = import.meta.dirname;
+const out = join(here, 'out', runName);
+rmSync(out, { recursive: true, force: true });
+mkdirSync(out, { recursive: true });
+const log = (line: string) => {
+  const stamped = `${new Date().toISOString()} ${line}`;
+  console.log(stamped);
+  appendFileSync(join(out, 'run.log'), `${stamped}\n`);
+};
+const record = (file: string, value: unknown) => appendFileSync(join(out, file), `${JSON.stringify(value)}\n`);
+const unexplained = new Map<string, number>();
+const HOME_TYPES = ['documents', 'tasks', 'email', 'channels', 'agents', 'folders', 'initiatives', 'github', 'calendar'];
+
+const stack = stackFromEnv();
+const viteEnv = {
+  backendProxy: stack.proxyUrl,
+  routes: env.PROOF_ROUTES ?? '',
+  caPem: env.PROOF_CA_PEM ?? '',
+  hostname: env.PROOF_HOSTNAME ?? 'localhost',
+};
+const oldWorktree = env.PROOF_OLD_WORKTREE ?? '';
+const newWorktree = env.PROOF_NEW_WORKTREE ?? '';
+const mutant = env.PROOF_MUTANT ? MUTANTS.find((m) => m.name === env.PROOF_MUTANT) : undefined;
+if (env.PROOF_MUTANT && !mutant) throw new Error(`unknown mutant ${env.PROOF_MUTANT}`);
+
+const started = Date.now();
+log(`run ${runName}: seed ${seed}, lanes ${lanesCount}, sizes ${sizes.join('/')}, reads ${readCount}, sequences ${lanesCount}x${sequencesPerLane}x${stepsPerSequence}, load ${load}, mutant ${mutant?.name ?? 'none'}`);
+
+const seeded = await seedWorld(stack, {
+  seed,
+  lanes: lanesCount,
+  sizes,
+  outDir: join(out, 'world'),
+  repo: env.PROOF_REPO ?? '',
+  instance: env.PROOF_INSTANCE ?? 'gqlns',
+  log,
+  reuse: env.PROOF_REUSE === '1',
+});
+const { world, users } = seeded;
+const byId = new Map<string, Entity>();
+for (const entity of world.entities) byId.set(entity.id, entity);
+
+if (mutant) applyMutant(newWorktree, mutant);
+const portBase = Number(env.PROOF_PORT_BASE ?? 30110);
+const apps: AppServer[] = [];
+let browser: Awaited<ReturnType<typeof launchBrowser>> | undefined;
+const stopLoad: (() => Promise<unknown>)[] = [];
+const summary: Record<string, unknown> = { run: runName, seed, now: genNow, mutant: mutant?.name ?? null, load, config: { lanesCount, sizes, readCount, sequencesPerLane, stepsPerSequence, LIVE_BOUND_MS } };
+try {
+  apps.push(...(await Promise.all([
+    startApp('old', oldWorktree, portBase, viteEnv, join(here, 'probe.ts'), out),
+    startApp('new', newWorktree, portBase + 1, viteEnv, join(here, 'probe.ts'), out),
+  ])));
+  const [oldApp, newApp] = apps;
+  browser = await launchBrowser();
+  const b = browser;
+  const pair = async (user: User, options: Parameters<typeof openLane>[3] = {}): Promise<[Lane, Lane]> => {
+    const lanes = await Promise.all([openLane(b, oldApp, user, options), openLane(b, newApp, user, options)]);
+    return [lanes[0], lanes[1]];
+  };
+  const userFor = (key: string) => {
+    const user = users.get(key);
+    if (!user) throw new Error(`no user ${key}`);
+    return user;
+  };
+
+  // The first load of each dev server compiles the app; do it once, alone.
+  {
+    const warm = await pair(userFor(world.viewers[0].key));
+    await Promise.all(warm.map((lane) => lane.page.getByRole("grid", { name: "Home" }).waitFor({ timeout: 180_000 }).catch(() => undefined)));
+    await Promise.all(warm.map((lane) => lane.context.close()));
+  }
+
+  if (load) stopLoad.push(...startLoad(world, pair, userFor));
+
+  if (phases.has('reads')) summary.reads = await readsPhase(pair, userFor);
+  if (phases.has('dom')) summary.dom = await domPhase(pair, userFor);
+  if (phases.has('sequences')) summary.sequences = await sequencesPhase(pair, userFor);
+} finally {
+  for (const stop of stopLoad) await stop().catch(() => undefined);
+  await browser?.close().catch(() => undefined);
+  for (const app of apps) stopApp(app);
+  if (mutant) revertMutant(newWorktree, mutant);
+}
+summary.ms = Date.now() - started;
+writeFileSync(join(out, 'summary.json'), JSON.stringify(summary, null, 1));
+log(`done in ${Math.round((Date.now() - started) / 1000)}s; unexplained ${JSON.stringify(unexplainedCounts())}`);
+
+// ---------------------------------------------------------------------------
+
+type Pair = (user: User, options?: Parameters<typeof openLane>[3]) => Promise<[Lane, Lane]>;
+
+function unexplainedCounts() {
+  return Object.fromEntries(unexplained);
+}
+
+/** Tallies classes; a class no closure explains counts as unexplained. */
+function tallyInto(into: Map<string, { n: number; closure: string | null; example: unknown }>, diffs: Classified[], phase: string) {
+  for (const diff of diffs) {
+    const closure = closureOf(diff.cls);
+    const entry = into.get(diff.cls);
+    if (entry) entry.n += 1;
+    else into.set(diff.cls, { n: 1, closure: closure?.id ?? null, example: diff });
+    if (!closure) unexplained.set(phase, (unexplained.get(phase) ?? 0) + 1);
+  }
+}
+
+function coverageAdd(into: Record<string, Record<string, number>>, dims: Record<string, string>) {
+  for (const [dim, value] of Object.entries(dims)) {
+    into[dim] ??= {};
+    into[dim][value] = (into[dim][value] ?? 0) + 1;
+  }
+}
+
+/** What the results themselves covered: permissions, kinds, odd values. */
+function observed(snapshot: ProbeResult): Record<string, string>[] {
+  const dims: Record<string, string>[] = [];
+  const rows = project(snapshot);
+  for (const entity of snapshot.entities) {
+    const e = entity as Record<string, unknown>;
+    const known = byId.get(String(e.id));
+    dims.push({
+      'result:kind': String(e.type),
+      'result:access': known?.access ?? 'not-in-world',
+      'result:name': typeof e.name !== 'string' ? 'none' : e.name.length > 200 ? 'long' : /[^\x20-\x7e]/.test(e.name) ? 'unicode' : e.name.startsWith(' ') ? 'leading-space' : 'plain',
+      'result:notifiedAt': e.notified_at == null && e.notifiedAt == null ? 'null' : 'set',
+    });
+  }
+  for (let i = 1; i < rows.length; i++) if (rows[i].notifiedAt !== null && rows[i].notifiedAt === rows[i - 1].notifiedAt) dims.push({ 'result:tie': 'adjacent-equal-notifiedAt' });
+  dims.push({ 'result:size': rows.length === 0 ? '0' : rows.length === 1 ? '1' : rows.length < 100 ? '2-99' : rows.length <= 101 ? '100-101' : rows.length < 1000 ? '102-999' : '1000+' });
+  return dims;
+}
+
+async function readsPhase(pair: Pair, userFor: (key: string) => User) {
+  const rng = new Rng(seed * 101 + 3);
+  const cases = generateReads(world, rng, readCount, 0, genNow);
+  const byViewer = new Map<string, ReadCase[]>();
+  for (const c of cases) byViewer.set(c.viewer, [...(byViewer.get(c.viewer) ?? []), c]);
+  // Split big groups so workers stay busy.
+  const groups: ReadCase[][] = [];
+  for (const group of byViewer.values()) for (let i = 0; i < group.length; i += 60) groups.push(group.slice(i, i + 60));
+  const classes = new Map<string, { n: number; closure: string | null; example: unknown }>();
+  const coverage: Record<string, Record<string, number>> = {};
+  const refByClass: Record<string, { 'ref-agrees': number; 'ref-disagrees': number; 'ref-absent': number; example: unknown }> = {};
+  const refTransports: Record<string, number> = {};
+  let done = 0;
+  let failed = 0;
+  const work = async () => {
+    for (let group = groups.shift(); group; group = groups.shift()) {
+      const user = userFor(group[0].viewer);
+      const [oldLane, newLane] = await pair(user);
+      try {
+        for (const c of group) {
+          // The third read is main's own GraphQL reader (update-time sort, which
+          // main serves over GraphQL): the reference for field mappings.
+          const refSpec: ReadSpec = { ...c.spec, params: { ...c.spec.params, sort_method: 'updated_at' } };
+          const results = await Promise.allSettled([probeRead(oldLane, user.macroUserId, c.spec), probeRead(newLane, user.macroUserId, c.spec), probeRead(oldLane, user.macroUserId, refSpec)]);
+          if (results[0].status === 'rejected' || results[1].status === 'rejected') {
+            failed += 1;
+            const reason = results.slice(0, 2).map((r) => (r.status === 'rejected' ? String(r.reason).slice(0, 300) : 'ok'));
+            record('reads.jsonl', { id: c.id, dims: c.dims, probeError: reason });
+            tallyInto(classes, [classify({ signature: `probe-error:${results[0].status}/${results[1].status}`, kind: 'error', detail: reason.join(' | ') })], 'reads');
+            continue;
+          }
+          const [a, b] = [results[0].value, results[1].value];
+          const diffs = compareSnapshots(a, b).map(classify);
+          tallyInto(classes, diffs, 'reads');
+          const ref = results[2].status === 'fulfilled' ? results[2].value : null;
+          refTransports[ref?.transport ?? 'failed'] = (refTransports[ref?.transport ?? 'failed'] ?? 0) + 1;
+          const fieldDiffs = diffs.filter((d) => d.kind === 'field' && !d.cls.startsWith('same-instant:'));
+          if (ref && ref.transport === 'graphql' && fieldDiffs.length) {
+            const verdicts = refCheck(b, ref, fieldDiffs, sameInstant);
+            fieldDiffs.forEach((d, i) => {
+              const entry = (refByClass[d.cls] ??= { 'ref-agrees': 0, 'ref-disagrees': 0, 'ref-absent': 0, example: null });
+              entry[verdicts[i]] += 1;
+              if (verdicts[i] === 'ref-disagrees' && !entry.example) entry.example = { ...d, ref: ref.entities.find((e) => entityKey(e) === d.entity) };
+            });
+          }
+          const dims = { ...c.dims, transport: `${a.transport}->${b.transport}`, pages: a.pages > 1 || b.pages > 1 ? 'multi' : 'single', paging: a.hasNextPage ? 'stopped-at-max' : 'complete' };
+          coverageAdd(coverage, dims);
+          for (const d of observed(b)) coverageAdd(coverage, d);
+          record('reads.jsonl', {
+            id: c.id,
+            dims,
+            old: { n: a.entities.length, pages: a.pages, ms: a.ms, error: a.error },
+            new: { n: b.entities.length, pages: b.pages, ms: b.ms, error: b.error },
+            classes: [...new Set(diffs.map((d) => d.cls))],
+            open: diffs.filter((d) => !closureOf(d.cls)).slice(0, 5),
+          });
+          done += 1;
+          if (done % 200 === 0) log(`reads: ${done}/${cases.length}`);
+        }
+      } finally {
+        await Promise.all([oldLane.context.close(), newLane.context.close()]);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: workers }, work));
+  log(`reads: ${done} compared, ${failed} probe errors`);
+  // A transport-mapping closure holds only where main's GraphQL reader agrees.
+  for (const [cls, entry] of Object.entries(refByClass)) {
+    if (entry['ref-disagrees'] > 0 && closureOf(cls)?.needsRefAgreement) unexplained.set('reads-ref', (unexplained.get('reads-ref') ?? 0) + entry['ref-disagrees']);
+  }
+  return { cases: cases.length, compared: done, probeErrors: failed, classes: Object.fromEntries(classes), coverage, reference: { transports: refTransports, byClass: refByClass } };
+}
+
+
+async function settledDom(lane: Lane): Promise<DomRow[]> {
+  await lane.page.getByRole('grid', { name: 'Home' }).waitFor({ timeout: 180_000 });
+  let previous = '';
+  let rows: DomRow[] = [];
+  for (let i = 0; i < 6; i++) {
+    await lane.page.waitForTimeout(1500);
+    rows = await readHomeDom(lane);
+    const text = JSON.stringify(rows);
+    if (text === previous) return rows;
+    previous = text;
+  }
+  return rows;
+}
+
+async function domPhase(pair: Pair, userFor: (key: string) => User) {
+  const rng = new Rng(seed * 211 + 7);
+  const jobs: { viewer: string; tab: 'signal' | 'noise'; touch: boolean; facets: Record<string, string[]> }[] = [];
+  for (const viewer of world.viewers) {
+    for (let k = 0; k < domPerViewer; k++) {
+      const touch = k % 2 === 0;
+      // Desktop Signal is the work feed, which this change does not touch.
+      const tab = touch ? (rng.bool() ? 'signal' : 'noise') : 'noise';
+      const facets: Record<string, string[]> = {};
+      if (rng.bool(0.4)) facets.read = [rng.pick(['read', 'unread'])];
+      if (rng.bool(0.4)) {
+        const types = rng.subset(HOME_TYPES, 0.3);
+        if (types.length) facets.type = types;
+      }
+      jobs.push({ viewer: viewer.key, tab, touch, facets });
+    }
+  }
+  const classes = new Map<string, { n: number; closure: string | null; example: unknown }>();
+  const coverage: Record<string, Record<string, number>> = {};
+  let compared = 0;
+  const work = async () => {
+    for (let job = jobs.shift(); job; job = jobs.shift()) {
+      const user = userFor(job.viewer);
+      const [oldLane, newLane] = await pair(user, { touch: job.touch, facets: job.facets, path: `/app/home?s0.home.tab=${job.tab}` });
+      try {
+        const [a, b] = await Promise.all([settledDom(oldLane), settledDom(newLane)]);
+        const diffs = (await compareHomeDom(stack, user, a, b, `home ${job.touch ? 'touch' : 'desktop'} ${job.tab}`)).map(classify);
+        tallyInto(classes, diffs, 'dom');
+        const dims = {
+          viewer: world.viewers.find((v) => v.key === job.viewer)?.role === 'size' ? `size:${job.viewer}` : 'lane',
+          layout: job.touch ? 'touch' : 'desktop',
+          tab: job.tab,
+          facetRead: job.facets.read?.[0] ?? 'all',
+          facetTypes: String(job.facets.type?.length ?? 0),
+          rows: a.length === 0 ? '0' : a.length < 20 ? '1-19' : a.length < 100 ? '20-99' : '100+',
+        };
+        coverageAdd(coverage, dims);
+        record('dom.jsonl', { job, dims, old: a.length, new: b.length, classes: diffs.map((d) => d.cls), diffs: diffs.slice(0, 4) });
+        if (compared === 0) {
+          await oldLane.page.screenshot({ path: join(out, 'dom-first-old.png') });
+          await newLane.page.screenshot({ path: join(out, 'dom-first-new.png') });
+        }
+        compared += 1;
+      } finally {
+        await Promise.all([oldLane.context.close(), newLane.context.close()]);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(workers, 4) }, work));
+  log(`dom: ${compared} compared`);
+  return { compared, classes: Object.fromEntries(classes), coverage };
+}
+
+// Each lane viewer has four page pairs: lists kept mounted (live), fresh reads
+// on a page that mounts nothing else (raw), a page reloaded after every step
+// (reload), and Home on a touch screen (dom).
+type LaneSet = { live: [Lane, Lane]; raw: [Lane, Lane]; reload: [Lane, Lane]; dom: [Lane, Lane] };
+
+async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
+  const classes = new Map<string, { n: number; closure: string | null; example: unknown }>();
+  const steps: Record<string, Record<string, number>> = {};
+  const liveTimes: Record<string, number[]> = {};
+  let sequences = 0;
+  let stepCount = 0;
+  const laneViewers = world.viewers.filter((v) => v.role === 'lane');
+
+  const runLane = async (viewerKey: string, laneIndex: number) => {
+    const user = userFor(viewerKey);
+    const lanes: LaneSet = {
+      live: await pair(user),
+      raw: await pair(user),
+      reload: await pair(user),
+      dom: await pair(user, { touch: true }),
+    };
+    const ctx: ActionContext = { stack, queueUrl: env.PROOF_QUEUE_URL ?? '', world, users, viewer: viewerKey, rng: new Rng(seed * 1000 + laneIndex), created: [] };
+    const specRng = new Rng(seed * 2000 + laneIndex);
+    try {
+      for (let s = 0; s < sequencesPerLane; s++) {
+        const random = generateReads(world, specRng, 40, 0, genNow).find((c) => c.viewer === viewerKey) ?? generateReads(world, specRng, 1, 0, genNow)[0];
+        const specs: ReadSpec[] = [
+          { source: { kind: 'home', tab: 'signal', facets: {}, foreignEntities: true }, maxPages: 1 },
+          { source: { kind: 'home', tab: 'noise', facets: {}, foreignEntities: true }, maxPages: 1 },
+          { ...random.spec, fresh: false, maxPages: Math.min(random.spec.maxPages ?? 1, 3) },
+        ];
+        const ids = specs.map((_, i) => `s${s}-${i}`);
+        record("sequences.jsonl", { lane: viewerKey, sequence: s, specs });
+        await Promise.all(
+          lanes.live.map((lane) => Promise.all(specs.map((spec, i) => probeOpenLive(lane, ids[i], user.macroUserId, spec))))
+        );
+        // The on-screen list for contract checks: touch Home, Signal or Noise.
+        const domTab = s % 2 === 0 ? 'signal' : 'noise';
+        await Promise.all(lanes.dom.map((lane) => lane.page.goto(`${lane.app.origin}/app/home?s0.home.tab=${domTab}`, { waitUntil: 'domcontentloaded' })));
+
+        for (let k = 0; k < stepsPerSequence; k++) {
+          const kind = ctx.rng.weighted(STEP_WEIGHTS) as StepKind;
+          const step = await runStep(ctx, kind);
+          stepCount += 1;
+          steps[kind] ??= {};
+          const outcome = step.ok ? 'ok' : `refused:${step.status ?? 'error'}`;
+          steps[kind][outcome] = (steps[kind][outcome] ?? 0) + 1;
+          const at = { lane: viewerKey, sequence: s, step: k, kind, entity: step.entity, entityKind: step.entityKind };
+          const checks: Record<string, unknown> = {};
+
+          // 1. Read-after-write: a fresh network read of every spec, both sides.
+          const raw: [Row[], Row[]][] = [];
+          for (let i = 0; i < specs.length; i++) {
+            let tries = 0;
+            let pairRead: [ProbeResult, ProbeResult] | undefined;
+            for (;;) {
+              tries += 1;
+              const read = await Promise.allSettled([probeRead(lanes.raw[0], user.macroUserId, { ...specs[i], fresh: true, clean: true }), probeRead(lanes.raw[1], user.macroUserId, { ...specs[i], fresh: true, clean: true })]);
+              if (read[0].status === 'fulfilled' && read[1].status === 'fulfilled') pairRead = [read[0].value, read[1].value];
+              // A replica can answer one side before it has the write: read
+              // again, both sides, a few times before calling it a difference.
+              if ((pairRead && sameRows(project(pairRead[0]), project(pairRead[1]))) || tries >= 4) break;
+              await new Promise((r) => setTimeout(r, 1500));
+            }
+            if (!pairRead) {
+              tallyInto(classes, [classify({ signature: `raw:probe-error`, kind: 'error', detail: JSON.stringify(at) })], 'sequences');
+              raw.push([[], []]);
+              continue;
+            }
+            const diffs = compareSnapshots(pairRead[0], pairRead[1], { label: `raw spec${i}` }).map(classify);
+            tallyInto(classes, diffs, 'sequences');
+            raw.push([project(pairRead[0]), project(pairRead[1])]);
+            checks[`raw${i}`] = { tries, classes: [...new Set(diffs.map((d) => d.cls))], rows: [pairRead[0].entities.length, pairRead[1].entities.length] };
+          }
+
+          // 2. Live: each side's mounted list must reach its own fresh read
+          // within the bound; then the two live lists are compared.
+          const liveStart = Date.now();
+          const reached: (number | null)[][] = specs.map(() => [null, null]);
+          const lastLive: (Row[] | null)[][] = specs.map(() => [null, null]);
+          while (Date.now() - liveStart < LIVE_BOUND_MS) {
+            for (let i = 0; i < specs.length; i++) {
+              for (const side of [0, 1]) {
+                if (reached[i][side] !== null) continue;
+                const snap = await probeSnapLive(lanes.live[side], ids[i]);
+                if (!snap) continue;
+                lastLive[i][side] = project(snap);
+                if (snap.settled && sameRows(lastLive[i][side] ?? [], raw[i][side])) reached[i][side] = Date.now() - liveStart;
+              }
+            }
+            if (reached.every((r) => r[0] !== null && r[1] !== null)) break;
+            await new Promise((r) => setTimeout(r, 250));
+          }
+          for (let i = 0; i < specs.length; i++) {
+            const tag = specs[i].groupBy ? 'grouped' : i < 2 ? 'home' : 'random';
+            for (const side of [0, 1]) {
+              const key = `${side ? 'new' : 'old'}:${tag}:${kind}`;
+              liveTimes[key] ??= [];
+              liveTimes[key].push(reached[i][side] ?? -1);
+            }
+            const [o, n] = reached[i];
+            if (o !== null && n === null) {
+              tallyInto(classes, [classify({ signature: `live:${tag}:new-not-within-bound`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][1] ?? [], raw[i][1]) ?? ''}` })], 'sequences');
+            } else if (o === null && n !== null) {
+              tallyInto(classes, [classify({ signature: `live:${tag}:old-not-within-bound`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
+            } else if (o === null && n === null) {
+              tallyInto(classes, [classify({ signature: `live:${tag}:both-not-within-bound`, kind: 'order', detail: JSON.stringify(at) })], 'sequences');
+            }
+          }
+          checks.live = reached;
+
+          // 3. Reload: a new document on each side reads every spec.
+          await Promise.all(lanes.reload.map(async (lane) => {
+            await lane.page.reload({ waitUntil: 'domcontentloaded' });
+            await loadProbe(lane.page);
+          }));
+          for (let i = 0; i < specs.length; i++) {
+            const read = await Promise.allSettled([probeRead(lanes.reload[0], user.macroUserId, specs[i]), probeRead(lanes.reload[1], user.macroUserId, specs[i])]);
+            if (read[0].status !== 'fulfilled' || read[1].status !== 'fulfilled') {
+              tallyInto(classes, [classify({ signature: 'reload:probe-error', kind: 'error', detail: JSON.stringify(at) })], 'sequences');
+              continue;
+            }
+            const diffs = compareSnapshots(read[0].value, read[1].value, { label: `reload spec${i}` }).map(classify);
+            tallyInto(classes, diffs, 'sequences');
+            checks[`reload${i}`] = [...new Set(diffs.map((d) => d.cls))];
+          }
+
+          // 4. Every few steps, Home on screen (touch): the rows the viewer sees.
+          if ((k + 1) % DOM_EVERY === 0) {
+            const deadline = Date.now() + LIVE_BOUND_MS;
+            let diffs: Classified[] = [];
+            let rows: [DomRow[], DomRow[]] = [[], []];
+            do {
+              rows = (await Promise.all(lanes.dom.map((lane) => settledDom(lane)))) as [DomRow[], DomRow[]];
+              diffs = (await compareHomeDom(stack, user, rows[0], rows[1], `seq home touch ${domTab}`)).map(classify);
+              if (diffs.every((d) => closureOf(d.cls))) break;
+            } while (Date.now() < deadline);
+            tallyInto(classes, diffs, 'sequences');
+            checks.dom = { rows: [rows[0].length, rows[1].length], classes: diffs.map((d) => d.cls) };
+          }
+          record('steps.jsonl', { ...at, ok: step.ok, status: step.status, note: step.note, checks });
+        }
+        await Promise.all(lanes.live.map((lane) => lane.page.evaluate(() => (window as never as { __proofProbe: { closeAllLive: () => void } }).__proofProbe.closeAllLive())));
+        sequences += 1;
+        log(`sequences: lane ${viewerKey} finished sequence ${s + 1}/${sequencesPerLane}`);
+      }
+    } finally {
+      for (const lanePair of Object.values(lanes)) await Promise.all(lanePair.map((lane: Lane) => lane.context.close().catch(() => undefined)));
+    }
+  };
+  await Promise.all(laneViewers.map((viewer, i) => runLane(viewer.key, i)));
+  const liveStats = Object.fromEntries(
+    Object.entries(liveTimes).map(([key, times]) => {
+      const ok = times.filter((t) => t >= 0).sort((x, y) => x - y);
+      return [key, { n: times.length, within: ok.length, p50: ok[Math.floor(ok.length / 2)] ?? null, p95: ok[Math.floor(ok.length * 0.95)] ?? null, max: ok[ok.length - 1] ?? null }];
+    })
+  );
+  return { sequences, steps: stepCount, stepOutcomes: steps, classes: Object.fromEntries(classes), live: liveStats };
+}
+
+/** Concurrent load for the whole run: notifications to other viewers through
+ * the ingress queue, and the largest viewer's lists read on both sides. */
+function startLoad(world: World, pair: Pair, userFor: (key: string) => User): (() => Promise<unknown>)[] {
+  let running = true;
+  const counts = { notifications: 0, reads: 0, errors: 0 };
+  const rng = new Rng(seed * 7 + 1);
+  const targets = world.entities.filter((e) => world.viewers.find((v) => v.key === e.viewer)?.role === 'size');
+  const notifier = async () => {
+    while (running && targets.length) {
+      const entity = rng.pick(targets);
+      const recipient = world.viewers.find((v) => v.key === entity.viewer)?.userId ?? '';
+      await queueNotify(stack, env.PROOF_QUEUE_URL ?? '', entity, [recipient], sender(world, entity), rng, { waitMs: 5000 })
+        .then(() => (counts.notifications += 1), () => (counts.errors += 1));
+    }
+  };
+  const big = world.viewers.filter((v) => v.role === 'size').sort((a, b) => (b.size ?? 0) - (a.size ?? 0))[0];
+  const reader = async () => {
+    if (!big) return;
+    const user = userFor(big.key);
+    const [a, b] = await pair(user);
+    try {
+      while (running) {
+        const spec: ReadSpec = { source: { kind: 'home', tab: rng.pick(['signal', 'noise'] as const), facets: {}, foreignEntities: true }, fresh: true, maxPages: 20 };
+        await Promise.all([probeRead(a, user.macroUserId, spec), probeRead(b, user.macroUserId, spec)]).then(() => (counts.reads += 2), () => (counts.errors += 1));
+      }
+    } finally {
+      await Promise.all([a.context.close(), b.context.close()]).catch(() => undefined);
+    }
+  };
+  const tasks = [...Array.from({ length: 6 }, notifier), reader(), reader()];
+  log('load: started 6 notifiers and 2 reader pairs');
+  return [
+    async () => {
+      running = false;
+      await Promise.allSettled(tasks);
+      summary.loadCounts = counts;
+      log(`load: ${JSON.stringify(counts)}`);
+    },
+  ];
+}

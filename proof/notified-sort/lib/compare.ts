@@ -1,0 +1,265 @@
+// Full comparison of two reads (old = main's reader, new = the branch's).
+// Nothing is dropped before comparing: every field of every entity, the
+// order, the groups and the paging state. Differences come back with a
+// signature (kind + field path, ids and indices erased) so equal causes
+// collapse into one class that the report closes once.
+
+export type Snapshot = {
+  transport: string;
+  error: string | null;
+  pages: number;
+  hasNextPage: boolean;
+  entities: unknown[];
+  groups: unknown[] | null;
+  itemsById: Record<string, unknown> | null;
+};
+
+export type Difference = {
+  signature: string;
+  kind:
+    | 'error'
+    | 'membership'
+    | 'order'
+    | 'field'
+    | 'groups'
+    | 'paging'
+    | 'dom';
+  detail: string;
+  entity?: string;
+  path?: string;
+  old?: unknown;
+  new?: unknown;
+};
+
+type Obj = Record<string, unknown>;
+
+export function entityKey(entity: unknown): string {
+  const e = entity as Obj;
+  return `${String(e.type)}:${String(e.id)}`;
+}
+
+function typeOf(key: string): string {
+  return key.split(':')[0];
+}
+
+const isObj = (value: unknown): value is Obj =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+/** Field-level differences between two JSON values, by path. */
+export function diffValues(
+  a: unknown,
+  b: unknown,
+  path: string,
+  out: { path: string; old: unknown; new: unknown }[]
+) {
+  if (Object.is(a, b)) return;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) {
+      out.push({ path: `${path}.length`, old: a.length, new: b.length });
+    }
+    for (let i = 0; i < Math.min(a.length, b.length); i++)
+      diffValues(a[i], b[i], `${path}[${i}]`, out);
+    return;
+  }
+  if (isObj(a) && isObj(b)) {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of [...keys].sort()) {
+      if (!(key in a)) {
+        out.push({ path: `${path}.${key}`, old: '<absent>', new: b[key] });
+      } else if (!(key in b)) {
+        out.push({ path: `${path}.${key}`, old: a[key], new: '<absent>' });
+      } else {
+        diffValues(a[key], b[key], `${path}.${key}`, out);
+      }
+    }
+    return;
+  }
+  out.push({ path, old: a, new: b });
+}
+
+const erase = (path: string) => path.replace(/\[\d+\]/g, '[]');
+
+export function compareSnapshots(
+  oldSnap: Snapshot,
+  newSnap: Snapshot,
+  options: { label?: string } = {}
+): Difference[] {
+  const diffs: Difference[] = [];
+  const label = options.label ? `${options.label} ` : '';
+
+  if ((oldSnap.error === null) !== (newSnap.error === null)) {
+    diffs.push({
+      signature: `${label}error:${oldSnap.error ? 'old' : 'new'}`,
+      kind: 'error',
+      detail: `old=${oldSnap.error} new=${newSnap.error}`,
+    });
+  }
+  if (oldSnap.hasNextPage !== newSnap.hasNextPage) {
+    diffs.push({
+      signature: `${label}paging:hasNextPage`,
+      kind: 'paging',
+      detail: `old=${oldSnap.hasNextPage} new=${newSnap.hasNextPage}`,
+    });
+  }
+
+  const oldKeys = oldSnap.entities.map(entityKey);
+  const newKeys = newSnap.entities.map(entityKey);
+  const oldSet = new Set(oldKeys);
+  const newSet = new Set(newKeys);
+  for (const key of oldKeys)
+    if (!newSet.has(key))
+      diffs.push({
+        signature: `${label}membership:missing-in-new:${typeOf(key)}`,
+        kind: 'membership',
+        entity: key,
+        detail: `${key} only in old`,
+      });
+  for (const key of newKeys)
+    if (!oldSet.has(key))
+      diffs.push({
+        signature: `${label}membership:extra-in-new:${typeOf(key)}`,
+        kind: 'membership',
+        entity: key,
+        detail: `${key} only in new`,
+      });
+  if (oldKeys.length !== oldSet.size || newKeys.length !== newSet.size) {
+    diffs.push({
+      signature: `${label}membership:duplicates`,
+      kind: 'membership',
+      detail: `old ${oldKeys.length - oldSet.size} dup, new ${newKeys.length - newSet.size} dup`,
+    });
+  }
+  const sharedOld = oldKeys.filter((key) => newSet.has(key));
+  const sharedNew = newKeys.filter((key) => oldSet.has(key));
+  const firstMove = sharedOld.findIndex((key, i) => sharedNew[i] !== key);
+  if (firstMove >= 0) {
+    diffs.push({
+      signature: `${label}order`,
+      kind: 'order',
+      entity: sharedOld[firstMove],
+      detail: `first divergence at ${firstMove}: old ${sharedOld[firstMove]} new ${sharedNew[firstMove]}`,
+    });
+  }
+
+  const oldByKey = new Map(oldSnap.entities.map((e) => [entityKey(e), e]));
+  for (const entity of newSnap.entities) {
+    const key = entityKey(entity);
+    const previous = oldByKey.get(key);
+    if (previous === undefined) continue;
+    const fields: { path: string; old: unknown; new: unknown }[] = [];
+    diffValues(previous, entity, '', fields);
+    for (const field of fields) {
+      diffs.push({
+        signature: `${label}field:${typeOf(key)}${erase(field.path)}`,
+        kind: 'field',
+        entity: key,
+        path: field.path,
+        old: field.old,
+        new: field.new,
+        detail: `${key}${field.path}`,
+      });
+    }
+  }
+
+  if (oldSnap.groups || newSnap.groups) {
+    const fields: { path: string; old: unknown; new: unknown }[] = [];
+    diffValues(oldSnap.groups, newSnap.groups, 'groups', fields);
+    for (const field of fields)
+      diffs.push({
+        signature: `${label}groups${erase(field.path).replace(/^groups/, '')}`,
+        kind: 'groups',
+        path: field.path,
+        old: field.old,
+        new: field.new,
+        detail: field.path,
+      });
+  }
+  return diffs;
+}
+
+/** Rows a caller rendered, as read from the DOM. */
+export type DomRow =
+  | { kind: 'header'; label: string }
+  | {
+      kind: 'entity';
+      id: string;
+      text: string;
+      unread: boolean;
+      labels: string[];
+    };
+
+export function compareDom(
+  oldRows: DomRow[],
+  newRows: DomRow[],
+  label: string
+): Difference[] {
+  const diffs: Difference[] = [];
+  const n = Math.max(oldRows.length, newRows.length);
+  for (let i = 0; i < n; i++) {
+    const a = oldRows[i];
+    const b = newRows[i];
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    const what = !a
+      ? 'extra-in-new'
+      : !b
+        ? 'missing-in-new'
+        : a.kind !== b.kind
+          ? 'kind'
+          : a.kind === 'header'
+            ? 'header'
+            : (a as { id: string }).id !== (b as { id: string }).id
+              ? 'row-id'
+              : (a as { unread: boolean }).unread !==
+                  (b as { unread: boolean }).unread
+                ? 'unread'
+                : 'text';
+    diffs.push({
+      signature: `${label} dom:${what}`,
+      kind: 'dom',
+      detail: `row ${i}`,
+      old: a,
+      new: b,
+    });
+    // One positional difference shifts every later row; report the first.
+    break;
+  }
+  if (oldRows.length !== newRows.length) {
+    diffs.push({
+      signature: `${label} dom:row-count`,
+      kind: 'dom',
+      detail: `old ${oldRows.length} rows, new ${newRows.length}`,
+      old: oldRows.length,
+      new: newRows.length,
+    });
+  }
+  return diffs;
+}
+
+export type RefVerdict = 'ref-agrees' | 'ref-disagrees' | 'ref-absent';
+
+/**
+ * For each field difference between old and new, whether a third read (main's
+ * own GraphQL reader, `ref`) gives the entity the same value the branch does
+ * at that path. Agreement means the difference is the REST-vs-GraphQL mapping
+ * main already serves, not something this branch introduced.
+ */
+export function refCheck(newSnap: Snapshot, refSnap: Snapshot, diffs: Difference[], same: (a: unknown, b: unknown) => boolean): RefVerdict[] {
+  const newByKey = new Map(newSnap.entities.map((e) => [entityKey(e), e]));
+  const refByKey = new Map(refSnap.entities.map((e) => [entityKey(e), e]));
+  const memo = new Map<string, string[]>();
+  return diffs.map((diff) => {
+    const key = diff.entity ?? '';
+    const ref = refByKey.get(key);
+    if (ref === undefined) return 'ref-absent';
+    let paths = memo.get(key);
+    if (!paths) {
+      const fields: { path: string; old: unknown; new: unknown }[] = [];
+      diffValues(ref, newByKey.get(key), '', fields);
+      paths = fields.filter((f) => !same(f.old, f.new)).map((f) => f.path);
+      memo.set(key, paths);
+    }
+    const path = diff.path ?? '';
+    const overlaps = paths.some((p) => p === path || p.startsWith(`${path}.`) || p.startsWith(`${path}[`) || path.startsWith(`${p}.`) || path.startsWith(`${p}[`));
+    return overlaps ? 'ref-disagrees' : 'ref-agrees';
+  });
+}
