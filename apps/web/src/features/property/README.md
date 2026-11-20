@@ -117,6 +117,16 @@ Kobalte can prevent the arrow key's default before a document listener runs.
 Ignore IME confirmation keys, including WebKit's key code 229; composing Escape
 must cancel composition without dismissing the popover.
 
+## References kept across updates
+
+A property read from a query is a store, and an update rewrites the objects of
+its reference list in place. Code that keeps references past the next update
+(a picker's staged selection, `Property.Root`'s pick shown until the source
+catches up, a collection row's accepted values) keeps plain copies from
+`utils/copy-entity-references.ts`; a kept store object turns into its neighbor
+when an earlier item is removed, and the next save then drops a reference the
+user never touched.
+
 ## Side-panel collections
 
 Property rows use a 4px vertical gap, including inline Tags and the boundary

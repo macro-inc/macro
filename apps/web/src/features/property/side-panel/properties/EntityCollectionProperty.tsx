@@ -15,6 +15,7 @@ import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { Property, PropertyApiValues } from '@property/types';
 import { getEntityValues } from '@property/utils';
+import { copyEntityReferences } from '@property/utils/copy-entity-references';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -104,8 +105,10 @@ export function EntityCollectionProperty(props: {
   ): Promise<void> => {
     if (!ctx.canEdit || property.isMetadata || props.loading || isSaving())
       return Promise.resolve();
-    const currentRefs = getEntityValues(property);
-    const nextRefs = values.valueType === 'ENTITY' ? (values.refs ?? []) : [];
+    const currentRefs = copyEntityReferences(getEntityValues(property));
+    const nextRefs = copyEntityReferences(
+      values.valueType === 'ENTITY' ? (values.refs ?? []) : []
+    );
     latestSave += 1;
     const save = latestSave;
     batch(() => {
