@@ -260,9 +260,9 @@ impl TreeSink for BoundedSink {
         }
     }
 
-    fn parse_error(&mut self, msg: Cow<'static, str>) {
-        self.html.parse_error(msg);
-    }
+    // Scraper keeps every parse error, and a NUL byte or a stray end tag
+    // raises one without building anything; nothing here reads them.
+    fn parse_error(&mut self, _msg: Cow<'static, str>) {}
 
     fn get_document(&mut self) -> NodeId {
         self.html.get_document()

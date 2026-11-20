@@ -320,3 +320,25 @@ fn a_reply_is_found_in_bounded_memory_just_under_the_node_limit() {
         html.len()
     );
 }
+
+#[test]
+fn parse_errors_cost_no_memory() {
+    // Each NUL is a parse error that builds nothing; kept, 5 MB of them
+    // peaked at 581 MB.
+    let html = format!("<p>x</p>{}", "\0".repeat(5 << 20));
+    let mut sanitized = String::new();
+    let mut reply = None;
+
+    let sanitize_peak = peak_bytes_during(|| sanitized = sanitize_email_html(&html));
+    let reply_peak = peak_bytes_during(|| reply = compute_body_replyless(None, Some(&html), None));
+
+    assert_eq!(sanitized, "<p>x</p>");
+    assert!(reply.is_some());
+    for peak in [sanitize_peak, reply_peak] {
+        assert!(
+            peak < 32 << 20,
+            "{peak} bytes for {} bytes of HTML",
+            html.len()
+        );
+    }
+}
