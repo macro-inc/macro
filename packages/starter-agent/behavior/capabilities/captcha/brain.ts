@@ -74,7 +74,9 @@ export const requestSolve = async (
   },
   request: SolveRequest
 ): Promise<SolveResult | Refused> => {
-  const response = await send(
+  let response: Response;
+  try {
+    response = await send(
     new Request(`${relay.url.replace(/\/+$/, '')}/${solveRoute}`, {
       method: 'POST',
       headers: {
@@ -87,8 +89,18 @@ export const requestSolve = async (
       body: JSON.stringify(solveBody(request)),
     })
   );
+  } catch {
+    // The relay or the harness unreachable.
+    return { outcome: 'refused', status: 502 };
+  }
   if (!response.ok) return { outcome: 'refused', status: response.status };
-  const parsed = solveResult.safeParse(await response.json());
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { outcome: 'refused', status: 502 };
+  }
+  const parsed = solveResult.safeParse(body);
   if (!parsed.success) return { outcome: 'refused', status: 502 };
   return parsed.data;
 };

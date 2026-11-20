@@ -275,9 +275,18 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
         .await
         .unwrap();
     let unknown_key = app
+        .clone()
         .oneshot(chat_request(
             "mak_nobody",
             json!({ "model": KIMI_K3, "messages": [] }),
+        ))
+        .await
+        .unwrap();
+    let many_choices = app
+        .clone()
+        .oneshot(chat_request(
+            "mak_agent",
+            json!({ "model": KIMI_K3, "messages": [], "n": 64 }),
         ))
         .await
         .unwrap();
@@ -298,6 +307,7 @@ async fn other_models_paths_and_callers_are_refused_before_fireworks() {
     .unwrap();
     assert_eq!(body["error"]["type"], "invalid_request_error");
     assert_eq!(other_path.status(), StatusCode::NOT_FOUND);
+    assert_eq!(many_choices.status(), StatusCode::BAD_REQUEST);
     assert_eq!(unknown_key.status(), StatusCode::UNAUTHORIZED);
     assert_eq!(teammates_off.status(), StatusCode::FORBIDDEN);
     assert!(seen.lock().unwrap().is_empty());

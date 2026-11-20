@@ -38,6 +38,8 @@ export type RunPlace = {
   readonly server: string;
   /** Where the server appends each attempt's outcome. */
   readonly record: string;
+  /** The harness's take-over file, which the server checks before touching the page. */
+  readonly screenDriver: string;
   /** How to start Bun for the server. */
   readonly bun: string;
   /** The run's span: the MCP server's spans and the harness's model spans join it. */
@@ -110,6 +112,7 @@ export const openCodeConfig = (place: RunPlace) => {
           [mcpVariables.browser]: place.browser,
           [mcpVariables.solveId]: place.solveId,
           [mcpVariables.record]: place.record,
+          [mcpVariables.screenDriver]: place.screenDriver,
           [mcpVariables.agentId]: place.telemetry.agentId,
           ...place.telemetry.environment,
           ...(place.traceparent === undefined
@@ -146,8 +149,15 @@ export const openCodeEnvironment = (
   XDG_STATE_HOME: join(home, 'state'),
 });
 
-/** The command line, after the sandbox prefix. */
-export const openCodeArgv = (): readonly string[] => [
+/**
+ * The command line, after the sandbox prefix. `timeout` runs inside the
+ * sandbox and stops OpenCode itself (which stops its MCP server) at the
+ * limit: a kill of the sandbox from outside would leave them running.
+ */
+export const openCodeArgv = (limitMs: number): readonly string[] => [
+  'timeout',
+  '--kill-after=10s',
+  `${Math.ceil(limitMs / 1000)}s`,
   'opencode',
   'run',
   '--agent',

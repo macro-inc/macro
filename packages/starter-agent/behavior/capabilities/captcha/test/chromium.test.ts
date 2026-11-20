@@ -20,8 +20,14 @@ const token = 'XXXX.DUMMY.TOKEN.XXXX';
 
 let profile = '';
 let running: Running | undefined;
+/** What happens on the page while the stand-in harness "solves": nothing, unless a test sets it. */
+let duringSolve: () => Promise<void> = () => Promise.resolve();
+let ownerHasTakenOver = false;
 const fixture = startFixture({
-  solve: () => ({ outcome: 'solved', token, userAgent: null, taskId: 'task-1' }),
+  solve: async () => {
+    await duringSolve();
+    return { outcome: 'solved', token, userAgent: null, taskId: 'task-1' };
+  },
 });
 
 beforeAll(async () => {
@@ -47,6 +53,7 @@ const needs = {
   relay: { url: fixture.origin, token: 'relay-capability' },
   fetch: (request: Request) => fetch(request),
   trace: passthrough,
+  ownerDriving: () => Promise.resolve(ownerHasTakenOver),
 };
 
 test.skipIf(!available)(
@@ -121,5 +128,55 @@ test.skipIf(!available)(
       outcome: 'noChallenge',
     });
     expect(fixture.seen.length).toBe(before);
+  }
+);
+
+test.skipIf(!available)(
+  'a hash change during the solve is not taken for a navigation',
+  async () => {
+    await open('/recaptcha');
+    duringSolve = () =>
+      withCurrentPage(endpoint, async (page) => {
+        await page.evaluate(() => {
+          const { history } = globalThis as unknown as {
+            history: { replaceState: (data: null, unused: string, url: string) => void };
+          };
+          history.replaceState(null, '', '#step2');
+        });
+      });
+    try {
+      expect(await solveOnPage(needs, { solveId: 'solve-hash' })).toEqual({
+        outcome: 'injected',
+      });
+    } finally {
+      duringSolve = () => Promise.resolve();
+    }
+  }
+);
+
+test.skipIf(!available)(
+  'the owner taking over during the solve stops it before the page is touched',
+  async () => {
+    await open('/turnstile');
+    duringSolve = async () => {
+      ownerHasTakenOver = true;
+    };
+    try {
+      expect(await solveOnPage(needs, { solveId: 'solve-owner' })).toEqual({
+        outcome: 'ownerDriving',
+      });
+      const field = await withCurrentPage(endpoint, (page) =>
+        page.evaluate(() => {
+          const { document } = globalThis as unknown as {
+            document: { querySelector: (selector: string) => { value: string } | null };
+          };
+          return document.querySelector('[name="cf-turnstile-response"]')?.value;
+        })
+      );
+      expect(field).toBe('');
+    } finally {
+      duringSolve = () => Promise.resolve();
+      ownerHasTakenOver = false;
+    }
   }
 );

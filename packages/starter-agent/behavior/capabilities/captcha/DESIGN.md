@@ -25,14 +25,16 @@ solveCaptcha ─ driver lease (browser/driver.ts) ─ one `opencode run` (Kimi K
 - **What CapSolver gets:** the task type, the page's origin and path (no query or fragment), the
   site key, and the widget's action, cdata or `data-s`. Never cookies, page text, a proxy or a user
   agent.
-- **The outcome is observed.** `solved` needs evidence: the page navigated, the challenge is gone, or
-  the widget's callback ran. `injected` means the token is in the form and the page hasn't reacted
-  yet. What `solveCaptcha` returns comes from the MCP server's record file, never from the model's
-  text.
-- **Bounded.** One OpenCode run per call, at most 8 model steps and 2 solves, and 5 minutes. No
+- **The outcome is observed.** `solved` needs evidence: the page moved to another origin or path
+  since right before the token went in, or the challenge is gone. The widget's callback running is
+  not evidence (the solver runs it). `injected` means the token is in the form and the challenge is
+  still shown. What `solveCaptcha` returns is the best attempt in the MCP server's record file,
+  never the model's text.
+- **Bounded.** One OpenCode run per call, at most 8 model steps and 2 solves, and 5 minutes,
+  enforced by `timeout` inside the sandbox so OpenCode and its MCP server stop too. No
   subagents, shell, files or web. The harness enforces each agent's solve budgets.
 - **One driver.** The solver holds the browser lease for the run, so the agent's own browser steps
   refuse while it does. The owner's take-over (`$HOME/state/screen-driver`, written by the harness)
-  beats both. The harness also holds every `/brain/*` call while the owner drives.
+  beats both, and the MCP server checks it again before it touches the page.
 - **Spans:** `captcha.solve_captcha` and `captcha.solve`, with the kind, host, outcome, evidence
   and CapSolver task id. Never the token, site key, path or query.

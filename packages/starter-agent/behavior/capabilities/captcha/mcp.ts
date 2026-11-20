@@ -18,6 +18,7 @@ import {
   underParent,
 } from '../../context/telemetry.ts';
 import { findChallenge, type Outcome, solveOnPage } from './solve.ts';
+import { ownerDriving, readOrMissing } from '../browser/driver.ts';
 import { withCurrentPage } from './page.ts';
 
 /** What the server is started with. */
@@ -29,6 +30,8 @@ export const mcpVariables = {
   solveId: 'CAPTCHA_SOLVE_ID',
   /** Where each outcome is appended, one JSON line per attempt. */
   record: 'CAPTCHA_RECORD_FILE',
+  /** The harness's take-over file: while the owner drives, the solver touches nothing. */
+  screenDriver: 'CAPTCHA_SCREEN_DRIVER_FILE',
   /** The agent's opaque telemetry id (`agentTelemetryId`), for the spans' resource. */
   agentId: 'CAPTCHA_AGENT_TELEMETRY_ID',
   /** The `captcha.opencode_run` span every tool call runs under. */
@@ -83,6 +86,8 @@ export const startServer = async (): Promise<void> => {
   const endpoint = required(mcpVariables.browser);
   const runId = required(mcpVariables.solveId);
   const record = required(mcpVariables.record);
+  const screenDriver = required(mcpVariables.screenDriver);
+  const ownerDrivingNow = async () => ownerDriving(await readOrMissing(screenDriver));
   const withPage = <Value>(use: Parameters<typeof withCurrentPage<Value>>[1]) =>
     withCurrentPage(endpoint, use);
   let attempts = 0;
@@ -119,7 +124,13 @@ export const startServer = async (): Promise<void> => {
           return text({ outcome: 'attemptsUsed', most: mostAttempts });
         attempts += 1;
         const outcome = await solveOnPage(
-          { withPage, relay, fetch: (request) => fetch(request), trace },
+          {
+            withPage,
+            relay,
+            fetch: (request) => fetch(request),
+            trace,
+            ownerDriving: ownerDrivingNow,
+          },
           { solveId: crypto.randomUUID() }
         );
         const line: Recorded = { attempt: attempts, outcome };

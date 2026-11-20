@@ -17,8 +17,8 @@ export type Driver =
   | { readonly kind: 'owner' }
   | { readonly kind: 'solver'; readonly solveId: string };
 
-/** A solver lease older than this is from a solve that died: it is taken over. */
-export const staleLeaseMs = 4 * 60_000;
+/** A solver lease older than this is from a solve that died: longer than a solve's whole run (`captcha/config.ts`) with a margin. */
+export const staleLeaseMs = 7 * 60_000;
 
 type Lease = { readonly solveId: string; readonly since: number };
 
@@ -75,7 +75,7 @@ export type DriverPorts = {
   readonly release: (solveId: string) => Promise<void>;
 };
 
-const readOrMissing = (path: string): Promise<string | undefined> =>
+export const readOrMissing = (path: string): Promise<string | undefined> =>
   readFile(path, 'utf8').catch((error: unknown) => {
     if (
       typeof error === 'object' &&

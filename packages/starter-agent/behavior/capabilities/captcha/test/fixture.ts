@@ -89,7 +89,7 @@ export const startFixture = ({
   solve,
   chat,
 }: {
-  readonly solve: (body: unknown) => unknown;
+  readonly solve: (body: unknown) => unknown | Promise<unknown>;
   readonly chat?: ChatTurn;
 }) => {
   const seen: BrainSeen[] = [];
@@ -101,7 +101,7 @@ export const startFixture = ({
       if (!pathname.startsWith('/brain/')) return fixturePage(pathname);
       const body: unknown = await request.json();
       seen.push({ path: pathname, authorization: request.headers.get('authorization'), body });
-      if (pathname === '/brain/captcha/solve') return Response.json(solve(body));
+      if (pathname === '/brain/captcha/solve') return Response.json(await solve(body));
       if (pathname === '/brain/fireworks/v1/chat/completions' && chat !== undefined) {
         const typed = body as Parameters<ChatTurn>[0] & { readonly model: string };
         return streamed(typed.model, chat(typed));

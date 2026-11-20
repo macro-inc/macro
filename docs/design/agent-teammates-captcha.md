@@ -25,9 +25,11 @@ agent (Claude) ─ solveCaptcha({ reason })                         packages/sta
 - **What CapSolver gets:** the task type, the page's origin and path (never its query or fragment),
   the site key, and the widget's own `action`, `cdata` or `data-s`. Never cookies, page content, a
   proxy or a user agent. All tasks are proxyless.
-- **The outcome is observed.** `solved` needs evidence: the page navigated, the challenge is gone,
-  or the widget's callback ran. `injected` means the token is in the form and the page hasn't
-  reacted yet, so the agent submits it. The result comes from the MCP server's record of what it
+- **The outcome is observed.** `solved` needs evidence: the page moved to another origin or path
+  since right before the token went in, or the challenge is gone. The widget's callback running is
+  not evidence, since the solver runs it itself. `injected` means the token is in the form (and the
+  callback ran) but the challenge is still shown, so the agent submits it. Of two attempts in a
+  run, the better outcome is the one reported. The result comes from the MCP server's record of what it
   did, never from the model's words.
 - **The owner as fallback.** A Cloudflare interstitial, hCaptcha, DataDome, AWS WAF, GeeTest,
   Arkose, PerimeterX and image puzzles come back `unsupported`. Those, and every failure, tell the
@@ -38,12 +40,12 @@ agent (Claude) ─ solveCaptcha({ reason })                         packages/sta
 
 | Limit | Where |
 | --- | --- |
-| One OpenCode run per call: at most 8 model steps, 2048 output tokens a step, 2 solves, 5 minutes | `packages/starter-agent` (`captcha/opencode.ts`, `captcha/mcp.ts`) |
+| One OpenCode run per call: at most 8 model steps, 2048 output tokens a step, 2 solves, 5 minutes (`timeout` inside the sandbox stops OpenCode and its MCP server) | `packages/starter-agent` (`captcha/opencode.ts`, `captcha/mcp.ts`) |
 | Every OpenCode tool off except the two captcha tools; no subagents, shell, files, web, skills or plugins; none of the computer's own OpenCode config | `captcha/opencode.ts` |
-| One driver: the solver's lease refuses the agent's own browser steps; the owner's take-over file refuses both | `browser/driver.ts` |
-| Per agent: 1 concurrent solve, 20 an hour, 100 a day; 120 s of polling per solve | harness `captcha_gateway` |
-| Idempotent by `solveId`: a repeat joins the same solve and never reaches CapSolver twice | harness `captcha_gateway` |
-| Only Kimi K3 on the Fireworks route; `max_tokens` at most 8192 | harness `fireworks_gateway` |
+| One driver: the solver's lease refuses the agent's own browser steps; the owner's take-over file refuses both, and the solver checks it again before it touches the page | `browser/driver.ts`, `captcha/solve.ts` |
+| Per agent and per harness process: 1 concurrent solve, 20 an hour, 100 a day, reset on deploy (two replicas allow twice that); 120 s of polling per solve | harness `captcha_gateway` |
+| Idempotent by `solveId` within a process: a repeated request joins the same solve. Each attempt sends a fresh id | harness `captcha_gateway` |
+| Only Kimi K3 on the Fireworks route; `max_tokens` at most 8192, `n` 1, 5 minutes per call | harness `fireworks_gateway` |
 | The harness holds every `/brain/*` call while the owner drives the agent's screen | agent screen (pending: lands with the screen take-over work) |
 
 The agent's charter (`AGENT.md`) says to use it only for what the owner asked: never to make

@@ -13,6 +13,8 @@ export type CaptchaPorts = {
   readonly config: ReturnType<typeof captchaConfig>;
   /** The browser's DevTools, which the solver's MCP server drives. */
   readonly browserEndpoint: string;
+  /** The harness's take-over file (`BrowserConfig.screenDriver`). */
+  readonly screenDriver: string;
   readonly withPage: <Value>(use: (page: Page) => Promise<Value>) => Promise<Value>;
   readonly driving: BrowserPorts['driving'];
   readonly fetch: (request: Request) => Promise<Response>;
@@ -21,6 +23,7 @@ export type CaptchaPorts = {
 const captchaPorts = (base: Base, browser: BrowserPorts): CaptchaPorts => ({
   config: captchaConfig(base),
   browserEndpoint: browser.config.endpoint,
+  screenDriver: browser.config.screenDriver,
   withPage: (use) => withCurrentPage(browser.config.endpoint, use),
   driving: browser.driving,
   fetch: (request) => fetch(request),

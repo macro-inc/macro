@@ -47,6 +47,9 @@ const OUTPUT_TOKEN_FIELDS: [&str; 2] = ["max_tokens", "max_completion_tokens"];
 const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
 const MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+/// The whole upstream call, stream included: a CAPTCHA run's model turn is
+/// at most 8192 tokens, and the run itself ends after five minutes.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 /// Chunks buffered between Fireworks and a slow caller.
 const STREAM_BUFFER_CHUNKS: usize = 16;
 /// Upstream headers returned to the caller.
@@ -80,6 +83,7 @@ impl FireworksGateway {
             recorder,
             client: reqwest::Client::builder()
                 .connect_timeout(CONNECT_TIMEOUT)
+                .timeout(REQUEST_TIMEOUT)
                 .build()?,
             upstream_url: upstream_url.trim_end_matches('/').to_owned(),
             api_key,
@@ -93,6 +97,11 @@ pub(crate) fn router(gateway: FireworksGateway) -> Router {
         .route("/brain/fireworks/v1/chat/completions", post(chat))
         .route("/brain/fireworks/{*rest}", any(unsupported))
         .with_state(Arc::new(gateway))
+        // Adopts the caller's traceparent, so `brain_fireworks.chat` joins the run's trace.
+        .layer(
+            macro_tower_layers::MacroRequestIdAndTracingLayer::new(Duration::from_millis(200))
+                .into_inner(),
+        )
 }
 
 async fn unsupported() -> Response {
@@ -251,6 +260,13 @@ fn pinned_request(body: &[u8]) -> Result<(Vec<u8>, bool), Rejection> {
     match request.get("model").and_then(Value::as_str) {
         Some(KIMI_K3) => {}
         _ => return Err(Rejection::model_not_allowed()),
+    }
+
+    // One choice per call: `n` would multiply the output the caps bound.
+    if let Some(choices) = request.get("n")
+        && choices.as_u64() != Some(1)
+    {
+        return Err(Rejection::invalid_request("n must be 1"));
     }
 
     let mut capped = false;

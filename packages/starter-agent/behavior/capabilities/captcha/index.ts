@@ -65,12 +65,36 @@ const nextStep = (result: SolveCaptchaResult): string => {
   return askOwner;
 };
 
-/** The attempts the MCP server recorded, in order. */
+/** How long past its own limit a run may take before it is killed from outside. */
+const backstopMs = 30_000;
+
+/** The attempts the MCP server recorded, in order; a line a killed run cut short is skipped. */
 const recorded = (text: string | undefined): readonly Recorded[] =>
   (text ?? '')
     .split('\n')
     .filter((line) => line.trim() !== '')
-    .map((line) => JSON.parse(line) as Recorded);
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as Recorded];
+      } catch {
+        return [];
+      }
+    });
+
+/** Most useful first: a solved or injected attempt stands even if a later one got less. */
+const rank = (outcome: Outcome): number => {
+  if (outcome.outcome === 'solved') return 0;
+  if (outcome.outcome === 'injected') return 1;
+  return 2;
+};
+
+/** The attempt to report: the best one, the latest among equals. */
+const bestOutcome = (attempts: readonly Recorded[]): Outcome | undefined =>
+  attempts.reduce<Outcome | undefined>(
+    (best, { outcome }) =>
+      best === undefined || rank(outcome) <= rank(best) ? outcome : best,
+    undefined
+  );
 
 /** One OpenCode run, its files in a directory of its own that is removed after. */
 const runSolver = (needs: Needs, solveId: string): Promise<SolveCaptchaResult> =>
@@ -87,6 +111,7 @@ const runSolver = (needs: Needs, solveId: string): Promise<SolveCaptchaResult> =
         solveId,
         server: config.server,
         record,
+        screenDriver: needs.captcha.screenDriver,
         bun: process.execPath,
         traceparent: span.traceparent(),
         telemetry: {
@@ -94,15 +119,19 @@ const runSolver = (needs: Needs, solveId: string): Promise<SolveCaptchaResult> =
           environment: telemetryEnvironment(process.env),
         },
       };
-      const ran = await needs.shell.run([...needs.sandbox, ...openCodeArgv()], {
-        cwd: home,
-        env: openCodeEnvironment(place, home, needs.join),
-        timeoutMs: config.runLimitMs,
-      });
+      // `timeout` inside the sandbox stops the run at the limit; this one only backs it up.
+      const ran = await needs.shell.run(
+        [...needs.sandbox, ...openCodeArgv(config.runLimitMs)],
+        {
+          cwd: home,
+          env: openCodeEnvironment(place, home, needs.join),
+          timeoutMs: config.runLimitMs + backstopMs,
+        }
+      );
       span.set('captcha.opencode_exit', ran.code);
       const attempts = recorded(await readOrMissing(record));
       span.set('captcha.attempts', attempts.length);
-      const outcome = attempts.at(-1)?.outcome;
+      const outcome = bestOutcome(attempts);
       return outcome ?? { outcome: 'solverFailed', exitCode: ran.code };
     } finally {
       await rm(home, { recursive: true, force: true });

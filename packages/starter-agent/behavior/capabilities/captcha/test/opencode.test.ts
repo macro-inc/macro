@@ -76,6 +76,7 @@ test.skipIf(!available)(
             runLimitMs: 120_000,
           },
           browserEndpoint: endpoint,
+          screenDriver: join(directory, 'screen-driver'),
           withPage: (use) => withCurrentPage(endpoint, use),
           driving,
           fetch: (request) => fetch(request),
