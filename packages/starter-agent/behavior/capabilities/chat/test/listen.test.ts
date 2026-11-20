@@ -163,12 +163,10 @@ test('the screen span records the verdict and each probability by question, neve
     'chat.screen.p.asks_agent': 0.92,
     'chat.screen.p.about_agent': 0.1,
   });
-  expect(screenAttributes({ kind: 'irrelevant', p: { fallback: 1 } })).toEqual(
-    {
-      'chat.screen.verdict': 'irrelevant',
-      'chat.screen.p.fallback': 1,
-    }
-  );
+  expect(screenAttributes({ kind: 'irrelevant', p: { fallback: 1 } })).toEqual({
+    'chat.screen.verdict': 'irrelevant',
+    'chat.screen.p.fallback': 1,
+  });
   expect(screenAttributes({ kind: 'ignored' })).toEqual({
     'chat.screen.verdict': 'ignored',
   });
