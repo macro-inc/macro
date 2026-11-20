@@ -53,12 +53,18 @@ describe('refreshChannelParticipants', () => {
 
   it('stops waiting for readers that do not read again within three seconds', async () => {
     vi.useFakeTimers();
-    coordinator.refresh.mockReturnValue(new Promise<void>(() => undefined));
+    // The wait starts with the refresh, after the soup client's import.
+    let startedAt = 0;
+    coordinator.refresh.mockImplementation(() => {
+      startedAt = Date.now();
+      return new Promise<void>(() => undefined);
+    });
     let done = false;
     const refreshed = refreshChannelParticipants(CHANNEL_ID).then(() => {
       done = true;
     });
-    await vi.advanceTimersByTimeAsync(2_900);
+    await vi.waitFor(() => expect(coordinator.refresh).toHaveBeenCalled());
+    await vi.advanceTimersByTimeAsync(startedAt + 2_900 - Date.now());
     expect(done).toBe(false);
     await vi.advanceTimersByTimeAsync(200);
     await refreshed;
