@@ -406,7 +406,8 @@ async fn new_drafts_saved_together_in_one_thread_both_commit(
             EmailPgRepo::new(pool)
                 .insert_message(&draft.message, &draft.contacts, link(), None, true)
                 .await
-                .map(|_| ())
+                // The settled ids prove the save was accepted, not refused.
+                .map(|settled| settled.is_some())
         })
     };
     let (first, second) = (save(pool.clone()), save(pool.clone()));
@@ -415,10 +416,8 @@ async fn new_drafts_saved_together_in_one_thread_both_commit(
 
     let (first, second) = (bounded(first).await?, bounded(second).await?);
     assert!(
-        first.is_ok() && second.is_ok(),
-        "{:?} {:?}",
-        first.err(),
-        second.err()
+        matches!((&first, &second), (Ok(true), Ok(true))),
+        "{first:?} {second:?}"
     );
     Ok(())
 }
