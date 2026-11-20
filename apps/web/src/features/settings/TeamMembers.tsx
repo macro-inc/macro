@@ -70,6 +70,7 @@ import { TeamMemberRow } from './components/team-member-row';
 import { TeammateRunsOn } from './components/teammate-runs-on';
 import { teamAgentComputer, teamAgentSetupStep } from './core/team-agent-setup';
 import { ownMachineRemoveBody } from './core/teammate-host';
+import { installProblemLine } from './core/teammate-install-problem';
 import {
   SettingsCard,
   SettingsPage,
@@ -608,6 +609,14 @@ export function TeamMembers(props: { team: TeamSummary }) {
                               : undefined
                           }
                         />
+                      }
+                      problem={
+                        selfHosted()
+                          ? installProblemLine(
+                              agent.installProblem,
+                              hostName(agent) ?? t('teamAgents.ownersComputer')
+                            )
+                          : undefined
                       }
                       setupStep={agentSetupStep(agent)}
                       onRetry={
