@@ -182,22 +182,30 @@ async function scriptAuthService(
     planGate: undefined as Promise<void> | undefined,
   };
   const viewerOwnsRuntimes = options.viewerOwnsRuntimes ?? true;
-  const members = () => [
-    { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
-    { user_id: MEMBER, role: 'member', team_id: 'team-1', plan: 'premium' },
-    ...(options.extraMembers ?? []).map((member) => ({
-      team_id: 'team-1',
-      plan: 'premium',
-      ...member,
-    })),
-    // The server adds an agent's own account to the team.
-    ...backend.agents.map((agent) => ({
-      user_id: agent.userId,
-      role: 'member',
-      team_id: 'team-1',
-      plan: 'premium',
-    })),
-  ];
+  // Roles the owner changed take effect on the next read.
+  const withRole = <T extends { user_id: string; role: string }>(member: T) => {
+    const update = [...backend.roleUpdates]
+      .reverse()
+      .find((change) => change.team_user_id === member.user_id);
+    return update ? { ...member, role: update.role } : member;
+  };
+  const members = () =>
+    [
+      { user_id: OWNER, role: 'owner', team_id: 'team-1', plan: 'premium' },
+      { user_id: MEMBER, role: 'member', team_id: 'team-1', plan: 'premium' },
+      ...(options.extraMembers ?? []).map((member) => ({
+        team_id: 'team-1',
+        plan: 'premium',
+        ...member,
+      })),
+      // The server adds an agent's own account to the team.
+      ...backend.agents.map((agent) => ({
+        user_id: agent.userId,
+        role: 'member',
+        team_id: 'team-1',
+        plan: 'premium',
+      })),
+    ].map(withRole);
   // Each agent's computer, as the team's computer list reports it.
   const computer = (agent: Agent) => ({
     id: agent.computerId,
@@ -1386,12 +1394,17 @@ test("a member's ⋯ holds their plan, role, CRM access and Remove", async ({
   await expect(rowAction(menu, testInfo, 'Remove from team')).toBeEnabled();
   await screenshot(page, testInfo, 'member-menu');
 
-  // Choosing a role or a plan makes the change and closes the menu.
+  // Choosing a role or a plan makes the change and closes the menu; the row
+  // then reads the new role, and its menu has it checked.
   await rowChoice(menu, testInfo, /^Admin/).click();
   await expect(menu).toBeHidden();
   await expect
     .poll(() => backend.roleUpdates)
     .toEqual([{ team_user_id: MEMBER, role: 'admin' }]);
+  await expect(summaryOf(page, MEMBER)).toHaveText('Admin · Pro');
+  const promoted = await openRowMenu(page, testInfo, 'sam@example.com');
+  await expect(rowChoice(promoted, testInfo, /^Admin/)).toBeChecked();
+  await closeRowMenu(page, promoted);
 
   // One seat move at a time: while it runs, every plan choice waits.
   let answerMove = () => {};
