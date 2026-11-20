@@ -149,8 +149,18 @@ export async function openLane(
     failed.push(failure);
     requestFailureSink?.(failure);
   });
-  await page.goto(`${app.origin}${options.path ?? "/app/home"}`, { waitUntil: "domcontentloaded", timeout: 180_000 });
-  await loadProbe(page);
+  // A page load fetches about a thousand modules from the dev server; the
+  // browser fails them all when the host's network changes (failed
+  // requests, above). Load the page again then, a few times.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await page.goto(`${app.origin}${options.path ?? "/app/home"}`, { waitUntil: "domcontentloaded", timeout: 180_000 });
+      await loadProbe(page);
+      break;
+    } catch (error) {
+      if (attempt >= 4) throw error;
+    }
+  }
   return { side: app.side, app, context, page, touch, failed };
 }
 

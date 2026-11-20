@@ -469,6 +469,9 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             if (reached.every((r) => r[0] !== null && r[1] !== null)) break;
             await new Promise((r) => setTimeout(r, 250));
           }
+          // A lane whose requests the browser failed for a network change in the
+          // window may miss the bound for that reason alone: say so in the class.
+          const changed = lanes.live.map((lane) => (networkChangedSince(lane, liveStart) ? ':after-network-change' : ''));
           for (let i = 0; i < specs.length; i++) {
             const tag = specs[i].groupBy ? 'grouped' : i < 2 ? 'home' : 'random';
             for (const side of [0, 1]) {
@@ -478,11 +481,11 @@ async function sequencesPhase(pair: Pair, userFor: (key: string) => User) {
             }
             const [o, n] = reached[i];
             if (o !== null && n === null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:new-not-within-bound`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][1] ?? [], raw[i][1]) ?? ''}` })], 'sequences');
+              tallyInto(classes, [classify({ signature: `live:${tag}:new-not-within-bound${changed[1]}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][1] ?? [], raw[i][1]) ?? ''}` })], 'sequences');
             } else if (o === null && n !== null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:old-not-within-bound`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
+              tallyInto(classes, [classify({ signature: `live:${tag}:old-not-within-bound${changed[0]}`, kind: 'order', detail: `${JSON.stringify(at)} ${rowsDiff(lastLive[i][0] ?? [], raw[i][0]) ?? ''}` })], 'sequences');
             } else if (o === null && n === null) {
-              tallyInto(classes, [classify({ signature: `live:${tag}:both-not-within-bound`, kind: 'order', detail: JSON.stringify(at) })], 'sequences');
+              tallyInto(classes, [classify({ signature: `live:${tag}:both-not-within-bound${changed[0] || changed[1]}`, kind: 'order', detail: JSON.stringify(at) })], 'sequences');
             }
           }
           checks.live = reached;
@@ -607,4 +610,9 @@ async function readUntilAnswered(where: string, lanes: Lane[], attempt: () => Pr
     record('retries.jsonl', { at: new Date().toISOString(), where, tries, unanswered, requests: requests.slice(0, 12) });
     await new Promise((r) => setTimeout(r, 3000));
   }
+}
+
+/** Whether the browser failed one of the lane's requests for a network change since `since` (ms). */
+function networkChangedSince(lane: Lane, since: number) {
+  return lane.failed.some((f) => f.error === 'net::ERR_NETWORK_CHANGED' && Date.parse(f.at) >= since);
 }
