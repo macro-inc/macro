@@ -194,6 +194,19 @@ pkgs.testers.runNixOSTest {
         machine.succeed(f"grep -x {trace} /run/macrod/agent-traceparent")
         machine.succeed("stat -c '%U %a' /run/macrod/agent-traceparent | grep -x 'root 644'")
         machine.succeed("test ! -s /run/macro-agent-inbox/setup-traceparent")
+        # A trace that can't be installed doesn't stop the environment, and
+        # stays in the inbox for the next delivery.
+        machine.succeed("rm -f /run/macrod/agent-traceparent && mkdir /run/macrod/agent-traceparent.new")
+        machine.succeed(f"runuser -u macro -- sh -c 'printf %s {trace} > /run/macro-agent-inbox/setup-traceparent'")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Bea > /run/macro-agent-inbox/agent.env'")
+        machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Bea /var/lib/macrod/agent.env")
+        machine.succeed("test ! -e /run/macrod/agent-traceparent")
+        machine.succeed(f"grep -x {trace} /run/macro-agent-inbox/setup-traceparent")
+        machine.succeed("rmdir /run/macrod/agent-traceparent.new")
+        machine.succeed("runuser -u macro -- sh -c 'echo MACRO_AGENT_NAME=Ada > /run/macro-agent-inbox/agent.env'")
+        machine.wait_until_succeeds("grep -x MACRO_AGENT_NAME=Ada /var/lib/macrod/agent.env")
+        machine.succeed(f"grep -x {trace} /run/macrod/agent-traceparent")
+        machine.succeed("test ! -s /run/macro-agent-inbox/setup-traceparent")
         # A symlink macro plants in its inbox can't make root read or write
         # through it.
         shadow = machine.succeed("sha256sum /etc/shadow")
