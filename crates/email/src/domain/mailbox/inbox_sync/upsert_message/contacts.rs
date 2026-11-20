@@ -46,10 +46,7 @@ where
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::SqsEnqueueFailed,
-                source: e.context(format!(
-                    "Failed to enqueue contacts message for {}",
-                    link.macro_id
-                )),
+                source: e.context("Failed to enqueue contacts message"),
             })
         })?;
 

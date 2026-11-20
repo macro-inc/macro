@@ -1,3 +1,4 @@
+import type { CacheAuthorityHost } from '../authority';
 import type { PeopleCache } from '../people/host';
 import type { IdentityBindingWire, MutationInspection } from '../protocol';
 /**
@@ -77,6 +78,8 @@ export type InspectQueryVariantsArgs = Omit<
 >;
 
 export interface CacheWriteArgs extends Omit<CacheReadArgs, 'priority'> {
+  /** Capture before dispatch; the shared owner compares it before publication. */
+  generation: string;
   data: unknown;
   /** Installs this active query's dependencies from the normalized response. */
   registerDependencies?: boolean;
@@ -135,6 +138,8 @@ export type AffectedOperationsListener = (
 ) => void;
 
 export interface CacheHost {
+  /** Shared permission ordering; required by the current browser/native runtime. */
+  readonly authority?: CacheAuthorityHost;
   /** The host understands engine-maintained fragment query requests. */
   readonly liveQueries?: boolean;
   /** Stable id of this context; used to namespace operation ids. */
@@ -169,7 +174,10 @@ export interface CacheHost {
     args: CalendarRangeCacheArgs
   ): Promise<CalendarRangeCacheResult>;
   /** Atomically applies calendar coverage, deletions, and sync state. */
-  calendarCommit(args: CalendarCommitArgs): Promise<CalendarCommitCacheResult>;
+  calendarCommit(
+    args: CalendarCommitArgs,
+    generation: string
+  ): Promise<CalendarCommitCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
   /**
    * Stores a background query response and returns only fields not marked
@@ -221,7 +229,10 @@ export interface CacheHost {
   /** Evict records by entity key (external/push updates); returns affected local op ids. */
   invalidate(keys: string[]): Promise<AffectedOperationsResult>;
   /** Apply explicit server-provided cache-deletion effects. */
-  deleteRecords(keys: string[]): Promise<AffectedOperationsResult>;
+  deleteRecords(
+    keys: string[],
+    authorityGeneration?: string
+  ): Promise<AffectedOperationsResult>;
   /** urql teardown for an operation key. */
   teardown(opKey: number): Promise<void>;
   /** Wipe all cached state (logout). */

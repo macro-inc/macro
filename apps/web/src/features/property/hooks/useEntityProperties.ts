@@ -29,6 +29,7 @@ export function useEntityProperties(
   isLoading: Accessor<boolean>;
   error: Accessor<string | null>;
   refetch: () => Promise<unknown>;
+  isCacheMaintained: Accessor<boolean>;
   addProperty: (propertyDefinitionId: string) => Promise<void>;
   removeProperty: (propertyId: string) => Promise<void>;
 } {
@@ -50,6 +51,7 @@ export function useEntityProperties(
       fireAndForget(refresh, 'entity-properties');
       return refresh;
     },
+    isCacheMaintained: () => query.isCacheMaintained,
     addProperty: (propertyDefinitionId: string) =>
       addMutation.mutateAsync({ entityId, entityType, propertyDefinitionId }),
     removeProperty: (propertyId: string) =>

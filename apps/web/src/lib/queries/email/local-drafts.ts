@@ -801,7 +801,11 @@ export function localDraftQueueLifecycle(
       (!draft || migrated.get(id) === draft.revision)
     ) {
       const optimistic = object(object(mutation.optimisticData).saveEmailDraft);
-      const message = object(optimistic.draft);
+      // Permission retirement preserves authored attachment/sender recovery
+      // metadata while removing the copied response that contained it.
+      const message = object(
+        optimistic.draft ?? object(mutation.clientMetadata).legacyDraftRecovery
+      );
       const attachments: LocalDraftAttachment[] = [
         ...objects(message.attachmentsDraft).map(
           (attachment): LocalDraftAttachment => ({
