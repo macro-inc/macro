@@ -388,12 +388,24 @@ fn exhausted_windows_and_multi_partition_queries_match_the_original_plan() {
             assert!(
                 try_select(&storage.connection(), &multi, &[])
                     .unwrap()
-                    .is_none()
+                    .is_some()
             );
             assert_eq!(
                 hits(&storage.connection(), &multi, &[]),
                 reference(&storage.connection(), &multi, &[])
             );
+            // Partitions that match nothing leave no window to read.
+            let mut nothing = multi.as_query().clone();
+            for partition in &mut nothing.partitions {
+                partition.predicate = PredicateExpr::None;
+            }
+            let nothing = ValidatedIndexQuery::new(nothing).unwrap();
+            assert!(
+                try_select(&storage.connection(), &nothing, &[])
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(hits(&storage.connection(), &nothing, &[]).is_empty());
             let direct = storage.query_predicate_index(&one).await.unwrap();
             let PredicateQueryResult::Complete(keys) = direct else {
                 panic!("expected complete page")
@@ -411,6 +423,29 @@ fn query_with_limit(
 ) -> ValidatedIndexQuery {
     let mut descriptor = query(predicate, direction, tie).as_query().clone();
     descriptor.limit = limit;
+    ValidatedIndexQuery::new(descriptor).unwrap()
+}
+
+/// `query` over one partition (shape 0), over a second partition with the
+/// opposite filter (1), or over only the second partition while the first
+/// matches nothing (2).
+fn partitioned(query: ValidatedIndexQuery, shape: u8) -> ValidatedIndexQuery {
+    let mut descriptor = query.as_query().clone();
+    let predicate = descriptor.partitions[0].predicate.clone();
+    let other = |predicate| PartitionPredicate {
+        partition: Token::new("other").unwrap(),
+        predicate,
+    };
+    match shape {
+        1 => descriptor
+            .partitions
+            .push(other(PredicateExpr::Not(Box::new(predicate)))),
+        2 => {
+            descriptor.partitions[0].predicate = PredicateExpr::None;
+            descriptor.partitions.push(other(predicate));
+        }
+        _ => {}
+    }
     ValidatedIndexQuery::new(descriptor).unwrap()
 }
 
@@ -573,12 +608,17 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                     .await
                     .unwrap();
             }
-            for predicate in &predicates {
+            for (predicate, shape) in predicates
+                .iter()
+                .flat_map(|predicate| [0u8, 1, 2].map(move |shape| (predicate, shape)))
+            {
                 for limit in [1u16, 7, 20, 100] {
                     for direction in [SortDirection::Asc, SortDirection::Desc] {
                         for tie in [SortDirection::Asc, SortDirection::Desc] {
-                            let mut page =
-                                query_with_limit(predicate.clone(), direction, tie, limit);
+                            let mut page = partitioned(
+                                query_with_limit(predicate.clone(), direction, tie, limit),
+                                shape,
+                            );
                             if shadowed {
                                 excluded = optimistic_query_status(&storage.connection(), &page)
                                     .unwrap()
@@ -589,7 +629,7 @@ fn widened_windows_match_the_set_based_plan_on_every_page() {
                                 assert_eq!(
                                     actual,
                                     reference(&storage.connection(), &page, &excluded),
-                                    "{predicate:?} limit {limit} {direction:?}/{tie:?} shadowed {shadowed}"
+                                    "{predicate:?} shape {shape} limit {limit} {direction:?}/{tie:?} shadowed {shadowed}"
                                 );
                                 let Some((key, value)) = actual.last() else {
                                     break;
