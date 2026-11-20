@@ -16,8 +16,10 @@ failures=0
 
 cleanup() {
   if ((failures)); then
-    echo "# the container's log"
-    docker logs "$name" 2>&1 | tail -n 80
+    echo "# the container's log (without Chromium's and the desktop's noise)"
+    docker logs "$name" 2>&1 |
+      grep -vE '^\[[0-9:/.]+:(ERROR|WARNING):|GLX|EGL|^[EW]: \[|xkbcomp|^> |dbind-WARNING|^$' |
+      tail -n 120
   fi
   docker rm -f "$name" "$server" >/dev/null 2>&1 || true
   docker volume rm "$volume" "$volume-provider" >/dev/null 2>&1 || true
