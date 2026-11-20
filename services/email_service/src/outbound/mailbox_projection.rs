@@ -334,11 +334,23 @@ where
             }
             .await;
             if let Err(error) = result {
-                if self
+                let settled = self
                     .settle_failed_attachment(mailbox.link_id, attachment_id, claimed_at, &error)
-                    .await?
-                {
-                    continue;
+                    .await;
+                let error = match settled {
+                    Ok(true) => continue,
+                    Ok(false) => error,
+                    // Recording the failure failed; that error is the step's now.
+                    Err(settle_error) => settle_error,
+                };
+                // The projection names the attachment of an upload effect
+                // itself (`EffectFailure::AttachmentUpload`); a download or
+                // database failure carries none, so it is named here, once.
+                if !matches!(error, MailboxError::Effect(_)) {
+                    tracing::Span::current().record(
+                        "outlook.attachment_id",
+                        tracing::field::display(attachment_id),
+                    );
                 }
                 return Err(error);
             }

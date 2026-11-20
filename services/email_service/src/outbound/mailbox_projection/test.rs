@@ -396,3 +396,208 @@ async fn a_lock_timeout_storing_the_file_mapping_is_not_counted(db: PgPool) {
     assert_eq!(state.failures, 0);
     assert!(!state.claimed && !state.abandoned);
 }
+
+/// Everything the worker logs, as its formatter writes it.
+#[derive(Clone, Default)]
+struct Logs(Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Logs {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl Logs {
+    fn capture(&self) -> tracing::subscriber::DefaultGuard {
+        let writer = self.clone();
+        let guard = tracing::subscriber::set_default(
+            tracing_subscriber::fmt()
+                .with_max_level(tracing::Level::TRACE)
+                .with_ansi(false)
+                .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
+                .with_writer(move || writer.clone())
+                .finish(),
+        );
+        // A callsite another test thread registered first can keep a cached
+        // "never" interest; recompute it for this subscriber.
+        tracing::callsite::rebuild_interest_cache();
+        guard
+    }
+
+    fn text(&self) -> String {
+        String::from_utf8(self.0.lock().unwrap().clone()).unwrap()
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_failed_upload_logs_no_part_of_its_presigned_url(db: PgPool) {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    // The upload URL carries its credentials, and nothing listens on it.
+    let storage = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/internal/file"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "upload_url": "http://127.0.0.1:9/upload?X-Amz-Credential=access-key-id&X-Amz-Security-Token=session-token-value&X-Amz-Signature=signature-value",
+            "file_location": format!("{}/file/stored", storage.uri()),
+            "id": Uuid::from_u128(0x5f5).to_string(),
+        })))
+        .mount(&storage)
+        .await;
+    let downloads = Downloads {
+        answer: Ok(b"image".to_vec()),
+        count: Arc::new(AtomicUsize::new(0)),
+    };
+    let effects = effects(db.clone(), downloads, &storage.uri());
+    let logs = Logs::default();
+    let capture = logs.capture();
+
+    let error = effects
+        .attachments(MAILBOX, &context(), false)
+        .await
+        .unwrap_err();
+    drop(capture);
+
+    assert!(
+        matches!(
+            error,
+            MailboxError::Effect(EffectFailure::AttachmentUpload { .. })
+        ),
+        "{error:?}"
+    );
+    let logged = logs.text();
+    assert!(
+        logged.contains("mailbox projection effect deferred"),
+        "{logged}"
+    );
+    for secret in [
+        "X-Amz",
+        "access-key-id",
+        "session-token-value",
+        "signature-value",
+    ] {
+        assert!(!logged.contains(secret), "{secret} in {logged}");
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_failed_download_names_its_attachment_on_the_projection(db: PgPool) {
+    use tracing::Instrument;
+
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    let effects = effects(db.clone(), Downloads::failing(interrupted()), UNUSED_URL);
+    let logs = Logs::default();
+    let capture = logs.capture();
+    let projection = tracing::info_span!(
+        "outlook.sync.project",
+        outlook.attachment_id = tracing::field::Empty
+    );
+
+    effects
+        .attachments(MAILBOX, &context(), false)
+        .instrument(projection)
+        .await
+        .unwrap_err();
+    drop(capture);
+
+    let logged = logs.text();
+    assert!(
+        logged.contains(&format!("outlook.attachment_id={IMAGE_ID}")),
+        "{logged}"
+    );
+}
+
+/// A download that fails while another transaction holds the attachment's
+/// row, so recording the failure waits past its lock timeout.
+struct LockedRowDownload {
+    db: PgPool,
+    lock: tokio::sync::Mutex<Option<sqlx::Transaction<'static, sqlx::Postgres>>>,
+}
+
+impl MailboxAttachmentAccess for LockedRowDownload {
+    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+        let mut lock = self.db.begin().await.unwrap();
+        sqlx::query!(
+            "SELECT id FROM email_attachments WHERE id = $1 FOR UPDATE",
+            IMAGE_ID
+        )
+        .fetch_one(&mut *lock)
+        .await
+        .unwrap();
+        *self.lock.lock().await = Some(lock);
+        Err(MailboxError::Provider(interrupted()))
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_failure_that_cannot_be_recorded_still_names_its_attachment(db: PgPool) {
+    use tracing::Instrument;
+
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    let impatient = sqlx::postgres::PgPoolOptions::new()
+        .connect_with(
+            (*db.connect_options())
+                .clone()
+                .options([("lock_timeout", "200ms")]),
+        )
+        .await
+        .unwrap();
+    let downloads = LockedRowDownload {
+        db: db.clone(),
+        lock: tokio::sync::Mutex::new(None),
+    };
+    let effects = effects(impatient, downloads, UNUSED_URL);
+    let logs = Logs::default();
+    let capture = logs.capture();
+    let projection = tracing::info_span!(
+        "outlook.sync.project",
+        outlook.attachment_id = tracing::field::Empty
+    );
+
+    let error = effects
+        .attachments(MAILBOX, &context(), false)
+        .instrument(projection)
+        .await
+        .unwrap_err();
+    drop(capture);
+
+    assert!(error.is_lock_timeout(), "{error:?}");
+    let logged = logs.text();
+    assert!(
+        logged.contains(&format!("outlook.attachment_id={IMAGE_ID}")),
+        "{logged}"
+    );
+}
