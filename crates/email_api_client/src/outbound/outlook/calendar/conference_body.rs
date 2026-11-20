@@ -138,18 +138,23 @@ fn replace_rewritten_block(
             .and_modify(|most| *most = (*most).max(media))
             .or_insert(media);
     }
-    // A part showing only media is the block's when the block shows those
-    // same sources; media the person added stays theirs.
-    let meeting_sources: HashSet<String> = media_sources(&meeting.root_element()).collect();
+    // Media in a part is the block's only when the block shows that same
+    // source; media the person added, or media without a source to compare,
+    // stays theirs.
+    let meeting_sources: HashSet<String> =
+        media_sources(&meeting.root_element()).flatten().collect();
     let part_of = |part: &ElementRef<'_>| {
         let text = plain_text(part);
         let media = media_count(part);
-        let own_media = || media_sources(part).all(|source| meeting_sources.contains(&source));
+        let own_media = || {
+            media_sources(part)
+                .all(|source| source.is_some_and(|source| meeting_sources.contains(&source)))
+        };
         match meeting_texts.get(&text) {
             _ if text.is_empty() && media == 0 => MeetingPart::Textless,
             _ if text.is_empty() && own_media() => MeetingPart::Meeting,
             _ if text.is_empty() => MeetingPart::Person,
-            Some(&most) if media <= most => MeetingPart::Meeting,
+            Some(&most) if media <= most && own_media() => MeetingPart::Meeting,
             Some(_) => MeetingPart::Mixed,
             None => MeetingPart::Person,
         }
@@ -230,20 +235,20 @@ const MEDIA_ELEMENTS: [&str; 9] = [
     "img", "picture", "video", "audio", "iframe", "object", "embed", "svg", "canvas",
 ];
 
-/// Where each media element under `element` loads from; one without a
-/// source counts as no source the block has.
-fn media_sources<'a>(element: &ElementRef<'a>) -> impl Iterator<Item = String> + 'a {
+/// Where each media element under `element` loads from, or `None` for one
+/// whose source cannot be told apart from another's.
+fn media_sources<'a>(element: &ElementRef<'a>) -> impl Iterator<Item = Option<String>> + 'a {
     element
         .descendants()
         .filter_map(ElementRef::wrap)
         .filter(|descendant| MEDIA_ELEMENTS.contains(&descendant.value().name()))
         .map(|media| {
-            media
-                .value()
-                .attr("src")
-                .or_else(|| media.value().attr("data"))
-                .unwrap_or_default()
-                .to_owned()
+            ["src", "data", "srcset"]
+                .iter()
+                .filter_map(|attribute| media.value().attr(attribute))
+                .map(str::trim)
+                .find(|source| !source.is_empty())
+                .map(str::to_owned)
         })
 }
 
