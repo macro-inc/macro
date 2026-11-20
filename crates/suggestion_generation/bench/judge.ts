@@ -230,9 +230,10 @@ export function describeRoutine(row: RoutineRow): string {
  * text `renamesExactly`, and its mail renamed is the first seat's mail
  * exactly, though a snippet cut at 500 characters may cut a longer domain's
  * copy elsewhere), the judge reads the first seat's mail and the suggestions
- * renamed: every seat that read the mail at one `now` (in a routines run,
- * every seat of every rep) then shares that text word for word (`shared`).
- * Otherwise it reads the seat's own.
+ * renamed, so every seat that read the mail at one `now` (in a routines run,
+ * every seat of every rep) and renames this way gives the judge the same mail
+ * word for word (`shared`); the suggestions stay each attempt's own.
+ * Otherwise it reads the seat's own mail.
  */
 export function routinesEvidence(persona: Persona, generation: Generation): { mail: string; suggestions: string[]; shared: boolean } {
   const { variant, now } = generation;

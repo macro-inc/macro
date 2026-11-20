@@ -2,7 +2,7 @@
 // local stack, has a model mark them against each persona's answer key, and
 // scores each section with one number you can hill climb. See README.md.
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -13,6 +13,7 @@ import { JUDGE, asGrader, judgeCost, judgeFeed, judgeRoutines, seedGraders } fro
 import { seedId } from '../../scheduled_action/bench/setup';
 import { type Persona, type Variant, contentKey, ownerEmail, personaDigest, personas, scenarioName, seatOf, slotName } from './personas';
 import { shiftDays } from './clock';
+import { UNJUDGED, type Waiting, judgeWaiting } from './judging';
 import { lines as reportLines } from './report';
 import { CACHE, type Trigger, generate, prepare } from './run';
 import { type Attempt, type Margins, type RunFile, type Section, PARTS, failedScore, noiseMargins, scoreFeed, scoreRoutines, summary, verdict } from './score';
@@ -183,9 +184,6 @@ async function eachAtMost<T>(items: T[], limit: number, work: (item: T) => Promi
 /** Seeds at once: each is a seed CLI process, and the first of a person signs them up. */
 const SEEDING = 3;
 
-/** What an attempt holds until it is judged: in a run that stopped before judging, `rejudge` judges it. */
-const UNJUDGED = 'not judged: the run stopped before judging it; `rejudge` its run file';
-
 /** Run `section` for every chosen persona, `reps` times, and write the run file as it goes. */
 async function runSection(section: Section, values: Record<string, string | undefined>): Promise<string> {
   const spec = SECTIONS[section];
@@ -227,7 +225,11 @@ async function runSection(section: Section, values: Record<string, string | unde
     flags: spec.flags,
     attempts: [],
   };
-  const save = () => writeFileSync(out, `${JSON.stringify(run, null, 1)}\n`);
+  // Through a sibling file, so a run stopped mid-write keeps its last whole snapshot.
+  const save = () => {
+    writeFileSync(`${out}.tmp`, `${JSON.stringify(run, null, 1)}\n`);
+    renameSync(`${out}.tmp`, out);
+  };
   await exclusive(at.instance, `suggestions bench ${section}`, async () => {
     startStub(at.instance);
     await setFlags(at.instance, spec.flags);
@@ -240,7 +242,7 @@ async function runSection(section: Section, values: Record<string, string | unde
     // once a rep.
     const runNow = Date.now();
     const judged: Promise<void>[] = [];
-    const unjudged: { slot: Persona; attempt: Attempt; log: () => void }[] = [];
+    const unjudged: Waiting<Persona, Attempt>[] = [];
     for (let rep = 1; rep <= reps; rep++) {
       const now = spec.judgeLast ? runNow : Date.now();
       await eachAtMost(slots, SEEDING, (slot) => prepare(at, slot, spec.variant, now, base(slot, rep)));
@@ -280,17 +282,7 @@ async function runSection(section: Section, values: Record<string, string | unde
         log();
       });
     }
-    // Each persona's first judgement takes a grader first and writes the prefix the rest read.
-    const firsts = unjudged.filter((item, i) => unjudged.findIndex((other) => other.slot.name === item.slot.name) === i);
-    for (const { slot, attempt, log } of [...firsts, ...unjudged.filter((item) => !firsts.includes(item))]) {
-      attempt.benchError = undefined;
-      judged.push(
-        judgeAndScore(at, section, slot, attempt).then(() => {
-          save();
-          log();
-        }),
-      );
-    }
+    judged.push(...judgeWaiting(unjudged, (slot, attempt) => judgeAndScore(at, section, slot, attempt), save));
     await Promise.all(judged);
   });
   save();
