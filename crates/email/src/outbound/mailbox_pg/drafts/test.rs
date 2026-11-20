@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::mailbox::live_pass::StreamKind;
 use crate::{
     domain::{
         models::{ResolvedDraftInput, UpsertedContacts},
@@ -13,6 +14,7 @@ use email_api_client::domain::models::{MailboxState, SendRequest};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 mod delivery_status;
+mod lock_timeouts;
 mod sent_view;
 
 const ACTOR: &str = "macro|outlook-test@example.com";
@@ -34,7 +36,11 @@ async fn sent_sync_settles_uncertainty_and_fences_a_late_coordinator(db: PgPool)
     sync.fail_draft(&lease, DraftFailure::SendUnknown)
         .await
         .unwrap();
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(link, "a", MailboxState::default(), "v3");
@@ -469,7 +475,11 @@ async fn saving_an_imported_draft_keeps_its_provider_identity_and_baseline(db: P
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn remote_ingestion_preserves_an_unsynced_local_edit_and_records_remote_content(db: PgPool) {
     let (sync, _, input, link) = setup(&db, true).await;
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     assert_eq!(work.provider_id.as_str(), "a");
@@ -702,7 +712,11 @@ async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPo
     let mut cp = checkpoint(&lease, DraftStage::Creating);
     cp.draft = None;
     sync.checkpoint_draft(&lease, &cp).await.unwrap();
-    let stream = sync.claim_stream(Uuid::now_v7()).await.unwrap().unwrap();
+    let stream = sync
+        .claim_stream(Uuid::now_v7(), StreamKind::MailFolder)
+        .await
+        .unwrap()
+        .unwrap();
     sync.commit_page(&stream, &page()).await.unwrap();
     let work = sync.claim_message(Uuid::now_v7()).await.unwrap().unwrap();
     let mut remote = snapshot(

@@ -73,7 +73,7 @@ impl FolderReimportRepository for PgMailboxSync {
         revision: i16,
         last_phase: bool,
     ) -> Result<Option<u64>, MailboxError> {
-        let mut tx = self.db.begin().await.map_err(db_error)?;
+        let mut tx = self.begin().await.map_err(db_error)?;
         // The link lock orders this after catalog commits and page commits, as
         // resync is.
         let current = sqlx::query_scalar!(r#"
@@ -119,6 +119,19 @@ impl FolderReimportRepository for PgMailboxSync {
         if restarted.is_empty() {
             return Ok(Some(0));
         }
+        // Each restarted folder's new import round opens a live pass of its own.
+        sqlx::query!(
+            r#"
+            DELETE FROM email_sync_streams
+            WHERE link_id = $1 AND generation = $2 AND kind = 'mail_folder_live' AND scope_id = ANY($3)
+        "#,
+            mailbox.link_id,
+            mailbox.sync_generation,
+            &restarted
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(db_error)?;
         let opened = sqlx::query!(
             r#"
             UPDATE email_sync_streams SET import_started_at = now(), import_completed_at = NULL

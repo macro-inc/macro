@@ -306,11 +306,20 @@
         package = "coding_agent_worker";
       };
 
-      # The agent sign-in daemon baked into the Macro computer image
-      # (nix/macro-box).
-      harnessdBinary = workspaceBinary {
-        pname = "harnessd";
-        package = "harnessd";
+      # The agent of Firecracker hosts (nix/hosts/_nixos/firecracker-host.nix).
+      # GET /v1/host reports the commit it was built from (`agentVersion`).
+      firecrackerHostBinary =
+        (workspaceBinary {
+          pname = "firecracker-host";
+          package = "firecracker_host";
+        }).overrideAttrs
+          { FIRECRACKER_HOST_COMMIT = gitRev; };
+
+      # The vsock agent the Firecracker host runs programs through, baked into
+      # the Firecracker computer image (nix/macro-box/_firecracker.nix).
+      firecrackerGuestAgentBinary = workspaceBinary {
+        pname = "firecracker-guest-agent";
+        package = "firecracker_guest_agent";
       };
 
       # Tauri sidecar sources carry the target triple in the file name; the
@@ -1508,7 +1517,8 @@
       packages = {
         js-node-modules = nodeModules;
         macrod = macrodBinary;
-        harnessd = harnessdBinary;
+        firecracker-host = firecrackerHostBinary;
+        firecracker-guest-agent = firecrackerGuestAgentBinary;
       }
       // lib.optionalAttrs isLinux {
         tauri-frontend = frontend;

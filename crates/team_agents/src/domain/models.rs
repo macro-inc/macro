@@ -7,7 +7,9 @@ use uuid::Uuid;
 
 pub use agent_credentials::{AgentApiKey, RepoToken};
 pub use agent_git::domain::voice::VoiceModel;
+pub use harness_id::HarnessId;
 pub use hosted_runtimes::domain::ids::ComputerId;
+pub use hosted_runtimes::domain::models::PurchaseKey;
 pub use hosted_runtimes::domain::size::ComputerSize;
 
 /// Longest agent name, in characters.
@@ -27,7 +29,9 @@ pub const AGENT_EMAIL_DOMAIN: &str = "agents.macro.invalid";
 pub enum TeamAgentStatus {
     /// Its computer is being bought, created or booted.
     Provisioning,
-    /// Its computer is up, so its brain is running.
+    /// Its computer is up, and the agent hasn't reported itself online yet.
+    Starting,
+    /// Its computer is up, and the agent has reported itself online.
     Running,
     /// Its computer is asleep, stopped, unreachable or ending.
     Paused,
@@ -85,9 +89,12 @@ pub struct CreateTeamAgent {
     pub purchase_key: String,
     /// Display name.
     pub name: String,
-    /// What the agent is responsible for. Seeds its workspace.
+    /// What the agent is responsible for. Seeds its workspace; when this and
+    /// `personality` are empty the agent asks its owner what to take on.
+    #[serde(default)]
     pub job_description: String,
     /// How the agent behaves and talks. Seeds its workspace.
+    #[serde(default)]
     pub personality: String,
     /// The computer to buy.
     #[cfg_attr(feature = "inbound", schema(value_type = String))]
@@ -98,6 +105,51 @@ pub struct CreateTeamAgent {
     /// agent's default.
     #[serde(default)]
     #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
+    pub voice: Option<VoiceModel>,
+}
+
+/// An agent's display name: trimmed, 1 to [`MAX_NAME_CHARS`] characters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentName(String);
+
+impl AgentName {
+    /// Trim `value` and check its length.
+    pub fn try_new(value: &str) -> Result<Self, TeamAgentError> {
+        let name = value.trim();
+        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+            return Err(TeamAgentError::InvalidName);
+        }
+        Ok(Self(name.to_owned()))
+    }
+
+    /// Borrow the name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Take the name.
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+/// A [`CreateTeamAgent`] whose fields have been checked, before anything is
+/// created.
+#[derive(Debug, Clone)]
+pub struct TeamAgentInvite {
+    /// The invite's purchase key.
+    pub purchase_key: PurchaseKey,
+    /// Display name.
+    pub name: AgentName,
+    /// What the agent is responsible for, trimmed; may be empty.
+    pub job_description: String,
+    /// How the agent behaves and talks, trimmed; may be empty.
+    pub personality: String,
+    /// The computer to buy.
+    pub size: ComputerSize,
+    /// Profile picture URL, `https://`.
+    pub avatar_url: Option<String>,
+    /// The call voice picked in the invite.
     pub voice: Option<VoiceModel>,
 }
 
@@ -130,11 +182,23 @@ pub struct NewAgentAccount {
     /// Admin creating it.
     pub created_by: MacroUserIdStr<'static>,
     /// Display name.
-    pub name: String,
+    pub name: AgentName,
     /// Profile picture URL.
     pub avatar_url: Option<String>,
     /// Workspace seed.
     pub persona_seed: PersonaSeed,
+    /// The invite's purchase key: one agent per key per team.
+    pub purchase_key: PurchaseKey,
+}
+
+/// What [`super::ports::TeamAgentRepository::create_account`] did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CreatedAccount {
+    /// The account and its `team_agents` row were created.
+    Created,
+    /// The team already invited an agent with this purchase key (a double
+    /// click, or a retry after a lost answer); nothing was created.
+    AlreadyInvited(Box<TeamAgentRecord>),
 }
 
 /// A stored agent, before its computer is read.
@@ -150,6 +214,34 @@ pub struct TeamAgentRecord {
     pub persona_seed: PersonaSeed,
     /// When it was invited.
     pub created_at: DateTime<Utc>,
+    /// When the agent first reported itself online, if it has.
+    pub first_online_at: Option<DateTime<Utc>>,
+}
+
+/// What the agent's inviter is told when it first comes online.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentReady {
+    /// The agent's computer.
+    pub computer_id: ComputerId,
+    /// The agent's team.
+    pub team_id: Uuid,
+    /// The computer's name and harness.
+    pub computer: ComputerDetails,
+    /// The admin who invited the agent.
+    pub inviter: MacroUserIdStr<'static>,
+    /// The agent.
+    pub agent: MacroUserIdStr<'static>,
+    /// The agent's name.
+    pub agent_name: String,
+}
+
+/// What an agent's ready notice names about its computer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComputerDetails {
+    /// Display name.
+    pub name: String,
+    /// The computer's harness, once macrod has connected.
+    pub harness_id: Option<HarnessId>,
 }
 
 /// The agent's workspace repository.
@@ -165,7 +257,7 @@ pub struct AgentRepo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerPurchase {
     /// The buyer's key for this purchase.
-    pub purchase_key: String,
+    pub purchase_key: PurchaseKey,
     /// The team that pays.
     pub team_id: Uuid,
     /// The admin buying it.
@@ -175,7 +267,7 @@ pub struct ComputerPurchase {
     /// The computer's size.
     pub size: ComputerSize,
     /// Display name.
-    pub name: String,
+    pub name: AgentName,
 }
 
 /// The coarse status of an agent's computer.
@@ -187,6 +279,8 @@ pub enum ComputerState {
     SettingUp,
     /// Up.
     Ready,
+    /// Up, with its first start waiting on the agent reporting online.
+    AwaitingAgent,
     /// Asleep, waking, stopping, stopped, or no fleet is attached.
     Paused,
     /// Gave up.
@@ -195,11 +289,16 @@ pub enum ComputerState {
     Released,
 }
 
-impl From<ComputerState> for TeamAgentStatus {
-    fn from(state: ComputerState) -> Self {
+impl TeamAgentStatus {
+    /// The agent's status from its computer's, and whether the agent has
+    /// ever reported itself online: a computer waiting on its agent runs it
+    /// only once it has. A computer that waits on nothing (bought before
+    /// agents reported) runs its agent once it is up.
+    pub fn of(state: ComputerState, came_online: bool) -> Self {
         match state {
             ComputerState::Purchasing | ComputerState::SettingUp => Self::Provisioning,
-            ComputerState::Ready => Self::Running,
+            ComputerState::AwaitingAgent if !came_online => Self::Starting,
+            ComputerState::AwaitingAgent | ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,
             ComputerState::Released => Self::Released,
@@ -214,7 +313,7 @@ pub enum TeamAgentError {
     #[error("the name must be 1 to {MAX_NAME_CHARS} characters")]
     InvalidName,
     /// The job description or personality is empty or too long.
-    #[error("the job description and personality must be 1 to {MAX_PROFILE_CHARS} characters")]
+    #[error("the job description and personality must be at most {MAX_PROFILE_CHARS} characters")]
     InvalidProfile,
     /// The purchase key is empty, too long or not printable ASCII.
     #[error("the purchase key must be 1 to 128 printable ASCII characters")]
@@ -238,6 +337,13 @@ pub enum TeamAgentError {
     /// billing refused). The message is safe for clients.
     #[error("the computer can't be bought: {0}")]
     ComputerUnavailable(String),
+    /// No host has room for the size, checked before any charge; nothing was
+    /// created or charged.
+    #[error("there's no room for a {} computer right now", .0.label())]
+    NoRoom(ComputerSize),
+    /// The card was declined; nothing was created or charged.
+    #[error("the card was declined")]
+    PaymentDeclined,
     /// The workspace repository could not be created; nothing was charged.
     #[error("the workspace repository could not be created; nothing was charged")]
     RepoUnavailable(rootcause::Report),
@@ -245,6 +351,10 @@ pub enum TeamAgentError {
     /// settles.
     #[error("the agent's computer purchase is still confirming; try again in a minute")]
     PurchaseConfirming,
+    /// An earlier request with this purchase key is still setting up the
+    /// agent and hasn't bought its computer yet.
+    #[error("this invite is still being set up; try again in a moment")]
+    InviteInProgress,
     /// The agent's repository has no valid `config/voice.json`.
     #[error("the agent has no voice set")]
     NoVoice,

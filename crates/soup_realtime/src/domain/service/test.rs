@@ -401,6 +401,43 @@ async fn updated_and_deleted_patches_are_published_unchanged() {
 }
 
 #[tokio::test]
+async fn named_recipients_receive_the_patch_without_current_access() {
+    let patch = Patch::Deleted(document(DOCUMENT_ID));
+    for (current, named, expected) in [
+        (Vec::new(), vec![user("member")], vec![user("member")]),
+        (
+            vec![user("owner"), user("viewer")],
+            vec![user("owner"), user("member")],
+            vec![user("member"), user("owner"), user("viewer")],
+        ),
+    ] {
+        let harness = harness(current, false, HashSet::new());
+
+        let delivery = harness
+            .service
+            .notify_users(vec![
+                SoupRealtimePatch::for_entity(patch.clone()).with_named_recipients(named),
+            ])
+            .await
+            .expect("patch is published");
+
+        let mut recipients = harness
+            .messages
+            .lock()
+            .expect("messages lock")
+            .iter()
+            .map(|message| {
+                assert_eq!(message.patch, patch);
+                message.user_id.clone()
+            })
+            .collect::<Vec<_>>();
+        recipients.sort_by(|left, right| left.as_ref().cmp(right.as_ref()));
+        assert_eq!(recipients, expected);
+        assert_eq!(delivery.publish_count, expected.len());
+    }
+}
+
+#[tokio::test]
 async fn duplicate_accessors_are_deduplicated() {
     let one = user("one");
     let two = user("two");

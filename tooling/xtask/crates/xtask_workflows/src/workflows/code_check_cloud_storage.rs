@@ -13,7 +13,9 @@
 use gh_workflow::expr::typed::{
     Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, env,
 };
-use gh_workflow::{Container, Env, Event, Job, Port, Run, Step, Workflow, WorkflowCall};
+use gh_workflow::{
+    Container, Env, Event, Expression, Job, Port, Run, Step, Workflow, WorkflowCall,
+};
 use xtask_paths::RuntimePath;
 
 use crate::workflows::actions::{DenolandSetupDeno, DornyPathsFilter};
@@ -305,6 +307,7 @@ fn test() -> Job {
         .add_service("postgres", postgres_service())
         .add_service("redis", redis_service())
         .add_step(steps::checkout(false, false))
+        .add_step(steps::start_opensearch().if_condition(Expression::new(RUNS_OPENSEARCH_TESTS)))
         .add_step(steps::mount_cache_volume())
         .add_step(steps::reuse_cargo_target())
         .add_step(steps::setup_nix_with_seed())
@@ -317,9 +320,28 @@ fn test() -> Job {
         .add_step(run_tests())
         .add_step(setup_execution_runtime())
         .add_step(test_execution_runtime())
+        .add_step(
+            steps::create_search_indices().if_condition(Expression::new(RUNS_OPENSEARCH_TESTS)),
+        )
+        .add_step(test_content_search())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
         .add_step(steps::seal_cargo_target())
+}
+
+/// The selections that include `opensearch_client`, whose content search
+/// test needs an OpenSearch with the search indices.
+const RUNS_OPENSEARCH_TESTS: &str =
+    "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'opensearch_client')";
+
+/// Run content search against a real OpenSearch and compare what it returns
+/// with what its matching rules select (`crates/opensearch_client/tests/content_search.rs`).
+fn test_content_search() -> Step<Run> {
+    Step::new("Test content search against OpenSearch")
+        .run(include_str!("scripts/run_tests.sh"))
+        .add_env(("NEXTEST_RUN_OPENSEARCH_TESTS", "true"))
+        .add_env(("SEARCH_TEST_OPENSEARCH_URL", steps::SEARCH_OPENSEARCH_URL))
+        .if_condition(Expression::new(RUNS_OPENSEARCH_TESTS))
 }
 
 /// The env the jobs that compile for `test` share, so their sccache keys stay

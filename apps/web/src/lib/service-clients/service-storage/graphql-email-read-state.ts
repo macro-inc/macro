@@ -18,6 +18,7 @@ function readStateDisposition<T, V extends AnyVariables>(
   if (disposition?.kind === 'queued') return 'queued';
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
+  if (disposition?.kind === 'committed') return 'committed';
   if (!hasReadState)
     throw new Error('Email read-state mutation returned no data');
   return 'committed';
@@ -46,13 +47,14 @@ export async function markGraphqlEmailThreadSeen(
 export async function markGraphqlEmailThreadUnread(
   client: Client,
   threadId: string,
-  revalidations: readonly QueryRevalidation[] = []
+  revalidations: readonly QueryRevalidation[] = [],
+  uuid?: string
 ): Promise<EmailReadStateDisposition> {
   const result = await client
     .mutation(
       MarkEmailThreadUnreadDocument,
       { input: { threadId } },
-      { optimisticMutation: { revalidations } }
+      { optimisticMutation: { revalidations, uuid } }
     )
     .toPromise();
   return readStateDisposition(

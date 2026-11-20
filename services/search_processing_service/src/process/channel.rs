@@ -7,21 +7,50 @@ use opensearch_client::{
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-pub async fn process_channel_message_update(
+use crate::parsers::message_text::with_pastes_as_content;
+
+/// What updating a channel message's document found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChannelMessageUpdate {
+    /// The document now matches the message.
+    Applied,
+    /// The message's channel is gone, and its messages with it: there is
+    /// nothing to index, and the channel's delete removes its documents.
+    ChannelGone,
+}
+
+pub(crate) async fn process_channel_message_update(
     opensearch_client: &OpensearchClient,
     db: &Pool<Postgres>,
     channel_id: Uuid,
     message_id: Uuid,
     index_override: Option<&str>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ChannelMessageUpdate> {
     let channel_message_info =
-        comms_db_client::messages::get_channel_message::get_channel_message_by_id(
+        match comms_db_client::messages::get_channel_message::get_channel_message_by_id(
             db,
             &channel_id,
             &message_id,
         )
         .await
-        .context("unable to get channel message")?;
+        {
+            Ok(info) => info,
+            Err(error) => {
+                // A missing message in a channel that still exists may be a
+                // write not yet visible, so it stays an error the caller retries.
+                if matches!(
+                    error.downcast_ref::<sqlx::Error>(),
+                    Some(sqlx::Error::RowNotFound)
+                ) && !comms_db_client::channels::channel_exists::channel_exists(db, &channel_id)
+                    .await
+                    .context("unable to check the channel of a missing message")?
+                {
+                    tracing::info!(%channel_id, %message_id, "channel is gone; nothing to index for its message");
+                    return Ok(ChannelMessageUpdate::ChannelGone);
+                }
+                return Err(error).context("unable to get channel message");
+            }
+        };
 
     if channel_message_info.message.deleted_at.is_some() {
         tracing::trace!("channel message is deleted, removing from search index");
@@ -30,7 +59,7 @@ pub async fn process_channel_message_update(
         opensearch_client
             .delete_channel_message(&channel_id, &message_id, index_override)
             .await?;
-        return Ok(());
+        return Ok(ChannelMessageUpdate::Applied);
     }
 
     let args = channel_message_upsert_args(channel_message_info)?;
@@ -38,7 +67,7 @@ pub async fn process_channel_message_update(
         .upsert_channel_message(&args, index_override)
         .await?;
 
-    Ok(())
+    Ok(ChannelMessageUpdate::Applied)
 }
 
 fn channel_message_upsert_args(
@@ -47,13 +76,17 @@ fn channel_message_upsert_args(
     let channel_id = message.channel_id;
     let message_id = message.message_id;
     let raw_content = &message.content;
-    let transformed_content = match ParsedXmlText::parse(raw_content) {
-        Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
-        Err(e) => {
-            tracing::error!(error = ?e, %channel_id, %message_id, "failed to parse channel message content, indexing raw content");
-            raw_content.to_string()
+    let transformed_content = with_pastes_as_content(raw_content, |markup| {
+        match ParsedXmlText::parse(markup) {
+            Ok(parsed) => PlainTextFormatter::format_xml_text(parsed).0,
+            // The parse error carries the rest of the message, which is
+            // content, so it stays out of the log.
+            Err(_) => {
+                tracing::error!(%channel_id, %message_id, "failed to parse channel message content, indexing raw content");
+                markup.to_string()
+            }
         }
-    };
+    });
 
     Ok(UpsertChannelMessageArgs {
         channel_id: channel_id.to_string(),

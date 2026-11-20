@@ -2626,6 +2626,10 @@ export type UnifiedSearchData = {
 export type UnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -2656,6 +2660,10 @@ export type SimpleUnifiedSearchData = {
 export type SimpleUnifiedSearchErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * The caller's other searches kept every slot of its lane busy for 20 seconds; retry after `Retry-After` seconds.
+     */
+    429: ErrorResponse;
     500: ErrorResponse;
 };
 

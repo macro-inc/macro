@@ -16,6 +16,399 @@ export const healthHandlerResponse = zod
   );
 
 /**
+ * @summary List the authenticated user's channels that have notification settings.
+ */
+export const listChannelNotificationSettingsResponse = zod.object({
+  channels: zod
+    .array(
+      zod
+        .object({
+          channelId: zod.uuid(),
+          enabled: zod
+            .array(
+              zod
+                .enum([
+                  'channel_message_send',
+                  'channel_message_reply',
+                  'channel_mention',
+                  'channel_message_reaction',
+                  'call_started',
+                  'channel_access_requested',
+                ])
+                .describe(
+                  'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+                )
+            )
+            .nullable()
+            .describe(
+              "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
+            ),
+          overridesSectionMute: zod
+            .boolean()
+            .describe(
+              'The channel notifies even when the sections holding it are muted.'
+            ),
+        })
+        .describe("One channel's own notification settings.")
+    )
+    .describe(
+      'Every channel with settings; any other channel follows its sections.'
+    ),
+});
+
+/**
+ * @summary Remove the authenticated user's settings for one channel, including a
+legacy mentions-only preference, so it follows its sections again.
+ */
+export const resetChannelNotificationSettingsParams = zod.object({
+  channel_id: zod.uuid().describe('The channel the settings apply to.'),
+});
+
+export const resetChannelNotificationSettingsResponse = zod
+  .object({})
+  .describe(
+    'Empty response is required due to custom fetch forcing `response.json()`'
+  );
+
+/**
+ * @summary Change the authenticated user's notification settings for one channel.
+ */
+export const updateChannelNotificationSettingsParams = zod.object({
+  channel_id: zod.uuid().describe('The channel the settings apply to.'),
+});
+
+export const updateChannelNotificationSettingsBody = zod
+  .object({
+    enabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .nullish()
+      .describe(
+        'Give the channel its own settings: exactly these kinds notify,\nwhatever its sections say. Omit to keep the current kinds.'
+      ),
+    inherit: zod
+      .boolean()
+      .optional()
+      .describe(
+        "Drop the channel's own kinds so it follows its sections again. Can't\nbe combined with `enabled`."
+      ),
+    overridesSectionMute: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Keep notifying while the sections holding the channel are muted.\nOmit to keep the current value.'
+      ),
+  })
+  .describe(
+    "A change to one channel's settings. A channel either follows its sections\nfor every kind or has its own setting for all of them."
+  );
+
+export const updateChannelNotificationSettingsResponse = zod
+  .object({
+    channelId: zod.uuid(),
+    enabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .nullable()
+      .describe(
+        "The channel's own settings: exactly the kinds it notifies for,\nwhatever its sections say. `null` follows the sections."
+      ),
+    overridesSectionMute: zod
+      .boolean()
+      .describe(
+        'The channel notifies even when the sections holding it are muted.'
+      ),
+  })
+  .describe("One channel's own notification settings.");
+
+/**
+ * @summary List the authenticated user's Chat sections that have notification settings.
+ */
+export const listSectionNotificationSettingsResponse = zod.object({
+  sections: zod
+    .array(
+      zod
+        .object({
+          disabled: zod
+            .array(
+              zod
+                .enum([
+                  'channel_message_send',
+                  'channel_message_reply',
+                  'channel_mention',
+                  'channel_message_reaction',
+                  'call_started',
+                  'channel_access_requested',
+                ])
+                .describe(
+                  'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+                )
+            )
+            .describe('Kinds the section does not allow.'),
+          mute: zod
+            .union([
+              zod
+                .object({
+                  state: zod.enum(['unmuted']),
+                })
+                .describe("The section's channels notify."),
+              zod
+                .object({
+                  state: zod.enum(['muted']),
+                })
+                .describe('Muted until the user unmutes it.'),
+              zod
+                .object({
+                  state: zod.enum(['snoozed']),
+                  until: zod.iso
+                    .datetime({})
+                    .describe('When the section notifies again.'),
+                })
+                .describe('Muted until a deadline.'),
+            ])
+            .describe('Whether a section is muted.'),
+          section: zod
+            .union([
+              zod
+                .object({
+                  labelId: zod
+                    .uuid()
+                    .describe("The section's `channel_label` id."),
+                  type: zod.enum(['label']),
+                })
+                .describe(
+                  'A custom section, team-shared or personal, manual or rule-based.'
+                ),
+              zod
+                .object({
+                  type: zod.enum(['favorites']),
+                })
+                .describe("The user's favorite channels."),
+              zod
+                .object({
+                  type: zod.enum(['direct_messages']),
+                })
+                .describe('Direct messages and group chats.'),
+              zod
+                .object({
+                  type: zod.enum(['team_channels']),
+                })
+                .describe(
+                  "Team channels in none of the user's custom sections."
+                ),
+            ])
+            .describe(
+              'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+            ),
+        })
+        .describe(
+          "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted."
+        )
+    )
+    .describe(
+      'Every section with settings; any other section allows everything and\nis unmuted.'
+    ),
+});
+
+/**
+ * @summary Change the authenticated user's notification settings for one Chat section.
+ */
+export const updateSectionNotificationSettingsBody = zod
+  .object({
+    disable: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .optional()
+      .describe('Kinds to stop allowing.'),
+    enable: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .optional()
+      .describe('Kinds to allow.'),
+    mute: zod
+      .union([
+        zod.null(),
+        zod
+          .union([
+            zod
+              .object({
+                state: zod.enum(['unmuted']),
+              })
+              .describe("The section's channels notify."),
+            zod
+              .object({
+                state: zod.enum(['muted']),
+              })
+              .describe('Muted until the user unmutes it.'),
+            zod
+              .object({
+                state: zod.enum(['snoozed']),
+                until: zod.iso
+                  .datetime({})
+                  .describe('When the section notifies again.'),
+              })
+              .describe('Muted until a deadline.'),
+          ])
+          .describe('Whether a section is muted.'),
+      ])
+      .optional(),
+    section: zod
+      .union([
+        zod
+          .object({
+            labelId: zod.uuid().describe("The section's `channel_label` id."),
+            type: zod.enum(['label']),
+          })
+          .describe(
+            'A custom section, team-shared or personal, manual or rule-based.'
+          ),
+        zod
+          .object({
+            type: zod.enum(['favorites']),
+          })
+          .describe("The user's favorite channels."),
+        zod
+          .object({
+            type: zod.enum(['direct_messages']),
+          })
+          .describe('Direct messages and group chats.'),
+        zod
+          .object({
+            type: zod.enum(['team_channels']),
+          })
+          .describe("Team channels in none of the user's custom sections."),
+      ])
+      .describe(
+        'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+      ),
+  })
+  .describe(
+    "A change to one section's settings. Kinds the change does not name keep\ntheir setting."
+  );
+
+export const updateSectionNotificationSettingsResponse = zod
+  .object({
+    disabled: zod
+      .array(
+        zod
+          .enum([
+            'channel_message_send',
+            'channel_message_reply',
+            'channel_mention',
+            'channel_message_reaction',
+            'call_started',
+            'channel_access_requested',
+          ])
+          .describe(
+            'A channel notification a user can turn off for one channel.\n\nEach kind is one notification event type, which is also its wire form.\nA message that mentions a document follows the kind of its message: a\ntop-level message outside a thread, a thread reply inside one (its\nproducer says which, see [`crate::domain::models::request`]). Channel\ninvites are not here: they reach people as they join, before they could\nhave chosen anything.'
+          )
+      )
+      .describe('Kinds the section does not allow.'),
+    mute: zod
+      .union([
+        zod
+          .object({
+            state: zod.enum(['unmuted']),
+          })
+          .describe("The section's channels notify."),
+        zod
+          .object({
+            state: zod.enum(['muted']),
+          })
+          .describe('Muted until the user unmutes it.'),
+        zod
+          .object({
+            state: zod.enum(['snoozed']),
+            until: zod.iso
+              .datetime({})
+              .describe('When the section notifies again.'),
+          })
+          .describe('Muted until a deadline.'),
+      ])
+      .describe('Whether a section is muted.'),
+    section: zod
+      .union([
+        zod
+          .object({
+            labelId: zod.uuid().describe("The section's `channel_label` id."),
+            type: zod.enum(['label']),
+          })
+          .describe(
+            'A custom section, team-shared or personal, manual or rule-based.'
+          ),
+        zod
+          .object({
+            type: zod.enum(['favorites']),
+          })
+          .describe("The user's favorite channels."),
+        zod
+          .object({
+            type: zod.enum(['direct_messages']),
+          })
+          .describe('Direct messages and group chats.'),
+        zod
+          .object({
+            type: zod.enum(['team_channels']),
+          })
+          .describe("Team channels in none of the user's custom sections."),
+      ])
+      .describe(
+        'A Chat sidebar section a user can set notifications for. The catch-all\n\"All channels\" section has no settings and is not one of these.'
+      ),
+  })
+  .describe(
+    "One section's settings. They apply to every channel the section holds for\nthe user: a channel notifies for a kind when any of its sections allows\nit, and its sections mute it only when all of them are muted."
+  );
+
+/**
  * @summary Gets the users unsubscribe items.
  */
 export const getUnsubscribesResponseItem = zod.object({
@@ -2425,6 +2818,12 @@ export const listTypedNotificationsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -4734,6 +5133,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -6993,6 +7398,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                       "Why, in the words the computer's status shows."
                                     ),
                                   kind: zod.enum(['failed']),
+                                  released: zod
+                                    .boolean()
+                                    .optional()
+                                    .describe(
+                                      'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                                    ),
                                 })
                                 .describe(
                                   'Setup gave up before the computer was ready.'
@@ -9084,6 +9495,12 @@ export const getTypedNotificationByIdResponse = zod
                               "Why, in the words the computer's status shows."
                             ),
                           kind: zod.enum(['failed']),
+                          released: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Setup gave up a second time, so the computer was released and its\npurchase refunded (and an agent teammate taken back): there is\nnothing to retry.'
+                            ),
                         })
                         .describe(
                           'Setup gave up before the computer was ready.'

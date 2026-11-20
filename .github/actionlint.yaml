@@ -23,6 +23,7 @@ self-hosted-runner:
     - nscloud-macos-sequoia-arm64-12x28
     - nscloud-macos-sequoia-arm64-12x28-with-cache
     - nscloud-macos-sequoia-arm64-6x14
+    - nscloud-macos-tahoe-slim-arm64-6x14
     - nscloud-windows-2022-amd64-8x16
 
 # shellcheck findings kept on purpose, one file and check per entry. A new

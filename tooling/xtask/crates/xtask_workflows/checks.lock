@@ -36,6 +36,8 @@ check	cargo_deny.yml	cargo-deny	cargo-deny
 check	cargo_deny_advisories.yml	advisories	cargo deny check advisories
 check	cargo_workspace_dependency_check.yml	dependency-check	dependency-check
 check	cargo_workspace_dependency_check.yml	hakari-and-dep-closures	hakari-and-dep-closures
+check	channels_e2e.yml	suite	Channels end-to-end
+check	channels_e2e.yml	email-e2e-alert	Tell Macro Alerts
 check	check_generated.yml	check-workflows	check-workflows
 check	check_generated.yml	lint-workflows	lint-workflows
 check	check_node_modules_nix.yml	check-linux-node-modules-nix	check Linux node_modules nix
@@ -124,6 +126,8 @@ check	ios_preview.yml	preview	Build iOS simulator app and publish to Appetize
 check	ios_preview.yml	cleanup	Delete the PR's Appetize app
 check	migrate-macro-db.yml	migrate-db	Run Database Migrations (${{ inputs.environment }})
 check	native-check-label.yml	rerun	Re-run the native check
+check	observability_aws.yml	validate	Render and validate
+check	observability_cluster.yml	check-manifests	Check rendered manifests
 check	observability_image.yml	build-image	Build observability image
 check	pr-ci.yml	start	Start
 check	pr-ci.yml	cloud-storage/path-check	Cloud Storage / path-check
@@ -156,7 +160,9 @@ check	pr-ci.yml	node-modules-nix/check-darwin-node-modules-nix	node_modules nix 
 check	pr-ci.yml	tauri-lockfiles/check-tauri-lockfiles	Tauri lockfiles / check Tauri lockfiles
 check	pr-ci.yml	tauri-lockfiles/check-tauri-vendoring	Tauri lockfiles / check Tauri vendoring
 check	pr-ci.yml	sdk/check-package	SDK / SDK Package Check
+check	pr-ci.yml	observability-aws/validate	Observability AWS layer / Render and validate
 check	pr-ci.yml	observability-image/build-image	Observability image / Build observability image
+check	pr-ci.yml	observability-cluster/check-manifests	Observability cluster / Check rendered manifests
 check	pr-ci.yml	macrod-update/linux	macrod update / macrod update (linux)
 check	pr-ci.yml	macrod-update/macos	macrod update / macrod update (macos)
 check	pr-ci.yml	macrod-update/windows	macrod update / macrod update (windows)

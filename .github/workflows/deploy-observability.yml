@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes Grafana, Loki, Tempo and GoAlert down for several minutes.
+        description: Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes GoAlert down for several minutes.
         required: true
         type: boolean
         default: true

@@ -520,6 +520,18 @@ describe('shared call lifecycle', () => {
       error: new Error('Network unavailable'),
       message: 'Unable to join the call. Please check your connection.',
     },
+    {
+      error: new ThrownResultError([
+        { code: 'NETWORK_ERROR', message: 'Network error occurred' },
+      ]),
+      message: 'Unable to join the call. Please check your connection.',
+    },
+    {
+      error: new ThrownResultError([
+        { code: 'SERVER_ERROR', message: 'Server error' },
+      ]),
+      message: "Couldn't join the call. Try again.",
+    },
   ])(
     'preserves join failures and displays $message',
     async ({ error, message }) => {
@@ -535,6 +547,20 @@ describe('shared call lifecycle', () => {
       expect(ports.setError).toHaveBeenLastCalledWith(message);
     }
   );
+
+  it('does not blame the connection when the server fails to start a call', async () => {
+    const { lifecycle, ports } = setup({ currentCall: () => undefined });
+    const error = new ThrownResultError([
+      { code: 'SERVER_ERROR', message: 'Server error' },
+    ]);
+    ports.startCall.mockRejectedValueOnce(error);
+    await expect(
+      lifecycle.join(call.channelId, undefined, 'user', { kind: 'start' })
+    ).rejects.toBe(error);
+    expect(ports.setError).toHaveBeenLastCalledWith(
+      "Couldn't start the call. Try again."
+    );
+  });
 
   it('reports a microphone denial before requesting a token', async () => {
     const denial = 'Microphone permission is required for calls';

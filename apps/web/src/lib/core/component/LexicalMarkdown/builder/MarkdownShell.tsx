@@ -238,7 +238,14 @@ export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
           )
             return;
           e.stopPropagation();
-          if (!isMobile()) editor.focus();
+          if (isMobile()) return;
+          // A click inside the editor has already focused it and put the
+          // caret where it landed. `editor.focus()` writes Lexical's stored
+          // selection back to the page, which is still the old caret when the
+          // click arrives before Lexical reads the browser's selectionchange
+          // (a quick click or trackpad tap, or a busy main thread).
+          if (editor.getRootElement()?.contains(document.activeElement)) return;
+          editor.focus();
         }}
         on:mousedown={(e) => e.stopPropagation()}
         on:mouseup={(e) => e.stopPropagation()}

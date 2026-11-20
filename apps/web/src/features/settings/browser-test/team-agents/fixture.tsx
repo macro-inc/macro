@@ -1,5 +1,6 @@
 import '@fontsource-variable/inter';
 import '../../../../index.css';
+import { analytics } from '@app/lib/analytics/analytics';
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
@@ -21,6 +22,7 @@ import { ImperativeDialogHost } from '@ui';
 import { Layer } from '@ui/components/Layer';
 import { createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
+import { macroDarkTheme } from '../../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../../theme/themes/macro-light';
 import { themeCssVars } from '../../../theme/utils/themeCssVars';
 import { TeamMembers } from '../../TeamMembers';
@@ -29,11 +31,33 @@ import {
   TeamAgentStatusChip,
 } from '../../views/team-agent-dm-status';
 
-for (const [key, token] of Object.entries(themeCssVars(macroLightTheme)))
+// `?dark` renders the page in the dark theme.
+const dark = new URLSearchParams(window.location.search).has('dark');
+for (const [key, token] of Object.entries(
+  themeCssVars(dark ? macroDarkTheme : macroLightTheme)
+))
   document.documentElement.style.setProperty(key, token);
-document.documentElement.dataset.themeLight = 'true';
+document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+document.documentElement.dataset.themeLight = String(!dark);
 // The fixture uses the same touch variant switch as the app entry point.
 document.documentElement.dataset.touchDevice = String(isTouchDevice());
+
+// Boot the SDK with a local-only flag answer; the production reader still decides visibility.
+analytics.posthog.init('local-browser-fixture', {
+  api_host: location.origin,
+  persistence: 'memory',
+  advanced_disable_flags: true,
+  capture_pageview: false,
+  autocapture: false,
+  disable_session_recording: true,
+  bootstrap: {
+    featureFlags: {
+      'enable-crm-member-access-changes':
+        new URLSearchParams(location.search).get('crmAccessChanges') !== 'off',
+      'fixture-flags-loaded': true,
+    },
+  },
+});
 
 const team: Team = {
   id: 'team-1',

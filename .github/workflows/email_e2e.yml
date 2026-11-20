@@ -1019,7 +1019,7 @@ jobs:
           # domain, with the analysis plugin the index mappings need. The build pulls
           # the base image and downloads the plugin; one that times out is tried again.
           for attempt in 1 2 3; do
-            if docker build --quiet --tag email-e2e-opensearch infra/local/opensearch; then
+            if docker build --quiet --tag search-opensearch infra/local/opensearch; then
               break
             fi
             if [ "$attempt" -eq 3 ]; then
@@ -1029,10 +1029,10 @@ jobs:
             echo "::warning::the OpenSearch image did not build (attempt $attempt); trying again"
             sleep $((attempt * 15))
           done
-          docker run --detach --name email-e2e-opensearch --publish 9200:9200 \
+          docker run --detach --name search-opensearch --publish 127.0.0.1:9200:9200 \
             --env discovery.type=single-node \
             --env OPENSEARCH_JAVA_OPTS="-Xms1g -Xmx1g" \
-            email-e2e-opensearch
+            search-opensearch
       - name: Mount Namespace cache volume
         uses: namespacelabs/nscloud-cache-action@15799a6b54e5765f85b2aac25b3f0df43ed571c0
         with:
@@ -1511,21 +1511,26 @@ jobs:
         run: |
           set -euo pipefail
 
+          url="${SEARCH_OPENSEARCH_URL:?}"
+          # Each probe is bounded, so a node that accepts the connection but never answers
+          # still reaches the log below within about four minutes.
           for _ in $(seq 1 120); do
-            curl --fail --silent --output /dev/null "$EMAIL_E2E_OPENSEARCH_URL" && break
+            curl --fail --silent --max-time 1 --output /dev/null "$url" && break
             sleep 1
           done
-          curl --fail --silent --show-error --output /dev/null "$EMAIL_E2E_OPENSEARCH_URL" \
-            || { docker logs --tail 50 email-e2e-opensearch; exit 1; }
+          curl --fail --silent --show-error --max-time 5 --output /dev/null "$url" \
+            || { docker logs --tail 50 search-opensearch; exit 1; }
 
           # The indices and aliases search reads, from the same script the local stack
           # and the deployed domain are set up with. The cluster has no security
           # plugin, so the credentials only have to be present.
           cd infra/stacks/opensearch/helpers
           bun install --frozen-lockfile
-          ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$EMAIL_E2E_OPENSEARCH_URL" \
+          ENVIRONMENT=local DRY_RUN=false OPENSEARCH_URL="$url" \
             OPENSEARCH_USERNAME=admin OPENSEARCH_PASSWORD=admin \
             bun run scripts/create_indices.ts
+        env:
+          SEARCH_OPENSEARCH_URL: http://127.0.0.1:9200
       - name: run the email end-to-end scenarios
         run: |
           set -euo pipefail
@@ -2919,8 +2924,8 @@ jobs:
           // Tells the Macro Alerts channel when an email end-to-end workflow turns red
           // on `main`, and when it turns green again. The last job of `email_e2e.yml`,
           // `email_e2e_browser.yml` and `email_e2e_full_stack.yml` runs it after every
-          // other job, on a push to `main` and in the daily sweep; never on a run by
-          // hand.
+          // other job, as does that of `channels_e2e.yml`, on a push to `main` and in
+          // the daily sweep; never on a run by hand.
           //
           // A run posts only when its result differs from what the channel was last
           // told about its stream: the workflow's runs on the same branch for the same
@@ -3220,7 +3225,12 @@ jobs:
             );
           }
 
-          type PlaywrightSpec = { title: string; file: string; line: number; tests: { status: string }[] };
+          type PlaywrightSpec = {
+            title: string;
+            file: string;
+            line: number;
+            tests: { status: string; expectedStatus?: string }[];
+          };
           type PlaywrightSuite = { specs?: PlaywrightSpec[]; suites?: PlaywrightSuite[] };
 
           /** `file:line title` of each spec that failed in a Playwright JSON report. */
@@ -3271,6 +3281,30 @@ jobs:
             };
           }
 
+          /** What a message says of a spec marked to fail (`test.fail()`) that passed. */
+          const MARKED_TO_FAIL = ' (marked as a known defect, and now passes)';
+
+          /**
+           * What the one Playwright report of a suite with no coverage check says failed
+           * (the channels suite's `playwright-report.json`). Its tests for known defects
+           * run in every run, marked to fail, so one that passes fails the run: it is
+           * named with the failed tests, and said to be that.
+           */
+          export function suiteFindings(report: { suites?: PlaywrightSuite[] }): Findings {
+            const unexpected = (spec: PlaywrightSpec) => spec.tests.filter((test) => test.status === 'unexpected');
+            const walk = (suites: PlaywrightSuite[] = []): string[] =>
+              suites.flatMap((suite) => [
+                ...(suite.specs ?? [])
+                  .filter((spec) => unexpected(spec).length > 0)
+                  .map((spec) => {
+                    const marked = unexpected(spec).some((test) => test.expectedStatus === 'failed');
+                    return `${spec.file}:${spec.line} ${spec.title}${marked ? MARKED_TO_FAIL : ''}`;
+                  }),
+                ...walk(suite.suites),
+              ]);
+            return { failedTests: walk(report.suites), knownBugsPassing: [], otherProblems: [] };
+          }
+
           /** What the coverage report in `dir` says failed, or null when there is none. */
           export function readFindings(dir: string): Findings | null {
             const read = (name: string) => JSON.parse(readFileSync(`${dir}/${name}`, 'utf8'));
@@ -3282,6 +3316,9 @@ jobs:
                 .filter((name) => /^playwright-.*\.json$/.test(name))
                 .map((name) => ({ name, report: read(name) }));
               return browserFindings(read('ledger.json'), reports);
+            }
+            if (existsSync(`${dir}/playwright-report.json`)) {
+              return suiteFindings(read('playwright-report.json'));
             }
             return null;
           }

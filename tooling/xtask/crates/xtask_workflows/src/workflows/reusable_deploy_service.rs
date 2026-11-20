@@ -9,13 +9,19 @@
 //! matrix out across it; with a single service there is no fan-out to
 //! amortise, so the per-service build realises its own closure directly (the
 //! /nix sticky disk still substitutes everything unchanged from prior runs).
+//!
+//! Like deploy-all-services, the builds read the private S3 nix cache, so a
+//! cold /nix volume downloads instead of rebuilding. Only runs on `main` write
+//! to it: a dispatch on another branch builds that branch's code, which must
+//! never be signed into the cache.
 
 use gh_workflow::expr::typed::{
     Bool, Expr, Flag, JobHandle, JobOutput, StepHandle, StepOutput, Str, cancelled, failure,
     format, github, input, runner,
 };
 use gh_workflow::{
-    Env, Event, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret, WorkflowInput,
+    Env, Event, Expression, Job, Run, Step, Use, Workflow, WorkflowCall, WorkflowCallSecret,
+    WorkflowInput,
 };
 
 use crate::workflows::actions::{LocalDeployCloudStoragePulumi, LocalGetProjectName};
@@ -127,7 +133,11 @@ pub fn reusable_deploy_service() -> Workflow {
                     WorkflowCallSecret::default().required(true),
                 )
                 .add_secret("DD_APP_KEY", WorkflowCallSecret::default().required(true))
-                .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true)),
+                .add_secret("DD_API_KEY", WorkflowCallSecret::default().required(true))
+                .add_secret(
+                    "NIX_CACHE_SIGNING_KEY",
+                    WorkflowCallSecret::default().required(false),
+                ),
         ))
         .add_job(SETUP, setup())
         .add_job(BUILD_SERVICE_BINARIES, build_service_binaries())
@@ -185,8 +195,16 @@ fn build_job(name: &str, gate: &JobOutput<Flag>) -> Job {
         .add_step(steps::checkout_v4_action().clean(false))
         .add_step(steps::setup_bun_pinned())
         .add_step(steps::mount_nix_cache_volume())
-        .add_step(steps::setup_nix())
+        .add_step(steps::setup_nix_with_cache())
 }
+
+/// Only a run on `main` signs what it built into the S3 nix cache.
+const ON_MAIN: &str = "${{ github.ref == 'refs/heads/main' }}";
+
+/// The signing key on `main`, empty elsewhere, for scripts that push when
+/// it is set.
+const SIGNING_KEY_ON_MAIN: &str =
+    "${{ github.ref == 'refs/heads/main' && secrets.NIX_CACHE_SIGNING_KEY || '' }}";
 
 fn build_service_binaries() -> Job {
     build_job(
@@ -194,11 +212,52 @@ fn build_service_binaries() -> Job {
         &SETUP.outputs.has_binaries,
     )
     .add_step(build_prebuilt_binaries())
+    .add_step(collect_build_inputs().if_condition(Expression::new(ON_MAIN)))
+    // The service's output makes an unchanged service a pure substitution
+    // next run; the deps and build inputs let a changed one compile only
+    // its own crates, even on a cold volume.
+    .add_step(
+        steps::push_nix_cache(
+            ".#deployCargoArtifacts .#deploy-service-binaries-${{ inputs.service-name }} ${{ steps.build-inputs.outputs.paths }}",
+        )
+        .if_condition(Expression::new(ON_MAIN))
+        // A stuck upload must not hold or fail the deploy.
+        .timeout_minutes(15u32)
+        .continue_on_error(true),
+    )
     .add_step(steps::upload_handoff_artifact(
         "prebuilt-binaries.tar.gz",
         service_name(),
     ))
     .add_step(steps::teardown_nix())
+}
+
+/// The store paths a changed service rebuilds from on a cold volume besides
+/// the deps: the vendored crate sources, the Rust toolchain and the code-mode
+/// assets. Only paths this run already realised are listed, so pushing them
+/// builds nothing.
+fn collect_build_inputs() -> Step<Run> {
+    Step::new("Collect build inputs for the nix cache")
+        .run(indoc::indoc! {r#"
+            set -uo pipefail
+            # The cache is an optimization: a failed lookup only pushes less.
+            mapfile -t candidates < <(
+              nix eval --raw .#deployCargoArtifacts --apply 'deps: builtins.concatStringsSep "\n" ([ (toString deps.cargoVendorDir) ] ++ map toString (builtins.filter (input: builtins.match "rust-[0-9].*" (input.name or "") != null) deps.nativeBuildInputs))' \
+                || echo "::warning::could not list the deps' build inputs" >&2
+              echo
+              nix eval --raw .#code-mode-assets.outPath \
+                || echo "::warning::could not find the code-mode assets" >&2
+              echo
+            )
+            paths=()
+            for path in $(printf '%s\n' "${candidates[@]}" | sort -u); do
+              if [[ -e "$path" ]]; then paths+=("$path"); fi
+            done
+            echo "build inputs to cache: ${paths[*]}"
+            echo "paths=${paths[*]}" >> "$GITHUB_OUTPUT"
+        "#})
+        .id("build-inputs")
+        .shell("bash")
 }
 
 fn build_prebuilt_binaries() -> Step<Run> {
@@ -243,9 +302,18 @@ fn build_lambda_artifacts() -> Job {
 }
 
 fn build_lambdas() -> Step<Run> {
+    // The script pushes the handlers it built when both cache values are
+    // set; off `main` the key is empty, so it skips the push.
     Step::new("Build Lambda artifacts")
         .run(".github/scripts/build-cloud-storage-lambdas-nix.sh")
         .add_env(Env::new("SERVICE", service_name()))
+        .add_env(Env::new("NIX_CACHE_URL", vars::NIX_CACHE_URL))
+        .add_env(Env::new("NIX_CACHE_SIGNING_KEY", SIGNING_KEY_ON_MAIN))
+        .add_env(Env::new("AWS_ACCESS_KEY_ID", vars::AWS_ACCESS_KEY))
+        .add_env(Env::new(
+            "AWS_SECRET_ACCESS_KEY",
+            vars::AWS_SECRET_ACCESS_KEY,
+        ))
 }
 
 fn log_lambda_receipt() -> Step<Run> {
@@ -385,4 +453,46 @@ fn handoff_tar_path(has: &JobOutput<Flag>, file: &str) -> Expr<Str> {
         ),
         "",
     )
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Both builds read the binary cache, and every step that could sign into
+    /// it does so only on `main`.
+    #[test]
+    fn deploy_builds_read_the_nix_cache_and_write_it_only_from_main() {
+        let yaml = reusable_deploy_service()
+            .to_string()
+            .expect("workflow yaml");
+        let root: serde_yaml::Value = serde_yaml::from_str(&yaml).expect("parsed yaml");
+        let jobs = root["jobs"].as_mapping().expect("jobs");
+
+        for job in ["build-service-binaries", "build-lambda-artifacts"] {
+            let steps = jobs[job]["steps"].as_sequence().expect("steps");
+            assert!(
+                steps
+                    .iter()
+                    .any(|step| step["with"]["nix-cache-url"].as_str()
+                        == Some(vars::NIX_CACHE_URL.to_string().as_str())),
+                "{job} reads the nix cache: {yaml}"
+            );
+        }
+
+        let mut signing_steps = 0;
+        for (name, job) in jobs {
+            for step in job["steps"].as_sequence().into_iter().flatten() {
+                let Some(key) = step["env"]["NIX_CACHE_SIGNING_KEY"].as_str() else {
+                    continue;
+                };
+                signing_steps += 1;
+                assert!(
+                    step["if"].as_str() == Some(ON_MAIN) || key == SIGNING_KEY_ON_MAIN,
+                    "{name:?} signs off main: {step:?}"
+                );
+            }
+        }
+        assert_eq!(signing_steps, 2, "{yaml}");
+    }
 }

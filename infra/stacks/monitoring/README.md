@@ -51,17 +51,17 @@ its thresholds many times a day.
 ## Prod threshold monitors
 
 `monitors/macrodb.ts`, `redis.ts`, `queues.ts`, `regressions.ts`,
-`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts` and `storage-pool.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
+`outlook-sync.ts`, `routine-suggestions.ts`, `harness-runtimes.ts`, `computer-capacity.ts`, `storage-pool.ts` and `search-freshness.ts` declare the prod threshold, forecast and anomaly monitors with `prodMonitor()`. The ones
 on CloudWatch metrics, except those `queues.ts` marks Datadog only, have
 hand-written copies in Grafana
-(`infra/stacks/observability/nixos/prod-alerts.nix`), and Grafana pages on-call for
+(`infra/stacks/observability/nixos/grafana-provisioning/prod-alerts.nix`), and Grafana pages on-call for
 the critical ones through GoAlert. Their Datadog copies only notify (GoAlert's
 Notify service), so one incident pages once. Keep thresholds and windows in sync by hand. The error-logs
 anomaly monitor reads `macro.logs.errors`, a log-based metric declared in
 `regressions.ts`, because log monitors have no anomaly function.
 
 Each of those files also declares a dashboard (MacroDB, Redis, Queue,
-Regression alerts, Outlook sync, Routine suggestions, Computer capacity, and Search and database saturation) with one graph per monitor, titled like the monitor, its
+Regression alerts, Outlook sync, Routine suggestions, Computer capacity, Search and database saturation, and Search freshness) with one graph per monitor, titled like the monitor, its
 critical and warning thresholds drawn as markers; anomaly graphs show the band
 instead. Every prod monitor's message links to its dashboard. Change a query or
 threshold in the graph too; `routing.test.ts` checks that each monitor has a
@@ -431,3 +431,31 @@ or none in its first hour, and keeps its last state; the far-behind monitor
 still covers a large backlog. Consumers that
 commit no offsets, such as the independent notification consumers, report no
 lag ([Notification retention coverage](#notification-retention-coverage)).
+## Firecracker computer coverage
+
+`monitors/firecracker.ts` adds **nine monitors, one dashboard and one
+span-based distribution**. The header is the contract with host-agent
+instrumentation and fleet admission telemetry; [the
+runbook](../../../docs/runbooks/firecracker-computers.md) covers activation and
+incident response.
+
+Deploy the host and fleet producers and configure each host's local Datadog
+agent before activating these monitors. The collector hostname must match the
+fleet host name. The restore distribution explicitly enables percentiles and
+counts successful `source:golden|hibernation` launches through vCPU resume, excluding
+queue wait and guest readiness. It has no historical backfill. Missing readiness
+alerts after five minutes for previously reporting hosts; idle event counters
+and percentiles do not alert on missing data. Validate a new host's telemetry
+before admitting purchases, since a host that never reports cannot form a group.
+
+Memory compares current usage with the configured admission high watermark,
+not an assumed percentage or historical peak. The drift gauge counts unresolved
+objects/errors; repaired drift counters do not page. Agent health, memory
+pressure and secret-scan refusals page; other failures notify without paging.
+Thresholds are provisional until a production baseline exists.
+
+The authenticated preview must add only these eleven resources for this change
+and preserve the existing adopted-resource constraints above. An offline Pulumi
+mock run checks resource definitions and routing but does not validate Datadog
+query syntax or inspect production drift. No monitor deployment is implied by
+merging this code.

@@ -3644,6 +3644,60 @@ impl From<LocalTeardownNix> for Step<Use> {
     }
 }
 
+/// Calls `./.github/workflows/observability_aws.yml` (Observability AWS layer), defined in `workflows/observability_aws.rs`.
+#[must_use]
+pub struct CallObservabilityAws(CallJob);
+
+impl CallObservabilityAws {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/observability_aws.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallObservabilityAws> for CallJob {
+    fn from(call: CallObservabilityAws) -> Self {
+        call.0
+    }
+}
+
+/// Calls `./.github/workflows/observability_cluster.yml` (Observability cluster), defined in `workflows/observability_cluster.rs`.
+#[must_use]
+pub struct CallObservabilityCluster(CallJob);
+
+impl CallObservabilityCluster {
+    /// A job calling the workflow, with its required inputs set.
+    pub fn new() -> Self {
+        Self(CallJob::new("./.github/workflows/observability_cluster.yml"))
+    }
+
+    /// Passes every secret the caller can read (`secrets: inherit`).
+    pub fn inherit_secrets(self) -> Self {
+        Self(self.0.inherit_secrets())
+    }
+
+    /// The job, to set its name, `needs`, condition or permissions.
+    pub fn job(self) -> CallJob {
+        self.0
+    }
+}
+
+impl From<CallObservabilityCluster> for CallJob {
+    fn from(call: CallObservabilityCluster) -> Self {
+        call.0
+    }
+}
+
 /// Calls `./.github/workflows/observability_image.yml` (Observability image), defined in `workflows/observability_image.rs`.
 #[must_use]
 pub struct CallObservabilityImage(CallJob);
@@ -4353,6 +4407,11 @@ impl CallReusableDeployService {
     /// Passes the secret `DD_API_KEY`.
     pub fn secret_dd_api_key(self, value: impl ToString) -> Self {
         Self(self.0.add_secret("DD_API_KEY", value))
+    }
+
+    /// Passes the secret `NIX_CACHE_SIGNING_KEY`.
+    pub fn secret_nix_cache_signing_key(self, value: impl ToString) -> Self {
+        Self(self.0.add_secret("NIX_CACHE_SIGNING_KEY", value))
     }
 
     /// Passes every secret the caller can read (`secrets: inherit`).

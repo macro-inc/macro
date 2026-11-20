@@ -4,6 +4,15 @@
 [profile.default]
 default-filter = "not package(email_e2e)"
 
+# The content search tests share one search cluster's aliases, so only one of
+# them runs at a time.
+[test-groups.opensearch-content-search]
+max-threads = 1
+
+[[profile.default.overrides]]
+filter = "package(opensearch_client) & binary(content_search)"
+test-group = "opensearch-content-search"
+
 [profile.email-e2e]
 default-filter = "package(email_e2e)"
 # A scenario that hangs is a failure, not something to wait an hour for.

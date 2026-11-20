@@ -29,6 +29,12 @@ async fn setup(pool: &PgPool) {
     .execute(pool)
     .await
     .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20261119171842_scheduling_booking_processing.up.sql"
+    ))
+    .execute(pool)
+    .await
+    .unwrap();
     sqlx::raw_sql("INSERT INTO \"User\" (id) VALUES ('host');")
         .execute(pool)
         .await
@@ -537,4 +543,174 @@ async fn stale_confirmed_snapshot_cannot_release_a_rescheduled_reservation(pool:
         .await,
         Err(Error::Conflict)
     ));
+}
+
+/// Starts moving `record` to `to` as `reschedule` does, leaving the move
+/// waiting on the calendar's first answer.
+async fn start_move(
+    repo: &PostgresRepository,
+    record: &BookingRecord,
+    to: DateTime<Utc>,
+) -> BookingRecord {
+    let mut moving = record.clone();
+    let shift = to - record.booking.starts_at;
+    moving.booking.starts_at += shift;
+    moving.booking.ends_at += shift;
+    moving.busy_start += shift;
+    moving.busy_end += shift;
+    moving.operation = Some(CalendarOperation::new(CalendarOperationKind::Move {
+        status: record.booking.status,
+        original_start: record.booking.starts_at,
+    }));
+    moving.booking.status = BookingStatus::Processing;
+    repo.move_booking(moving, record.booking.status, to, to + Duration::days(1))
+        .await
+        .unwrap()
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_move_waiting_on_the_calendar_holds_a_place_on_both_days(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool);
+    let p = repo.save_profile(owned()).await.unwrap();
+    let day = Utc::now().trunc_subsecs(0) + Duration::days(2);
+    let next_day = day + Duration::days(1);
+    let mut original = booking(p.id, day);
+    original.event.daily_limit = Some(1);
+    let original = repo
+        .reserve(original, Some(1), day, next_day)
+        .await
+        .unwrap();
+    let event_type = original.booking.event_type_id;
+    let moving = start_move(&repo, &original, next_day).await;
+    for start in [day, next_day] {
+        assert_eq!(
+            repo.daily_bookings(p.id, event_type, start, start + Duration::days(1), None)
+                .await
+                .unwrap(),
+            1
+        );
+        // The booking being moved never takes a place from itself.
+        assert_eq!(
+            repo.daily_bookings(
+                p.id,
+                event_type,
+                start,
+                start + Duration::days(1),
+                Some(moving.booking.id)
+            )
+            .await
+            .unwrap(),
+            0
+        );
+    }
+    // A refusal would put the move back on its first day, so that day is
+    // still full: neither a new booking nor another move may take it.
+    let mut newcomer = booking(p.id, day + Duration::hours(3));
+    newcomer.booking.event_type_id = event_type;
+    assert!(matches!(
+        repo.reserve(newcomer.clone(), Some(1), day, next_day).await,
+        Err(Error::Conflict)
+    ));
+    let mut other = booking(p.id, day + Duration::days(4));
+    other.booking.event_type_id = event_type;
+    other.event.daily_limit = Some(1);
+    let other = repo
+        .reserve(
+            other,
+            Some(1),
+            day + Duration::days(4),
+            day + Duration::days(5),
+        )
+        .await
+        .unwrap();
+    let mut into_first_day = other.clone();
+    into_first_day.booking.starts_at = day + Duration::hours(5);
+    into_first_day.booking.ends_at = day + Duration::hours(5) + Duration::minutes(30);
+    into_first_day.busy_start = into_first_day.booking.starts_at;
+    into_first_day.busy_end = into_first_day.booking.ends_at;
+    into_first_day.booking.status = BookingStatus::Processing;
+    assert!(matches!(
+        repo.move_booking(into_first_day, other.booking.status, day, next_day)
+            .await,
+        Err(Error::Conflict)
+    ));
+    // Refused and put back: the first day holds exactly its limit.
+    let mut reverted = moving.clone();
+    reverted.booking.starts_at = original.booking.starts_at;
+    reverted.booking.ends_at = original.booking.ends_at;
+    reverted.busy_start = original.busy_start;
+    reverted.busy_end = original.busy_end;
+    reverted.booking.status = original.booking.status;
+    let reverted = repo
+        .update_booking(reverted, BookingStatus::Processing)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.daily_bookings(p.id, event_type, day, next_day, None)
+            .await
+            .unwrap(),
+        1
+    );
+    assert_eq!(
+        repo.daily_bookings(
+            p.id,
+            event_type,
+            next_day,
+            next_day + Duration::days(1),
+            None
+        )
+        .await
+        .unwrap(),
+        0
+    );
+    // Accepted: the move leaves its first day for good.
+    let mut accepted = start_move(&repo, &reverted, next_day).await;
+    accepted.booking.status = reverted.booking.status;
+    repo.update_booking(accepted, BookingStatus::Processing)
+        .await
+        .unwrap();
+    assert!(repo.reserve(newcomer, Some(1), day, next_day).await.is_ok());
+}
+
+#[sqlx::test(migrations = false)]
+async fn a_move_past_its_first_attempt_counts_only_on_its_new_day(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PostgresRepository::new(pool.clone());
+    let p = repo.save_profile(owned()).await.unwrap();
+    let day = Utc::now().trunc_subsecs(0) + Duration::days(2);
+    let next_day = day + Duration::days(1);
+    let original = repo
+        .reserve(booking(p.id, day), Some(1), day, next_day)
+        .await
+        .unwrap();
+    let moving = start_move(&repo, &original, next_day).await;
+    // A recovery claim moves it past its first attempt; a refusal then
+    // abandons it at the new time instead of putting it back.
+    sqlx::query!(
+        "UPDATE scheduling_booking SET record = jsonb_set(record, '{operation,attempt}', '1') WHERE id = $1",
+        moving.booking.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let event_type = original.booking.event_type_id;
+    assert_eq!(
+        repo.daily_bookings(p.id, event_type, day, next_day, None)
+            .await
+            .unwrap(),
+        0
+    );
+    assert_eq!(
+        repo.daily_bookings(
+            p.id,
+            event_type,
+            next_day,
+            next_day + Duration::days(1),
+            None
+        )
+        .await
+        .unwrap(),
+        1
+    );
 }

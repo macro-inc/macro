@@ -455,6 +455,16 @@ pub trait CurrentOwnerAccess: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<EventAccessCapability>, Report>> + Send;
 }
 
+/// The accounts an inbox's owner delegated it to (multi-inbox), who read its
+/// mail as their own. Err is transient, like `CurrentOwnerAccess`.
+pub trait InboxDelegates: Send + Sync + 'static {
+    fn delegates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, Report>> + Send;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EventIngestionResult {
     /// All eligible candidates were durably handled (including no matches).

@@ -40,7 +40,7 @@ F-038	list	Move through the list with the keyboard	yes	yes	yes	ui
 F-039	list	Select threads (one, range, all) and clear the selection	yes	yes	yes	ui
 F-040	list	Use the reading pane (toggle, resize, open beside the list)	yes	yes	yes	ui
 F-041	list	See a thread's row: sender, subject, snippet, time, unread, star, attachment, draft and count marks	yes	yes	yes	ui
-F-042	list	See the unread count badge on Mail	yes	yes	yes	ui
+F-042	list	See the unread badge on Mail	yes	yes	yes	ui
 F-043	list	See empty, loading and failed list states and retry	yes	yes	yes	ui
 F-044	list	Undo the last list action	yes	yes	yes	provider
 F-045	views	Create a saved view from filters	yes	yes	yes	service

@@ -9,6 +9,10 @@ import { batch, createEffect, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EmailTab, EmailViewState } from '../types';
+import {
+  EMPTY_PAGES_LOAD_MORE_LABEL,
+  MAX_PAGES_PER_LOAD,
+} from './advance-empty-pages';
 import { buildEmailQuery } from './email-query';
 import {
   type EmailDataSource,
@@ -241,6 +245,9 @@ function mount(search = '', keepRowsWhileSearching = false) {
       get isLoading() {
         return loading();
       },
+      get hasPageData() {
+        return !loading() && !paused();
+      },
       get isPlaceholderData() {
         return placeholder();
       },
@@ -270,6 +277,9 @@ function mount(search = '', keepRowsWhileSearching = false) {
       const [missing, setMissing] = createSignal(false);
       const lookup: SoupAstItemsQuery = {
         isFetching: false,
+        get hasPageData() {
+          return !retentionLoading() && !missing();
+        },
         get error() {
           return lookupError() ?? null;
         },
@@ -810,6 +820,54 @@ describe('Email list query transitions', () => {
     expect(ids(source)).toEqual([]);
     await vi.waitFor(() => expect(source.isLoading()).toBe(false));
     expect(source.hasMore()).toBe(false);
+  });
+
+  it('reads on after Load More through pages that keep no archived hit', async () => {
+    const root = mount('invoice');
+    const first = { ...email('first'), done: true };
+    const later = { ...email('later'), done: true };
+    batch(() => {
+      root.setState('tab', 'archived');
+      root.setSearchEntities([first]);
+    });
+    expect(ids(root.source)).toEqual(['first']);
+    root.searchNext
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {})
+      .mockImplementationOnce(async () => {
+        root.setSearchEntities([first, later]);
+      });
+
+    await root.source.loadMore();
+    await vi.waitFor(() =>
+      expect(ids(root.source)).toEqual(['first', 'later'])
+    );
+    expect(root.searchNext).toHaveBeenCalledTimes(3);
+    expect(root.source.items().at(-1)).toMatchObject({
+      kind: 'load-more',
+      isLoading: false,
+    });
+    expect(root.source.items().at(-1)).not.toHaveProperty('label');
+  });
+
+  it('stops a Load More after a bounded run of empty pages and says so', async () => {
+    const root = mount('invoice');
+    batch(() => {
+      root.setState('tab', 'archived');
+      root.setSearchEntities([{ ...email('first'), done: true }]);
+    });
+    root.searchNext.mockImplementation(async () => {});
+
+    await root.source.loadMore();
+    await vi.waitFor(() =>
+      expect(root.source.items().at(-1)).toMatchObject({
+        kind: 'load-more',
+        label: EMPTY_PAGES_LOAD_MORE_LABEL,
+      })
+    );
+    expect(root.searchNext).toHaveBeenCalledTimes(MAX_PAGES_PER_LOAD);
+    expect(ids(root.source)).toEqual(['first']);
+    expect(root.source.hasMore()).toBe(true);
   });
 
   it('does not suspend on pending native data while its fetch is paused', () => {

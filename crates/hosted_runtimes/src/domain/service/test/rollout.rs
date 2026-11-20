@@ -3,7 +3,7 @@ use crate::domain::rollout::{ComputerRollout, ENABLE_MACRO_COMPUTERS};
 use feature_flags::{FlagSnapshot, FlagValue, outbound::fake::FakeFeatureFlags};
 use macro_user_id::user_id::MacroUserIdStr;
 
-pub(super) fn enabled_rollout() -> ComputerRollout {
+pub(crate) fn enabled_rollout() -> ComputerRollout {
     let mut flags = FakeFeatureFlags::default();
     flags.set(
         MacroUserIdStr::try_from("macro|admin@example.com".to_owned()).unwrap(),

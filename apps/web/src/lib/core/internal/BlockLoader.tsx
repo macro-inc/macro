@@ -4,13 +4,21 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFlow, usePending } from '@app/observability/flow';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
-import { Telemetry } from '@macro-inc/observability';
-import { useQueryClient } from '@queries/client';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
+import { invalidateDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
 import { blockNameToItemType } from '@service-storage/client';
 import type { AccessLevel as UserAccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import { createAsync } from '@solidjs/router';
 import { err, ok } from 'neverthrow';
-import { createEffect, type JSX, onCleanup, untrack } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  untrack,
+} from 'solid-js';
 import {
   type BlockDefinition,
   type BlockName,
@@ -35,6 +43,7 @@ import {
 import type { Source, SourcePreload } from '../source';
 import type { ObjectLike } from '../util/result';
 import { loadBlockDataAfterComponentPreload } from './loadBlockData';
+import { trackOpen } from './track-open';
 
 export const blockDataSignal = createBlockSignal<unknown>();
 export const blockLiveTrackingEnabledSignal = createBlockSignal<boolean>();
@@ -127,55 +136,116 @@ export function BlockLoader<
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
 
   const retryToken = blockLoadRetrySignal.get;
+  const [publicationRetry, retryPublication] = createSignal(0);
+  const loadRequest = createMemo(() => {
+    retryToken();
+    return {
+      source: props.source,
+      definition: props.definition,
+      id: props.id,
+      attempt: 0,
+    };
+  });
+  let loadVersion = 0;
+  let disposed = false;
 
   const getResult = createAsync(async () => {
-    // Tracked before the first await so a failure view can re-run the load.
-    retryToken();
-    const result = await loadBlockDataAfterComponentPreload(
-      () =>
-        flow.task('block.data', async (span) => {
-          span.setAttr('block.type', props.definition.name);
-          span.setAttr('document.id', props.id);
-          const result = await props.definition.load(
-            props.source,
-            'initial',
-            span
-          );
-          if (result.isErr()) span.error('Block data could not load');
-          return result;
-        }),
-      props.definition.component.preload
-    );
-    if (result.isErr()) {
-      return err(result.error);
-    }
-    const data = result.value;
-    if ('type' in data && data.type === 'preload') {
-      console.error(
-        `BlockLoader received a nested preload.
-Check that the load function does not return a preload source when the intent is not preload`
-      );
-      return err([
-        {
-          code: 'INVALID' as const,
-          message: 'BlockLoader received a nested preload',
-        },
-      ]);
-    }
-    return ok({
-      ...data,
-      __block: props.definition.name,
+    publicationRetry();
+    const request = loadRequest();
+    const version = ++loadVersion;
+    const { source, definition, id } = request;
+    let generation = cacheSessionGeneration.capture();
+    const respond = <R,>(result: R) => ({
+      result,
+      generation,
+      version,
+      request,
     });
+    const superseded = () =>
+      disposed ||
+      version !== loadVersion ||
+      untrack(currentSharedAccess) === null;
+    const stale = () =>
+      err([
+        { code: 'INVALID' as const, message: 'The loading session changed' },
+      ]);
+    for (let attempt = request.attempt; attempt < 2; attempt++) {
+      request.attempt = attempt;
+      if (superseded()) return respond(stale());
+      generation = cacheSessionGeneration.capture();
+      const result = await untrack(() =>
+        loadBlockDataAfterComponentPreload(
+          () =>
+            flow.task('block.data', async (span) => {
+              span.setAttr('block.type', definition.name);
+              span.setAttr('document.id', id);
+              span.setAttr('block.session_retry', attempt);
+              // A retry starts from the document identity, never an old token or URL.
+              const origin =
+                attempt > 0 && source.type === 'preload'
+                  ? source.origin
+                  : source;
+              const result = await definition.load(origin, 'initial', span);
+              if (result.isErr()) span.error('Block data could not load');
+              return result;
+            }),
+          definition.component.preload
+        )
+      ).catch((error: unknown) => {
+        if (cacheSessionGeneration.isCurrent(generation)) throw error;
+        return stale();
+      });
+      if (superseded() || !cacheSessionGeneration.isCurrent(generation)) {
+        if (result.isOk() && 'syncSource' in result.value)
+          result.value.syncSource.cleanup();
+        if (attempt > 0 || superseded()) return respond(stale());
+        await cacheSessionGeneration.settled();
+        if (superseded() || cacheSessionGeneration.state().paused)
+          return respond(stale());
+        // This imperative bundle is not an active TanStack query. Its fresh
+        // authorization read must not reuse a token cached before retirement.
+        await invalidateDocumentLoadBundle(id);
+        continue;
+      }
+      if (result.isErr()) {
+        return respond(err(result.error));
+      }
+      const data = result.value;
+      if ('type' in data && data.type === 'preload') {
+        console.error(
+          `BlockLoader received a nested preload.
+Check that the load function does not return a preload source when the intent is not preload`
+        );
+        return respond(
+          err([
+            {
+              code: 'INVALID' as const,
+              message: 'BlockLoader received a nested preload',
+            },
+          ])
+        );
+      }
+      return respond(
+        ok({
+          ...data,
+          __block: definition.name,
+        })
+      );
+    }
+    return respond(stale());
   });
 
   onCleanup(() => {
+    disposed = true;
+    loadVersion += 1;
     if (syncSource()) {
       syncSource()!.cleanup();
     }
   });
 
   createEffect(() => {
-    const result = getResult();
+    const publication = getResult();
+    const result = publication?.result;
 
     // An earlier in-flight load must not restore a document after revocation.
     if (untrack(currentSharedAccess) === null) {
@@ -183,6 +253,41 @@ Check that the load function does not return a preload source when the intent is
         result.value.syncSource.cleanup();
       clearLoadedDocument();
       setError('UNAUTHORIZED');
+      return;
+    }
+
+    if (
+      publication &&
+      result?.isOk() &&
+      !untrack(() => cacheSessionGeneration.isCurrent(publication.generation))
+    ) {
+      if ('syncSource' in result.value) result.value.syncSource.cleanup();
+      clearLoadedDocument();
+      if (publication.request.attempt > 0) {
+        setError('INVALID');
+        return;
+      }
+      // Resource delivery is another asynchronous boundary. Keep the original
+      // attempt budget when a result is retired after the loader accepted it.
+      publication.request.attempt = 1;
+      const accepted = publication;
+      async function retryAcceptedLoad() {
+        await cacheSessionGeneration.settled();
+        if (
+          disposed ||
+          accepted.version !== loadVersion ||
+          untrack(currentSharedAccess) === null
+        )
+          return;
+        if (cacheSessionGeneration.state().paused) {
+          setError('INVALID');
+          return;
+        }
+        await invalidateDocumentLoadBundle(accepted.request.id);
+        if (!disposed && accepted.version === loadVersion)
+          retryPublication((value) => value + 1);
+      }
+      fireAndForget(retryAcceptedLoad(), 'block-loader');
       return;
     }
 
@@ -220,23 +325,7 @@ Check that the load function does not return a preload source when the intent is
     if (!isNested && data) {
       const tracksOpenHistory = props.definition.openTrackingEnabled !== false;
       if (tracksOpenHistory) {
-        // we need to pass in a client accessor since the mutation is dynamically imported outside a query context provider
-        import('./trackBlockOpened')
-          .then(({ track }) => {
-            if (authenticated() !== true) return;
-            track({
-              itemId: props.id,
-              blockName: data.__block,
-              client: useQueryClient,
-            });
-          })
-          .catch((error) =>
-            Telemetry.error(error, {
-              surface: 'track-block-opened',
-              blockName: data.__block,
-            })
-          );
-
+        trackOpen(props.id, data.__block, authenticated);
         analytics.pageView(data.__block);
       }
 
