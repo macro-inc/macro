@@ -153,15 +153,15 @@ async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
     assert_eq!(
         claimed
             .iter()
-            .map(|a| a.attachment_db_id)
+            .map(|a| a.metadata.attachment_db_id)
             .collect::<Vec<_>>(),
         vec![image, video, animation]
     );
     let uploads = claimed
         .into_iter()
-        .map(|attachment_metadata| AttachmentUploadArgs {
+        .map(|claimed| AttachmentUploadArgs {
             recipient_emails: vec![],
-            attachment_metadata,
+            attachment_metadata: claimed.metadata,
             backfill: false,
             upload_destination: AttachmentUploadDestination::Sfs,
         })
@@ -192,7 +192,7 @@ async fn a_refused_attachment_fetch_is_claimed_again_by_the_retry(
     assert_eq!(
         reclaimed
             .iter()
-            .map(|a| a.attachment_db_id)
+            .map(|a| a.metadata.attachment_db_id)
             .collect::<Vec<_>>(),
         vec![video, animation]
     );
@@ -217,9 +217,9 @@ async fn an_attachment_deleted_mid_run_is_skipped_without_a_retry(
     let claimed = new_email_media_atts(&pool, link_id, "claim-test-media-msg").await?;
     let uploads = claimed
         .into_iter()
-        .map(|attachment_metadata| AttachmentUploadArgs {
+        .map(|claimed| AttachmentUploadArgs {
             recipient_emails: vec![],
-            attachment_metadata,
+            attachment_metadata: claimed.metadata,
             backfill: false,
             upload_destination: AttachmentUploadDestination::Sfs,
         })

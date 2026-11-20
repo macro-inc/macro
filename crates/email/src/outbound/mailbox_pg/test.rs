@@ -864,7 +864,7 @@ async fn completed_import_rechecks_attachments_after_later_sent_correspondence(d
     assert_eq!(eligible.len(), 1);
     assert_eq!(
         queued[0].payload["message_id"],
-        eligible[0].message_db_id.to_string()
+        eligible[0].metadata.message_db_id.to_string()
     );
 }
 

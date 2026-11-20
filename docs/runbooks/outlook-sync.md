@@ -55,7 +55,11 @@ backoff). A value the database refuses (`unstorable`: SQLSTATE class 22, a NOT
 NULL or CHECK violation) is refused the same way every time, so it stops like
 a refusal Graph won't change: 3 tries, 10 minutes apart. NUL characters, which
 no PostgreSQL text holds, are removed from a message's text, headers, names
-and attachment metadata before the write. It is then `abandoned`: the span
+and attachment metadata before the write. A message whose claims keep ending
+with no outcome at all (the worker reading it stopped, as one that runs out of
+memory does, and its lease expired) stops after 5 such claims in a row, unread
+(`unfinished`): a read that kills its worker would otherwise kill one every
+few minutes forever. It is then `abandoned`: the span
 records `@outlook.outcome:abandoned`, a `"mailbox message abandoned"` WARN
 names its `@defer_reason` and attempts, and
 the health snapshot counts it in `abandoned` instead of `queued`. The next
@@ -66,6 +70,17 @@ stops counting once its backoff reaches 30 minutes: during a Microsoft outage
 queued messages keep retrying every 30 minutes and are never abandoned. An
 invitation whose MIME source Graph won't return is retried twice
 (`calendar_parts`), then imported without its calendar parts.
+
+An attachment whose copy keeps failing to download or store stops being tried
+the same way, counted on the attachment rather than on the projection event
+that tries it: after 3 refusals (`permanent`, `forbidden` or a 404) or 50
+failures of any other kind, a download Graph keeps cutting off included (about
+seven hours of one event's retries). Throttling, token failures, a lost lease
+and lock timeouts never count. The attachment keeps its upload claim and gets
+`upload_abandoned_at`, an `"outlook attachment abandoned"` WARN names its
+`@attachment_id`, failures and `@defer_reason`, and the projection that waited
+on it completes. Nothing revives it: the app shows it as an attachment Macro
+holds no copy of, and opening one downloads it from Graph on demand.
 
 A message Graph answers 404 for is settled as gone (`@outlook.outcome:absent`).
 Live work is read twice more first, 30 and 60 s apart
@@ -196,8 +211,8 @@ More than 500 units of Outlook sync work in 15 minutes were deferred because
 their database writes failed. Failed Kafka, SQS or HTTP effects are deferred
 as `effect` instead and don't count here, and neither do values the database
 refuses (`unstorable`). A message reconciliation that hits one stops after 3
-tries; other sync work (catalogs, folder streams, projections) keeps retrying
-it, and no monitor counts it: search `"mailbox sync work deferred"` and
+tries, as does an attachment's; other sync work (catalogs, folder streams,
+projections) keeps retrying it, and no monitor counts it: search `"mailbox sync work deferred"` and
 `"mailbox sync work failed"` logs for `@defer_reason:unstorable`.
 
 - Group the deferral logs (`"mailbox sync work deferred"`) for
