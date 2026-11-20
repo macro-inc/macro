@@ -50,7 +50,7 @@ The Agents workspace owns conversation navigation, the agent roster, and new-cha
 - Push phone subpages into split history and derive their restored state without navigating again; let nested agent editors consume Back before leaving their list.
 - Suppress the mobile navigation dock only in active session hosts with an empty `FloatRegion` contribution; retain header/gesture Back and the shared accessory host's safe-area padding, and restore navigation on list and management pages.
 - Use the shell NavigationSheet and ViewSidebar items for phone destinations; Conversations and Archived keep the hamburger, never a title-menu sheet or Archived Back button.
-- Put phone conversation headings after the agent bubbles and before pinned sections; keep them sticky below the shared floating-header inset, without unmounting the list when its drawer opens.
+- Put phone conversation headings after the agent bubbles and before pinned sections; use MobileListLayout as the sole island-inset owner, and share its offset between scroll padding and the sticky heading without extra top padding or a hosted split header.
 - Reuse EmptyStatePanel for exhausted empty phone lists; omit search/filter actions and focus the existing accessory composer from Start a conversation.
 - Follow Root-and-parts composition and the [frontend feature architecture](../../../../../docs/architecture/frontend-features.md).
 - Keep catalog option identities stable across capability updates; isolate optional speed-marker discovery with Suspense so it cannot detach the editor.

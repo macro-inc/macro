@@ -1,6 +1,5 @@
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
-import { MobileHeader } from '@components/app/mobile-header/mobile-header';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -22,14 +21,15 @@ export function PhoneListHeader(
     props.onSearchChange('');
   };
   return (
-    <MobileHeader
-      trailing={
+    <div class="flex min-w-0 items-center justify-between gap-2">
+      <ViewSidebar.Toggle action="expand" presentation="pill" />
+      <div class="flex min-w-0 flex-1 items-center justify-end gap-2">
         <Show when={!props.empty}>
           <Show
             when={searchOpen() || props.search}
             fallback={
               <>
-                <MobileHeader.Island>
+                <div class="island pointer-events-auto flex h-10 min-w-0 shrink-0 items-center gap-1 rounded-full px-3">
                   <Button
                     variant="ghost"
                     size="icon-md"
@@ -41,7 +41,7 @@ export function PhoneListHeader(
                   >
                     <SearchIcon class="size-5" />
                   </Button>
-                </MobileHeader.Island>
+                </div>
                 <ConversationFiltersDrawer
                   filters={props.filters}
                   onFilterChange={props.onFilterChange}
@@ -67,9 +67,7 @@ export function PhoneListHeader(
             />
           </Show>
         </Show>
-      }
-    >
-      <ViewSidebar.Toggle action="expand" presentation="pill" />
-    </MobileHeader>
+      </div>
+    </div>
   );
 }

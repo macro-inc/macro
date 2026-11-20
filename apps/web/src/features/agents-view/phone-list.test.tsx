@@ -2,28 +2,24 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { EMPTY_CONVERSATION_FILTERS } from './core/conversation-filters';
+import {
+  type ConversationFilters,
+  EMPTY_CONVERSATION_FILTERS,
+} from './core/conversation-filters';
 import type { AgentConversationEntity } from './core/recent-conversations';
 import { PhoneAgentsList } from './phone-list';
 
-vi.mock('@components/app/SplitHeaderScope', () => ({
-  SplitHeaderScope: {
-    Root: (props: { children: JSX.Element }) => props.children,
-    TopBar: () => null,
-  },
-}));
-vi.mock('@components/app/mobile-header/mobile-header', () => ({
-  MobileHeader: Object.assign(
-    (props: { children: JSX.Element; trailing: JSX.Element }) => (
-      <div>
-        {props.children}
-        {props.trailing}
-      </div>
-    ),
-    {
-      Island: (props: { children: JSX.Element }) => <div>{props.children}</div>,
-    }
-  ),
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
+
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => true,
 }));
 vi.mock('@app/components/view-shell', () => ({
   ViewShell: {
@@ -76,6 +72,7 @@ function Harness(props: {
   hasNextPage?: boolean;
   rows?: AgentConversationEntity[];
   focus?: () => void;
+  filters?: ConversationFilters;
 }) {
   const [search, setSearch] = createSignal('');
   return (
@@ -89,7 +86,7 @@ function Harness(props: {
       rosterLoading={false}
       search={search()}
       onSearchChange={setSearch}
-      filters={EMPTY_CONVERSATION_FILTERS}
+      filters={props.filters ?? EMPTY_CONVERSATION_FILTERS}
       onFilterChange={() => {}}
       onClearFilters={() => {}}
       showUnlistedRuns={false}
@@ -118,9 +115,9 @@ function Harness(props: {
 describe('phone Agents list', () => {
   it('shows the conversation empty panel after the bubbles and sticky heading, and focuses the existing composer', () => {
     const focus = vi.fn();
-    const { container } = render(() => <Harness focus={focus} />);
+    render(() => <Harness focus={focus} />);
     const heading = screen.getByRole('heading', { name: 'Conversations' });
-    expect(container.querySelector('header')?.className).toContain(
+    expect(heading.closest('header')?.className).toContain(
       'sticky top-(--mobile-content-inset-top)'
     );
     expect(
@@ -140,6 +137,62 @@ describe('phone Agents list', () => {
       screen.getByRole('button', { name: 'Start a conversation' })
     );
     expect(focus).toHaveBeenCalledOnce();
+  });
+
+  it('keeps bubbles, one sticky collection heading, waiting card, and remaining rows in scroll order', () => {
+    const { container } = render(() => (
+      <Harness
+        rows={[
+          {
+            type: 'agent_session',
+            id: 'waiting',
+            botId: 'agent',
+            name: 'Waiting session',
+            ownerId: 'owner',
+            status: 'acp_ready',
+            turnState: 'blocked',
+          },
+          {
+            type: 'agent_session',
+            id: 'recent',
+            botId: 'agent',
+            name: 'Recent session',
+            ownerId: 'owner',
+            status: 'acp_ready',
+            turnState: 'complete',
+          },
+        ]}
+      />
+    ));
+    const bubbles = screen.getByRole('button', { name: 'New agent' });
+    const heading = screen.getByRole('heading', { name: 'Conversations' });
+    const waiting = screen.getByRole('region', { name: 'Waiting on you' });
+    const row = screen.getByText('Recent session');
+    for (const [before, after] of [
+      [bubbles, heading],
+      [heading, waiting],
+      [waiting, row],
+    ]) {
+      expect(
+        before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+    expect(
+      screen.getAllByRole('heading', { name: 'Conversations' })
+    ).toHaveLength(1);
+    const sticky = heading.closest('header');
+    expect(sticky?.className).toContain(
+      'sticky top-(--mobile-content-inset-top)'
+    );
+    expect(sticky?.className).toContain('bg-panel');
+    expect(heading.className).toContain('text-[20px]/[26px]');
+    expect(sticky?.parentElement?.className).toContain(
+      'pt-(--mobile-content-inset-top)'
+    );
+    expect(sticky?.parentElement?.className).not.toContain('calc');
+    expect(
+      container.querySelectorAll('[data-mobile-list-header]')
+    ).toHaveLength(1);
   });
 
   it('shows the archived empty panel without bubbles, an action, or Back', () => {
