@@ -330,7 +330,7 @@ impl ProgramExecutor for Held {
         progress: tokio::sync::mpsc::Sender<serde_json::Value>,
     ) -> Outcome {
         let _ = progress
-            .send(json!({"type": "operation", "id": 1, "operation": "routines.check", "status": "running"}))
+            .send(json!({"id": 1, "service": "cognition", "operation": "decisions", "status": "started"}))
             .await;
         self.started.notify_one();
         tokio::select! {
@@ -468,6 +468,8 @@ async fn a_refused_background_runs_in_the_foreground_and_says_why() {
         refuse: Some("Someone other than the owner prompted this turn.".into()),
         ..Default::default()
     });
+    // In the foreground the call waits for the program, so let it finish.
+    harness.program.release.notify_one();
     let receipt = harness
         .launch(ExecutionId::mint(), check_routine())
         .await
