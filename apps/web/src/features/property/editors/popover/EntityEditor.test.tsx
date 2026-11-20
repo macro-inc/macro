@@ -119,6 +119,17 @@ vi.mock('@entity', () => ({
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: false }),
 }));
+vi.mock('@app/features/crm/crm-search', () => ({
+  useCrmCompanySearchSource: () => ({
+    companies: () => [],
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    error: () => undefined,
+    retry: async () => {},
+  }),
+}));
 vi.mock('@app/features/crm/record-adapter', () => ({
   useCrmContactMentionSource: () => ({
     entities: () => [],
