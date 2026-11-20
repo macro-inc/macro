@@ -150,18 +150,19 @@ pub trait AgentMailboxes: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<MailboxView>, MailboxError>> + Send;
 
-    /// Stop syncing and sending; keep the mail and the address.
+    /// Stop the agent's mailbox reading and sending; keep the mail and the
+    /// address. No mailbox is success.
     fn pause(
         &self,
         agent: &MacroUserIdStr<'_>,
-        mailbox_id: Uuid,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 
-    /// Delete the mailbox and its mail; the address stops receiving.
+    /// Delete the agent's mailbox and its mail; the address stops
+    /// receiving. No mailbox, or one email_service is still deleting, is
+    /// success.
     fn release(
         &self,
         agent: &MacroUserIdStr<'_>,
-        mailbox_id: Uuid,
     ) -> impl Future<Output = Result<(), MailboxError>> + Send;
 }
 
@@ -445,12 +446,9 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
             Err(MailboxError::Unavailable(error)) => return Err(InboxError::Unavailable(error)),
         };
         let (done, after) = match step {
-            WindDown::Pause => (
-                self.mailboxes.pause(agent, mailbox_id).await,
-                AgentInboxState::Paused,
-            ),
+            WindDown::Pause => (self.mailboxes.pause(agent).await, AgentInboxState::Paused),
             WindDown::Release => (
-                self.mailboxes.release(agent, mailbox_id).await,
+                self.mailboxes.release(agent).await,
                 AgentInboxState::Released,
             ),
         };
