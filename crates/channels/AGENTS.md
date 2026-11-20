@@ -98,9 +98,11 @@ DMs, and the shared message store other domains discuss things on.
   edit, `finalized_reply` on `MessagePosted`) tells the member it was posted
   for (`triggered_by`) as a `channel_mention` (`AnsweredMention`), not a
   thread reply, so a mentions-only channel or one with replies off still
-  reaches whoever asked, while a mute still silences it; one who turned
-  mentions off gets the reply instead (mention fallback). Its id derives from
-  the message and answer, so a redelivered resolution notifies once. The
+  reaches whoever asked, while a mute still silences it. One who turned
+  mentions off for the channel gets the reply or message instead (mention
+  fallback), if that kind is on. Only patched replies count: a bot answer
+  posted as a new message notifies as any post does. Its id derives from the
+  message and answer, so a redelivered resolution notifies once. The
   `channel.message_posted_notifications` span's `answered_person` names the
   decision.
 

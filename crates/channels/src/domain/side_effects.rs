@@ -1192,7 +1192,8 @@ struct PostedMessageNotificationContext {
 /// forever, so a redelivered resolution keeps its id across deploys.
 const ANSWERED_MENTION_NAMESPACE: Uuid = Uuid::from_u128(0x6368_616e_2d61_6e73_7765_7265_642d_6d65);
 
-/// The answered mention's id: one per message and answer, so redelivering
+/// The answered mention's id, derived rather than generated (`now_v7`) so it
+/// is idempotent: one per message and answer, so redelivering
 /// the same resolution is a no-op while a later, different answer (after a
 /// question was answered) is news again.
 fn answered_notification_id(message_id: Uuid, content: &str) -> Uuid {

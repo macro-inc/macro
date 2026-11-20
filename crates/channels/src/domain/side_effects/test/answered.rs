@@ -222,3 +222,139 @@ async fn an_answer_for_someone_who_left_tells_nobody_directly() {
 
     assert!(answered_mentions(&notifications).is_empty());
 }
+
+/// A reply that @mentions the asker already tells them; they get that
+/// mention only.
+#[tokio::test]
+async fn an_answer_that_mentions_the_asker_sends_only_that_mention() {
+    let notifications = FakeNotifications::default();
+    let ChannelEvent::MessagePosted {
+        channel_id,
+        metadata,
+        participants,
+        message,
+        has_attachments,
+        notification_policy,
+        finalized_reply,
+        ..
+    } = answer(Some(asker().as_ref().to_string()), "Done", true)
+    else {
+        unreachable!();
+    };
+
+    service(&notifications)
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions: vec![SimpleMention::user(&asker())],
+            has_attachments,
+            notification_policy,
+            finalized_reply,
+        })
+        .await;
+
+    assert!(answered_mentions(&notifications).is_empty());
+    let mentioned: Vec<_> = notifications
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .filter_map(|effect| match effect {
+            ChannelNotificationEffect::UserMention { recipient_ids, .. } => {
+                Some(recipient_ids.clone())
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(mentioned, vec![HashSet::from([asker()])]);
+}
+
+/// An answer outside a thread, as in a conversation on the channel's
+/// timeline: the asker is left out of the channel message and kept as its
+/// mention fallback.
+#[tokio::test]
+async fn a_top_level_answer_tells_the_asker_as_a_mention() {
+    let notifications = FakeNotifications::default();
+    let ChannelEvent::MessagePosted {
+        channel_id,
+        metadata,
+        participants,
+        mut message,
+        mentions,
+        has_attachments,
+        notification_policy,
+        finalized_reply,
+    } = answer(Some(asker().as_ref().to_string()), "Done", true)
+    else {
+        unreachable!();
+    };
+    message.thread_id = None;
+
+    service(&notifications)
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions,
+            has_attachments,
+            notification_policy,
+            finalized_reply,
+        })
+        .await;
+
+    assert_eq!(answered_mentions(&notifications).len(), 1);
+    let message = notifications
+        .effects
+        .lock()
+        .unwrap()
+        .iter()
+        .find_map(|effect| match effect {
+            ChannelNotificationEffect::ChannelMessage {
+                recipient_ids,
+                mention_fallback_ids,
+                ..
+            } => Some((recipient_ids.clone(), mention_fallback_ids.clone())),
+            _ => None,
+        })
+        .expect("expected a channel message notification");
+    assert_eq!(message.0, HashSet::from([follower()]));
+    assert_eq!(message.1, HashSet::from([asker()]));
+}
+
+/// Only a bot's reply answers anyone: a person's own edit never does.
+#[tokio::test]
+async fn a_persons_edit_tells_nobody_directly() {
+    let notifications = FakeNotifications::default();
+    let ChannelEvent::MessagePosted {
+        channel_id,
+        metadata,
+        participants,
+        mut message,
+        mentions,
+        has_attachments,
+        notification_policy,
+        finalized_reply,
+    } = answer(Some(asker().as_ref().to_string()), "Done", true)
+    else {
+        unreachable!();
+    };
+    message.sender_id = Sender::new_from_user(follower());
+
+    service(&notifications)
+        .handle(ChannelEvent::MessagePosted {
+            channel_id,
+            metadata,
+            participants,
+            message,
+            mentions,
+            has_attachments,
+            notification_policy,
+            finalized_reply,
+        })
+        .await;
+
+    assert!(answered_mentions(&notifications).is_empty());
+}
