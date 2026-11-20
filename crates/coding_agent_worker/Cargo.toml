@@ -24,6 +24,7 @@ agent_trigger = { path = "../agent_trigger" }
 arboard = { workspace = true }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+teammate_lifecycle = { path = "../teammate_lifecycle" }
 trigger_context = { path = "../trigger_context" }
 chrono = { workspace = true }
 clap = { workspace = true }
@@ -45,6 +46,8 @@ macro_uuid = { path = "../macro_uuid" }
 opentelemetry = { workspace = true, features = ["trace"] }
 opentelemetry_sdk = { workspace = true, features = ["trace", "rt-tokio"] }
 opentelemetry-otlp = { workspace = true }
+prost = { workspace = true }
+opentelemetry-proto = { version = "0.31.0", default-features = false, features = ["gen-tonic-messages", "trace"] }
 tracing-opentelemetry = { workspace = true }
 ratatui = { workspace = true }
 nom = { workspace = true }

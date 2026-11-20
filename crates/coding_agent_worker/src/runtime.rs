@@ -14,7 +14,7 @@ use tokio_util::task::AbortOnDropHandle;
 
 use crate::computer::Computer;
 use crate::config::{Harness, HarnessCredentials, MacroApi};
-use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
+use crate::harness::{self, BridgeEnd, Handoffs, HostTeammates, LineTap};
 use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
 use crate::retry_delay::RetryDelays;
@@ -48,6 +48,9 @@ pub struct Runtime {
 impl Runtime {
     /// Start connecting with the given credentials and keep the harness
     /// available for model discovery and agent sessions until dropped.
+    /// `teammates`, when this macrod hosts any, has its engine checked
+    /// before every dial, which decides whether the dial lists the
+    /// teammate capability.
     #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
     pub fn start(
         macro_api: &MacroApi,
@@ -59,6 +62,7 @@ impl Runtime {
         adopted: Option<RunningAgent>,
         handoffs: Handoffs,
         computer: Option<Arc<Computer>>,
+        teammates: Option<Arc<HostTeammates>>,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let agents_changed = Arc::new(Notify::new());
@@ -74,6 +78,7 @@ impl Runtime {
             adopted,
             handoffs,
             computer,
+            teammates,
         ));
         Self {
             connected,
@@ -130,6 +135,7 @@ async fn serve(
     mut adopted: Option<RunningAgent>,
     mut handoffs: Handoffs,
     computer: Option<Arc<Computer>>,
+    teammates: Option<Arc<HostTeammates>>,
 ) {
     let mut backoff = reconnect_strategy();
     loop {
@@ -137,8 +143,12 @@ async fn serve(
         if adopted.is_none() {
             adopted = start_ahead(&harness, &cwd);
         }
+        let hosting = check_teammate_host(teammates.as_ref()).await;
+        let hosts_teammates = hosting
+            .as_ref()
+            .is_some_and(|(_, report)| report.engine.is_some() && report.problem.is_none());
         let dialed = tokio::select! {
-            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            dialed = tokio::time::timeout(DIAL_TIMEOUT, link::dial(&gateway_url, &token, hosts_teammates)) => dialed,
             request = handoffs.next() => {
                 answer_between_bridges(request, adopted.take(), &turns);
                 return;
@@ -159,6 +169,7 @@ async fn serve(
                     &mut handoffs,
                     computer.clone(),
                     &agents_changed,
+                    hosting,
                 )
                 .await
                 {
@@ -193,6 +204,21 @@ async fn serve(
             }
         }
     }
+}
+
+/// Check the container engine before a dial: macrod checks when it starts
+/// and again on every reconnect.
+async fn check_teammate_host(
+    teammates: Option<&Arc<HostTeammates>>,
+) -> Option<harness::TeammateHosting> {
+    let teammates = teammates?;
+    #[cfg(unix)]
+    {
+        let report = teammates.detect().await;
+        Some((Arc::clone(teammates), report))
+    }
+    #[cfg(not(unix))]
+    match **teammates {}
 }
 
 /// Start the agent while the runtime dials, so a session that arrives with

@@ -63,6 +63,35 @@ pub type InheritedAgent = std::convert::Infallible;
 #[cfg(unix)]
 const HANDOFF_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// The teammates this macrod hosts in containers (docs/design/
+/// teammate-runtime.md). Without them macrod still serves sessions; it just
+/// doesn't list the capability. Tests never touch the real engine or the
+/// home directory's store.
+fn host_teammates(
+    macro_api: &crate::config::MacroApi,
+    credentials: &HarnessCredentials,
+) -> Option<std::sync::Arc<crate::harness::HostTeammates>> {
+    #[cfg(all(unix, not(test)))]
+    return crate::teammate::host(
+        credentials.harness_id,
+        crate::teammate::ingest::IngestTarget {
+            url: format!(
+                "{}/teammates/telemetry",
+                macro_api.api_url.trim_end_matches('/')
+            ),
+            token: credentials.token.clone(),
+        },
+    )
+    .inspect_err(|error| tracing::warn!(error = ?error, "could not set up hosting teammates"))
+    .ok()
+    .map(std::sync::Arc::new);
+    #[cfg(any(not(unix), test))]
+    {
+        let _ = (macro_api, credentials);
+        None
+    }
+}
+
 impl Daemon {
     /// Connect the runtime and listen for agent triggers in background tasks.
     ///
@@ -130,6 +159,7 @@ impl Daemon {
             adopted,
             handoffs,
             computer,
+            host_teammates(&config.macro_api, &credentials),
         );
         let runtime_connected = runtime.connection_state();
         let agents_changed = runtime.agents_changed();

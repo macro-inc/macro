@@ -37,6 +37,7 @@ async fn unspawnable_harness_reports_failure() {
         &mut Handoffs::channel().0,
         None,
         &tokio::sync::Notify::new(),
+        None,
     )
     .await
     .expect_err("a harness that cannot be spawned must not look like success");
@@ -66,6 +67,7 @@ async fn harness_that_exits_immediately_disconnects() {
         &mut Handoffs::channel().0,
         None,
         &tokio::sync::Notify::new(),
+        None,
     )
     .await;
 
@@ -92,6 +94,7 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
         &mut Handoffs::channel().0,
         None,
         &tokio::sync::Notify::new(),
+        None,
     )
     .await
     .expect_err("announcing into a closed channel must fail");
@@ -166,6 +169,7 @@ for line in sys.stdin:
         &mut handoffs,
         None,
         &agents_changed,
+        None,
     );
     let conversation = async {
         let mut next_answer = async || loop {
@@ -208,4 +212,80 @@ for line in sys.stdin:
         blocks[1],
         serde_json::json!({"type": "text", "text": "hello"})
     );
+}
+
+/// The whole path on one connection: the service's `RunTeammate` reaches
+/// the supervisor and ends in a running container (on the fake engine), and
+/// the connection carries the host report and each state back.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_run_teammate_over_the_runtime_socket_ends_in_a_running_container() {
+    use agent_runtime_protocol::domain::schema::v0::TeammateRunState;
+
+    let (hosting, engine, _exit, _directory) = crate::teammate::test::fake_hosting().await;
+    let (runtime, mut service) = Channel::duplex();
+    // An agent that stays up, so the bridge keeps relaying.
+    let agent = Harness {
+        command: "sleep".to_owned(),
+        args: vec!["30".to_owned()],
+        env: Default::default(),
+    };
+    let mut handoffs = Handoffs::channel().0;
+    let agents_changed = tokio::sync::Notify::new();
+    let turns = ActiveTurns::default();
+    let bridged = bridge(
+        &agent,
+        std::path::Path::new("/"),
+        runtime,
+        None,
+        &turns,
+        None,
+        &mut handoffs,
+        None,
+        &agents_changed,
+        Some(hosting),
+    );
+
+    let served = async {
+        service
+            .tx
+            .send(ToRuntimeMessage::RunTeammate {
+                install: crate::teammate::test::fake_install(),
+                image: crate::teammate::test::fake_image(),
+                environment: crate::teammate::test::fake_environment(),
+                traceparent: None,
+            })
+            .unwrap();
+        let mut reported_host = false;
+        let mut states = Vec::new();
+        while states.last() != Some(&TeammateRunState::Running) {
+            match service.rx.recv().await.expect("the bridge stays connected") {
+                ToServerMessage::TeammateHost { report } => {
+                    assert!(report.problem.is_none(), "{report:?}");
+                    reported_host = true;
+                }
+                ToServerMessage::TeammateStatus { install, state } => {
+                    assert_eq!(install, crate::teammate::test::fake_install());
+                    states.push(state);
+                }
+                _ => {}
+            }
+        }
+        (reported_host, states)
+    };
+    let (reported_host, states) = tokio::select! {
+        served = served => served,
+        ended = bridged => panic!("the bridge ended first: {ended:?}"),
+    };
+
+    assert!(reported_host, "the connection sends the host report first");
+    assert_eq!(
+        states,
+        [
+            TeammateRunState::Downloading,
+            TeammateRunState::Starting,
+            TeammateRunState::Running,
+        ]
+    );
+    assert_eq!(engine.runs(), 1);
 }

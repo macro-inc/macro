@@ -28,6 +28,7 @@ fn start_runtime(listener: &TcpListener) -> Runtime {
         None,
         crate::harness::Handoffs::channel().0,
         None,
+        None,
     )
 }
 
@@ -223,6 +224,7 @@ async fn the_agent_starts_while_the_runtime_dials() {
         ActiveTurns::default(),
         None,
         crate::harness::Handoffs::channel().0,
+        None,
         None,
     );
     let read = tokio::task::spawn_blocking(move || std::fs::read_to_string(started));
