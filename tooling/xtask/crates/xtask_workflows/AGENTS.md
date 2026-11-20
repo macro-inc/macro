@@ -36,7 +36,7 @@ TypeScript job logic in the owning package.
 ## Gotchas
 
 - Step conditions use `if_condition` after `run` or `uses`; job conditions use `cond`.
-- Lexical nightly and PR checks share builders; the session coverage job runs
-  `packages/lexical-conformance/coverage/document-session.ts`, and missing bundles
-  fail the actual web-build bundle gate.
+- The editor landing keeps conformance, session-contract and Loro compatibility
+  checks as local commands. Existing web test WASM builds, decorator typechecks
+  and bundle gates remain in their owning jobs.
 

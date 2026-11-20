@@ -31,8 +31,8 @@ use xtask_paths::RepoGlob;
 
 use crate::workflows::{
     cargo_deny, cargo_workspace_dependency_check, check_generated, check_node_modules_nix,
-    check_tauri_lockfiles, code_check_conventions, code_check_infra, loro_pair,
-    observability_image, runners, sdk_check, steps, test_macrod_update,
+    check_tauri_lockfiles, code_check_conventions, code_check_infra, observability_image, runners,
+    sdk_check, steps, test_macrod_update,
 };
 
 #[cfg(test)]
@@ -65,24 +65,6 @@ struct Call {
 }
 
 const CALLS: &[Call] = &[
-    Call {
-        id: "lexical",
-        name: "Lexical",
-        file: "lexical_conformance.yml",
-        paths: Some(super::lexical_conformance::PATHS),
-    },
-    Call {
-        id: "document-session",
-        name: "Document session",
-        file: "document_session.yml",
-        paths: Some(super::lexical_conformance::SESSION_PATHS),
-    },
-    Call {
-        id: "loro-pair",
-        name: "Loro compatibility",
-        file: "loro-pair.yml",
-        paths: Some(loro_pair::PATHS),
-    },
     Call {
         id: "cloud-storage",
         name: "Cloud Storage",
