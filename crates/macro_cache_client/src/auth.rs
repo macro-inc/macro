@@ -213,24 +213,37 @@ impl MacroCache {
         Ok(value.is_some())
     }
 
-    /// Stores Meta click ids for the browser that started SSO from `ip`.
-    /// The create-user webhook reads them back. A later attempt from the same
-    /// address replaces the previous one.
-    pub async fn stash_signup_meta(&self, ip: &str, json: &str) -> anyhow::Result<()> {
-        let key = signup_meta_key(ip);
+    /// Stores Meta click ids for the browser that started SSO from `ip` with
+    /// `user_agent`. A different browser at the same address keeps its own slot.
+    pub async fn stash_signup_meta(
+        &self,
+        ip: &str,
+        user_agent: &str,
+        json: &str,
+    ) -> anyhow::Result<()> {
+        let key = signup_meta_key(ip, user_agent);
         macro_redis::set::set_with_expiry(&self.inner, &key, json, MACRO_SIGNUP_META_EXPIRY_SECONDS)
             .await
     }
 
-    /// Takes the Meta click ids stashed for `ip`, if a signup start stored any.
-    pub async fn take_signup_meta(&self, ip: &str) -> anyhow::Result<Option<String>> {
-        let key = signup_meta_key(ip);
+    /// Takes the Meta click ids stashed for this address and user agent.
+    pub async fn take_signup_meta(
+        &self,
+        ip: &str,
+        user_agent: &str,
+    ) -> anyhow::Result<Option<String>> {
+        let key = signup_meta_key(ip, user_agent);
         macro_redis::get::get_del_optional::<String>(&self.inner, &key).await
     }
 }
 
-fn signup_meta_key(ip: &str) -> String {
-    format!("signup_meta:{ip}")
+fn signup_meta_key(ip: &str, user_agent: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    user_agent.hash(&mut hasher);
+    format!("signup_meta:{ip}:{:x}", hasher.finish())
 }
 
 #[cfg(test)]

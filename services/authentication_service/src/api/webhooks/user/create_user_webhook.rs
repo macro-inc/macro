@@ -446,18 +446,24 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 return;
             }
 
-            let stashed = if SignupClickIds::from_user_data(stored_user_data.as_ref())
-                .has_click_id()
-            {
+            let stored_clicks = SignupClickIds::from_user_data(stored_user_data.as_ref());
+            let stashed = if stored_clicks.has_click_id() {
                 None
-            } else {
-                match macro_cache_client.take_signup_meta(&ip_address).await {
+            } else if let Some(user_agent) =
+                SignupClickIds::normalized_user_agent(event_user_agent.as_deref())
+            {
+                match macro_cache_client
+                    .take_signup_meta(&ip_address, &user_agent)
+                    .await
+                {
                     Ok(json) => json.as_deref().and_then(SignupClickIds::from_json),
                     Err(error) => {
                         tracing::warn!(error = ?error, "failed to read signup meta attribution");
                         None
                     }
                 }
+            } else {
+                None
             };
             let user_data = registration_user_data(
                 &email,

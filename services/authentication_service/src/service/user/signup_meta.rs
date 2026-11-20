@@ -61,6 +61,12 @@ impl SignupClickIds {
         self.fbp.is_some() || self.fbc.is_some()
     }
 
+    /// The user-agent string used as part of the SSO stash key. The webhook
+    /// and the login handler must normalize it the same way.
+    pub(crate) fn normalized_user_agent(value: Option<&str>) -> Option<String> {
+        accepted_user_agent(value)
+    }
+
     /// Writes the fields FusionAuth will echo on `user.create`.
     pub(crate) fn merge_into(&self, data: &mut Value) {
         let Some(object) = data.as_object_mut() else {
@@ -102,8 +108,8 @@ pub(crate) fn signup_event_id(profile_id: &str) -> String {
 /// User data for the signup conversion.
 ///
 /// Click ids stored on the FusionAuth user (passwordless) win. A stash from
-/// the SSO start is used only when its user agent matches the webhook's,
-/// so two people behind one address cannot take each other's click.
+/// the SSO start is stored per address and user agent, and used only when
+/// that user agent matches the webhook.
 pub(crate) fn registration_user_data(
     email: &str,
     client_ip: &str,
