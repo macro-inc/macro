@@ -88,6 +88,10 @@ export type Chat = {
   readonly handled: (messageId: string) => void;
   /** Resolves once `incoming`'s stream is open and a round trip to Macro worked. */
   readonly listening: () => Promise<void>;
+  /** Macro has answered a request (the agent's own id) in this process: it is online. */
+  readonly reached: () => boolean;
+  /** Resolves once Macro has answered a request. */
+  readonly reachable: () => Promise<void>;
 };
 
 /**
@@ -221,10 +225,16 @@ export const sdkChat = ({
     })();
   };
   let me: Promise<string> | undefined;
+  const macroAnswered = Promise.withResolvers<void>();
+  let reached = false;
   const myId = () => {
     me ??= connect()
       .then((macro) => macro.users.me())
-      .then((user) => user.id)
+      .then((user) => {
+        reached = true;
+        macroAnswered.resolve();
+        return user.id;
+      })
       .catch((error: unknown) => {
         // Asked again next time: one failure must not stick.
         me = undefined;
@@ -345,6 +355,8 @@ export const sdkChat = ({
       if (unhandled.delete(messageId)) saveCursor();
     },
     listening: () => listening.promise,
+    reached: () => reached,
+    reachable: () => macroAnswered.promise,
     incoming: pushed<Incoming>(async (emit) => {
       const macro = await connect();
       // Before the stream opens, so retried like the round trip: one failed
@@ -616,6 +628,8 @@ export const sdkChat = ({
           for (let attempt = 0; open && !answered; attempt += 1) {
             try {
               await macro.users.me();
+              reached = true;
+              macroAnswered.resolve();
               answered = true;
               listening.resolve();
             } catch {

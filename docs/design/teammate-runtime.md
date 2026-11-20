@@ -116,11 +116,16 @@ interpret them.
 | Code | From | Means | The supervisor |
 | --- | --- | --- | --- |
 | 0 | runtime | Stopped | *stopped* if a stop was asked for; otherwise starts again after at least 2 s |
-| 75 | runtime or `teammate-boot` | Restart after a land (the restart marker) | Starts again at once, not counted |
+| 75 | runtime or `teammate-boot` | Restart after a land: the runtime sees its restart marker change and exits 75 itself | Starts again at once, not counted |
 | 77 | `teammate-boot` | The last run was a 78 on last-good: the settings are wrong, not the code | *failed: badConfiguration*, no restart; the service redelivers |
 | 78 | runtime or `teammate-boot` | A setting or credential is missing or invalid | Starts again with backoff. `teammate-boot` counts it as a failed boot, so code that broke its settings rolls back. |
 | 79 | `teammate-boot` (or the old `start-agent`) | The code needs a newer runtime (a newer muppet, or packages the image lacks) and nothing older would run | *failed: incompatibleRuntime*, no restart until a newer image |
-| other | anything | A crash | Starts again with backoff from 2 to 60 s; `teammate-boot` counts it |
+| other | anything | A crash, or 1 from the runtime when Macro answers but chat's event stream didn't open within 3 minutes (a code fault) | Starts again with backoff from 2 to 60 s; `teammate-boot` counts it |
+
+Offline is not an exit. A runtime that can't reach Macro at all stays up,
+shown offline and not healthy (no `last-good`), and becomes healthy once
+Macro answers and chat hears it; only a stream that doesn't open while
+Macro answers ends the run, as a failed boot.
 
 77 is new with `teammate-boot`. An older image's `start-agent` never exits
 77, and it exits 79 with the same meaning, so a supervisor running an older

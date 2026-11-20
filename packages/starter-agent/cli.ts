@@ -211,7 +211,8 @@ const run = async (): Promise<void> => {
           );
           // Built, credentials read, presence open, sources started and chat
           // hearing Macro: a healthy boot, so the launcher's rollback starts
-          // from this HEAD. One that can't hear in time exits, as a failed boot.
+          // from this HEAD. One that Macro answers but whose stream doesn't
+          // open in time exits, as a failed boot; one offline waits, up.
           await phase('agent.start.healthy', () =>
             markHealthy({
               git: (args) =>
@@ -220,6 +221,8 @@ const run = async (): Promise<void> => {
               file: files.lastGood,
               listening: assistant.decorations.chat.listening,
               deadline: () => Bun.sleep(listeningDeadlineMs),
+              reached: assistant.decorations.chat.reached,
+              reachable: assistant.decorations.chat.reachable,
             })
           );
           // Wrapped, so the start's span ends here instead of awaiting the loop.

@@ -178,7 +178,11 @@ during the start is handled the same way.
 An agent's own machine goes offline: Macro being unreachable is not a
 failure. The start needs nothing from Macro, and a stream from Macro whose
 start fails (asking who the agent is, listening for messages) is tried
-again, backing off from 1 s to 60 s, while the agent shows offline.
+again, backing off from 1 s to 60 s, while the agent shows offline. A boot
+is healthy (`MUPPET_LAST_GOOD_FILE` written) only once chat hears Macro; an
+offline one waits, up and not healthy, with no deadline. Only when Macro
+answers and chat's stream still doesn't open within 3 minutes does `run`
+exit 1, a failed boot, so code that broke listening rolls back.
 
 Exit codes of `run`: `0` stopped; `75` restart after a land; `78` a setting or
 credential is missing or invalid. The launcher (`start-agent`) adds: `78` when
