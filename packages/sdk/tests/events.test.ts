@@ -218,7 +218,9 @@ describe('MacroEvents', () => {
       // it again.
       expect(drops).toHaveLength(1);
       expect(opens).toHaveLength(2);
-      expect(opens[1]!.getTime()).toBeGreaterThanOrEqual(drops[0]!.getTime());
+      const [, reopened] = opens;
+      const [dropped] = drops;
+      expect(reopened && dropped && reopened >= dropped).toBe(true);
     } finally {
       await server.stop(true);
     }
@@ -279,8 +281,11 @@ describe('MacroEvents', () => {
       ).toBe('e1');
       stop();
 
-      expect(new URL(requests[0]!.url).searchParams.get('resume')).toBe('true');
-      expect(requests[0]!.lastEventId).toBe('e0');
+      const [first] = requests;
+      expect(first && new URL(first.url).searchParams.get('resume')).toBe(
+        'true',
+      );
+      expect(first?.lastEventId).toBe('e0');
       // The id is reported once its event was handled.
       expect(handled).toEqual(['handler d1', 'id e1']);
     } finally {
