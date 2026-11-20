@@ -197,10 +197,11 @@ jobs:
 
         started=$(date +%s)
         # The bring-up prints a stage's output only once the stage ends, so a stage
-        # that never ends leaves nothing in the log. Once a minute, say what is running.
+        # that never ends leaves nothing in the log. Once a minute, name the three
+        # busiest processes.
         (
           while sleep 60; do
-            echo "starting the stack, $(( $(date +%s) - started )) s: $(pgrep -af 'docker build|docker compose|cargo build|vite build' | cut -c1-160 | head -n 3 | tr '\n' ';')"
+            echo "starting the stack, $(( $(date +%s) - started )) s: $(ps -eo pcpu,etime,args --sort=-pcpu | sed -n 2,4p | cut -c1-140 | tr '\n' ';')"
           done
         ) &
         watch=$!
