@@ -1,0 +1,6 @@
+gh_workflow is derived from gh-workflow and gh-workflow-macros 0.8.1 by
+Tailcall (https://github.com/tailcallhq/gh-workflow), commit
+ef51106c4c4152f595dc6d18295d78a5ca3c54f9, licensed under the Apache License
+2.0 (LICENSE). Macro modifies it: `src/generate.rs` (writing workflow files
+itself) was left out when vendoring, and the git history of this directory
+records every later change.

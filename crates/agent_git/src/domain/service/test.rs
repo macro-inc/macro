@@ -11,7 +11,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use super::*;
-use crate::domain::models::{AgentRepo, RepoTokenHash};
+use crate::domain::models::{AgentRepo, GitProcessLimits, RepoTokenHash};
 use crate::domain::template::{PersonaSeed, RenderedFile, WORKSPACE_TEMPLATE};
 
 /// The agent teammates rollout, on or off for [`ADMIN`], who invited
@@ -50,6 +50,8 @@ struct FakeRepos {
     locked: Arc<Mutex<Vec<String>>>,
     /// Every lock taken, in order.
     lock_log: Arc<Mutex<Vec<String>>>,
+    /// Writing a row fails, as with the database down.
+    fail_upsert: bool,
 }
 
 /// Holds its repo's lock and its entry in [`FakeRepos::locked`] until dropped.
@@ -69,10 +71,13 @@ impl Drop for FakeLock {
 }
 
 impl RepoRepository for FakeRepos {
-    type Err = Infallible;
+    type Err = std::io::Error;
     type Lock = FakeLock;
 
-    async fn lock_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<FakeLock, Infallible> {
+    async fn lock_repo(
+        &self,
+        agent_user_id: &MacroUserIdStr<'_>,
+    ) -> Result<FakeLock, std::io::Error> {
         let agent_user_id = agent_user_id.as_ref().to_owned();
         let lock = self
             .locks
@@ -94,7 +99,7 @@ impl RepoRepository for FakeRepos {
     async fn try_lock_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<FakeLock>, Infallible> {
+    ) -> Result<Option<FakeLock>, std::io::Error> {
         let agent_user_id = agent_user_id.as_ref().to_owned();
         let lock = self
             .locks
@@ -118,7 +123,7 @@ impl RepoRepository for FakeRepos {
     async fn find_repo(
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
-    ) -> Result<Option<AgentRepo>, Infallible> {
+    ) -> Result<Option<AgentRepo>, std::io::Error> {
         Ok(self
             .rows
             .lock()
@@ -132,7 +137,10 @@ impl RepoRepository for FakeRepos {
         agent_user_id: &MacroUserIdStr<'_>,
         team_id: Uuid,
         token_hash: &RepoTokenHash,
-    ) -> Result<bool, Infallible> {
+    ) -> Result<bool, std::io::Error> {
+        if self.fail_upsert {
+            return Err(std::io::Error::other("database unavailable"));
+        }
         let mut rows = self.rows.lock().unwrap();
 
         if let Some(row) = rows.get_mut(agent_user_id.as_ref()) {
@@ -162,7 +170,7 @@ impl RepoRepository for FakeRepos {
         agent_user_id: &MacroUserIdStr<'_>,
         team_id: Uuid,
         token_hash: &RepoTokenHash,
-    ) -> Result<(), Infallible> {
+    ) -> Result<(), std::io::Error> {
         self.rows
             .lock()
             .unwrap()
@@ -182,7 +190,7 @@ impl RepoRepository for FakeRepos {
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
         size_bytes: u64,
-    ) -> Result<(), Infallible> {
+    ) -> Result<(), std::io::Error> {
         self.pushes
             .lock()
             .unwrap()
@@ -190,7 +198,7 @@ impl RepoRepository for FakeRepos {
         Ok(())
     }
 
-    async fn delete_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), Infallible> {
+    async fn delete_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), std::io::Error> {
         self.rows.lock().unwrap().remove(agent_user_id.as_ref());
         Ok(())
     }
@@ -210,12 +218,12 @@ impl RepoStore for FakeStore {
         &self,
         agent_user_id: &MacroUserIdStr<'_>,
         _files: &[RenderedFile],
-    ) -> Result<(), Infallible> {
-        self.repos
+    ) -> Result<bool, Infallible> {
+        Ok(self
+            .repos
             .lock()
             .unwrap()
-            .insert(agent_user_id.as_ref().to_owned());
-        Ok(())
+            .insert(agent_user_id.as_ref().to_owned()))
     }
 
     async fn delete_repo(&self, agent_user_id: &MacroUserIdStr<'_>) -> Result<(), Infallible> {
@@ -298,7 +306,8 @@ impl PushRateLimiter for FakeLimiter {
     }
 }
 
-/// Answers 200 with the bytes it read, so tests can see the body limit.
+/// Answers 200 with the bytes it read, so tests can see the body limit. Its
+/// "process" lives until the response body is dropped, keeping the hold.
 #[derive(Clone, Default)]
 struct EchoBackend {
     served: Arc<Mutex<Vec<(String, GitAccess)>>>,
@@ -312,6 +321,7 @@ impl GitBackend for EchoBackend {
         &self,
         repo: &AuthorizedRepo,
         request: GitRequest,
+        hold: GitHold,
     ) -> Result<GitResponse, std::io::Error> {
         self.input_limits
             .lock()
@@ -331,7 +341,12 @@ impl GitBackend for EchoBackend {
         Ok(GitResponse {
             status: 200,
             headers: Vec::new(),
-            body: Box::pin(futures::stream::iter([Ok(Bytes::from(received))])),
+            body: Box::pin(
+                futures::stream::iter([Ok(Bytes::from(received))]).map(move |chunk| {
+                    let _hold = &hold;
+                    chunk
+                }),
+            ),
         })
     }
 }
@@ -375,6 +390,7 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -433,10 +449,16 @@ async fn the_agent_token_pushes_and_an_admin_session_only_reads() {
             request(GitEndpoint::InfoRefs(GitService::UploadPack), b""),
         )
         .await;
-    assert!(matches!(
-        member_read,
-        Err(AgentGitError::Forbidden(GitAccess::Read))
-    ));
+    // To anyone but an admin, an existing repo answers as a missing one.
+    assert!(matches!(member_read, Err(AgentGitError::InvalidToken)));
+    let member_push = service
+        .serve_git(
+            GitCredential::User(MacroUserIdStr::try_from(MEMBER.to_owned()).unwrap()),
+            &agent,
+            request(GitEndpoint::InfoRefs(GitService::ReceivePack), b""),
+        )
+        .await;
+    assert!(matches!(member_push, Err(AgentGitError::InvalidToken)));
 
     assert_eq!(
         *backend.served.lock().unwrap(),
@@ -463,6 +485,7 @@ async fn creating_again_replaces_the_token_and_another_team_is_refused() {
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -526,6 +549,7 @@ async fn pushes_stop_at_the_size_cap_and_the_rate_limit() {
         },
         RepoLimits {
             max_repo_size_bytes: 504,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -585,6 +609,7 @@ async fn a_full_repo_refuses_the_push_advertisement() {
         },
         RepoLimits {
             max_repo_size_bytes: 500,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -628,6 +653,7 @@ async fn deleting_removes_the_repo_and_the_row() {
         },
         RepoLimits {
             max_repo_size_bytes: 500,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -669,6 +695,7 @@ async fn voices_are_read_and_committed_only_for_the_repos_team() {
         },
         RepoLimits {
             max_repo_size_bytes: 500,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -834,6 +861,7 @@ async fn creating_a_repo_without_a_creator_is_refused() {
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -867,6 +895,7 @@ async fn recovery_preserves_live_tokens_and_recreates_missing_resources() {
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -939,7 +968,7 @@ impl RepoStore for PausedStore {
         &self,
         agent: &MacroUserIdStr<'_>,
         files: &[RenderedFile],
-    ) -> Result<(), Self::Err> {
+    ) -> Result<bool, Self::Err> {
         self.creating.notify_one();
         self.resume.notified().await;
         self.store.create_repo(agent, files).await
@@ -996,6 +1025,7 @@ async fn deletion_waits_for_recovery_and_removes_its_published_storage() {
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     ));
@@ -1035,6 +1065,7 @@ async fn a_push_holds_the_repo_lock_until_its_response_ends_and_management_takes
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -1095,6 +1126,7 @@ async fn a_second_push_while_one_holds_the_repo_is_busy_and_a_rate_limited_one_n
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -1126,7 +1158,9 @@ async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every
         AgentGitAdapters {
             repos: FakeRepos::default(),
             store: FakeStore::default(),
-            admins: FakeAdmins::default(),
+            admins: FakeAdmins {
+                admins: HashSet::from([(TEAM, ADMIN.to_owned())]),
+            },
             limiter: FakeLimiter {
                 remaining: Arc::new(Mutex::new(30)),
             },
@@ -1136,6 +1170,7 @@ async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every
         },
         RepoLimits {
             max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
         },
         WORKSPACE_TEMPLATE,
     );
@@ -1145,19 +1180,248 @@ async fn with_the_rollout_off_for_its_creator_the_agents_repo_is_closed_to_every
         .await
         .unwrap();
 
-    for endpoint in [
-        GitEndpoint::Rpc(GitService::UploadPack),
-        GitEndpoint::Rpc(GitService::ReceivePack),
-    ] {
-        assert!(matches!(
-            service
-                .serve_git(
-                    GitCredential::RepoToken(created.token.clone()),
-                    &agent,
-                    request(endpoint, b""),
-                )
-                .await,
-            Err(AgentGitError::NotFound)
-        ));
+    let credentials = [
+        GitCredential::RepoToken(created.token.clone()),
+        GitCredential::User(MacroUserIdStr::try_from(ADMIN.to_owned()).unwrap()),
+    ];
+    for credential in credentials {
+        for endpoint in [
+            GitEndpoint::Rpc(GitService::UploadPack),
+            GitEndpoint::Rpc(GitService::ReceivePack),
+        ] {
+            assert!(matches!(
+                service
+                    .serve_git(credential.clone(), &agent, request(endpoint, b""))
+                    .await,
+                // The same answer as a missing repo, so it reveals nothing.
+                Err(AgentGitError::InvalidToken)
+            ));
+        }
     }
+}
+
+#[tokio::test]
+async fn git_requests_past_the_replicas_or_the_repos_process_slots_are_refused_until_one_ends() {
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            creators: invited_by_admin(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits {
+                max_processes: 3,
+                max_processes_per_repo: 2,
+                max_fetch_request_bytes: 1024,
+            },
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    let fetch = || {
+        service.serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::UploadPack), b"0000"),
+        )
+    };
+
+    let first = fetch().await.unwrap();
+    let second = fetch().await.unwrap();
+    // The repo's two slots are taken while both responses stream.
+    assert!(matches!(fetch().await, Err(AgentGitError::ServerBusy)));
+    drop(first);
+    let third = fetch().await.unwrap();
+    drop((second, third));
+    fetch().await.unwrap();
+}
+
+#[tokio::test]
+async fn the_replicas_process_slots_are_shared_by_every_repo() {
+    const OTHER_AGENT: &str = "macro|other-agent@example.com";
+    let mut creators = invited_by_admin();
+    creators.set(
+        MacroUserIdStr::try_from(OTHER_AGENT.to_owned()).unwrap(),
+        MacroUserIdStr::try_from(ADMIN.to_owned()).unwrap(),
+    );
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            creators,
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits {
+                max_processes: 1,
+                max_processes_per_repo: 1,
+                max_fetch_request_bytes: 1024,
+            },
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let other = MacroUserIdStr::try_from(OTHER_AGENT.to_owned()).unwrap();
+    let agent_token = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap()
+        .token;
+    let other_token = service
+        .create_repo(other.clone(), TEAM, &seed())
+        .await
+        .unwrap()
+        .token;
+
+    let held = service
+        .serve_git(
+            GitCredential::RepoToken(agent_token),
+            &agent,
+            request(GitEndpoint::InfoRefs(GitService::UploadPack), b""),
+        )
+        .await
+        .unwrap();
+    let other_fetch = || {
+        service.serve_git(
+            GitCredential::RepoToken(other_token.clone()),
+            &other,
+            request(GitEndpoint::InfoRefs(GitService::UploadPack), b""),
+        )
+    };
+    assert!(matches!(
+        other_fetch().await,
+        Err(AgentGitError::ServerBusy)
+    ));
+    drop(held);
+    other_fetch().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_fetch_request_body_past_its_cap_fails() {
+    let backend = EchoBackend::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos::default(),
+            store: FakeStore::default(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: backend.clone(),
+            creators: invited_by_admin(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits {
+                max_processes: 32,
+                max_processes_per_repo: 4,
+                max_fetch_request_bytes: 4,
+            },
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+    let created = service
+        .create_repo(agent.clone(), TEAM, &seed())
+        .await
+        .unwrap();
+    let fetch = |body: &'static [u8]| {
+        service.serve_git(
+            GitCredential::RepoToken(created.token.clone()),
+            &agent,
+            request(GitEndpoint::Rpc(GitService::UploadPack), body),
+        )
+    };
+
+    fetch(b"0000").await.unwrap();
+    // EchoBackend reads the whole body, so the cap surfaces as its failure.
+    assert!(matches!(
+        fetch(b"0032want").await,
+        Err(AgentGitError::Internal(_))
+    ));
+}
+
+#[tokio::test]
+async fn a_new_repo_whose_row_cannot_be_written_leaves_no_directory() {
+    let store = FakeStore::default();
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos {
+                fail_upsert: true,
+                ..FakeRepos::default()
+            },
+            store: store.clone(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            creators: invited_by_admin(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+
+    assert!(matches!(
+        service.create_repo(agent, TEAM, &seed()).await,
+        Err(AgentGitError::Internal(_))
+    ));
+    assert!(store.repos.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_failed_row_write_keeps_a_directory_that_was_already_there() {
+    let store = FakeStore::default();
+    store.repos.lock().unwrap().insert(AGENT.to_owned());
+    let service = AgentGitServiceImpl::new(
+        AgentGitAdapters {
+            repos: FakeRepos {
+                fail_upsert: true,
+                ..FakeRepos::default()
+            },
+            store: store.clone(),
+            admins: FakeAdmins::default(),
+            limiter: FakeLimiter {
+                remaining: Arc::new(Mutex::new(30)),
+            },
+            backend: EchoBackend::default(),
+            creators: invited_by_admin(),
+            flags: Some(Rollout(true)),
+        },
+        RepoLimits {
+            max_repo_size_bytes: 500_000_000,
+            git: GitProcessLimits::default(),
+        },
+        WORKSPACE_TEMPLATE,
+    );
+    let agent = MacroUserIdStr::try_from(AGENT.to_owned()).unwrap();
+
+    assert!(service.create_repo(agent, TEAM, &seed()).await.is_err());
+    assert_eq!(
+        *store.repos.lock().unwrap(),
+        HashSet::from([AGENT.to_owned()])
+    );
 }

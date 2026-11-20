@@ -19,7 +19,7 @@ async fn guard(tx: &mut sqlx::PgConnection, lease: &WatchLease) -> Result<(), Ma
 impl MailboxWatchRepository for PgMailboxSync {
     async fn claim_watch(&self, lease_id: Uuid) -> Result<Option<WatchLease>, MailboxError> {
         let row=sqlx::query!(r#"WITH candidate AS(SELECT w.link_id FROM email_mailbox_watch_work w JOIN email_links l ON l.id=w.link_id
-            WHERE l.is_sync_active AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
+            WHERE l.is_sync_active AND l.mailbox_unavailable_at IS NULL AND l.provider='OUTLOOK' AND w.next_run_at<=now() AND (w.lease_until IS NULL OR w.lease_until<now())
             ORDER BY w.next_run_at LIMIT 1 FOR UPDATE OF w SKIP LOCKED)
             UPDATE email_mailbox_watch_work w SET lease_id=$1,lease_until=now()+interval '3 minutes'
             FROM candidate c,email_links l WHERE w.link_id=c.link_id AND l.id=w.link_id

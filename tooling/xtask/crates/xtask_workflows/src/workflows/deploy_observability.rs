@@ -10,11 +10,13 @@
 //! The steps live in `infra/stacks/observability/deploy/release.ts`; the
 //! stack's README ("Deploying") describes them.
 
-use anyhow::Result;
+use gh_workflow::expr::typed::{Bool, Expr, StepHandle, StepOutput, Str, always, github, input};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
+    Concurrency, Event, Job, Level, Permissions, Step, Use, Workflow, WorkflowDispatch,
+    WorkflowInput,
 };
 
+use crate::workflows::actions::{AwsActionsConfigureAwsCredentials, PulumiActions};
 use crate::workflows::{runners, steps, vars};
 
 #[cfg(test)]
@@ -23,42 +25,56 @@ mod test;
 const STACK_DIR: &str = "infra/stacks/observability";
 /// Shared with the PR image build, so a deploy after a PR starts warm.
 pub(crate) const CACHE_TAG: &str = "observability-image";
-/// Every step's `if` after `find`: which stage this source's image has reached.
-const STAGE: &str = "steps.find.outputs.stage";
-const AMI: &str = "${{ steps.publish.outputs.ami || steps.find.outputs.ami }}";
+pub(crate) struct FindOutputs {
+    /// Which stage this source's image has reached.
+    pub stage: StepOutput<Str>,
+    /// The AMI already published for this source, if any.
+    pub ami: StepOutput<Str>,
+    /// The Nix system the image is built for.
+    pub system: StepOutput<Str>,
+}
 
-/// Build the workflow. The ordered dispatch input is filled in by [`patch`].
+/// The step that finds this source's image.
+pub(crate) const FIND: StepHandle<FindOutputs> = StepHandle::new(
+    "find",
+    FindOutputs {
+        stage: StepOutput::new("find", "stage"),
+        ami: StepOutput::new("find", "ami"),
+        system: StepOutput::new("find", "system"),
+    },
+);
+
+pub(crate) struct PublishOutputs {
+    /// The AMI this run published.
+    pub ami: StepOutput<Str>,
+}
+
+/// The step that publishes the AMI.
+pub(crate) const PUBLISH: StepHandle<PublishOutputs> = StepHandle::new(
+    "publish",
+    PublishOutputs {
+        ami: StepOutput::new("publish", "ami"),
+    },
+);
+
+/// Every step's `if` after `find`: which stage this source's image has reached.
+fn stage() -> Expr<Str> {
+    FIND.outputs.stage.read()
+}
+
+fn ami() -> Expr<Str> {
+    PUBLISH.outputs.ami.read().or_else(FIND.outputs.ami.read())
+}
+
+/// Build the workflow.
 pub fn deploy_observability() -> Workflow {
     Workflow::new("Deploy Observability")
-        .on(Event::default().workflow_dispatch(WorkflowDispatch::default()))
+        .on(Event::default().workflow_dispatch(WorkflowDispatch::default().add_input("dry_run", WorkflowInput::boolean().description("Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes GoAlert down for several minutes.").required(true).default(true))))
         .permissions(Permissions {
             contents: Some(Level::Read),
             ..Default::default()
         })
         .add_job("deploy", deploy_job())
-}
-
-/// The `dry_run` input: a boolean defaulting to true, so a deploy is a choice.
-pub fn patch(root: &mut serde_yaml::Value) -> Result<()> {
-    let on = root
-        .get_mut("on")
-        .and_then(serde_yaml::Value::as_mapping_mut)
-        .ok_or_else(|| anyhow::anyhow!("rendered workflow has no `on` mapping"))?;
-    on.insert(
-        "workflow_dispatch".into(),
-        crate::workflows::yaml_fragment(indoc::indoc! {r#"
-            inputs:
-              dry_run:
-                type: boolean
-                required: true
-                default: true
-                description: >-
-                  Build, publish and smoke-boot the image and preview the rollout,
-                  but leave production alone. Untick to replace the host, which
-                  takes GoAlert down for several minutes.
-        "#})?,
-    );
-    Ok(())
 }
 
 /// `nix build` of the image. Its builder boots a VM and requires the `kvm`
@@ -88,15 +104,10 @@ pub(crate) fn nix_steps(job: Job) -> Job {
 
 /// The deploy credentials every deploy workflow uses, as in `deploy_web_app`.
 fn aws_credentials() -> Step<Use> {
-    Step::new("Configure AWS credentials")
-        .uses(
-            "aws-actions",
-            "configure-aws-credentials",
-            "e7f100cf4c008499ea8adda475de1042d6975c7b",
-        )
-        .add_with(("aws-access-key-id", vars::AWS_ACCESS_KEY))
-        .add_with(("aws-secret-access-key", vars::AWS_SECRET_ACCESS_KEY))
-        .add_with(("aws-region", "us-east-2"))
+    AwsActionsConfigureAwsCredentials::new("Configure AWS credentials", "us-east-2")
+        .aws_access_key_id(vars::AWS_ACCESS_KEY)
+        .aws_secret_access_key(vars::AWS_SECRET_ACCESS_KEY)
+        .step()
 }
 
 fn release(name: &str, command: &str) -> Step<gh_workflow::Run> {
@@ -113,10 +124,7 @@ fn deploy_job() -> Job {
         .timeout_minutes(180u32)
         // One rollout at a time, and never cancel one: that could leave the
         // stack mid-replacement. A queued run waits for the running one.
-        .concurrency(
-            Concurrency::new(Expression::new("deploy-observability-prod"))
-                .cancel_in_progress(false),
-        )
+        .concurrency(Concurrency::new("deploy-observability-prod").cancel_in_progress(false))
         .add_env(("PULUMI_ACCESS_TOKEN", vars::PULUMI_ACCESS_TOKEN))
         .add_step(
             Step::new("Refuse branches other than main")
@@ -136,41 +144,36 @@ fn deploy_job() -> Job {
                 .shell("bash")
                 .working_directory("infra"),
         )
-        .add_step(Step::new("Install Pulumi").uses(
-            "pulumi",
-            "actions",
-            "8e5e406f4007fca908480587cb9893c07090f58d",
-        ))
+        .add_step(PulumiActions::new("Install Pulumi"))
         .add_step(
             release(
                 "Refuse a commit older than main's last stack change",
                 "latest",
             )
-            .add_env(("GITHUB_TOKEN", "${{ github.token }}")),
+            .add_env(("GITHUB_TOKEN", github().token())),
         )
         .add_step(aws_credentials())
-        .add_step(release("Find this source's image", "find").id("find"))
-        .add_step(build_image().if_condition(Expression::new(format!("{STAGE} == 'build'"))))
+        .add_step(release("Find this source's image", "find").id(FIND.id()))
+        .add_step(build_image().if_condition(stage().eq("build")))
         .add_step(
             release("Publish the AMI", "publish")
-                .id("publish")
-                .if_condition(Expression::new(format!("{STAGE} == 'build'")))
-                .add_env(("NIX_SYSTEM", "${{ steps.find.outputs.system }}")),
+                .id(PUBLISH.id())
+                .if_condition(stage().eq("build"))
+                .add_env(("NIX_SYSTEM", FIND.outputs.system.read())),
         )
         .add_step(
             release("Smoke-boot the AMI on a throwaway host", "smoke")
-                .if_condition(Expression::new(format!("{STAGE} != 'deploy'")))
-                .add_env(("AMI", AMI)),
+                .if_condition(stage().ne("deploy"))
+                .add_env(("AMI", ami())),
         )
         .add_step(
             release("Check the plan and roll out", "deploy")
-                .add_env(("AMI", AMI))
-                .add_env(("DRY_RUN", "${{ inputs.dry_run }}")),
+                .add_env(("AMI", ami()))
+                .add_env(("DRY_RUN", input::<Bool>("dry_run"))),
         )
         .add_step(
-            release("Remove smoke resources a cancelled run left", "cleanup").if_condition(
-                Expression::new(format!("always() && {STAGE} != '' && {STAGE} != 'deploy'")),
-            ),
+            release("Remove smoke resources a cancelled run left", "cleanup")
+                .if_condition(always().and(stage().ne("")).and(stage().ne("deploy"))),
         )
         .add_step(steps::teardown_nix())
 }
