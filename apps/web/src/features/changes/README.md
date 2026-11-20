@@ -51,6 +51,16 @@ owners survive responsive mode changes. The all-diffs collapse/expand button sta
 in the floating diff controls; a hidden or drawer tree puts its count there too.
 Another host composes the same components its own way.
 
+Agent replies link code into the pane (`code-links.ts`, pure parsing in
+`core/code-reference.ts`). `AgentMessage` passes `createCodeLinkOpener` to
+`AgentReplyLinks` as `openOther`, so a link that is neither a Macro mention nor
+an app route is offered to it, and `linkChangedCode` turns inline code naming a
+changed file into such a link before the prose renders. A resolved link calls
+`layout.open()` and `review.activate(path, lines)`; `review.pointed()` lights the
+lines through `DiffView.Stack`'s `selection` (a note draft or focused note wins)
+and its `reveal` scrolls them in once the file settles. Unchanged relative files
+open on GitHub at the head commit.
+
 Native PR and Agents workspace hosts put their title row and content together
 inside `ChangesSplit`, so changes occupy the full height beside that row.
 Host title, sharing, and sidebar actions remain available on the left. The Changes

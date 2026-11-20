@@ -147,6 +147,29 @@ describe('createReviewState', () => {
     });
   });
 
+  it('points at code link lines until the next activation', () => {
+    createRoot((dispose) => {
+      const { review } = setup();
+      const lines = {
+        path: 'b.ts',
+        side: 'additions' as const,
+        lineNumber: 4,
+        endLineNumber: 6,
+      };
+      review.toggleCollapsed('b.ts');
+      review.activate('b.ts', lines);
+      expect(review.active()).toBe('b.ts');
+      expect(review.isCollapsed('b.ts')).toBe(false);
+      expect(review.pointed()).toEqual(lines);
+      review.activate('a.ts');
+      expect(review.active()).toBe('a.ts');
+      expect(review.pointed()).toBeUndefined();
+      review.activate('a.ts', lines);
+      expect(review.pointed()).toBeUndefined();
+      dispose();
+    });
+  });
+
   it('queues, sends, and removes notes', () => {
     createRoot((dispose) => {
       const { review } = setup();

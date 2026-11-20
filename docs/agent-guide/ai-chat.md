@@ -2273,6 +2273,16 @@ with at most 40 changed lines (additions + deletions) and collapses larger files
 on desktop and phones. File toggles and **Collapse all / Expand all** override
 these defaults; selecting a file in the tree expands it.
 
+An agent's references to changed files in its reply are links: markdown links
+(`[pane.tsx:12](apps/web/src/pane.tsx#L12)`) and inline code that names a changed
+file (`apps/web/src/pane.tsx:12-14`, an absolute checkout path, or a path from a
+subdirectory that only one changed file ends in). Clicking one opens the Changes
+pane, expands and scrolls to the file, lights the referenced lines on the head side
+(old side for a deleted file), and scrolls the first lit line into view. A relative
+link to an unchanged file opens it on GitHub at the capture's head commit; an
+absolute one shows a toast. Bare identifiers in code (`pane`) never link, and
+sessions without changes keep links as before.
+
 The Changes pane header and sidebar totals display the linked PR's `additions`
 and `deletions` returned by the GitHub API, without summing transcript edits.
 The header toggle itself has no totals. The sidebar lists files from the captured PR diff.
