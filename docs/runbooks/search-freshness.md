@@ -116,6 +116,29 @@ again. The tags say how it was lost:
 
 Recovery: reindex the affected entities by id with the backfill routes (below).
 
+## Failed bulk items
+
+For 30 minutes, OpenSearch has failed items of one entity type's bulk index
+writes in every 5 minutes. The events behind them are queued for a replay,
+and if that fails too they are dropped (see [Dropped events](#dropped-events)).
+Until a write succeeds, those changes are missing from search. Only bulk
+writes report failed items: documents, email messages, call segments and
+chat repair. Single-document writes (channel messages, projects, calendar
+events, properties) and a refusal of a whole request count none; the
+backlog and dropped-events monitors catch those. `failure` says why:
+
+- **`overloaded`**: OpenSearch refused items inside the bulk response to
+  protect itself (a 429 per item, usually a full write queue). A bulk load,
+  such as a mailbox import drain, can do this. Check the domain's write
+  rejections and JVM pressure (`aws.es.threadpool_write_rejected`,
+  `aws.es.jvmmemory_pressure`) and whether a backfill is running, and slow or
+  pause it. A short burst the replays absorb does not reach this alert.
+- **`bulk_items`**: OpenSearch accepted the request but failed the items:
+  usually a document the mapping rejects, or a write to an index that does
+  not exist. The `process_event` spans with `failed_items` above 0 carry the
+  entity id and the error; the same documents fail on every replay until the
+  code or the mapping is fixed.
+
 ## Offset reset
 
 librdkafka reset a partition's position after an error. Usually the position

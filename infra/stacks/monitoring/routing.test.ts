@@ -221,6 +221,7 @@ test('every prod monitor is graphed on its dashboard with its thresholds', () =>
     'search-dropped-events',
     'search-email-backlog',
     'search-email-near-retention',
+    'search-failed-bulk-items',
     'search-indexer-silent',
     'search-live-backlog',
     'search-near-retention',
@@ -435,4 +436,14 @@ test('the probe judges rotation rounds per type, the crowded prefix apart and fa
   expect(query('search-probe-failing')).toContain(
     'by {entity_type,operation}.as_count()'
   );
+});
+
+test('failed bulk items alert only when they last, on complete buckets', () => {
+  const failed = monitors().find((r) => r.name === 'search-failed-bulk-items');
+  expect(failed?.inputs.query).toBe(
+    'min(last_30m):default_zero(sum:search.index.failed_bulk_items{env:prod,service:search-processing-service} by {entity_type,failure}.as_rate().rollup(avg, 300)) * 300 > 0'
+  );
+  // An unfinished 5-minute bucket reads as none; the delay keeps the alert
+  // from recovering every 5 minutes.
+  expect(failed?.inputs.evaluationDelay).toBe(420);
 });
