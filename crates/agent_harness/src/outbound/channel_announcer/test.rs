@@ -2,7 +2,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
+use agent_trigger::domain::processing::ChannelTypeLookup;
 use bot_id::BotId;
+use channels::domain::models::ChannelType;
 use entity_access::domain::models::{
     AccessError, AccessLevel, CallChannelInfo, Entity, EntityPermission, EntityType,
     RequiredPermission, TeamRole, UserTeamInfo,
@@ -261,6 +263,18 @@ struct EditingAccess {
     session_readers: Vec<MacroUserIdStr<'static>>,
 }
 
+/// A channel of one fixed type, or none at all.
+struct FixedChannelType(Option<ChannelType>);
+
+impl ChannelTypeLookup for FixedChannelType {
+    async fn channel_type(
+        &self,
+        _: Uuid,
+    ) -> agent_session::domain::error::Result<Option<ChannelType>> {
+        Ok(self.0)
+    }
+}
+
 fn reader(email: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email(email).unwrap()
 }
@@ -447,6 +461,7 @@ async fn an_answer_the_thread_may_not_carry_points_at_the_session() {
     let announcer = MessageAnnouncer::new(
         Arc::new(messages),
         Arc::new(EditingAccess::shared()),
+        Arc::new(FixedChannelType(Some(ChannelType::Private))),
         LexicalClient::new("test-key".to_owned(), lexical.uri()),
     );
 
@@ -556,6 +571,7 @@ async fn shared_thread_and_dm_snapshots_omit_raw_tool_details() {
         let announcer = MessageAnnouncer::new(
             Arc::new(messages),
             Arc::new(EditingAccess::shared()),
+            Arc::new(FixedChannelType(Some(ChannelType::Private))),
             LexicalClient::new("test-key".to_owned(), lexical.uri()),
         );
         announcer
@@ -633,10 +649,14 @@ fn a_stored_step_keeps_the_view_it_presented() {
     assert_eq!(rows[0].detail, None);
 }
 
-fn announcer_with(access: EditingAccess) -> MessageAnnouncer<EditingAccess> {
+fn announcer_with(
+    access: EditingAccess,
+    channel_type: Option<ChannelType>,
+) -> MessageAnnouncer<EditingAccess, FixedChannelType> {
     MessageAnnouncer::new(
         Arc::new(messages::domain::api::MockMessageCommands::new()),
         Arc::new(access),
+        Arc::new(FixedChannelType(channel_type)),
         LexicalClient::new("test-key".to_owned(), "http://127.0.0.1:9".to_owned()),
     )
 }
@@ -645,14 +665,28 @@ fn announcer_with(access: EditingAccess) -> MessageAnnouncer<EditingAccess> {
 /// open the session: push and search text reach the whole thread.
 #[tokio::test]
 async fn a_thread_whose_readers_all_open_the_session_sees_its_name() {
-    let label = announcer_with(EditingAccess::shared())
-        .link_label(
-            SESSION,
-            Some("Fix login".to_owned()),
-            &MessageParent::Channel(Uuid::from_u128(1)),
-        )
-        .await;
-    assert_eq!(label.as_deref(), Some("Fix login"));
+    for (channel_type, parent) in [
+        (
+            Some(ChannelType::Private),
+            MessageParent::Channel(Uuid::from_u128(1)),
+        ),
+        (
+            Some(ChannelType::DirectMessage),
+            MessageParent::Channel(Uuid::from_u128(1)),
+        ),
+        (
+            None,
+            MessageParent::Document(
+                messages::domain::models::DocumentId::try_from(Uuid::from_u128(1).to_string())
+                    .unwrap(),
+            ),
+        ),
+    ] {
+        let label = announcer_with(EditingAccess::shared(), channel_type)
+            .link_label(SESSION, Some("Fix login".to_owned()), &parent)
+            .await;
+        assert_eq!(label.as_deref(), Some("Fix login"), "{parent:?}");
+    }
 }
 
 /// One reader who cannot open the session, or a thread anyone with the link
@@ -668,7 +702,7 @@ async fn a_thread_with_readers_outside_the_session_sees_the_generic_label() {
         ..EditingAccess::shared()
     };
     for access in [outsider, public] {
-        let label = announcer_with(access)
+        let label = announcer_with(access, Some(ChannelType::Private))
             .link_label(
                 SESSION,
                 Some("Fix login".to_owned()),
@@ -676,5 +710,30 @@ async fn a_thread_with_readers_outside_the_session_sees_the_generic_label() {
             )
             .await;
         assert_eq!(label, None);
+    }
+}
+
+/// A public or team channel is read by people who are not its participants
+/// (anyone, or the owning team view-only), and a call by guests without an
+/// account, so the participant list is not the whole audience there: the
+/// link stays generic even when every participant can open the session.
+#[tokio::test]
+async fn a_thread_read_beyond_its_participants_sees_the_generic_label() {
+    for (channel_type, parent) in [
+        (
+            Some(ChannelType::Public),
+            MessageParent::Channel(Uuid::from_u128(1)),
+        ),
+        (
+            Some(ChannelType::Team),
+            MessageParent::Channel(Uuid::from_u128(1)),
+        ),
+        (None, MessageParent::Channel(Uuid::from_u128(1))),
+        (None, MessageParent::Call(Uuid::from_u128(1))),
+    ] {
+        let label = announcer_with(EditingAccess::shared(), channel_type)
+            .link_label(SESSION, Some("Fix login".to_owned()), &parent)
+            .await;
+        assert_eq!(label, None, "{channel_type:?} {parent:?}");
     }
 }

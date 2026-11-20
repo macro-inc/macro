@@ -1422,6 +1422,9 @@ pub async fn run() -> anyhow::Result<()> {
     let announcer = MessageAnnouncer::new(
         message_service.clone(),
         Arc::clone(&entity_access),
+        Arc::new(agent_trigger::outbound::ChannelRepoTypeLookup::new(
+            PgChannelsRepo::new(pool.clone()),
+        )),
         lexical.clone(),
     );
     let prompt_mentions =

@@ -20,7 +20,9 @@ use std::sync::Arc;
 use agent_egress::domain::approval::MACRO_SERVER_SLUG;
 use agent_fold::domain::model::{ActivityStatus, ProjectedSegment, SegmentKind, TurnId, TurnPhase};
 use agent_session::domain::model::AgentSessionId;
+use agent_trigger::domain::processing::ChannelTypeLookup;
 use bot_id::BotId;
+use channels::domain::models::ChannelType;
 use entity_access::domain::{
     models::{BotAccessScope, EntityAccessReceipt, EntityType},
     ports::EntityAccessService,
@@ -302,28 +304,32 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
 }
 
 /// Posts as the session bot with the invoking user's current parent capability.
-pub struct MessageAnnouncer<Access> {
+pub struct MessageAnnouncer<Access, Channels> {
     messages: Arc<dyn MessageCommands>,
     access: Arc<Access>,
+    channels: Arc<Channels>,
     lexical: LexicalClient,
 }
 
-impl<Access> MessageAnnouncer<Access> {
-    /// Compose the common message service, authorization service, and Markdown composer.
+impl<Access, Channels> MessageAnnouncer<Access, Channels> {
+    /// Compose the common message service, authorization service, channel
+    /// facts, and Markdown composer.
     pub fn new(
         messages: Arc<dyn MessageCommands>,
         access: Arc<Access>,
+        channels: Arc<Channels>,
         lexical: LexicalClient,
     ) -> Self {
         Self {
             messages,
             access,
+            channels,
             lexical,
         }
     }
 }
 
-impl<Access: EntityAccessService> MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Channels: ChannelTypeLookup> MessageAnnouncer<Access, Channels> {
     /// The bot's capability to write into `parent`, minted on the invoking
     /// user's current one: an author who may no longer write there gets
     /// nothing posted or patched in their name.
@@ -349,7 +355,11 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
     /// the session, else the generic label. Push and search text reach every
     /// thread reader, and the name is session content. One audience lookup
     /// per side, whatever the size of the thread; a failed lookup or a
-    /// publicly readable parent keeps the name out.
+    /// publicly readable parent keeps the name out. Public and team channels
+    /// are read by people with no participant row, and calls by guests with
+    /// no account, so only private and direct-message channels can list their
+    /// whole audience. The label is decided once, when the reply is written:
+    /// later joins, renames or unshares do not change it.
     async fn link_label(
         &self,
         session_id: AgentSessionId,
@@ -361,6 +371,29 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
             span.record("reply_link_label", "default_name");
             return None;
         };
+        let listed = match parent {
+            MessageParent::Call(_) => false,
+            MessageParent::Channel(channel_id) => {
+                match self.channels.channel_type(*channel_id).await {
+                    Ok(channel_type) => matches!(
+                        channel_type,
+                        Some(ChannelType::Private | ChannelType::DirectMessage)
+                    ),
+                    Err(error) => {
+                        tracing::warn!(error = ?error, %session_id, "could not read the thread's channel type; labelling the reply's link generically");
+                        false
+                    }
+                }
+            }
+            MessageParent::Document(_)
+            | MessageParent::Initiative(_)
+            | MessageParent::CrmCompany(_)
+            | MessageParent::CrmContact(_) => true,
+        };
+        if !listed {
+            span.record("reply_link_label", "generic");
+            return None;
+        }
         let parent_id = parent.entity_id();
         let parent_type = parent.access_entity_type();
         let shared = async {
@@ -395,7 +428,7 @@ impl<Access: EntityAccessService> MessageAnnouncer<Access> {
     }
 }
 
-impl<Access> MessageAnnouncer<Access> {
+impl<Access, Channels> MessageAnnouncer<Access, Channels> {
     /// A chat agent's reply saying `body`, composed by Lexical, its link
     /// reading as `label` where the reply is shown as text.
     async fn compose_reply(
@@ -414,7 +447,9 @@ impl<Access> MessageAnnouncer<Access> {
     }
 }
 
-impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
+impl<Access: EntityAccessService, Channels: ChannelTypeLookup> SessionAnnouncer
+    for MessageAnnouncer<Access, Channels>
+{
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
         let access = self
             .bot_write(
