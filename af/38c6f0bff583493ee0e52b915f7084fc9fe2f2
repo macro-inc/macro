@@ -1,0 +1,41 @@
+crates/agent_code_mode/src/inbound/axum_router.rs
+  s_778a35fb352331::t_2953a9aa012d60 157-159
+crates/agent_code_mode/src/domain/models.rs
+  s_778a35fb352331::t_2953a9aa012d60 245-249
+packages/sdk/src/entities/connected-apps/connected-app.ts
+  s_778a35fb352331::t_40ce29d09dcf59 109-112
+services/agent_harness_service/src/code_mode/connected_apps.rs
+  s_778a35fb352331::t_2953a9aa012d60 17,195,308-326,333
+services/agent_harness_service/src/code_mode/connected_apps/test.rs
+  s_778a35fb352331::t_3092fd7f55eb8f 25-63
+crates/agent_code_mode/src/inbound/axum_router/test.rs
+  s_778a35fb352331::t_2953a9aa012d60 95-108
+crates/agent_code_mode/AGENTS.md
+  s_86a3b382b10917::t_989ef6bd8d0164 75-78
+services/agent_harness_service/AGENTS.md
+  s_86a3b382b10917::t_1f390081576715 195-197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.7",
+  "base_commit_sha": "af38c6f0bff583493ee0e52b915f7084fc9fe2f2",
+  "prompts": {},
+  "sessions": {
+    "s_778a35fb352331": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "aa6765a9-10bd-46c9-8814-4b0c87b4e29a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    },
+    "s_86a3b382b10917": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a275f075-bf4f-4b81-a101-edd06f6ebfa3",
+        "model": "unknown"
+      },
+      "human_author": "Eric Hayes <56524199+ehayes2000@users.noreply.github.com>"
+    }
+  }
+}
