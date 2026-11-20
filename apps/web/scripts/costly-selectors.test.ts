@@ -25,6 +25,9 @@ describe('costlySelectors', () => {
     ':root *',
     '.a ~ *',
     ':root ::highlight(search)',
+    '[style] ::selection',
+    '[class] *',
+    '[id] *',
   ])('flags %s', (selector) => {
     expect(costly(selector)).toBe(true);
   });
@@ -47,6 +50,8 @@ describe('costlySelectors', () => {
     ':where(input), :where(p) *',
     '.x:where(html[data-touch-device="true"] *)',
     '*:focus-visible',
+    '[data-invert] *',
+    '#modal *',
   ])('allows %s', (selector) => {
     expect(costly(selector)).toBe(false);
   });

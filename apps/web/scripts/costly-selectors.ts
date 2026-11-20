@@ -76,6 +76,12 @@ const NARROW_PSEUDO_ELEMENTS = new Set([
 /** Every element descends from these, so they filter nothing. */
 const ROOT_TAGS = new Set(['html', 'body']);
 
+/**
+ * Attributes the ancestor filter leaves out (Blink's selector_filter.cc): ids
+ * and classes go in by value, and `style` is too common to help.
+ */
+const UNFILTERED_ATTRIBUTES = new Set(['id', 'class', 'style']);
+
 /** Combinators that can visit any number of elements. */
 const WALKING_COMBINATORS = new Set(['descendant', 'later-sibling']);
 
@@ -157,9 +163,10 @@ function filters(components: SelectorComponent[]): boolean {
     switch (component.type) {
       case 'id':
       case 'class':
-      case 'attribute':
       case 'type':
         return true;
+      case 'attribute':
+        return !UNFILTERED_ATTRIBUTES.has(component.name.toLowerCase());
       case 'pseudo-class': {
         const inner = singleArgument(component);
         return (
