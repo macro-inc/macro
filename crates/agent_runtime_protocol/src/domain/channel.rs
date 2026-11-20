@@ -78,8 +78,15 @@ where
         }
     });
 
+    // Exits as soon as the caller stops reading, not on the next message:
+    // dropping `receiver` is what tells the transport nothing serves it.
     tokio::spawn(async move {
-        while let Ok(Some(incoming)) = receiver.recv().await {
+        loop {
+            let incoming = tokio::select! {
+                () = worker_tx.closed() => break,
+                incoming = receiver.recv() => incoming,
+            };
+            let Ok(Some(incoming)) = incoming else { break };
             if worker_tx.send(incoming).is_err() {
                 break;
             }

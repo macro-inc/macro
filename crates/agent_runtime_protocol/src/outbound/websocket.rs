@@ -115,11 +115,30 @@ impl WireFrame for TungsteniteMessage {
     }
 }
 
+/// Run one write to the socket, giving up on it after [`SILENCE_TIMEOUT`].
+///
+/// A write into a half-open path can wait on a full send buffer until TCP
+/// itself gives up, minutes later; while it waits, the pump reads nothing and
+/// checks no silence. A peer that hasn't drained a write in that long is as
+/// dead as one that hasn't answered a ping in that long.
+async fn bounded_write<Error>(write: impl Future<Output = Result<(), Error>>) -> bool {
+    match tokio::time::timeout(SILENCE_TIMEOUT, write).await {
+        Ok(Ok(())) => true,
+        Ok(Err(_)) => false,
+        Err(_) => {
+            tracing::warn!("closing a WebSocket whose write did not complete");
+            false
+        }
+    }
+}
+
 /// Drive one physical WebSocket until it closes or fails: outgoing JSON text
 /// pulled from `outgoing` is written to the socket, and incoming text frames
 /// are decoded and pushed onto `incoming`. When `outgoing` ends, this side
 /// sends its close frame and keeps reading until the peer closes (or goes
-/// silent), so nothing the peer already sent is lost.
+/// silent), so nothing the peer already sent is lost. When `incoming`'s
+/// receiver is gone, nothing serves the connection any more, so the socket
+/// closes then too, however many senders are still held.
 ///
 /// A frame that fails to decode as `Rx` is dropped with a warning rather than
 /// closing the connection - the rest of the logical stream is unaffected by
@@ -148,15 +167,23 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 let Some(payload) = next_outgoing else {
                     // Frames the peer sent before it sees the close are still
                     // delivered; dropping the socket here would discard them.
-                    if sink.close().await.is_err() {
+                    if !bounded_write(sink.close()).await {
                         break;
                     }
                     closing = true;
                     continue;
                 };
-                if sink.send(Frame::text(payload)).await.is_err() {
+                if !bounded_write(sink.send(Frame::text(payload))).await {
                     break;
                 }
+            }
+            () = incoming.closed() => {
+                // The peer sees the close and redials; without it, the pings
+                // would keep an unserved socket looking alive indefinitely.
+                if !closing {
+                    let _ = bounded_write(sink.close()).await;
+                }
+                break;
             }
             next_incoming = stream.next() => {
                 // Every frame counts, text or not: a pong carries no logical
@@ -190,7 +217,7 @@ async fn run_pump<Rx, Socket, Frame, Error>(
                 }
                 // Both halves of a split socket share one connection, so this
                 // is also what flushes any pong the read half queued.
-                if !closing && sink.send(Frame::ping()).await.is_err() {
+                if !closing && !bounded_write(sink.send(Frame::ping())).await {
                     break;
                 }
             }

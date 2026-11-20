@@ -400,3 +400,107 @@ async fn a_socket_that_stops_answering_pings_is_closed() {
         "the pump should close its inbound channel when the peer goes quiet"
     );
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_socket_nobody_reads_is_closed_even_while_its_sender_is_held() {
+    let transport: Arc<ServerTransport<ToRuntimeMessage, ToServerMessage>> =
+        Arc::new(ServerTransport::new());
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("listener should bind");
+    let address = listener.local_addr().expect("listener address");
+    let app = Arc::clone(&transport).into_router();
+    let server_handle = tokio::spawn(async move {
+        axum::serve(listener, app).await.expect("server should run");
+    });
+
+    let (mut client, _response) = tokio_tungstenite::connect_async(format!("ws://{address}"))
+        .await
+        .expect("raw client should connect");
+    let Channel { tx: held_sender, rx } = timeout(PROMPT, transport.accept())
+        .await
+        .expect("server accept should not hang")
+        .expect("server should accept the connection");
+    // What an evicted connection looks like: its router is gone, but a
+    // session still holds a way to send on it.
+    drop(rx);
+
+    // The pings would keep an unread socket alive forever; it has to close
+    // instead, so the peer sees the end and redials.
+    let ended = timeout(PROMPT, async {
+        loop {
+            match client.next().await {
+                Some(Ok(TungsteniteMessage::Ping(_) | TungsteniteMessage::Pong(_))) => {}
+                Some(Ok(TungsteniteMessage::Close(_)) | Err(_)) | None => break,
+                Some(Ok(other)) => panic!("expected only keepalive frames, got {other:?}"),
+            }
+        }
+    })
+    .await;
+    assert!(
+        ended.is_ok(),
+        "a socket whose reader is gone should close, not keep answering pings"
+    );
+    drop(held_sender);
+    server_handle.abort();
+}
+
+/// A socket whose writes never complete: the kernel send buffer of a
+/// half-open path, full and never drained.
+struct BlockedSocket;
+
+impl futures::Sink<TungsteniteMessage> for BlockedSocket {
+    type Error = futures::channel::mpsc::SendError;
+
+    fn poll_ready(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn start_send(
+        self: std::pin::Pin<&mut Self>,
+        _item: TungsteniteMessage,
+    ) -> Result<(), Self::Error> {
+        unreachable!("poll_ready never resolves")
+    }
+
+    fn poll_flush(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+
+    fn poll_close(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        std::task::Poll::Pending
+    }
+}
+
+impl futures::Stream for BlockedSocket {
+    type Item = Result<TungsteniteMessage, futures::channel::mpsc::SendError>;
+
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        _context: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        std::task::Poll::Pending
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_write_that_never_completes_does_not_hold_off_the_silence_check() {
+    let (outgoing, outgoing_rx) = mpsc::unbounded_channel();
+    let (incoming, mut incoming_rx) = mpsc::unbounded_channel::<ToServerMessage>();
+    tokio::spawn(run_pump(BlockedSocket, outgoing_rx, incoming));
+    outgoing.send("{}".to_owned()).unwrap();
+
+    let ended = timeout(SILENCE_TIMEOUT + PING_INTERVAL, incoming_rx.recv())
+        .await
+        .expect("a write stuck on a dead path should not keep the socket open");
+    assert!(ended.is_none(), "the pump should end when a write stalls");
+}
