@@ -12,6 +12,15 @@ export function debounce<T extends (...args: any[]) => any>(
   return solidDebounce(func, delay);
 }
 
+/** Calls `func` once, `delay` after the first call of a burst, with the
+ * last call's arguments. Unlike a debounce, later calls never postpone it. */
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  delay: number
+) {
+  return solidThrottle(func, delay);
+}
+
 /**
  * Create a debounced view of a signal.
  */

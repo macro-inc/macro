@@ -32,6 +32,7 @@ import {
   type ChannelDirectory,
   channelDirectoryPagesQueryOptions,
   channelDirectoryState,
+  createByIdReader,
   createCachedChannelDirectory,
   createMemoryChannelDirectory,
   fetchJoinedChannels,
@@ -187,6 +188,85 @@ describe('lookupChannel', () => {
       'missing'
     );
     expect(lookupChannel(state, {}, 'other').status).toBe('missing');
+  });
+});
+
+describe('by-id reader', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  type Read = Parameters<typeof createByIdReader>[0];
+  function mountReader(read: Read) {
+    return createRoot((dispose) => {
+      disposers.push(dispose);
+      return createByIdReader(read);
+    });
+  }
+
+  it('reads a failed id again within the cooldown while others keep failing', async () => {
+    const read = vi.fn<Read>(async () => {
+      throw new Error('offline');
+    });
+    const reader = mountReader(read);
+    reader.request('a');
+    await vi.advanceTimersByTimeAsync(100);
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(reader.outcomes().a).toBe('failed');
+
+    // Another channel fails every ten seconds.
+    for (const id of ['b', 'c', 'd']) {
+      await vi.advanceTimersByTimeAsync(10_000);
+      reader.request(id);
+    }
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(reader.outcomes().a).toBeUndefined();
+    expect(reader.request('a')).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    // Two attempts each time.
+    expect(read.mock.calls.filter(([ids]) => ids.includes('a'))).toHaveLength(
+      4
+    );
+  });
+
+  it('reads at most two batches at a time', async () => {
+    const answers: (() => void)[] = [];
+    const read = vi.fn<Read>(
+      (ids) =>
+        new Promise((resolve) => {
+          answers.push(() => resolve({ returned: new Set(ids) }));
+        })
+    );
+    const reader = mountReader(read);
+    for (let i = 0; i < 250; i += 1) reader.request(`c${i}`);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(read.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100]);
+
+    answers.shift()?.();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(read.mock.calls.map(([ids]) => ids.length)).toEqual([100, 100, 50]);
+    expect(reader.request('c0')).toBe(false);
+  });
+
+  it('reads again the ids a read without evidence lists as unreadable', async () => {
+    const read = vi.fn<Read>(async (ids) => ({
+      returned: undefined,
+      unreadable: ids.filter((id) => id !== 'seen'),
+    }));
+    const reader = mountReader(read);
+    reader.request('seen');
+    reader.request('lost');
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(reader.outcomes()).toEqual({ seen: 'returned', lost: 'failed' });
+    expect(read.mock.calls.map(([ids]) => ids)).toEqual([
+      ['seen', 'lost'],
+      ['lost'],
+    ]);
   });
 });
 
@@ -649,6 +729,40 @@ describe('cached channel directory', () => {
     await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
     // Neither answered: still waiting, not missing.
     expect(directory.lookup('thin').status).toBe('pending');
+  });
+
+  it('keeps waiting on a channel a by-id read gave no evidence for', async () => {
+    const { cache, directory, hydrate } = mountCachedDirectory([]);
+    // A page that reached its limit without the channel.
+    hydrate.mockImplementation(async () => ({
+      nextCursor: 'more',
+      entityIds: [],
+    }));
+    cache.put(channelRecord('thin'), { incomplete: true });
+    completeLane('g1');
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    expect(directory.lookup('thin').status).toBe('pending');
+  });
+
+  it('reads every incomplete record, 500 new ones a read, past ones already read', async () => {
+    const { cache, directory, hydrate } = mountCachedDirectory([]);
+    hydrate.mockImplementation(async () => ({
+      nextCursor: null,
+      entityIds: [],
+    }));
+    for (let i = 0; i < 600; i += 1)
+      cache.put(channelRecord(`i${String(i).padStart(3, '0')}`), {
+        incomplete: true,
+      });
+    completeLane('g1');
+    const named = () =>
+      new Set(hydrate.mock.calls.flatMap(([input]) => namedIds(input) ?? []));
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    // The rereads after the first answers queue the rest.
+    await vi.waitFor(() => expect(named().size).toBe(600));
   });
 
   it('reads every channel from the network until complete, then from the cache', async () => {

@@ -11,7 +11,7 @@
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
 import { deepEqual } from '@core/util/compareUtils';
-import { debounce } from '@core/util/debounce';
+import { throttle } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -360,17 +360,16 @@ export async function fetchJoinedChannels(
 
 /** Reads channels by id from the network: joined ones, and public or team
  * channels the viewer has not joined. */
-async function fetchChannelsById(
+function fetchChannelsById(
   client: UrqlQuery,
   ids: readonly string[],
   signal: AbortSignal
-): Promise<DirectoryChannel[]> {
-  const page = await fetchDirectoryPage(
+): Promise<DirectoryPage> {
+  return fetchDirectoryPage(
     client,
     readableChannelsInput(CHANNEL_DIRECTORY_INPUT, ids),
     signal
   );
-  return page.channels;
 }
 
 /** Every joined channel, paged from the network into memory. For the
@@ -416,8 +415,9 @@ export async function refreshChannelDirectory(
 }
 
 /** What a by-id read found. `returned` is undefined when the answer proves
- * nothing about the ids it lacks; `unreadable` are ids it returned whose
- * records could not be read, to be read again. */
+ * nothing about the ids it lacks; `unreadable` are ids to read again: ones
+ * it returned whose records could not be read, or, without evidence, ones it
+ * did not return. */
 type ByIdRead = {
   returned: ReadonlySet<string> | undefined;
   unreadable?: readonly string[];
@@ -425,11 +425,11 @@ type ByIdRead = {
 
 /**
  * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
- * id is read once until `reset`, except that an id whose reads failed is
- * forgotten `BY_ID_RETRY_AFTER_MS` after the last failure, so a lookup still
- * asking for it reads it again.
+ * id is read once until `reset`, except that the ids whose reads failed are
+ * forgotten together at most every `BY_ID_RETRY_AFTER_MS`, so a lookup still
+ * asking for one reads it again within that time of its failure.
  */
-function createByIdReader(
+export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>
 ) {
   const [outcomes, setOutcomes] = createSignal<
@@ -444,7 +444,9 @@ function createByIdReader(
     setOutcomes((previous) => ({ ...previous, ...updates }));
   };
 
-  const forgetFailures = debounce(() => {
+  // Not a debounce: failures that keep arriving would postpone the retry of
+  // earlier ones for as long as they arrive.
+  const forgetFailures = throttle(() => {
     const failed = Object.entries(untrack(outcomes)).flatMap(([id, outcome]) =>
       outcome === 'failed' ? [id] : []
     );
@@ -499,6 +501,7 @@ function createByIdReader(
       const updates: Record<string, ByIdOutcome> = {};
       for (const id of ids) {
         if (unreadable.has(id)) continue;
+        // Without evidence, the caller listed every id it lacks as unreadable.
         updates[id] =
           !found.returned || found.returned.has(id) ? 'returned' : 'absent';
       }
@@ -534,12 +537,13 @@ function createByIdReader(
 
   return {
     outcomes,
-    /** Queues a by-id read. Never writes a signal, so a reactive read may
-     * call it. */
+    /** Queues a by-id read; false when the id was already requested. Never
+     * writes a signal, so a reactive read may call it. */
     request(id: string) {
-      if (requested.has(id)) return;
+      if (requested.has(id)) return false;
       requested.add(id);
       batcher.addItem(id);
+      return true;
     },
     /** Forgets every read, for a new storage generation. */
     reset() {
@@ -721,8 +725,13 @@ export function createCachedChannelDirectory(
     for (const id of ids) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
     await runner();
     const returned = returnedChannelIds(ids, page);
-    if (!returned) return { returned: undefined };
     const records = untrack(state).records;
+    // Without evidence, an id with no record may still be the viewer's.
+    if (!returned)
+      return {
+        returned: undefined,
+        unreadable: ids.filter((id) => !records[id]),
+      };
     return {
       returned,
       unreadable: [...returned].filter((id) => !records[id]),
@@ -805,13 +814,15 @@ export function createCachedChannelDirectory(
             lane.complete
           );
     if (!sameState(untrack(state), next)) setState(next);
-    // Before the lane finishes it fills these itself.
-    if (lane.complete)
-      for (const id of read.incompleteIds.slice(
-        0,
-        INCOMPLETE_READS_PER_REFRESH
-      ))
-        reader.request(id);
+    // Before the lane finishes it fills these itself. Ids already requested
+    // do not count, so ones that keep failing cannot hold back the rest.
+    if (lane.complete) {
+      let queued = 0;
+      for (const id of read.incompleteIds) {
+        if (queued >= INCOMPLETE_READS_PER_REFRESH) break;
+        if (reader.request(id)) queued += 1;
+      }
+    }
     if (lane.failed) startFallback();
   };
 
@@ -998,14 +1009,24 @@ export function createMemoryChannelDirectory(
   >({});
 
   const reader = createByIdReader(async (ids, signal) => {
-    const channels = await fetchChannelsById(deps.client(), ids, signal);
+    const page = await fetchChannelsById(deps.client(), ids, signal);
     signal.throwIfAborted();
     setOverlay((previous) => {
       const next = { ...previous };
-      for (const channel of channels) next[channel.id] = channel;
+      for (const channel of page.channels) next[channel.id] = channel;
       return next;
     });
-    return { returned: new Set(channels.map(({ id }) => id)) };
+    const listed = page.channels.map(({ id }) => id);
+    const returned = returnedChannelIds(ids, {
+      nextCursor: page.nextCursor,
+      entityIds: listed,
+    });
+    if (returned) return { returned };
+    const found = new Set(listed);
+    return {
+      returned: undefined,
+      unreadable: ids.filter((id) => !found.has(id)),
+    };
   });
 
   const views = createViewStamps();

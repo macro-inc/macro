@@ -1374,11 +1374,12 @@ directory lacks is pending, and the lookup reads it by id (batched, 100 ids
 or 25 ms, two batches at a time), then rereads only the records that read
 wrote; it is missing once that read returns nothing for it or the directory
 completes without it. A returned id whose record cannot be read yet is read
-again; an id that failed twice stays pending and is tried again after 30
-seconds. Readers that decide from absence (section membership, notification
-bulk actions, scope checks, built-in section mute) wait for `complete()` or
-call `readComplete()`, which pages the network while the cache is still
-filling. When the lane gives up in a generation, the backfill marks it
+again, and so is one a read without complete evidence did not return; an id
+that failed twice stays pending, and the failed ids are tried again together
+at most every 30 seconds. Readers that decide from absence (section
+membership, notification bulk actions, scope checks, built-in section mute)
+wait for `complete()` or call `readComplete()`, which pages the network while
+the cache is still filling. When the lane gives up in a generation, the backfill marks it
 (`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
 memory for the tab when storage refuses the write) and the directory pages the
 joined channels from the network instead. Its membership is the network's
