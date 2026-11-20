@@ -96,7 +96,11 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   header says "machine connected, service reports offline" instead of "paired,
   machine not dialed in".
 - `src/tui.rs` (`src/tui/`): the control panel itself (registration, agents,
-  sessions, config form, logs).
+  sessions, config form, logs). The theme is 24-bit RGB; every drawn frame
+  passes through `ColorSupport::fit_buffer` (`src/tui/ui/color_support.rs`),
+  which maps it to the 256 or 16-color palette when `COLORTERM`,
+  `TERM_PROGRAM` and `TERM` say the terminal has no truecolor (macOS
+  Terminal.app misreads RGB escapes). New draw calls must fit their frame too.
 - `src/herdr.rs` (`src/herdr/`): native herdr integration — only compiled
   `#[cfg(unix)]`. `src/herdr/cli.rs` picks herdr 0.9 (`herdr`) or herdr-core
   (`hc`, the binary the terminal's `HC_BIN` names; never `PATH`) by
@@ -210,8 +214,10 @@ external chat replies depend on it. Direct session controls still mint IDs.
 - Every herdr call goes through the `HerdrCli` facade; add a capability to both
   `cli/legacy.rs` and `cli/hc.rs`. herdr-core has no agent registry or
   worktrees, and status comes only from OSC 7501 (README.md, "Herdr versions").
-- macrod never pulls into the operator's working branch — new herdr worktrees
-  start from a fresh fetch of `origin/main` (see README.md).
+- macrod never pulls into the operator's working branch — new session
+  worktrees start from a fresh fetch of `origin/main` (see README.md).
+- Each native session opens in its own herdr workspace/space, in the
+  background by default; never add it to macrod's or the operator's workspace.
 - Only release builds update themselves: the tag workflow compiles the tag in
   as `MACROD_RELEASE_TAG`, and a build without a `vYYYY.MM.DD.N` tag never
   polls. `macrod service` (the desktop app's bundled copy) never updates; the

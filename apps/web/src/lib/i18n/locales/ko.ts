@@ -506,6 +506,9 @@ export default {
       other: '항목 {{count}}개를 삭제했습니다',
     },
     toastDeleteFailed: '삭제하지 못했습니다',
+    toastPropertySet: {
+      other: '{{property}}: 항목 {{count}}개에 설정했습니다',
+    },
     toastAddedToFavorites: '즐겨찾기에 추가했습니다',
     toastAddedCountToFavorites: {
       other: '항목 {{count}}개를 즐겨찾기에 추가했습니다',

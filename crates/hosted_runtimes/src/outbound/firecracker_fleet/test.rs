@@ -55,6 +55,7 @@ fn computer(phase: crate::domain::lifecycle::Phase) -> Computer {
         created_by: MacroUserIdStr::try_from("macro|owner@example.com".to_owned()).unwrap(),
         created_at: "2026-11-05T10:00:00Z".parse().unwrap(),
         enrolled_at: None,
+        hibernated_at: None,
         setup_completed_at: None,
         default_agent_id: None,
         image: None,

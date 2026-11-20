@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars SET is_deleted=true,synced_at=NULL,materialized_starts_at=NULL,materialized_ends_at=NULL,materialized_start_date=NULL,materialized_end_date=NULL\n            WHERE account_id=$1 AND NOT(provider_calendar_id=ANY($2::text[])) AND NOT is_deleted RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "18c97155bcd48cd5e0f087e795879737a916a36d8b65afd54d901dffd47b2522"
+}

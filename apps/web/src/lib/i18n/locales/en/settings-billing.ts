@@ -20,6 +20,7 @@ export default {
   settingUp: 'Setting up…',
   failed: 'Failed',
   starting: 'Starting…',
+  unhealthy: 'Not responding',
   stopping: 'Stopping',
   stopped: 'Stopped',
   released: 'Released',

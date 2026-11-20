@@ -738,6 +738,10 @@ export type CreatePropertyDefinitionErrors = {
      */
     403: unknown;
     /**
+     * The name belongs to a built-in property. The body names that property.
+     */
+    409: unknown;
+    /**
      * Internal server error
      */
     500: unknown;

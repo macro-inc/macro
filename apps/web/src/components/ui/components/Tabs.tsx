@@ -225,19 +225,32 @@ function OptionContent<T extends string>(props: {
   iconOnly: boolean;
   iconClass: string;
 }) {
+  const iconOnly = () => props.iconOnly && props.option.icon !== undefined;
+  const dotColor = () =>
+    props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent';
   return (
     <>
       <Show when={props.option.icon}>
         {(icon) => (
-          <Dynamic component={icon()} class={cn('shrink-0', props.iconClass)} />
+          <span class="relative inline-flex shrink-0">
+            <Dynamic
+              component={icon()}
+              class={cn('shrink-0', props.iconClass)}
+            />
+            {/* An icon-only option carries its dot on the glyph's corner. */}
+            <Show when={props.option.dot && iconOnly()}>
+              <span
+                aria-hidden="true"
+                class={cn(
+                  'absolute -top-0.5 -right-1 size-1.5 rounded-full',
+                  dotColor()
+                )}
+              />
+            </Show>
+          </span>
         )}
       </Show>
-      <span
-        class={cn(
-          'truncate',
-          props.iconOnly && props.option.icon !== undefined && 'sr-only'
-        )}
-      >
+      <span class={cn('truncate', iconOnly() && 'sr-only')}>
         {props.option.label}
       </span>
       <Show when={props.option.count !== undefined && !props.iconOnly}>
@@ -245,13 +258,10 @@ function OptionContent<T extends string>(props: {
           {props.option.count}
         </span>
       </Show>
-      <Show when={props.option.dot && !props.iconOnly}>
+      <Show when={props.option.dot && !iconOnly()}>
         <span
           aria-hidden="true"
-          class={cn(
-            'size-1.5 shrink-0 rounded-full',
-            props.option.dot === 'violet' ? 'bg-violet' : 'bg-accent'
-          )}
+          class={cn('size-1.5 shrink-0 rounded-full', dotColor())}
         />
       </Show>
     </>
@@ -267,6 +277,8 @@ function PillOption<T extends string>(props: {
 }) {
   const [tooltipOpen, setTooltipOpen] = createSignal(false);
   const square = () => props.iconOnly && props.option.icon !== undefined;
+  // Full width shares the row equally, icon-only options too.
+  const fixedSquare = () => square() && !props.fullWidth;
   const item = () => (
     <KSegmentedControl.Item
       value={props.option.value}
@@ -281,13 +293,13 @@ function PillOption<T extends string>(props: {
         'has-focus-visible:ring-2 has-focus-visible:ring-inset has-focus-visible:ring-edge-focus',
         'data-disabled:pointer-events-none data-disabled:opacity-50',
         !props.joined &&
-          (square()
+          (fixedSquare()
             ? iconControlSizes[props.size]
             : labeledControlFrames[props.size]),
-        props.joined && square() && joinedIconSizes[props.size],
+        props.joined && fixedSquare() && joinedIconSizes[props.size],
         'touch:min-h-8',
         square() && 'touch:min-w-8',
-        props.fullWidth && !square() && 'flex-1'
+        props.fullWidth && 'flex-1'
       )}
     >
       <KSegmentedControl.ItemInput
@@ -324,7 +336,7 @@ function PillOption<T extends string>(props: {
           onFocusOut={() => setTooltipOpen(false)}
           class={cn(
             'inline-flex min-w-0 shrink-0 self-stretch items-center',
-            props.fullWidth && !square() && 'flex-1'
+            props.fullWidth && 'flex-1'
           )}
         >
           {item()}
@@ -469,7 +481,7 @@ function TouchInset<T extends string>(props: TabsProps<T>) {
                 value={option.value}
                 disabled={option.disabled}
                 class={cn(
-                  'inline-flex min-w-0 items-center rounded-full touch:min-h-8',
+                  'relative inline-flex min-w-0 items-center rounded-full touch:min-h-8',
                   props.iconOnly && option.icon !== undefined
                     ? iconControlSizes[size()]
                     : labeledControlFrames[size()],

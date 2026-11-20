@@ -24,6 +24,11 @@ export const ERROR_MESSAGES = {
   VALIDATION_MIN_OPTIONS: 'At least one option required',
 } as const;
 
+/** Why a property can't be created under a built-in property's name. */
+export function builtInNameMessage(builtInName: string): string {
+  return `${builtInName} is a built-in property, so another property can’t use its name.`;
+}
+
 /**
  * Handles property operation errors consistently
  * - Logs error to console

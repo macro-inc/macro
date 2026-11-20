@@ -74,6 +74,29 @@ impl HerdrError {
         self.has_code("/error/code", "agent_pane_busy")
     }
 
+    /// herdr-core refused to type into a terminal whose output has not
+    /// settled since it started. Nothing was typed, so the send can retry.
+    /// hc gives this refusal no code, only `kind: unavailable` and its
+    /// wording, so either its message or its hint is enough; the test
+    /// `only_a_settle_refusal_counts_as_still_starting` pins hc's text.
+    pub(crate) fn still_starting(&self) -> bool {
+        let Self::Refused { stderr, .. } = self else {
+            return false;
+        };
+        let Ok(value) = serde_json::from_str::<Value>(stderr) else {
+            return false;
+        };
+        let text = |pointer: &str| {
+            value
+                .pointer(pointer)
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        };
+        text("/error/kind") == "unavailable"
+            && (text("/error/message").contains("is still starting")
+                || text("/error/hint").starts_with("nothing was typed"))
+    }
+
     fn has_code(&self, pointer: &str, code: &str) -> bool {
         let Self::Refused { stderr, .. } = self else {
             return false;
@@ -122,8 +145,6 @@ pub(crate) struct AgentLaunch<'a> {
     pub label: &'a str,
     /// Switch to the tab.
     pub focus: bool,
-    /// For a managed worktree at `cwd`, the repository's main checkout.
-    pub worktree_source: Option<&'a Path>,
     /// A private environment file to source before starting the agent.
     pub environment: Option<&'a Path>,
     /// The agent's arguments.
@@ -162,19 +183,6 @@ impl HerdrCli {
                 terminal: terminal.into(),
                 space: Arc::default(),
             }),
-        }
-    }
-
-    /// Create a fresh worktree of `source` at `path` from the fetched main ref.
-    pub(crate) async fn create_worktree(
-        &self,
-        source: &Path,
-        path: &Path,
-        branch: &str,
-    ) -> rootcause::Result<()> {
-        match &self.backend {
-            Backend::Legacy(herdr) => Ok(herdr.create_worktree(source, path, branch).await?),
-            Backend::Core(herdr) => herdr.create_worktree(source, path, branch).await,
         }
     }
 

@@ -14,11 +14,14 @@ export function ViewCreateButton(
   props: ButtonProps & {
     presentation?: 'sidebar' | 'toolbar';
     menu?: boolean;
+    /** The visible label, when the button says more than "New". */
+    text?: string;
   }
 ) {
   const [local, rest] = splitProps(props, [
     'presentation',
     'menu',
+    'text',
     'class',
     'children',
     'aria-label',
@@ -52,7 +55,7 @@ export function ViewCreateButton(
       <span
         class={cn('truncate', !sidebar() && '@max-[600px]/split-header:hidden')}
       >
-        {t('create.new')}
+        {local.text ?? t('create.new')}
       </span>
       <Show when={local.menu}>
         <Show when={sidebar()} fallback={<CaretDownIcon class="size-3" />}>

@@ -5,7 +5,10 @@ import { t } from '@app/lib/i18n';
 import { AgentTag } from '@core/component/AgentTag';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
-import { enableAgentTeammates } from '@core/constant/featureFlags';
+import {
+  enableAgentTeammates,
+  enableCrmMemberAccessChanges,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
   getDisplayName,
@@ -165,6 +168,10 @@ function MemberRow(props: {
   showPlan: boolean;
   canEditPlan: boolean;
   planPending: boolean;
+  crmAccess: boolean;
+  canManageCrm: boolean;
+  crmPending: boolean;
+  onCrmAccessChange: (enabled: boolean) => void;
   pendingDowngrade: boolean;
   onRemove: () => void;
   onRoleChange: (role: TeamRole) => void;
@@ -180,16 +187,30 @@ function MemberRow(props: {
     const e = email();
     return e && e !== displayName();
   };
+  const showCrmAccess = () =>
+    props.canManageCrm && props.member.role === TeamRole.member;
 
   return (
-    <div class="flex items-center justify-between gap-2 px-4 py-4">
-      <div class="flex items-center gap-3 min-w-0 flex-1">
+    <div
+      data-team-member={props.member.user_id}
+      class="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 px-4 py-4"
+    >
+      {/* With the CRM switch the avatar and name keep 12rem, so on phones the
+          controls wrap below the name; other rows keep one line as before. */}
+      <div
+        data-member-identity
+        class="flex min-w-0 grow items-center gap-3"
+        classList={{
+          'basis-48': showCrmAccess(),
+          'basis-0': !showCrmAccess(),
+        }}
+      >
         <div class="shrink-0">
           <UserIcon id={props.member.user_id} isDeleted={false} size="lg" />
         </div>
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-1.5 min-w-0">
-            <div class="text-sm font-medium text-ink truncate">
+            <div data-member-name class="text-sm font-medium text-ink truncate">
               {displayName()}
               {props.isCurrentUser && (
                 <span class="text-ink-muted font-normal"> (you)</span>
@@ -204,7 +225,10 @@ function MemberRow(props: {
           </Show>
         </div>
       </div>
-      <div class="flex items-center gap-2 shrink-0">
+      <div
+        data-member-controls
+        class="ml-auto flex max-w-full shrink-0 flex-wrap items-center justify-end gap-2"
+      >
         <Show when={props.showPlan}>
           <Show
             when={props.canEditPlan}
@@ -233,6 +257,24 @@ function MemberRow(props: {
         >
           <RoleSelect value={props.member.role} onChange={props.onRoleChange} />
         </Show>
+        <Show when={showCrmAccess()}>
+          <ToggleSwitch
+            size="sm"
+            label={
+              <>
+                <span aria-hidden="true">{t('crm.memberAccessShort')}</span>
+                <span class="sr-only">
+                  {t('crm.memberAccessFor', { name: displayName() })}
+                </span>
+              </>
+            }
+            labelClass="text-xs text-ink"
+            class="touch:-my-1 touch:min-h-11 touch:min-w-11"
+            checked={props.crmAccess}
+            disabled={props.crmPending}
+            onChange={props.onCrmAccessChange}
+          />
+        </Show>
         <Show when={props.canManageRemovals}>
           <Show
             when={props.canRemove}
@@ -248,6 +290,7 @@ function MemberRow(props: {
                   variant="ghost"
                   size="sm"
                   disabled
+                  aria-label={`Remove ${displayName()}`}
                   class="opacity-50 cursor-not-allowed"
                 >
                   <TrashIcon class="size-4" />
@@ -256,7 +299,12 @@ function MemberRow(props: {
             }
           >
             <Tooltip label="Remove member">
-              <Button variant="ghost" size="sm" onClick={props.onRemove}>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Remove ${displayName()}`}
+                onClick={props.onRemove}
+              >
                 <TrashIcon class="size-4" />
               </Button>
             </Tooltip>
@@ -288,6 +336,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
   const resendInviteMutation = useResendTeamInviteMutation();
   const removeUserMutation = useRemoveUserFromTeamMutation();
   const patchTeamMutation = usePatchTeamMutation();
+  const crmAccessMutation = usePatchTeamMutation();
+  const crmAccessChanges = useFeatureFlag(enableCrmMemberAccessChanges);
+  const canManageCrm = () => isAdminOrOwner() && crmAccessChanges().enabled;
   const toggleAutoJoinMutation = useToggleAutoJoinDomainMutation();
   const toggleNonAdminInvitesMutation = useToggleNonAdminInvitesMutation();
 
@@ -591,6 +642,24 @@ export function TeamMembers(props: { team: TeamSummary }) {
                       showPlan={showSeatPlans()}
                       canEditPlan={isAdminOrOwner()}
                       planPending={planMovePending()}
+                      crmAccess={
+                        member.role !== TeamRole.member ||
+                        teamQuery.data?.crm_member_access?.[member.user_id] !==
+                          false
+                      }
+                      canManageCrm={canManageCrm()}
+                      crmPending={crmAccessMutation.isPending}
+                      onCrmAccessChange={(enabled) => {
+                        crmAccessMutation.mutate({
+                          teamId: props.team.id,
+                          request: {
+                            member_crm_access: {
+                              user_id: member.user_id,
+                              enabled,
+                            },
+                          },
+                        });
+                      }}
                       pendingDowngrade={
                         teamQuery.data?.scheduled_seat_plans?.[member.user_id]
                           ?.plan === 'premium'
@@ -655,6 +724,9 @@ export function TeamMembers(props: { team: TeamSummary }) {
                 </For>
               </SettingsCard>
             </Show>
+          </Show>
+          <Show when={canManageCrm()}>
+            <p class="text-xs text-ink-muted">{t('crm.memberAccessAlways')}</p>
           </Show>
         </SettingsSection>
 
