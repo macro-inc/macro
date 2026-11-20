@@ -20,6 +20,8 @@ align trailing controls by their outer edges or offset an individual icon.
 - `ViewSidebar.Primary` gives create actions and toolbars the same 8px top inset.
 - `ListHeader` reserves the title's natural width and scrolls right-aligned controls
   in the remaining space; keep switcher triggers inside the title's clip boundary.
+- Keep collection navigation on the left and search/filter actions on the right; on touch, keep trailing actions outside scrollable view tabs. Give the action group `min-w-0 flex-1` and use the search field's `wide` layout so expanded search fits the remaining width, including 320px panes.
+- Render the shared expandable Search trigger with the same 40px glass island and 24px glyph as the other floating touch controls; keep desktop Search at its existing control size.
 - `ViewSidebar.CloseButton` closes the owning split in both docked navigation and
   narrow navigation overlays. Its visibility follows the split controller, not
   the sidebar breakpoint; the last remaining list split still has no close action.
@@ -31,6 +33,43 @@ align trailing controls by their outer edges or offset an individual icon.
 - `TreeItem` and `Branch` own disclosure positioning and the nested rail.
 - Use `--sidebar-action-inset` for a trailing control beside a separate selectable
   row, as in Email's inbox list. Do not repeat numeric offsets in the workspace.
+
+## Section order
+
+Give `ViewSidebar.Root` a stable `reorderId` for its view. Give each top-level
+`CollapsibleSection.Root` a stable `sectionId` and a `sectionLabel`, and compose
+its trigger and actions inside `CollapsibleSection.Header`. Non-collapsible
+sections use `ViewSidebar.Section` (`id`, `label`) and `ViewSidebar.SectionHeader`.
+For an unnamed navigation group, use `headerless`: `label` supplies only its
+accessible region name. It has no drag handle, drag source, or keyboard move
+control, but remains a drop target in the same order as headed sections. Move a
+headed section before or after the unnamed group to change their relative order;
+the unnamed group's row layout and navigation remain unchanged.
+Mark fixed account/workspace selectors or other controls inside Content with
+`pinned`; pinned sections have no drag handle or drop target, retain their DOM
+slot, and their keys are ignored in stored orders. Header, Primary, and Footer
+slots remain outside the reorder region.
+Keep these sections as direct resolved children of `ViewSidebar.Content`;
+fragments, conditional children, and components returning a section are supported.
+Nested disclosure groups remain contents of their owning section, not separate drag targets.
+
+The shared app drag provider supplies isolated scopes for each sidebar instance.
+Drag a section header with the mouse, or Tab to its Reorder control and use
+Up/Down. Header action buttons keep their normal behavior. Touch retains normal
+scrolling and collapse behavior without section dragging. The shared handle,
+drop indicator, reorder math, and layout animation also serve Chat; Chat retains
+its own preference storage.
+
+Order is local to the account and view (`sidebar-section-order:<view>:<account>`).
+Open splits and tabs of the same account/view synchronize through storage
+notifications; account/view changes retire their previous listeners.
+Storage is schema-validated through `makePersistedState`; unavailable storage
+leaves in-memory ordering usable. Unknown keys are ignored and new sections stay
+in their default slots. Temporarily hidden sections retain their saved positions.
+Pinned controls and footer controls do not move. Sections move
+as existing DOM nodes, not CSS `order`, preserving input state and reading order.
+
+## Navigation layout
 
 Desktop multi-split close controls live in the outer frame corner. The inherited split controller sets `closeButtonPlacement` to `frame` to suppress duplicate header/sidebar close buttons; touch layouts retain header placement.
 
@@ -45,15 +84,25 @@ Breakpoint transitions own host changes; pin changes only animate the active
 host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
 
-A view whose aside is its entity list (Notifications) passes `asideList`.
+A view whose aside is its entity list (Notifications, desktop Chat) passes
+`asideList`.
 Narrow, it bypasses the overlay: the list fills the shell over an inert Main
 until `open`, then Main fills it and `ViewNavigationControls` shows Back,
 calling `onBack`, in place of Show navigation. The list stays mounted, hidden
 and inert, so it keeps its scroll, and takes focus when Back returns to it.
 Collapse controls and `Cmd+.` are off there; wide layouts are unchanged.
+`aside.fillsShell()` is true while the list fills the shell, so a list that
+follows the keyboard into a preview can wait for Enter instead.
 
+`ViewBreadcrumbs.Outlet` accepts `activeItem` to replace the current breadcrumb
+with a title control while retaining parent navigation. `EntityDetailTopBar`
+uses this slot for its title menu; appending the title as outlet children would
+render the same entity twice.
 Workspace layouts share a 720px container breakpoint. Desktop navigation docks
-above it and overlays below it. Wide touch has two compositions:
+above it and overlays below it, in every split: only that breakpoint hides it
+automatically. A split other than the first starts with navigation shown and
+keeps its own Hide/Show choice across the views it shows; only the first split
+reads and writes the saved preference. Wide touch has two compositions:
 
 - A list aside (Chat, Agents, Notifications) stays left of its detail.
 - A collection (Mail, Drive, Tasks, CRM, Calls, Reviews) passes
@@ -113,6 +162,11 @@ standalone header without a Block. A `SplitHeaderScope.Root` that is off hides
 any enclosing scope from its content, so `useSplitHeaderScope` answers for the
 nearest host only. Inline block previews (`PreviewFrame`) use the same scope.
 
+Project routes inside Tasks and mobile task details use `SplitHeaderScope.Pane`,
+which composes the root, top bar, and filling content area, so the collection pane
+measures its own islands instead of inheriting an unrelated outer split header inset.
+The project pane retains the shared split Back action, including history and direct-link fallbacks, instead of adding a sidebar toggle beside it.
+A top bar's `navigation` slot replaces its automatic controls when a host supplies its own leading action.
 Touch collection navigation uses the global modal sheet at every width so its
 surface and backdrop cover floating list controls and app chrome. On narrow
 layouts it takes three quarters of the screen, at least 256px, capped by the

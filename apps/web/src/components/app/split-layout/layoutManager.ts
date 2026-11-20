@@ -54,6 +54,7 @@ import {
 import { adjacentPane, type SplitDirection } from './split-direction';
 import { fitsNewColumn, fitsSplit, type TileArea } from './split-geometry';
 import { paneOf, splitOf } from './split-ids';
+import { viewRestorationKey } from './view-restoration-key';
 import { createViewState, type ViewState } from './view-state';
 
 /** Checked on every route change in a pane, so entry state is captured before the pane moves. */
@@ -1724,7 +1725,9 @@ export function createSplitLayout(
     span.setAttr('view.id', content.id);
     try {
       const snapshot =
-        content.type === 'component' ? viewState.get(content.id) : undefined;
+        content.type === 'component'
+          ? viewState.get(viewRestorationKey(content.id, toLocation(content)))
+          : undefined;
       span.setAttr('view.restored', false);
       if (!snapshot) return;
       const restored = toContent(snapshot.location);

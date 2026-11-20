@@ -1,3 +1,4 @@
+export { applySenderColorScheme, hasLayoutTable } from './color-scheme';
 export type { ThemeColorParams } from './colors';
 export { processEmailColors } from './colors';
 export type {

@@ -1,7 +1,0 @@
-/* Projects hide Updated below 840px, so its track goes too. Two classes, so
-   neither shared task-grid stylesheet's narrow widths win by load order. */
-@container u-list (width < 840px) {
-  .task-grid-row.project-grid-row {
-    --task-col-timestamp: 0rem;
-  }
-}

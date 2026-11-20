@@ -1,14 +1,9 @@
-import { parseAgentsRoute } from '@app/features/agents-view/core/route';
-import {
-  type Entry,
-  useBeforeLeave,
-  usePane,
-  useSplitRouter,
-} from '@app/lib/split-router';
-import { onCleanup, untrack, useContext } from 'solid-js';
+import { type Entry, usePane, useSplitRouter } from '@app/lib/split-router';
+import { createComputed, on, onCleanup, useContext } from 'solid-js';
 import { SplitLayoutContext } from './context';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { splitContentFromLocation } from './split-router/legacy-route';
+import { viewRestorationKey } from './view-restoration-key';
 import type { RetainedViewState } from './view-state';
 
 /** Opt this view into resuming its last location and captured entry-state slices. */
@@ -19,15 +14,7 @@ export function useViewRestoration(key?: string): void {
   const pane = usePane();
   const router = useSplitRouter();
   const entry = () => router.entry(pane());
-  const viewId =
-    key ??
-    untrack(() => {
-      const current = entry();
-      if (!current) throw new Error('View restoration requires a router entry');
-      const content = splitContentFromLocation(current.location);
-      return parseAgentsRoute(content.id) ? 'agents' : content.id;
-    });
-
+  if (!entry()) throw new Error('View restoration requires a router entry');
   function capture(entry: Entry): RetainedViewState | undefined {
     const content = handle.content();
     if (content.type !== 'component') return;
@@ -41,16 +28,41 @@ export function useViewRestoration(key?: string): void {
     };
   }
 
-  const retention = layout.manager.viewState.register(
-    viewId,
-    handle.id,
-    entry,
-    capture
+  let retention:
+    | ReturnType<typeof layout.manager.viewState.register>
+    | undefined;
+  let registeredKey: string | undefined;
+  createComputed(
+    on(entry, (current) => {
+      const id = current
+        ? (key ??
+          viewRestorationKey(
+            splitContentFromLocation(current.location).id,
+            current.location
+          ))
+        : undefined;
+      if (id !== registeredKey) {
+        retention?.dispose();
+        retention = id
+          ? layout.manager.viewState.register(id, handle.id, entry, capture)
+          : undefined;
+        registeredKey = id;
+      }
+    })
   );
-  onCleanup(retention.dispose);
-  useBeforeLeave(({ from, onCommit }) => {
-    const publish = retention.remember(from);
-    if (publish) onCommit(publish);
-    return true;
-  });
+  onCleanup(() => retention?.dispose());
+  // Descendant navigation can switch Tasks and Projects without unmounting
+  // this workspace. Capture its old entry before any such navigation commits.
+  onCleanup(
+    router.registerGuard(
+      pane(),
+      Number.MAX_SAFE_INTEGER,
+      ({ from, onCommit }) => {
+        const publish = retention?.remember(from);
+        if (publish) onCommit(publish);
+        return true;
+      },
+      { search: ['tasks', 'projects'] }
+    )
+  );
 }

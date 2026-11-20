@@ -8,7 +8,7 @@ on:
         type: boolean
         required: true
         default: true
-        description: Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes Grafana, Loki, Tempo and GoAlert down for several minutes.
+        description: Build, publish and smoke-boot the image and preview the rollout, but leave production alone. Untick to replace the host, which takes GoAlert down for several minutes.
 permissions:
   contents: read
 jobs:

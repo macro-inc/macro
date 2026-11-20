@@ -1,5 +1,6 @@
 //! The last job of the three email end-to-end workflows (`email_e2e.rs`,
-//! `email_e2e_browser.rs`, `email_e2e_full_stack.rs`): after every other
+//! `email_e2e_browser.rs`, `email_e2e_full_stack.rs`) and of the channels
+//! end-to-end workflow (`channels_e2e.rs`): after every other
 //! job of a push to `main` or of the daily sweep, it tells the Macro Alerts
 //! channel when the workflow turns red, and when it turns green again. Not on
 //! a run by hand. `scripts/email_e2e_alert.ts` decides whether a run posts,

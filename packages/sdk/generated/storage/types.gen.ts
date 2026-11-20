@@ -5321,8 +5321,10 @@ export type CreateCrmContactRequest = {
  */
 export type CreateCrmTeamContactRequest = {
     /**
-     * The contact's email address, of any domain. Optional: omit it to
-     * add the contact by name only.
+     * The contact's email address, of any domain. A company-domain address
+     * also links the contact to that domain's company, unless the team
+     * blocks the domain or the company is hidden. Optional: omit it to add
+     * the contact by name only.
      */
     email?: string | null;
     /**
@@ -12397,6 +12399,13 @@ export type GetBatchProjectPreviewResponse = {
 };
 
 /**
+ * Response from looking up a CRM company by domain.
+ */
+export type GetCompanyByDomainResponse = {
+    company?: null | CrmCompanyResponse;
+};
+
+/**
  * Response from looking up a CRM contact by email.
  */
 export type GetContactByEmailResponse = {
@@ -19299,7 +19308,9 @@ export type SetCompanyNameRequest = {
 };
 
 /**
- * Link or switch a contact with a known personal-provider email.
+ * Link a contact without a company, or switch the company of a contact
+ * whose primary email is at a known personal provider. A contact with an
+ * address on its current company's domain cannot switch.
  */
 export type SetContactCompanyRequest = {
     /**
@@ -28472,6 +28483,40 @@ export type CreateCrmCompanyResponses = {
 };
 
 export type CreateCrmCompanyResponse = CreateCrmCompanyResponses[keyof CreateCrmCompanyResponses];
+
+export type GetCompanyByDomainData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * The company domain to resolve within the caller's team, such as
+         * `acme.com`.
+         */
+        domain: string;
+    };
+    url: '/crm/companies/by-domain';
+};
+
+export type GetCompanyByDomainErrors = {
+    /**
+     * The domain is not a bare domain like acme.com.
+     */
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetCompanyByDomainError = GetCompanyByDomainErrors[keyof GetCompanyByDomainErrors];
+
+export type GetCompanyByDomainResponses = {
+    /**
+     * The company for the domain, or a null company when none is visible.
+     */
+    200: GetCompanyByDomainResponse;
+};
+
+export type GetCompanyByDomainResponse2 = GetCompanyByDomainResponses[keyof GetCompanyByDomainResponses];
 
 export type ImportCrmCompaniesCsvData = {
     body: ImportCompaniesCsvRequest;

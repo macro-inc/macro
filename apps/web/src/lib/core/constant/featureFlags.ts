@@ -474,6 +474,11 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// No dev override: the server requires this same remote flag before accepting writes.
+export const enableCrmMemberAccessChanges = defineFlag({
+  key: 'enable-crm-member-access-changes',
+});
+
 // Stay off until all ingestion and Team email reader binaries support exceptions.
 // No dev default or local override: the server independently requires this flag.
 export const enableCrmThreadExclusions = defineFlag({
@@ -685,6 +690,16 @@ export const enableTagTeamSharing = defineFlag({
 export const enableChatSidebarSections = defineFlag({
   key: 'enable-chat-sidebar-sections',
   env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
+  default: onInDev,
+});
+
+// Channel and Chat section Notification Settings (All messages, Messages
+// involving me, Nothing, Custom) beside Mute, in place of Only @mentions. On in
+// development; deployed environments defer to PostHog. Override with
+// VITE_ENABLE_CHANNEL_NOTIFICATION_SETTINGS.
+export const enableChannelNotificationSettings = defineFlag({
+  key: 'enable-channel-notification-settings',
+  env: 'ENABLE_CHANNEL_NOTIFICATION_SETTINGS',
   default: onInDev,
 });
 

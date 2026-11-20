@@ -16,8 +16,28 @@ async fn setup(limits: Limits) -> (tempfile::TempDir, ExecutionService) {
         .unwrap();
     (
         root,
-        ExecutionService::new(Arc::new(runner), limits).unwrap(),
+        ExecutionService::new(Arc::new(runner), Arc::new(Unchecked), limits).unwrap(),
     )
+}
+
+/// Passes every program, so these tests reach the process boundary with
+/// code a type checker would refuse.
+pub(super) struct Unchecked;
+
+#[async_trait::async_trait]
+impl ProgramChecker for Unchecked {
+    fn sdk_fingerprint(&self) -> &str {
+        "unchecked"
+    }
+
+    async fn check_files(
+        &self,
+        _files: &[SourceFile],
+        _declarations: &str,
+        _imports: ProgramImports,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
+        Ok(Vec::new())
+    }
 }
 
 async fn collect(mut handle: ExecutionHandle) -> (Vec<ExecutionEvent>, Outcome) {
@@ -204,6 +224,76 @@ export async function main({token, hosts, macro: supplied, session, execution}) 
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn a_program_sends_four_searches_at_once_and_queues_the_rest() {
+    const IN_FLIGHT: usize = 4;
+    const SEARCHES: usize = 6;
+    let (_root, service) = setup(Limits::default()).await;
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let mut held = Vec::new();
+        for _ in 0..IN_FLIGHT {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let request = read_request(&mut stream).await;
+            assert!(request.starts_with("POST /search?"), "{request}");
+            held.push(stream);
+        }
+        assert!(
+            tokio::time::timeout(Duration::from_millis(500), listener.accept())
+                .await
+                .is_err(),
+            "a fifth search started while four were unanswered"
+        );
+        for mut stream in held {
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+        for _ in IN_FLIGHT..SEARCHES {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            read_request(&mut stream).await;
+            respond(&mut stream, r#"{"results":[]}"#).await;
+        }
+    });
+    let environment = RunEnvironment {
+        token: "fixture-run-token".into(),
+        endpoints: SdkEndpoints {
+            hosts: BTreeMap::from([("search".into(), format!("http://{address}"))]),
+            web_app_url: "https://app.example.test".into(),
+        },
+        ..RunEnvironment::default()
+    };
+    let source = format!(
+        r#"
+export async function main({{macro}}) {{
+  const pages = await Promise.all(Array.from({{length: {SEARCHES}}}, (_, i) => macro.search.page(`query ${{i}}`)));
+  return {{ data: {{ pages: pages.length }}, reviews: [] }};
+}}
+"#
+    );
+    let (_, outcome) = collect(
+        service
+            .execute(
+                ExecuteRequest {
+                    source,
+                    timeout_ms: 8000,
+                },
+                environment,
+            )
+            .unwrap(),
+    )
+    .await;
+    assert!(
+        matches!(outcome, Outcome::Succeeded { ref value } if value["data"]["pages"] == SEARCHES),
+        "{outcome:?}"
+    );
+    tokio::time::timeout(Duration::from_secs(5), server)
+        .await
+        .unwrap()
+        .unwrap();
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn a_program_presents_a_view_through_its_session() {
     let (_root, service) = setup(Limits::default()).await;
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -326,16 +416,20 @@ export async function main({token, hosts, webAppUrl, macro: supplied}) {
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
-async fn requires_javascript_exported_main() {
+async fn requires_an_exported_main() {
     let (_root, service) = setup(Limits::default()).await;
-    for source in [
-        "return 42;",
-        "export const main = 42;",
-        "export function main() { const n: number = 42; return n; }",
-    ] {
+    for source in ["return 42;", "export const main = 42;"] {
         let (_, outcome) = run(&service, source, 5000).await;
         assert!(matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Runtime));
     }
+    // Programs are TypeScript; Deno strips the types.
+    let (_, outcome) = run(
+        &service,
+        "export function main() { const n: number = 42; return n; }",
+        5000,
+    )
+    .await;
+    assert!(matches!(outcome, Outcome::Succeeded { value } if value == 42));
     service.shutdown().await;
 }
 
@@ -1170,6 +1264,22 @@ async fn the_cpu_limit_stops_a_busy_program() {
     service.shutdown().await;
 }
 
+async fn checked_service() -> (tempfile::TempDir, ExecutionService) {
+    let root = tempfile::tempdir().unwrap();
+    let binary = Command::new("which").arg("deno").output().await.unwrap();
+    assert!(binary.status.success(), "Deno 2.9.6 must be on PATH");
+    let binary = PathBuf::from(String::from_utf8(binary.stdout).unwrap().trim());
+    let runner = DenoRunner::new(binary.clone(), root.path().join("runs"), 128)
+        .await
+        .unwrap();
+    let checker = check::DenoChecker::new(binary, root.path().join("checks"), 1, 4, 64 * 1024)
+        .await
+        .unwrap();
+    let service =
+        ExecutionService::new(Arc::new(runner), Arc::new(checker), Limits::default()).unwrap();
+    (root, service)
+}
+
 /// A server answering every request with `body`, counting them.
 async fn counting_server(body: &'static str) -> (String, Arc<std::sync::atomic::AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -1234,6 +1344,33 @@ async fn run_in_session(
     )
     .await
     .1
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn sdk_misuse_is_reported_by_line_and_never_runs() {
+    let (_root, service) = checked_service().await;
+    // Run, it would print; a rejected program has no log events.
+    let source = "export async function main({ macro }: CodeContext) {\n  console.log('ran');\n  return await macro.tasks.findSimilarr({ title: 'x', body: 'y' });\n}\n";
+    let (events, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("expected a type error, got {outcome:?}");
+    };
+    assert_eq!(error.code, FailureCode::Compile);
+    assert!(
+        error
+            .message
+            .contains("Property 'findSimilarr' does not exist on type 'TaskNamespace'"),
+        "{}",
+        error.message
+    );
+    assert!(error.message.contains("at main.ts:3:"), "{}", error.message);
+    assert!(
+        events
+            .iter()
+            .all(|event| !matches!(event.kind, EventKind::Started | EventKind::Log { .. }))
+    );
+    service.shutdown().await;
 }
 
 #[tokio::test]
@@ -1328,6 +1465,25 @@ export async function main({ macro }) {
         "{}",
         error.message
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn a_typed_program_with_handlebars_checks_and_runs() {
+    let (_root, service) = checked_service().await;
+    let source = r#"import Handlebars from 'handlebars';
+export async function main({ macro, webAppUrl }: CodeContext) {
+  const render = Handlebars.compile('{{count}} items', { strict: true });
+  return { data: { text: render({ count: 2 }), sdk: typeof macro.tasks.findSimilar, webAppUrl } };
+}
+"#;
+    let (_, outcome) = run(&service, source, 20_000).await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("expected success, got {outcome:?}");
+    };
+    assert_eq!(value["data"]["text"], "2 items");
+    assert_eq!(value["data"]["sdk"], "function");
     service.shutdown().await;
 }
 
@@ -1762,6 +1918,68 @@ export async function main({hosts}) {
     assert!(
         request.ends_with(r#"{"input":"x","questions":{"yes":"Yes?"}}"#),
         "{request}"
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_entity_knob_arrives_as_the_sdk_handle_for_its_item() {
+    let (_root, service) = setup(Limits::default()).await;
+    // What `routine_program`'s entity knob sends: the item, marked.
+    let knobs = serde_json::json!({
+        "bugs": { "$entity": { "type": "channel", "id": "c1" } },
+        "doc": { "$entity": { "type": "document", "id": "d1" } },
+        "folder": { "$entity": { "type": "project", "id": "p1" } },
+        "table": { "$entity": { "type": "database", "id": "db1" } },
+        "person": { "$entity": { "type": "user", "id": "macro|dana@macro.com" } },
+        "task": { "$entity": { "type": "task", "id": "t1" } },
+        "thread": { "$entity": { "type": "email_thread", "id": "e1" } },
+        "chat": { "$entity": { "type": "chat", "id": "a1" } },
+        "company": { "$entity": { "type": "crm_company", "id": "co1" } },
+        "contact": { "$entity": { "type": "crm_contact", "id": "ct1" } },
+        "initiative": { "$entity": { "type": "initiative", "id": "i1" } },
+        "days": 7,
+    });
+    let source = r#"
+export async function main({ macro, knobs }: any) {
+  return {
+    channel: knobs.bugs.constructor === macro.channels.byId("x").constructor && knobs.bugs.id,
+    document: knobs.doc.constructor === macro.documents.byId("x").constructor && knobs.doc.id,
+    project: knobs.folder.constructor === macro.projects.byId("x").constructor && knobs.folder.id,
+    database: knobs.table.constructor === macro.databases.byId("x").constructor && knobs.table.id,
+    user: knobs.person.constructor === macro.users.byId("x").constructor && knobs.person.id,
+    task: knobs.task.constructor === macro.tasks.byId("x").constructor && knobs.task.id,
+    email_thread: knobs.thread.constructor === macro.email.byId("x").constructor && knobs.thread.id,
+    chat: knobs.chat.constructor === macro.chats.byId("x").constructor && knobs.chat.id,
+    crm_company: knobs.company.constructor === macro.crm.companyById("x").constructor && knobs.company.id,
+    crm_contact: knobs.contact.constructor === macro.crm.contactById("x").constructor && knobs.contact.id,
+    initiative: knobs.initiative.constructor === macro.initiatives.byId("x").constructor && knobs.initiative.id,
+    days: knobs.days,
+  };
+}
+"#;
+    let (_, outcome) = run_unattended(
+        &service,
+        source,
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({ "knobs": knobs }),
+            true,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        value,
+        serde_json::json!({
+            "channel": "c1", "document": "d1", "project": "p1", "database": "db1",
+            "user": "macro|dana@macro.com", "task": "t1", "email_thread": "e1", "chat": "a1",
+            "crm_company": "co1", "crm_contact": "ct1", "initiative": "i1", "days": 7,
+        })
     );
     service.shutdown().await;
 }

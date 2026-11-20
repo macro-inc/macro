@@ -53,3 +53,13 @@ export function announceConsentCancelled() {
     subtext: 'Sign-in was cancelled before access was granted.',
   });
 }
+
+/**
+ * Shown when the Microsoft mailbox signed in at consent is not the one an
+ * inbox at that address syncs.
+ */
+export const INBOX_IDENTITY_CONFLICT_MESSAGE =
+  'This address is connected through a different Microsoft account';
+
+/** Shown when the inbox changed while it was being connected. */
+export const INBOX_CHANGED_MESSAGE = 'Something changed, try again';

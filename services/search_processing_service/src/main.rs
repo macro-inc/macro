@@ -3,7 +3,8 @@ use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "processing")]
 use crate::inbound::kafka_consumer::{
-    IndexMetrics, KafkaProcessingContext, publish_lane_backlog, run_event_consumer,
+    EmailLaneEvent, IndexMetrics, KafkaProcessingContext, Lane, LeaveTogether, LiveLaneEvent,
+    publish_lane_backlog, run_event_consumer,
 };
 use crate::{
     api::context::{ApiContext, AuthorizationService},
@@ -76,6 +77,12 @@ pub type EmailAttachmentStatusBackfill =
         outbound::email_attachment_search::OpenSearchEmailAttachmentFlags,
     >;
 
+/// Production wiring for the deleted chat message repair.
+pub type DeletedChatMessageRepair = domain::chat_message_repair::DeletedChatMessageRepair<
+    outbound::chat_message_repair::OpenSearchChatMessages,
+    outbound::chat_message_repair::PgChatRows,
+>;
+
 /// Resolve a read-replica macrodb URL and
 /// connect a small pool. Returns `None` when the replica URL is missing,
 /// blank. Failures
@@ -112,14 +119,16 @@ const CONSUMER_RESTART_DELAY: Duration = Duration::from_secs(5);
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(feature = "processing")]
-async fn supervise_event_consumer(
+async fn supervise_event_consumer<L: Lane>(
     brokers: String,
     context: KafkaProcessingContext,
+    leave: LeaveTogether,
     shutdown_token: CancellationToken,
 ) {
     let _ = Retry::start(FixedInterval::new(CONSUMER_RESTART_DELAY), || {
         let consumer_brokers = brokers.clone();
         let consumer_context = context.clone();
+        let consumer_leave = leave.clone();
         let consumer_shutdown_token = shutdown_token.clone();
 
         async move {
@@ -129,9 +138,10 @@ async fn supervise_event_consumer(
 
             let task_shutdown_token = consumer_shutdown_token.clone();
             let consumer_result = tokio::spawn(async move {
-                run_event_consumer(
+                run_event_consumer::<L>(
                     &consumer_brokers,
                     consumer_context,
+                    consumer_leave,
                     task_shutdown_token.cancelled_owned(),
                 )
                 .await
@@ -139,26 +149,27 @@ async fn supervise_event_consumer(
             .await;
 
             if consumer_shutdown_token.is_cancelled() {
-                tracing::info!("search processing event consumer stopped after shutdown");
+                tracing::info!(lane = L::NAME, "search processing event consumer stopped after shutdown");
                 return Ok(());
             }
 
             match consumer_result {
                 Ok(Ok(())) => {
-                    tracing::error!("search processing event consumer exited unexpectedly");
+                    tracing::error!(lane = L::NAME, "search processing event consumer exited unexpectedly");
                 }
                 Ok(Err(error)) => {
-                    tracing::error!(error = ?error, "search processing event consumer failed");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer failed");
                 }
                 Err(error) if error.is_panic() => {
-                    tracing::error!(error = ?error, "search processing event consumer panicked");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer panicked");
                 }
                 Err(error) => {
-                    tracing::error!(error = ?error, "search processing event consumer task was cancelled");
+                    tracing::error!(lane = L::NAME, error = ?error, "search processing event consumer task was cancelled");
                 }
             }
 
             tracing::warn!(
+                lane = L::NAME,
                 restart_delay_seconds = CONSUMER_RESTART_DELAY.as_secs(),
                 "search processing event consumer stopped; waiting before restart"
             );
@@ -167,7 +178,10 @@ async fn supervise_event_consumer(
     })
     .await;
 
-    tracing::info!("search processing event consumer supervisor stopped");
+    tracing::info!(
+        lane = L::NAME,
+        "search processing event consumer supervisor stopped"
+    );
 }
 
 #[tokio::main]
@@ -287,6 +301,13 @@ async fn main() -> anyhow::Result<()> {
         backfill_gate.clone(),
     ));
 
+    let deleted_chat_message_repair = Arc::new(DeletedChatMessageRepair::new(
+        outbound::chat_message_repair::OpenSearchChatMessages(opensearch_client.clone()),
+        outbound::chat_message_repair::PgChatRows::new(backfill_db.clone()),
+        outbound::chat_message_repair::PgChatRows::new(db.clone()),
+        backfill_gate.clone(),
+    ));
+
     let backfill_service = Arc::new(BackfillOrchestrator::new(
         PgBackfillSource::new(backfill_db, db.clone(), config.backfill_page_sizes()?),
         SqsSearchEventPublisher::new(sqs_client.clone()),
@@ -382,11 +403,24 @@ async fn main() -> anyhow::Result<()> {
             ),
             shutdown_token.clone(),
         ));
-        tokio::spawn(supervise_event_consumer(
-            config.kafka_brokers.as_ref().to_owned(),
-            kafka_processing_context,
+        let brokers = config.kafka_brokers.as_ref().to_owned();
+        let leave = LeaveTogether::new(2);
+        let email = tokio::spawn(supervise_event_consumer::<EmailLaneEvent>(
+            brokers.clone(),
+            kafka_processing_context.clone(),
+            leave.clone(),
             shutdown_token.clone(),
-        ))
+        ));
+        let live = tokio::spawn(supervise_event_consumer::<LiveLaneEvent>(
+            brokers,
+            kafka_processing_context,
+            leave,
+            shutdown_token.clone(),
+        ));
+        async move {
+            let (email, live) = tokio::join!(email, live);
+            email.and(live)
+        }
     };
 
     let backfill_jobs = BackfillJobs::new(
@@ -411,6 +445,7 @@ async fn main() -> anyhow::Result<()> {
             backfill_service,
             backfill_jobs,
             email_attachment_status_backfill,
+            deleted_chat_message_repair,
             macro_event_broker,
             backfill_control,
             backfill_gate,

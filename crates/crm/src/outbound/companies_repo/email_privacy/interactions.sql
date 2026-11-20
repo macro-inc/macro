@@ -6,15 +6,15 @@
 -- compare this query against them.
 -- Mail the provider no longer has (`provider_missing`: deleted at Outlook)
 -- is no interaction, as a Gmail deletion removes the row.
-WITH matching_messages AS (
-    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at
+WITH matching_messages AS MATERIALIZED (
+    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at) AS occurred_at, ec.id AS contact_id
     FROM email_messages m
     JOIN email_message_recipients r ON r.message_id = m.id
     JOIN email_contacts ec ON ec.id = r.contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
       AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
     UNION
-    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at)
+    SELECT m.id, m.thread_id, m.is_sent, COALESCE(m.internal_date_ts, m.created_at), ec.id
     FROM email_messages m
     JOIN email_contacts ec ON ec.id = m.from_contact_id
     WHERE m.link_id = $2 AND ec.link_id = $2 AND NOT m.is_sent AND NOT m.is_draft AND lower(ec.email_address) = $3
@@ -190,11 +190,36 @@ WITH matching_messages AS (
     UNION
     SELECT p.thread_id FROM participants p
     JOIN selected_participants s ON s.owner = p.owner AND s.contact_id = p.contact_id
+), eligible_threads AS MATERIALIZED (
+    SELECT thread_id FROM contributed_threads
+    -- Preserve hashed membership even when estimates predict few matches;
+    -- nested-loop semi-joins can become quadratic for an included history.
+    WHERE (thread_id IN (SELECT thread_id FROM included_threads)) IS TRUE
+      AND thread_id NOT IN (SELECT thread_id FROM blocked_threads)
+), eligible_messages AS MATERIALIZED (
+    SELECT m.* FROM matching_messages m
+    WHERE (m.thread_id IN (SELECT thread_id FROM eligible_threads)) IS TRUE
 )
-SELECT COALESCE(min(first_sent_at), min(first_at)) AS first_at,
-       max(last_at) AS last_at, bool_or(is_sent) AS is_sent
-FROM contributed_threads
--- Preserve hashed membership even when estimates predict few matches; a
--- nested-loop semi-join becomes quadratic when a rule includes the history.
-WHERE (thread_id IN (SELECT thread_id FROM included_threads)) IS TRUE
-  AND thread_id NOT IN (SELECT thread_id FROM blocked_threads)
+SELECT first_message.occurred_at AS first_at,
+       last_message.occurred_at AS last_at,
+       first_message.is_sent AS is_sent,
+       first_message.id AS first_message_id,
+       first_message.thread_id AS first_thread_id,
+       first_message.contact_id AS first_contact_id,
+       last_message.id AS last_message_id,
+       last_message.thread_id AS last_thread_id,
+       last_message.contact_id AS last_contact_id,
+       last_message.is_sent AS last_is_sent
+FROM (VALUES (1)) singleton(dummy)
+LEFT JOIN LATERAL (
+    -- The earliest sent message supplies both first_at and is_sent; fall
+    -- back to the earliest received message when there is no sent history.
+    SELECT * FROM eligible_messages
+    ORDER BY is_sent DESC, occurred_at, id, contact_id
+    LIMIT 1
+) first_message ON TRUE
+LEFT JOIN LATERAL (
+    SELECT * FROM eligible_messages
+    ORDER BY occurred_at DESC, id, contact_id
+    LIMIT 1
+) last_message ON TRUE

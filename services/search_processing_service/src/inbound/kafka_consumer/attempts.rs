@@ -108,6 +108,9 @@ pub(crate) enum Handled {
     Indexed,
     /// The event needs no search-index operation.
     Ignored,
+    /// The event's write found nothing in the index to change: a property
+    /// write for an entity the index does not hold yet.
+    NoIndexChange,
     /// The event's source is gone for good, so there is nothing to index.
     SourceMissing,
 }

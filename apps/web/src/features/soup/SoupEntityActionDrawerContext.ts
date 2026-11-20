@@ -16,6 +16,7 @@ export type EntityActionDrawerEntry = {
     | EntityActionNavigationHandler
     | undefined;
   viewedProjectId?: string;
+  onClose?: () => void;
 };
 
 export type SoupEntityActionDrawerState = {

@@ -151,6 +151,10 @@ export default {
     other: '{{count}} drafts discarded',
   },
   toastDiscardDraftFailed: 'Failed to discard draft',
+  toastPropertySet: {
+    one: '{{property}} set',
+    other: '{{property}} set on {{count}} items',
+  },
   toastAddedToFavorites: 'Added to favorites',
   toastAddedCountToFavorites: {
     one: 'Added {{count}} item to favorites',

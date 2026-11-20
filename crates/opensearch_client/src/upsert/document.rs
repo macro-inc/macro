@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use models_opensearch::SearchIndex;
 
 use super::BulkUpsertResult;
-use super::properties::IndexedProperty;
+use super::properties::{IndexedProperty, PropertyUpdate};
 use crate::{
     Result,
     date_format::EpochMillis,
@@ -417,14 +417,15 @@ pub(crate) async fn update_document_metadata(
 
 /// Update only the denormalized `properties` on an existing parent doc,
 /// without touching content. Used when an entity's properties change
-/// independently of its body. A missing doc (404) is treated as a no-op —
-/// the next full index will include the properties.
+/// independently of its body. A missing doc (404) changes nothing and is
+/// [`PropertyUpdate::NotIndexed`]: the next full index will include the
+/// properties.
 pub(crate) async fn update_document_properties(
     client: &opensearch::OpenSearch,
     document_id: &str,
     properties: &[IndexedProperty],
     index_override: Option<&str>,
-) -> Result<()> {
+) -> Result<PropertyUpdate> {
     use serde_json::json;
 
     let index = resolve_destination(index_override);
@@ -451,7 +452,7 @@ pub(crate) async fn update_document_properties(
     let status_code = response.status_code();
     if status_code.is_success() {
         tracing::trace!(document_id=%document_id, "document properties updated");
-        return Ok(());
+        return Ok(PropertyUpdate::Applied);
     }
     let body = response.text().await.map_err(|err| {
         OpensearchClientError::deserialization_failed(
@@ -474,7 +475,7 @@ pub(crate) async fn update_document_properties(
                 document_id=%document_id,
                 "document not indexed yet; skipping property update"
             );
-            return Ok(());
+            return Ok(PropertyUpdate::NotIndexed);
         }
     }
 
