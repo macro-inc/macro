@@ -29,8 +29,8 @@ The oldest unindexed change of a non-email entity type has been older than
 60 s for five minutes (warning: 30 s). The age is measured from the event's
 Kafka timestamp, so it includes time the event waited behind others.
 
-- **Processing has stopped** (the outcome panel is flat): the live lane's
-  consumer is stalled.
+- **Processing has stopped** (the outcome panel is flat for the live entity
+  types, everything but email): the live lane's consumer is stalled.
   - Check `aws.ecs.service.running` for the service and the
     `kafka.consumer_stop` spans (`lane:live`) for restarts.
   - Check OpenSearch health (the [OpenSearch monitors](../../infra/stacks/monitoring/monitors/opensearch.ts),
@@ -173,8 +173,10 @@ unknown, not zero.
 - Check `aws.ecs.service.running` and the task stop reasons.
 - Check for the consumer supervisor's "event consumer failed" or
   "panicked" logs, whose `lane` field names the lane.
-- If the tasks run and process events (APM still shows `process_event` spans),
-  the metrics export is broken: check the Datadog agent sidecar.
+- If the tasks run and the quiet lane still processes events (APM shows
+  `process_event` spans with `entity_type:email` for the email lane, any other
+  `entity_type` for the live lane), the metrics export is broken: check the
+  Datadog agent sidecar. The other lane's spans say nothing about this one.
 
 ## Probe late
 
