@@ -51,6 +51,10 @@ pub struct Deployment {
     pub app_url: url::Url,
     /// Session egress: first-party MCP and the Anthropic gateway.
     pub egress_url: url::Url,
+    /// OTLP/HTTP intake for the computer's own spans (macrod, the agent).
+    /// Absent when the deployment has none the computer can reach.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub telemetry_url: Option<url::Url>,
 }
 
 /// The deployment could not be resolved; never carries a URL.

@@ -4,7 +4,56 @@ use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
-macro_env_var::maybe_env_vars! { pub struct OtelExporterOtlpEndpoint; }
+macro_env_var::maybe_env_vars! {
+    pub struct OtelExporterOtlpEndpoint;
+    pub struct OtelExporterOtlpProtocol;
+}
+
+/// Where a computer's macrod finds the telemetry settings its enrollment
+/// gave: the standard OTel variables, as a systemd environment file that
+/// `macrod.service` loads. Root's, like the enrollment marker beside it.
+pub const TELEMETRY_ENV: &str = "/var/lib/macrod/telemetry.env";
+
+/// How spans leave this process.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Exporter {
+    /// OTLP over gRPC to this base URL: a collector beside the daemon.
+    Grpc(String),
+    /// OTLP/HTTP protobuf to this base URL (`/v1/traces` appended): a
+    /// computer's telemetry intake.
+    Http(String),
+}
+
+impl Exporter {
+    /// The standard variables: `OTEL_EXPORTER_OTLP_ENDPOINT`, and
+    /// `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc` by default, or `http/protobuf`).
+    /// None without an endpoint; an unknown protocol fails loudly.
+    pub(crate) fn from_environment() -> Option<Self> {
+        let endpoint = OtelExporterOtlpEndpoint::new()?.to_string();
+        let protocol = OtelExporterOtlpProtocol::new().map(|protocol| protocol.to_string());
+        Some(
+            Self::parse(endpoint, protocol.as_deref())
+                .expect("OTEL_EXPORTER_OTLP_PROTOCOL must be grpc or http/protobuf"),
+        )
+    }
+
+    fn parse(endpoint: String, protocol: Option<&str>) -> Option<Self> {
+        match protocol {
+            None | Some("grpc") => Some(Self::Grpc(endpoint)),
+            Some("http/protobuf") => Some(Self::Http(endpoint)),
+            Some(_) => None,
+        }
+    }
+
+    /// The `KEY=value` lines [`TELEMETRY_ENV`] holds for this exporter.
+    pub(crate) fn environment_file(&self) -> String {
+        let (endpoint, protocol) = match self {
+            Self::Grpc(endpoint) => (endpoint, "grpc"),
+            Self::Http(endpoint) => (endpoint, "http/protobuf"),
+        };
+        format!("OTEL_EXPORTER_OTLP_ENDPOINT={endpoint}\nOTEL_EXPORTER_OTLP_PROTOCOL={protocol}\n")
+    }
+}
 
 /// Trace headers from the current span, or `parent` (the setup trace an
 /// enrollment carries) when this process exports no spans of its own, so the
@@ -34,16 +83,22 @@ impl Drop for Telemetry {
     }
 }
 
-pub(crate) fn install() -> Telemetry {
+pub(crate) fn install(exporter: Option<Exporter>) -> Telemetry {
     let computer_id = std::fs::read_to_string(crate::computer::ENROLLED_MARKER)
         .ok()
         .and_then(|value| uuid::Uuid::parse_str(value.lines().next()?.trim()).ok());
-    let provider = OtelExporterOtlpEndpoint::new().map(|endpoint| {
-        let exporter = opentelemetry_otlp::SpanExporter::builder()
-            .with_tonic()
-            .with_endpoint(endpoint.to_string())
-            .build()
-            .expect("invalid macrod OTLP exporter configuration");
+    let provider = exporter.map(|exporter| {
+        let exporter = match exporter {
+            Exporter::Grpc(endpoint) => opentelemetry_otlp::SpanExporter::builder()
+                .with_tonic()
+                .with_endpoint(endpoint)
+                .build(),
+            Exporter::Http(endpoint) => opentelemetry_otlp::SpanExporter::builder()
+                .with_http()
+                .with_endpoint(format!("{}/v1/traces", endpoint.trim_end_matches('/')))
+                .build(),
+        }
+        .expect("invalid macrod OTLP exporter configuration");
         SdkTracerProvider::builder()
             .with_resource(
                 opentelemetry_sdk::Resource::builder()
@@ -65,7 +120,9 @@ pub(crate) fn install() -> Telemetry {
         tracing_opentelemetry::layer()
             .with_tracer(provider.tracer("macrod"))
             .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-                metadata.name().starts_with("macrod.enroll") || metadata.name() == "run_enroll"
+                metadata.name().starts_with("macrod.enroll")
+                    || metadata.name() == "run_enroll"
+                    || metadata.name() == "macrod.agent.apply"
             }))
     });
     // Without a filter the registry logs every dependency at TRACE.
