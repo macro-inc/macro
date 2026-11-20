@@ -137,8 +137,11 @@ impl JobStore for PgJobStore {
         job: ExecutionId,
     ) -> Result<JobControl, CodeModeError> {
         let row = sqlx::query!(
-            r#"SELECT job_cancel_requested_at, job_settled_at FROM agent_code_execution
-            WHERE id = $1 AND agent_session_id = $2 AND job_deadline IS NOT NULL"#,
+            // `is_job` is a column, not a filter: as a filter it matches the
+            // session's partial job index, whose generic plan reads every job
+            // the session ever ran instead of the primary key.
+            r#"SELECT job_cancel_requested_at, job_settled_at, job_deadline IS NOT NULL AS "is_job!"
+            FROM agent_code_execution WHERE id = $1 AND agent_session_id = $2"#,
             job.as_uuid(),
             session.as_uuid(),
         )
@@ -147,6 +150,7 @@ impl JobStore for PgJobStore {
         .map_err(storage)?;
         Ok(match row {
             None => JobControl::Gone,
+            Some(row) if !row.is_job => JobControl::Gone,
             Some(row) if row.job_settled_at.is_some() => JobControl::Settled,
             Some(row) if row.job_cancel_requested_at.is_some() => JobControl::CancelRequested,
             Some(_) => JobControl::Running,
@@ -158,19 +162,23 @@ impl JobStore for PgJobStore {
         session: AgentSessionId,
         job: ExecutionId,
     ) -> Result<JobCancel, CodeModeError> {
-        let settled = sqlx::query_scalar!(
+        // A foreground execution's row is left as it was (the CASE), and
+        // `job_deadline` is not a filter, for the reason given in `control`.
+        let row = sqlx::query!(
             r#"UPDATE agent_code_execution
-            SET job_cancel_requested_at = COALESCE(job_cancel_requested_at, now())
-            WHERE id = $1 AND agent_session_id = $2 AND job_deadline IS NOT NULL
-            RETURNING job_settled_at IS NOT NULL AS "settled!""#,
+            SET job_cancel_requested_at = CASE WHEN job_deadline IS NULL THEN job_cancel_requested_at
+                ELSE COALESCE(job_cancel_requested_at, now()) END
+            WHERE id = $1 AND agent_session_id = $2
+            RETURNING job_deadline IS NOT NULL AS "is_job!", job_settled_at IS NOT NULL AS "settled!""#,
             job.as_uuid(),
             session.as_uuid(),
         )
         .fetch_optional(&self.pool)
         .await
         .map_err(storage)?
+        .filter(|row| row.is_job)
         .ok_or(CodeModeError::NotFound)?;
-        Ok(if settled {
+        Ok(if row.settled {
             JobCancel::AlreadySettled
         } else {
             JobCancel::Requested

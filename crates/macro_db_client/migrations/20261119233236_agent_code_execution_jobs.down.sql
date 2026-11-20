@@ -1,4 +1,4 @@
-SET lock_timeout = '5s';
+SET LOCAL lock_timeout = '5s';
 ALTER TABLE agent_code_execution
     DROP COLUMN job_owner_id,
     DROP COLUMN job_deadline,
