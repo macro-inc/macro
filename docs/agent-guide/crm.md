@@ -79,8 +79,10 @@ tabs retain their own section toolbar.
 Activity rows show stored Companies and Contacts reference pills in the shared
 Soup row. Click a pill to open its record; Shift-click opens a new split without
 opening the parent item. The first two references appear inline; **+N** opens
-the remainder. Email matches still determine feed membership, but an address
-or domain match without a stored property does not add a display pill. The row
+the remainder, and Shift opens one of its rows in a new split too. A record
+already open in another split is focused instead of opened again, from a pill or
+from **+N**. Email matches still determine feed membership, but an address or
+domain match without a stored property does not add a display pill. The row
 uses shared property previews rather than a separate association lookup.
 Verify these interactions at desktop and phone widths.
 Sales Tasks use the normal Tasks filters (status, priority, assignee, creator,
