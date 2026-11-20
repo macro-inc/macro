@@ -28,9 +28,10 @@
     # then reach the edge through `kubectl port-forward` with a Host header.
     grafanaHosts = [ "grafana.macro-internal.com" ];
     otlpHosts = [ "otlp.macro-internal.com" ];
-    # Until the switch no listener rule uses the target groups, so the ALB
-    # never reports these pods healthy (modules/edge.nix).
-    albReadinessGate = false;
+    # From the switch's step 2: the AWS layer's listener rules use the target
+    # groups, so a pod is ready only once the ALB reports it healthy
+    # (modules/edge.nix).
+    albReadinessGate = true;
     targetGroups = {
       grafana = "obs-k8s-grafana";
       otlp = "obs-k8s-otlp";
@@ -47,9 +48,8 @@
 
   macro.grafana = {
     hostname = "grafana.macro-internal.com";
-    # Until the switch Grafana is tested at http://localhost:3000 through
-    # `kubectl port-forward` (README "Testing before the switch").
-    localTesting = true;
+    # Served at `hostname` through the ALB from the switch's step 2 on.
+    localTesting = false;
     # Through the ALB: GoAlert stays on the host. Only the GoAlert-only host's
     # nginx lets /api/v2/grafana/ through, so the GoAlert contact points page
     # from the switch's step 8 on (README "Before Grafana runs"); the
