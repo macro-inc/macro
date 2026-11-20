@@ -4,7 +4,9 @@ import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import { createSignal, Show } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ChannelDirectoryPassUnproven } from '../channel/directory-reconcile';
 import {
+  CHANNEL_SOUP_BACKFILL_LANE,
   DEFAULT_SOUP_BACKFILL_LANES,
   loadSoupBackfillCheckpoint,
   NOISE_EMAIL_FILTER_BACKFILL_LANE,
@@ -30,6 +32,7 @@ const graphqlMocks = vi.hoisted(() => ({
 vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
 // Reconciliation has its own tests; here the channel lane only pages.
 vi.mock('../channel/directory-reconcile', () => ({
+  ChannelDirectoryPassUnproven: class extends Error {},
   createChannelDirectoryBackfillFetcher:
     async () => (input: unknown, options: unknown) =>
       graphqlMocks.hydrateGraphqlSoup({}, { input }, options),
@@ -759,6 +762,117 @@ describe('runSoupBackfills', () => {
       'cache.backfill_state',
       'failed',
     ]);
+  });
+
+  describe('a retried pass', () => {
+    /** Three pages, first, p2 and p3; the calls in `failing` throw. */
+    function threePages(failing: readonly number[]) {
+      const fetchPage = vi.fn(
+        async (input: { continuation?: { cursor: string } }) => {
+          if (failing.includes(fetchPage.mock.calls.length))
+            throw new Error('offline');
+          const cursor = input.continuation?.cursor;
+          if (cursor === undefined) return { nextCursor: 'p2' };
+          return { nextCursor: cursor === 'p2' ? 'p3' : null };
+        }
+      );
+      const pages = () =>
+        fetchPage.mock.calls.map(
+          ([input]) => input.continuation?.cursor ?? 'first'
+        );
+      return { fetchPage, pages };
+    }
+
+    const restartingLane = (
+      fetchPage: NonNullable<SoupBackfillParams['fetchPage']>,
+      createFetchPage: SoupBackfillParams['createFetchPage'],
+      resumesAfter?: SoupBackfillParams['resumesAfter']
+    ): SoupBackfillParams => ({
+      ...lane('restarting-lane', fetchPage),
+      createFetchPage,
+      restartOnRun: true,
+      resumesAfter,
+      pageDelayMs: 0,
+    });
+
+    async function run(params: SoupBackfillParams) {
+      const running = Effect.runPromise(
+        runSoupBackfills('user-1', mockCacheHost, [params])
+      );
+      await vi.advanceTimersByTimeAsync(10_000);
+      await running;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    it('resumes from its cursor with the page fetcher that read the pages before it', async () => {
+      const { fetchPage, pages } = threePages([3]);
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p3', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledOnce();
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'restarting-lane')
+      ).toMatchObject({ completed: true, pagesFetched: 3 });
+    });
+
+    it.each([
+      { lane: 'does not resume retries', resumesAfter: undefined },
+      { lane: 'cannot resume after the error', resumesAfter: () => false },
+    ])(
+      'starts again at the first page in a lane that $lane',
+      async ({ resumesAfter }) => {
+        const { fetchPage, pages } = threePages([3]);
+        const createFetchPage = vi.fn(async () => fetchPage);
+
+        await run(restartingLane(fetchPage, createFetchPage, resumesAfter));
+
+        expect(pages()).toEqual(['first', 'p2', 'p3', 'first', 'p2', 'p3']);
+        expect(createFetchPage).toHaveBeenCalledTimes(2);
+      }
+    );
+
+    it('resumes the channel lane after a failed page but not after an unproven pass', () => {
+      const resumesAfter = CHANNEL_SOUP_BACKFILL_LANE.resumesAfter;
+      expect(resumesAfter?.(new Error('offline'))).toBe(true);
+      expect(
+        resumesAfter?.(new ChannelDirectoryPassUnproven('partial_pass'))
+      ).toBe(false);
+    });
+
+    it('makes the page fetcher again when making it failed', async () => {
+      const { fetchPage, pages } = threePages([]);
+      const createFetchPage = vi
+        .fn(async () => fetchPage)
+        .mockRejectedValueOnce(new Error('offline'));
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledTimes(2);
+    });
+
+    it('starts again with a new page fetcher when the storage was replaced', async () => {
+      const { fetchPage, pages } = threePages([2]);
+      fetchPage.mockImplementationOnce(async () => ({ nextCursor: 'p2' }));
+      fetchPage.mockImplementationOnce(async () => {
+        mockCacheHost.currentStorageGeneration.mockResolvedValue('storage-2');
+        throw new Error('offline');
+      });
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'first', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledTimes(2);
+      expect(
+        loadSoupBackfillCheckpoint('user-1', 'restarting-lane')
+      ).toMatchObject({ storageGeneration: 'storage-2', completed: true });
+    });
   });
 
   it("marks a lane that failed before saving a checkpoint in the cache's generation", async () => {

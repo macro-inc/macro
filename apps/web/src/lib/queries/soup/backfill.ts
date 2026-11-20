@@ -16,6 +16,7 @@ import {
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
 import { createSharedMailBackfillFetcher } from '@service-storage/shared-mail-backfill';
+import * as Cause from 'effect/Cause';
 import * as Effect from 'effect/Effect';
 import * as Fiber from 'effect/Fiber';
 import * as Schedule from 'effect/Schedule';
@@ -24,7 +25,10 @@ import {
   CHANNEL_DIRECTORY_CHECKPOINT_ID,
   CHANNEL_DIRECTORY_INPUT,
 } from '../channel/directory-lane';
-import { createChannelDirectoryBackfillFetcher } from '../channel/directory-reconcile';
+import {
+  ChannelDirectoryPassUnproven,
+  createChannelDirectoryBackfillFetcher,
+} from '../channel/directory-reconcile';
 import { useContactBackfill } from '../contacts/backfill';
 import type { ContextChannel } from '../contacts/context-facts';
 import { useContactContextPublisher } from '../contacts/use-context-publisher';
@@ -77,6 +81,10 @@ export type SoupBackfillParams = {
   createFetchPage?: (userId: string) => Promise<SoupBackfillFetchPage>;
   /** Access-scope reconciliation requires a fresh full scan after interruption. */
   restartOnRun?: boolean;
+  /** Whether a retry after this error goes on from the failed attempt's
+   * cursor, with the page fetcher that read the pages before it. Otherwise a
+   * retry starts like a new run (at the top, with `restartOnRun`). */
+  resumesAfter?: (error: unknown) => boolean;
   /** Soup input shared by every page. The backfill manages the cursor. */
   input: GraphqlSoupInitialInput;
   /** Delay between successful pages. Defaults to two seconds. */
@@ -103,8 +111,12 @@ export const CHANNEL_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   createFetchPage: createChannelDirectoryBackfillFetcher,
   refreshAll: true,
   // A pass resumed from a cursor cannot tell which channels are stale, and
-  // the fetcher fails its last page, so a pass always starts at the top.
+  // the fetcher fails its last page, so a run always starts at the top.
   restartOnRun: true,
+  // A retry goes on with the fetcher that saw the pages before its cursor,
+  // so one failed page does not cost a large account its whole pass. Not
+  // when that fetcher could not prove the pass: it would fail again.
+  resumesAfter: (error) => !(error instanceof ChannelDirectoryPassUnproven),
   // One request per 100 channels: 2 s spacing takes minutes on a large account.
   pageDelayMs: 250,
   input: CHANNEL_DIRECTORY_INPUT,
@@ -406,11 +418,26 @@ function withEmailRecency(
 
 type SoupBackfillCacheHost = Pick<CacheHost, 'currentStorageGeneration'>;
 
+/** What an attempt of a lane leaves the retry after it. */
+export type SoupBackfillRetry = {
+  /** The page fetcher of the pass the attempt was on, and the storage
+   * generation it read into. */
+  pageFetcher?: {
+    storageGeneration: string;
+    fetchPage: SoupBackfillFetchPage;
+  };
+};
+
+/** What a failed Effect step threw. */
+const thrownBy = (error: unknown) =>
+  Cause.isUnknownError(error) ? error.cause : error;
+
 export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   userId: string,
   host: SoupBackfillCacheHost,
   params: SoupBackfillParams,
-  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void
+  onCheckpoint?: (checkpoint: SoupBackfillCheckpoint) => void,
+  retry?: SoupBackfillRetry
 ) {
   // Await storage readiness before reading a cursor. Generation notifications
   // may predate this runner or belong to another tab, so they cannot prove that
@@ -421,10 +448,19 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
   let checkpoint = yield* Effect.sync(() =>
     loadSoupBackfillCheckpoint(userId, params.checkpointId)
   );
-  if (checkpoint.storageGeneration !== storageGeneration) {
+  const storedHere = checkpoint.storageGeneration === storageGeneration;
+  if (!storedHere) {
     checkpoint = initialSoupBackfillCheckpoint(userId, storageGeneration);
   }
-  if (params.restartOnRun) {
+  // A retry goes on from the cursor of the pass the failed attempt left
+  // unfinished, with the fetcher that read the pages before it.
+  const resuming =
+    storedHere &&
+    !checkpoint.completed &&
+    checkpoint.scanStartedAt !== null &&
+    retry?.pageFetcher?.storageGeneration === storageGeneration;
+  if (retry && !resuming) retry.pageFetcher = undefined;
+  if (params.restartOnRun && !resuming) {
     checkpoint = {
       ...checkpoint,
       nextCursor: null,
@@ -446,17 +482,24 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     checkpoint = initialSoupBackfillCheckpoint(userId, generation);
     startPass();
   };
-  const createPageFetcher = () =>
-    params.createFetchPage
-      ? Effect.tryPromise(() => params.createFetchPage!(userId))
-      : Effect.succeed(params.fetchPage ?? fetchSoupPage);
+  const createPageFetcher = Effect.fnUntraced(function* (generation: string) {
+    const kept = retry?.pageFetcher;
+    if (kept?.storageGeneration === generation) return kept.fetchPage;
+    if (retry) retry.pageFetcher = undefined;
+    const create = params.createFetchPage;
+    const fetchPage = create
+      ? yield* Effect.tryPromise(() => create(userId))
+      : (params.fetchPage ?? fetchSoupPage);
+    if (retry) retry.pageFetcher = { storageGeneration: generation, fetchPage };
+    return fetchPage;
+  });
 
   // `completed` marks the end of one pass. Start a fresh pass from its stored
   // watermark, while an unfinished checkpoint keeps its cursor.
   if (checkpoint.completed || checkpoint.scanStartedAt === null) {
     yield* Effect.sync(startPass);
   }
-  let fetchPage = yield* createPageFetcher();
+  let fetchPage = yield* createPageFetcher(storageGeneration);
 
   while (true) {
     const beforeFetchGeneration = yield* Effect.tryPromise(() =>
@@ -464,7 +507,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
     );
     if (checkpoint.storageGeneration !== beforeFetchGeneration) {
       yield* Effect.sync(() => restartForGeneration(beforeFetchGeneration));
-      fetchPage = yield* createPageFetcher();
+      fetchPage = yield* createPageFetcher(beforeFetchGeneration);
       continue;
     }
     const passInput = withUpdatedSince(
@@ -492,7 +535,7 @@ export const runSoupBackfill = Effect.fn('runSoupBackfill')(function* (
       // A reset during hydration invalidates the page's continuation even when
       // its request could not be cancelled. Never save it into the new scan.
       yield* Effect.sync(() => restartForGeneration(afterFetchGeneration));
-      fetchPage = yield* createPageFetcher();
+      fetchPage = yield* createPageFetcher(afterFetchGeneration);
       continue;
     }
 
@@ -566,7 +609,11 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
           })
         );
 
-        yield* runSoupBackfill(userId, host, lane, (checkpoint) => {
+        // Kept across the attempts of a lane whose retries can resume.
+        const retry: SoupBackfillRetry | undefined = lane.resumesAfter
+          ? {}
+          : undefined;
+        const onCheckpoint = (checkpoint: SoupBackfillCheckpoint) => {
           pagesFetched += 1;
           if (
             !checkpoint.completed &&
@@ -580,7 +627,15 @@ export const runSoupBackfills = Effect.fn('runSoupBackfills')(function* (
               totalPagesFetched: checkpoint.pagesFetched,
             });
           }
-        }).pipe(
+        };
+
+        yield* runSoupBackfill(userId, host, lane, onCheckpoint, retry).pipe(
+          Effect.tapError((error) =>
+            Effect.sync(() => {
+              if (retry && !lane.resumesAfter?.(thrownBy(error)))
+                retry.pageFetcher = undefined;
+            })
+          ),
           Effect.retry({
             times: BACKFILL_RETRY_COUNT,
             schedule: BACKFILL_RETRY_SCHEDULE,
