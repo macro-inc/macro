@@ -13,6 +13,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { isDateProperty } from '@property/utils';
 import { formatStartDue, startDueOf } from '@property/utils/start-due';
+import { cn } from '@ui/utils/classname';
 import { For, Show } from 'solid-js';
 import { ProjectProgress } from '../../components/project-progress';
 import type { ProjectRow as ProjectRowData } from '../../context/projects-context';
@@ -107,7 +108,10 @@ export function ProjectRowColumns(
 
   return (
     <Entity.Layout
-      class="task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm"
+      class={cn(
+        'task-grid-row task-grid-icon-creator project-grid-row grid min-h-[inherit] w-full grid-rows-[1fr] items-center gap-2 px-2 text-sm',
+        startDateEnabled() && 'task-grid-dates'
+      )}
       style={taskGridTemplate(columns())}
     >
       <Show when={columns().includes('indicator')}>

@@ -214,6 +214,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
           <Entity.Layout
             class={cn(
               'task-grid-row task-grid-icon-creator w-full min-h-[inherit] items-center text-sm px-2',
+              startDateEnabled() && 'task-grid-dates',
               'gap-2 grid grid-rows-[1fr]'
             )}
             style={taskGridTemplate(columns())}

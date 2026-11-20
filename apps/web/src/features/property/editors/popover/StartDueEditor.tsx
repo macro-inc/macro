@@ -22,7 +22,8 @@ export function StartDueEditor(props: StartDueEditorProps) {
   const ctx = useProperty();
   return (
     <Show when={ctx.editorOpen() && isDateProperty(ctx.property())}>
-      <EditorPopover>
+      {/* The two fields and the footer need more room than a single date's calendar. */}
+      <EditorPopover class="max-h-[28rem]">
         <StartDueEditorBody {...props} />
       </EditorPopover>
     </Show>
