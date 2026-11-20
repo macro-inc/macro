@@ -288,6 +288,14 @@ export class ChannelDirectoryPassUnproven extends Error {
   }
 }
 
+/** A page the lane read and has not yet kept: its channel ids, whether it
+ * listed them, and the cursor the lane continues from once it keeps it. */
+type StagedPage = {
+  next: string;
+  ids: readonly string[];
+  evidence: boolean;
+};
+
 /** Reconciles, again after a failed read, until the cache is proven. */
 async function reconcile(input: Reconciliation): Promise<void> {
   for (let attempt = 1; ; attempt += 1) {
@@ -317,6 +325,11 @@ async function reconcile(input: Reconciliation): Promise<void> {
  * a page listed no ids, the cache changed hands, or the reads kept failing)
  * deletes nothing and fails on its last page, so the lane never records it
  * complete. Without a cache there is nothing to reconcile.
+ *
+ * A page counts once the lane asks for the page after it. The lane saves a
+ * page's cursor only after the checks that follow its read, and a retry
+ * reads from the cursor it saved, so a page whose checks failed is read
+ * again and only that answer counts.
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
@@ -331,6 +344,7 @@ export async function createChannelDirectoryBackfillFetcher(
   let lane: GraphqlSoupInitialInput | undefined;
   let firstPage = true;
   let completeEvidence = true;
+  let staged: StagedPage | undefined;
 
   return async (input, options) => {
     if (firstPage) {
@@ -339,18 +353,32 @@ export async function createChannelDirectoryBackfillFetcher(
       if (input.initial) lane = input.initial;
       else completeEvidence = false;
     }
+    // Continuing from the staged page's cursor keeps it; any other read is
+    // that page read again.
+    if (staged && input.continuation?.cursor === staged.next) {
+      for (const id of staged.ids) seen.add(id);
+      if (!staged.evidence) completeEvidence = false;
+    }
+    staged = undefined;
     const page = await fetch(input, options);
     options?.signal?.throwIfAborted();
-    if (!page.entityIds) completeEvidence = false;
-    for (const id of page.entityIds ?? []) seen.add(id);
+    const ids = page.entityIds ?? [];
+    const evidence = page.entityIds !== undefined;
+    if (page.nextCursor !== null) {
+      staged = { next: page.nextCursor, ids, evidence };
+      return page;
+    }
 
-    if (page.nextCursor !== null || !host || host.disabled) return page;
-    if (!completeEvidence || !lane)
+    if (!host || host.disabled) return page;
+    if (!completeEvidence || !evidence || !lane)
       throw new ChannelDirectoryPassUnproven('partial_pass');
     // The viewer's identity may have reached the cache only with this pass.
     scope ??= await readReconcileScope(host, userId);
     if (!scope) throw new ChannelDirectoryPassUnproven('scope');
-    const candidates = scope.previous.filter((id) => !seen.has(id));
+    const last = new Set(ids);
+    const candidates = scope.previous.filter(
+      (id) => !seen.has(id) && !last.has(id)
+    );
     if (candidates.length > 0)
       await reconcile({
         host: scope.host,

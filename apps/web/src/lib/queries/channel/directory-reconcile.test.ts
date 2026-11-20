@@ -42,6 +42,12 @@ const LANE = {
   filters: { documentFilter: { literal: { id: 'nil' } } },
 };
 const FIRST: GraphqlSoupInput = { initial: LANE };
+const SECOND: GraphqlSoupInput = {
+  continuation: { cursor: 'p2', expand: true },
+};
+const THIRD: GraphqlSoupInput = {
+  continuation: { cursor: 'p3', expand: true },
+};
 
 type Page = { nextCursor: string | null; entityIds?: string[] };
 
@@ -493,4 +499,78 @@ describe('channel directory reconciliation', () => {
 
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  // The lane saves a page's cursor only after its checks pass, and a retry
+  // reads from the cursor it saved: a page it read but never saved is read
+  // again, and only that second answer counts.
+  it.each([
+    {
+      page: 'first',
+      pages: [
+        { nextCursor: 'p2', entityIds: ['kept', 'removed'] },
+        { nextCursor: 'p2', entityIds: ['kept'] },
+        { nextCursor: null, entityIds: [] },
+      ],
+      inputs: [FIRST, FIRST, SECOND],
+    },
+    {
+      page: 'second',
+      pages: [
+        { nextCursor: 'p2', entityIds: ['kept'] },
+        { nextCursor: 'p3', entityIds: ['removed'] },
+        { nextCursor: 'p3', entityIds: [] },
+        { nextCursor: null, entityIds: [] },
+      ],
+      inputs: [FIRST, SECOND, SECOND, THIRD],
+    },
+  ])(
+    'deletes a channel the $page page listed before the lane read it again without it',
+    async ({ pages, inputs }) => {
+      const { host } = reconcileHost(['kept', 'removed']);
+      const fetch = server(pages.map((page) => ({ ...page })));
+      const fetchPage = await createChannelDirectoryBackfillFetcher(
+        'viewer',
+        host,
+        fetch
+      );
+
+      await runPass(fetchPage, inputs);
+
+      expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+    }
+  );
+
+  it('keeps a page once the lane asks for the page after it', async () => {
+    const { host } = reconcileHost(['kept', 'removed']);
+    const fetch = server(
+      [
+        { nextCursor: 'p2', entityIds: ['kept'] },
+        { nextCursor: 'p3', entityIds: [] },
+        { nextCursor: 'p3', entityIds: [] },
+        { nextCursor: null, entityIds: [] },
+      ],
+      ['kept']
+    );
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch
+    );
+    await runPass(fetchPage, [FIRST, SECOND, SECOND, THIRD]);
+
+    // Only the removed channel is read by id: the first page was kept.
+    expect(namedInReads(fetch)).toEqual(['removed']);
+    expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+  });
 });
+
+/** The channels by-id reads named, by test name. */
+function namedInReads(fetch: ReturnType<typeof server>) {
+  return fetch.mock.calls.flatMap(([input]) =>
+    [
+      ...JSON.stringify(input.initial?.filters?.channelFilter ?? null).matchAll(
+        /"channelId":"([^"]+)"/g
+      ),
+    ].map(([, id]) => channelName(id))
+  );
+}

@@ -820,6 +820,23 @@ describe('runSoupBackfills', () => {
       ).toMatchObject({ completed: true, pagesFetched: 3 });
     });
 
+    it('reads a page again when the check after it failed before its cursor was saved', async () => {
+      const { fetchPage, pages } = threePages([]);
+      fetchPage.mockImplementationOnce(async () => ({ nextCursor: 'p2' }));
+      fetchPage.mockImplementationOnce(async () => {
+        mockCacheHost.currentStorageGeneration.mockRejectedValueOnce(
+          new Error('cache temporarily unavailable')
+        );
+        return { nextCursor: 'p3' };
+      });
+      const createFetchPage = vi.fn(async () => fetchPage);
+
+      await run(restartingLane(fetchPage, createFetchPage, () => true));
+
+      expect(pages()).toEqual(['first', 'p2', 'p2', 'p3']);
+      expect(createFetchPage).toHaveBeenCalledOnce();
+    });
+
     it.each([
       { lane: 'does not resume retries', resumesAfter: undefined },
       { lane: 'cannot resume after the error', resumesAfter: () => false },
