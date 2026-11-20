@@ -248,8 +248,8 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   page (newest first) without two exact matches goes to the session,
   which also looks up the other kinds. `routine_code.rs` gives the
   session each SDK area it needs
-  (`area_reference`: the area's index, guidance and declarations, then
-  the generated types they import). `scheduling.rs` composes the drafter
+  (`area_reference`: the area's index, guidance and declarations from every
+  namespace in the topic, then the generated types they import). `scheduling.rs` composes the drafter
   after the service with its
   `scheduled_action_draft` store, the session drafter's check lookup
   (`CorrelationSessions`) and activity (`ActivityCreations`), and the
@@ -281,8 +281,9 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   `src/scheduling.rs`).
   Routine suggestions (`src/scheduling/routine_suggestions.rs`) read the
   newest 100 messages (labels, 500-character snippets) through
-  email_service's internal recent-messages route and the person's connected
-  Pipedream apps. Generations (`crates/suggestion_generation`) run their
+  email_service's internal recent-messages route, the person's connected
+  Pipedream apps, and whether CRM's company tools would let them add a
+  company (a team, and CRM access in it). Generations (`crates/suggestion_generation`) run their
   suggestions and routines sessions hidden on the free tier's model, each kind
   gated on its flag (`enable-suggestions`, `enable-routine-suggestions`).
   `scheduling.rs` sweeps generation sessions a stopped process left open

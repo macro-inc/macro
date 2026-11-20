@@ -65,11 +65,11 @@
       grafana-exploretraces-app = "2.0.3";
     };
     database = {
-      # Set after `tofu apply` from `nix run .#tofu -- main output` in
-      # ../aws: grafana_db_address and grafana_db_secret_arn. Grafana runs
-      # 0 replicas until both are set.
-      host = null;
-      secret = null;
+      # ../aws outputs grafana_db_address and grafana_db_secret_arn
+      # (`nix run .#tofu -- main output`). Grafana runs 0 replicas while
+      # either is null.
+      host = "observability-grafana.c7laebw90i5d.us-east-2.rds.amazonaws.com";
+      secret = "arn:aws:secretsmanager:us-east-2:569036502058:secret:rds!db-89830474-27c7-4b12-bece-45bf280892da-l6lPOq";
       # The private subnets RDS uses: the host's 2a and the cluster's 2b, 2c.
       cidrs = [
         "10.88.10.0/24"
