@@ -183,21 +183,13 @@ impl Daemon {
                         delays.reset();
                         attempt = 0;
                     }
-                    ServeOutcome::Ended(error) => {
+                    ServeOutcome::Ended { error, lasted } => {
                         tracing::warn!(error = ?error, "event stream ended; reconnecting");
-                        // A stream that was live starts over from the fast
-                        // reconnects: a stall must reopen within the
-                        // service's two-minute replay retention.
-                        if matches!(*health.borrow(), TriggerStreamHealth::Live { .. }) {
-                            attempt = 0;
-                            delays.reset();
-                        }
-                        attempt = attempt.saturating_add(1);
+                        let delay = reconnect_delay(lasted, &mut delays, &mut attempt);
                         health.send_replace(TriggerStreamHealth::Reconnecting {
                             attempt,
                             last_error: error.to_string(),
                         });
-                        let delay = delays.next_delay();
                         tokio::select! {
                             () = shutdown.cancelled() => return Ok(()),
                             () = tokio::time::sleep(delay) => {}
@@ -368,10 +360,36 @@ fn reconnect_delays() -> RetryDelays {
     RetryDelays::new(Duration::from_millis(250), Duration::from_secs(30))
 }
 
+/// A stream open this long was healthy: it reopens at the first delay, so a
+/// stall reopens within the service's two-minute replay retention. One that
+/// ends sooner (the service closing it at once, say on a failed access
+/// check) keeps backing off.
+const HEALTHY_STREAM: Duration = Duration::from_secs(10);
+
+/// The delay before reopening a stream that was open for `lasted` (`None`
+/// when it never opened), counting `attempt` from 1 since the last healthy
+/// stream.
+fn reconnect_delay(
+    lasted: Option<Duration>,
+    delays: &mut RetryDelays,
+    attempt: &mut u32,
+) -> Duration {
+    if lasted.is_some_and(|lasted| lasted >= HEALTHY_STREAM) {
+        delays.reset();
+        *attempt = 0;
+    }
+    *attempt = attempt.saturating_add(1);
+    delays.next_delay()
+}
+
 enum ServeOutcome {
     Stopped,
     Idle,
-    Ended(rootcause::Report),
+    Ended {
+        error: rootcause::Report,
+        /// How long the stream was open, `None` when it never opened.
+        lasted: Option<Duration>,
+    },
 }
 
 /// Open the stream (or wait for bound agents) until it ends or is cancelled.
@@ -395,7 +413,12 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
             position.agents_read(&agents.bot_ids, agents.read_by.unwrap_or(read_at));
             agents.bot_ids
         }
-        Err(error) => return ServeOutcome::Ended(error),
+        Err(error) => {
+            return ServeOutcome::Ended {
+                error,
+                lasted: None,
+            };
+        }
     };
     if bots.is_empty() {
         health.send_replace(TriggerStreamHealth::NoAgentsBound);
@@ -415,7 +438,17 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         .await
     {
         Ok(stream) => stream,
-        Err(error) => return ServeOutcome::Ended(error),
+        Err(error) => {
+            return ServeOutcome::Ended {
+                error,
+                lasted: None,
+            };
+        }
+    };
+    let opened = tokio::time::Instant::now();
+    let ended = |error| ServeOutcome::Ended {
+        error,
+        lasted: Some(opened.elapsed()),
     };
     position.opened();
     let verified = stream.heartbeat_interval().is_some();
@@ -433,13 +466,17 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
         tokio::select! {
             () = cancel.cancelled() => return ServeOutcome::Stopped,
             () = agents_changed.notified() => {
-                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
-                    return outcome;
+                match bound_agents_changed(client, &bots, position).await {
+                    Ok(false) => {}
+                    Ok(true) => return ServeOutcome::Idle,
+                    Err(error) => return ended(error),
                 }
             }
             () = tokio::time::sleep(BOUND_AGENT_REFRESH) => {
-                if let Some(outcome) = bound_agents_changed(client, &bots, position).await {
-                    return outcome;
+                match bound_agents_changed(client, &bots, position).await {
+                    Ok(false) => {}
+                    Ok(true) => return ServeOutcome::Idle,
+                    Err(error) => return ended(error),
                 }
             }
             next = stream.next_event() => {
@@ -459,35 +496,27 @@ async fn serve_once<Executor: crate::trigger::WorkExecutor>(
                         }
                     }
                     Ok(Some(StreamNext::Heartbeat)) => {}
-                    Ok(None) => {
-                        return ServeOutcome::Ended(rootcause::report!(
-                            "the server closed the stream"
-                        ));
-                    }
-                    Err(error) => return ServeOutcome::Ended(error),
+                    Ok(None) => return ended(rootcause::report!("the server closed the stream")),
+                    Err(error) => return ended(error),
                 }
             }
         }
     }
 }
 
-/// Re-read the bound agents: `Some` ends the stream when they are no longer
-/// `bots` (or cannot be read), `None` keeps it.
+/// Re-read the bound agents: whether they are no longer `bots`, so the
+/// stream reopens for the new set.
 async fn bound_agents_changed(
     client: &EventStreamClient,
     bots: &[String],
     position: &mut StreamPosition,
-) -> Option<ServeOutcome> {
+) -> Result<bool, rootcause::Report> {
     let read_at = std::time::SystemTime::now();
-    match client.bound_agents().await {
-        Ok(latest) if latest.bot_ids == bots => {
-            position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
-            None
-        }
-        Ok(_) => {
-            tracing::info!("bound-agent set changed; reconnecting the event stream");
-            Some(ServeOutcome::Idle)
-        }
-        Err(error) => Some(ServeOutcome::Ended(error)),
+    let latest = client.bound_agents().await?;
+    if latest.bot_ids == bots {
+        position.agents_read(&latest.bot_ids, latest.read_by.unwrap_or(read_at));
+        return Ok(false);
     }
+    tracing::info!("bound-agent set changed; reconnecting the event stream");
+    Ok(true)
 }

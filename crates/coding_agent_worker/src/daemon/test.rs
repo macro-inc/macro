@@ -21,6 +21,40 @@ fn the_event_stream_reconnects_fast_then_backs_off() {
 }
 
 #[test]
+fn a_stream_that_ends_as_soon_as_it_opens_keeps_backing_off() {
+    let mut delays = reconnect_delays();
+    let mut attempt = 0;
+    let at_once = Some(Duration::from_millis(5));
+
+    reconnect_delay(at_once, &mut delays, &mut attempt);
+    reconnect_delay(at_once, &mut delays, &mut attempt);
+    let third = reconnect_delay(at_once, &mut delays, &mut attempt);
+
+    assert_eq!(attempt, 3);
+    assert!(
+        third >= Duration::from_millis(750),
+        "third reopen of a stream closed at once after {third:?}"
+    );
+}
+
+#[test]
+fn a_stream_that_stalled_after_holding_reopens_at_the_first_delay() {
+    let mut delays = reconnect_delays();
+    let mut attempt = 0;
+    for _ in 0..5 {
+        reconnect_delay(None, &mut delays, &mut attempt);
+    }
+
+    let stalled = reconnect_delay(Some(Duration::from_secs(70)), &mut delays, &mut attempt);
+
+    assert_eq!(attempt, 1);
+    assert!(
+        stalled <= Duration::from_millis(313),
+        "reopen after a stall after {stalled:?}"
+    );
+}
+
+#[test]
 fn a_fresh_dial_is_not_a_held_connection_until_it_has_lasted() {
     let (connected, mut runtime) = watch::channel(false);
     assert!(!runtime_held_since_last_look(&mut runtime));

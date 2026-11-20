@@ -208,9 +208,9 @@ async fn bound_agents_are_sorted_unique_and_dated_by_the_service() {
 
 /// An SSE body that sends `chunks`, then stays open and silent.
 fn body(
-    chunks: &[&'static str],
+    chunks: &'static [&'static str],
 ) -> impl Stream<Item = Result<&'static str, reqwest::Error>> + Send + 'static {
-    futures::stream::iter(chunks.to_vec().into_iter().map(Ok)).chain(futures::stream::pending())
+    futures::stream::iter(chunks.iter().copied().map(Ok)).chain(futures::stream::pending())
 }
 
 const HEARTBEAT: &str = "event: heartbeat\ndata: {}\n\n";
@@ -240,7 +240,7 @@ async fn a_heartbeating_stream_that_goes_silent_stalls_after_three_missed_heartb
     );
     let started = tokio::time::Instant::now();
 
-    let error = stream.next_event().await.err().expect("a stall");
+    let error = stream.next_event().await.expect_err("a stall");
 
     assert!(format!("{error}").contains("stalled"), "{error}");
     assert_eq!(started.elapsed(), Duration::from_secs(70));

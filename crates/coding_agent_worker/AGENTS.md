@@ -44,12 +44,14 @@ the local ACP process (Claude Code, Codex, ...), and drives native
   A service that sends `x-macro-stream-heartbeat` heartbeats the stream only
   while its event source progresses; three heartbeats missed in a row with no
   event (70 s at 20 s) end the stream as stalled, and it reopens from the
-  cursor at the fastest reconnect delay. Without
+  cursor. Without
   the header (older service) there is no such deadline. `Daemon::trigger_stream_health`
   publishes the stream's state (`src/daemon/health.rs`) for the panel.
   A failed runtime dial and a dropped event stream retry after 250 ms,
   doubling to 30 s, each delay jittered (`src/retry_delay.rs`); a runtime
-  connection that held 10 s is redialed at once. The ACP agent starts before
+  connection that held 10 s is redialed at once, and an event stream that
+  held 10 s reopens at the first delay (one closed sooner keeps backing off).
+  The ACP agent starts before
   each dial (and stays ready across failed ones), so a session that arrives
   with the connection does not also wait for the agent's startup.
 - Pass `macrod service --ignore-stdin-eof` under system service managers;
