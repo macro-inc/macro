@@ -152,7 +152,8 @@ fn parse_retry_after(value: &str) -> Option<Duration> {
 /// Decodes a successful JSON response. A failure names the JSON path it
 /// happened at and, for a missing or duplicate field, the field; serde's own
 /// message is dropped because it quotes the offending value, which can be an
-/// address or mail content.
+/// address or mail content. The path is built from the response's own keys,
+/// so a wire type that is a map keyed by such data needs its own decoder.
 pub(crate) async fn decode_json_response<T>(
     response: reqwest::Response,
 ) -> Result<T, GmailApiHttpError>
