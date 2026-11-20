@@ -30,11 +30,15 @@
 //! role) and optionally an Apple Distribution certificate; without the
 //! certificate xcodebuild uses cloud signing through the API key.
 
+use gh_workflow::expr::typed::{
+    Expr, Flag, StepHandle, StepOutput, Str, failure, github, job_status, success,
+};
 use gh_workflow::{
-    Concurrency, Event, Expression, Job, Level, Permissions, PullRequest, PullRequestType, Run,
-    Step, Use, Workflow,
+    Concurrency, Event, Job, Level, Permissions, PullRequest, PullRequestType, Run, Step, Use,
+    Workflow,
 };
 
+use crate::workflows::actions::{ActionsCheckout, ActionsGithubScript};
 use crate::workflows::{runners, steps, vars};
 
 /// Build the workflow.
@@ -42,8 +46,9 @@ pub fn ios_app_store_release() -> Workflow {
     Workflow::new("iOS App Store Release")
         .on(Event::default()
             .pull_request(PullRequest::default().add_type(PullRequestType::Labeled)))
-        .concurrency(Concurrency::new(Expression::new(
-            "ios-app-store-release-${{ github.event.pull_request.number }}",
+        .concurrency(Concurrency::new(format!(
+            "ios-app-store-release-{}",
+            pr_number()
         )))
         .add_job("release", release_job())
 }
@@ -53,10 +58,13 @@ fn release_job() -> Job {
         .name("iOS App Store Release")
         // Same-repo PRs only: the release needs the App Store Connect secrets,
         // which fork PRs don't receive anyway.
-        .cond(Expression::new(
-            "github.event.label.name == 'ios-update' && \
-             github.event.pull_request.head.repo.full_name == github.repository",
-        ))
+        .cond(
+            github().event::<Str>("label.name").eq("ios-update").and(
+                github()
+                    .event::<Str>("pull_request.head.repo.full_name")
+                    .eq(github().repository()),
+            ),
+        )
         .runs_on(runners::Runner::MacOsTahoeArm.to_string())
         // Device build + upload + up to 30 minutes of App Store Connect
         // processing; the simulator preview alone measured ~11 minutes cold.
@@ -71,10 +79,10 @@ fn release_job() -> Job {
                 // `gh pr checks` also reads commit statuses (the CLA check).
                 .statuses(Level::Read),
         )
-        .add_env(("GH_TOKEN", "${{ github.token }}"))
-        .add_env(("GH_REPO", "${{ github.repository }}"))
-        .add_env(("PR_NUMBER", "${{ github.event.pull_request.number }}"))
-        .add_env(("BASE_BRANCH", "${{ github.event.pull_request.base.ref }}"))
+        .add_env(("GH_TOKEN", github().token()))
+        .add_env(("GH_REPO", github().repository()))
+        .add_env(("PR_NUMBER", pr_number()))
+        .add_env(("BASE_BRANCH", base_ref()))
         .add_step(checkout_pr_head())
         .add_step(steps::select_ios_xcode())
         .add_step(require_cli_tools())
@@ -93,6 +101,18 @@ fn release_job() -> Job {
 /// `ios-update` means "release this and merge it when Apple approves", so the
 /// PR must already be mergeable: not a draft, every other check on the head
 /// commit green (pending ones are waited on). Fails before the long build.
+fn pr_number() -> Expr<Str> {
+    github().event("pull_request.number")
+}
+
+fn base_ref() -> Expr<Str> {
+    github().event("pull_request.base.ref")
+}
+
+fn head_sha() -> Expr<Str> {
+    github().event("pull_request.head.sha")
+}
+
 fn preconditions() -> Step<Run> {
     steps::logged_run(
         "Require the PR to be ready to merge",
@@ -104,7 +124,7 @@ fn preconditions() -> Step<Run> {
             include_str!("scripts/release_wait_for_checks.sh")
         ),
     )
-    .add_env(("HEAD_SHA", "${{ github.event.pull_request.head.sha }}"))
+    .add_env(("HEAD_SHA", head_sha()))
     .add_env(("WAIT_MINUTES", "30"))
     .add_env(("RELEASE_LABEL", "ios-update"))
 }
@@ -145,15 +165,12 @@ fn head_guard() -> Step<Run> {
 }
 
 fn checkout_pr_head() -> Step<Use> {
-    steps::abort_stalled_fetch(Step::new("Checkout PR head").uses(
-        "actions",
-        "checkout",
-        "df4cb1c069e1874edd31b4311f1884172cec0e10",
-    )) // v6
-    .add_with(("ref", "${{ github.event.pull_request.head.sha }}"))
-    // Full history so the bump check can diff against the base branch.
-    .add_with(("fetch-depth", 0))
-    .add_with(("persist-credentials", false))
+    ActionsCheckout::new("Checkout PR head")
+        .r#ref(head_sha())
+        // Full history so the bump check can diff against the base branch.
+        .fetch_depth(0)
+        .persist_credentials(false)
+        .step()
 }
 
 /// Run a command in `apps/web` inside the Nix dev shell, with its output
@@ -171,10 +188,7 @@ fn verify_bump() -> Step<Run> {
         "Verify iOS release numbers were bumped",
         "  cd apps/web\n  bun scripts/ios-verify-native-bump.mjs\n",
     )
-    .add_env((
-        "BASE_REF",
-        "origin/${{ github.event.pull_request.base.ref }}",
-    ))
+    .add_env(("BASE_REF", format!("origin/{}", base_ref())))
 }
 
 /// Writes the API key where altool/tauri/the scripts look for it and exports
@@ -188,6 +202,19 @@ fn fetch_credentials() -> Step<Run> {
         .add_env(("IOS_DISTRIBUTION_CERTIFICATE", "1"))
 }
 
+struct BuildCheckOutputs {
+    /// Whether App Store Connect already holds our own upload of this build.
+    uploaded: StepOutput<Flag>,
+}
+
+/// The [`require_unused_build`] step.
+const BUILD_CHECK: StepHandle<BuildCheckOutputs> = StepHandle::new(
+    "build-check",
+    BuildCheckOutputs {
+        uploaded: StepOutput::new("build-check", "uploaded"),
+    },
+);
+
 /// Fail before the (long) build if App Store Connect already holds a build at
 /// or above this PR's number that is not our own upload — another native PR
 /// bumped from the same base, or a hand-made release whose bump was never
@@ -200,7 +227,7 @@ fn require_unused_build() -> Step<Run> {
         "Check the build number is unused in App Store Connect",
         "  cd apps/web\n  bun scripts/ios-app-store.mjs status --require-unused-build\n",
     )
-    .id("build-check")
+    .id(BUILD_CHECK.id())
 }
 
 fn configure_signing() -> Step<Run> {
@@ -220,11 +247,9 @@ fn build_and_upload() -> Step<Run> {
             "  bun install --frozen-lockfile\n  cd apps/web\n  just ios-release --no-bump\n",
         ))
         .shell("bash")
-        .if_condition(Expression::new(
-            "steps.build-check.outputs.uploaded != 'true'",
-        ))
+        .if_condition(BUILD_CHECK.outputs.uploaded.read().is_unset())
         .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
-        .add_env(("IOS_RELEASE_PR", "${{ github.event.pull_request.number }}"))
+        .add_env(("IOS_RELEASE_PR", pr_number()))
 }
 
 /// `IOS_RELEASE_PR` lets `submit` recognise (and take over) this PR's own
@@ -234,23 +259,13 @@ fn submit_for_review() -> Step<Run> {
         "Submit for App Review",
         "  cd apps/web\n  bun scripts/ios-app-store.mjs submit\n",
     )
-    .add_env(("IOS_RELEASE_PR", "${{ github.event.pull_request.number }}"))
+    .add_env(("IOS_RELEASE_PR", pr_number()))
 }
 
 fn pr_comment() -> Step<Use> {
-    Step::new("Comment on the PR")
-        .uses(
-            "actions",
-            "github-script",
-            "f28e40c7f34bde8b3046d885e986cb6290c5673b",
-        )
-        // Not `always()`: a run the drift workflow cancelled must not post
-        // "failed, re-add the label" next to drift's own comment.
-        .if_condition(Expression::new("success() || failure()"))
-        .add_with(("github-token", "${{ secrets.GITHUB_TOKEN }}"))
-        .add_with((
-            "script",
-            indoc::indoc! {r#"
+    ActionsGithubScript::new(
+        "Comment on the PR",
+        indoc::indoc! {r#"
                 const fs = require('fs');
                 const path = require('path');
                 const confPath = 'apps/web/tauri/src-tauri/tauri.ios.conf.json';
@@ -262,7 +277,7 @@ fn pr_comment() -> Step<Use> {
                 const runUrl =
                   `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}` +
                   `/actions/runs/${context.runId}`;
-                const success = '${{ job.status }}' === 'success';
+                const success = process.env.JOB_STATUS === 'success';
                 const SUCCESS_BODY = [
                   `📱 iOS ${version} (build ${build}) was uploaded to TestFlight and submitted for App Review.`,
                   '',
@@ -320,5 +335,11 @@ fn pr_comment() -> Step<Use> {
                   body,
                 });
             "#},
-        ))
+    )
+    .github_token(vars::GITHUB_TOKEN)
+    .step()
+    .add_env(("JOB_STATUS", job_status()))
+    // Not `always()`: a run the drift workflow cancelled must not post
+    // "failed, re-add the label" next to drift's own comment.
+    .if_condition(success().or(failure()))
 }

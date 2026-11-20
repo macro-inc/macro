@@ -8135,6 +8135,7 @@
           "needs_attention",
           "waiting_for_capacity",
           "ready",
+          "unhealthy",
           "starting",
           "stopping",
           "stopped",
@@ -10441,7 +10442,7 @@
           "diskGb": {
             "type": "integer",
             "format": "int32",
-            "description": "Root disk size in GiB.",
+            "description": "Whole disk quota in GiB: root and `/home` together.",
             "minimum": 0
           },
           "memoryGb": {
@@ -10952,6 +10953,7 @@
           "starting",
           "running",
           "paused",
+          "unhealthy",
           "failed",
           "released"
         ]

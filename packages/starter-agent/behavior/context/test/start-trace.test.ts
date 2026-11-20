@@ -131,3 +131,31 @@ test('the start ends while the event loop it began keeps running', async () => {
     'agent.start',
   ]);
 });
+
+test('what ran before the start (loading the code, telemetry) is shown as its first steps', async () => {
+  exporter.reset();
+  const processStart = Date.now() - process.uptime() * 1000;
+  const loaded = processStart + 1_200;
+  const telemetry = loaded + 300;
+
+  await traceStart({}, async () => undefined, [
+    { name: 'agent.start.load', end: loaded },
+    { name: 'agent.start.telemetry', start: loaded, end: telemetry },
+  ]);
+
+  const spans = Object.fromEntries(
+    exporter.getFinishedSpans().map((span) => [span.name, span])
+  );
+  const ms = (time: [number, number] | undefined) =>
+    time === undefined ? 0 : time[0] * 1000 + time[1] / 1e6;
+  const start = spans['agent.start'];
+  const load = spans['agent.start.load'];
+  const setup = spans['agent.start.telemetry'];
+  for (const step of [load, setup])
+    expect(step?.parentSpanContext?.spanId).toBe(start?.spanContext().spanId);
+  // Loading starts with the process, as the start does.
+  expect(Math.abs(ms(load?.startTime) - ms(start?.startTime))).toBeLessThan(50);
+  expect(Math.abs(ms(load?.endTime) - loaded)).toBeLessThan(5);
+  expect(Math.abs(ms(setup?.startTime) - loaded)).toBeLessThan(5);
+  expect(Math.abs(ms(setup?.endTime) - telemetry)).toBeLessThan(5);
+});
