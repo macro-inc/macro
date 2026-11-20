@@ -190,6 +190,18 @@ mod tests {
     }
 
     #[test]
+    fn code_mode_recovers_from_an_unknown_symbol_without_probing_or_choosing_a_scope() {
+        let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(code_mode.contains("every type its options take"));
+        assert!(code_mode.contains("When `ReadCodeDocs` answers a symbol unknown"));
+        assert!(code_mode.contains("never a program that guesses"));
+        assert!(code_mode.contains("Never inspect the SDK at runtime"));
+        assert!(code_mode.contains("`toString()`"));
+        assert!(code_mode.contains("Never choose who can see or own"));
+        assert!(code_mode.contains("say which scope you used"));
+    }
+
+    #[test]
     fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
         let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
         assert!(

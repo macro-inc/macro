@@ -234,7 +234,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "DescribeCodeTools",
-    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
+    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Never guess a method, its arguments or its result's fields. Call it after ReadCodeDocs answers a symbol unknown, for the entity it suggests. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
 )]
 pub struct DescribeCodeTools {
     /// What the next program must do; selects relevant references.
@@ -456,7 +456,7 @@ impl DescribeCodeTools {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "ReadCodeDocs",
-    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way."
+    description = "Read the Macro SDK reference for symbols named in an entity index or another reference: a class (Task), one of its methods (TaskNamespace.create) or a type (CreateReviewOptions). Request every symbol the next program needs together, up to ten. Each reference has the full signature, parameters, option fields and return type; read a result's type before using its fields. Symbols a reference names in backticks can be read the same way. An unknown symbol comes back with the nearest symbols that exist and the entities whose index lists them: read those, never guess."
 )]
 pub struct ReadCodeDocs {
     /// Symbols exactly as an index or reference names them.
