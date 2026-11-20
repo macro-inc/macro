@@ -66,7 +66,9 @@ pub struct ReplaceEdit {
     pub old: String,
     /// Its replacement. Empty deletes it.
     pub new: String,
-    /// Replace every occurrence instead of requiring exactly one.
+    /// Replace every occurrence within blocks instead of requiring exactly
+    /// one. An `old` spanning blocks must still occur once: `replace_all`
+    /// does not apply to matches across blocks.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub replace_all: bool,
 }
@@ -157,7 +159,8 @@ pub enum MarkdownEdit {
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MarkdownEditRequest {
-    /// The edits, applied in order.
+    /// The edits, applied in order: 1 to 200.
+    #[cfg_attr(feature = "axum", schema(min_items = 1, max_items = 200))]
     pub edits: Vec<MarkdownEdit>,
     /// The `revision` the edits were written against. Changes made since
     /// merge with the batch; absent means the current revision.
@@ -256,7 +259,8 @@ pub enum MarkdownEditOutcomeKind {
     /// A dry run: computed and verified, nothing written.
     DryRun,
     /// This request (same document, base revision and batch) committed
-    /// before; nothing was written again.
+    /// before; nothing was written again. `changes` is empty: read the blocks
+    /// again for the ids of blocks the first commit inserted.
     AlreadyApplied,
 }
 
@@ -283,7 +287,8 @@ pub struct MarkdownEdited {
     pub outcome: MarkdownEditOutcomeKind,
     /// The document's revision after the write (the current one otherwise).
     pub revision: String,
-    /// What changed, block by block.
+    /// What changed, block by block; empty for `unchanged` and
+    /// `already_applied` (read the blocks again for inserted ids then).
     pub changes: Vec<MarkdownBlockChange>,
     /// How the batch was placed; absent for `already_applied`.
     #[serde(default, skip_serializing_if = "Option::is_none")]

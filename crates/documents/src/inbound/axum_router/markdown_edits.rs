@@ -162,9 +162,9 @@ pub async fn get_markdown_blocks_handler<
         (status = 401, description = "Authentication required"),
         (status = 403, description = "Document edit access denied"),
         (status = 404, description = "Document not found"),
-        (status = 409, description = "An edit's matched text is gone since the base revision; nothing was written", body = MarkdownEditFailure),
+        (status = 409, description = "Nothing was written. `conflict: changed`: an edit no longer applies to the document as it is now; read the blocks again and redo it. `conflict: busy`: others kept editing while it committed; retry the same batch as is", body = MarkdownEditFailure),
         (status = 422, description = "The batch was refused; nothing was written", body = MarkdownEditFailure),
-        (status = 502, description = "The edit failed and may have applied", body = MarkdownEditFailure)
+        (status = 502, description = "The edit failed and may have applied. A batch with `baseRevision` is safe to resend (it answers `already_applied` if it committed); one without it is not: read the blocks first, or its inserts may land twice", body = MarkdownEditFailure)
     )
 )]
 pub async fn edit_markdown_handler<

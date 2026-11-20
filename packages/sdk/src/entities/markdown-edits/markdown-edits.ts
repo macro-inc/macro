@@ -96,7 +96,10 @@ export type MarkdownEditOperation =
       with: string;
       /** Only look in this block. */
       in?: DocumentBlock;
-      /** Replace every occurrence instead of requiring exactly one. */
+      /**
+       * Replace every occurrence within blocks instead of requiring exactly
+       * one; a `replace` spanning blocks must still occur once.
+       */
       all?: boolean;
     }
   | {
@@ -134,7 +137,9 @@ export interface MarkdownEditOptions {
    * The `markdownBlocks()` read the edits were written against. Edits made
    * since merge with yours, and repeating the call is safe: a batch that
    * already committed at this base is not applied again. Without it, edits
-   * apply to the document as it is now and every call writes.
+   * apply to the document as it is now and every call writes: after an
+   * `EditOutcomeUnknownError`, read the blocks before resending, or inserts
+   * may land twice.
    */
   base?: DocumentBlocks;
   /** Check the edits and return the changes they would make; write nothing. */
@@ -181,7 +186,8 @@ export interface MarkdownEditResult {
   /**
    * `committed`, `unchanged` (it already read that way), `dry_run`, or
    * `already_applied` (this same batch at this same `base` committed before,
-   * so a retry wrote nothing).
+   * so a retry wrote nothing; `changes` is then empty, so read the blocks
+   * again for the ids of blocks it inserted).
    */
   outcome: 'committed' | 'unchanged' | 'dry_run' | 'already_applied';
   /** The document's revision after the write (the current one otherwise). */
