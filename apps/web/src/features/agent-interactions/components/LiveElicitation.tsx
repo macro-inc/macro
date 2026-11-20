@@ -394,6 +394,7 @@ export function parseDraftedTool(
   return undefined;
 }
 
+// The tools `UserToolComposer` opens; keep this in step with its `Switch`.
 const composedTools = new Set([
   'CreateBookingLink',
   'EditBookingLink',
