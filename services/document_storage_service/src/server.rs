@@ -1166,6 +1166,12 @@ async fn run_server() -> anyhow::Result<()> {
             ),
             webhook_http_client.clone(),
         );
+    consumer_tracker.spawn(crate::mcp_subscription_sweep::run(
+        webhook::domain::mcp::service::McpSubscriptionSweeper::new(
+            mcp_subscription_repository.clone(),
+        ),
+        consumer_cancellation_token.clone(),
+    ));
 
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
