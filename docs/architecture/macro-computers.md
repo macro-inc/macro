@@ -34,7 +34,9 @@ Their isolation and threat model is in
 - The team sees `ComputerStatusKind::Unhealthy` for a computer past its
   first connection that is `Running` with macrod missing at one or more
   `MACROD_GRACE` checks (`macrod_misses >= 1`, so a reconnect flap stays
-  Ready), or `Crashed` with a restart scheduled. Before the first
+  Ready; never while hibernated), `Crashed` with a restart scheduled, or
+  `Booting` again after a crash inside `CRASH_WINDOW` or with a missed check
+  (a power-on, move or retry boot reads Starting). Before the first
   connection the same states read as setting up; only a give-up reads Failed.
 - Effects run in workers keyed by outbox id: `Billing` effects where Stripe lives
   (authentication_service), `Fleet` effects and timers in agent_harness_service.

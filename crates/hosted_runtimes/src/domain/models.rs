@@ -830,7 +830,9 @@ impl Computer {
         };
         // Before the first connection the same signs are setup still going.
         // A missed check, not the disconnect itself, so a reconnect flap
-        // stays ready; a hibernated guest is asleep, not missing.
+        // stays ready; a hibernated guest is asleep, not missing. Crashes
+        // count inside the lifecycle's own window: the list is pruned only on
+        // the next crash.
         let unhealthy = self.enrolled_at.is_some()
             && match self.state.phase {
                 Phase::Running => {
@@ -839,8 +841,18 @@ impl Computer {
                         && self.state.macrod_misses >= 1
                 }
                 Phase::Crashed { retry: Some(_), .. } => true,
+                // Restarting after a crash, or a boot whose macrod has
+                // already missed a check. A power-on, a move or a retry
+                // boots with no recent crash and no miss, and reads Starting.
+                Phase::Booting => {
+                    self.state.macrod_misses >= 1
+                        || self
+                            .state
+                            .recent_crashes
+                            .iter()
+                            .any(|at| now - *at < crate::domain::lifecycle::CRASH_WINDOW)
+                }
                 Phase::Provisioning { .. }
-                | Phase::Booting
                 | Phase::Crashed { retry: None, .. }
                 | Phase::Stopping
                 | Phase::Stopped

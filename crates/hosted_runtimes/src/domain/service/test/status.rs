@@ -109,3 +109,47 @@ fn a_hibernated_computer_without_macrod_reads_ready_where_an_awake_one_is_unheal
         ComputerStatusKind::Ready
     );
 }
+
+fn booting_with(recent_crashes: Vec<DateTime<Utc>>, macrod_misses: u8) -> ComputerStatusKind {
+    let mut computer = computer(
+        ComputerId::new_from_uuid(Uuid::from_u128(7)),
+        Phase::Booting,
+        BillingState::Comped {
+            reason: "test".to_owned(),
+        },
+    );
+    computer.state.recent_crashes = recent_crashes;
+    computer.state.macrod_misses = macrod_misses;
+    computer.status(0, now(), policy()).status
+}
+
+/// The restart a crash schedules boots the guest again: still unhealthy
+/// until macrod connects, not Starting (which the agent shows as Paused).
+#[test]
+fn a_computer_booting_again_after_a_crash_reads_unhealthy() {
+    assert_eq!(
+        booting_with(vec![now() - chrono::Duration::minutes(1)], 0),
+        ComputerStatusKind::Unhealthy
+    );
+}
+
+/// A boot whose macrod never dials only counts misses: it reads unhealthy
+/// from the first one instead of Starting forever.
+#[test]
+fn a_boot_whose_macrod_missed_a_check_reads_unhealthy() {
+    assert_eq!(booting_with(vec![], 1), ComputerStatusKind::Unhealthy);
+}
+
+/// A power-on (or a move or a retry) boots with no recent crash and no miss.
+/// A crash older than the crash window no longer counts.
+#[test]
+fn a_computer_booting_after_a_power_on_reads_starting() {
+    assert_eq!(booting_with(vec![], 0), ComputerStatusKind::Starting);
+    assert_eq!(
+        booting_with(
+            vec![now() - crate::domain::lifecycle::CRASH_WINDOW - chrono::Duration::minutes(1)],
+            0
+        ),
+        ComputerStatusKind::Starting
+    );
+}
