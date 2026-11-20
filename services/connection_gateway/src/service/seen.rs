@@ -121,7 +121,11 @@ async fn flush<L: SeenLog>(
         skipped,
         otel.status_code = tracing::field::Empty,
     );
-    match log.record_seen(&due, Utc::now()).instrument(span.clone()).await {
+    match log
+        .record_seen(&due, Utc::now())
+        .instrument(span.clone())
+        .await
+    {
         Ok(()) => written.extend(due.into_iter().map(|user| (user, now))),
         Err(error) => {
             span.record("otel.status_code", "ERROR");

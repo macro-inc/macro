@@ -103,7 +103,10 @@ async fn recording_keeps_the_latest_visit_and_passes_over_unknown_ids(pool: PgPo
         .unwrap();
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].user_id, ADA);
-    assert_eq!(rows[0].seen_at.timestamp_micros(), latest.timestamp_micros());
+    assert_eq!(
+        rows[0].seen_at.timestamp_micros(),
+        latest.timestamp_micros()
+    );
     repo.record_seen(&[], latest).await.unwrap();
 }
 
@@ -134,20 +137,13 @@ async fn work_an_agent_does_for_a_person_does_not_make_them_active(pool: PgPool)
     let bot = Actor::new_from_bot(bot_id::BotId::new_from_uuid(Uuid::from_u128(0xB07)));
 
     // A bot of Ada's edits for her: the row is hers, its actor the bot's.
-    let delegated = on_a_document(
-        1,
-        bot,
-        Some(ADA),
-        CommonAction::Edited,
-        yesterday,
-    );
+    let delegated = on_a_document(1, bot, Some(ADA), CommonAction::Edited, yesterday);
     assert_eq!(delegated.subject_id, ADA);
     // A code-mode run under Ada's own identity: her actor, with the run's
     // correlation.
-    let correlated = agent_correlation::context::scope(Some(Uuid::now_v7()), async {
-        ada_edits(2, yesterday)
-    })
-    .await;
+    let correlated =
+        agent_correlation::context::scope(Some(Uuid::now_v7()), async { ada_edits(2, yesterday) })
+            .await;
     assert!(correlated.agent_correlation_id.is_some());
     repo.insert_activities(&[delegated, correlated])
         .await

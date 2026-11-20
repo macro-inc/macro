@@ -32,7 +32,9 @@ impl SeenLog for FakeLog {
         let _ = self.writes.send(ids);
         let failed = self
             .failures
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| left.checked_sub(1))
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                left.checked_sub(1)
+            })
             .is_ok();
         if failed {
             return Err(std::io::Error::other("database unavailable"));
