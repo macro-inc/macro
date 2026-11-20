@@ -99,12 +99,11 @@ Properties, Lists and Email sharing follow, with no duplicate visibility toggle.
 Contact headers and Record details share `ContactEmailField` and
 `ContactCompanyField`. The email field lists every address as a Tasks-style
 pill, primary first; each pill opens Make primary and Remove, and a trailing
-control adds another. The company pill links or switches only for a
-personal-provider primary with no address on the company's domain, and offers
-Remove company whenever no address is on the company's domain
-(`companyDomain === false`), behind the shared confirmation dialog, which
-adds that the link cannot be recreated when the primary is not a
-personal-provider address. The single address in `companyDomainEmails`
+control adds another. The company pill offers Add company to any contact
+without a company, switches only for a personal-provider primary with no
+address on the company's domain, and offers Remove company whenever no address
+is on the company's domain (`companyDomain === false`), behind the shared
+confirmation dialog. The single address in `companyDomainEmails`
 shows no Remove, and a company-domain contact keeps a read-only company value
 with its reason in a tooltip. These fields come only from the REST contact
 detail; a response without `emails` or `companyDomain` stays read-only.
