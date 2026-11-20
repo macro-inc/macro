@@ -71,3 +71,12 @@ query ChannelDirectoryPage($input: SoupInput!) {
 		}
 	}
 }
+
+# The viewer's DM with one person, the one a first message to them would reuse.
+# Asking never creates one.
+query DirectMessageChannelId($userId: ID!) {
+	user {
+		id
+		directMessageChannelId(userId: $userId)
+	}
+}

@@ -20,7 +20,7 @@ import { dismissBootShell } from '@components/app/boot-shell';
 import { RootFrame } from '@components/app/Layout';
 import { useSessionWebsockets } from '@core/auth/session-websockets';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ChannelsContextProvider } from '@core/context/channels';
+import { ChannelDirectoryProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { UserContextProvider, useUserInfo } from '@core/context/user';
@@ -236,7 +236,7 @@ export function Root() {
                   <IosPushNotificationModal />
                   <IpadUnsupportedDialog />
                   <GlobalShareInboxConflictDialog />
-                  <ChannelsContextProvider>
+                  <ChannelDirectoryProvider>
                     <CallProvider>
                       <CallKitSync />
                       <CallStartedNotifier />
@@ -262,7 +262,7 @@ export function Root() {
                         <ToastRegion />
                       </QuickAccessProvider>
                     </CallProvider>
-                  </ChannelsContextProvider>
+                  </ChannelDirectoryProvider>
                 </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>

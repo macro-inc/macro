@@ -84,8 +84,8 @@ type IndexEntry = { sourceHash: string; channel: DirectoryChannel | null };
 export type ChannelDirectoryRead = {
   /** Every complete channel record, the same object while it is unchanged. */
   channels: DirectoryChannel[];
-  /** Records the search lists that lack a directory field. */
-  incomplete: number;
+  /** Ids of the records the search lists that lack a directory field. */
+  incompleteIds: string[];
   /** Records read this time: new or changed since the last refresh. */
   reread: number;
 };
@@ -144,12 +144,12 @@ export function createChannelDirectoryIndex(
       entries = next;
 
       const channels: DirectoryChannel[] = [];
-      let incomplete = 0;
-      for (const entry of entries.values()) {
+      const incompleteIds: string[] = [];
+      for (const [recordKey, entry] of entries) {
         if (entry.channel) channels.push(entry.channel);
-        else incomplete += 1;
+        else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
       }
-      return { channels, incomplete, reread: read.size };
+      return { channels, incompleteIds, reread: read.size };
     },
   };
 }

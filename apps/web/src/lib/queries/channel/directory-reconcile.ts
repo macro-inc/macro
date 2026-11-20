@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -23,10 +22,6 @@ import {
   CHANNEL_RECORD_PREFIX,
   listCachedChannelDocuments,
 } from './directory-cache';
-import {
-  type ShadowScope,
-  shadowCompareChannelDirectory,
-} from './directory-shadow';
 
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
@@ -64,7 +59,7 @@ function chunks<T>(items: readonly T[], size: number): T[][] {
  * by-id rule, which a filter naming only channel ids and both
  * participation states selects.
  */
-function readableChannelsInput(
+export function readableChannelsInput(
   lane: GraphqlSoupInitialInput,
   ids: readonly string[]
 ): GraphqlSoupInput {
@@ -212,17 +207,11 @@ async function readReconcileScope(
  * return is read again by id; the ones the server no longer returns are
  * deleted from the cache. A resumed, failed or cancelled pass, or a cache
  * that belongs to another viewer, deletes nothing.
- *
- * Once a pass has been reconciled, `onReconciled` compares the cache with
- * the REST channel list in the background (the shadow comparison).
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
-  fetch: FetchPage = fetchDirectoryPage,
-  onReconciled: (
-    scope: ShadowScope
-  ) => Promise<void> = shadowCompareChannelDirectory
+  fetch: FetchPage = fetchDirectoryPage
 ): Promise<FetchPage> {
   const scope = await readReconcileScope(host, userId);
   const seen = new Set<string>();
@@ -244,10 +233,9 @@ export async function createChannelDirectoryBackfillFetcher(
 
     if (page.nextCursor === null && completeEvidence && lane && scope) {
       const candidates = scope.previous.filter((id) => !seen.has(id));
-      let outcome: ReconcileOutcome | 'failed' = 'complete';
       if (candidates.length > 0) {
         try {
-          outcome = await removeUnreadableChannels({
+          await removeUnreadableChannels({
             host: scope.host,
             userId,
             generation: scope.generation,
@@ -260,20 +248,8 @@ export async function createChannelDirectoryBackfillFetcher(
           options?.signal?.throwIfAborted();
           // Stale records stay until the next pass; the page itself landed.
           Telemetry.error(error, { surface: 'channel-directory-reconcile' });
-          outcome = 'failed';
         }
       }
-      // Compare only a cache the pass both filled and cleaned, without
-      // holding the page back for it.
-      if (outcome === 'complete')
-        fireAndForget(
-          onReconciled({
-            host: scope.host,
-            userId,
-            generation: scope.generation,
-          }),
-          'channel-directory-shadow'
-        );
     }
     return page;
   };

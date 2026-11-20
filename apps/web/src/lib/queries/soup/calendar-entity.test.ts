@@ -16,7 +16,7 @@ vi.mock('@core/constant/allBlocks', () => ({
   blockNameToDefaultFile: {},
   itemToSafeName: vi.fn(),
 }));
-vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
+vi.mock('@core/context/channels', () => ({ useChannelDirectory: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
 vi.mock('@service-storage/websocket', () => ({
   storageWS: { reconnectIfDisconnected: vi.fn() },

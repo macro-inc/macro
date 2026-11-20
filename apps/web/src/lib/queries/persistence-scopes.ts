@@ -15,7 +15,11 @@ export function shouldPersistChannelQuery(queryKey: QueryKey): boolean {
   if (partialMatchKey(queryKey, channelKeys.mentions._def)) return true;
   // Legacy unscoped payloads and disabled (unknown-account) queries cannot
   // establish ownership, so neither is eligible for persistence.
-  return [channelKeys.activity._def, channelKeys.listChannels._def].some(
+  return [
+    channelKeys.activity._def,
+    channelKeys.listChannels._def,
+    channelKeys.directory._def,
+  ].some(
     (prefix) =>
       partialMatchKey(queryKey, prefix) &&
       queryKey.length === prefix.length + 1 &&

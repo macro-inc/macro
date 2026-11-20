@@ -3,6 +3,7 @@
  * list. Pure: no app imports, so a script can run the same comparison.
  */
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
+import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
 import type { ChannelDirectoryFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { match } from 'ts-pattern';
 
@@ -169,7 +170,7 @@ export type DirectoryDifference = {
 };
 
 // REST lists a bot among the participants under this prefix.
-const BOT_PRINCIPAL_PREFIX = 'bot|';
+export const BOT_PRINCIPAL_PREFIX = 'bot|';
 
 function sameInstant(
   left: string | null | undefined,
@@ -341,4 +342,79 @@ export function countDirectoryDifferences(
   const counts: Partial<Record<DirectoryDifferenceKind, number>> = {};
   for (const { kind } of differences) counts[kind] = (counts[kind] ?? 0) + 1;
   return counts;
+}
+
+function channelMessage(value: DirectoryMessage | null): ChannelMessage | null {
+  if (!value) return null;
+  return {
+    message_id: value.messageId,
+    thread_id: value.threadId,
+    sender_id: value.senderId,
+    content: value.content,
+    created_at: value.createdAt,
+    updated_at: value.updatedAt,
+    deleted_at: value.deletedAt,
+    mentions: value.mentions,
+  };
+}
+
+const channelListItems = new WeakMap<DirectoryChannel, ApiChannelWithLatest>();
+
+/**
+ * A directory record in the channel list's shape, for readers written
+ * against it (recipients, mentions, channel entities). Bots join the
+ * participants as `bot|<id>`, as the list sent them. One record always maps
+ * to the same object, so a list rebuilt from unchanged records keeps its
+ * items.
+ */
+export function toChannelListItem(
+  channel: DirectoryChannel
+): ApiChannelWithLatest {
+  const cached = channelListItems.get(channel);
+  if (cached) return cached;
+  const item: ApiChannelWithLatest = {
+    id: channel.id,
+    name: channel.name,
+    channel_type: channel.channelType,
+    owner_id: channel.ownerId,
+    org_id:
+      channel.organizationId === null ? null : Number(channel.organizationId),
+    team_id: channel.teamId,
+    auto_join_team: channel.autoJoinTeam,
+    created_at: channel.createdAt,
+    updated_at: channel.updatedAt,
+    viewed_at: channel.viewedAt,
+    interacted_at: channel.interactedAt,
+    is_participant: channel.isParticipant,
+    frecency_score: channel.frecencyScore,
+    participants: [
+      ...channel.participants.map((participant) => ({
+        channel_id: channel.id,
+        user_id: participant.userId,
+        role: participant.role,
+        joined_at: participant.joinedAt,
+        left_at: participant.leftAt,
+      })),
+      ...channel.botParticipants.map((participant) => ({
+        channel_id: channel.id,
+        user_id: `${BOT_PRINCIPAL_PREFIX}${participant.botId}`,
+        role: participant.role,
+        joined_at: participant.joinedAt,
+        left_at: participant.leftAt,
+      })),
+    ],
+    ...(channel.agentDm
+      ? {
+          agent_dm: {
+            bot_id: channel.agentDm.botId,
+            name: channel.agentDm.name,
+            avatar_url: channel.agentDm.avatarUrl,
+          },
+        }
+      : {}),
+    latest_message: channelMessage(channel.latestMessage),
+    latest_non_thread_message: channelMessage(channel.latestNonThreadMessage),
+  };
+  channelListItems.set(channel, item);
+  return item;
 }

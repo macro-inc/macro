@@ -2,7 +2,7 @@ import {
   blockNameToDefaultFile,
   itemToSafeName,
 } from '@core/constant/allBlocks';
-import { useChannelsContext } from '@core/context/channels';
+import { useChannelDirectory } from '@core/context/channels';
 import { emailToId } from '@core/user';
 import {
   extractSearchSnippet,
@@ -35,6 +35,7 @@ import type {
   WithSearch,
 } from '@entity';
 import { type GithubPullRequestLabel, toSubType } from '@entity/types/entity';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -330,18 +331,29 @@ export function mapChannelSearchResultItem(
 const formatDisplayName = (text: string, fileType?: string | null) =>
   formatDocumentName(text, fileType, { fullyQualifiedBlockName: true });
 
+type SearchChannelMetadata = {
+  id: string;
+  name?: string | null;
+  team_id?: string | null;
+};
+
+/** What a search result mapper reads of each joined channel. */
+export const channelSearchMetadata = (
+  channels: readonly DirectoryChannel[]
+): SearchChannelMetadata[] =>
+  channels.map(({ id, name, teamId }) => ({ id, name, team_id: teamId }));
+
 export const useSearchResponseItemMapper = () => {
-  const { channels } = useChannelsContext();
+  const { channels } = useChannelDirectory();
   return (result: UnifiedSearchResponseItem, searchQuery: string) =>
-    createSearchResponseItemMapper(channels())(result, searchQuery);
+    createSearchResponseItemMapper(channelSearchMetadata(channels()))(
+      result,
+      searchQuery
+    );
 };
 
 export const createSearchResponseItemMapper = (
-  channels: ReadonlyArray<{
-    id: string;
-    name?: string | null;
-    team_id?: string | null;
-  }>
+  channels: ReadonlyArray<SearchChannelMetadata>
 ) => {
   return (
     result: UnifiedSearchResponseItem,

@@ -2,127 +2,177 @@
  * @vitest-environment jsdom
  */
 
+import {
+  type ChannelDirectory,
+  channelDirectoryState,
+  lookupChannel,
+} from '@queries/channel/directory';
+import type { DirectoryChannel } from '@queries/channel/directory-core';
+import {
+  directoryChannel,
+  directoryParticipant,
+} from '@queries/channel/tests/directory-channel';
 import { cleanup, render } from '@solidjs/testing-library';
-import { createStore, unwrap } from 'solid-js/store';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ channels: vi.fn() }));
-vi.mock('@queries/channel/channels', () => ({
-  useListChannelsQuery: mocks.channels,
-}));
-vi.mock('@queries/channel/activity', () => ({
-  useChannelsActivityQuery: () => ({
-    isPending: false,
-    isLoading: false,
-    data: [],
-  }),
-}));
+const viewer = vi.hoisted(() => ({ id: 'viewer' as string | undefined }));
 vi.mock('./user', () => ({
-  useUserId: () => () => undefined,
+  useUserId: () => () => viewer.id,
   useIsAuthenticated: () => () => true,
 }));
 
 import {
-  ChannelsContextProvider,
+  ChannelDirectoryProvider,
+  directMessagePeer,
+  useChannel,
   useChannelCanCall,
-  useChannelsContext,
+  useDmActivityByUserId,
 } from './channels';
 
 afterEach(() => {
   cleanup();
-  vi.clearAllMocks();
+  viewer.id = 'viewer';
 });
+
+/** A directory that fills when the test says so. */
+function fillingDirectory() {
+  const [channels, setChannels] = createSignal<readonly DirectoryChannel[]>([]);
+  const [complete, setComplete] = createSignal(false);
+  const state = () => channelDirectoryState(channels(), [], complete());
+  const directory: ChannelDirectory = {
+    channels: () => state().joined,
+    complete,
+    lookup: (channelId) => lookupChannel(state(), {}, channelId),
+    readComplete: async () => state().joined,
+    failed: () => false,
+    retry: () => {},
+  };
+  return {
+    directory,
+    fill(next: readonly DirectoryChannel[]) {
+      setChannels(next);
+      setComplete(true);
+    },
+    setChannels,
+  };
+}
 
 function CanCall(props: { channelId: string }) {
   const canCall = useChannelCanCall(props.channelId);
   return <output>{String(canCall())}</output>;
 }
 
-function setup(channelId: string) {
-  const [list, setList] = createStore({
-    loading: true,
-    channels: [] as { id: string; agent_dm?: { bot_id: string } }[],
-  });
-  mocks.channels.mockReturnValue({
-    get isPending() {
-      return list.loading;
-    },
-    get isLoading() {
-      return list.loading;
-    },
-    get data() {
-      if (list.loading) throw new Error('Pending data must not be read');
-      return list.channels;
-    },
-  });
+function setupCanCall(channelId: string) {
+  const filling = fillingDirectory();
   const view = render(() => (
-    <ChannelsContextProvider>
+    <ChannelDirectoryProvider directory={filling.directory}>
       <CanCall channelId={channelId} />
-    </ChannelsContextProvider>
+    </ChannelDirectoryProvider>
   ));
-  return { setList, value: () => view.getByRole('status').textContent };
+  return { ...filling, value: () => view.getByRole('status').textContent };
 }
 
 describe('useChannelCanCall', () => {
-  it('waits for the channel list, then refuses an agent DM', () => {
-    const { setList, value } = setup('dm');
+  it('waits for the directory, then refuses an agent DM', () => {
+    const { fill, value } = setupCanCall('dm');
     expect(value()).toBe('undefined');
-    setList({
-      loading: false,
-      channels: [{ id: 'dm', agent_dm: { bot_id: 'bot' } }],
-    });
+    fill([
+      directoryChannel('dm', {
+        channelType: 'direct_message',
+        agentDm: { botId: 'bot', name: 'Agent', avatarUrl: null },
+      }),
+    ]);
     expect(value()).toBe('false');
   });
 
-  it('allows a listed channel that is not an agent DM', () => {
-    const { setList, value } = setup('team');
-    setList({ loading: false, channels: [{ id: 'team' }] });
+  it('allows a joined channel that is not an agent DM', () => {
+    const { fill, value } = setupCanCall('team');
+    fill([directoryChannel('team', { channelType: 'team' })]);
     expect(value()).toBe('true');
   });
 
-  it('allows a channel the loaded list does not have', () => {
-    const { setList, value } = setup('public');
-    setList({ loading: false, channels: [{ id: 'other' }] });
+  it('allows a channel the complete directory does not have', () => {
+    const { fill, value } = setupCanCall('public');
+    fill([directoryChannel('other')]);
+    expect(value()).toBe('true');
+  });
+
+  it('answers for a channel a partial directory already holds', () => {
+    const { setChannels, value } = setupCanCall('team');
+    setChannels([directoryChannel('team')]);
     expect(value()).toBe('true');
   });
 });
 
-describe('useChannelsContext', () => {
-  function setupList() {
-    const [list, setList] = createStore({
-      channels: [{ id: 'first', participants: [{ user_id: 'a' }] }],
-    });
-    mocks.channels.mockReturnValue({
-      isPending: false,
-      isLoading: false,
-      get data() {
-        return list.channels;
-      },
-    });
-    let context!: ReturnType<typeof useChannelsContext>;
+describe('useChannel', () => {
+  it('follows a channel as the directory changes it, and drops one the viewer left', () => {
+    const filling = fillingDirectory();
+    let channel!: () => DirectoryChannel | undefined;
     render(() => (
-      <ChannelsContextProvider>
+      <ChannelDirectoryProvider directory={filling.directory}>
         {(() => {
-          context = useChannelsContext();
+          channel = useChannel('first');
           return null;
         })()}
-      </ChannelsContextProvider>
+      </ChannelDirectoryProvider>
     ));
-    return { context, setList };
-  }
+    expect(channel()).toBeUndefined();
+    filling.fill([directoryChannel('first', { name: 'First' })]);
+    expect(channel()?.name).toBe('First');
+    filling.fill([directoryChannel('first', { name: 'Renamed' })]);
+    expect(channel()?.name).toBe('Renamed');
+    filling.fill([directoryChannel('first', { isParticipant: false })]);
+    expect(channel()).toBeUndefined();
+  });
+});
 
-  it('hands readers raw rows, not store proxies', () => {
-    const { context } = setupList();
-    const channel = context.channels()[0];
-    expect(unwrap(channel)).toBe(channel);
-    expect(unwrap(channel.participants)).toBe(channel.participants);
-    expect(unwrap(context.channelsById().first)).toBe(channel);
+describe('direct message peers', () => {
+  const dm = (id: string, userIds: string[], updatedAt: string) =>
+    directoryChannel(id, {
+      channelType: 'direct_message',
+      updatedAt,
+      participants: userIds.map((userId) => directoryParticipant(userId)),
+    });
+
+  it('names the other person, else the bot', () => {
+    expect(directMessagePeer(dm('a', ['viewer', 'peer'], ''), 'viewer')).toBe(
+      'peer'
+    );
+    expect(
+      directMessagePeer(
+        directoryChannel('agent', {
+          channelType: 'direct_message',
+          participants: [directoryParticipant('viewer')],
+          botParticipants: [
+            {
+              botId: 'bot-1',
+              role: 'member',
+              joinedAt: '2026-11-01T00:00:00+00:00',
+              leftAt: null,
+            },
+          ],
+        }),
+        'viewer'
+      )
+    ).toBe('bot|bot-1');
   });
 
-  it('follows a replaced channel list', () => {
-    const { context, setList } = setupList();
-    setList('channels', [{ id: 'second', participants: [] }]);
-    expect(context.channels().map((channel) => channel.id)).toEqual(['second']);
-    expect(Object.keys(context.channelsById())).toEqual(['second']);
+  it('dates each peer by their DM and skips other channels', () => {
+    const filling = fillingDirectory();
+    let activity!: ReturnType<typeof useDmActivityByUserId>;
+    render(() => (
+      <ChannelDirectoryProvider directory={filling.directory}>
+        {(() => {
+          activity = useDmActivityByUserId();
+          return null;
+        })()}
+      </ChannelDirectoryProvider>
+    ));
+    filling.fill([
+      dm('a', ['viewer', 'peer'], '2026-11-02T00:00:00+00:00'),
+      directoryChannel('group', { updatedAt: '2026-11-03T00:00:00+00:00' }),
+    ]);
+    expect([...activity()]).toEqual([['peer', '2026-11-02T00:00:00+00:00']]);
   });
 });

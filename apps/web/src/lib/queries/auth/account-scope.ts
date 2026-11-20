@@ -14,6 +14,7 @@ import { authKeys } from './keys';
 
 const ACCOUNT_SOURCE_PREFIXES = [
   channelKeys.listChannels._def,
+  channelKeys.directory._def,
   channelKeys.activity._def,
   channelKeys.quickAccessGraphql._def,
   emailKeys.links._def,

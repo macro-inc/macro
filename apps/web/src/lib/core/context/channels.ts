@@ -1,101 +1,101 @@
 import type { DateValue } from '@core/util/date';
-import { useChannelsActivityQuery } from '@queries/channel/activity';
-import { useListChannelsQuery } from '@queries/channel/channels';
-import { queryReadyGate } from '@queries/gate';
-import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
-import { ChannelTypeEnum } from '@service-storage/client';
-import type { ApiActivity as ChannelsActivity } from '@service-storage/generated/schemas/apiActivity';
+import {
+  type ChannelDirectory,
+  type ChannelLookup,
+  createAppChannelDirectory,
+  sameChannelLookup,
+} from '@queries/channel/directory';
+import {
+  BOT_PRINCIPAL_PREFIX,
+  type DirectoryChannel,
+  type DirectoryChannelType,
+} from '@queries/channel/directory-core';
 import { type Accessor, createMemo } from 'solid-js';
-import { unwrap } from 'solid-js/store';
 import { createAssertedContextProvider } from './createContext';
-import { useIsAuthenticated, useUserId } from './user';
+import { useUserId } from './user';
 
-type ChannelsContextValue = {
-  channels: Accessor<ApiChannelWithLatest[]>;
-  activity: Accessor<ChannelsActivity[]>;
-  channelsById: Accessor<Record<string, ApiChannelWithLatest>>;
-  activityByChannelId: Accessor<Record<string, ChannelsActivity>>;
-  isLoading: Accessor<boolean>;
-  error: Accessor<Error | null>;
+export type { ChannelDirectory, ChannelLookup, DirectoryChannel };
+
+type ChannelDirectoryProviderProps = {
+  /** A directory to provide instead of the app's, for tests and fixtures. */
+  directory?: ChannelDirectory;
 };
 
-export const [ChannelsContextProvider, useChannelsContext] =
-  createAssertedContextProvider('ChannelsContext', (): ChannelsContextValue => {
-    const authenticated = useIsAuthenticated();
-    const enabled = () => authenticated() === true;
-    const channelsQuery = useListChannelsQuery(enabled);
-    const activityQuery = useChannelsActivityQuery(enabled);
+/**
+ * The viewer's channels for the app: one directory, read from the GraphQL
+ * cache (or the network without one), shared by every reader under it.
+ */
+export const [ChannelDirectoryProvider, useChannelDirectory] =
+  createAssertedContextProvider(
+    'ChannelDirectory',
+    (props: ChannelDirectoryProviderProps): ChannelDirectory =>
+      props.directory ?? createAppChannelDirectory()
+  );
 
-    // Raw rows: walking them through the store creates a signal per field.
-    const channels = () =>
-      enabled() && queryReadyGate(channelsQuery)
-        ? unwrap(channelsQuery.data)
-        : [];
-    const activity = () =>
-      enabled() && queryReadyGate(activityQuery) ? activityQuery.data : [];
-
-    const channelsById = createMemo(() =>
-      channels().reduce<Record<string, ApiChannelWithLatest>>((acc, ch) => {
-        acc[ch.id] = ch;
-        return acc;
-      }, {})
-    );
-
-    const activityByChannelId = createMemo(() => {
-      if (!enabled() || !queryReadyGate(activityQuery)) return {};
-      return activityQuery.data.reduce<Record<string, ChannelsActivity>>(
-        (acc, a) => {
-          acc[a.channel_id] = a;
-          return acc;
-        },
-        {}
-      );
-    });
-
-    return {
-      channels,
-      activity,
-      channelsById,
-      activityByChannelId,
-      isLoading: () => channelsQuery.isLoading || activityQuery.isLoading,
-      error: () => channelsQuery.error ?? activityQuery.error ?? null,
-    };
+/** One channel the viewer joined: `pending` while a cold directory cannot
+ * tell yet, `missing` when it is not one of theirs. */
+export function useChannelLookup(
+  channelId: string | Accessor<string>
+): Accessor<ChannelLookup> {
+  const directory = useChannelDirectory();
+  const id = typeof channelId === 'string' ? () => channelId : channelId;
+  return createMemo(() => directory.lookup(id()), undefined, {
+    equals: sameChannelLookup,
   });
+}
 
-export function useChannel(channelId: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]);
+/** The joined channel a lookup found, undefined while pending or missing. */
+export function loadedChannel(
+  lookup: ChannelLookup
+): DirectoryChannel | undefined {
+  return lookup.status === 'loaded' ? lookup.channel : undefined;
+}
+
+/** A channel the viewer joined, undefined while pending or missing. */
+export function useChannel(
+  channelId: string | Accessor<string>
+): Accessor<DirectoryChannel | undefined> {
+  const lookup = useChannelLookup(channelId);
+  return createMemo(() => loadedChannel(lookup()));
 }
 
 /**
- * Whether a channel can host a call: unknown while the channel list first
- * loads, and never in an agent DM. A channel the loaded list lacks is not
- * one of the user's agent DMs, so it can, as before agent DMs existed.
+ * Whether a channel can host a call: unknown while the directory cannot tell,
+ * and never in an agent DM. A channel the viewer has not joined is not one of
+ * their agent DMs, so it can, as before agent DMs existed.
  */
 export function useChannelCanCall(
   channelId: string
 ): Accessor<boolean | undefined> {
-  const ctx = useChannelsContext();
+  const lookup = useChannelLookup(channelId);
   return createMemo(() => {
-    const channel = ctx.channelsById()[channelId];
-    if (channel) return !channel.agent_dm;
-    return ctx.isLoading() ? undefined : true;
+    const result = lookup();
+    if (result.status === 'loaded') return !result.channel.agentDm;
+    return result.status === 'pending' ? undefined : true;
   });
 }
 
 export function useChannelName(channelId: string, fallback?: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]?.name ?? fallback);
+  const channel = useChannel(channelId);
+  return createMemo(() => channel()?.name ?? fallback);
 }
 
-export function useChannelType(channelId: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.channelsById()[channelId]?.channel_type);
+export function useChannelType(
+  channelId: string
+): Accessor<DirectoryChannelType | undefined> {
+  const channel = useChannel(channelId);
+  return createMemo(() => channel()?.channelType);
 }
 
-export function useChannelActivity(channelId: string) {
-  const ctx = useChannelsContext();
-  return createMemo(() => ctx.activityByChannelId()[channelId]);
+/** The person (or `bot|` principal) a DM is with, from the viewer's side. */
+export function directMessagePeer(
+  channel: DirectoryChannel,
+  viewerId: string | undefined
+): string | undefined {
+  const person = channel.participants.find(({ userId }) => userId !== viewerId);
+  if (person) return person.userId;
+  const bot = channel.botParticipants[0];
+  return bot ? `${BOT_PRINCIPAL_PREFIX}${bot.botId}` : undefined;
 }
 
 /**
@@ -104,27 +104,19 @@ export function useChannelActivity(channelId: string) {
  * interaction.
  */
 export function useDmActivityByUserId(): Accessor<Map<string, DateValue>> {
-  const { channels } = useChannelsContext();
+  const { channels } = useChannelDirectory();
   const currentUserId = useUserId();
 
   return createMemo(() => {
     const currentUser = currentUserId();
     if (!currentUser) return new Map();
 
-    const allChannels = channels();
     const map = new Map<string, DateValue>();
-
-    for (const channel of allChannels) {
-      if (channel.channel_type !== ChannelTypeEnum.DirectMessage) continue;
-
-      const otherParticipant = channel.participants.find(
-        (p) => p.user_id !== currentUser
-      );
-      if (!otherParticipant) continue;
-
-      map.set(otherParticipant.user_id, channel.updated_at);
+    for (const channel of channels()) {
+      if (channel.channelType !== 'direct_message') continue;
+      const peer = directMessagePeer(channel, currentUser);
+      if (peer) map.set(peer, channel.updatedAt);
     }
-
     return map;
   });
 }
