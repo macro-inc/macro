@@ -11,7 +11,13 @@
  * and read measurements can be repeated without reseeding.
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -96,20 +102,28 @@ function summarize(samples: Record<string, number[]>) {
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
+function append(target: Record<string, number[]>, key: string, value: number) {
+  const values = target[key];
+  if (values) values.push(value);
+  else target[key] = [value];
+}
+
 function collect(target: Record<string, number[]>, steps: Step[], prefix = '') {
-  for (const { name, ms } of steps) {
-    const key = `${prefix}${name}`;
-    target[key] ??= [];
-    target[key].push(ms);
-  }
+  for (const { name, ms } of steps) append(target, `${prefix}${name}`, ms);
 }
 
 async function startServer(): Promise<() => void> {
   if (!existsSync(dist)) throw new Error(`missing ${dist}; build it first`);
   const server = spawn(
     process.execPath,
-    [resolve(webDir, 'scripts/cache-wasm/precompressed-preview-server.mjs'), dist],
-    { env: { ...process.env, PORT: String(port) }, stdio: ['ignore', 'pipe', 'inherit'] }
+    [
+      resolve(webDir, 'scripts/cache-wasm/precompressed-preview-server.mjs'),
+      dist,
+    ],
+    {
+      env: { ...process.env, PORT: String(port) },
+      stdio: ['ignore', 'pipe', 'inherit'],
+    }
   );
   await new Promise<void>((ready, fail) => {
     server.once('error', fail);
@@ -120,25 +134,38 @@ async function startServer(): Promise<() => void> {
   return () => server.kill();
 }
 
-async function openPage(context: Awaited<ReturnType<typeof chromium.launchPersistentContext>>) {
+async function openPage(
+  context: Awaited<ReturnType<typeof chromium.launchPersistentContext>>
+) {
   const page = await context.newPage();
   page.on('console', (message) => {
     if (message.type() === 'error' || message.type() === 'warning')
       process.stderr.write(`[page ${message.type()}] ${message.text()}\n`);
   });
-  page.on('pageerror', (error) => process.stderr.write(`[page error] ${error.stack ?? error}\n`));
+  page.on('pageerror', (error) =>
+    process.stderr.write(`[page error] ${error.stack ?? error}\n`)
+  );
   const started = Date.now();
   await page.goto(`${origin}/app/bench.html`);
-  await page.waitForFunction(() => document.querySelector('#result')?.getAttribute('data-status') === 'ready');
+  await page.waitForFunction(
+    () =>
+      document.querySelector('#result')?.getAttribute('data-status') === 'ready'
+  );
   return { page, loadMs: Date.now() - started };
 }
 
-const call = <T>(page: Page, method: string, ...params: unknown[]): Promise<T> =>
+const call = <T>(
+  page: Page,
+  method: string,
+  ...params: unknown[]
+): Promise<T> =>
   page.evaluate(
     ([name, rest]) =>
-      (window as unknown as { cacheBench: Record<string, (...a: unknown[]) => unknown> }).cacheBench[
-        name as string
-      ]?.(...(rest as unknown[])) as Promise<T>,
+      (
+        window as unknown as {
+          cacheBench: Record<string, (...a: unknown[]) => unknown>;
+        }
+      ).cacheBench[name as string]?.(...(rest as unknown[])) as Promise<T>,
     [method, params] as const
   );
 
@@ -147,7 +174,9 @@ async function main() {
   if (!fresh) {
     // OPFS belongs to the origin, port included: another port opens an empty
     // database while this marker skips the seed.
-    const seededOrigin = readFileSync(`${profileDir}/.seeded`, 'utf8').split('\n')[0];
+    const seededOrigin = readFileSync(`${profileDir}/.seeded`, 'utf8').split(
+      '\n'
+    )[0];
     if (seededOrigin.startsWith('http') && seededOrigin !== origin)
       throw new Error(
         `profile was seeded on ${seededOrigin}; rerun with that --port or --reseed`
@@ -168,7 +197,11 @@ async function main() {
     const source = set === 'seed' ? seedOps : foregroundOps;
     const body = source[Number(index)];
     if (!body) return route.fulfill({ status: 404 });
-    return route.fulfill({ status: 200, contentType: 'application/json', body });
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body,
+    });
   });
 
   const result: Record<string, unknown> = {
@@ -181,20 +214,20 @@ async function main() {
       const { page } = await openPage(context);
       const opened = await call<unknown>(page, 'open', SCOPE);
       const seedStarted = Date.now();
-      const rows = await call<Array<{ lane: string; ms: number; bytes: number }>>(
-        page,
-        'seed',
-        '/bench-data/seed',
-        seedOps.length
-      );
+      const rows = await call<
+        Array<{ lane: string; ms: number; bytes: number }>
+      >(page, 'seed', '/bench-data/seed', seedOps.length);
       const seedWallMs = Date.now() - seedStarted;
       const byLane: Record<string, number[]> = {};
       const bytes: Record<string, number> = {};
       for (const row of rows) {
-        (byLane[row.lane] ??= []).push(row.ms);
+        append(byLane, row.lane, row.ms);
         bytes[row.lane] = (bytes[row.lane] ?? 0) + row.bytes;
       }
-      const storage = await call<{ usage: number; files: Array<{ name: string; bytes: number }> }>(page, 'storage');
+      const storage = await call<{
+        usage: number;
+        files: Array<{ name: string; bytes: number }>;
+      }>(page, 'storage');
       result.seed = {
         opened,
         wallMs: seedWallMs,
@@ -205,7 +238,10 @@ async function main() {
       };
       await call(page, 'close');
       await page.close();
-      writeFileSync(`${profileDir}/.seeded`, `${origin}\n${new Date().toISOString()}\n`);
+      writeFileSync(
+        `${profileDir}/.seeded`,
+        `${origin}\n${new Date().toISOString()}\n`
+      );
       log('seed', result.seed);
     }
 
@@ -224,12 +260,12 @@ async function main() {
         firstReadMs: number;
         lifecycle: Array<{ name: string; side: string; durationMs?: number }>;
       }>(page, 'open', SCOPE);
-      (coldOpen['page.load'] ??= []).push(loadMs);
-      (coldOpen['open.total'] ??= []).push(opened.totalMs);
-      (coldOpen['open.firstRead'] ??= []).push(opened.firstReadMs);
+      append(coldOpen, 'page.load', loadMs);
+      append(coldOpen, 'open.total', opened.totalMs);
+      append(coldOpen, 'open.firstRead', opened.firstReadMs);
       for (const event of opened.lifecycle) {
         if (event.durationMs === undefined) continue;
-        (coldOpen[`${event.side}:${event.name}`] ??= []).push(event.durationMs);
+        append(coldOpen, `${event.side}:${event.name}`, event.durationMs);
       }
       lifecycle.push(opened.lifecycle);
       // Two passes: the first right after open, the second warm.
@@ -251,7 +287,10 @@ async function main() {
       );
       collect(writes, writeResult.steps);
       if (!args['skip-contended']) {
-        const contendedResult = await call<{ steps: Step[]; background: number[] }>(
+        const contendedResult = await call<{
+          steps: Step[];
+          background: number[];
+        }>(
           page,
           'contended',
           threads,
@@ -293,7 +332,10 @@ async function main() {
 function rmProfile() {
   if (existsSync(profileDir)) {
     // Only ever a profile this runner created.
-    if (!existsSync(`${profileDir}/.seeded`) && !existsSync(`${profileDir}/Default`))
+    if (
+      !existsSync(`${profileDir}/.seeded`) &&
+      !existsSync(`${profileDir}/Default`)
+    )
       throw new Error(`refusing to delete ${profileDir}: not a bench profile`);
     rmSync(profileDir, { recursive: true, force: true });
   }
@@ -301,7 +343,9 @@ function rmProfile() {
 
 function log(label: string, value: unknown) {
   const text = JSON.stringify(value, null, 1);
-  process.stdout.write(`\n== ${label}\n${text.length > 4000 ? `${text.slice(0, 4000)}…` : text}\n`);
+  process.stdout.write(
+    `\n== ${label}\n${text.length > 4000 ? `${text.slice(0, 4000)}…` : text}\n`
+  );
 }
 
 await main();

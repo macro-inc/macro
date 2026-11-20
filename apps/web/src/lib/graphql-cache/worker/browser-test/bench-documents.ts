@@ -15,8 +15,10 @@ if (!out) throw new Error('usage: bench-documents.ts <dir>');
 mkdirSync(out, { recursive: true });
 
 function fileName(exportName: string): string | undefined {
-  if (exportName.endsWith('FragmentDoc')) return `${exportName.slice(0, -'FragmentDoc'.length)}.fragment.graphql`;
-  if (exportName.endsWith('Document')) return `${exportName.slice(0, -'Document'.length)}.graphql`;
+  if (exportName.endsWith('FragmentDoc'))
+    return `${exportName.slice(0, -'FragmentDoc'.length)}.fragment.graphql`;
+  if (exportName.endsWith('Document'))
+    return `${exportName.slice(0, -'Document'.length)}.graphql`;
   return undefined;
 }
 

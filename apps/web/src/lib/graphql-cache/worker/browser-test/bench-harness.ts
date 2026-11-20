@@ -7,15 +7,15 @@
  */
 import { stringifyDocument } from '@urql/core';
 import * as generated from '../../../service-clients/service-storage/graphql/generated/graphql';
-import { createWorkerCacheHost } from '../../host/worker-host';
 import type { CacheHost } from '../../host/types';
+import { createWorkerCacheHost } from '../../host/worker-host';
 import { captureContactWriteScope } from '../../people/sync';
 import type { EntityFilterCacheArgs } from '../../protocol';
-import mailTabs from './bench-mail-tabs.json';
 import type {
   CacheTelemetryObservation,
   CacheTelemetryRecorderLike,
 } from '../../telemetry';
+import mailTabs from './bench-mail-tabs.json';
 
 const resultElement = document.querySelector<HTMLElement>('#result');
 if (!resultElement) throw new Error('missing result element');
@@ -39,7 +39,9 @@ function documentText(name: string, suffix = 'Document'): string {
   if (text === undefined) {
     const document = documents[key];
     if (!document) throw new Error(`unknown document ${key}`);
-    text = stringifyDocument(document as Parameters<typeof stringifyDocument>[0]);
+    text = stringifyDocument(
+      document as Parameters<typeof stringifyDocument>[0]
+    );
     textCache.set(key, text);
   }
   return text;
@@ -118,10 +120,11 @@ async function apply(op: BenchOp): Promise<number> {
   const target = requireHost();
   const query = documentText(op.doc);
   const authority = target.authority;
-  if (!authority) throw new Error("cache host has no authority");
+  if (!authority) throw new Error('cache host has no authority');
   const { generation } = await authority.current();
   // The app passes the viewer id on every Soup response (extractIdentity).
-  const identity = (op.data as { user?: { id?: string } } | undefined)?.user?.id;
+  const identity = (op.data as { user?: { id?: string } } | undefined)?.user
+    ?.id;
   // Contact pages carry the fenced scope the app captures before fetching
   // (captureContactWriteScope); the capture is part of the measured write.
   const hydrationScope = async () => {
@@ -203,7 +206,9 @@ function inboxArgs(
 }
 
 /** A Mail tab's list read as the app sends it (the fixture's own test keeps it so). */
-function tabArgs(input: (typeof mailTabs)[keyof typeof mailTabs]): EntityFilterCacheArgs {
+function tabArgs(
+  input: (typeof mailTabs)[keyof typeof mailTabs]
+): EntityFilterCacheArgs {
   return {
     filters: input.filters,
     sortMethod: input.sortMethod,
@@ -393,17 +398,29 @@ async function storage() {
 }
 
 function telemetry() {
-  return observations.map(({ name, side, durationMs, outcome, count, at, queryFingerprint, operationCategory, aggregatedEventName }) => ({
-    name,
-    aggregatedEventName,
-    side,
-    operationCategory,
-    durationMs,
-    count,
-    outcome,
-    queryFingerprint,
-    at,
-  }));
+  return observations.map(
+    ({
+      name,
+      side,
+      durationMs,
+      outcome,
+      count,
+      at,
+      queryFingerprint,
+      operationCategory,
+      aggregatedEventName,
+    }) => ({
+      name,
+      aggregatedEventName,
+      side,
+      operationCategory,
+      durationMs,
+      count,
+      outcome,
+      queryFingerprint,
+      at,
+    })
+  );
 }
 
 function close() {
