@@ -83,3 +83,29 @@ fn a_computer_that_gave_up_reads_failed() {
         ComputerStatusKind::Failed
     );
 }
+
+/// Relief hibernated it: its macrod is gone and fleet checks count misses,
+/// but a prompt wakes it, so the team sees it ready, as before.
+#[test]
+fn a_hibernated_computer_without_macrod_reads_ready_where_an_awake_one_is_unhealthy() {
+    let mut computer = computer(
+        ComputerId::new_from_uuid(Uuid::from_u128(7)),
+        Phase::Running,
+        BillingState::Comped {
+            reason: "test".to_owned(),
+        },
+    );
+    computer.state.macrod_connected = false;
+    computer.state.macrod_misses = crate::domain::lifecycle::MAX_MACROD_MISSES;
+    assert_eq!(
+        computer.status(0, now(), policy()).status,
+        ComputerStatusKind::Unhealthy
+    );
+
+    computer.hibernated_at = Some(now() - chrono::Duration::minutes(30));
+
+    assert_eq!(
+        computer.status(0, now(), policy()).status,
+        ComputerStatusKind::Ready
+    );
+}

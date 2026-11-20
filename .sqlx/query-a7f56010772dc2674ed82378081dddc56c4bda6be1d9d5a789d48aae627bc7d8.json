@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,\n                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image\n            FROM hosted_runtime\n            WHERE host_id = $1\n            ",
+  "query": "\n            UPDATE hosted_runtime\n            SET setup_completed_at = COALESCE(setup_completed_at, $2)\n            WHERE id = $1\n            RETURNING id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,\n                      created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at\n            ",
   "describe": {
     "columns": [
       {
@@ -113,11 +113,17 @@
         "ordinal": 19,
         "name": "image",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "hibernated_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -140,8 +146,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "387b9767cc2171a95be01b41d55043e56f2183fbbe78cbf599ad0c622081bd58"
+  "hash": "a7f56010772dc2674ed82378081dddc56c4bda6be1d9d5a789d48aae627bc7d8"
 }

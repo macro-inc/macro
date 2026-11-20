@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,\n                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image\n            FROM hosted_runtime\n            WHERE id = $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT id, team_id, host_id, name, size AS \"size: ComputerSize\", vcpus, memory_gib, disk_gib, catalog_entry, price_id, comp_reason, state, harness_id, created_by,\n                   created_at, enrolled_at, enrollment_generation, setup_completed_at, default_agent_id, image, hibernated_at\n            FROM hosted_runtime\n            WHERE host_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -113,6 +113,11 @@
         "ordinal": 19,
         "name": "image",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "hibernated_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -140,8 +145,9 @@
       false,
       true,
       true,
+      true,
       true
     ]
   },
-  "hash": "7ad693f21784f88f82fe2535e89b0f1dace68691d0ab7003d538401a6cb338a6"
+  "hash": "0f149e577db1f53c26b5096a397471894e081ab88e19621bab083b1dfe36de49"
 }

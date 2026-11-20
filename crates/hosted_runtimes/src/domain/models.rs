@@ -89,6 +89,9 @@ pub struct Computer {
     pub created_at: DateTime<Utc>,
     /// When macrod first connected; setup is over from then on.
     pub enrolled_at: Option<DateTime<Utc>>,
+    /// When overcommit relief hibernated it, until it wakes. A hibernated
+    /// guest runs no macrod but stays `Running` to its team: a prompt wakes it.
+    pub hibernated_at: Option<DateTime<Utc>>,
     /// When the team finished the guided setup after buying it.
     pub setup_completed_at: Option<DateTime<Utc>>,
     /// The coding agent the computer came with, once created. Bots are
@@ -827,10 +830,14 @@ impl Computer {
         };
         // Before the first connection the same signs are setup still going.
         // A missed check, not the disconnect itself, so a reconnect flap
-        // stays ready.
+        // stays ready; a hibernated guest is asleep, not missing.
         let unhealthy = self.enrolled_at.is_some()
             && match self.state.phase {
-                Phase::Running => !self.state.macrod_connected && self.state.macrod_misses >= 1,
+                Phase::Running => {
+                    self.hibernated_at.is_none()
+                        && !self.state.macrod_connected
+                        && self.state.macrod_misses >= 1
+                }
                 Phase::Crashed { retry: Some(_), .. } => true,
                 Phase::Provisioning { .. }
                 | Phase::Booting
