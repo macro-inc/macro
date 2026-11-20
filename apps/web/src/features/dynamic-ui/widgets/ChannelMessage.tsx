@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { ReadonlyThread } from '@channel/StandaloneThread';
 import { openThreadMessage } from '@channel/StandaloneThread/open-thread-message';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
@@ -15,7 +16,8 @@ export type ChannelMessageProps = Omit<WidgetOf<'channelMessage'>, 'type'>;
  */
 export function ChannelMessage(props: ChannelMessageProps) {
   const orchestrator = useGlobalBlockOrchestrator();
-  const channelName = useChannelName(props.channelId, 'Channel');
+  // The fallback is read at render so it follows the interface language.
+  const channelName = useChannelName(props.channelId);
   const open = (messageId: string) =>
     openThreadMessage(
       orchestrator,
@@ -34,8 +36,12 @@ export function ChannelMessage(props: ChannelMessageProps) {
             <EntityIcon targetType="channel" size="sm" />
           </Item.Media>
           <Item.Content class="gap-0">
-            <UiCard.Title class="truncate">{channelName()}</UiCard.Title>
-            <UiCard.Description>Thread</UiCard.Description>
+            <UiCard.Title class="truncate">
+              {channelName() ?? t('agentCards.channelFallback')}
+            </UiCard.Title>
+            <UiCard.Description>
+              {t('agentCards.channelThread')}
+            </UiCard.Description>
           </Item.Content>
           <Item.Actions>
             <Button
@@ -43,7 +49,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
               size="sm"
               onClick={() => open(props.messageId)}
             >
-              Open in channel
+              {t('agentCards.openInChannel')}
             </Button>
           </Item.Actions>
         </Item>
