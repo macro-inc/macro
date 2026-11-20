@@ -1,7 +1,11 @@
 /**
  * Runs the cache engine benchmark (`bench.html`) in a real browser on OPFS.
  *
- * Usage (from apps/web, after `just build-cache-wasm-browser-production`):
+ * Usage, from apps/web. Build the bench page first:
+ *   just build-cache-wasm
+ *   bunx --bun vite build --config src/lib/graphql-cache/worker/browser-test/bench.vite.config.ts
+ *   bun scripts/cache-wasm/cli.ts package-dist --dist src/lib/graphql-cache/worker/browser-test/.dist-bench
+ * then run:
  *   node src/lib/graphql-cache/worker/browser-test/bench-runner.ts \
  *     --data <dir with seed.ndjson, foreground.ndjson, meta.json> \
  *     [--profile <browser profile dir>] [--reseed] [--runs 5] [--out results.json]
@@ -116,7 +120,10 @@ function collect(target: Record<string, number[]>, steps: Step[], prefix = '') {
 }
 
 async function startServer(): Promise<() => void> {
-  if (!existsSync(dist)) throw new Error(`missing ${dist}; build it first`);
+  if (!existsSync(dist))
+    throw new Error(
+      `missing ${dist}; build it with the steps in this file's header`
+    );
   const server = spawn(
     process.execPath,
     [
@@ -130,6 +137,11 @@ async function startServer(): Promise<() => void> {
   );
   await new Promise<void>((ready, fail) => {
     server.once('error', fail);
+    server.once('exit', (code, signal) =>
+      fail(
+        new Error(`preview server exited (${code ?? signal}) before listening`)
+      )
+    );
     server.stdout.on('data', (chunk: Buffer) => {
       if (String(chunk).includes('listening')) ready();
     });
@@ -193,10 +205,28 @@ async function main() {
     writeFileSync(`${profileDir}/${OWNED}`, '');
   }
   const stopServer = await startServer();
-  const context = await chromium.launchPersistentContext(profileDir, {
-    headless: !args.headed,
-    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
-  });
+  let context:
+    | Awaited<ReturnType<typeof chromium.launchPersistentContext>>
+    | undefined;
+  try {
+    context = await chromium.launchPersistentContext(profileDir, {
+      headless: !args.headed,
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+    });
+    await runBench(context, fresh);
+  } finally {
+    try {
+      await context?.close();
+    } finally {
+      stopServer();
+    }
+  }
+}
+
+async function runBench(
+  context: Awaited<ReturnType<typeof chromium.launchPersistentContext>>,
+  fresh: boolean
+) {
   await context.route(`${origin}/bench-data/**`, async (route) => {
     const url = new URL(route.request().url());
     const [, , set, index] = url.pathname.split('/');
@@ -215,121 +245,119 @@ async function main() {
     when: new Date().toISOString(),
     seedOps: seedOps.length,
   };
-  try {
-    if (fresh) {
-      const { page } = await openPage(context);
-      const opened = await call<unknown>(page, 'open', SCOPE);
-      const seedStarted = Date.now();
-      const rows = await call<
-        Array<{ lane: string; ms: number; bytes: number }>
-      >(page, 'seed', '/bench-data/seed', seedOps.length);
-      const seedWallMs = Date.now() - seedStarted;
-      const byLane: Record<string, number[]> = {};
-      const bytes: Record<string, number> = {};
-      for (const row of rows) {
-        append(byLane, row.lane, row.ms);
-        bytes[row.lane] = (bytes[row.lane] ?? 0) + row.bytes;
-      }
-      const storage = await call<{
-        usage: number;
-        files: Array<{ name: string; bytes: number }>;
-      }>(page, 'storage');
-      result.seed = {
-        opened,
-        wallMs: seedWallMs,
-        lanes: summarize(byLane),
-        payloadBytes: bytes,
-        storage,
-        telemetry: await call(page, 'telemetry'),
-      };
-      await call(page, 'close');
-      await page.close();
-      writeFileSync(
-        `${profileDir}/.seeded`,
-        `${origin}\n${new Date().toISOString()}\n`
-      );
-      log('seed', result.seed);
+  if (fresh) {
+    const { page } = await openPage(context);
+    const opened = await call<unknown>(page, 'open', SCOPE);
+    const seedStarted = Date.now();
+    const rows = await call<Array<{ lane: string; ms: number; bytes: number }>>(
+      page,
+      'seed',
+      '/bench-data/seed',
+      seedOps.length
+    );
+    const seedWallMs = Date.now() - seedStarted;
+    const byLane: Record<string, number[]> = {};
+    const bytes: Record<string, number> = {};
+    for (const row of rows) {
+      append(byLane, row.lane, row.ms);
+      bytes[row.lane] = (bytes[row.lane] ?? 0) + row.bytes;
     }
-
-    const coldOpen: Record<string, number[]> = {};
-    const reads: Record<string, number[]> = {};
-    const writes: Record<string, number[]> = {};
-    const contended: Record<string, number[]> = {};
-    const background: number[] = [];
-    const lifecycle: unknown[] = [];
-    const telemetry: unknown[] = [];
-    let counts: unknown;
-    for (let run = 0; run < runs; run++) {
-      const { page, loadMs } = await openPage(context);
-      const opened = await call<{
-        totalMs: number;
-        firstReadMs: number;
-        lifecycle: Array<{ name: string; side: string; durationMs?: number }>;
-      }>(page, 'open', SCOPE);
-      append(coldOpen, 'page.load', loadMs);
-      append(coldOpen, 'open.total', opened.totalMs);
-      append(coldOpen, 'open.firstRead', opened.firstReadMs);
-      for (const event of opened.lifecycle) {
-        if (event.durationMs === undefined) continue;
-        append(coldOpen, `${event.side}:${event.name}`, event.durationMs);
-      }
-      lifecycle.push(opened.lifecycle);
-      // Two passes: the first right after open, the second warm.
-      for (const pass of ['first', 'warm']) {
-        const readResult = await call<{ steps: Step[]; counts: unknown }>(
-          page,
-          'readPass',
-          threads,
-          homeVariables
-        );
-        counts = readResult.counts;
-        collect(reads, readResult.steps, `${pass}:`);
-      }
-      const writeResult = await call<{ steps: Step[] }>(
-        page,
-        'writePass',
-        '/bench-data/foreground',
-        foregroundOps.length
-      );
-      collect(writes, writeResult.steps);
-      if (!args['skip-contended']) {
-        const contendedResult = await call<{
-          steps: Step[];
-          background: number[];
-        }>(
-          page,
-          'contended',
-          threads,
-          homeVariables,
-          backgroundBase,
-          backgroundCount
-        );
-        collect(contended, contendedResult.steps);
-        background.push(...contendedResult.background);
-      }
-      telemetry.push(await call(page, 'telemetry'));
-      await call(page, 'close');
-      await page.close();
-      process.stderr.write(`run ${run + 1}/${runs} done\n`);
-    }
-    result.coldOpen = summarize(coldOpen);
-    result.reads = summarize(reads);
-    result.writes = summarize(writes);
-    result.contended = summarize(contended);
-    result.backgroundHydrate = summarize({ hydrate: background });
-    result.counts = counts;
-    result.lifecycle = lifecycle;
-    result.telemetry = telemetry;
-    log('coldOpen', result.coldOpen);
-    log('reads', result.reads);
-    log('writes', result.writes);
-    log('contended', result.contended);
-    log('backgroundHydrate', result.backgroundHydrate);
-    log('counts', counts);
-  } finally {
-    await context.close();
-    stopServer();
+    const storage = await call<{
+      usage: number;
+      files: Array<{ name: string; bytes: number }>;
+    }>(page, 'storage');
+    result.seed = {
+      opened,
+      wallMs: seedWallMs,
+      lanes: summarize(byLane),
+      payloadBytes: bytes,
+      storage,
+      telemetry: await call(page, 'telemetry'),
+    };
+    await call(page, 'close');
+    await page.close();
+    writeFileSync(
+      `${profileDir}/.seeded`,
+      `${origin}\n${new Date().toISOString()}\n`
+    );
+    log('seed', result.seed);
   }
+
+  const coldOpen: Record<string, number[]> = {};
+  const reads: Record<string, number[]> = {};
+  const writes: Record<string, number[]> = {};
+  const contended: Record<string, number[]> = {};
+  const background: number[] = [];
+  const lifecycle: unknown[] = [];
+  const telemetry: unknown[] = [];
+  let counts: unknown;
+  for (let run = 0; run < runs; run++) {
+    const { page, loadMs } = await openPage(context);
+    const opened = await call<{
+      totalMs: number;
+      firstReadMs: number;
+      lifecycle: Array<{ name: string; side: string; durationMs?: number }>;
+    }>(page, 'open', SCOPE);
+    append(coldOpen, 'page.load', loadMs);
+    append(coldOpen, 'open.total', opened.totalMs);
+    append(coldOpen, 'open.firstRead', opened.firstReadMs);
+    for (const event of opened.lifecycle) {
+      if (event.durationMs === undefined) continue;
+      append(coldOpen, `${event.side}:${event.name}`, event.durationMs);
+    }
+    lifecycle.push(opened.lifecycle);
+    // Two passes: the first right after open, the second warm.
+    for (const pass of ['first', 'warm']) {
+      const readResult = await call<{ steps: Step[]; counts: unknown }>(
+        page,
+        'readPass',
+        threads,
+        homeVariables
+      );
+      counts = readResult.counts;
+      collect(reads, readResult.steps, `${pass}:`);
+    }
+    const writeResult = await call<{ steps: Step[] }>(
+      page,
+      'writePass',
+      '/bench-data/foreground',
+      foregroundOps.length
+    );
+    collect(writes, writeResult.steps);
+    if (!args['skip-contended']) {
+      const contendedResult = await call<{
+        steps: Step[];
+        background: number[];
+      }>(
+        page,
+        'contended',
+        threads,
+        homeVariables,
+        backgroundBase,
+        backgroundCount
+      );
+      collect(contended, contendedResult.steps);
+      background.push(...contendedResult.background);
+    }
+    telemetry.push(await call(page, 'telemetry'));
+    await call(page, 'close');
+    await page.close();
+    process.stderr.write(`run ${run + 1}/${runs} done\n`);
+  }
+  result.coldOpen = summarize(coldOpen);
+  result.reads = summarize(reads);
+  result.writes = summarize(writes);
+  result.contended = summarize(contended);
+  result.backgroundHydrate = summarize({ hydrate: background });
+  result.counts = counts;
+  result.lifecycle = lifecycle;
+  result.telemetry = telemetry;
+  log('coldOpen', result.coldOpen);
+  log('reads', result.reads);
+  log('writes', result.writes);
+  log('contended', result.contended);
+  log('backgroundHydrate', result.backgroundHydrate);
+  log('counts', counts);
   const out = args.out ?? `${dataDir}/results-${Date.now()}.json`;
   writeFileSync(out, JSON.stringify(result, null, 2));
   process.stderr.write(`wrote ${out}\n`);
