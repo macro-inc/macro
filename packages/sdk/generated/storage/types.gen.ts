@@ -14685,7 +14685,7 @@ export type MarkdownEditMatchingBlock = {
     /**
      * The block.
      */
-    blockId: string;
+    blockId: BlockId;
     /**
      * Its markdown as the batch saw it.
      */

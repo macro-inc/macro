@@ -54398,7 +54398,7 @@
         "required": ["blockId", "occurrences", "markdown"],
         "properties": {
           "blockId": {
-            "type": "string",
+            "$ref": "#/components/schemas/BlockId",
             "description": "The block."
           },
           "markdown": {

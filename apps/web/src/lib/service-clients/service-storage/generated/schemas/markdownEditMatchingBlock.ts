@@ -4,13 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { BlockId } from './blockId';
 
 /**
  * A block a missing or ambiguous `old` was found in, or is nearest to.
  */
 export interface MarkdownEditMatchingBlock {
   /** The block. */
-  blockId: string;
+  blockId: BlockId;
   /** Its markdown as the batch saw it. */
   markdown: string;
   /**
