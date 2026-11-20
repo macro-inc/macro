@@ -14,8 +14,7 @@ open sheets and the pickers and menus on them cover prompts and reminders, which
 sit above the transient notice; the notice itself stays on top of sheets.
 While the desktop stack shows anything, its height above the window's bottom
 edge is `--desktop-toast-inset-bottom` on `<html>` (0 otherwise); a view's
-bottom-right control adds it to its offset to stay above the stack, as the
-calendar view's setup pill does.
+bottom-right control adds it to its offset to stay above the stack.
 
 All toasts place actions to the right of the message, centered vertically. The
 close button floats halfway over the top-right corner; stacked cards leave room
