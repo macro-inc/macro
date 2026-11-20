@@ -1,0 +1,73 @@
+# The fields the channel directory reads from a cached channel record. A record
+# missing any of them is omitted from directory reads, so SoupItemPreviewFields,
+# which every channel write uses, selects each of them; keep the two in step.
+fragment ChannelDirectoryFields on GraphqlSoupChannel {
+	__typename
+	id
+	name
+	channelType
+	ownerId
+	organizationId
+	teamId
+	autoJoinTeam
+	createdAt
+	updatedAt
+	viewedAt
+	interactedAt
+	isParticipant
+	frecencyScore
+	participants {
+		channelId
+		userId
+		role
+		joinedAt
+		leftAt
+	}
+	botParticipants {
+		channelId
+		botId
+		role
+		joinedAt
+		leftAt
+	}
+	agentDm {
+		botId
+		name
+		avatarUrl
+	}
+	latestMessage {
+		...SoupChannelMessageFields
+	}
+	latestNonThreadMessage {
+		...SoupChannelMessageFields
+	}
+}
+
+# The channel backfill lane's page. scopeIds lists the page's channels so a
+# finished pass can tell which cached channels it no longer returned.
+query SoupChannelDirectoryBackfill($input: SoupInput!) {
+	user {
+		id @cacheOnly
+		soup(input: $input) {
+			items @cacheOnly { ...SoupItemFields }
+			scopeIds: items { __typename id }
+			nextCursor
+		}
+	}
+}
+
+# The directory's page when the device cache is off: the lane's input, read
+# from the network into memory.
+query ChannelDirectoryPage($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupChannel { ...ChannelDirectoryFields }
+			}
+			nextCursor
+		}
+	}
+}
