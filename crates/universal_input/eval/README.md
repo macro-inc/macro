@@ -108,6 +108,8 @@ cargo run -p universal_input --example thread_due_date_eval
 It prints each case's result, the precision and recall of due dates and of event
 days, the share of answers rejected, and the tokens, cost and latency of the reads,
 and needs no running service. An answer that fails validation stores no date, so it
-scores as no date. Tune for precision: a wrong date is worse than a missing one, and
+scores as no date, and returns no usage: its tokens are left out of the token and
+cost figures, which are still averaged over every read, so a run with rejected
+answers understates them. Tune for precision: a wrong date is worse than a missing one, and
 a wrong event day takes a thread out of Focus early. As above, do not change an
 expectation to accommodate a prediction, and never add real mail.
