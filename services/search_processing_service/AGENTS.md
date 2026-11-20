@@ -57,9 +57,14 @@ OpenSearch, and exposes backfill HTTP routes for each.
   task's members leave the group together (`LeaveTogether`); one that left
   early would rebalance every task while the other lane drains. A poll loop
   blocks on a full worker channel, so one slow, busy key stalls every topic
-  in its lane. `coalescible_reread_key` skips agent-session events while a
-  reread for that session is queued; only add an event kind there if handling
-  it rereads the entity's whole current state.
+  in its lane. `coalescible_reread_key` skips agent-session events and
+  one-thread email reindex requests while a reread for that session or thread
+  is queued; only add an event kind there if handling it rereads the entity's
+  whole current state. Handing off any other event for the key releases its
+  claim, since the reread runs before it; keep that, or a blind delete queued
+  behind a reread swallows the request that would undo it. Never shard a
+  thread event by its mailbox: one mailbox's import then runs on one worker
+  and its full channel stalls every topic in its lane.
 - A lane's topics share its member's one librdkafka prefetch queue; the
   group's `PREFETCH` bound keeps a live topic from waiting behind another live
   topic's backlog. Throughput comes from the workers, not the prefetch, so
