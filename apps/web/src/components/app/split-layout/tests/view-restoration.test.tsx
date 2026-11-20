@@ -337,6 +337,26 @@ describe('opt-in view restoration', () => {
     );
   });
 
+  it.each([
+    ['created-by-me', 'tasks'],
+    ['created-projects', 'projects'],
+  ])(
+    'restores legacy %s under the %s destination',
+    async (legacy, destination) => {
+      const { router, manager } = setup('/tasks');
+      const pane = router.panes()[0]!;
+      await router.updateSearch(pane, 'tasks', { tab: [legacy] });
+      expect(viewRestorationKey('tasks', router.entry(pane)?.location)).toBe(
+        destination
+      );
+      mocks.setSelection?.(['legacy-selection']);
+      await router.navigatePane(pane, '/home');
+      expect(
+        manager.viewState.get(destination)?.entryState?.['view.selection']
+      ).toEqual(['legacy-selection']);
+    }
+  );
+
   it('restores Tasks and Projects to their own dock destinations', async () => {
     const { router, manager } = setup('/tasks/task-one');
     const pane = router.panes()[0]!;

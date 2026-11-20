@@ -48,7 +48,6 @@ function ProjectViewSummary(props: {
           scope: {
             all: t('viewMenus.all'),
             'assigned-to-me': t('viewMenus.assignedToMe'),
-            'created-by-me': t('viewMenus.createdByMe'),
           }[props.config.scope],
         })}
       </p>

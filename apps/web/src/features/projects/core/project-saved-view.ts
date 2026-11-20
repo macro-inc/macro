@@ -17,7 +17,11 @@ const settingsSchema = z.strictObject({
   sort: z.enum(['updated', 'created']),
   groupBy: z.enum(['none', 'status', 'priority', 'assignee']),
 });
-const scopeSchema = z.enum(['all', 'assigned-to-me', 'created-by-me']);
+const scopeSchema = z
+  .enum(['all', 'assigned-to-me', 'created-by-me'])
+  .transform((scope) =>
+    scope === 'created-by-me' ? ('assigned-to-me' as const) : scope
+  );
 const definitionSchema = z
   .object({
     kind: z.literal('projects'),

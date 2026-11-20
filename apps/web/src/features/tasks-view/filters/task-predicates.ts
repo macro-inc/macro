@@ -31,15 +31,13 @@ export function taskMatchesTab(
   switch (tab) {
     case 'my-tasks':
       if (!userId) return false;
-      return getTaskAssigneeIds(task).includes(userId);
-    case 'created-by-me':
-      if (!userId) return false;
-      return task.ownerId === userId;
+      return (
+        task.ownerId === userId || getTaskAssigneeIds(task).includes(userId)
+      );
     case 'team-tasks':
       return true;
     case 'projects':
     case 'my-projects':
-    case 'created-projects':
       return false;
   }
 }

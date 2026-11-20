@@ -32,7 +32,6 @@ const nonTaskFilters: EntityFilters = {
 
 const selectedCreators = (
   selection: FacetSelection,
-  tab: TaskTab,
   userId: string | undefined
 ): string[] | undefined => {
   const selected = [
@@ -45,12 +44,7 @@ const selectedCreators = (
       )
     ),
   ];
-  if (tab !== 'created-by-me') {
-    return selected.length > 0 ? selected : undefined;
-  }
-  if (!userId) return [NIL_UUID];
-  if (selected.length > 0 && !selected.includes(userId)) return [NIL_UUID];
-  return [userId];
+  return selected.length > 0 ? selected : undefined;
 };
 
 const selectedPropertyFilters = (
@@ -114,13 +108,6 @@ export function buildTaskSearchRequest(options: {
     });
   }
 
-  if (options.tab === 'my-tasks') {
-    propertyFilters.push({
-      property_definition_id: SYSTEM_PROPERTY_IDS.ASSIGNEES,
-      entity_type: 'TASK',
-      entity_ids: [options.userId ?? NIL_UUID],
-    });
-  }
   if (options.reference) {
     propertyFilters.push({
       property_definition_id: options.reference.propertyDefinitionId,
@@ -129,11 +116,22 @@ export function buildTaskSearchRequest(options: {
     });
   }
 
-  const owners = selectedCreators(options.facets, options.tab, options.userId);
+  const owners = selectedCreators(options.facets, options.userId);
   // Saved views supply stored bindings even when tag labels are unavailable.
   const tagOptionIds = [...new Set(options.facets.tags ?? [])].filter((id) =>
     facetContext.tagPropertyDefinitionByOptionId.has(id)
   );
+  const documentFilters: NonNullable<EntityFilters['document_filters']> = {
+    sub_types: ['task'],
+    ...(owners ? { owners } : {}),
+  };
+  if (options.tab === 'my-tasks') {
+    if (options.userId) {
+      documentFilters.task_filters = { owner_or_assignee: options.userId };
+    } else {
+      documentFilters.document_ids = [NIL_UUID];
+    }
+  }
 
   return {
     params: { cursor: null, page_size: 100 },
@@ -143,10 +141,7 @@ export function buildTaskSearchRequest(options: {
       search_on: 'name_content',
       filters: {
         ...nonTaskFilters,
-        document_filters: {
-          sub_types: ['task'],
-          ...(owners ? { owners } : {}),
-        },
+        document_filters: documentFilters,
         ...(propertyFilters.length > 0
           ? { property_filters: propertyFilters }
           : {}),

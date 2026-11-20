@@ -10,14 +10,16 @@ import {
 } from '@components/app/split-layout/entry-persistence';
 import type { Accessor } from 'solid-js';
 import { z } from 'zod';
-import { TASK_TAB_IDS } from './core/task-navigation';
+import { normalizeTaskTab, TASK_TAB_IDS } from './core/task-navigation';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import type { TasksViewState } from './types';
 
 export const TASKS_ENTRY_STATE_KEY = 'tasks.view';
 export const TASKS_LIST_ENTRY_STATE_KEY = 'tasks.listState';
 
-const taskTabSchema = z.enum(TASK_TAB_IDS).catch('my-tasks');
+const taskTabSchema = z
+  .preprocess(normalizeTaskTab, z.enum(TASK_TAB_IDS))
+  .catch('my-tasks');
 
 const taskGroupBySchema = z.enum([
   'none',

@@ -30,12 +30,6 @@ export const BUILT_IN_TASK_TABS: TaskTabItem[] = [
       return t('viewMenus.allTasks');
     },
   },
-  {
-    id: 'created-by-me',
-    get label() {
-      return t('viewMenus.createdByMe');
-    },
-  },
 ];
 
 export const PROJECT_TABS: (TaskTabItem & { id: ProjectTab })[] = [
@@ -51,12 +45,6 @@ export const PROJECT_TABS: (TaskTabItem & { id: ProjectTab })[] = [
       return t('viewMenus.allProjects');
     },
   },
-  {
-    id: 'created-projects',
-    get label() {
-      return t('viewMenus.createdByMe');
-    },
-  },
 ];
 
 export const TASK_TABS: TaskTabItem[] = [
@@ -66,11 +54,9 @@ export const TASK_TABS: TaskTabItem[] = [
 
 export const TASK_DEFAULT_GROUP_BY: Record<TasksTab, TaskGroupBy> = {
   'my-tasks': 'priority',
-  'created-by-me': 'status',
   'team-tasks': 'priority',
   projects: 'status',
   'my-projects': 'status',
-  'created-projects': 'status',
 };
 
 export const TASK_GROUP_OPTIONS: {

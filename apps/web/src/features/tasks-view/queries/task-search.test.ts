@@ -5,7 +5,7 @@ import {
   createDateBucketBoundaries,
   taskDueDatePredicate,
 } from '../core/task-due-date';
-import { taskMatchesView } from '../filters/task-predicates';
+import { taskMatchesTab, taskMatchesView } from '../filters/task-predicates';
 import { boardEntity, boardProperty } from '../tests/task-board-fixture';
 import { buildTaskSearchRequest } from './task-search';
 
@@ -79,6 +79,32 @@ describe('buildTaskSearchRequest', () => {
     expect(unresolved.tag_option_ids).toBeUndefined();
     expect(unresolved.tag_filter_mode).toBeUndefined();
   });
+});
+
+it('matches assigned-only, created-only, overlapping, and unrelated tasks', () => {
+  for (const [ownerId, assigned, expected] of [
+    ['someone-else', true, true],
+    ['viewer', false, true],
+    ['viewer', true, true],
+    ['someone-else', false, false],
+  ] as const) {
+    const task = {
+      ...boardEntity(
+        'task',
+        assigned
+          ? [
+              boardProperty('00000001-0000-0000-0000-000000000001', {
+                type: 'EntityReference',
+                value: [{ entity_type: 'USER', entity_id: 'viewer' }],
+              }),
+            ]
+          : []
+      ),
+      ownerId,
+    };
+    expect(taskMatchesTab(task, 'my-tasks', 'viewer')).toBe(expected);
+    expect(taskMatchesTab(task, 'my-tasks', undefined)).toBe(false);
+  }
 });
 
 it('compiles the same DST range for remote and local search without changing text ordering', () => {

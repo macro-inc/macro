@@ -101,6 +101,9 @@ function TaskSavedViewSummary(props: {
           unchanged.
         </p>
       </Show>
+      <Show when={props.config.scope === 'my-tasks'}>
+        <p>{t('viewMenus.myTasks')}</p>
+      </Show>
       <For each={filters.groups().filter((group) => group.id !== 'project')}>
         {(group) => (
           <Show when={(selection().facets[group.id] ?? []).length}>

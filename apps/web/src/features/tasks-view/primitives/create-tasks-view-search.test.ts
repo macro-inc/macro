@@ -145,8 +145,8 @@ it('restores project view history without retaining task person filters', () => 
   expect(view.state.tab).toBe('my-projects');
   expect(view.state.facets).toEqual(DEFAULT_TASK_FACET_SELECTION);
   expect(view.state.groupBy).toBe('status');
-  view.setSearch('tab', 'created-projects');
-  expect(view.state.tab).toBe('created-projects');
+  view.setSearch('tab', 'projects');
+  expect(view.state.tab).toBe('projects');
   view.setSearch('tab', 'my-tasks');
   expect(view.state.tab).toBe('my-tasks');
   expect(view.state.groupBy).toBe('priority');
@@ -377,9 +377,9 @@ it('restores the requested built-in scope after leaving a saved view', () => {
     },
     search: { savedView: '10000000-0000-4000-8000-000000000001' },
   });
-  view.setSearch({ savedView: undefined, tab: 'created-by-me' });
+  view.setSearch({ savedView: undefined, tab: 'my-tasks' });
   view.setState('savedViewActive', false);
-  expect(view.state.tab).toBe('created-by-me');
+  expect(view.state.tab).toBe('my-tasks');
   expect(view.state.facets.priority).toBeUndefined();
 });
 
@@ -460,7 +460,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
   expect(fixture.draft.view()).toMatchObject({ kind: 'saved', dirty: false });
 });
 
-it.each(['my-tasks', 'created-by-me', 'team-tasks'] as const)(
+it.each(['my-tasks', 'team-tasks'] as const)(
   'compares presentation against the %s base defaults',
   (tab) => {
     const fixture = createRoot((dispose) => {
@@ -528,7 +528,8 @@ it('captures relative due dates and property sorts without losing the saved defi
     { id: 'due_date_earliest', reversed: false },
     { id: 'priority', reversed: true },
   ]);
-  expect(restored.facets.assignees).toEqual(['@viewer']);
+  expect(restored.tab).toBe('my-tasks');
+  expect(restored.facets.assignees).toEqual([]);
   expect(readTaskSavedView(captured.value).issues).toEqual([]);
   const decoded = decodeTaskSavedView(captured.value);
   expect(decoded.isOk()).toBe(true);
