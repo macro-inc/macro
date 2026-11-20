@@ -6,27 +6,43 @@ use models_email::service::link::UserProvider;
 use sqlx::PgPool;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// Graph answering every download of the mailbox with `error`.
-struct FailingDownloads {
-    error: EmailApiError,
-    downloads: Arc<AtomicUsize>,
+/// Graph answering every download of the mailbox with `answer`.
+struct Downloads {
+    answer: Result<Vec<u8>, EmailApiError>,
+    count: Arc<AtomicUsize>,
 }
 
-impl MailboxAttachmentAccess for FailingDownloads {
-    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
-        self.downloads.fetch_add(1, Ordering::SeqCst);
-        Err(MailboxError::Provider(self.error.clone()))
+impl Downloads {
+    fn failing(error: EmailApiError) -> Self {
+        Self {
+            answer: Err(error),
+            count: Arc::new(AtomicUsize::new(0)),
+        }
     }
 }
 
-// The attachment step only reaches the database and the download; the other
-// adapters point at an unused local endpoint.
-fn effects(
+impl MailboxAttachmentAccess for Downloads {
+    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        self.answer.clone().map_err(MailboxError::Provider)
+    }
+}
+
+fn interrupted() -> EmailApiError {
+    EmailApiError::Transient {
+        message: "Microsoft Graph attachment download was interrupted".into(),
+    }
+}
+
+const UNUSED_URL: &str = "http://127.0.0.1:9";
+
+// The attachment step only reaches the database, the download and static file
+// storage; the other adapters point at an unused local endpoint.
+fn effects<A: MailboxAttachmentAccess>(
     db: PgPool,
-    error: EmailApiError,
-    downloads: Arc<AtomicUsize>,
+    attachments: A,
+    sfs_url: &str,
 ) -> impl MailboxProjectionEffects {
-    let unused_url = "http://127.0.0.1:9";
     let sqs = aws_sdk_sqs::Client::from_conf(
         aws_sdk_sqs::Config::builder()
             .behavior_version(aws_sdk_sqs::config::BehaviorVersion::latest())
@@ -34,11 +50,11 @@ fn effects(
             .credentials_provider(aws_sdk_sqs::config::Credentials::new(
                 "test", "test", None, None, "test",
             ))
-            .endpoint_url(unused_url)
+            .endpoint_url(UNUSED_URL)
             .build(),
     );
     MailboxEffects {
-        attachments: FailingDownloads { error, downloads },
+        attachments,
         invitations: email::outbound::invitation_pg::InvitationPgRepository(db.clone()),
         broker: macro_event_broker::MacroEventBrokerService::new(
             macro_event_broker::KafkaEventPublisher::new("127.0.0.1:9").unwrap(),
@@ -47,27 +63,27 @@ fn effects(
         notification: Arc::new(notification::domain::service::SqsNotificationIngress {
             queue: notification::outbound::queue::SqsQueue::new(
                 sqs.clone(),
-                unused_url.to_string(),
+                UNUSED_URL.to_string(),
             ),
         }),
         contacts: Arc::new(contacts::domain::service::SqsContactsIngress {
             queue: contacts::outbound::ingress::SqsContactsQueue::new(
                 sqs.clone(),
-                unused_url.to_string(),
+                UNUSED_URL.to_string(),
             ),
         }),
         queue: sqs_client::SQS::new(sqs),
         gateway: connection_gateway_client::client::ConnectionGatewayClient::new(
             "test".to_string(),
-            unused_url.to_string(),
+            UNUSED_URL.to_string(),
         ),
         dss: document_storage_service_client::DocumentStorageServiceClient::new(
             "test".to_string(),
-            unused_url.to_string(),
+            UNUSED_URL.to_string(),
         ),
         sfs: static_file_service_client::StaticFileServiceClient::new(
             "test".to_string(),
-            unused_url.to_string(),
+            sfs_url.to_string(),
         ),
         properties: Arc::new(SystemPropertiesServiceImpl::new(
             PgSystemPropertiesRepository::new(db.clone()),
@@ -166,11 +182,9 @@ async fn an_attachment_whose_download_keeps_being_interrupted_is_abandoned(db: P
         .execute(&db)
         .await
         .unwrap();
-    let downloads = Arc::new(AtomicUsize::new(0));
-    let interrupted = EmailApiError::Transient {
-        message: "Microsoft Graph attachment download was interrupted".into(),
-    };
-    let effects = effects(db.clone(), interrupted, downloads.clone());
+    let downloads = Downloads::failing(interrupted());
+    let count = downloads.count.clone();
+    let effects = effects(db.clone(), downloads, UNUSED_URL);
     let context = context();
 
     // Each failure defers the projection and leaves the attachment for its next try.
@@ -199,7 +213,7 @@ async fn an_attachment_whose_download_keeps_being_interrupted_is_abandoned(db: P
 
     // Later events for the message never download it again, and no claim takes it.
     effects.attachments(MAILBOX, &context, true).await.unwrap();
-    assert_eq!(downloads.load(Ordering::SeqCst), 50);
+    assert_eq!(count.load(Ordering::SeqCst), 50);
     assert!(
         new_email_media_atts(&db, LINK_ID, "claim-test-media-msg")
             .await
@@ -224,7 +238,7 @@ async fn a_throttled_download_is_never_counted_against_the_attachment(db: PgPool
         retry_after: None,
         origin: RateLimitOrigin::Local,
     };
-    let effects = effects(db.clone(), throttled, Arc::new(AtomicUsize::new(0)));
+    let effects = effects(db.clone(), Downloads::failing(throttled), UNUSED_URL);
     let context = context();
 
     for _ in 0..60 {
@@ -238,6 +252,146 @@ async fn a_throttled_download_is_never_counted_against_the_attachment(db: PgPool
         ));
     }
 
+    let state = upload_state(&db).await;
+    assert_eq!(state.failures, 0);
+    assert!(!state.claimed && !state.abandoned);
+}
+
+/// A pass whose claim goes stale while it downloads: another pass takes the
+/// attachment over and abandons it before this download fails.
+struct OvertakenDownload<E> {
+    db: PgPool,
+    next_pass: E,
+}
+
+impl<E: MailboxProjectionEffects> MailboxAttachmentAccess for OvertakenDownload<E> {
+    async fn download(&self, _: MailboxKey, _: &str, _: &str) -> Result<Vec<u8>, MailboxError> {
+        sqlx::query!(
+            "UPDATE email_attachments SET upload_claimed_at = now() - interval '4 minutes'
+            WHERE id = $1",
+            IMAGE_ID
+        )
+        .execute(&self.db)
+        .await
+        .unwrap();
+        self.next_pass
+            .attachments(MAILBOX, &context(), false)
+            .await
+            .unwrap();
+        Err(MailboxError::Provider(interrupted()))
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_pass_that_lost_its_claim_leaves_the_next_pass_abandonment_alone(db: PgPool) {
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    sqlx::query!(
+        "UPDATE email_attachments SET upload_failures = 2 WHERE id = $1",
+        IMAGE_ID
+    )
+    .execute(&db)
+    .await
+    .unwrap();
+    // The next pass's third refusal abandons the attachment; this pass's
+    // interrupted download would only count toward 50.
+    let next_pass = effects(
+        db.clone(),
+        Downloads::failing(EmailApiError::NotFound),
+        UNUSED_URL,
+    );
+    let this_pass = effects(
+        db.clone(),
+        OvertakenDownload {
+            db: db.clone(),
+            next_pass,
+        },
+        UNUSED_URL,
+    );
+
+    let error = this_pass
+        .attachments(MAILBOX, &context(), false)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            error,
+            MailboxError::Provider(EmailApiError::Transient { .. })
+        ),
+        "{error:?}"
+    );
+    let state = upload_state(&db).await;
+    assert_eq!(state.failures, 3);
+    assert!(state.claimed && state.abandoned);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../crates/email_db_client/fixtures",
+        scripts("upload_claim_tests")
+    )
+)]
+async fn a_lock_timeout_storing_the_file_mapping_is_not_counted(db: PgPool) {
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    sqlx::query!("DELETE FROM email_attachments WHERE id = $1", VIDEO_ID)
+        .execute(&db)
+        .await
+        .unwrap();
+    let storage = MockServer::start().await;
+    Mock::given(method("PUT"))
+        .and(path("/internal/file"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "upload_url": format!("{}/upload", storage.uri()),
+            "file_location": format!("{}/file/stored", storage.uri()),
+            "id": Uuid::from_u128(0x5f5).to_string(),
+        })))
+        .mount(&storage)
+        .await;
+    Mock::given(method("PUT"))
+        .and(path("/upload"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&storage)
+        .await;
+    let impatient = sqlx::postgres::PgPoolOptions::new()
+        .connect_with(
+            (*db.connect_options())
+                .clone()
+                .options([("lock_timeout", "200ms")]),
+        )
+        .await
+        .unwrap();
+    let downloads = Downloads {
+        answer: Ok(b"image".to_vec()),
+        count: Arc::new(AtomicUsize::new(0)),
+    };
+    let effects = effects(impatient, downloads, &storage.uri());
+    // Inserts into the file mapping wait behind this lock; reads and the
+    // attachment's own row do not.
+    let mut lock = db.begin().await.unwrap();
+    sqlx::query!("LOCK TABLE email_attachments_sfs IN SHARE MODE")
+        .execute(&mut *lock)
+        .await
+        .unwrap();
+
+    let error = effects
+        .attachments(MAILBOX, &context(), false)
+        .await
+        .unwrap_err();
+    lock.rollback().await.unwrap();
+
+    assert!(error.is_lock_timeout(), "{error:?}");
     let state = upload_state(&db).await;
     assert_eq!(state.failures, 0);
     assert!(!state.claimed && !state.abandoned);

@@ -43,7 +43,7 @@ pub enum UploadAttachmentError {
     ParseError(String),
 
     #[error("Database error: {0}")]
-    DatabaseError(String),
+    DatabaseError(anyhow::Error),
 
     #[error("Attachment filename is missing")]
     FilenameMissing,
@@ -164,7 +164,7 @@ async fn upload_media_attachment(
         },
     )
     .await
-    .map_err(|e| UploadAttachmentError::DatabaseError(e.to_string()))?;
+    .map_err(UploadAttachmentError::DatabaseError)?;
 
     Ok(sfs_response.id)
 }

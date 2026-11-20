@@ -621,10 +621,12 @@ pub async fn new_email_media_atts(
 }
 
 /// Releases an attachment's upload claim so the next claiming query picks it up again.
+/// An abandoned attachment keeps its claim, so it is never released.
 #[tracing::instrument(skip(db), err)]
 pub async fn release_upload_claim(db: &Pool<Postgres>, attachment_id: Uuid) -> anyhow::Result<()> {
     sqlx::query!(
-        "UPDATE email_attachments SET upload_claimed_at = NULL WHERE id = $1",
+        "UPDATE email_attachments SET upload_claimed_at = NULL
+        WHERE id = $1 AND upload_abandoned_at IS NULL",
         attachment_id
     )
     .execute(db)

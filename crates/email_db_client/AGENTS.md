@@ -111,8 +111,8 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   claimed attachment the caller never sees is never uploaded, and the Outlook
   projection waits on its claim forever. An abandoned attachment
   (`upload_abandoned_at`) keeps its claim on purpose, so claims skip it; a
-  query that waits on or reclaims claims (`oldest_pending_upload_claim`, the
-  projection's stale-claim release) must leave it out.
+  query that waits on, releases or reclaims claims (`oldest_pending_upload_claim`,
+  `release_upload_claim`, the projection's stale-claim release) must leave it out.
 - The document auto-import (`attachments/provider/upload.rs`: the new-mail
   claims and both backfill queries) skips drafts. A draft's row is deleted
   when it is saved again, sent or discarded, and `document_email` cascades

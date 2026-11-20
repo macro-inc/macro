@@ -607,12 +607,15 @@ tools — hexagonal, heavily feature-gated.
   outage or a busy mailbox never abandons a message.
 - A projection's attachment download or upload that keeps failing is counted
   on the attachment (`email_attachments.upload_failures`), not the event, and
-  abandoned by `attachment_retry` in `domain/mailbox/projection.rs`: 3 refusals
-  or 50 other failures. A transient download failure counts there, unlike a
-  message read's, because Graph can cut the same attachment's download every
-  time. The abandoned attachment keeps its upload claim and gets
-  `upload_abandoned_at`, so no claim takes it and the projection stops waiting
-  on it; nothing revives it, and opening it still downloads it on demand.
+  abandoned at the limit `attachment_failure_limit` in
+  `domain/mailbox/projection.rs` gives: 3 refusals or 50 other failures. A
+  transient download failure counts there, unlike a message read's, because
+  Graph can cut the same attachment's download every time. The abandoned
+  attachment keeps its upload claim and gets `upload_abandoned_at`, so no claim
+  takes it and the projection stops waiting on it; nothing revives it, and
+  opening it still downloads it on demand. email-service writes a failure only
+  while the claim is still the one its pass took, so a pass that outlived the
+  three-minute claim cannot undo the next pass's outcome.
 - A message read Graph answers 404 settles as `absent` (`reconcile` in
   `domain/mailbox.rs`). Live work reads it twice more, 30 and 60 s apart
   (`location_unsettled`), because it follows a change Graph's read can

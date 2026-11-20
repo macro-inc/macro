@@ -1,5 +1,6 @@
 //! Adapters from durable email projections to existing Macro services.
 
+use chrono::{DateTime, Utc};
 use contacts::domain::{models::messages::ContactConnection, ports::ContactsIngress};
 use email::domain::{
     events::EmailMacroEvent,
@@ -24,7 +25,10 @@ use models_email::{
     },
 };
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 use uuid::Uuid;
 
@@ -261,6 +265,9 @@ where
         .map_err(|error| {
             database_failed(&error, error.chain().find_map(|cause| cause.downcast_ref()))
         })?;
+        let claims = self
+            .claim_times(documents.iter().chain(&media).map(|a| a.attachment_db_id))
+            .await?;
         for (attachment, destination) in documents
             .into_iter()
             .map(|a| (a, AttachmentUploadDestination::Dss))
@@ -310,12 +317,16 @@ where
                 {
                     return Ok(());
                 }
-                stored.map_err(|error| match error {
-                    // Its message is already a string, so no SQLSTATE survives.
-                    crate::util::upload_attachment::UploadAttachmentError::DatabaseError(_) => {
-                        database_failed(&error, None)
+                stored.map_err(|error| match &error {
+                    // Keeps the SQLSTATE, so a lock timeout is not counted
+                    // against the attachment.
+                    crate::util::upload_attachment::UploadAttachmentError::DatabaseError(cause) => {
+                        database_failed(
+                            &error,
+                            cause.chain().find_map(|cause| cause.downcast_ref()),
+                        )
                     }
-                    error => {
+                    _ => {
                         tracing::warn!(?error, "mailbox projection effect deferred");
                         MailboxError::Effect(EffectFailure::AttachmentUpload { attachment_id })
                     }
@@ -324,9 +335,15 @@ where
             }
             .await;
             if let Err(error) = result {
-                if self
-                    .settle_failed_attachment(mailbox.link_id, attachment_id, &error)
-                    .await?
+                if let Some(claimed_at) = claims.get(&attachment_id)
+                    && self
+                        .settle_failed_attachment(
+                            mailbox.link_id,
+                            attachment_id,
+                            *claimed_at,
+                            &error,
+                        )
+                        .await?
                 {
                     continue;
                 }
@@ -354,61 +371,88 @@ where
 }
 
 impl<A, I, B, N, C> MailboxEffects<A, I, B, N, C> {
+    /// When this pass claimed each attachment, read before any download, which
+    /// can outlast the three minutes after which another pass may take a claim.
+    async fn claim_times(
+        &self,
+        attachment_ids: impl Iterator<Item = Uuid>,
+    ) -> Result<HashMap<Uuid, DateTime<Utc>>, MailboxError> {
+        let attachment_ids: Vec<Uuid> = attachment_ids.collect();
+        if attachment_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = sqlx::query!(
+            r#"SELECT id, upload_claimed_at AS "upload_claimed_at!" FROM email_attachments
+            WHERE id = ANY($1) AND upload_claimed_at IS NOT NULL"#,
+            &attachment_ids
+        )
+        .fetch_all(&self.db)
+        .await
+        .map_err(|error| database_failed(&error, Some(&error)))?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.id, row.upload_claimed_at))
+            .collect())
+    }
+
     /// Releases a failed attachment's claim for the event's next try, counting
-    /// the failure against it as `attachment_retry` says. An attachment that
-    /// failed too often keeps its claim and is marked abandoned instead, so no
-    /// claim takes it again and the projection stops waiting on it. Returns
+    /// the failure against it unless `attachment_failure_limit` says it isn't
+    /// counted. At the limit the attachment keeps its claim and is marked
+    /// abandoned instead, so no claim takes it again and the projection stops
+    /// waiting on it. Each write applies only while the claim is still the one
+    /// this pass took at `claimed_at`: a pass that lost it may find the
+    /// attachment stored, or abandoned, by the pass that took it next. Returns
     /// whether it was abandoned.
     async fn settle_failed_attachment(
         &self,
         link_id: Uuid,
         attachment_id: Uuid,
+        claimed_at: DateTime<Utc>,
         error: &MailboxError,
     ) -> Result<bool, MailboxError> {
-        let failures = sqlx::query_scalar!(
-            "SELECT upload_failures FROM email_attachments WHERE id = $1",
-            attachment_id
+        let Some(limit) = attachment_failure_limit(error) else {
+            sqlx::query!(
+                "UPDATE email_attachments SET upload_claimed_at = NULL
+                WHERE id = $1 AND upload_claimed_at = $2",
+                attachment_id,
+                claimed_at
+            )
+            .execute(&self.db)
+            .await
+            .map_err(|error| database_failed(&error, Some(&error)))?;
+            return Ok(false);
+        };
+
+        let settled = sqlx::query!(
+            r#"
+            UPDATE email_attachments SET
+                upload_failures = upload_failures + 1,
+                upload_claimed_at = CASE WHEN upload_failures + 1 >= $3 THEN upload_claimed_at END,
+                upload_abandoned_at = CASE WHEN upload_failures + 1 >= $3 THEN now() END
+            WHERE id = $1 AND upload_claimed_at = $2
+            RETURNING upload_failures, upload_abandoned_at IS NOT NULL AS "abandoned!"
+        "#,
+            attachment_id,
+            claimed_at,
+            i32::from(limit)
         )
         .fetch_optional(&self.db)
         .await
         .map_err(|error| database_failed(&error, Some(&error)))?;
-        // A deleted row took its claim with it.
-        let Some(failures) = failures else {
+        let Some(settled) = settled else {
             return Ok(false);
         };
 
-        let retry = attachment_retry(error, failures.saturating_add(1));
-        let counted: i16 = match retry {
-            AttachmentRetry::Release => 0,
-            AttachmentRetry::Count | AttachmentRetry::Abandon => 1,
-        };
-        let abandoned = retry == AttachmentRetry::Abandon;
-        sqlx::query!(
-            r#"
-            UPDATE email_attachments SET
-                upload_failures = upload_failures + $2,
-                upload_claimed_at = CASE WHEN $3 THEN upload_claimed_at END,
-                upload_abandoned_at = CASE WHEN $3 THEN now() END
-            WHERE id = $1
-        "#,
-            attachment_id,
-            counted,
-            abandoned
-        )
-        .execute(&self.db)
-        .await
-        .map_err(|error| database_failed(&error, Some(&error)))?;
-
-        if abandoned {
+        if settled.abandoned {
             tracing::warn!(
                 %link_id,
                 %attachment_id,
-                failures = failures.saturating_add(1),
+                failures = settled.upload_failures,
                 defer_reason = defer_reason(error),
                 %error,
                 "outlook attachment abandoned"
             );
         }
-        Ok(abandoned)
+        Ok(settled.abandoned)
     }
 }

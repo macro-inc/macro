@@ -163,17 +163,15 @@ async fn persisted_projection_restores_invocation_when_publishing_later() {
 #[test]
 fn refused_attachments_stop_sooner_and_worker_failures_never_count() {
     let gone = MailboxError::Provider(EmailApiError::NotFound);
-    assert_eq!(attachment_retry(&gone, 2), AttachmentRetry::Count);
-    assert_eq!(attachment_retry(&gone, 3), AttachmentRetry::Abandon);
+    assert_eq!(attachment_failure_limit(&gone), Some(3));
 
     let upload = MailboxError::Effect(EffectFailure::AttachmentUpload {
         attachment_id: Uuid::nil(),
     });
-    assert_eq!(attachment_retry(&upload, 49), AttachmentRetry::Count);
-    assert_eq!(attachment_retry(&upload, 50), AttachmentRetry::Abandon);
+    assert_eq!(attachment_failure_limit(&upload), Some(50));
 
     let lock_timeout = MailboxError::database(DatabaseFailure::Sqlstate(LOCK_NOT_AVAILABLE.into()));
     for error in [lock_timeout, MailboxError::Stale] {
-        assert_eq!(attachment_retry(&error, 50), AttachmentRetry::Release);
+        assert_eq!(attachment_failure_limit(&error), None);
     }
 }
