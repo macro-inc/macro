@@ -16,6 +16,7 @@ import { MobileCalendarSidebar } from './calendar-sidebar';
 
 const state = vi.hoisted(() => ({
   changeView: vi.fn(),
+  navigate: vi.fn(),
   period: 'timeGridWeek',
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
@@ -60,7 +61,7 @@ vi.mock('@app/features/calendar/availability/CopyAvailabilityButton', () => ({
 }));
 vi.mock('@app/lib/split-router', async (original) => ({
   ...(await original<typeof import('@app/lib/split-router')>()),
-  useNavigate: () => vi.fn(),
+  useNavigate: () => state.navigate,
 }));
 
 beforeEach(() => {
@@ -79,6 +80,7 @@ beforeEach(() => {
   );
   vi.stubGlobal('scrollTo', vi.fn());
   state.changeView.mockClear();
+  state.navigate.mockClear();
 });
 afterEach(() => {
   cleanup();
@@ -124,4 +126,28 @@ it('uses shell navigation, marks the active view, and dismisses after a view cho
   fireEvent.click(screen.getByRole('button', { name: /^Day$/ }));
   expect(state.changeView).toHaveBeenCalledWith('timeGridDay');
   await waitFor(() => expect(shell.aside.isOverlay()).toBe(false));
+});
+
+it('opens the existing booking-link editor with the serialized creation request', async () => {
+  render(() => (
+    <ViewShell.Root
+      asidePreferenceKey="calendar-test"
+      contentLayout="collection"
+      aside={{ preserveDuringResize: false }}
+    >
+      <ViewShell.Aside>
+        <MobileCalendarSidebar />
+      </ViewShell.Aside>
+      <ViewShell.Main>
+        <ViewSidebar.Toggle action="expand" presentation="pill" />
+      </ViewShell.Main>
+    </ViewShell.Root>
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'New booking link' })
+  );
+  expect(state.navigate).toHaveBeenCalledWith(expect.any(Object), {
+    search: { scheduling: { createBookingLink: ['true'] } },
+  });
 });

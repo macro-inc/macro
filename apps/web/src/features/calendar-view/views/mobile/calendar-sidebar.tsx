@@ -7,6 +7,10 @@ import { useHasTeammates } from '@app/features/calendar/hooks/use-team-ooo';
 import { TEAM_OOO_SOURCE_ID } from '@app/features/calendar/types';
 import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
+import {
+  bookingLinksSearch,
+  bookingLinksSearchCodec,
+} from '@app/features/scheduling/booking-links-search';
 import { useSchedulingProfileWithAutoSetupQuery } from '@app/features/scheduling/queries/source';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { useNavigate } from '@app/lib/split-router';
@@ -71,12 +75,18 @@ function MobileBookingLinks() {
           aria-label="New booking link"
           onClick={() =>
             fireAndForget(
-              navigate({
-                route: bookingLinksRoute,
-                query: {
-                  scheduling: { tab: 'links', createBookingLink: true },
-                },
-              }),
+              navigate(
+                { route: bookingLinksRoute },
+                {
+                  search: {
+                    [bookingLinksSearch.namespace]:
+                      bookingLinksSearchCodec.serialize({
+                        ...bookingLinksSearch.defaults,
+                        createBookingLink: true,
+                      }),
+                  },
+                }
+              ),
               'calendar-booking-links'
             )
           }
