@@ -318,6 +318,11 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   allowCustomRecipients?: boolean;
   /** Show each person's address beside their name on chips, as email does. */
   showChipAddresses?: boolean;
+  /**
+   * Takes no more recipients: chips can still be removed, with their X or
+   * Backspace, but the field takes no typing and opens no suggestions.
+   */
+  full?: boolean;
 } & (
   | {
       /** Explicit scoped options, such as team participants or agents. */
@@ -372,7 +377,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     createSignal(Boolean(props.focusOnMount));
 
   const setComboboxOpen = (next: boolean) => {
-    if (next && suppressOpenUntilInputChange()) return;
+    if (next && (suppressOpenUntilInputChange() || props.full)) return;
     setIsOpen(next);
   };
 
@@ -807,7 +812,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         noResetInputOnBlur={props.noResetInputOnBlur}
         shouldFocusWrap
         placeholder={
-          props.selectedOptions?.length === 0 || isMobile()
+          !props.full && (props.selectedOptions?.length === 0 || isMobile())
             ? (props.placeholder ?? placeholderText())
             : undefined
         }
@@ -981,6 +986,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   <Combobox.Input
                     id={props.inputId}
                     disabled={disabled()}
+                    // Read-only rather than disabled: Backspace still removes
+                    // the last chip.
+                    readOnly={props.full}
                     ref={(el) => {
                       setInputRef(el);
                       props.inputRef?.(el);
