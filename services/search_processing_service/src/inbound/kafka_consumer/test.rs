@@ -3429,7 +3429,49 @@ async fn processing_records_its_lag_and_counts_a_drop() {
             .iter()
             .map(|point| (point.tags.clone(), point.value))
             .collect::<Vec<_>>(),
-        [(tags(&[("entity_type", "email"), ("outcome", "dropped")]), 1)]
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "dropped"),
+                ("failure", "bulk_items"),
+            ]),
+            1
+        )]
+    );
+}
+
+#[tokio::test]
+async fn failed_items_count_by_the_last_attempts_failure() {
+    use super::metrics::{
+        FAILED_BULK_ITEMS,
+        test::{Recorded, tags},
+    };
+
+    let recorded = Recorded::new();
+    let received = received_thread_backfilled_event(EMAIL_THREAD_ID, 7);
+    let replays = RecordedReplays(Mutex::default());
+
+    process_received(&recorded.metrics, &received, &replays, |_| async {
+        Err(exhausted(Failure::Overloaded))
+    })
+    .await;
+
+    // A refusal while OpenSearch protects itself, such as a drain's 429s,
+    // counts apart from items it failed.
+    assert_eq!(
+        recorded
+            .points(FAILED_BULK_ITEMS)
+            .iter()
+            .map(|point| (point.tags.clone(), point.value))
+            .collect::<Vec<_>>(),
+        [(
+            tags(&[
+                ("entity_type", "email"),
+                ("outcome", "retry_queued"),
+                ("failure", "overloaded"),
+            ]),
+            1
+        )]
     );
 }
 
@@ -3458,6 +3500,126 @@ async fn an_indexed_event_is_not_counted_as_dropped() {
         ["indexed"]
     );
     assert!(recorded.points(DROPPED).is_empty());
+}
+
+/// Stands in for OpenSearch's answers to property writes, with bodies as
+/// OpenSearch 3.5 returns them: [`PROJECT_ID`] is the only indexed project,
+/// and no email thread is indexed.
+async fn property_write_opensearch() -> opensearch_client::OpensearchClient {
+    use axum::{
+        http::{StatusCode, Uri},
+        response::IntoResponse,
+    };
+
+    let app = axum::Router::new().fallback(|uri: Uri| async move {
+        let path = uri.path();
+        let (status, body) = if path == format!("/projects/_update/{PROJECT_ID}") {
+            (
+                StatusCode::OK,
+                serde_json::json!({"_index": "projects", "_id": PROJECT_ID, "result": "updated"}),
+            )
+        } else if path.starts_with("/projects/_update/") {
+            let error = serde_json::json!({
+                "type": "document_missing_exception",
+                "reason": "document missing",
+                "index": "projects",
+            });
+            (
+                StatusCode::NOT_FOUND,
+                serde_json::json!({"error": {"root_cause": [error.clone()], "type": error["type"], "reason": error["reason"]}, "status": 404}),
+            )
+        } else if path == "/emails/_update_by_query" {
+            (
+                StatusCode::OK,
+                serde_json::json!({"total": 0, "updated": 0, "version_conflicts": 0, "noops": 0, "failures": []}),
+            )
+        } else {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                serde_json::json!({"error": format!("unexpected request {path}")}),
+            )
+        };
+        (status, axum::Json(body)).into_response()
+    });
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let endpoint = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    opensearch_client::OpensearchClient::new(endpoint, String::new(), String::new()).unwrap()
+}
+
+/// Freshness reads `outcome:indexed`, so a property write that changes nothing
+/// in the index, because the entity's type has no search index or the entity
+/// is not indexed yet, must not count as one.
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn property_writes_that_change_nothing_indexed_are_not_counted_as_indexed(
+    pool: sqlx::PgPool,
+) {
+    use super::metrics::{LAG, test::Recorded};
+    use properties::domain::events::PropertyMacroEvent;
+
+    let opensearch = property_write_opensearch().await;
+    let (pool, opensearch) = (&pool, &opensearch);
+    let thread_id = EMAIL_THREAD_ID.to_string();
+    let cases = [
+        (PROJECT_ID, EntityType::Project, "indexed"),
+        (
+            "project-not-indexed",
+            EntityType::Project,
+            "no_index_change",
+        ),
+        (thread_id.as_str(), EntityType::Thread, "no_index_change"),
+        ("company-id", EntityType::Company, "ignored"),
+    ];
+    for (offset, (entity_id, entity_type, outcome)) in (0..).zip(cases) {
+        let recorded = Recorded::new();
+        let event =
+            PropertyMacroEvent::entity_properties_cleared(EntityPropertiesClearedMetadata {
+                entity_id: entity_id.to_string(),
+                entity_type,
+                actor_user_id: None,
+                actor: None,
+                on_behalf_of: None,
+            });
+        let mut received = attach_event_coordinates(
+            Ok::<_, EventBrokerError>(DeclaredMacroEvent::PropertyMacroEvent(event)),
+            0,
+            offset,
+            tracing::Span::none(),
+        )
+        .expect("attached event");
+        received.produced_at_ms = Some(Utc::now().timestamp_millis());
+
+        process_received(
+            &recorded.metrics,
+            &received,
+            &UnreachableReplays,
+            |received| async move {
+                let DeclaredMacroEvent::PropertyMacroEvent(event) = &received.event else {
+                    unreachable!("a property event");
+                };
+                property::process_property_event(
+                    pool,
+                    opensearch,
+                    event,
+                    received.partition,
+                    received.offset,
+                    &Attempts::Once,
+                )
+                .await
+            },
+        )
+        .await;
+
+        assert_eq!(
+            recorded
+                .points(LAG)
+                .iter()
+                .map(|point| point.tags["outcome"].as_str())
+                .collect::<Vec<_>>(),
+            [outcome],
+            "{entity_type:?} {entity_id}"
+        );
+    }
 }
 
 #[tokio::test]

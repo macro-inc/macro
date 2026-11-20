@@ -449,11 +449,14 @@ pub trait CrmService: super::email_privacy::EmailPrivacyService {
         patch: CrmTeamSettingsPatch,
     ) -> impl Future<Output = Result<CrmTeamSettings, CrmError>> + Send;
 
-    /// Manually creates a contact for the caller's team without a
-    /// company, with a display `name` and an optional `email` of any
-    /// domain. Validates like [`CrmService::create_contact`]. Any team
-    /// member may create one. See
-    /// [`CompaniesRepository::create_contact_for_team`].
+    /// Manually creates a contact for the caller's team with a display
+    /// `name` and an optional `email` of any domain, without naming a
+    /// company. An address at a company's own domain files the contact under
+    /// the team's company for that domain, as email sync does
+    /// ([`CompaniesRepository::create_contact_for_email_domain`]); a personal
+    /// or generic provider address, or none, leaves it without a company
+    /// ([`CompaniesRepository::create_contact_for_team`]). Validates like
+    /// [`CrmService::create_contact`]. Any team member may create one.
     fn create_team_contact(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,
@@ -623,7 +626,7 @@ where
     R: CompanyMetadataResolver,
 {
     /// The underlying companies repository
-    companies_repository: CR,
+    pub(super) companies_repository: CR,
     /// Resolver consulted when `crm_domain_directory` has no entry for a
     /// given domain, and for pending entries in
     /// [`CrmServiceImpl::enrich_pending_domains`]. The resolver itself is
@@ -741,7 +744,7 @@ where
     /// Ensures `crm_domain_directory` has an entry for `domain`: resolves
     /// it when the domain has none, storing a pending entry instead when
     /// the resolver is unavailable.
-    async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
+    pub(super) async fn ensure_domain_directory_entry(&self, domain: &str) -> Result<(), CrmError> {
         if self
             .companies_repository
             .lookup_domain_metadata(domain)
@@ -1442,8 +1445,27 @@ where
             .filter(|email| !email.is_empty())
             .map(normalize_contact_email)
             .transpose()?;
+
+        // An address at a company's own domain files the contact under that
+        // company, as email sync would. Personal and generic providers key no
+        // company, so those contacts start without one.
+        let company_address = email.as_deref().filter(|email| {
+            email
+                .split_once('@')
+                .is_some_and(|(_, domain)| !is_generic_email_domain(domain))
+        });
+        let Some(company_address) = company_address else {
+            return self
+                .companies_repository
+                .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+                .await;
+        };
+
+        if let Some((_, domain)) = company_address.split_once('@') {
+            self.ensure_domain_directory_entry(domain).await?;
+        }
         self.companies_repository
-            .create_contact_for_team(&access.team_id(), email.as_deref(), name, Utc::now())
+            .create_contact_for_email_domain(&access.team_id(), company_address, name, Utc::now())
             .await
     }
 

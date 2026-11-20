@@ -3,7 +3,7 @@
 ## Scope
 
 Customize routines, ordinary Markdown documents, snippets, task projects
-(initiatives), forms, and databases. Exclude tasks, skills, internal collab
+(initiatives), forms, databases, and saved views. Exclude tasks, skills, internal collab
 documents, Drive folders, and other file types.
 
 Appearance belongs to the shared entity, not the viewer. Every identity surface,
@@ -33,6 +33,9 @@ Appearance travels with entity reads, rather than fetching per rendered icon.
 Headers and breadcrumbs use the lightweight preview identity selection, without
 loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.
+An agent creating or changing a routine may pick its look (`appearance` on the
+configuration), replacing the template's or default look, but never a look the
+owner chose through the appearance endpoint (see `crates/scheduled_action/AGENTS.md`).
 Published routine templates retain snapshot semantics.
 
 Generate wire types from the Rust schemas, not hand-written frontend DTOs.

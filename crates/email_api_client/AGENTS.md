@@ -147,8 +147,10 @@ Outlook (Microsoft Graph) outbound adapters.
   plus `originalStart`); a new read of an instance property must be added
   there, since a `$select` returns nothing else. An exception still without
   one is left out of its series and reported as a `SkippedOccurrence`
-  (`instances.originalStart.missing`); one Macro cannot parse rejects the
-  series at `instances.originalStart`. Raise `READER_REVISION` with a change
+  (`instances.originalStart.missing`), and the series is stored under no
+  role, from the sync and from an edit's echo, so team reads leave it out;
+  one Macro cannot parse rejects the series at `instances.originalStart`.
+  Raise `READER_REVISION` with a change
   that lets Macro read events it skipped before, so delta calendars read
   them again. Graph names UTC `tzone://Microsoft/Utc` on meetings Exchange
   imported from another system's invitation, which `zones::zone` maps; a

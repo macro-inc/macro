@@ -13,6 +13,8 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { createCloseOnNavigation } from './close-on-navigation';
 
+export type { Size as DrawerSnapPoint } from '@corvu/drawer';
+
 /**
  * Call this from a scroll container's `onFocusIn` to smoothly scroll a
  * focused input/textarea to `offset` px from the container's top edge.
@@ -127,6 +129,103 @@ function MobileDrawerContent(
         {...rest}
       />
     </Layer>
+  );
+}
+
+/**
+ * Opt-in sheet whose height stays anchored to the layout viewport while the
+ * keyboard opens. The keyboard occupies space inside the sheet instead of
+ * moving or shrinking the sheet itself. Put a flexing, min-h-0 thread above
+ * KeyboardFooter so only the thread gives up space to the keyboard.
+ */
+function MobileDrawerFixedContent(
+  props: ComponentProps<typeof Drawer.Content> & {
+    /** Maximum height as a percentage of the layout viewport. Defaults to 80. */
+    maxHeight?: number;
+    /** Fixed height as a percentage of the layout viewport. Defaults to 80. */
+    targetHeight?: number;
+    /** Keep the footer inside the visible portion of a bottom snap-point sheet. */
+    fitSnapPoint?: boolean;
+    opaque?: boolean;
+  }
+) {
+  const [local, rest] = splitProps(props, [
+    'class',
+    'maxHeight',
+    'targetHeight',
+    'opaque',
+    'fitSnapPoint',
+  ]);
+  const drawer = Drawer.useContext();
+  const targetHeight = () => Math.min(100, local.targetHeight ?? 80);
+  const maxHeight = () =>
+    Math.min(100, local.maxHeight ?? Math.max(80, targetHeight()));
+
+  onCleanup(() => {
+    clearTimeout(scrollTimer);
+    scrollTimer = undefined;
+  });
+
+  return (
+    <Layer depth={0}>
+      <Drawer.Content
+        onFocusIn={(e: FocusEvent) => {
+          // A pinned footer is already above the keyboard. Scrolling Content
+          // for its input would move the header inside this fixed-height sheet.
+          if (
+            e.target instanceof Element &&
+            e.target.closest('[data-drawer-scroll-body]')
+          )
+            scrollToFocusedInput(e);
+        }}
+        style={{
+          '--drawer-h': `${targetHeight()}dvh`,
+          '--drawer-max-h': `${maxHeight()}dvh`,
+          // Native sets both variables, but Safari only squishes --dvh.
+          // 100dvh remains the layout viewport while the keyboard is open.
+          '--drawer-keyboard-inset': virtualKeyboardVisible()
+            ? 'max(var(--virtual-keyboard-height,0px),calc(100dvh - var(--dvh,1dvh)*100))'
+            : '0px',
+          // Corvu moves a full-height sheet offscreen at smaller snap points.
+          // Reserve that translated portion so the footer stays on screen.
+          '--drawer-snap-inset': local.fitSnapPoint
+            ? `${Math.max(0, drawer.translate())}px`
+            : '0px',
+        }}
+        class={cn(
+          'portal-scope',
+          'fixed! inset-x-2 bottom-2 z-modal mobile-sheet glass flex flex-col h-(--drawer-h) max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-16px))] min-h-0 overflow-hidden data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          local.fitSnapPoint
+            ? 'data-transitioning:transition-[transform,padding-bottom]'
+            : 'data-transitioning:transition-transform',
+          virtualKeyboardVisible()
+            ? 'pb-(--drawer-keyboard-inset)'
+            : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]',
+          local.fitSnapPoint &&
+            (virtualKeyboardVisible()
+              ? 'pb-[calc(var(--drawer-keyboard-inset)+var(--drawer-snap-inset))]'
+              : 'pb-[calc(max(16px,var(--mobile-sheet-safe-padding))+var(--drawer-snap-inset))]'),
+          '[&_[data-drawer-scroll-body]]:pb-0',
+          local.opaque
+            ? 'bg-menu [--color-dialog:var(--color-menu)]'
+            : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
+          local.class
+        )}
+        {...rest}
+      />
+    </Layer>
+  );
+}
+
+/** Place after a min-h-0 flexing thread inside FixedContent. */
+function MobileDrawerKeyboardFooter(props: ComponentProps<'div'>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <div
+      data-drawer-keyboard-footer
+      class={cn('shrink-0', local.class)}
+      {...rest}
+    />
   );
 }
 
@@ -349,10 +448,7 @@ function focusSheetOverItsFirstRow(event: Event) {
  */
 export const MobileDrawer = Object.assign(
   (
-    props: Omit<
-      ComponentProps<typeof Drawer>,
-      'activeSnapPoint' | 'onActiveSnapPointChange'
-    > & {
+    props: ComponentProps<typeof Drawer> & {
       /**
        * Stay open when the app navigates. Only for a sheet whose dismissal
        * discards something the user can't get back, such as files shared to
@@ -365,6 +461,9 @@ export const MobileDrawer = Object.assign(
       'onOutsidePointer',
       'onOpenChange',
       'onInitialFocus',
+      'activeSnapPoint',
+      'onActiveSnapPointChange',
+      'breakPoints',
       'initialOpen',
       'keepOpenOnNavigation',
     ]);
@@ -385,10 +484,18 @@ export const MobileDrawer = Object.assign(
     // it to the open snap point. It starts closed, as Corvu's own state does,
     // so opening slides it in.
     const [activeSnapPoint, setActiveSnapPoint] = createSignal<Size>(0);
+    let lastOpenSnapPoint: Size = props.defaultSnapPoint ?? 1;
+    const changeSnapPoint = (point: Size) => {
+      const previousPoint = local.activeSnapPoint ?? activeSnapPoint();
+      if (point === 0 && previousPoint !== 0) lastOpenSnapPoint = previousPoint;
+      if (point !== 0) lastOpenSnapPoint = point;
+      setActiveSnapPoint(point);
+      local.onActiveSnapPointChange?.(point);
+    };
     const changeOpen = (next: boolean) => {
       setUncontrolledOpen(next);
       local.onOpenChange?.(next);
-      if (!next && !closed()) setActiveSnapPoint(1);
+      if (!next && !closed()) changeSnapPoint(lastOpenSnapPoint);
     };
     createCloseOnNavigation({
       open: () => !local.keepOpenOnNavigation && open(),
@@ -396,14 +503,16 @@ export const MobileDrawer = Object.assign(
     });
     return (
       <Drawer
-        breakPoints={[0.8]}
+        breakPoints={
+          local.breakPoints ?? (props.snapPoints ? undefined : [0.8])
+        }
         closeOnOutsideFocus={false}
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
         open={open()}
-        activeSnapPoint={activeSnapPoint()}
-        onActiveSnapPointChange={setActiveSnapPoint}
+        activeSnapPoint={local.activeSnapPoint ?? activeSnapPoint()}
+        onActiveSnapPointChange={changeSnapPoint}
         onOpenChange={changeOpen}
         onInitialFocus={(event) => {
           local.onInitialFocus?.(event);
@@ -427,10 +536,13 @@ export const MobileDrawer = Object.assign(
     );
   },
   {
+    useContext: Drawer.useContext,
     Trigger: Drawer.Trigger,
     Portal: Drawer.Portal,
     Overlay: MobileDrawerOverlay,
     Content: MobileDrawerContent,
+    FixedContent: MobileDrawerFixedContent,
+    KeyboardFooter: MobileDrawerKeyboardFooter,
     Close: Drawer.Close,
     Title: Drawer.Label,
     Description: Drawer.Description,

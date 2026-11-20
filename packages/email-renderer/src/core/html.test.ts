@@ -111,6 +111,25 @@ describe('prepareEmailBody in Node, without a DOM', () => {
       hasTable: true,
     });
   });
+  it('ignores a signature laid out as a table, shown or hidden', () => {
+    const html =
+      '<div>Thanks, see you Friday.</div><div class="gmail_signature"><table width="470" cellpadding="0"><tr><td><img src="cid:photo"></td><td><b>Alex Example</b><br>Acme</td><td><a href="https://example.com">example.com</a></td></tr></table></div>';
+    expect(prepareEmailBody({ html }).hasTable).toBe(false);
+    expect(
+      prepareEmailBody({ html }, { showQuotedContent: true }).hasTable
+    ).toBe(false);
+    expect(
+      prepareEmailBody({
+        html: `<table><tr><td>Newsletter</td></tr></table>${html}`,
+      }).hasTable
+    ).toBe(true);
+    // Every signature counts, including one that is the table itself.
+    expect(
+      prepareEmailBody({
+        html: `${html}<table class="macro-email-signature"><tr><td>Sam</td></tr></table>`,
+      }).hasTable
+    ).toBe(false);
+  });
   it('retains document styles and signatures according to explicit options', () => {
     const html =
       '<head><style>p { color: red }</style></head><body><p>A<br></p><span class="gmail_signature_prefix">--</span><div class="gmail_signature">Me</div></body>';
@@ -299,21 +318,14 @@ describe('content and resource policy', () => {
     expect(result).toContain('color:red');
     expect(result).toContain('color:blue');
   });
-  it('applies the legacy theme policy only to top-level media rules in head styles', () => {
+  it("keeps the sender's color-scheme rules for the browser to apply", () => {
     const html =
       '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p>Hello</p></body>';
     const result = prepareEmailBody({ html }).html;
-    expect(result).not.toContain('.head');
+    expect(result).toContain('.head{color:red}');
     expect(result).toContain('.nested{color:green}');
     expect(result).toContain('.body{color:blue}');
-  });
-  it('preserves safe dark-mode rules in quoted HTML and applies reader policy separately', () => {
-    const html =
-      '<style>@media(prefers-color-scheme:dark){p{color:white}}</style><p>Quoted</p>';
     expect(sanitizeEmailHtml(html)).toContain('prefers-color-scheme');
-    expect(prepareEmailBody({ html }).html).not.toContain(
-      'prefers-color-scheme'
-    );
   });
   it('preserves unrelated valid declarations when CSS contains a recoverable error', () => {
     const result = sanitizeEmailHtml(

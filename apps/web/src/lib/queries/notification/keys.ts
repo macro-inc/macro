@@ -14,4 +14,6 @@ export const notificationKeys = createQueryKeys('notification', {
   }),
   unsubscribes: null,
   preferences: null,
+  channelSettings: null,
+  sectionSettings: null,
 });

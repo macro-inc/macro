@@ -103,7 +103,6 @@ export default {
     close: 'Sulje',
     delete: 'Poista',
     rename: 'Nimeä uudelleen',
-    more: 'Lisää',
     search: 'Hae',
     settings: 'Asetukset',
   },
@@ -519,6 +518,10 @@ export default {
       other: '{{count}} kohdetta poistettu',
     },
     toastDeleteFailed: 'Poisto epäonnistui',
+    toastPropertySet: {
+      one: '{{property}} asetettu',
+      other: '{{property}} asetettu {{count}} kohteelle',
+    },
     toastAddedToFavorites: 'Lisätty suosikkeihin',
     toastAddedCountToFavorites: {
       one: '{{count}} kohde lisätty suosikkeihin',

@@ -5,7 +5,21 @@ import { describe, expect, it, vi } from 'vitest';
 import { createSharedMailBackfillFetcher } from './shared-mail-backfill';
 
 const invokeMock = vi.hoisted(() => vi.fn());
-vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('@tauri-apps/api/core', async () => {
+  const { testAuthority } = await import('@graphql-cache/authority-fixture');
+  return {
+    invoke: (command: string, args: Record<string, unknown> = {}) => {
+      if (command === 'graphql_cache_current_authority')
+        return Promise.resolve(testAuthority(String(args.identity)));
+      const {
+        authority: _,
+        authorityGeneration: _generation,
+        ...request
+      } = args;
+      return invokeMock(command, request);
+    },
+  };
+});
 vi.mock('@tauri-apps/api/event', () => ({
   listen: vi.fn(async () => () => {}),
 }));
@@ -194,4 +208,17 @@ describe('Shared Mail scope refresh', () => {
       key('kept'),
     ]);
   });
+});
+
+// These suites isolate transport/session behavior; native authority races use the real observer elsewhere.
+vi.mock('@graphql-cache/authority', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@graphql-cache/authority')>();
+  return {
+    ...actual,
+    createAuthorityObserver: (identity: string) => ({
+      ...actual.createAuthorityObserver(identity),
+      verified: () => true,
+    }),
+  };
 });

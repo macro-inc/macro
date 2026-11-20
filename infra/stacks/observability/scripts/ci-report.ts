@@ -1,10 +1,10 @@
 // Daily CI report from the exporter's Loki events: wall time by PR type, what held
 // pushes up, slowest jobs and steps, queues, cache volumes and CI hours. The Macro CI
-// dashboard reads the same queries from nixos/ci-report.json.
+// dashboard reads the same queries from nixos/grafana-provisioning/ci-report.json.
 //
 // GRAFANA_TOKEN=$(cat <token file>) bun infra/stacks/observability/scripts/ci-report.ts [--range 24h] [--days 7]
 // Pass --loki <url> to query another Loki API root, such as a local one, and
-// --spec local for run_local's opt-in events (nixos/local-report.json, the
+// --spec local for run_local's opt-in events (nixos/grafana-provisioning/local-report.json, the
 // Macro run_local dashboard) instead of CI's.
 
 import { readFileSync } from 'node:fs';
@@ -193,7 +193,13 @@ export async function main(args: string[]) {
     throw new Error(`--spec must be one of ${Object.keys(SPECS).join(', ')}`);
   }
   const spec: Spec = JSON.parse(
-    readFileSync(new URL(`../nixos/${specFile.file}`, import.meta.url), 'utf8')
+    readFileSync(
+      new URL(
+        `../nixos/grafana-provisioning/${specFile.file}`,
+        import.meta.url
+      ),
+      'utf8'
+    )
   );
   const range = argument(args, '--range', '24h');
   const days = Number(argument(args, '--days', '7'));

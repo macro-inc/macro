@@ -49,6 +49,11 @@ pub enum PropertiesErr {
     #[error("Cannot modify system properties")]
     SystemPropertyNotModifiable,
 
+    /// The name belongs to a built-in property, named here as that property
+    /// spells it - maps to 409
+    #[error("\"{0}\" is a built-in property, so another property can't use its name")]
+    ReservedName(&'static str),
+
     /// Team scope was requested by a caller with no team - maps to 403
     #[error("You must be on a team to use team-scoped properties")]
     TeamMembershipRequired,

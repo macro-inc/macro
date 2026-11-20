@@ -9179,7 +9179,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_team_contact"],
-        "summary": "Manually create a contact without a company for the caller's team.\nAny team member may create one. The team must not already have a\ncompany-less contact with the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact for the caller's team without naming a company.\nAn email at a company's own domain files the contact under the team's\ncompany for that domain, creating the company when the team has none; a\npersonal or generic provider address, a domain the team blocks, or a\nhidden company leaves the contact without a company. Any team member with\nCRM access may create one. A contact filed under a company is refused when\nthat company, or a contact without a company, already has the email as its\nprimary address, and one left without a company when another such contact\nhas it (409). The team's CRM killswitch must be on (403).",
         "operationId": "create_crm_team_contact",
         "requestBody": {
           "content": {
@@ -29289,6 +29289,86 @@
         }
       }
     },
+    "/saved_views/definitions/{saved_view_id}/appearance": {
+      "put": {
+        "tags": ["saved_views"],
+        "operationId": "set_saved_view_appearance",
+        "parameters": [
+          {
+            "name": "saved_view_id",
+            "in": "path",
+            "description": "The saved view to edit",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EntityAppearance"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedViewDefinition"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/saved_views/exclude_default": {
       "post": {
         "tags": ["saved_views"],
@@ -32776,7 +32856,7 @@
               },
               {
                 "$ref": "#/components/schemas/CrmAssociation",
-                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A company also matches through\nits contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
+                "description": "Restrict every entity type to items associated with this CRM record\n(wire key `crma`): its Companies or Contacts property names the\nrecord, or it references the record. A task also matches when one of\nits custom entity properties names the record. A company also matches\nthrough its contacts. Unknown or inaccessible records answer 404; requests\nrequire expanded queries sorted by a timestamp or selected numeric property."
               }
             ]
           },
@@ -38837,7 +38917,7 @@
         "properties": {
           "email": {
             "type": ["string", "null"],
-            "description": "The contact's email address, of any domain. Optional: omit it to\nadd the contact by name only."
+            "description": "The contact's email address, of any domain. A company-domain address\nalso links the contact to that domain's company, unless the team\nblocks the domain or the company is hidden. Optional: omit it to add\nthe contact by name only."
           },
           "name": {
             "type": "string",
@@ -39311,6 +39391,17 @@
         "type": "object",
         "required": ["name", "config"],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Optional initial icon and color metadata; retries retain the original value."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Consumer configuration with its `kind` and `version`, at most 32 KiB."
@@ -60856,6 +60947,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Icon and color metadata, separate from configuration."
+              }
+            ]
+          },
           "config": {
             "type": "object",
             "description": "Versioned configuration interpreted by the consuming feature, with its\n`kind` (such as `email` or `task`) and `version`."
@@ -61252,7 +61354,7 @@
       },
       "SetContactCompanyRequest": {
         "type": "object",
-        "description": "Link or switch a contact with a known personal-provider email.",
+        "description": "Link a contact without a company, or switch the company of a contact\nwhose primary email is at a known personal provider. A contact with an\naddress on its current company's domain cannot switch.",
         "required": ["companyId"],
         "properties": {
           "companyId": {
@@ -68679,6 +68781,17 @@
           "updatedAt"
         ],
         "properties": {
+          "appearance": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/EntityAppearance",
+                "description": "Validated icon and color metadata, independent of configuration revisions."
+              }
+            ]
+          },
           "config": {
             "description": "It is an explicit choice that the structure of the view configuration\nis up to the frontend. The structure and composition of view configuration\nis still very much in flux."
           },

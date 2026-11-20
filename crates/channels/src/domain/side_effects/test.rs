@@ -1,3 +1,5 @@
+mod mention_fallback;
+
 use super::*;
 use crate::domain::{
     events::ReactionNotificationContext,

@@ -93,8 +93,11 @@ networking starts.
 `just android-benchmark --serial <emulator>` (from `apps/web`) times cold start, view
 switches, opening a channel and documents, and going back, on a signed-in benchmark build,
 using the app's own perf spans so lab and Datadog field numbers compare. It navigates and
-reads only. Building the benchmark APK, the emulator settings it was baselined on, the
-private targets file and how to read its noise figures are in
+reads only. It waits for the boot `view.app` flow to end before the first timed tap, opens
+the first channel of an ordered candidate list that shows no unread (it never opens an
+unread row), and stops the run when a scenario cannot reach its starting list. Building
+the benchmark APK, the emulator settings it was baselined on, the private targets file,
+comparing two runs (`compare.ts`) and how to read its noise figures are in
 [`apps/web/scripts/android-benchmark/README.md`](../../apps/web/scripts/android-benchmark/README.md).
 Measure before and after every Android performance change with it. Add
 `--cpu-throttle 4` to slow the WebView to an Android phone's CPU when judging work on its
@@ -907,6 +910,18 @@ and `MIN_NATIVE_BUILD_IOS`; production builds read them from
 `apps/web/min-native-build.json`, whose Android floor `just android-bump`
 raises. See the
 [native compatibility contract](../../apps/web/tauri/src-tauri/README.md).
+
+At startup, the updater rejects a saved or previously downloaded OTA whose bundle
+build is older than the binary's embedded bundle, falling back to the embedded
+assets when needed. That prevents an older cached OTA from automatically surviving every
+native upgrade. It does not prove reverse IPC compatibility: a later-built OTA
+or republished rollback can still contain older JS and satisfy the native floor.
+Preserve the legacy command contract on newer binaries when older bundles omit
+new arguments. The [CRM cache authority contract](../../apps/web/docs/ios-releases.md#crm-cache-command-compatibility)
+uses this rule; an omitted `generation` keeps legacy cache behavior, while a
+supplied stale generation is rejected on response writes. Reads and watches do
+not require an admission claim. Cut the store build from the final
+native tree, including this compatibility behavior.
 
 Android ConnectivityManager reports the validated default network and takes a
 fresh snapshot on resume. Captive/unvalidated networks count as offline. Older
