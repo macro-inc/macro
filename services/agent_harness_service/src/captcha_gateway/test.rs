@@ -118,12 +118,14 @@ fn access(on: bool) -> BrainAccess {
 }
 
 /// Polls every 10 ms and gives up after a second.
+/// Fast polling, and the charge on, so the billing path is exercised.
 const FAST: SolveLimits = SolveLimits {
     concurrent: 1,
     hourly: 20,
     daily: 100,
     poll_interval: Duration::from_millis(10),
     max_wait: Duration::from_secs(1),
+    charge_users: true,
 };
 
 /// Room for every solve a test makes on one run.
@@ -1041,4 +1043,43 @@ async fn two_solves_back_to_back_each_get_a_run(pool: PgPool) {
 
     assert_eq!(outcomes, vec![json!("solved"), json!("solved")]);
     assert_eq!(emulator.created_tasks().len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn with_the_charge_off_a_solve_is_observed_but_not_charged(pool: PgPool) {
+    let _callsites = agents(&pool).await;
+    let emulator = CapsolverEmulator::start().await.unwrap();
+    let (app, usage) = gateway_on(
+        &pool,
+        &emulator,
+        SolveLimits {
+            charge_users: false,
+            ..FAST
+        },
+    );
+    let run = start_run(&app, "mak_agent").await;
+
+    let (_, body) = answer(
+        &app,
+        solve_request(
+            "mak_agent",
+            &run,
+            json!({
+                "solveId": SOLVE,
+                "challenge": { "kind": "turnstile", "pageUrl": "https://example.com/", "siteKey": "key" },
+            }),
+        ),
+    )
+    .await;
+
+    assert_eq!(body["outcome"], "solved");
+    assert!(usage.events().is_empty());
+    let finals = usage.tracked.finals.lock().unwrap();
+    assert_eq!(finals.len(), 1);
+    assert!(finals[0].provider_request_id.is_some());
+}
+
+#[test]
+fn solves_are_not_charged_to_users_by_default() {
+    assert!(!SolveLimits::default().charge_users);
 }

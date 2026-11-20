@@ -368,6 +368,11 @@ pub(crate) struct SolveLimits {
     pub(crate) daily: u16,
     pub(crate) poll_interval: Duration,
     pub(crate) max_wait: Duration,
+    /// Whether a solved task is charged to the agent's user. Off: CapSolver's
+    /// terms forbid reselling its service without its written approval, so
+    /// until then Macro absorbs the cost and every solve is only observed in
+    /// the tracking journal (with CapSolver's task id).
+    pub(crate) charge_users: bool,
 }
 
 impl Default for SolveLimits {
@@ -378,6 +383,7 @@ impl Default for SolveLimits {
             daily: 100,
             poll_interval: Duration::from_secs(2),
             max_wait: Duration::from_secs(120),
+            charge_users: false,
         }
     }
 }
@@ -484,7 +490,8 @@ impl<Solver: CaptchaSolver> Solves<Solver> {
                             .inspect_err(|error| {
                                 tracing::error!(error = ?error, "the solve's outcome was not recorded");
                             });
-                        bill(recorder, &claim.agent, run, &task, &outcome).await;
+                        bill(recorder, limits.charge_users, &claim.agent, run, &task, &outcome)
+                            .await;
                         Ok(outcome)
                     }
                     Ok(Claimed::Finished(outcome)) => Ok(outcome),
@@ -510,12 +517,14 @@ impl<Solver: CaptchaSolver> Solves<Solver> {
     }
 }
 
-/// Bill a solved task (CapSolver charges only those) on the legacy recorder,
-/// which settles it, and observe it in the tracking journal under its run
-/// with CapSolver's task id. The journal has no credit dimension, so its
-/// usage is `UnsupportedDimensions`: the charge is the recorder's alone.
+/// Observe a solved task (CapSolver charges only those) in the tracking
+/// journal under its run with CapSolver's task id, and, when `charge_users`
+/// is on, charge it on the legacy recorder, which settles it. The journal has
+/// no credit dimension, so its usage is `UnsupportedDimensions`: any charge
+/// is the recorder's alone.
 async fn bill(
     recorder: Arc<dyn UsageRecorder>,
+    charge_users: bool,
     agent: &MacroUserIdStr<'static>,
     run: SolverRunId,
     task: &CaptchaTask,
@@ -524,10 +533,12 @@ async fn bill(
     let SolveOutcome::Solved { task_id, .. } = outcome else {
         return;
     };
-    recorder.record(
-        UsageContext::new(AiFeature::AgentSession, agent.clone())
-            .into_provider_credits_event(task.task_type.pricing_model().to_owned(), 1),
-    );
+    if charge_users {
+        recorder.record(
+            UsageContext::new(AiFeature::AgentSession, agent.clone())
+                .into_provider_credits_event(task.task_type.pricing_model().to_owned(), 1),
+        );
+    }
     let Some(tracking) = recorder.tracking() else {
         return;
     };

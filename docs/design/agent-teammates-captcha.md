@@ -64,24 +64,7 @@ terms also forbid.
   `ai_usage`'s tracking journal (`ai_usage_observation`) under the solver run, with Fireworks'
   response id as `provider_request_id`; the journal never bills, so the legacy recorder's row is
   the one charge.
-- **Solves:** a solve that comes back `ready` records `UsageAmount::ProviderCredits { credits: 1 }`
-  under the model `capsolver-<task>`, priced per solve from CapSolver's list price (seeded by the
-  `capsolver_pricing` migration), and is observed in the tracking journal under its solver run with
-  CapSolver's task id as `provider_request_id` (no token dimensions, so its usage reads
-  `UnsupportedDimensions`; the recorder's row is the one charge). Failed solves cost nothing, here
-  and at CapSolver. The `solveId` is the idempotency key, kept in Postgres, so a repeated request
-  never records twice, on any replica.
-
-## Tracing
-
-One trace per solve: `captcha.solve_captcha` → `captcha.find`, `captcha.opencode_run` → (MCP
-server) `captcha.tool.solve` → `captcha.solve` → `captcha.harness_solve` → (harness)
-`captcha_gateway.solve` → `captcha.apply`. The run's traceparent also goes on each model call, so
-`brain_fireworks.chat` joins it. The harness sends no traceparent on to CapSolver or Fireworks. Spans carry kinds, hosts, outcomes, evidence, counts and the
-CapSolver task id: never the token, the site key, a path or query, or page text.
-
-## Testing
-
+- **Solves:** observe-only for now. A solve that comes back `ready` is recorded in the tracking journal with CapSolver's task id, and Macro absorbs its cost. CapSolver's terms forbid reselling its service without written approval, so the charge to users (`UsageAmount::ProviderCredits { credits: 1 }` at the `capsolver-<task>` list price, seeded by the `capsolver_pricing` migration) sits behind `SolveLimits::charge_users`, which is off. Failed solves cost nothing, here and at CapSolver.
 - `packages/starter-agent`: detection on literal page facts, the driver lease, the relay's brain
   routes, Chromium against local fixture pages (test site keys, no third-party scripts) with a
   stand-in harness, and the whole chain through a real OpenCode with a scripted stand-in model.

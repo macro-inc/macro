@@ -117,11 +117,13 @@ network/resource-only Pulumi stacks; they do not host extra agent processes.
   is the only adapter (`CapsolverApiUrl`, `OVERRIDE_CAPSOLVER_API_URL` for
   `crates/capsolver_emulator`); a `keyBlocked` answer stops tasks from this
   process for five minutes. `CAPSOLVER_API_KEY` is optional: unset or empty
-  answers `notConfigured` (no run needed). Only `solved` is billed: one
-  `ProviderCredits` against the agent at `capsolver-<task>` pricing on the
-  legacy `UsageRecorder` (which settles it), plus a tracking observation with
-  CapSolver's `taskId` as `provider_request_id` and `UnsupportedDimensions`
-  usage, which never bills. Span `captcha_gateway.solve` /
+  answers `notConfigured` (no run needed). Only `solved` costs anything: a
+  tracking observation with CapSolver's `taskId` as `provider_request_id` and
+  `UnsupportedDimensions` usage, which never bills, and, only with
+  `SolveLimits::charge_users` on, one `ProviderCredits` against the agent at
+  `capsolver-<task>` pricing on the legacy `UsageRecorder` (which settles it).
+  It is off: CapSolver's terms forbid reselling without written approval, so
+  Macro absorbs the cost until then. Span `captcha_gateway.solve` /
   `captcha_gateway.start_run`; never record the token, site key, page path or
   query, or vendor error text. No traceparent goes to CapSolver.
 - `src/fireworks_gateway.rs` + `src/fireworks_gateway/`:
