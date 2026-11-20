@@ -1344,15 +1344,28 @@ what a pass proves stale. When a pass that started at its first page finishes,
 each cached channel it did not return is read again by id; the ones the server
 no longer returns are deleted. A by-id page is evidence only when it lists
 entity ids and either ends or returned every id it was asked for (a page that
-reaches its limit carries a cursor). Its reads are tried three times. A pass
-that cannot reconcile (it resumed from a cursor, a page lacked entity ids, the
-cache belongs to another viewer or changed generation, or the reads kept
-failing) deletes nothing and fails its last page, so its checkpoint is never
-marked complete. The lane restarts every pass at its first page
-(`restartOnRun`); the previous pass's completion keeps the directory complete
-meanwhile. A by-id read also returns public and team channels the viewer
-opened without joining (`isParticipant: false`), so the cache holds those too:
-a joined list filters them out.
+reaches its limit carries a cursor). Its reads are tried three times. A
+cached id the server could not parse as a channel id is gone without a read:
+one such id would fail the whole read. The deletes carry the cache session
+taken before the reads, so the cache refuses them after a session transition,
+and a channel whose cached record changed while it was read (the viewer was
+added back) is read again instead of deleted, three rounds in all. The recheck
+and the delete are still two cache calls: a write landing between them is
+deleted and comes back with the channel's next update or the next pass.
+A pass that cannot reconcile (it resumed from a cursor, a page lacked entity
+ids, the cache belongs to another viewer or changed generation, or the reads
+or records kept failing or changing) deletes nothing and fails its last page
+(`ChannelDirectoryPassUnproven`), so its checkpoint is never marked complete;
+the checkpoint id changed when this rule did, so a pass recorded complete
+without reconciling is never read as one. The lane restarts every run at its
+first page (`restartOnRun`); the previous pass's completion keeps the
+directory complete meanwhile. A retry within a run goes on from the failed
+page's cursor with the same page fetcher, which holds the evidence of the
+pages before it (`resumesAfter`), unless the pass was unproven or storage
+was replaced, which start the retry at the top. A by-id read also returns
+public and team channels the viewer opened without joining
+(`isParticipant: false`), so the cache holds those too: a joined list filters
+them out.
 
 `queries/channel/directory.ts` is the app's only reader of the viewer's
 channels: `ChannelDirectoryProvider` in `Root` supplies it, and
@@ -1361,15 +1374,21 @@ channels: `ChannelDirectoryProvider` in `Root` supplies it, and
 reads the lane's records from the cache's channel search buckets, again on
 visible cache changes and when the lane's checkpoint completes or fails, and
 is `complete` once a pass of the lane finished in the cache's current storage
-generation; another viewer's cache reads as empty. Only a scan that read the
-checkpoint as complete before it started may make the directory complete, and
+generation and every joined record that lacks a directory field (another query
+cached it thinner) has settled its by-id read; another viewer's cache reads as
+empty. A read that failed settles too, so the cache answers offline, but
+`readComplete()` then reads the network rather than trust it. Only a scan
+that read the checkpoint as complete before it started may make the directory
+complete, and
 a scan is dropped when the viewer or storage generation changed while it ran;
 a storage reset (`onCacheGenerationChanged`) retires what it read at once.
 Without the cache it pages the lane's own query (`ChannelDirectoryPage`) into
 memory, never the REST channel list.
 
 A cold cache takes about a minute to fill on a large account, so a lookup of
-one channel answers `loaded`, `pending` or `missing`. A channel a filling
+one channel answers `loaded`, `pending` or `missing`. An id no channel can
+have (not a UUID, such as a mistyped link) is missing at once and never read,
+since one would fail every id read with it. A channel a filling
 directory lacks is pending, and the lookup reads it by id (batched, 100 ids
 or 25 ms, two batches at a time), then rereads only the records that read
 wrote; it is missing once that read returns nothing for it or the directory
@@ -1382,26 +1401,33 @@ wait for `complete()` or call `readComplete()`, which pages the network while
 the cache is still filling. When the lane gives up in a generation, the backfill marks it
 (`markSoupBackfillLaneFailed`, cleared by its next saved page, and kept in
 memory for the tab when storage refuses the write) and the directory pages the
-joined channels from the network instead. Its membership is the network's
-list, updated by each cached record that changed or was removed after that
-read began; a cached record unchanged since is older than the network's row,
-so a stale joined row the network left out stays out. A lane pass that
-finishes later makes the cache answer alone again. `failed()` says the
-directory is not complete and that read failed; `retry()` reads again.
+joined channels from the network instead. It does the same when the lane
+stalls: the lane saves its checkpoint after every page in whichever tab runs
+it, and 30 seconds with no save while the lane is unfinished (that tab closed
+or froze, or a request hung) starts the walk too. Its membership is the
+network's list, updated by each cached record that changed or was removed
+after that read began; a cached record unchanged since is older than the
+network's row, so a stale joined row the network left out stays out. A change
+proves no membership by itself: a changed record the network did not list
+shows only once a by-id read returns it, and a listed channel the cache never
+held is dropped once a by-id read finds it absent. A lane pass that finishes
+later stops the walk and makes the cache answer alone again. `failed()` says
+the directory is not complete and that read failed; `retry()` reads again.
 Channel writes outside the cache's soup updates (join links, renames, new
 DMs) call `refreshChannelDirectory`, which rereads the in-memory directory,
 reading again after a first read that was already in flight; a full read
-(`readComplete()`, and the network list behind a filling cache) that started
-before a write reads again, since nothing else refetches a query nobody
+(`readComplete()`, and the network list behind a filling cache) reads until
+one began after the latest write, since nothing else refetches a query nobody
 observes. The viewer's own views reach no soup update, so the channel view
-hands each recorded view to the directory (`recordView`). The directory lays
-it over every record it reads for the rest of its life, so a page, a by-id read
-or a refetch read before the view never shows an older one. The cached
-directory also writes it onto the channel's cached record
+hands each recorded view to its tab's directory (`recordView`). That
+directory lays it over every record it reads for the rest of its life, so in
+that tab a page, a by-id read or a refetch read before the view never shows an
+older one. The cached directory also writes it onto the channel's cached record
 (`queries/channel/viewed-at.ts`, one stamp of a channel at a time, never
 moving it back), once the record exists, and again over a later record that
-holds an older view. A channel mention in
-rendered Markdown waits up to five seconds for a pending lookup.
+holds an older view; other tabs see it when they read that record. Without
+the cache another tab shows it once its own pages are read again. A channel
+mention in rendered Markdown waits up to five seconds for a pending lookup.
 
 ## Authoritative Mail membership repair
 

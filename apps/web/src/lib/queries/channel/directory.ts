@@ -142,8 +142,10 @@ export type ChannelDirectory = {
    * network's pages failed too. */
   failed: Accessor<boolean>;
   retry: () => void;
-  /** Shows a view the viewer just recorded on the channel from now on. No
-   * soup update carries it, and a read older than it never moves it back. */
+  /** Shows a view the viewer just recorded on the channel from now on, in
+   * this tab's directory: no soup update carries it, and a read older than it
+   * never moves it back here. Other tabs show it once a read of theirs
+   * returns it (the cached directory also stamps the cached record). */
   recordView: (channelId: string, viewedAt: string) => void;
 };
 
@@ -226,8 +228,8 @@ export function channelDirectoryState(
 }
 
 /**
- * The views the viewer recorded while the directory ran, laid over every
- * record it reads: the cache's, a by-id read's or a network page's, which may
+ * The views the viewer recorded in this tab while the directory ran, laid
+ * over every record it reads: the cache's, a by-id read's or a network page's, which may
  * have been read before the view. A record with a later view shows its own.
  */
 function createViewStamps() {
@@ -804,7 +806,8 @@ function recordsById(read: ChannelDirectoryRead | undefined) {
 
 /**
  * The directory read from the cache. Complete once a pass of the channel lane
- * finished in the cache's current storage generation. If the lane gives up
+ * finished in the cache's current storage generation and every joined record
+ * lacking a field has settled its by-id read. If the lane gives up or stalls
  * first, the joined channels are paged from the network instead, and
  * `failed` says whether that failed too.
  */
