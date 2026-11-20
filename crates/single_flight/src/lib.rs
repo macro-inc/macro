@@ -31,7 +31,7 @@ use std::{
 use futures::{
     FutureExt,
     channel::oneshot,
-    future::{BoxFuture, Either, Shared, WeakShared, select},
+    future::{self, BoxFuture, Either, Shared, WeakShared, select},
 };
 use tracing::Instrument;
 
@@ -48,12 +48,13 @@ pub const COALESCED_FIELD: &str = "coalesced";
 
 type Runs<K, T> = Arc<Mutex<HashMap<K, Run<T>>>>;
 
-/// Who drives a run: its callers alone, or a task as well.
+/// Who drives a run's work: its callers, or a task they wait on.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Callers {
-    Drive,
-    DriveWithTask,
+enum Driver {
+    Callers,
+    Task,
 }
+
 type Panicked = Shared<oneshot::Receiver<()>>;
 
 struct Run<T> {
@@ -98,12 +99,13 @@ where
         F: Fn() -> Fut,
         Fut: Future<Output = T> + Send + 'static,
     {
-        self.run_with(key, work, Callers::Drive).await
+        self.run_with(key, work, Driver::Callers).await
     }
 
     /// Like [`run`](Self::run), but the work also runs to its end when every
     /// caller goes away, and a caller arriving before then joins it. A task on
-    /// the current Tokio runtime drives it alongside the callers.
+    /// the current Tokio runtime drives the work, and callers wait for its
+    /// output.
     ///
     /// For work whose effects outlast the call, such as a lookup that leaves
     /// what it read for the next one: when its callers give up (a search
@@ -115,15 +117,15 @@ where
         F: Fn() -> Fut,
         Fut: Future<Output = T> + Send + 'static,
     {
-        self.run_with(key, work, Callers::DriveWithTask).await
+        self.run_with(key, work, Driver::Task).await
     }
 
-    async fn run_with<F, Fut>(&self, key: K, work: F, callers: Callers) -> T
+    async fn run_with<F, Fut>(&self, key: K, work: F, driver: Driver) -> T
     where
         F: Fn() -> Fut,
         Fut: Future<Output = T> + Send + 'static,
     {
-        let (shared, panicked, coalesced) = self.join_or_start(key, &work, callers);
+        let (shared, panicked, coalesced) = self.join_or_start(key, &work, driver);
         tracing::Span::current().record(COALESCED_FIELD, coalesced);
 
         // The panic signal is polled first: polling work that has panicked
@@ -140,7 +142,7 @@ where
         &self,
         key: K,
         work: &F,
-        callers: Callers,
+        driver: Driver,
     ) -> (Shared<BoxFuture<'static, T>>, Panicked, bool)
     where
         F: Fn() -> Fut,
@@ -158,18 +160,22 @@ where
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (signal_panic, panicked) = oneshot::channel();
         let panicked = panicked.shared();
-        let shared = SharedWork {
-            work: Box::pin(work()),
-            signal_panic: Some(signal_panic),
-            finished: Some(Finished {
-                running: Arc::clone(&self.running),
-                key: key.clone(),
-                id,
-            }),
-        }
-        .in_current_span()
-        .boxed()
-        .shared();
+        let finished = Finished {
+            running: Arc::clone(&self.running),
+            key: key.clone(),
+            id,
+        };
+        let shared = match driver {
+            Driver::Callers => SharedWork {
+                work: Box::pin(work()),
+                signal_panic: Some(signal_panic),
+                finished: Some(finished),
+            }
+            .in_current_span()
+            .boxed()
+            .shared(),
+            Driver::Task => drive_with_task(Box::pin(work()), signal_panic, finished),
+        };
 
         if let Some(weak) = shared.downgrade() {
             let run = Run {
@@ -181,14 +187,76 @@ where
             running.insert(key, run);
         }
 
-        // The task holds the work, which keeps the run joinable while no
-        // caller waits. Like a caller, it stops at the panic signal rather
-        // than poll work that has panicked.
-        if callers == Callers::DriveWithTask {
-            tokio::spawn(select(panicked.clone(), shared.clone()).map(drop));
-        }
-
         (shared, panicked, false)
+    }
+}
+
+/// Spawns the task that drives `work`, and returns what its callers wait on:
+/// the output the task delivers. Only the task polls the work. A caller
+/// polling it too could find it poisoned by a panic on the task's thread
+/// between checking the panic signal and polling, and panic instead of running
+/// the work itself.
+///
+/// The task holds a clone of what callers wait on, which keeps the run
+/// joinable while no caller waits. When it ends without delivering, because the
+/// work panicked or the task was dropped, it signals the panic, so the waiting
+/// callers run the work themselves.
+fn drive_with_task<K, T>(
+    work: BoxFuture<'static, T>,
+    signal_panic: oneshot::Sender<()>,
+    finished: Finished<K, T>,
+) -> Shared<BoxFuture<'static, T>>
+where
+    K: Eq + Hash + Send + 'static,
+    T: Clone + Send + Sync + 'static,
+{
+    let (deliver, delivered) = oneshot::channel();
+    let shared = async move {
+        match delivered.await {
+            Ok(output) => output,
+            // Undelivered output comes with the panic signal, which callers
+            // poll first and act on.
+            Err(oneshot::Canceled) => future::pending().await,
+        }
+    }
+    .boxed()
+    .shared();
+
+    let driven = SharedWork {
+        work,
+        signal_panic: None,
+        finished: Some(finished),
+    }
+    .in_current_span();
+    let joinable = shared.clone();
+    let undelivered = SignalUnlessDelivered(Some(signal_panic));
+
+    tokio::spawn(async move {
+        let output = driven.await;
+        // Fails only when no caller is waiting, which needs no output.
+        let _ = deliver.send(output);
+        undelivered.delivered();
+        drop(joinable);
+    });
+
+    shared
+}
+
+/// Signals the panic when dropped, unless the output was delivered first.
+struct SignalUnlessDelivered(Option<oneshot::Sender<()>>);
+
+impl SignalUnlessDelivered {
+    fn delivered(mut self) {
+        self.0 = None;
+    }
+}
+
+impl Drop for SignalUnlessDelivered {
+    fn drop(&mut self) {
+        if let Some(signal_panic) = self.0.take() {
+            // Fails only when no caller is waiting, which needs no signal.
+            let _ = signal_panic.send(());
+        }
     }
 }
 

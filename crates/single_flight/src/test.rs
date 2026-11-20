@@ -256,7 +256,7 @@ async fn a_run_to_completion_finishes_with_no_caller_left() {
 }
 
 #[tokio::test]
-async fn when_a_run_to_completion_panics_the_other_callers_run_it_themselves() {
+async fn when_a_run_to_completion_panics_every_caller_runs_it_itself() {
     let flights = SingleFlight::<&str, Output>::new();
     let runs = Arc::new(AtomicUsize::new(0));
     let (release, released) = watch::channel(None::<()>);
@@ -278,14 +278,38 @@ async fn when_a_run_to_completion_panics_the_other_callers_run_it_themselves() {
     assert!(futures::poll!(joined.as_mut()).is_pending());
     release.send(Some(())).unwrap();
 
-    assert!(AssertUnwindSafe(joined).catch_unwind().await.is_err());
-
+    // The task drives the work, so its panic reaches no caller.
+    assert_eq!(joined.await, Ok(4));
     assert_eq!(started.await, Ok(4));
-    assert_eq!(
-        flights
-            .run_to_completion("user-1", panics_on_first_run)
-            .await,
-        Ok(4)
-    );
     assert_eq!(runs.load(Ordering::SeqCst), 3);
+}
+
+/// A caller that polled the work alongside the task could find it poisoned by
+/// a panic on the task's thread. Work that panics on its first poll shows
+/// whether a caller ever polls it.
+#[tokio::test]
+async fn a_run_to_completion_caller_never_polls_the_work() {
+    let flights = SingleFlight::<&str, Output>::new();
+    let runs = Arc::new(AtomicUsize::new(0));
+    let panics_on_first_poll = || {
+        let runs = Arc::clone(&runs);
+        async move {
+            let run = runs.fetch_add(1, Ordering::SeqCst);
+            assert_ne!(run, 0, "the first run panics");
+            Ok(8)
+        }
+    };
+
+    let mut caller: Caller<'_> =
+        Box::pin(flights.run_to_completion("user-1", panics_on_first_poll));
+    let polled = AssertUnwindSafe(async { futures::poll!(caller.as_mut()) })
+        .catch_unwind()
+        .await;
+    assert!(
+        polled.is_ok_and(|poll| poll.is_pending()),
+        "the caller waits for the task instead of polling the work"
+    );
+
+    assert_eq!(caller.await, Ok(8));
+    assert_eq!(runs.load(Ordering::SeqCst), 2);
 }
