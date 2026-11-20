@@ -47,6 +47,9 @@ pub struct BriefData<'a> {
     /// Whether a routine may start when mail arrives: the person is in the
     /// event routines rollout and the deployment evaluates conditions.
     pub events: bool,
+    /// Whether the person may add companies to a team's CRM, which a drafted
+    /// routine for possible clients does.
+    pub crm: bool,
     /// The SDK's routines guide.
     pub guide: &'a str,
 }
@@ -63,6 +66,12 @@ const START_ON_SCHEDULE: &str = "this user's routines can't start when mail \
     arrives, so run it on a schedule: each morning, to handle what each message of that \
     kind since the last run asks of them, or each week, to gather that week's mail of \
     that kind into one task or document for them";
+
+/// What a drafted routine makes for a possible client, told only to a person
+/// who may add companies to a team's CRM: for anyone else the tool refuses,
+/// and a task for each step serves.
+const CRM_COMPANY: &str = "a company in their CRM for a company that may become a \
+    client (unless another app of theirs already keeps track of them), ";
 
 /// What a weekly routines session does before suggesting: review and retire.
 const WEEKLY_REVIEW: &str = "Where this differs from the rest of the brief, \
@@ -107,6 +116,7 @@ pub fn brief(data: &BriefData<'_>) -> String {
     let task = TASK
         .replace("{surfaces}", &surfaces)
         .replace("{occasion}", &occasion)
+        .replace("{crm}", if data.crm { CRM_COMPANY } else { "" })
         .replace(
             "{start}",
             if data.events {
