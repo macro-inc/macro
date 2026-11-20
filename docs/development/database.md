@@ -19,18 +19,21 @@ explicit Nix invocation. See also [Rust development](rust.md).
 
 ## Set up local test databases
 
-On a **local machine**, from the root inside Nix:
+`nix develop` can override `DATABASE_URL` with the shared stack's
+`localhost:5432` default. Before DB-writing tests, migrations or preparation,
+verify the owned container, port and database, then bind its verified URL in the
+final inner command after Nix/environment setup and before starting any client,
+including Just's `DATABASE_URL` variable where applicable. Never rely on an
+ambient/default URL or drop, create, reset, migrate or prepare a shared/default
+database. Pure checks must use explicit offline settings or an invalid owned
+endpoint. Existing approvals, including explicit reset approval below, still apply.
 
-```bash
-just run_dbs -d
-just setup_test_envs
-just setup_macrodb
-```
-
-`run_dbs` creates the required networks/volumes and starts Postgres and Redis.
-`setup_macrodb` creates and migrates MacroDB; `initialize_dbs` is its alias.
-The default local URL is defined in [database.just](../../tooling/just/database.just).
-These recipes target that default database, not a named local-stack instance.
+On a **local machine**, enter Nix at the repository root and follow the
+[instance-specific setup commands](running-locally.md) for an owned database.
+After verifying its container, port and database, export its URL as
+`OWNED_DATABASE_URL` for the examples below. The default URL in
+[database.just](../../tooling/just/database.just) targets the shared/default
+database, so bare setup recipes are not an instance-specific setup procedure.
 
 On **Cursor Cloud**, installation already prepares the database and test envs.
 Start the infrastructure with `bash .cursor/infra.sh`; see [Cursor Cloud](cursor-cloud.md).
@@ -115,7 +118,8 @@ compatible with the service code currently deployed, not just the code in its PR
 3. **Apply schema changes** to the local database:
 
    ```bash
-   just crates/macro_db_client/migrate_db
+   DATABASE_URL="${OWNED_DATABASE_URL:?verify and set the owned URL}" \
+     sqlx migrate run --source crates/macro_db_client/migrations
    ```
 
    Migrations deploy before services and must survive a rolling deploy: give
@@ -129,16 +133,14 @@ compatible with the service code currently deployed, not just the code in its PR
    change, or when required metadata is missing. From the repository root:
 
    ```bash
-   nix develop --command just prepare_db
+   nix develop --command sh -c \
+     'just --set DATABASE_URL "${OWNED_DATABASE_URL:?verify and export the owned URL}" prepare_db'
    ```
 
    The root recipe uses Just's `DATABASE_URL` variable, which defaults to the
    database on localhost:5432; exporting the environment variable does not
-   override it. For a dedicated test database, set the Just variable explicitly:
-
-   ```bash
-   nix develop --command just --set DATABASE_URL "$DATABASE_URL" prepare_db
-   ```
+   override it. The inner command above explicitly binds the verified owned URL
+   after Nix environment setup; do not substitute the ambient `DATABASE_URL`.
 
    Inspect `git status` after preparation and restore unrelated `.sqlx`
    deletions before committing; workspace preparation can omit entries for
@@ -194,13 +196,10 @@ has the steps: the seed, the runs, and what to look for in the plan.
 
 ### Destructive local reset — explicit approval required
 
-Only after confirming the target is the disposable local database and the user
-approves losing its data, run from the repository root inside Nix:
-
-```bash
-just crates/macro_db_client/drop_db -y -f
-just setup_macrodb
-```
+Only after confirming the target is the owned disposable local database and the
+user approves losing its data, use its instance-specific reset commands from the
+repository root inside Nix, with its verified URL bound in the final inner command
+as above.
 
 Do not use this on hosted dev/production databases or delete unrelated containers.
 For a named local stack, follow [its instance-specific commands](running-locally.md)
