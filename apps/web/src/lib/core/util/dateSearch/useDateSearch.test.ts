@@ -217,7 +217,9 @@ describe('formatDateWithContext', () => {
       process.env.TZ = 'America/New_York';
     });
     afterEach(() => {
-      process.env.TZ = systemTimeZone;
+      // Assigning undefined would store the string "undefined".
+      if (systemTimeZone === undefined) delete process.env.TZ;
+      else process.env.TZ = systemTimeZone;
     });
 
     it('counts the day after a 23-hour day as tomorrow', () => {
