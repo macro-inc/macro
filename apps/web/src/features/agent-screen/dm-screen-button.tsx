@@ -20,10 +20,18 @@ import {
  * conversation.
  */
 export function useDmScreenHarnessId(
-  channelId: Accessor<string>
+  channelId: string
 ): Accessor<string | undefined> {
   const userId = useUserId();
-  const participants = useChannelParticipants(channelId);
+  const channelType = useChannelType(channelId);
+  const channel = useChannel(channelId);
+  // An ordinary DM (a team agent is a user) or a bot DM; other conversations
+  // never look their participants up for it.
+  const participants = useChannelParticipants(() =>
+    channelType() === ChannelType.direct_message || channel()?.agent_dm
+      ? channelId
+      : ''
+  );
   const otherParticipant = () => {
     const ids = participants.ids();
     if (ids.length !== 2) return undefined;
@@ -57,14 +65,7 @@ export function DmScreenButton(props: {
  * channel block's) render it.
  */
 export function DmScreenIsland(props: { channelId: string }) {
-  const channelType = useChannelType(props.channelId);
-  const channel = useChannel(props.channelId);
-  // Other conversations never look their participants up for it.
-  const harnessId = useDmScreenHarnessId(() =>
-    channelType() === ChannelType.direct_message || channel()?.agent_dm
-      ? props.channelId
-      : ''
-  );
+  const harnessId = useDmScreenHarnessId(props.channelId);
   return (
     <Show when={harnessId()}>
       {(id) => (

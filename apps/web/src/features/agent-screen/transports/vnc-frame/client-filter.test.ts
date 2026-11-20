@@ -54,4 +54,24 @@ describe('createRfbClientFilter', () => {
       'unknown RFB client message 77'
     );
   });
+
+  it('follows the version the client speaks: 3.3 sends no security type, others are refused', () => {
+    const old = createRfbClientFilter();
+    const sent = [
+      ...old.push(new TextEncoder().encode('RFB 003.003\n')),
+      // ClientInit, then SetPixelFormat right away: no security byte in 3.3.
+      ...old.push(new Uint8Array([1])),
+      ...old.push(new Uint8Array(20)),
+    ];
+    expect(sent.map((bytes) => bytes.length)).toEqual([12, 1, 20]);
+
+    // A version split across chunks waits for the rest.
+    const split = createRfbClientFilter();
+    expect(split.push(new TextEncoder().encode('RFB 003'))).toEqual([]);
+    expect(split.push(new TextEncoder().encode('.008\n'))).toHaveLength(1);
+
+    expect(() =>
+      createRfbClientFilter().push(new TextEncoder().encode('RFB 004.001\n'))
+    ).toThrow('unsupported RFB version');
+  });
 });

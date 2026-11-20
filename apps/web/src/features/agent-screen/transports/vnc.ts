@@ -168,9 +168,13 @@ async function connectVnc(
       });
     }
   };
-  // Abandoned before it resolved (pane closed, Retry, waking): close now,
-  // rather than leave a socket streaming into a removed frame.
-  signal.addEventListener('abort', close, { once: true });
+  // Ends the connect in flight: abandoned by the viewer (pane closed, Retry,
+  // waking), or the socket closed before the handshake finished. Closes now,
+  // rather than leave a socket streaming into a removed frame or a connect
+  // waiting forever.
+  const attempt = new AbortController();
+  signal.addEventListener('abort', () => attempt.abort(), { once: true });
+  attempt.signal.addEventListener('abort', close, { once: true });
 
   socket.addEventListener('message', (event: MessageEvent) => {
     if (typeof event.data === 'string') {
@@ -193,15 +197,17 @@ async function connectVnc(
 
   socket.addEventListener('close', () => {
     toFrame({ type: 'close' });
-    if (closedByViewer) return;
-    handlers.onEnded(endReason ?? 'connectionLost');
+    if (!closedByViewer) handlers.onEnded(endReason ?? 'connectionLost');
+    // Before the handshake: the connect ends here too (the end is reported
+    // once, above; the session ignores the connect's rejection after it).
+    if (!rfbReady) attempt.abort();
   });
 
   let code: string;
   try {
     [code] = await Promise.all([loadVncFrameCode(), waitForOpen(socket)]);
-    if (signal.aborted) throw abortError();
-    const mounted = await mountFrame(element, code, signal);
+    if (attempt.signal.aborted) throw abortError();
+    const mounted = await mountFrame(element, code, attempt.signal);
     port = mounted.port;
     frame = mounted.frame;
   } catch (error) {
@@ -211,7 +217,7 @@ async function connectVnc(
   const framePort = port;
 
   const connected = new Promise<void>((resolve, reject) => {
-    signal.addEventListener('abort', () => reject(abortError()), {
+    attempt.signal.addEventListener('abort', () => reject(abortError()), {
       once: true,
     });
     framePort.onmessage = (event: MessageEvent<FromVncFrame>) => {

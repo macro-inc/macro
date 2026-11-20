@@ -143,9 +143,10 @@ export function createScreenSession(options: ScreenSessionOptions) {
   };
 
   /**
-   * Leaving on purpose while driving (closing the pane, Stop, a new
-   * connection) hands back first, so the agent resumes at once instead of
-   * waiting out the lease; only an unplanned drop keeps the lease's grace.
+   * Leaving on purpose while driving (closing the pane, Stop) hands back
+   * first, so the agent resumes at once instead of waiting out the lease. A
+   * new connection does not: it keeps the lease through `controlLost` and
+   * `resumeDriving`, and an unplanned drop keeps the lease's grace.
    */
   const handBackIfDriving = () => {
     if (!session || !drivingMe() || leaseCarriedAway || handedBackOnLeaving)
@@ -175,6 +176,8 @@ export function createScreenSession(options: ScreenSessionOptions) {
     const target = element;
     forgetServer();
     teardown();
+    // A new connection can be left (and handed back) again.
+    handedBackOnLeaving = false;
     const abandon = new AbortController();
     pendingConnect = abandon;
 
@@ -216,6 +219,9 @@ export function createScreenSession(options: ScreenSessionOptions) {
     }
 
     let connected = false;
+    // The server ended this attempt itself (computer off, access revoked):
+    // that end is what the viewer shows, not the connect's later rejection.
+    let endedByServer = false;
     try {
       const transport = options.capabilities.transport(transportKind);
       const opened = await transport.connect(
@@ -251,6 +257,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
           },
           onEnded: (reason) => {
             if (current !== generation) return;
+            endedByServer = true;
             record('computer.screen.ended', { reason });
             endConnectionSpan(reason);
             session = undefined;
@@ -278,7 +285,7 @@ export function createScreenSession(options: ScreenSessionOptions) {
       resumeDriving();
     } catch (error) {
       connectSpan.error(error);
-      if (current !== generation) return;
+      if (current !== generation || endedByServer) return;
       endConnectionSpan('connect_failed');
       apply(afterConnectFailed('failed', attempt), attempt + 1);
     } finally {

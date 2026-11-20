@@ -1,8 +1,19 @@
 import { match } from 'ts-pattern';
 import { withoutCursorEncodings } from '../rfb-input';
 
-/** ProtocolVersion (12) + security type (1) + ClientInit (1). */
-const HANDSHAKE_BYTES = 14;
+/** The client's ProtocolVersion, e.g. `RFB 003.008\n`. */
+const VERSION_BYTES = 12;
+
+/**
+ * After the version, what else the client sends before its first message:
+ * a security type (3.7 and 3.8 only) and ClientInit. The server's gate
+ * accepts the same versions; security is always None.
+ */
+const AFTER_VERSION_BYTES: Record<string, number> = {
+  'RFB 003.003\n': 1,
+  'RFB 003.007\n': 2,
+  'RFB 003.008\n': 2,
+};
 
 const SET_PIXEL_FORMAT = 0;
 const SET_ENCODINGS = 2;
@@ -48,7 +59,8 @@ function inputLength(bytes: Uint8Array): number | undefined {
  * it can't frame throws: the stream can't be trusted past it.
  */
 export function createRfbClientFilter() {
-  let handshakeLeft = HANDSHAKE_BYTES;
+  let versionKnown = false;
+  let handshakeLeft = 0;
   let buffer = new Uint8Array(0);
   let dropped = 0;
 
@@ -59,6 +71,24 @@ export function createRfbClientFilter() {
       joined.set(buffer);
       joined.set(chunk, buffer.length);
       let rest = joined;
+
+      if (!versionKnown) {
+        if (rest.length < VERSION_BYTES) {
+          buffer = rest.slice();
+          return out;
+        }
+        const version = new TextDecoder().decode(
+          rest.subarray(0, VERSION_BYTES)
+        );
+        const after = AFTER_VERSION_BYTES[version];
+        if (after === undefined) {
+          throw new Error(`unsupported RFB version ${JSON.stringify(version)}`);
+        }
+        out.push(rest.slice(0, VERSION_BYTES));
+        rest = rest.subarray(VERSION_BYTES);
+        versionKnown = true;
+        handshakeLeft = after;
+      }
 
       if (handshakeLeft > 0) {
         const take = Math.min(handshakeLeft, rest.length);

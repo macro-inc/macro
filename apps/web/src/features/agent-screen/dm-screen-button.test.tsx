@@ -41,7 +41,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
 
 /** A DM header's Screen slot, as ChannelDetail composes it. */
 function DmHeader() {
-  const harnessId = useDmScreenHarnessId(() => 'dm-1');
+  const harnessId = useDmScreenHarnessId('dm-1');
   return (
     <Show when={harnessId()}>
       {(id) => <DmScreenButton harnessId={id()} />}

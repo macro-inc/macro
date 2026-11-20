@@ -61,6 +61,17 @@ const PASTE_FALLBACK_MS = 60;
 /** The three modifiers held together leave the keyboard without handing back. */
 const RELEASE_CHORD_KEYS = ['Control', 'Alt', 'Shift'];
 
+/** Keys that are modifiers themselves, by `KeyboardEvent.key`. */
+const MODIFIER_KEYS = [
+  'Control',
+  'Alt',
+  'AltGraph',
+  'Shift',
+  'Meta',
+  'OS',
+  'CapsLock',
+];
+
 function pointerKind(type: string): PointerKind {
   if (type === 'mouse') return 'mouse';
   if (type === 'pen') return 'pen';
@@ -302,9 +313,14 @@ export function createScreenInput(options: ScreenInputOptions) {
         return;
       }
 
+      // Windows reports AltGr as Ctrl+Alt: an AltGr character is not a
+      // shortcut, and AltGr+Shift is not the release chord.
+      const altGraph = event.getModifierState?.('AltGraph') ?? false;
+
       // Ctrl+Alt+Shift held together leaves the keyboard (focus moves out)
       // without handing back: the way out of the guest by keyboard alone.
       if (
+        !altGraph &&
         event.ctrlKey &&
         event.altKey &&
         event.shiftKey &&
@@ -350,6 +366,31 @@ export function createScreenInput(options: ScreenInputOptions) {
 
       const keysym = keysymFor(event);
       if (keysym === undefined) return;
+
+      // macOS sends CapsLock's keydown when it turns on and its keyup when it
+      // turns off: each is one tap, or the guest's caps state drifts.
+      if (isMac && event.key === 'CapsLock') {
+        options.send({ kind: 'key', keysym, down: true });
+        options.send({ kind: 'key', keysym, down: false });
+        return;
+      }
+      // macOS sends no keyup for a key let go while Cmd is down (Cmd+C):
+      // press and release it at once, as noVNC's keyboard does.
+      if (isMac && event.metaKey && !MODIFIER_KEYS.includes(event.key)) {
+        options.send({ kind: 'key', keysym, down: true });
+        options.send({ kind: 'key', keysym, down: false });
+        return;
+      }
+      // An AltGr character on Windows arrives with a fake Ctrl held: let the
+      // guest's Ctrl go first, so the character isn't a Ctrl+Alt shortcut.
+      if (altGraph && !MODIFIER_KEYS.includes(event.key)) {
+        const control = pressedKeys.ControlLeft;
+        if (control !== undefined) {
+          delete pressedKeys.ControlLeft;
+          options.send({ kind: 'key', keysym: control, down: false });
+        }
+      }
+
       pressedKeys[event.code] = keysym;
       options.send({ kind: 'key', keysym, down: true });
     },
@@ -363,6 +404,14 @@ export function createScreenInput(options: ScreenInputOptions) {
         cancelEscapeHold();
         options.send({ kind: 'key', keysym: KEYSYM_ESCAPE, down: true });
         options.send({ kind: 'key', keysym: KEYSYM_ESCAPE, down: false });
+        return;
+      }
+
+      if (isMac && event.key === 'CapsLock') {
+        const capsLock = keysymFor(event);
+        if (capsLock === undefined) return;
+        options.send({ kind: 'key', keysym: capsLock, down: true });
+        options.send({ kind: 'key', keysym: capsLock, down: false });
         return;
       }
 

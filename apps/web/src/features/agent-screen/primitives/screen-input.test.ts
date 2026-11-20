@@ -60,7 +60,7 @@ describe('createScreenInput keyboard', () => {
     });
   });
 
-  it("lets go of held keys before a hand-back, maps a Mac's Cmd to Ctrl, and pastes the guest's clipboard when nothing local arrives", async () => {
+  it("on a Mac: Cmd is Ctrl, keys under Cmd release at once, CapsLock taps, the guest's clipboard pastes when nothing local arrives, and held keys go before a hand-back", async () => {
     vi.useFakeTimers();
     const sent: ScreenInputEvent[] = [];
     await createRoot(async (dispose) => {
@@ -90,22 +90,44 @@ describe('createScreenInput keyboard', () => {
       // guest pastes its own clipboard (Cmd is already down as Ctrl).
       keyDown({ key: 'v', code: 'KeyV', metaKey: true });
       await vi.advanceTimersByTimeAsync(100);
+      // macOS sends no keyup for C while Cmd is down: it goes down and up at once.
       expect(sent).toEqual([
         { kind: 'key', keysym: 0xffe3, down: true },
         { kind: 'key', keysym: 0x63, down: true },
+        { kind: 'key', keysym: 0x63, down: false },
         { kind: 'key', keysym: 0x76, down: true },
         { kind: 'key', keysym: 0x76, down: false },
       ]);
 
       sent.length = 0;
-      keyDown({ key: 'a', code: 'KeyA', metaKey: true });
+      keyDown({
+        key: 'Shift',
+        code: 'ShiftLeft',
+        metaKey: true,
+        shiftKey: true,
+      });
       // Holding Esc (or the Hand back button) lets go of all of it first.
       input.releaseAll();
       expect(sent).toEqual([
-        { kind: 'key', keysym: 0x61, down: true },
+        { kind: 'key', keysym: 0xffe1, down: true },
         { kind: 'key', keysym: 0xffe3, down: false },
-        { kind: 'key', keysym: 0x63, down: false },
-        { kind: 'key', keysym: 0x61, down: false },
+        { kind: 'key', keysym: 0xffe1, down: false },
+      ]);
+
+      // CapsLock on a Mac: keydown when it turns on, keyup when it turns
+      // off; each is one tap in the guest.
+      sent.length = 0;
+      keyDown({ key: 'CapsLock', code: 'CapsLock' });
+      const capsOff = new KeyboardEvent('keyup', {
+        key: 'CapsLock',
+        code: 'CapsLock',
+      });
+      input.onKeyUp(capsOff);
+      expect(sent).toEqual([
+        { kind: 'key', keysym: 0xffe5, down: true },
+        { kind: 'key', keysym: 0xffe5, down: false },
+        { kind: 'key', keysym: 0xffe5, down: true },
+        { kind: 'key', keysym: 0xffe5, down: false },
       ]);
       dispose();
     });
@@ -154,6 +176,67 @@ describe('createScreenInput keyboard', () => {
       expect(sent.slice(2)).toEqual([
         { kind: 'key', keysym: 0xffe3, down: false },
         { kind: 'key', keysym: 0xffe9, down: false },
+      ]);
+      field.remove();
+      dispose();
+    });
+  });
+
+  it("Windows AltGr: the character isn't a Ctrl+Alt shortcut, and AltGr+Shift isn't the release chord", () => {
+    const sent: ScreenInputEvent[] = [];
+    createRoot((dispose) => {
+      const input = createScreenInput({
+        frame: () => ({ width: 1920, height: 1080 }),
+        container: () => ({ width: 960, height: 540 }),
+        rotation: () => 0,
+        sendsInput: () => true,
+        send: (event) => sent.push(event),
+        onHandBackHold: () => {},
+        isMac: false,
+      });
+      const field = document.createElement('textarea');
+      document.body.append(field);
+      field.focus();
+      const keyDown = (init: KeyboardEventInit) => {
+        const event = new KeyboardEvent('keydown', {
+          cancelable: true,
+          ...init,
+        });
+        Object.defineProperty(event, 'currentTarget', { value: field });
+        input.onKeyDown(event);
+      };
+      // Chrome on Windows: AltGr is a fake left Ctrl, then AltGraph.
+      keyDown({ key: 'Control', code: 'ControlLeft', ctrlKey: true });
+      keyDown({
+        key: 'AltGraph',
+        code: 'AltRight',
+        ctrlKey: true,
+        altKey: true,
+        modifierAltGraph: true,
+      });
+      // AltGr+Shift (Polish Ł): not the release chord.
+      keyDown({
+        key: 'Shift',
+        code: 'ShiftLeft',
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+        modifierAltGraph: true,
+      });
+      expect(document.activeElement).toBe(field);
+      // AltGr+Shift+L types Ł, with the fake Ctrl let go first.
+      sent.length = 0;
+      keyDown({
+        key: 'Ł',
+        code: 'KeyL',
+        ctrlKey: true,
+        altKey: true,
+        shiftKey: true,
+        modifierAltGraph: true,
+      });
+      expect(sent).toEqual([
+        { kind: 'key', keysym: 0xffe3, down: false },
+        { kind: 'key', keysym: 0x01000141, down: true },
       ]);
       field.remove();
       dispose();

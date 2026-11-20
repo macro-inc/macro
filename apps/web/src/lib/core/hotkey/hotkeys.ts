@@ -621,7 +621,6 @@ export function useHotKeyRoot() {
   // dispatched (untrusted) events, so they stay exempt. Chrome autofill
   // dispatches trusted keydown/keyup events with no `key`; they are not key
   // presses either.
-  //
   const shouldIgnoreKeyEvent = (e: KeyboardEvent) =>
     typeof e.key !== 'string' ||
     (!e.isTrusted && import.meta.env.MODE !== 'test');

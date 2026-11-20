@@ -29,6 +29,7 @@ export default {
   handBack: 'Hand back',
   holdEscToHandBack: 'Hold Esc to hand back',
   leaveKeyboardHint: 'Ctrl+Alt+Shift leaves the keyboard',
+  leaveKeyboardHintMac: 'Control+Option+Shift leaves the keyboard',
   keyboardFor: 'Keyboard for {{name}}’s desktop',
   stopWatching: 'Stop watching',
   popOut: 'Pop out',
@@ -70,7 +71,7 @@ export default {
   noticeSourceUnavailable: 'The screen closed. Reconnecting…',
   noticeTunnelFailed: 'Couldn’t reach the computer’s screen. Reconnecting…',
   noticeTooManySockets:
-    'Too many screens are open for this computer. Close one, then try again.',
+    'Too many screens are open for this computer. Close one; this view keeps trying.',
 
   modeView: 'View',
   modeTouch: 'Touch',

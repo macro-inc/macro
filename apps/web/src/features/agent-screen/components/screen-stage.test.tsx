@@ -146,4 +146,60 @@ describe('ScreenStage keyboard', () => {
     );
     expect(openCreate).toHaveBeenCalledTimes(1);
   });
+
+  it('runs no hotkey on a key-up inside the viewer, though it still releases the key', () => {
+    const seen: string[] = [];
+    createRoot((dispose) => {
+      disposers.push(dispose);
+      useHotKeyRoot()?.addHotkeyInterceptor((context) => {
+        seen.push(`${context.eventType}:${context.pressedKeysString}`);
+        return false;
+      });
+    });
+    const { unmount } = render(() => (
+      <ScreenStage
+        label="Scout's desktop"
+        keyboardLabel="Keyboard for Scout's desktop"
+        frame={{ width: 1920, height: 1080 }}
+        transform={undefined}
+        driven
+        drivingMe
+        stale={false}
+        loupe={undefined}
+        snapshot={() => undefined}
+        handlers={handlers(() => {})}
+        containerRef={() => {}}
+        frameRef={() => {}}
+      />
+    ));
+    const keyboard = screen.getByRole('textbox', {
+      name: "Keyboard for Scout's desktop",
+    });
+    // Two keys held outside; one is let go over the viewer's field.
+    for (const key of ['x', 'y']) {
+      document.body.dispatchEvent(
+        new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true })
+      );
+    }
+    seen.length = 0;
+    keyboard.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'x', bubbles: true })
+    );
+
+    expect(seen).toEqual([]);
+    document.body.dispatchEvent(
+      new KeyboardEvent('keyup', { key: 'y', bubbles: true })
+    );
+    // "x" was released by the viewer's key-up: only "y" was still down.
+    expect(seen).toEqual([]);
+    document.body.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'z',
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+    expect(seen).toEqual(['keydown:z']);
+    unmount();
+  });
 });

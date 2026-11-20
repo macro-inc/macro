@@ -59,6 +59,8 @@ export function KeyBar(props: {
     onComposingChange: setComposing,
   });
 
+  const keepKeyboard = (event: Event) => event.preventDefault();
+
   const toggle = (modifier: Modifier) =>
     setModifiers((held) =>
       held.includes(modifier)
@@ -101,13 +103,18 @@ export function KeyBar(props: {
           </span>
         </Show>
       </div>
-      <div class="flex flex-wrap gap-1.5">
+      {/* Keeps the text field focused, so the phone keyboard stays up: both
+          events, on the whole row (gaps too), since WKWebView still
+          synthesises a mousedown after a cancelled pointerdown. */}
+      <div
+        class="flex flex-wrap gap-1.5"
+        onPointerDown={keepKeyboard}
+        onMouseDown={keepKeyboard}
+      >
         <Button
           size="sm"
           variant="secondary"
           aria-pressed={modifiers().includes('control')}
-          // Keep the text field focused, so the phone keyboard stays up.
-          onPointerDown={(event: PointerEvent) => event.preventDefault()}
           onClick={() => toggle('control')}
         >
           {t('agentScreen.keyControl')}
@@ -116,8 +123,6 @@ export function KeyBar(props: {
           size="sm"
           variant="secondary"
           aria-pressed={modifiers().includes('alt')}
-          // Keep the text field focused, so the phone keyboard stays up.
-          onPointerDown={(event: PointerEvent) => event.preventDefault()}
           onClick={() => toggle('alt')}
         >
           {t('agentScreen.keyAlt')}
@@ -128,7 +133,6 @@ export function KeyBar(props: {
               size="sm"
               variant="secondary"
               aria-label={key.name ?? key.label}
-              onPointerDown={(event: PointerEvent) => event.preventDefault()}
               onClick={() => press(key.keysym)}
             >
               {key.label}

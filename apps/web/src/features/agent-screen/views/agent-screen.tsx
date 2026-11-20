@@ -5,6 +5,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
+import { IS_MAC } from '@core/constant/isMac';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CursorIcon from '@icon/system/regular/cursor.svg';
 import LockIcon from '@icon/system/regular/lock.svg';
@@ -111,7 +112,9 @@ export function AgentScreen(props: { model: AgentScreenModel }) {
                   {t('agentScreen.holdEscToHandBack')}
                 </span>
                 <span class="border-l border-current pl-2">
-                  {t('agentScreen.leaveKeyboardHint')}
+                  {IS_MAC
+                    ? t('agentScreen.leaveKeyboardHintMac')
+                    : t('agentScreen.leaveKeyboardHint')}
                 </span>
               </Show>
             </div>

@@ -194,13 +194,7 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
   const channel = useChannel(props.channelId);
   const channelName = useChannelName(props.channelId, props.fallbackName);
   const channelType = useChannelType(props.channelId);
-  // An agent teammate's DM: an ordinary DM (a team agent is a user) or a bot
-  // DM. Other conversations never look their participants up for it.
-  const screenHarnessId = useDmScreenHarnessId(() =>
-    channelType() === ChannelType.direct_message || channel()?.agent_dm
-      ? props.channelId
-      : ''
-  );
+  const screenHarnessId = useDmScreenHarnessId(props.channelId);
   const call = useCall(() => props.channelId);
   const { activeTab } = useChannelTab();
 

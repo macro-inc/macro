@@ -687,4 +687,154 @@ describe('createScreenSession', () => {
       dispose();
     });
   });
+
+  it('shows asleep, without retrying, when the server ends a connect before the handshake', async () => {
+    let issued = 0;
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () => {
+        issued += 1;
+        return ok({
+          socketUrl: 'wss://screen.test/ws?ticket=t1',
+          expiresAt: '',
+        });
+      },
+      transport: () => ({
+        kind: 'vnc',
+        // As vnc does: the end first, then the connect's own rejection.
+        connect: async (_element, _ticket, handlers) => {
+          handlers.onEnded('computerOff');
+          throw new DOMException(
+            'The screen connection was abandoned',
+            'AbortError'
+          );
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      await vi.advanceTimersByTimeAsync(60_000);
+
+      expect(session.store.status).toEqual({ kind: 'asleep' });
+      expect(issued).toBe(1);
+      dispose();
+    });
+  });
+
+  it('hands back again after Stop watching and Watch again, and releases held input on an explicit hand-back', async () => {
+    const connections: FakeConnection[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => fakeTransport(connections),
+    };
+    const drivenByAlice = {
+      driver: { userId: 'user-alice', name: 'Alice' },
+      agentHeld: true,
+      waking: false,
+      transport: 'vnc' as const,
+      viewers: 1,
+      drivingHere: true,
+    };
+    const released: string[] = [];
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.setInputReleaser(() => released.push('released'));
+      session.attach(document.createElement('div'));
+      await settle();
+      connections[0].handlers.onState(drivenByAlice);
+
+      session.handBack('Your turn');
+      expect(released).toEqual(['released']);
+      expect(connections[0].controls).toEqual(['handBack:Your turn']);
+
+      connections[0].handlers.onState(drivenByAlice);
+      session.stop();
+      connections[0].handlers.onEnded('stopped');
+      session.retry();
+      await settle();
+      connections[1].handlers.onState(drivenByAlice);
+      dispose();
+      expect(connections[1].controls).toEqual(['handBack:null', 'close']);
+    });
+  });
+
+  it('drops a connect that resolves after the view went away', async () => {
+    let finish: () => void = () => {};
+    let late: ScreenSessionHandlers | undefined;
+    const closed: string[] = [];
+    const capabilities: ScreenCapabilities = {
+      requestTicket: async () =>
+        ok({ socketUrl: 'wss://screen.test/ws?ticket=t1', expiresAt: '' }),
+      transport: () => ({
+        kind: 'vnc',
+        connect: async (_element, _ticket, handlers) => {
+          late = handlers;
+          await new Promise<void>((resolve) => {
+            finish = resolve;
+          });
+          return {
+            sendInput: () => {},
+            takeOver: () => {},
+            handBack: () => {},
+            switchSurface: () => {},
+            stop: () => {},
+            close: () => closed.push('closed'),
+            stats: () => ({
+              fps: undefined,
+              kbps: 0,
+              rttMs: undefined,
+              decodeMs: undefined,
+            }),
+          };
+        },
+      }),
+    };
+
+    await createRoot(async (dispose) => {
+      const session = createScreenSession({
+        harnessId: 'harness-1',
+        canDrive: () => true,
+        accessKnown: () => true,
+        currentUserId: () => 'user-alice',
+        transport: () => 'vnc',
+        capabilities,
+      });
+      session.attach(document.createElement('div'));
+      await settle();
+      dispose();
+      // A transport that ignores the abort still resolves later: its session
+      // is closed and never shown as live.
+      finish();
+      await settle();
+      expect(closed).toEqual(['closed']);
+      expect(session.store.status).not.toEqual({ kind: 'live' });
+      // Nor does a late message from it change what the view shows.
+      late?.onState({
+        driver: null,
+        agentHeld: false,
+        waking: true,
+        transport: 'vnc',
+        viewers: 3,
+      });
+      expect(session.store.server).toBeUndefined();
+    });
+  });
 });
