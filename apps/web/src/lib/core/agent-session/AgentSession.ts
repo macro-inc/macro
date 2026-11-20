@@ -405,9 +405,21 @@ export class AgentSession {
       actionId,
       ...this.typedIn(action),
     };
-    const result = trace
-      ? await this.sendPrompt(trace, actionId, request)
-      : await agentHarnessServiceClient.control(this.id, request);
+    let result: IssueResult;
+    try {
+      result = trace
+        ? await this.sendPrompt(trace, actionId, request)
+        : await agentHarnessServiceClient.control(this.id, request);
+    } catch (error) {
+      // A request that never got an answer goes back to the composer, so
+      // its bubble goes too; otherwise a resend would show it twice.
+      if (speculated)
+        fireAndForget(
+          this.enqueue({ kind: 'retracted', actionId }),
+          'agent-session'
+        );
+      throw error;
+    }
 
     if (!speculated) return result;
     if (result.isErr()) {

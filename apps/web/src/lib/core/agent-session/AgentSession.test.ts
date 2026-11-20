@@ -476,6 +476,26 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('retracts a speculation whose request threw', async () => {
+    harness.control.mockRejectedValue(new Error('offline'));
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+
+    await expect(live.issue({ type: 'prompt', prompt: 'hi' })).rejects.toThrow(
+      'offline'
+    );
+    await settle();
+
+    const [speculation] = inputs().filter(
+      (input) => input.kind === 'speculated'
+    );
+    expect(inputs().at(-1)).toEqual({
+      kind: 'retracted',
+      actionId: (speculation as { actionId: string }).actionId,
+    });
+    live.release();
+  });
+
   it('speculates an elicitation answer like any other action', async () => {
     const live = AgentSession.acquire(SESSION);
     await live.load();

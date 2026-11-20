@@ -2388,10 +2388,11 @@ must stay hidden; subsequent live messages must still appear.
   than queued. Waiting prompts are written through to the session store as they are
   accepted, edited, or removed, and are restored when the session resumes after a
   harness restart — they must not disappear if the managing replica drains.
-- The composer clears on Send. A send the harness refuses (a network failure,
-  the queue full, or an external agent with no runtime it may run on) retracts
-  its pending bubble and puts the message back in the composer, ahead of
-  anything typed since, with its attached files. A no-runtime refusal is
+- The composer clears on Send. A send that fails or is refused (a network
+  failure, the queue full, or an external agent with no runtime it may run on)
+  puts the message back in the composer with its attached files, ahead of
+  anything typed since, with the caret left at the end. Any pending bubble it
+  showed is retracted, so a resend appears once. A no-runtime refusal is
   explained in the transcript; any other failure shows "The message could not
   be sent".
 - Queued prompts render as a list between the transcript and the input, newest at the

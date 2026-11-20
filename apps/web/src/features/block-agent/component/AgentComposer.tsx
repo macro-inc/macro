@@ -232,8 +232,8 @@ export function AgentComposer(props: {
       .filter((part) => part.length > 0)
       .join('\n\n');
     // The composer clears at once, as a sent message reads as sent; the
-    // fold shows it pending. A refusal retracts that bubble, so the message
-    // comes back here rather than vanishing.
+    // fold shows it pending. A failed or refused send retracts any such
+    // bubble, so the message comes back here rather than vanishing.
     attachmentTracker.clearAttachments();
     const sent = await act(
       promptActionOf(prompt, attachments),

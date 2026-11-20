@@ -47,30 +47,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/features/changes/context/changes-controller', () => ({
   useOptionalChanges: () => ({ consumeSendableNotes: mocks.consumeNotes }),
 }));
-vi.mock('@channel/Input', async () => {
-  const { createSignal } = await import('solid-js');
-  return {
-    createInputAttachmentTracker: () => {
-      const [attachments, setAttachments] = createSignal<InputAttachmentData[]>(
-        []
-      );
-      return {
-        attachments,
-        hasPending: () => false,
-        addAttachment: (attachment: InputAttachmentData) =>
-          setAttachments((current) => [...current, attachment]),
-        removeAttachment: (id: string) =>
-          setAttachments((current) =>
-            current.filter((attachment) => attachment.id !== id)
-          ),
-        setAttachmentPending: vi.fn(),
-        setAttachments,
-        clearAttachments: () => setAttachments([]),
-      };
-    },
-    uploadInputAttachments: mocks.upload,
-  };
-});
+vi.mock('@channel/Input', () => ({
+  uploadInputAttachments: mocks.upload,
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.toastFailure },
 }));
