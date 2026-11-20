@@ -1,6 +1,9 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type Accessor, createEffect, onCleanup } from 'solid-js';
-import { createScrollIntentTracker } from './scroll-intent';
+import {
+  createScrollIntentTracker,
+  SCROLL_INTENT_EVENT,
+} from './scroll-intent';
 
 const SCROLL_KEYS = new Set([
   'ArrowUp',
@@ -24,15 +27,18 @@ export function createScrollTopFade(
     const controller = new AbortController();
     const { signal } = controller;
     const intent = createScrollIntentTracker();
-    // Custom scrollbars are siblings, and list keyboard focus can sit on an
-    // ancestor grid. Observe those inputs without treating restoration as input.
+    // Shared scrollbars report intent directly. Native scrollbar input stays
+    // on the scroller; ancestor grids can own keyboard navigation.
     const inputRoot = element.parentElement ?? element;
     const document = element.ownerDocument;
     let pointerDown = false;
     let activated = false;
     let previousTop = element.scrollTop;
 
-    const markIntent = () => intent.markUserIntent('down');
+    const markIntent = () => {
+      if (!intent.isUserInteracting()) previousTop = element.scrollTop;
+      intent.markUserIntent('down');
+    };
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY !== 0 && !event.ctrlKey) markIntent();
     };
@@ -52,14 +58,16 @@ export function createScrollTopFade(
     };
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return;
-      const target = event.target;
-      // Focusing an editor can scroll it into view without a scroll gesture.
-      if (
-        target instanceof Element &&
-        target.closest('input, textarea, [contenteditable]')
-      ) {
-        return;
-      }
+      if (event.target !== element) return;
+      const rect = element.getBoundingClientRect();
+      const contentLeft = rect.left + element.clientLeft;
+      const contentRight = contentLeft + element.clientWidth;
+      const inLeftGutter =
+        event.clientX >= rect.left && event.clientX < contentLeft;
+      const inRightGutter =
+        event.clientX >= contentRight && event.clientX < rect.right;
+      const inGutter = inLeftGutter || inRightGutter;
+      if (!inGutter) return;
       markIntent();
       pointerDown = true;
     };
@@ -83,7 +91,8 @@ export function createScrollTopFade(
           : previousMask;
     };
     inputRoot.addEventListener('wheel', onWheel, { passive: true, signal });
-    inputRoot.addEventListener('pointerdown', onPointerDown, {
+    element.addEventListener(SCROLL_INTENT_EVENT, markIntent, { signal });
+    element.addEventListener('pointerdown', onPointerDown, {
       capture: true,
       signal,
     });

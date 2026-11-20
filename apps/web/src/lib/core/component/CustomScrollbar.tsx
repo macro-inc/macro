@@ -1,6 +1,7 @@
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import { SCROLL_INTENT_EVENT } from '../util/scroll-intent';
 
 interface CustomScrollbarProps {
   scrollContainer: () => HTMLElement | undefined;
@@ -213,6 +214,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
     if (horiz()) {
       container.scrollLeft = newPos;
     } else {
+      if (delta !== 0) container.dispatchEvent(new Event(SCROLL_INTENT_EVENT));
       container.scrollTop = newPos;
     }
     setScrollPos(newPos);
@@ -276,6 +278,7 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
           props.gutterSize === undefined
             ? undefined
             : (e) => {
+                if (e.ctrlKey) return;
                 const container = props.scrollContainer();
                 if (!container) return;
                 // Consume the event so ancestors don't also scroll, and
@@ -285,6 +288,9 @@ function InnerCustomScrollbar(props: CustomScrollbarProps) {
                   container.scrollLeft +=
                     e.deltaX || (e.shiftKey ? e.deltaY : 0);
                 } else {
+                  if (e.deltaY !== 0) {
+                    container.dispatchEvent(new Event(SCROLL_INTENT_EVENT));
+                  }
                   container.scrollTop += e.deltaY;
                 }
               }

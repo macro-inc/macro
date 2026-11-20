@@ -159,12 +159,15 @@ it('recognizes ancestor-focused keyboard navigation but ignores editing controls
   dispose();
 });
 
-it('recognizes sibling scrollbar input and releases pointer tracking outside the pane', () => {
+it('recognizes native scrollbar input and releases pointer tracking outside the pane', () => {
   vi.useFakeTimers();
   const wrapper = document.createElement('div');
   const element = document.createElement('div');
-  const scrollbar = document.createElement('div');
-  wrapper.append(element, scrollbar);
+  wrapper.append(element);
+  Object.defineProperty(element, 'clientWidth', { value: 90 });
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 100, 100)
+  );
   document.body.append(wrapper);
   let dispose = () => {};
   createRoot((cleanup) => {
@@ -172,8 +175,8 @@ it('recognizes sibling scrollbar input and releases pointer tracking outside the
     createScrollTopFade(() => element);
   });
 
-  scrollbar.dispatchEvent(
-    new MouseEvent('pointerdown', { button: 0, bubbles: true })
+  element.dispatchEvent(
+    new MouseEvent('pointerdown', { button: 0, clientX: 95, bubbles: true })
   );
   document.dispatchEvent(new MouseEvent('pointerup', { bubbles: true }));
   vi.advanceTimersByTime(1000);
@@ -182,11 +185,45 @@ it('recognizes sibling scrollbar input and releases pointer tracking outside the
   element.dispatchEvent(new Event('scroll'));
   expect(element.style.maskImage).toBe('');
 
-  scrollbar.dispatchEvent(
-    new MouseEvent('pointerdown', { button: 0, bubbles: true })
+  element.dispatchEvent(
+    new MouseEvent('pointerdown', { button: 0, clientX: 95, bubbles: true })
   );
   element.scrollTop = 400;
   element.dispatchEvent(new Event('scroll'));
   expect(element.style.maskImage).toContain('black 32px');
+  dispose();
+});
+
+it('does not attribute delayed restoration to ordinary row or button clicks', () => {
+  const wrapper = document.createElement('div');
+  const element = document.createElement('div');
+  const button = document.createElement('button');
+  element.append(button);
+  wrapper.append(element);
+  document.body.append(wrapper);
+  element.scrollTop = 400;
+  Object.defineProperty(element, 'clientWidth', { value: 90 });
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(0, 0, 100, 100)
+  );
+  let dispose = () => {};
+  createRoot((cleanup) => {
+    dispose = cleanup;
+    createScrollTopFade(() => element);
+  });
+
+  button.dispatchEvent(
+    new MouseEvent('pointerdown', { button: 0, bubbles: true })
+  );
+  element.scrollTop = 600;
+  element.dispatchEvent(new Event('scroll'));
+  expect(element.style.maskImage).toBe('');
+
+  element.dispatchEvent(
+    new MouseEvent('pointerdown', { button: 0, clientX: 50, bubbles: true })
+  );
+  element.scrollTop = 800;
+  element.dispatchEvent(new Event('scroll'));
+  expect(element.style.maskImage).toBe('');
   dispose();
 });

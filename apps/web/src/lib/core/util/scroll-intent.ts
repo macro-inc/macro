@@ -6,6 +6,9 @@ import type { JSX } from 'solid-js';
 const INTERACTION_TIMEOUT_MS = 300;
 const TOUCH_DRAG_THRESHOLD_PX = 6;
 
+/** Shared scrollbars dispatch on their scroller before user-driven vertical movement. */
+export const SCROLL_INTENT_EVENT = 'user-scroll-intent';
+
 export type ScrollDirection = 'up' | 'down';
 
 type ScrollIntentTracker = {
