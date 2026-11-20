@@ -27,15 +27,12 @@ export function useChannelSectionNotifications(
   const directory = useChannelDirectory();
   const notificationPreferences = useBulkNotificationPreferencesMutation();
   const [pending, setPending] = createSignal<{ actorId: string }>();
-  const requests = new Set<AbortController>();
+  // The directory's read is shared and runs on; what it resolves after
+  // unmount is dropped by `isCurrent`.
   let disposed = false;
 
   onCleanup(() => {
     disposed = true;
-
-    for (const request of requests) {
-      request.abort();
-    }
   });
 
   const favoriteIds = () =>
@@ -73,8 +70,7 @@ export function useChannelSectionNotifications(
   };
 
   const channelIdsFor = (
-    section: ChannelSectionKey,
-    signal: AbortSignal
+    section: ChannelSectionKey
   ): string[] | Promise<string[]> => {
     if (section === 'favorites') {
       return [...new Set(favoriteIds())];
@@ -85,12 +81,9 @@ export function useChannelSectionNotifications(
       section === 'team_channels' ||
       section === 'direct_messages'
     ) {
-      return Telemetry.span('channels.section.members', async () => {
-        const channels = await directory.readComplete();
-        // Unmounted while the directory filled: apply nothing.
-        if (signal.aborted) return [];
-        return channelGroupIds(section, [], channels);
-      });
+      return Telemetry.span('channels.section.members', async () =>
+        channelGroupIds(section, [], await directory.readComplete())
+      );
     }
 
     return [...new Set(labelFor(section)?.channelIds ?? [])];
@@ -109,7 +102,6 @@ export function useChannelSectionNotifications(
     }
 
     const request = { actorId };
-    const controller = new AbortController();
 
     const isCurrent = () =>
       !disposed &&
@@ -118,14 +110,13 @@ export function useChannelSectionNotifications(
       options.dialogOwner() === owner;
 
     setPending(request);
-    requests.add(controller);
 
     try {
       await Telemetry.span('channels.section.notifications', async (span) => {
         span.setAttr('section.id', section);
         span.setAttr('notification.action', action);
 
-        const ids = channelIdsFor(section, controller.signal);
+        const ids = channelIdsFor(section);
         const channelIds = Array.isArray(ids) ? ids : await ids;
 
         if (!isCurrent() || channelIds.length === 0) {
@@ -199,7 +190,6 @@ export function useChannelSectionNotifications(
 
       throw error;
     } finally {
-      requests.delete(controller);
       setPending((current) => (current === request ? undefined : current));
     }
   };
