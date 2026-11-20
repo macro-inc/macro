@@ -17,7 +17,20 @@ const sources = vi.hoisted(() => ({
   contactCopies: [] as ReturnType<typeof contactItem>[],
   contactError: undefined as Error | undefined,
   contactRetries: 0,
+  companySearches: [] as string[],
+  companyError: undefined as Error | undefined,
+  companyRetries: 0,
 }));
+
+function companyEntity(id: string, name: string, domain: string) {
+  return {
+    type: 'crm_company',
+    id,
+    name,
+    hidden: false,
+    domains: [{ id: `${id}-domain`, companyId: id, domain }],
+  };
+}
 
 function contactItem(
   id: string,
@@ -36,6 +49,37 @@ function contactItem(
   };
 }
 
+// The search service matches companies Quick Access does not hold.
+vi.mock('@app/features/crm/crm-search', () => ({
+  useCrmCompanySearchSource: (
+    search: () => string,
+    enabled: () => boolean
+  ) => ({
+    companies: () => {
+      if (!enabled()) return [];
+      sources.companySearches.push(search());
+      return 'northwind traders | northwind.example.com'.includes(
+        search().toLowerCase()
+      )
+        ? [
+            companyEntity(
+              'company-old',
+              'Northwind Traders',
+              'northwind.example.com'
+            ),
+          ]
+        : [];
+    },
+    hasMore: () => false,
+    isLoading: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+    error: () => sources.companyError,
+    retry: async () => {
+      sources.companyRetries += 1;
+    },
+  }),
+}));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: sources.contactSearchDisabled }),
 }));
@@ -104,25 +148,41 @@ vi.mock('@core/context/quickAccess', () => ({
       windowKey: () => undefined,
       loadMore: async () => {},
       items: () =>
-        options.buckets.includes('crm_contact')
+        options.buckets.includes('crm_company')
           ? [
-              contactItem('contact-recent', 'Ada Recent', 'ada@example.com'),
-              ...sources.contactCopies,
+              {
+                kind: 'entity',
+                id: 'company-recent',
+                bucket: 'crm_company',
+                searchText: 'Initech | initech.example.com',
+                sortTimestamp: 0,
+                timestamps: {},
+                data: companyEntity(
+                  'company-recent',
+                  'Initech',
+                  'initech.example.com'
+                ),
+              },
             ]
-          : options.buckets.includes('task')
+          : options.buckets.includes('crm_contact')
             ? [
-                {
-                  kind: 'task',
-                  id: 'task-1',
-                  data: {
-                    type: 'document',
-                    id: 'task-1',
-                    name: 'Ship it',
-                    subType: { type: 'task' },
-                  },
-                },
+                contactItem('contact-recent', 'Ada Recent', 'ada@example.com'),
+                ...sources.contactCopies,
               ]
-            : [],
+            : options.buckets.includes('task')
+              ? [
+                  {
+                    kind: 'task',
+                    id: 'task-1',
+                    data: {
+                      type: 'document',
+                      id: 'task-1',
+                      name: 'Ship it',
+                      subType: { type: 'task' },
+                    },
+                  },
+                ]
+              : [],
     }),
   }),
 }));
@@ -183,6 +243,9 @@ afterEach(() => {
   sources.contactCopies.length = 0;
   sources.contactError = undefined;
   sources.contactRetries = 0;
+  sources.companySearches.length = 0;
+  sources.companyError = undefined;
+  sources.companyRetries = 0;
 });
 
 function renderSelector(
@@ -297,5 +360,50 @@ describe('a contact selector', () => {
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(screen.queryByText('Northwind Support')).toBeNull();
     expect(sources.contactSearches).toEqual([]);
+  });
+});
+
+describe('a company selector', () => {
+  const type = (value: string) =>
+    fireEvent.input(screen.getByPlaceholderText('Find'), {
+      target: { value },
+    });
+
+  it('lists recent companies without searching the server', async () => {
+    renderSelector('COMPANY');
+    expect(await screen.findByText('Initech')).toBeTruthy();
+    expect(sources.companySearches).toEqual([]);
+  });
+
+  it('finds a company Quick Access does not hold by name or domain', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    for (const query of ['Northwind', 'northwind.example.com', 'wind.exa']) {
+      type(query);
+      await waitFor(() =>
+        expect(sources.companySearches).toContain(query.toLowerCase())
+      );
+      expect(await screen.findByText('Northwind Traders')).toBeTruthy();
+      expect(screen.queryByText('No companies found')).toBeNull();
+    }
+  });
+
+  it('finds a recent company by its domain', async () => {
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('initech.example');
+    await waitFor(() =>
+      expect(sources.companySearches).toContain('initech.example')
+    );
+    expect(screen.getByText('Initech')).toBeTruthy();
+  });
+
+  it('offers Retry when a server company page fails', async () => {
+    sources.companyError = new Error('company page failed');
+    renderSelector('COMPANY');
+    await screen.findByText('Initech');
+    type('northwind');
+    fireEvent.click(await screen.findByRole('button', { name: /retry/i }));
+    await waitFor(() => expect(sources.companyRetries).toBe(1));
   });
 });
