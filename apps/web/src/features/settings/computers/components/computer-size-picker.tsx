@@ -13,6 +13,8 @@ export function ComputerSizePicker(props: {
   offers: readonly SizeOffer[];
   selected: ComputerSize | undefined;
   onSelect: (size: ComputerSize) => void;
+  /** The radio group's name, when other choices share the group. */
+  name?: string;
 }) {
   return (
     <fieldset class="flex min-w-0 flex-col gap-2">
@@ -25,7 +27,7 @@ export function ComputerSizePicker(props: {
       >
         {(offer) => (
           <ChoiceRow
-            name="macro-computer-size"
+            name={props.name ?? 'macro-computer-size'}
             value={offer.size}
             checked={props.selected === offer.size}
             title={sizeLabel(offer.size)}

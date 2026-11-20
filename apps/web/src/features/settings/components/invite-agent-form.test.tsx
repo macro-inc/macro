@@ -1,7 +1,7 @@
 import type { CreateTeamAgent } from '@service-auth/team-agents';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { InviteAgentForm } from './invite-agent-form';
+import { AGENT_COMPUTER_CHOICE, InviteAgentForm } from './invite-agent-form';
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -118,4 +118,85 @@ it('says every size is sold out when Add is pressed with none for sale', () => {
   expect(onSubmit).not.toHaveBeenCalled();
   expect(prepareAvatar).not.toHaveBeenCalled();
   Reflect.deleteProperty(Element.prototype, 'scrollIntoView');
+});
+
+it('offers your computers in the same choice as the sizes, and adds on one without buying', () => {
+  const onSubmit = vi.fn();
+  const onSubmitHost = vi.fn();
+  const noop = () => {};
+  render(() => (
+    <InviteAgentForm
+      offers={[
+        {
+          size: 'standard',
+          vcpus: 4,
+          memoryGb: 8,
+          diskGb: 100,
+          soldOut: false,
+          quote: {
+            size: 'standard',
+            amount: 4000,
+            currency: 'usd',
+            interval: 'month',
+            priceId: 'price_standard',
+          },
+        },
+      ]}
+      offersFailed={false}
+      onRetryOffers={noop}
+      state={{ kind: 'editing' }}
+      purchaseKey="example"
+      onCancel={noop}
+      onSubmit={onSubmit}
+      onSubmitHost={onSubmitHost}
+      onRetryStart={noop}
+      onEdit={noop}
+      onBilling={noop}
+      hosts={(choice) => (
+        <label>
+          <input
+            type="radio"
+            name={AGENT_COMPUTER_CHOICE}
+            checked={choice.selected() === 'harness-1'}
+            onChange={() =>
+              choice.onSelect({ harnessId: 'harness-1', name: 'my-laptop' })
+            }
+          />
+          my-laptop
+        </label>
+      )}
+      hostNotice={(host) => <p>Runs on {host.name}</p>}
+    />
+  ));
+  fireEvent.input(screen.getByRole('textbox', { name: 'Name it' }), {
+    target: { value: 'Ada' },
+  });
+  expect(screen.getByText('Buy a computer')).toBeTruthy();
+  expect(screen.getByText('Your computers')).toBeTruthy();
+  const standard = screen.getByRole('radio', { name: 'Standard' });
+  const laptop = screen.getByRole('radio', { name: 'my-laptop' });
+  expect((standard as HTMLInputElement).checked).toBe(true);
+  expect(standard.getAttribute('name')).toBe(laptop.getAttribute('name'));
+
+  fireEvent.click(laptop);
+  expect((standard as HTMLInputElement).checked).toBe(false);
+  expect(screen.getByText('Runs on my-laptop')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Ada on my-laptop' }));
+  expect(onSubmit).not.toHaveBeenCalled();
+  expect(onSubmitHost).toHaveBeenCalledWith({
+    name: 'Ada',
+    jobDescription: '',
+    personality: '',
+    avatarUrl: null,
+    purchaseKey: 'example',
+    harnessId: 'harness-1',
+  });
+
+  // Picking a size again leaves the computer, and Add buys that size.
+  fireEvent.click(standard);
+  expect(screen.queryByText('Runs on my-laptop')).toBeNull();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Add Ada · $40.00/month' })
+  );
+  expect(onSubmit).toHaveBeenCalledTimes(1);
 });

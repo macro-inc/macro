@@ -31,6 +31,9 @@ export default {
   tryAgain: 'Try again',
   add: 'Add {{name}}',
   addPriced: 'Add {{name}} · {{price}}',
+  addOn: 'Add {{name}} on {{host}}',
+  buyAComputer: 'Buy a computer',
+  yourComputers: 'Your computers',
   adding: 'Adding {{name}}…',
   tryAgainPriced: 'Try again · {{price}}',
   declined:

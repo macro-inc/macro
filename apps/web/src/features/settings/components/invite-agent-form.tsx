@@ -20,11 +20,27 @@ import { FailureNotice } from '../computers/components/failure-notice';
 import { formatQuote, sizeLabel } from '../computers/core/computer-display';
 import type { AddAgentState, AddRefusal } from '../core/team-agent-add';
 import {
+  type AgentHost,
   addBlocker,
+  type HostInvite,
+  hostInvite,
   MAX_AGENT_NAME_CHARS,
   teamAgentRequest,
 } from '../core/team-agent-draft';
 import { AgentInviteLayoutA } from './agent-invite-layout-a';
+
+/**
+ * The radio name every computer choice shares, sizes to buy and the
+ * inviter's own computers alike, so exactly one is picked.
+ */
+export const AGENT_COMPUTER_CHOICE = 'agent-computer';
+
+/** Names a part of the computer list; not itself a choice. */
+function ChoiceGroupLabel(props: { children: JSX.Element }) {
+  return (
+    <div class="pt-1 text-xs font-medium text-ink-muted">{props.children}</div>
+  );
+}
 
 function refusalText(reason: AddRefusal): string {
   return match(reason)
@@ -67,9 +83,29 @@ export function InviteAgentForm(props: {
    * recipe). It may fail softly by returning less; it must not throw.
    */
   prepareAvatar?: () => Promise<Partial<CreateTeamAgent> | undefined>;
+  /**
+   * The inviter's own computers, listed under Your computers in the same
+   * choice as the sizes. Rows share the radio name `AGENT_COMPUTER_CHOICE`,
+   * check the host `selected` names and call `onSelect` when picked. Left
+   * out, only sizes to buy are offered.
+   */
+  hosts?: (choice: {
+    selected: () => string | undefined;
+    onSelect: (host: AgentHost) => void;
+  }) => JSX.Element;
+  /** Under the list while one of the inviter's computers is picked. */
+  hostNotice?: (host: AgentHost) => JSX.Element;
+  /** Add with one of the inviter's computers picked: nothing is bought. */
+  onSubmitHost?: (invite: HostInvite) => void;
 }) {
   const [name, setName] = createSignal('');
   const [chosenSize, setChosenSize] = createSignal<ComputerSize>();
+  // One of the inviter's computers, in place of a size to buy.
+  const [host, setHost] = createSignal<AgentHost>();
+  const chooseSize = (chosen: ComputerSize) => {
+    setHost(undefined);
+    setChosenSize(chosen);
+  };
   // Add was pressed with no name: the field says it needs one.
   const [asked, setAsked] = createSignal(false);
   // Add was pressed with every size sold out.
@@ -126,6 +162,9 @@ export function InviteAgentForm(props: {
 
   const addLabel = () => {
     const agentName = trimmedName() || t('teamAgents.agent');
+    const picked = host();
+    if (picked)
+      return t('teamAgents.addOn', { name: agentName, host: picked.name });
     const amount = price();
     return amount
       ? t('teamAgents.addPriced', { name: agentName, price: amount })
@@ -143,9 +182,16 @@ export function InviteAgentForm(props: {
       .with('not_started', () => t('teamAgents.retryStart'))
       .otherwise(() => addLabel());
 
-  const send = async (request: CreateTeamAgent, chosen: SizeOffer) => {
+  /**
+   * Adds the picture's fields to `request`, then sends it; with no picture to
+   * prepare it sends right away. Nothing is sent once the form has gone.
+   */
+  const withPicture = async <Request extends Partial<CreateTeamAgent>>(
+    request: Request,
+    sendRequest: (request: Request) => void
+  ) => {
     if (!props.prepareAvatar) {
-      props.onSubmit(request, chosen.size);
+      sendRequest(request);
       return;
     }
     setPreparing(true);
@@ -153,7 +199,7 @@ export function InviteAgentForm(props: {
     if (disposed) return;
     setPreparing(false);
     if (!avatar) return;
-    props.onSubmit({ ...request, ...avatar }, chosen.size);
+    sendRequest({ ...request, ...avatar });
   };
 
   const submit = () => {
@@ -168,6 +214,16 @@ export function InviteAgentForm(props: {
       nameInput?.focus();
       return;
     }
+    const picked = host();
+    if (picked) {
+      const invite = hostInvite(draft(), picked);
+      if (invite)
+        fireAndForget(
+          withPicture(invite, (ready) => props.onSubmitHost?.(ready)),
+          'team-agent.add'
+        );
+      return;
+    }
     if (addBlocker(draft()) === 'size') {
       // Sizes still loading or failed to load say so already.
       if (offers()) {
@@ -179,7 +235,10 @@ export function InviteAgentForm(props: {
     const request = teamAgentRequest(draft());
     const chosen = offer();
     if (request && chosen)
-      fireAndForget(send(request, chosen), 'team-agent.add');
+      fireAndForget(
+        withPicture(request, (ready) => props.onSubmit(ready, chosen.size)),
+        'team-agent.add'
+      );
   };
 
   // The notice sits below the sizes; bring it into view and announce it, so
@@ -277,11 +336,32 @@ export function InviteAgentForm(props: {
             }
           >
             {(available) => (
-              <ComputerSizePicker
-                offers={available()}
-                selected={size()}
-                onSelect={edit(setChosenSize)}
-              />
+              <>
+                <Show when={props.hosts}>
+                  <ChoiceGroupLabel>
+                    {t('teamAgents.buyAComputer')}
+                  </ChoiceGroupLabel>
+                </Show>
+                <ComputerSizePicker
+                  name={AGENT_COMPUTER_CHOICE}
+                  offers={available()}
+                  selected={host() ? undefined : size()}
+                  onSelect={edit(chooseSize)}
+                />
+              </>
+            )}
+          </Show>
+          <Show when={props.hosts}>
+            {(hosts) => (
+              <>
+                <ChoiceGroupLabel>
+                  {t('teamAgents.yourComputers')}
+                </ChoiceGroupLabel>
+                {hosts()({
+                  selected: () => host()?.harnessId,
+                  onSelect: edit(setHost),
+                })}
+              </>
             )}
           </Show>
         </div>
@@ -291,7 +371,7 @@ export function InviteAgentForm(props: {
           ref={notice}
           data-add-agent-state={props.state.kind}
           // With nothing to say it takes no room, not a gap under the sizes.
-          class="empty:hidden"
+          class="flex flex-col gap-3 empty:hidden"
         >
           <Switch>
             <Match when={props.state.kind === 'declined'}>
@@ -336,6 +416,10 @@ export function InviteAgentForm(props: {
               )}
             </Match>
           </Switch>
+          {/* What running on the inviter's computer means, while one is picked. */}
+          <Show when={props.hostNotice && host()}>
+            {(picked) => props.hostNotice?.(picked())}
+          </Show>
         </div>
       }
       cancel={
