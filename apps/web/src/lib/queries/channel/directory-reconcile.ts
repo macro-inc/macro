@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import {
@@ -22,6 +23,10 @@ import {
   CHANNEL_RECORD_PREFIX,
   listCachedChannelDocuments,
 } from './directory-cache';
+import {
+  type ShadowScope,
+  shadowCompareChannelDirectory,
+} from './directory-shadow';
 
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
@@ -36,6 +41,7 @@ type FetchPage = (
 type ReconcileHost = Pick<
   CacheHost,
   | 'search'
+  | 'readRecordsByKeys'
   | 'readQuery'
   | 'currentStorageGeneration'
   | 'deleteRecords'
@@ -133,8 +139,12 @@ async function stillInScope(input: Reconciliation): Promise<boolean> {
 
 /** Deletes the cached channels the viewer can no longer read: channels they
  * were removed from or that were deleted while no event reached them. */
-async function removeUnreadableChannels(input: Reconciliation): Promise<void> {
-  await Telemetry.span('channel_directory.reconcile', async (span) => {
+type ReconcileOutcome = 'incomplete' | 'scope_changed' | 'complete';
+
+async function removeUnreadableChannels(
+  input: Reconciliation
+): Promise<ReconcileOutcome> {
+  return Telemetry.span('channel_directory.reconcile', async (span) => {
     span.setAttr('channel_directory.candidates', input.candidates.length);
     const gone = await unreadableChannels(
       input.lane,
@@ -144,12 +154,12 @@ async function removeUnreadableChannels(input: Reconciliation): Promise<void> {
     );
     if (!gone) {
       span.setAttr('channel_directory.reconcile_outcome', 'incomplete');
-      return;
+      return 'incomplete';
     }
     // Delete only for the viewer and storage the evidence was read for.
     if (!(await stillInScope(input))) {
       span.setAttr('channel_directory.reconcile_outcome', 'scope_changed');
-      return;
+      return 'scope_changed';
     }
     for (const batch of chunks(gone, DELETE_BATCH)) {
       input.signal?.throwIfAborted();
@@ -159,6 +169,7 @@ async function removeUnreadableChannels(input: Reconciliation): Promise<void> {
     }
     span.setAttr('channel_directory.removed', gone.length);
     span.setAttr('channel_directory.reconcile_outcome', 'complete');
+    return 'complete';
   });
 }
 
@@ -201,11 +212,17 @@ async function readReconcileScope(
  * return is read again by id; the ones the server no longer returns are
  * deleted from the cache. A resumed, failed or cancelled pass, or a cache
  * that belongs to another viewer, deletes nothing.
+ *
+ * Once a pass has been reconciled, `onReconciled` compares the cache with
+ * the REST channel list in the background (the shadow comparison).
  */
 export async function createChannelDirectoryBackfillFetcher(
   userId: string,
   host: ReconcileHost | undefined = getGraphqlSoupCacheHost(),
-  fetch: FetchPage = fetchDirectoryPage
+  fetch: FetchPage = fetchDirectoryPage,
+  onReconciled: (
+    scope: ShadowScope
+  ) => Promise<void> = shadowCompareChannelDirectory
 ): Promise<FetchPage> {
   const scope = await readReconcileScope(host, userId);
   const seen = new Set<string>();
@@ -227,9 +244,10 @@ export async function createChannelDirectoryBackfillFetcher(
 
     if (page.nextCursor === null && completeEvidence && lane && scope) {
       const candidates = scope.previous.filter((id) => !seen.has(id));
+      let outcome: ReconcileOutcome | 'failed' = 'complete';
       if (candidates.length > 0) {
         try {
-          await removeUnreadableChannels({
+          outcome = await removeUnreadableChannels({
             host: scope.host,
             userId,
             generation: scope.generation,
@@ -242,8 +260,20 @@ export async function createChannelDirectoryBackfillFetcher(
           options?.signal?.throwIfAborted();
           // Stale records stay until the next pass; the page itself landed.
           Telemetry.error(error, { surface: 'channel-directory-reconcile' });
+          outcome = 'failed';
         }
       }
+      // Compare only a cache the pass both filled and cleaned, without
+      // holding the page back for it.
+      if (outcome === 'complete')
+        fireAndForget(
+          onReconciled({
+            host: scope.host,
+            userId,
+            generation: scope.generation,
+          }),
+          'channel-directory-shadow'
+        );
     }
     return page;
   };

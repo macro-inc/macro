@@ -3,10 +3,13 @@ import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createChannelDirectoryBackfillFetcher } from './directory-reconcile';
+import type { ShadowScope } from './directory-shadow';
 import { channelRecord, fakeChannelCache } from './tests/directory-fixtures';
 
+const onReconciled = vi.fn(async (_scope: ShadowScope) => {});
 const telemetry = vi.hoisted(() => ({ error: vi.fn() }));
-vi.mock('@macro-inc/observability', () => ({
+vi.mock('@macro-inc/observability', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   Telemetry: {
     error: telemetry.error,
     span: async (
@@ -84,7 +87,10 @@ const deleted = (host: { deleteRecords: ReturnType<typeof vi.fn> }) =>
   host.deleteRecords.mock.calls.flatMap(([keys]) => keys as string[]);
 
 describe('channel directory reconciliation', () => {
-  beforeEach(() => telemetry.error.mockReset());
+  beforeEach(() => {
+    telemetry.error.mockReset();
+    onReconciled.mockClear();
+  });
 
   it('deletes only the cached channels the server no longer returns by id', async () => {
     const { host } = reconcileHost(['joined', 'unjoined', 'removed']);
@@ -98,7 +104,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await runPass(fetchPage, [
@@ -107,6 +114,11 @@ describe('channel directory reconciliation', () => {
     ]);
 
     expect(deleted(host)).toEqual(['GraphqlSoupChannel:removed']);
+    expect(onReconciled).toHaveBeenCalledExactlyOnceWith({
+      host,
+      userId: 'viewer',
+      generation: 'g1',
+    });
     const byId = fetch.mock.calls[2]?.[0];
     expect(byId).toMatchObject({
       initial: {
@@ -136,7 +148,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await fetchPage(FIRST);
@@ -146,6 +159,7 @@ describe('channel directory reconciliation', () => {
       .map(([input]) => input.initial?.limit);
     expect(batches).toEqual([100, 100, 50]);
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).toHaveBeenCalledOnce();
   });
 
   it('deletes nothing after a resumed pass', async () => {
@@ -154,13 +168,15 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await fetchPage({ continuation: { cursor: 'saved', expand: true } });
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('deletes nothing when a lane page did not list its channels', async () => {
@@ -172,7 +188,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await runPass(fetchPage, [
@@ -181,6 +198,7 @@ describe('channel directory reconciliation', () => {
     ]);
 
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('deletes nothing from a cache that belongs to another viewer', async () => {
@@ -189,13 +207,15 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await fetchPage(FIRST);
 
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('deletes nothing when the storage generation changed during the pass', async () => {
@@ -204,7 +224,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       harness.host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     harness.setGeneration('g2');
@@ -212,6 +233,7 @@ describe('channel directory reconciliation', () => {
 
     expect(fetch).toHaveBeenCalledTimes(2);
     expect(harness.host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('deletes nothing when a by-id read does not finish in one page', async () => {
@@ -223,12 +245,14 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await fetchPage(FIRST);
 
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('still returns the final page when a by-id read fails', async () => {
@@ -241,11 +265,13 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await expect(fetchPage(FIRST)).resolves.toBe(final);
     expect(host.deleteRecords).not.toHaveBeenCalled();
+    expect(onReconciled).not.toHaveBeenCalled();
     expect(telemetry.error).toHaveBeenCalledTimes(1);
   });
 
@@ -256,7 +282,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       host,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await fetchPage(FIRST);
@@ -264,6 +291,7 @@ describe('channel directory reconciliation', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(host.deleteRecords).not.toHaveBeenCalled();
     expect(telemetry.error).toHaveBeenCalledTimes(1);
+    expect(onReconciled).not.toHaveBeenCalled();
   });
 
   it('pages without reconciling when the device cache is off', async () => {
@@ -271,7 +299,8 @@ describe('channel directory reconciliation', () => {
     const fetchPage = await createChannelDirectoryBackfillFetcher(
       'viewer',
       undefined,
-      fetch
+      fetch,
+      onReconciled
     );
 
     await expect(fetchPage(FIRST)).resolves.toEqual({
@@ -279,5 +308,22 @@ describe('channel directory reconciliation', () => {
       entityIds: [],
     });
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onReconciled).not.toHaveBeenCalled();
+  });
+
+  it('compares with the REST list after a pass that left nothing to remove', async () => {
+    const { host } = reconcileHost(['joined']);
+    const fetch = server([{ nextCursor: null, entityIds: ['joined'] }]);
+    const fetchPage = await createChannelDirectoryBackfillFetcher(
+      'viewer',
+      host,
+      fetch,
+      onReconciled
+    );
+
+    await fetchPage(FIRST);
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(onReconciled).toHaveBeenCalledOnce();
   });
 });
