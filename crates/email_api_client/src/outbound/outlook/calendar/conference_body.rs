@@ -1,27 +1,27 @@
 //! Exact provider-owned HTML boundaries, shared by ordinary edits and event replacement.
 use super::*;
-use scraper::{ElementRef, Html, Selector};
+use email_utils::bounded_html;
+use scraper::{ElementRef, Html};
+
+/// Refuses a body whose parse stopped at a bound of [`bounded_html`]: what
+/// it left out cannot be checked for the meeting link, and writing the rest
+/// back would cut the description short.
+const TOO_LARGE: &str = "This event's description is too large for Macro to edit safely. Edit or replace the event in Outlook to preserve your description.";
 
 /// Split a recognized meeting block from user content. Never infer ownership from
 /// aggregate text: an ordinary wrapper may also contain the user's trailing notes.
 pub(super) fn split(content: &str, join: &str) -> Result<(String, String), CalendarProviderError> {
-    let mut document = Html::parse_fragment(content);
-    let selector = Selector::parse("div").map_err(|_| invalid())?;
-    let provider_owned = |element: &ElementRef<'_>| {
-        element
-            .value()
-            .classes()
-            .any(|class| class.starts_with("me-email"))
-    };
-    let blocks: Vec<_> = document
-        .select(&selector)
-        .filter(provider_owned)
-        .filter(|element| {
-            !element
-                .ancestors()
-                .filter_map(ElementRef::wrap)
-                .any(|ancestor| provider_owned(&ancestor))
-        })
+    let parsed = bounded_html::parse_fragment(content);
+    if parsed.clipped {
+        tracing::warn!(
+            body_bytes = content.len(),
+            "refused to split an Outlook event body too large to parse whole"
+        );
+        return Err(unsupported(TOO_LARGE));
+    }
+    let mut document = parsed.html;
+    let blocks: Vec<_> = provider_blocks(&document)
+        .into_iter()
         .map(|element| (element.id(), element.html()))
         .collect();
     let meeting = blocks
@@ -46,3 +46,33 @@ pub(super) fn split(content: &str, join: &str) -> Result<(String, String), Calen
     }
     Ok((description, meeting))
 }
+
+fn provider_owned(element: &ElementRef<'_>) -> bool {
+    element
+        .value()
+        .classes()
+        .any(|class| class.starts_with("me-email"))
+}
+
+/// The outermost provider-owned `div`s, in document order. One walk that
+/// skips everything inside a provider-owned element: checking each `div`'s
+/// ancestors instead reads an ancestor's classes once per `div` inside it.
+fn provider_blocks(document: &Html) -> Vec<ElementRef<'_>> {
+    let mut blocks = Vec::new();
+    let mut pending = vec![*document.root_element()];
+    while let Some(node) = pending.pop() {
+        if let Some(element) = ElementRef::wrap(node)
+            && provider_owned(&element)
+        {
+            if element.value().name() == "div" {
+                blocks.push(element);
+            }
+            continue;
+        }
+        pending.extend(node.children().rev());
+    }
+    blocks
+}
+
+#[cfg(test)]
+mod test;
