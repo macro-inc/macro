@@ -21267,6 +21267,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "strum 0.27.2",
  "team_agents",
  "teams",
  "thiserror 2.0.18",

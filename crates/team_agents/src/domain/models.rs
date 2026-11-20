@@ -5,6 +5,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::inbox::AgentInbox;
+
 pub use agent_credentials::{AgentApiKey, RepoToken};
 pub use agent_git::domain::voice::VoiceModel;
 pub use harness_id::HarnessId;
@@ -72,6 +74,8 @@ pub struct TeamAgent {
     pub status: TeamAgentStatus,
     /// When the agent was invited.
     pub created_at: DateTime<Utc>,
+    /// The agent's email inbox, if it was given one.
+    pub inbox: Option<AgentInbox>,
 }
 
 /// A team's agents.
@@ -110,6 +114,10 @@ pub struct CreateTeamAgent {
     #[serde(default)]
     #[cfg_attr(feature = "inbound", schema(value_type = Option<String>))]
     pub voice: Option<VoiceModel>,
+    /// Give the agent its own email inbox once its computer is bought. An
+    /// inbox that can't be made never fails the invite.
+    #[serde(default)]
+    pub inbox: bool,
 }
 
 /// An agent's display name: trimmed, 1 to [`MAX_NAME_CHARS`] characters.
@@ -155,6 +163,8 @@ pub struct TeamAgentInvite {
     pub avatar_url: Option<String>,
     /// The call voice picked in the invite.
     pub voice: Option<VoiceModel>,
+    /// Whether to give the agent an email inbox.
+    pub inbox: bool,
 }
 
 /// The non-secret inputs the brain's first run writes into its workspace.
@@ -390,9 +400,30 @@ pub enum TeamAgentError {
     /// voice request.
     #[error("voices are unavailable right now")]
     VoiceUnavailable(rootcause::Report),
+    /// No email provider is set up on this server.
+    #[error("email inboxes aren't available on this server")]
+    InboxesNotConfigured,
+    /// The agent has no email inbox.
+    #[error("the agent has no email inbox")]
+    NoInbox,
+    /// Email inboxes didn't answer.
+    #[error("email inboxes are unavailable right now")]
+    InboxUnavailable(rootcause::Report),
     /// Anything else.
     #[error("internal error: {0}")]
     Internal(rootcause::Report),
+}
+
+impl From<super::inbox::InboxError> for TeamAgentError {
+    fn from(error: super::inbox::InboxError) -> Self {
+        use super::inbox::InboxError;
+        match error {
+            InboxError::NotConfigured => Self::InboxesNotConfigured,
+            InboxError::NoInbox => Self::NoInbox,
+            InboxError::Unavailable(report) => Self::InboxUnavailable(report),
+            InboxError::Internal(report) => Self::Internal(report),
+        }
+    }
 }
 
 impl TeamAgentError {
