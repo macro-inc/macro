@@ -300,7 +300,11 @@ async fn a_bucket_lets_its_capacity_through_at_once_then_waits_for_its_next_toke
 
     let mut taken = Vec::new();
     for _ in 0..3 {
-        taken.push(TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap());
+        taken.push(
+            TokenBucketPort::take(&adapter, key.clone(), config)
+                .await
+                .unwrap(),
+        );
     }
     assert_eq!(
         taken,
@@ -341,11 +345,15 @@ async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
     .unwrap();
 
     assert_eq!(
-        TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap(),
+        TokenBucketPort::take(&adapter, key.clone(), config)
+            .await
+            .unwrap(),
         TokenBucketResult::Taken { remaining: 1 }
     );
     assert_eq!(
-        TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap(),
+        TokenBucketPort::take(&adapter, key.clone(), config)
+            .await
+            .unwrap(),
         TokenBucketResult::Taken { remaining: 0 }
     );
     match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
@@ -423,12 +431,16 @@ async fn each_key_has_its_own_bucket() {
         .await
         .unwrap();
     assert!(matches!(
-        TokenBucketPort::take(&adapter, emptied, config).await.unwrap(),
+        TokenBucketPort::take(&adapter, emptied, config)
+            .await
+            .unwrap(),
         TokenBucketResult::Empty { .. }
     ));
 
     assert_eq!(
-        TokenBucketPort::take(&adapter, other, config).await.unwrap(),
+        TokenBucketPort::take(&adapter, other, config)
+            .await
+            .unwrap(),
         TokenBucketResult::Taken { remaining: 0 }
     );
 }
