@@ -89,6 +89,7 @@ export default {
   inboxNotConfigured: "Email inboxes aren't available yet.",
   inboxAddFailed: "Couldn't add an inbox for {{name}}. Try again.",
   inboxOption: 'Give it an email address',
+  inboxFakeProvider: 'Fake provider, not live',
   retryFailed: "Couldn't retry setting up {{name}}. Try again.",
   readyNotice: '{{name}} is ready',
   readyNoticeBody: 'Message {{name}} to get started.',
