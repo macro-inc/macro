@@ -9,6 +9,10 @@ export default {
   memberAccessFor: 'CRM access for {{name}}',
   memberAccess: 'CRM access',
   memberAccessOff: 'No CRM access',
+  memberAccessFixed: 'Always has CRM access',
+  memberAccessTitle: 'Who can use CRM',
+  memberAccessDescription:
+    "People without CRM access don't see Customers or CRM records. They keep their own email contribution settings.",
   policyChange: 'Change',
   policyRules: 'Sharing rules',
   policyEdit: 'Edit JSON',
