@@ -5,12 +5,16 @@ import { queryOptions } from '@tanstack/solid-query';
 import { channelKeys } from './keys';
 import type { ChannelParticipant } from './types';
 
+/** Why a reader asks REST: its by-id read left the channel out, or failed. */
+export type ParticipantsFallbackReason =
+  | 'channel not in soup'
+  | 'channel read failed';
+
 /**
  * Counted as the Soup list reads that fall back to REST count theirs: a
  * `soup.rest_fallback` span, by reason and shape.
  */
 const FALLBACK_ATTRIBUTES = {
-  'soup.fallback.reason': 'channel not in soup',
   'soup.fallback.shape': 'channel participants',
   'soup.fallback.kind': 'channel_participants',
 };
@@ -26,21 +30,26 @@ const FALLBACK_ATTRIBUTES = {
  */
 export function channelParticipantsRestFallbackOptions(
   channelId: string,
-  enabled: boolean
+  enabled: boolean,
+  reason: ParticipantsFallbackReason = 'channel not in soup'
 ) {
   return queryOptions({
     ...channelKeys.participantsFallback(channelId),
     enabled,
-    queryFn: () => readParticipantsFromRest(channelId),
+    queryFn: () => readParticipantsFromRest(channelId, reason),
   });
 }
 
 async function readParticipantsFromRest(
-  channelId: string
+  channelId: string,
+  reason: ParticipantsFallbackReason
 ): Promise<ChannelParticipant[]> {
   return await Telemetry.span(
     'soup.rest_fallback',
-    { kind: 'client', attributes: FALLBACK_ATTRIBUTES },
+    {
+      kind: 'client',
+      attributes: { ...FALLBACK_ATTRIBUTES, 'soup.fallback.reason': reason },
+    },
     async (span) => {
       try {
         const participants = await throwOnErr(() =>
