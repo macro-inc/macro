@@ -241,9 +241,7 @@ describe('SetupStatus', () => {
         .getByText('Calendar for stopped@example.com stopped syncing')
     ).toBeTruthy();
     expect(
-      view
-        .aboveGrid()
-        .getByText('Reconnect to show its events in Macro again.')
+      view.aboveGrid().getByText('Reconnect to show its events in Macro again.')
     ).toBeTruthy();
     expect(view.grid().queryByRole('button')).toBeNull();
     await user.click(
