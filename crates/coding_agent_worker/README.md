@@ -179,8 +179,13 @@ macrod's hidden `<macrod-runtime>` header and other leading Macro tags.
   opens each session's workspace; herdr starts agents and reports their status
   and session IDs. macrod does not use `herdr worktree`, which groups a
   worktree under the operator's repository workspace.
-- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` CLI, which must
-  be on `PATH`. Each session is a core terminal labelled with a new
+- **herdr-core and the herdr app** (`HC_TERMINAL_ID`): the `hc` at `HC_BIN`,
+  which herdr-core sets when it starts a terminal (a terminal already running
+  before herdr-core was updated has none until it is restarted). macrod never
+  looks `hc` up on `PATH`: a process `hc run` starts inherits the herdr-core
+  server's `PATH`, not the shell's. Without `HC_BIN`, sessions open no herdr
+  tabs and the daemon log says why, the herdr agents are not offered, and
+  `macrod herdr-acp` exits with the same error. Each session is a core terminal labelled with a new
   `herdr.space` and `herdr.tab`, so the app shows it in a space of its own.
   macrod starts the shell and then types `exec <agent> …` into it, so the agent
   gets the operator's login environment. herdr-core refuses to type into a

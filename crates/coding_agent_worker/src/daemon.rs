@@ -90,7 +90,7 @@ impl Daemon {
         #[cfg(unix)]
         let workspaces = if crate::herdr::drives_herdr(&config.harness) {
             let root = crate::herdr::instance_directory(credentials.harness_id)?;
-            crate::herdr::HerdrSession::detect()
+            crate::herdr::HerdrSession::detect()?
                 .ok_or_else(|| rootcause::report!("start macrod inside a Herdr pane"))?;
             crate::herdr::configure_launch(&mut config.harness, &config.herdr, &root);
             Some(crate::herdr::repositories::Workspaces::new(
@@ -305,14 +305,27 @@ fn adopt(inherited: Option<InheritedAgent>, _turns: &ActiveTurns) -> Option<Runn
 /// every session works in, and each session gets a herdr window.
 #[cfg(unix)]
 fn start_herdr(config: &mut Config, credentials: &HarnessCredentials) -> Option<crate::herdr::Hub> {
-    let herdr = crate::herdr::HerdrSession::detect()?;
-    if !crate::herdr::drives_herdr(&config.harness) {
+    use crate::herdr::HcBinMissing;
+    let herdr = crate::herdr::HerdrSession::detect();
+    let drives_herdr = crate::herdr::drives_herdr(&config.harness);
+    // A herdr-core terminal without `HC_BIN` is still inside herdr: only its
+    // windows are lost.
+    if !drives_herdr && !matches!(herdr, Ok(None)) {
         match std::env::current_dir() {
             Ok(cwd) => config.workspace.path = cwd,
             Err(error) => tracing::warn!(error = %error, "could not read the working directory"),
         }
     }
-    if crate::herdr::drives_herdr(&config.harness) {
+    let herdr = match herdr {
+        Ok(herdr) => herdr?,
+        // A `macrod herdr-acp` harness fails startup with this error itself.
+        Err(HcBinMissing) if drives_herdr => return None,
+        Err(error) => {
+            tracing::error!(error = %error, "herdr-core detected but its windows cannot open");
+            return None;
+        }
+    };
+    if drives_herdr {
         tracing::info!("herdr detected; the harness opens a herdr window per session");
         return None;
     }
