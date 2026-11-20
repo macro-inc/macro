@@ -159,29 +159,7 @@ pub struct NetworkFacts {
 
 /// The ruleset for `allow` and `facts`, as `nft -f` reads it.
 pub fn ruleset(allow: &[Allow], facts: &NetworkFacts) -> String {
-    let mut blocked4: Vec<Ipv4Net> = BLOCKED_IPV4
-        .iter()
-        .filter_map(|net| net.parse().ok())
-        .collect();
-    let mut blocked6: Vec<Ipv6Net> = BLOCKED_IPV6
-        .iter()
-        .filter_map(|net| net.parse().ok())
-        .collect();
-    let gateways = facts.gateways.iter().map(|gateway| IpNet::from(*gateway));
-    for net in facts
-        .host_prefixes
-        .iter()
-        .chain(&facts.network_prefixes)
-        .copied()
-        .chain(gateways)
-    {
-        match net.trunc() {
-            IpNet::V4(net) => blocked4.push(net),
-            IpNet::V6(net) => blocked6.push(net),
-        }
-    }
-    let blocked4 = Ipv4Net::aggregate(&blocked4);
-    let blocked6 = Ipv6Net::aggregate(&blocked6);
+    let (blocked4, blocked6) = blocked(facts);
 
     let mut text = String::new();
     // A first `table ... {}` and `delete` make a reload replace the table
@@ -233,6 +211,201 @@ pub fn ruleset(allow: &[Allow], facts: &NetworkFacts) -> String {
     let _ = writeln!(text, "\t}}");
     let _ = writeln!(text, "}}");
     text
+}
+
+/// Every range the sets must hold, aggregated.
+fn blocked(facts: &NetworkFacts) -> (Vec<Ipv4Net>, Vec<Ipv6Net>) {
+    let mut blocked4: Vec<Ipv4Net> = BLOCKED_IPV4
+        .iter()
+        .filter_map(|net| net.parse().ok())
+        .collect();
+    let mut blocked6: Vec<Ipv6Net> = BLOCKED_IPV6
+        .iter()
+        .filter_map(|net| net.parse().ok())
+        .collect();
+    let gateways = facts.gateways.iter().map(|gateway| IpNet::from(*gateway));
+    for net in facts
+        .host_prefixes
+        .iter()
+        .chain(&facts.network_prefixes)
+        .copied()
+        .chain(gateways)
+    {
+        match net.trunc() {
+            IpNet::V4(net) => blocked4.push(net),
+            IpNet::V6(net) => blocked6.push(net),
+        }
+    }
+    (Ipv4Net::aggregate(&blocked4), Ipv6Net::aggregate(&blocked6))
+}
+
+/// How a read-back table differs from the one rendered.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum Mismatch {
+    /// Not `nft -j` output.
+    #[error("the read-back table is not nftables JSON")]
+    Unreadable,
+    /// No output chain with the filter type, hook, priority and policy.
+    #[error("the output chain is missing or differs")]
+    Chain,
+    /// The rules differ in number, order or content.
+    #[error("the rules differ from the rendered ones")]
+    Rules,
+    /// A range that must be dropped isn't in the sets.
+    #[error("{0} is not in the blocked sets")]
+    NotBlocked(IpNet),
+}
+
+/// Check `nft -j list table inet macro_teammate` against what [`ruleset`]
+/// renders for the same input: the chain, every rule in order, and every
+/// blocked range covered by the sets (which `auto-merge` may have joined).
+pub fn verify(readback: &str, allow: &[Allow], facts: &NetworkFacts) -> Result<(), Mismatch> {
+    let json: serde_json::Value =
+        serde_json::from_str(readback).map_err(|_| Mismatch::Unreadable)?;
+    let objects = json
+        .get("nftables")
+        .and_then(serde_json::Value::as_array)
+        .ok_or(Mismatch::Unreadable)?;
+
+    let chain_matches = objects
+        .iter()
+        .filter_map(|object| object.get("chain"))
+        .any(|chain| {
+            chain["name"] == "output"
+                && chain["type"] == "filter"
+                && chain["hook"] == "output"
+                && chain["prio"] == 0
+                && chain["policy"] == "accept"
+        });
+    if !chain_matches {
+        return Err(Mismatch::Chain);
+    }
+
+    let rules: Vec<&serde_json::Value> = objects
+        .iter()
+        .filter_map(|object| object.get("rule"))
+        .filter(|rule| rule["chain"] == "output")
+        .map(|rule| &rule["expr"])
+        .collect();
+    let expected = expected_rules(allow, facts);
+    if rules.len() != expected.len()
+        || rules
+            .iter()
+            .zip(&expected)
+            .any(|(rule, expected)| *rule != expected)
+    {
+        return Err(Mismatch::Rules);
+    }
+
+    let elements = |name: &str| -> Vec<(u128, u128, bool)> {
+        objects
+            .iter()
+            .filter_map(|object| object.get("set"))
+            .filter(|set| set["name"] == name)
+            .flat_map(|set| set["elem"].as_array().cloned().unwrap_or_default())
+            .filter_map(|element| element_range(&element))
+            .collect()
+    };
+    let (blocked4, blocked6) = blocked(facts);
+    let sets4 = elements("blocked4");
+    let sets6 = elements("blocked6");
+    let wanted = blocked4
+        .into_iter()
+        .map(IpNet::V4)
+        .chain(blocked6.into_iter().map(IpNet::V6));
+    for net in wanted {
+        let (start, end, v4) = net_range(&net);
+        let sets = if v4 { &sets4 } else { &sets6 };
+        let covered = sets
+            .iter()
+            .any(|(first, last, family)| *family == v4 && *first <= start && end <= *last);
+        if !covered {
+            return Err(Mismatch::NotBlocked(net));
+        }
+    }
+    Ok(())
+}
+
+/// The `expr` of each rule as `nft -j` prints it, in order.
+fn expected_rules(allow: &[Allow], facts: &NetworkFacts) -> Vec<serde_json::Value> {
+    use serde_json::json;
+
+    let matches = |protocol: &str, field: &str, right: serde_json::Value| json!({ "match": { "op": "==", "left": { "payload": { "protocol": protocol, "field": field } }, "right": right } });
+    let address = |net: &IpNet| -> serde_json::Value {
+        if net.prefix_len() == net.max_prefix_len() {
+            json!(net.addr().to_string())
+        } else {
+            json!({ "prefix": { "addr": net.network().to_string(), "len": net.prefix_len() } })
+        }
+    };
+    let mut rules = vec![
+        json!([{ "match": { "op": "==", "left": { "meta": { "key": "oif" } }, "right": "lo" } }, { "accept": null }]),
+        json!([{ "match": { "op": "in", "left": { "ct": { "key": "state" } }, "right": ["established", "related"] } }, { "accept": null }]),
+    ];
+    for resolver in &facts.resolvers {
+        for transport in ["udp", "tcp"] {
+            rules.push(json!([
+                matches(family(resolver), "daddr", json!(resolver.to_string())),
+                matches(transport, "dport", json!(53)),
+                { "accept": null },
+            ]));
+        }
+    }
+    for transport in ["udp", "tcp"] {
+        rules.push(json!([matches(transport, "dport", json!(53)), { "drop": null }]));
+    }
+    for entry in allow {
+        let family = match entry.network {
+            IpNet::V4(_) => "ip",
+            IpNet::V6(_) => "ip6",
+        };
+        let ports = match entry.ports.as_slice() {
+            [port] => json!(port),
+            ports => json!({ "set": ports }),
+        };
+        rules.push(json!([
+            matches(family, "daddr", address(&entry.network)),
+            matches("tcp", "dport", ports),
+            { "accept": null },
+        ]));
+    }
+    rules.push(json!([matches("ip", "daddr", json!("@blocked4")), { "drop": null }]));
+    rules.push(json!([matches("ip6", "daddr", json!("@blocked6")), { "drop": null }]));
+    rules
+}
+
+/// A set element as an inclusive range of addresses, with its family.
+fn element_range(element: &serde_json::Value) -> Option<(u128, u128, bool)> {
+    if let Some(text) = element.as_str() {
+        let address: IpAddr = text.parse().ok()?;
+        return Some(net_range(&IpNet::from(address)));
+    }
+    if let Some(prefix) = element.get("prefix") {
+        let address: IpAddr = prefix["addr"].as_str()?.parse().ok()?;
+        let length = u8::try_from(prefix["len"].as_u64()?).ok()?;
+        return Some(net_range(&IpNet::new(address, length).ok()?));
+    }
+    let range = element.get("range")?.as_array()?;
+    let first: IpAddr = range.first()?.as_str()?.parse().ok()?;
+    let last: IpAddr = range.get(1)?.as_str()?.parse().ok()?;
+    let (start, _, v4) = net_range(&IpNet::from(first));
+    let (end, _, _) = net_range(&IpNet::from(last));
+    Some((start, end, v4))
+}
+
+fn net_range(net: &IpNet) -> (u128, u128, bool) {
+    match net.trunc() {
+        IpNet::V4(net) => (
+            u128::from(u32::from(net.network())),
+            u128::from(u32::from(net.broadcast())),
+            true,
+        ),
+        IpNet::V6(net) => (
+            u128::from(net.network()),
+            u128::from(net.broadcast()),
+            false,
+        ),
+    }
 }
 
 fn family(address: &IpAddr) -> &'static str {

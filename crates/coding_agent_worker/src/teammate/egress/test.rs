@@ -99,3 +99,78 @@ fn only_the_listed_resolvers_get_dns() {
     assert!(position("ip6 daddr fd00::53 tcp dport 53 accept") < position("tcp dport 53 drop"));
     assert!(position("tcp dport 53 drop") < position("ip daddr @blocked4 drop"));
 }
+
+/// What `nft -j list table inet macro_teammate` printed after loading the
+/// ruleset for [`readback_inputs`] (nftables 1.1.6, in a user namespace).
+const READBACK: &str = include_str!("readback.json");
+
+fn readback_inputs() -> (Vec<Allow>, NetworkFacts) {
+    (
+        vec![
+            Allow::new(net("10.20.0.5/32"), vec![8101]).unwrap(),
+            Allow::new(net("fd12::5/128"), vec![443]).unwrap(),
+        ],
+        NetworkFacts {
+            resolvers: vec!["8.8.8.8".parse().unwrap(), "fd00::53".parse().unwrap()],
+            host_prefixes: vec![net("192.168.1.0/24"), net("2a01:4f8:1:2::/64")],
+            gateways: vec!["172.18.0.1".parse().unwrap()],
+            network_prefixes: vec![net("172.18.0.0/16")],
+        },
+    )
+}
+
+#[test]
+fn the_loaded_ruleset_reads_back_as_rendered() {
+    let (allow, facts) = readback_inputs();
+    assert_eq!(verify(READBACK, &allow, &facts), Ok(()));
+}
+
+#[test]
+fn a_readback_missing_a_rule_or_a_blocked_prefix_is_refused() {
+    let (allow, facts) = readback_inputs();
+
+    // The DNS drop gone: a resolver could be bypassed.
+    let mut json: serde_json::Value = serde_json::from_str(READBACK).unwrap();
+    let objects = json["nftables"].as_array_mut().unwrap();
+    let dns_drop = objects
+        .iter()
+        .position(|object| {
+            object.to_string().contains("\"drop\"") && object.to_string().contains("\"udp\"")
+        })
+        .unwrap();
+    objects.remove(dns_drop);
+    assert!(matches!(
+        verify(&json.to_string(), &allow, &facts),
+        Err(Mismatch::Rules)
+    ));
+
+    // The host moved to a new on-link prefix the loaded sets don't cover.
+    let moved = NetworkFacts {
+        host_prefixes: vec![net("81.2.69.160/29")],
+        ..facts.clone()
+    };
+    assert!(matches!(
+        verify(READBACK, &allow, &moved),
+        Err(Mismatch::NotBlocked(prefix)) if prefix == net("81.2.69.160/29")
+    ));
+
+    // Another chain policy, or no table at all.
+    assert!(matches!(
+        verify(
+            &READBACK
+                .replace("\"policy\": \"accept\"", "\"policy\": \"drop\"")
+                .replace("\"policy\":\"accept\"", "\"policy\":\"drop\""),
+            &allow,
+            &facts
+        ),
+        Err(Mismatch::Chain)
+    ));
+    assert!(matches!(
+        verify(r#"{"nftables": []}"#, &allow, &facts),
+        Err(Mismatch::Chain)
+    ));
+    assert!(matches!(
+        verify("not json", &allow, &facts),
+        Err(Mismatch::Unreadable)
+    ));
+}
