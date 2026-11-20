@@ -291,20 +291,6 @@ the row's ⋯ (**Change voice**), which also holds **Remove agent**: **Save voic
 agent's repository and applies from its next call; a failed save keeps the
 pick for retry.
 
-Behind `enable-agent-inboxes` (on in dev, checked again by the server for the
-acting admin), owners and admins also see the agent's email inbox on its row:
-**Add an inbox** (`PUT /team_agents/{agent}/inbox`), then **Setting up its
-inbox…** while the provider is slow (the list polls and the server asks
-email_service again), then the address with **Copy**; a failure says why
-(address taken, no inboxes left, email not set up on this server, or a plain
-"Couldn't create its inbox.") with **Retry**, which reuses the same request so
-it never makes a second inbox. The Invite form's **Give it an email address**
-(`inbox: true` on `POST /team_agents`) does the same after the computer is
-bought; an inbox that fails never fails the invite. The mailbox belongs to the
-agent's own account and only the agent reads and sends from it, through its
-email tools; removing the agent pauses it (no sync or sends, mail kept) and
-email_service deletes it after 30 days.
-
 When the agent itself first reports online (not when its computer connects),
 its inviter (the team agent's `created_by`) gets the `computer_setup` notification with the agent's
 `agent { userId, name }`: "<name> is ready", in-app as a one-minute notice

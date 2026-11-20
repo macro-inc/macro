@@ -424,3 +424,36 @@ async fn releasing_an_inbox_email_service_never_made_releases_nothing() {
             .any(|call| call.starts_with("release"))
     );
 }
+
+#[tokio::test]
+async fn a_lost_answer_heals_once_email_service_has_made_the_mailbox() {
+    let (service, _, mailboxes) = service(Answer::Down);
+    let lost = service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    assert_eq!(lost.failure, Some(AgentInboxFailure::Unavailable));
+    // email_service got the request after all and finished it.
+    mailboxes.answer(Answer::Active);
+    *mailboxes.made.lock().unwrap() = Some(FakeMailboxes::view(AgentInboxState::Active));
+
+    let refreshed = service.refresh(&agent()).await.unwrap();
+
+    assert_eq!(refreshed.state, AgentInboxState::Active);
+    assert_eq!(refreshed.address.as_deref(), Some(ADDRESS));
+}
+
+#[tokio::test]
+async fn pausing_an_inbox_email_service_never_made_changes_nothing() {
+    let (service, records, mailboxes) = service(Answer::Down);
+    service
+        .provision(TEAM, &agent(), "Sam Rivera", "sam-rivera")
+        .await
+        .unwrap();
+    mailboxes.answer(Answer::Active);
+
+    service.pause(&agent()).await.unwrap();
+
+    assert_eq!(records.only().state, AgentInboxState::Failed);
+    assert!(!mailboxes.calls().iter().any(|call| call == "pause"));
+}

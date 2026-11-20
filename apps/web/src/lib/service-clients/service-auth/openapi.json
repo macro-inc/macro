@@ -7820,7 +7820,6 @@
           "not_configured",
           "address_taken",
           "quota_exceeded",
-          "throttled",
           "unavailable",
           "rejected"
         ]

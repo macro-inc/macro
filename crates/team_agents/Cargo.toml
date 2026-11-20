@@ -25,6 +25,7 @@ outbound = [
   "dep:teams",
   "dep:user_api_key",
   "dep:email_service_client",
+  "dep:tokio",
 ]
 
 [dependencies]
@@ -50,6 +51,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 teams = { path = "../teams", optional = true, default-features = false, features = ["ports"] }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["time"] }
 tracing = { workspace = true }
 user_api_key = { path = "../user_api_key", optional = true, features = ["ports"] }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }

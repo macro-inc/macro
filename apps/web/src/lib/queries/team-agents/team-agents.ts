@@ -197,7 +197,6 @@ function storeAgentInbox(teamId: string, userId: string, inbox: AgentInbox) {
 async function addAgentInbox(vars: AddAgentInboxArgs) {
   return await Telemetry.span('team-agent.add-inbox', async (span) => {
     span.setAttr('team.id', vars.teamId);
-    span.setAttr('agent.user_id', vars.userId);
     const inbox = await throwOnErr(() =>
       teamAgentsClient.addInbox(vars.userId)
     );

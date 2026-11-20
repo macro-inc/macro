@@ -189,3 +189,47 @@ async fn a_release_left_for_the_sweep_counts_as_done_and_a_failed_pause_does_not
         Err(MailboxError::Unavailable(_))
     ));
 }
+
+#[tokio::test]
+async fn a_pause_of_a_mailbox_already_paused_or_being_deleted_is_done() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path(format!("{AGENT_PATH}/pause")))
+        .respond_with(refused(409, "not_ready"))
+        .mount(&server)
+        .await;
+
+    mailboxes(&server).pause(&agent()).await.unwrap();
+}
+
+#[tokio::test]
+async fn a_permanent_refusal_is_rejected_not_an_outage() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/internal/agent-mailboxes"))
+        .respond_with(refused(403, "not_an_agent"))
+        .mount(&server)
+        .await;
+
+    assert!(matches!(
+        mailboxes(&server).provision(&request()).await,
+        Err(MailboxError::Rejected)
+    ));
+}
+
+#[tokio::test]
+async fn a_failed_request_never_names_the_agent() {
+    // Nothing listens there.
+    let mailboxes = EmailServiceMailboxes::new(
+        EmailServiceClient::new("internal-key".to_owned(), "http://127.0.0.1:9".to_owned())
+            .agent_mailboxes(),
+    );
+
+    let Err(MailboxError::Unavailable(report)) = mailboxes.status(&agent()).await else {
+        panic!("a refused connection is an outage");
+    };
+
+    let logged = format!("{report:?} {report}");
+    assert!(!logged.contains("agents.macro.invalid"), "{logged}");
+    assert!(!logged.contains("sam-rivera"), "{logged}");
+}

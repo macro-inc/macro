@@ -77,8 +77,6 @@ pub enum AgentInboxFailure {
     AddressTaken,
     /// The provider account is out of inboxes.
     QuotaExceeded,
-    /// The provider asked us to slow down.
-    Throttled,
     /// The provider or email_service didn't answer.
     Unavailable,
     /// The provider refused the request.
@@ -454,8 +452,12 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes>
         }
         let mailbox_id = match self.mailbox_id(agent, &record).await {
             Ok(Some(mailbox_id)) => mailbox_id,
+            // Nothing was created at the provider: nothing to pause, and a
+            // release has nothing left to delete.
+            Ok(None) | Err(MailboxError::NotConfigured) if matches!(step, WindDown::Pause) => {
+                return Ok(());
+            }
             Ok(None) | Err(MailboxError::NotConfigured) => {
-                // Nothing was created at the provider.
                 self.store(
                     agent,
                     InboxUpdate {
@@ -581,12 +583,17 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
     )]
     async fn refresh(&self, agent: &MacroUserIdStr<'_>) -> Result<AgentInbox, InboxError> {
         let record = self.record(agent).await?.ok_or(InboxError::NoInbox)?;
-        if record.state != AgentInboxState::Provisioning {
+        // Still being made, or a request whose answer was lost: email_service
+        // may have it and finish it in the background.
+        let unsettled = record.state == AgentInboxState::Provisioning
+            || (record.state == AgentInboxState::Failed
+                && record.last_error == Some(AgentInboxFailure::Unavailable));
+        if !unsettled {
             return Ok(record.view());
         }
         match self.mailboxes.status(agent).await {
             Ok(Some(view)) => Ok(self.store(agent, view.into()).await?.view()),
-            // Not answered yet; keep what we know.
+            // Not made, or not answered yet; keep what we know.
             Ok(None) => Ok(record.view()),
             Err(MailboxError::NotConfigured) => Ok(self
                 .store(agent, failed(AgentInboxFailure::NotConfigured, &record))
@@ -596,7 +603,10 @@ impl<Repository: AgentInboxRepository, Mailboxes: AgentMailboxes> AgentInboxes
                 tracing::warn!(error = ?error, "email service didn't answer an inbox status");
                 Ok(record.view())
             }
-            Err(MailboxError::Rejected) => Ok(record.view()),
+            Err(MailboxError::Rejected) => {
+                tracing::warn!("email service refused an inbox status");
+                Ok(record.view())
+            }
         }
     }
 
