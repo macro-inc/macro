@@ -24,6 +24,7 @@ import { refreshChannelParticipants } from './participants';
 const CHANNEL_ID = '01a1fa85-798c-7956-80d4-1f36b50bd73b';
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.clearAllMocks();
   coordinator.invalidateQuery.mockReturnValue(true);
 });
@@ -48,6 +49,20 @@ describe('refreshChannelParticipants', () => {
     await refreshed;
     expect(done).toBe(true);
     expect(soupClient.query).not.toHaveBeenCalled();
+  });
+
+  it('stops waiting for readers that do not read again within three seconds', async () => {
+    vi.useFakeTimers();
+    coordinator.refresh.mockReturnValue(new Promise<void>(() => undefined));
+    let done = false;
+    const refreshed = refreshChannelParticipants(CHANNEL_ID).then(() => {
+      done = true;
+    });
+    await vi.advanceTimersByTimeAsync(2_900);
+    expect(done).toBe(false);
+    await vi.advanceTimersByTimeAsync(200);
+    await refreshed;
+    expect(done).toBe(true);
   });
 
   it('never fails the write when the readers fail to read again', async () => {
