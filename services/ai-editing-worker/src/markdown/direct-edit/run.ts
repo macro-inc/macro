@@ -24,7 +24,7 @@
  * Without a base revision every request is a new write.
  */
 import type { Span } from '@macro-inc/observability';
-import { LoroDoc, VersionVector } from 'loro-crdt';
+import { LoroDoc, type PeerID, VersionVector } from 'loro-crdt';
 import {
   AI_PEER_BASE,
   AI_PEER_COUNT,
@@ -223,7 +223,12 @@ async function planAttempt(
   const peerId = await requestPeerId(documentId, request);
   const doc = new LoroDoc();
   doc.import(snapshot);
-  if (doc.oplogVersion().toJSON().has(`${peerId}`))
+  if (
+    doc
+      .oplogVersion()
+      .toJSON()
+      .has(`${peerId}` as PeerID)
+  )
     return { revision, alreadyApplied: true };
   const options = {
     allowDeletingContent: request.allowDeletingContent,

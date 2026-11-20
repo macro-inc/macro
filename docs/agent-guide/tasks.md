@@ -215,6 +215,11 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
+Other single-value entity rows in the Properties side panel, such as Parent Task
+or a custom property holding one contact, company, document or project, split
+the same way: click the name to open the item (shift-click for a new split; an
+item already open in another split is focused instead), and use the caret to
+change it. People who can't edit get the name alone.
 The property pills beneath the task title place Due date before Project and
 Assignees. Due date has no `Due date:` prefix and uses a 12px desktop icon.
 On touch devices, these pills use 16px Status, Priority, Due date, and Project
@@ -959,7 +964,11 @@ and contacts that writes the Companies and Contacts properties. Picking a compan
 leaves the contact unset; picking a contact also sets its company, and the pill
 shows the contact with both named on hover. A team with no CRM records sees the
 pill with "No customers or contacts found". Neither property is offered separately
-under **Add property**.
+under **Add property**. Creating a property there under a look-alike name
+(`Contact`, `Company`, `Customer`) shows a note with **Use Contacts** or **Use
+Companies**, which opens that property's own multi-select picker on the draft's
+current value; picks add to it. The pill then shows the record, or a count when
+there are several, and its hover card names them all.
 
 Customers supplies its preset. Record-level task
 creation prefills the company or contact, including the contact's company when

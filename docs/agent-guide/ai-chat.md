@@ -1867,7 +1867,9 @@ and caret untouched; it does not send anything.
 Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread). An agent-session chip with
 `"expanded":true` renders as the Magic Chip card that follows the session's
-latest turn.
+latest turn. A date chip written for a moment (a timestamp whose label names a
+time, as agents write a busy block) shows that moment's day and time in the
+viewer's zone, such as "Today, 3:15 PM"; a day chip shows the day alone.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
