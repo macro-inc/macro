@@ -518,6 +518,10 @@ export default {
       other: '{{count}} kohdetta poistettu',
     },
     toastDeleteFailed: 'Poisto epäonnistui',
+    toastPropertySet: {
+      one: '{{property}} asetettu',
+      other: '{{property}} asetettu {{count}} kohteelle',
+    },
     toastAddedToFavorites: 'Lisätty suosikkeihin',
     toastAddedCountToFavorites: {
       one: '{{count}} kohde lisätty suosikkeihin',

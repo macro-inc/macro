@@ -10,6 +10,7 @@ import {
   type HydrationScope,
   isStaleHydrationScopeError,
 } from '@graphql-cache/protocol';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { Telemetry } from '@macro-inc/observability';
 import {
   ContactDirectoryByUserIdsDocument,
@@ -152,6 +153,7 @@ export async function resolveContactDirectory(
       }
     }
     try {
+      const generation = cacheSessionGeneration.capture();
       const data = await fetchIds(ids, signal);
       signal.throwIfAborted();
       if (data.user.id !== viewer) throw new ContactDirectoryScopeError();
@@ -177,6 +179,7 @@ export async function resolveContactDirectory(
           signal.throwIfAborted();
           if ((capability.projectionVersion ?? 0) >= 5) {
             await host.hydrateQuery({
+              generation,
               query: LOOKUP_DOCUMENT,
               operationName: 'ContactDirectoryByUserIds',
               variables: { userIds: ids },

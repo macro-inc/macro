@@ -602,6 +602,16 @@ queue! {
             dev: "email-service-crm-cleanup-queue-dev",
             prod: "email-service-crm-cleanup-queue-prod",
         },
+        /// FIFO queue for CRM contact population (email_service), grouped by
+        /// mailbox so each mailbox runs one population at a time. That holds
+        /// only while a consumer receives one message per request and keeps
+        /// it hidden until it finishes: one receive can return several
+        /// messages of the same group.
+        pub EmailCrmPopulationQueue {
+            local: "email-service-crm-population-queue.fifo",
+            dev: "email-service-crm-population-queue-dev.fifo",
+            prod: "email-service-crm-population-queue-prod.fifo",
+        },
         /// Queue for the bulk upload extractor lambda
         /// (upload_extractor_lambda_trigger `UPLOAD_EXTRACTOR_QUEUE`).
         pub UploadExtractorQueue {

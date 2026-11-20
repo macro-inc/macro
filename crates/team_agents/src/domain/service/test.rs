@@ -9,8 +9,8 @@ use rootcause::Report;
 
 use super::*;
 use crate::domain::models::{
-    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState, RepoToken,
-    VoiceModel,
+    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState,
+    MAX_NAME_CHARS, RepoToken, VoiceModel,
 };
 
 const ADMIN: &str = "macro|admin@example.com";
@@ -59,7 +59,7 @@ struct FakeError;
 struct FakeRepository {
     journal: Journal,
     /// Each agent with its invite's purchase key.
-    agents: Arc<Mutex<Vec<(TeamAgentRecord, String)>>>,
+    agents: Arc<Mutex<Vec<(TeamAgentRecord, PurchaseKey)>>>,
 }
 
 impl FakeRepository {
@@ -280,14 +280,14 @@ struct FakeComputers {
     /// The computers rollout doesn't include the buyer.
     rollout_off: bool,
     /// (purchase key, computer, agent) links made by purchases.
-    links: Arc<Mutex<Vec<(String, ComputerId, MacroUserIdStr<'static>)>>>,
+    links: Arc<Mutex<Vec<(PurchaseKey, ComputerId, MacroUserIdStr<'static>)>>>,
 }
 
 impl Computers for FakeComputers {
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
         self.journal.record(format!(
             "computer.purchase {} by {}",
-            purchase.name,
+            purchase.name.as_str(),
             purchase.created_by.as_ref()
         ));
         if self.refuse_purchase {
@@ -531,7 +531,7 @@ async fn a_repeated_invite_before_the_first_bought_its_computer_is_refused_and_c
             created_at: chrono::DateTime::UNIX_EPOCH,
             first_online_at: None,
         },
-        "invite-1".to_owned(),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     ));
 
     let result = service.create(receipt(), request()).await;
@@ -614,6 +614,47 @@ async fn an_empty_name_is_refused_before_anything_is_created() {
 
     assert!(matches!(result, Err(TeamAgentError::InvalidName)));
     assert!(journal.entries().is_empty());
+}
+
+#[tokio::test]
+async fn an_overlong_name_is_refused_before_anything_is_created() {
+    let (service, journal) = service(true, FakeComputers::default());
+
+    let result = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                name: "a".repeat(MAX_NAME_CHARS + 1),
+                ..request()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(TeamAgentError::InvalidName)));
+    assert!(journal.entries().is_empty());
+}
+
+#[tokio::test]
+async fn an_invalid_purchase_key_is_refused_before_anything_is_created() {
+    for purchase_key in ["", "has space", &"k".repeat(129)] {
+        let (service, journal) = service(true, FakeComputers::default());
+
+        let result = service
+            .create(
+                receipt(),
+                CreateTeamAgent {
+                    purchase_key: purchase_key.to_owned(),
+                    ..request()
+                },
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(TeamAgentError::InvalidPurchaseKey)),
+            "{purchase_key:?}"
+        );
+        assert!(journal.entries().is_empty(), "{purchase_key:?}");
+    }
 }
 
 #[tokio::test]

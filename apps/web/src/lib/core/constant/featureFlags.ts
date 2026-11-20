@@ -474,6 +474,11 @@ export const disableCrmContactSearch = defineFlag({
   env: 'DISABLE_CRM_CONTACT_SEARCH',
 });
 
+// No dev override: the server requires this same remote flag before accepting writes.
+export const enableCrmMemberAccessChanges = defineFlag({
+  key: 'enable-crm-member-access-changes',
+});
+
 // Stay off until all ingestion and Team email reader binaries support exceptions.
 // No dev default or local override: the server independently requires this flag.
 export const enableCrmThreadExclusions = defineFlag({

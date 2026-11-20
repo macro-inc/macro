@@ -1,6 +1,17 @@
 import type { Result } from 'neverthrow';
 import type { ObjectLike, ResultError } from './result';
 
+const caches = new Set<WeakRef<{ clear(): void }>>();
+
+/** Retire decoded helper results as well as query snapshots on a session change. */
+export function clearCachedResults(): void {
+  for (const reference of caches) {
+    const cache = reference.deref();
+    if (cache) cache.clear();
+    else caches.delete(reference);
+  }
+}
+
 interface CacheEntry<E extends string, R extends ObjectLike> {
   result: Promise<Result<R, ResultError<E>[]>>;
   expiresAt: number;
@@ -56,6 +67,7 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
   options: CacheOptions
 ): CachedFunction<Fn> {
   const cache = new Map<string, CacheEntry<any, any>>();
+  caches.add(new WeakRef(cache));
 
   const wrappedFn = async (...args: any[]) => {
     const key = hashKey(args);
@@ -82,11 +94,13 @@ export function cache<Fn extends (...args: any[]) => Promise<any>>(
 
     result
       .then((value) => {
-        if (value.isErr()) {
+        if (value.isErr() && cache.get(key) === cacheEntry) {
           cache.delete(key);
         }
       })
-      .catch(() => cache.delete(key));
+      .catch(() => {
+        if (cache.get(key) === cacheEntry) cache.delete(key);
+      });
 
     cache.set(key, cacheEntry);
     return result;

@@ -293,11 +293,14 @@ async fn single_and_bulk_teardown_keep_company_before_source_lock_order(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn company_edits_require_known_personal_providers(pool: PgPool) -> anyhow::Result<()> {
+async fn any_contact_without_a_company_links_but_only_personal_ones_switch(
+    pool: PgPool,
+) -> anyhow::Result<()> {
     let team = Uuid::now_v7();
     seed_team(&pool, team, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team).await?;
     let company = insert_company(&pool, team, true, &["example.com"]).await?;
+    let other = insert_company(&pool, team, true, &["example.net"]).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     for domain in [
         None,
@@ -309,22 +312,6 @@ async fn company_edits_require_known_personal_providers(pool: PgPool) -> anyhow:
         let contact = repo
             .create_contact_for_team(&team, email.as_deref(), "Contact", chrono::Utc::now())
             .await?;
-        assert!(matches!(
-            repo.update_contact(
-                &team,
-                &contact.id,
-                &ContactFieldUpdate::Company(company),
-                true
-            )
-            .await,
-            Err(CrmError::InvalidRequest(_))
-        ));
-    }
-    for domain in ["gmail.com", "outlook.com", "icloud.com"] {
-        let email = format!("contact@{domain}");
-        let contact = repo
-            .create_contact_for_team(&team, Some(&email), "Contact", chrono::Utc::now())
-            .await?;
         assert_eq!(
             repo.update_contact(
                 &team,
@@ -334,8 +321,41 @@ async fn company_edits_require_known_personal_providers(pool: PgPool) -> anyhow:
             )
             .await?
             .company_id,
-            Some(company)
+            Some(company),
+            "{domain:?}"
         );
+        assert!(
+            matches!(
+                repo.update_contact(
+                    &team,
+                    &contact.id,
+                    &ContactFieldUpdate::Company(other),
+                    true
+                )
+                .await,
+                Err(CrmError::InvalidRequest(_))
+            ),
+            "{domain:?}"
+        );
+    }
+    for domain in ["gmail.com", "outlook.com", "icloud.com"] {
+        let email = format!("contact@{domain}");
+        let contact = repo
+            .create_contact_for_team(&team, Some(&email), "Contact", chrono::Utc::now())
+            .await?;
+        for destination in [company, other] {
+            assert_eq!(
+                repo.update_contact(
+                    &team,
+                    &contact.id,
+                    &ContactFieldUpdate::Company(destination),
+                    true
+                )
+                .await?
+                .company_id,
+                Some(destination)
+            );
+        }
     }
     Ok(())
 }

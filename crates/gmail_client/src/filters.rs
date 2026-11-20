@@ -3,7 +3,7 @@ use crate::{GmailApiHttpError, GmailClient};
 use models_email::gmail::filters::{Filter, ListFiltersResponse};
 
 /// Creates a Gmail filter from the supplied wire request.
-#[tracing::instrument(skip(client, access_token), err)]
+#[tracing::instrument(skip(client, access_token, filter), err)]
 pub(crate) async fn create_filter(
     client: &GmailClient,
     access_token: &str,

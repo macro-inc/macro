@@ -647,8 +647,10 @@ External (plug icon, `g x`) appears on the rail only with the
   a new split, including when Search is already active. The command menu stays
   on ⌘K (Ctrl+K elsewhere).
 - Nav: `Home`, `Notifications`, `Drive`, `Email`, `Chat`, `Tasks`, `Calendar`,
-  `Agents`, `Customers`. Notifications, Calendar and Customers appear only when
-  their features are enabled. Calendar shows a next-meeting badge (`Now`, or
+  `Agents`, `Customers`. Notifications follows its feature gate; Customers is
+  hidden only once CRM access is proven denied, including in More, customization,
+  and the phone dock, and stays while that check is pending or has failed.
+  Calendar shows a next-meeting badge (`Now`, or
   minutes under an hour away) unless **Next meeting countdown** is off in
   **Settings → Calendar**.
 - Bottom: `Settings` (`Ctrl ;`) — a gear with the signed-in account's profile
@@ -788,7 +790,7 @@ conversations, new channels, and direct messages; when disabled, Chat offers
 separate channel and direct-message creation actions.
 Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
-lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
+lists. Customers offers Company, Contact, and Pipeline creation to members with CRM access. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
 A desktop sidebar has a Search icon, immediately left of the collapse control,
 only where the sidebar is itself the list being searched: Home, Chat, and
@@ -1439,7 +1441,7 @@ whose only step is **Ask AI** saves in the original single-agent form.
 step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
 AI writes them (**Draft it**, the starter templates, or a conversation about
 the routine), and they run with the owner's access. Each shows the sentence
-of what it does, with its values to change; its code is in the step's ⋯ menu. **Ask AI** hands the run to a model or agent with instructions; it sees
+of what it does, with its values to change; its code is in the step's ⋯ menu. Code, type-check problems, code changes, a paused routine's reason and proposed update, a run's step output and a failed run's errors can be selected and copied (`bunx playwright test --config src/features/routines/browser-test/playwright.config.ts` from `apps/web` checks each). **Ask AI** hands the run to a model or agent with instructions; it sees
 the triggering event and what earlier steps returned, a routine has one, and
 its required apps go to it. The tray under the last step card (like the tray
 under Home's composer) holds **Then… say what should happen next**, where AI
