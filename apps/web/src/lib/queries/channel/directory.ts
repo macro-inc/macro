@@ -73,7 +73,10 @@ import {
   watchSoupBackfillCheckpoint,
 } from '../soup/backfill-checkpoint';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
-import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
+import {
+  ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
+  createHiddenDeferral,
+} from '../visible-refresh';
 import { isChannelId } from './channel-id';
 import {
   CHANNEL_RECORD_PREFIX,
@@ -535,9 +538,10 @@ type ByIdReaderOptions = {
 
 /**
  * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
- * id is read once until `reset` or `renew`, except that the ids whose reads failed are
- * forgotten together at most every `BY_ID_RETRY_AFTER_MS`, so a lookup still
- * asking for one reads it again within that time of its failure.
+ * id is read once until `reset` or `renew`, except that the ids whose reads
+ * failed are read again together at most every `BY_ID_RETRY_AFTER_MS`, with
+ * nobody asking: an owner waiting on them may hear of nothing else. A hidden
+ * tab holds that read until it is shown.
  */
 export function createByIdReader(
   read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>,
@@ -557,23 +561,27 @@ export function createByIdReader(
     options.onSettle?.();
   };
 
-  // Not a debounce: failures that keep arriving would postpone the retry of
-  // earlier ones for as long as they arrive.
-  const forgetFailures = throttle(() => {
+  // The ids stay requested, so a lookup asking meanwhile queues nothing.
+  const retryFailures = () => {
     const failed = Object.entries(untrack(outcomes)).flatMap(([id, outcome]) =>
       outcome === 'failed' ? [id] : []
     );
     if (failed.length === 0) return;
-    for (const id of failed) {
-      requested.delete(id);
-      attempts.delete(id);
-    }
+    for (const id of failed) attempts.delete(id);
     setOutcomes((previous) =>
       Object.fromEntries(
         Object.entries(previous).filter(([, outcome]) => outcome !== 'failed')
       )
     );
-  }, BY_ID_RETRY_AFTER_MS);
+    for (const id of failed) batcher.addItem(id);
+  };
+  const whileShown = createHiddenDeferral(retryFailures);
+  // Not a debounce: failures that keep arriving would postpone the retry of
+  // earlier ones for as long as they arrive.
+  const forgetFailures = throttle(
+    () => whileShown.request(),
+    BY_ID_RETRY_AFTER_MS
+  );
 
   const retryOrFail = (ids: readonly string[]) => {
     const failed: Record<string, ByIdOutcome> = {};
@@ -646,6 +654,7 @@ export function createByIdReader(
   onCleanup(() => {
     drop();
     queuer.stop();
+    whileShown.dispose();
   });
 
   return {

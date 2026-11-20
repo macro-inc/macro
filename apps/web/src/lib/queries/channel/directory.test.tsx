@@ -292,7 +292,7 @@ describe('by-id reader', () => {
     expect(read.mock.calls.map(([ids]) => ids)).toEqual([[channelUuid('a')]]);
   });
 
-  it('reads a failed id again within the cooldown while others keep failing', async () => {
+  it('reads a failed id again after the cooldown unasked, while others keep failing', async () => {
     const read = vi.fn<Read>(async () => {
       throw new Error('offline');
     });
@@ -309,13 +309,33 @@ describe('by-id reader', () => {
     }
     await vi.advanceTimersByTimeAsync(1_000);
 
-    expect(reader.outcomes().a).toBeUndefined();
-    expect(reader.request('a')).toBe(true);
-    await vi.advanceTimersByTimeAsync(100);
-    // Two attempts each time.
+    // Two attempts each time, and nobody had to ask again.
     expect(read.mock.calls.filter(([ids]) => ids.includes('a'))).toHaveLength(
       4
     );
+    expect(reader.outcomes().a).toBe('failed');
+    expect(reader.request('a')).toBe(false);
+  });
+
+  it('reads failed ids again only once a hidden tab is shown', async () => {
+    const read = vi.fn<Read>(async () => {
+      throw new Error('offline');
+    });
+    const reader = mountReader(read);
+    reader.request('a');
+    await vi.advanceTimersByTimeAsync(100);
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(read).toHaveBeenCalledTimes(2);
+
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(read).toHaveBeenCalledTimes(4);
+    visibility.mockRestore();
   });
 
   it('reads at most two batches at a time', async () => {
@@ -1332,6 +1352,46 @@ describe('cached channel directory', () => {
     await new Promise((done) => setTimeout(done, 50));
     expect(ids(directory.channels())).toEqual(['kept']);
     expect(directory.complete()).toBe(false);
+  });
+
+  describe('a confirming read that fails', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('reads again after the cooldown with no cache change, and completes once the network is back', async () => {
+      const { directory, hydrate } = mountCachedDirectory(
+        [channelRecord('a')],
+        {
+          pageAll: async () => [
+            directoryChannel('a'),
+            directoryChannel('gone', { channelType: 'private' }),
+          ],
+        }
+      );
+      const read = hydrate.getMockImplementation();
+      hydrate.mockImplementation(async () => {
+        throw new Error('offline');
+      });
+      markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(ids(directory.channels()).sort()).toEqual(['a', 'gone']);
+      // Read once more, then given up on for now.
+      expect(hydrate).toHaveBeenCalledTimes(2);
+      expect(directory.complete()).toBe(false);
+      expect(directory.failed()).toBe(false);
+
+      // The network is back, and nothing in the cache changes.
+      if (read) hydrate.mockImplementation(read);
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      expect(hydrate).toHaveBeenCalledTimes(3);
+      expect(directory.complete()).toBe(true);
+      expect(ids(directory.channels())).toEqual(['a']);
+    });
   });
 
   it('pages the network again when the storage resets under the fallback', async () => {
