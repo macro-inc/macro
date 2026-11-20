@@ -145,10 +145,16 @@ if [[ "$(readlink "$modules" || true)" != "$runtime/node_modules" ]]; then
 fi
 finish packages
 
-# Where the runtime's spans go: agent.env's, not a credential.
+# Where the runtime's spans go: agent.env's, not a credential. The intake
+# rate-limits each computer by the id it sends, not by the egress IP that
+# computers share.
 endpoint=$(setting "$credentials" OTEL_EXPORTER_OTLP_ENDPOINT)
 if [[ -n $endpoint ]]; then
   export OTEL_EXPORTER_OTLP_ENDPOINT=$endpoint
+  computer=$(setting "$credentials" MACRO_COMPUTER_ID)
+  if [[ $computer =~ ^[A-Za-z0-9-]{1,64}$ ]]; then
+    export OTEL_EXPORTER_OTLP_HEADERS="x-macro-computer-id=$computer"
+  fi
 fi
 # The computer's setup trace, which macrod stages beside agent.env: the
 # runtime's start (agent.start) joins it once. A restart after that (a land,

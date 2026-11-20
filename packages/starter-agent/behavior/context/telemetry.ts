@@ -24,10 +24,34 @@ export const tracesUrl = (environment: Environment): string | undefined => {
   return `${base.replace(/\/+$/, '')}${tracesPath}`;
 };
 
+/**
+ * The export's extra headers, from the standard `OTEL_EXPORTER_OTLP_HEADERS`
+ * (`key=value,…`, values URL-encoded): the image names the computer there,
+ * which the intake rate-limits by. A malformed entry is skipped.
+ */
+export const tracesHeaders = (
+  environment: Environment
+): Readonly<Record<string, string>> =>
+  Object.fromEntries(
+    (environment.OTEL_EXPORTER_OTLP_HEADERS ?? '')
+      .split(',')
+      .flatMap((entry) => {
+        const [, key, value] =
+          /^\s*([^=\s]+)\s*=\s*(.*?)\s*$/.exec(entry) ?? [];
+        if (key === undefined || value === undefined || value === '') return [];
+        try {
+          return [[key.toLowerCase(), decodeURIComponent(value)]];
+        } catch {
+          return [];
+        }
+      })
+  );
+
 /** The OTel settings a script's process exports with: where, and nothing secret. */
 const telemetryVariables = [
   'OTEL_EXPORTER_OTLP_ENDPOINT',
   'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT',
+  'OTEL_EXPORTER_OTLP_HEADERS',
   'OTEL_DEPLOYMENT_ENVIRONMENT',
 ] as const;
 
@@ -63,7 +87,7 @@ export const startTelemetry = async ({
     enabled: async () => url !== undefined,
     tracingProvider: (resource, getUserId, sampling) =>
       createServerTracingProvider(
-        { tracesUrl: url },
+        { tracesUrl: url, tracesHeaders: tracesHeaders(environment) },
         resource,
         getUserId,
         sampling

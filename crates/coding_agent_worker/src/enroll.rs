@@ -227,13 +227,17 @@ async fn enroll(
     Ok(())
 }
 
-/// The enrollment's telemetry intake, which takes OTLP/HTTP.
+/// The enrollment's telemetry intake, which takes OTLP/HTTP, named this
+/// computer.
 fn telemetry_exporter(enrollment: &Enrollment) -> Option<crate::telemetry::Exporter> {
     enrollment
         .deployment
         .telemetry_url
         .as_ref()
-        .map(|url| crate::telemetry::Exporter::Http(url.as_str().trim_end_matches('/').to_owned()))
+        .map(|url| crate::telemetry::Exporter::Http {
+            endpoint: url.as_str().trim_end_matches('/').to_owned(),
+            computer: Some(enrollment.computer_id),
+        })
 }
 
 /// Record the enrollment's telemetry settings for `macrod.service`, or

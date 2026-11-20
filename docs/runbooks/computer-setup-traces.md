@@ -56,6 +56,17 @@ In Datadog, use `operation_name:computer.setup @computer_id:<computer uuid>`,
 and the `computer.setup.phase.duration` / `computer.setup.duration`
 histograms (by `phase`) for distributions.
 
+## Rate limit at the intake
+
+Deployed computers export through the analytics proxy
+(`services/analytics-proxy`), which rate-limits by client IP. macrod and the
+agent send `x-macro-computer-id`, so a computer counts against its own limit
+(100 requests / 10 s) and its egress IP's fleet ceiling (3000 / 10 s), not a
+browser's 300 / 10 s that computers behind one IP would share. The header is
+not authenticated; the fleet ceiling bounds what a client gets by rotating ids.
+A 429 there drops spans: look for missing guest spans across many computers of
+one host.
+
 ## Local collector
 
 `just run_local` starts the shared LGTM collector (`macro-lgtm-1`) and attaches

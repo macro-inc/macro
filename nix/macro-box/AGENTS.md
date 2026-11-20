@@ -111,8 +111,10 @@ image with systemd as PID 1 (for the dev-only DockerFleet).
   marker `~macro/agent/.restart`) restarts `macro-agent.service`, so
   writing, rewriting or removing the file starts, restarts or stops the
   agent (`ConditionPathExists`). `start-agent` exports the file's
-  `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime;
-  everything else stays a credential. `macro-agent-apply` also installs the
+  `OTEL_EXPORTER_OTLP_ENDPOINT` (telemetry, not a credential) to the runtime,
+  with `OTEL_EXPORTER_OTLP_HEADERS=x-macro-computer-id=<MACRO_COMPUTER_ID>`
+  (the analytics proxy rate-limits each computer by it); everything else stays
+  a credential. `macro-agent-apply` also installs the
   setup traceparent macrod staged (`setup-traceparent` in the inbox) once, as
   `/run/macrod/agent-traceparent` (root, 0644, at most 128 bytes; a failure
   never stops the environment's install), and `start-agent` exports it as

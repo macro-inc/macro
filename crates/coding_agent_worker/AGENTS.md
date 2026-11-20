@@ -240,7 +240,9 @@ Service telemetry opts in with `OTEL_EXPORTER_OTLP_ENDPOINT` and
 `OTEL_EXPORTER_OTLP_PROTOCOL` (`grpc`, the default, or `http/protobuf`).
 `macrod enroll` exports to the enrollment's `deployment.telemetry_url`
 (OTLP/HTTP) and writes those two variables to `/var/lib/macrod/telemetry.env`,
-which a computer's `macrod.service` loads. Only setup spans (`run_enroll`,
+which a computer's `macrod.service` loads, with `OTEL_EXPORTER_OTLP_HEADERS`
+naming the computer (`x-macro-computer-id`), which the analytics proxy
+rate-limits by instead of by the egress IP computers share. Only setup spans (`run_enroll`,
 `macrod.enroll.*`, `macrod.agent.apply`) export, with the marker's computer
 UUID as a resource attribute. Enrollment joins the setup trace from
 `Enrollment.traceparent`; its claim sends the setup `traceparent`.
