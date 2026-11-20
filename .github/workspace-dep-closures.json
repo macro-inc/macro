@@ -3669,6 +3669,7 @@
       "crates/attachment",
       "crates/bot_id",
       "crates/bot_token",
+      "crates/broadcast",
       "crates/channel_labels",
       "crates/cowlike",
       "crates/database_env_vars",
@@ -3677,11 +3678,15 @@
       "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
+      "crates/kafka_util",
+      "crates/last_online_tracker",
       "crates/macro_auth",
       "crates/macro_authorization",
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
+      "crates/macro_event_broker",
+      "crates/macro_event_topics",
       "crates/macro_service_urls",
       "crates/macro_user_id",
       "crates/macro_uuid",
@@ -3696,7 +3701,10 @@
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
+      "crates/notification",
+      "crates/notification_state",
       "crates/prompt",
+      "crates/rate_limit",
       "crates/remote_env_var",
       "crates/single_flight",
       "crates/workspace-hack"
@@ -5993,6 +6001,7 @@
       "crates/system_properties",
       "crates/system_skills",
       "crates/task_dedup",
+      "crates/task_templates",
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
@@ -7967,6 +7976,9 @@
     "generic_email_domains": [
       "crates/generic_email_domains",
       "crates/workspace-hack"
+    ],
+    "gh_workflow": [
+      "tooling/xtask/crates/gh_workflow"
     ],
     "git_patch": [
       "crates/git_patch",
@@ -12920,6 +12932,7 @@
       "crates/bot_id",
       "crates/bot_token",
       "crates/broadcast",
+      "crates/channel_labels",
       "crates/channel_sender",
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
@@ -16452,6 +16465,13 @@
       "crates/trigger_context",
       "crates/workspace-hack"
     ],
+    "task_templates": [
+      "crates/document_sub_type",
+      "crates/macro_uuid",
+      "crates/models_properties",
+      "crates/task_templates",
+      "crates/workspace-hack"
+    ],
     "team_agents": [
       "crates/activity",
       "crates/agent",
@@ -17640,6 +17660,7 @@
       "tooling/xtask/crates/xtask_ports"
     ],
     "xtask_workflows": [
+      "tooling/xtask/crates/gh_workflow",
       "tooling/xtask/crates/xtask_paths",
       "tooling/xtask/crates/xtask_workflows"
     ]

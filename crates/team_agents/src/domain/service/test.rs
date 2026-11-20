@@ -9,8 +9,8 @@ use rootcause::Report;
 
 use super::*;
 use crate::domain::models::{
-    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState, RepoToken,
-    VoiceModel,
+    AgentApiKey, AgentReady, AgentRepo, ComputerDetails, ComputerSize, ComputerState,
+    MAX_NAME_CHARS, RepoToken, VoiceModel,
 };
 
 const ADMIN: &str = "macro|admin@example.com";
@@ -59,7 +59,7 @@ struct FakeError;
 struct FakeRepository {
     journal: Journal,
     /// Each agent with its invite's purchase key.
-    agents: Arc<Mutex<Vec<(TeamAgentRecord, String)>>>,
+    agents: Arc<Mutex<Vec<(TeamAgentRecord, PurchaseKey)>>>,
 }
 
 impl FakeRepository {
@@ -223,6 +223,10 @@ impl AgentApiKeys for FakeApiKeys {
     }
 }
 
+/// A seed with this name fails its repo create after the call went out, as
+/// when the answer is lost: the repo may exist.
+const LOST_REPO_ANSWER: &str = "Lost Answer";
+
 struct FakeRepos(Journal);
 
 impl AgentRepos for FakeRepos {
@@ -233,6 +237,11 @@ impl AgentRepos for FakeRepos {
         seed: &PersonaSeed,
     ) -> Result<AgentRepo, TeamAgentError> {
         self.0.record(format!("repo.create {}", seed.name));
+        if seed.name == LOST_REPO_ANSWER {
+            return Err(TeamAgentError::RepoUnavailable(
+                rootcause::Report::new(std::io::Error::other("answer lost")).into_dynamic(),
+            ));
+        }
         Ok(AgentRepo {
             url: "https://git.example.com/ada.git".to_owned(),
             token: RepoToken::generate(),
@@ -280,14 +289,14 @@ struct FakeComputers {
     /// The computers rollout doesn't include the buyer.
     rollout_off: bool,
     /// (purchase key, computer, agent) links made by purchases.
-    links: Arc<Mutex<Vec<(String, ComputerId, MacroUserIdStr<'static>)>>>,
+    links: Arc<Mutex<Vec<(PurchaseKey, ComputerId, MacroUserIdStr<'static>)>>>,
 }
 
 impl Computers for FakeComputers {
     async fn purchase(&self, purchase: ComputerPurchase) -> Result<ComputerId, TeamAgentError> {
         self.journal.record(format!(
             "computer.purchase {} by {}",
-            purchase.name,
+            purchase.name.as_str(),
             purchase.created_by.as_ref()
         ));
         if self.refuse_purchase {
@@ -531,7 +540,7 @@ async fn a_repeated_invite_before_the_first_bought_its_computer_is_refused_and_c
             created_at: chrono::DateTime::UNIX_EPOCH,
             first_online_at: None,
         },
-        "invite-1".to_owned(),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     ));
 
     let result = service.create(receipt(), request()).await;
@@ -580,6 +589,33 @@ async fn a_refused_purchase_takes_back_the_repo_seat_and_account() {
     assert!(service.repository.agents.lock().unwrap().is_empty());
 }
 
+#[tokio::test]
+async fn a_repo_create_whose_answer_is_lost_is_still_undone() {
+    let (service, journal) = service(true, FakeComputers::default());
+
+    let result = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                name: LOST_REPO_ANSWER.to_owned(),
+                ..request()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(TeamAgentError::RepoUnavailable(_))));
+    let entries = journal.entries();
+    assert_eq!(
+        entries[entries.len() - 4..],
+        [
+            format!("repo.create {LOST_REPO_ANSWER}"),
+            "repo.delete".to_owned(),
+            "team.undo".to_owned(),
+            "account.delete".to_owned(),
+        ]
+    );
+}
+
 /// Agent teammates on but computers off for the admin: refused before an
 /// account, seat or repository is made, not created and then undone.
 #[tokio::test]
@@ -614,6 +650,47 @@ async fn an_empty_name_is_refused_before_anything_is_created() {
 
     assert!(matches!(result, Err(TeamAgentError::InvalidName)));
     assert!(journal.entries().is_empty());
+}
+
+#[tokio::test]
+async fn an_overlong_name_is_refused_before_anything_is_created() {
+    let (service, journal) = service(true, FakeComputers::default());
+
+    let result = service
+        .create(
+            receipt(),
+            CreateTeamAgent {
+                name: "a".repeat(MAX_NAME_CHARS + 1),
+                ..request()
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(TeamAgentError::InvalidName)));
+    assert!(journal.entries().is_empty());
+}
+
+#[tokio::test]
+async fn an_invalid_purchase_key_is_refused_before_anything_is_created() {
+    for purchase_key in ["", "has space", &"k".repeat(129)] {
+        let (service, journal) = service(true, FakeComputers::default());
+
+        let result = service
+            .create(
+                receipt(),
+                CreateTeamAgent {
+                    purchase_key: purchase_key.to_owned(),
+                    ..request()
+                },
+            )
+            .await;
+
+        assert!(
+            matches!(result, Err(TeamAgentError::InvalidPurchaseKey)),
+            "{purchase_key:?}"
+        );
+        assert!(journal.entries().is_empty(), "{purchase_key:?}");
+    }
 }
 
 #[tokio::test]
@@ -1098,4 +1175,52 @@ async fn with_the_rollout_off_the_list_and_an_agents_voice_are_refused() {
         Err(TeamAgentError::NotEnabled)
     ));
     assert_eq!(journal.entries().len(), before);
+}
+
+/// An invited agent whose account exists but whose computer isn't bought yet.
+fn agent_without_a_computer(created_at: chrono::DateTime<chrono::Utc>) -> TeamAgentRecord {
+    TeamAgentRecord {
+        user_id: user("macro|sam-rivera-abc123@agents.macro.invalid"),
+        team_id: Uuid::parse_str(TEAM).unwrap(),
+        created_by: Some(user(ADMIN)),
+        persona_seed: PersonaSeed {
+            creator_id: Some(user(ADMIN)),
+            name: "Sam Rivera".to_owned(),
+            job_description: "Runs vendor relations.".to_owned(),
+            personality: "Dry, direct, kind.".to_owned(),
+            voice: None,
+        },
+        created_at,
+        first_online_at: None,
+    }
+}
+
+/// The invite reserves the computer in the same request that made the
+/// account, so a computer missing just after the invite is still coming.
+#[tokio::test]
+async fn an_agent_invited_moments_ago_without_a_computer_yet_is_provisioning() {
+    let (service, _) = service(true, FakeComputers::default());
+    service.repository.agents.lock().unwrap().push((
+        agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(1)),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
+    ));
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Provisioning);
+}
+
+/// Past [`crate::domain::models::ORPHANED_INVITE_AFTER`], the invite that
+/// should have bought the computer died.
+#[tokio::test]
+async fn an_agent_still_without_a_computer_long_after_its_invite_failed() {
+    let (service, _) = service(true, FakeComputers::default());
+    service.repository.agents.lock().unwrap().push((
+        agent_without_a_computer(chrono::Utc::now() - chrono::Duration::minutes(11)),
+        PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
+    ));
+
+    let listed = service.list(receipt()).await.unwrap();
+
+    assert_eq!(listed.agents[0].status, TeamAgentStatus::Failed);
 }

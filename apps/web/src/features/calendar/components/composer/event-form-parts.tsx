@@ -195,6 +195,7 @@ function Description() {
       }}
       placeholder="Add description..."
       portalScope="local"
+      releaseEscape
       domRef={(element) => element.setAttribute('aria-label', 'Description')}
       class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
     />

@@ -23,6 +23,7 @@ export function SpreadsheetDraftMenu(props: {
     entity: [],
     sender: [],
     macro: [{ label: 'Ask Macro', icon: Sparkle, action: props.onAsk }],
+    notifications: [],
     sharing: [{ label: 'Share', icon: Share, action: props.onShare }],
     file: props.onRename
       ? [{ label: 'Rename', icon: Rename, action: props.onRename }]

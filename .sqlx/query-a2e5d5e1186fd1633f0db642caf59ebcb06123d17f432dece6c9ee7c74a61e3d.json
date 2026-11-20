@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE email_attachments SET\n                upload_failures = upload_failures + 1,\n                upload_claimed_at = CASE WHEN upload_failures + 1 >= $3 THEN upload_claimed_at END,\n                upload_abandoned_at = CASE WHEN upload_failures + 1 >= $3 THEN now() END\n            WHERE id = $1 AND upload_claimed_at = $2\n            RETURNING upload_failures, upload_abandoned_at IS NOT NULL AS \"abandoned!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "upload_failures",
+        "type_info": "Int2"
+      },
+      {
+        "ordinal": 1,
+        "name": "abandoned!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "a2e5d5e1186fd1633f0db642caf59ebcb06123d17f432dece6c9ee7c74a61e3d"
+}

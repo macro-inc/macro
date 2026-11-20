@@ -43,7 +43,9 @@ function Modal() {
       open
       onOpenChange={() => {}}
       gates={{
+        showCustomers: true,
         showNotifications: false,
+        homeMode: 'off',
         showForYou: false,
         showCalls: true,
         showReviews: true,

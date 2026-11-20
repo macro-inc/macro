@@ -54,8 +54,8 @@ function keyBody(queryKey: readonly unknown[]): unknown {
 
 /**
  * Refetch every mounted list restricted to a CRM association, on both
- * transports. Call after a CRM reference or a Companies/Contacts property
- * changes; lists without an association are left alone.
+ * transports. Call after a CRM reference, a Companies/Contacts property or a
+ * custom entity property changes; lists without an association are left alone.
  */
 export async function refreshCrmAssociatedSoupQueries(): Promise<void> {
   const prefixes = [soupKeys.astItems._def, soupKeys.groupedGroup._def];

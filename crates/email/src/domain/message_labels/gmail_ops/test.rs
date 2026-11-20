@@ -213,7 +213,10 @@ async fn provider_errors_keep_the_queue_route_and_original_reason_for_every_vari
             let (deleted, detail) = detail(service.process(Ok(message)).await);
             assert_eq!(deleted, !retry || !deferred);
             assert_eq!(detail.reason, *reason);
-            assert_eq!(detail.source.to_string(), format!("block_sender: {error}"));
+            assert_eq!(
+                format!("{:#}", detail.source),
+                format!("block_sender: {error}")
+            );
             let queued: Vec<_> = fake
                 .calls()
                 .into_iter()
@@ -265,9 +268,11 @@ async fn failed_retry_publication_keeps_the_primary_message_for_redelivery() {
     let (deleted, error) = detail(service.process(Ok(message(1, true))).await);
     assert!(!deleted);
     assert_eq!(error.reason, FailureReason::SqsEnqueueFailed);
-    assert_eq!(
-        error.source.to_string(),
-        "modify_message_labels: Failed to enqueue gmail ops retry message"
+    assert!(
+        format!("{:#}", error.source)
+            .starts_with("modify_message_labels: Failed to enqueue gmail ops retry message: "),
+        "{:#}",
+        error.source
     );
     assert!(
         !fake
@@ -590,12 +595,7 @@ async fn every_persistence_failure_keeps_the_message_and_never_queues_a_retry() 
         let (deleted, error) = detail(service.process(Ok(message(1, true))).await);
         assert!(!deleted, "{fault}");
         assert_eq!(error.reason, FailureReason::DatabaseQueryFailed, "{fault}");
-        assert!(
-            error
-                .source
-                .to_string()
-                .starts_with("modify_message_labels: ")
-        );
+        assert!(format!("{:#}", error.source).starts_with("modify_message_labels: "));
         assert!(
             !fake
                 .calls()

@@ -64,6 +64,8 @@ async function author(at: Stack): Promise<string> {
       workspace: { scenario: 'sugbench-author', description: 'The account the bench writes held-out personas as.', users: { author: { email: AUTHOR, first_name: 'Bench', last_name: 'Author', roles: ['team_subscriber', 'sub_opus'] } } },
       inbox: { owner: { name: 'Bench Author', email: AUTHOR }, persona: '', timezone: 'UTC', messages: [] },
     } as unknown as Persona;
+    // On a machine that has made no set yet, the folder isn't there.
+    mkdirSync(HELDOUT_DIR, { recursive: true });
     await seed(at.instance, account, 'full', Date.now(), join(HELDOUT_DIR, 'author.seed.log'));
   })();
   await authorSeeded;

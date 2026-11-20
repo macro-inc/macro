@@ -15,7 +15,8 @@ use std::time::Duration;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_harness::domain::model::{DORMANT_AFTER, ListedSessions, RuntimeAccessFacts};
 use agent_harness::domain::ports::{
-    ConnectionRecorded, HarnessBindings, HarnessPresence, RuntimeAccepts, RuntimeConnectionId,
+    ConnectionRecorded, HarnessBindings, HarnessConnection, HarnessPresence, RuntimeAccepts,
+    RuntimeConnectionId,
 };
 use agent_session::domain::model::ReplicaId;
 use bot_id::BotId;
@@ -289,11 +290,20 @@ impl HarnessPresence for PgHarnessPresence {
 
     fn renew(
         self: Arc<Self>,
-        live: Vec<(HarnessId, RuntimeConnectionId)>,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>> {
+        live: Vec<HarnessConnection>,
+    ) -> Pin<Box<dyn Future<Output = Vec<HarnessConnection>> + Send>> {
+        let span = tracing::info_span!(
+            "harness.presence.renew",
+            replica = %self.replica,
+            connections = live.len(),
+            renewed = tracing::field::Empty,
+            restored = tracing::field::Empty,
+            error = tracing::field::Empty,
+            otel.status_code = tracing::field::Empty,
+        );
         Box::pin(async move {
             let (harnesses, connections): (Vec<_>, Vec<_>) = live
-                .into_iter()
+                .iter()
                 .map(|(harness, connection)| (harness.as_uuid(), connection.as_uuid()))
                 .unzip();
             // An upsert, so a connection whose attach write failed, or whose
@@ -316,22 +326,38 @@ impl HarnessPresence for PgHarnessPresence {
             )
             .fetch_all(&self.pool)
             .await;
-            match renewed {
-                Ok(renewed) => {
-                    for row in renewed.into_iter().filter(|row| row.restored) {
-                        tracing::warn!(
-                            telemetry_event = "harness_runtime_lease_restored",
-                            harness = %row.harness_id,
-                            connection = %row.id,
-                            replica = %self.replica,
-                            "a held harness runtime connection had no presence row"
-                        );
-                    }
-                }
+            let renewed = match renewed {
+                Ok(renewed) => renewed,
                 Err(error) => {
+                    let span = tracing::Span::current();
+                    span.record("error", tracing::field::display(&error));
+                    span.record("otel.status_code", "ERROR");
                     tracing::warn!(error = ?error, replica = %self.replica, "failed to renew harness runtime leases");
+                    return Vec::new();
                 }
+            };
+            tracing::Span::current().record("renewed", renewed.len());
+            let restored: Vec<_> = renewed
+                .into_iter()
+                .filter(|row| row.restored)
+                .map(|row| (row.harness_id, row.id))
+                .collect();
+            tracing::Span::current().record("restored", restored.len());
+            for (harness, connection) in &restored {
+                tracing::warn!(
+                    telemetry_event = "harness_runtime_lease_restored",
+                    %harness,
+                    %connection,
+                    replica = %self.replica,
+                    "a renewed harness runtime connection had no presence row"
+                );
             }
-        })
+            live.into_iter()
+                .filter(|(harness, connection)| {
+                    restored.contains(&(harness.as_uuid(), connection.as_uuid()))
+                })
+                .collect()
+        }
+        .instrument(span))
     }
 }

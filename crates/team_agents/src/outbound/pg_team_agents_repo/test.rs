@@ -1,6 +1,7 @@
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::models::{AgentName, PurchaseKey};
 
 const TEAM: Uuid = Uuid::from_u128(0x0193_a1b2_0000_7000_8000_0000_0000_00aa);
 
@@ -42,7 +43,7 @@ fn sam() -> NewAgentAccount {
         created_by: MacroUserIdStr::parse_from_str("macro|admin@example.com")
             .unwrap()
             .into_owned(),
-        name: "Sam Rivera".to_owned(),
+        name: AgentName::try_new("Sam Rivera").unwrap(),
         avatar_url: None,
         persona_seed: PersonaSeed {
             creator_id: Some(
@@ -55,7 +56,7 @@ fn sam() -> NewAgentAccount {
             personality: "Dry, direct, kind.".to_owned(),
             voice: None,
         },
-        purchase_key: "invite-1".to_owned(),
+        purchase_key: PurchaseKey::try_new("invite-1".to_owned()).unwrap(),
     }
 }
 
@@ -123,7 +124,7 @@ async fn a_repeated_purchase_key_returns_the_first_agent_and_creates_no_account(
     assert_eq!(repo.get(&sam_again().user_id).await.unwrap(), None);
     // Another invite, with its own key, is another agent.
     let other = NewAgentAccount {
-        purchase_key: "invite-2".to_owned(),
+        purchase_key: PurchaseKey::try_new("invite-2".to_owned()).unwrap(),
         ..sam_again()
     };
     assert_eq!(

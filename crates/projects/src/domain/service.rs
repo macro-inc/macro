@@ -174,6 +174,7 @@ where
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<Project, ProjectError> {
         validate_project_name(&args.name)?;
 
@@ -193,7 +194,14 @@ where
                 owner: owner.clone(),
                 name: args.name,
                 parent_id: parent_id.clone(),
-                share_permission: SharePermissionV2::new_project_share_permission(team_default),
+                share_permission: match initial_link_share {
+                    models_permissions::share_permission::InitialLinkShare::Exact(state) => {
+                        SharePermissionV2::from_link_share_state(state)
+                    }
+                    models_permissions::share_permission::InitialLinkShare::EntityDefault => {
+                        SharePermissionV2::new_project_share_permission(team_default)
+                    }
+                },
                 updated_at,
             })
             .await
@@ -447,6 +455,51 @@ where
             .map_err(|error| internal_error(error, "unable to get project permissions"))
     }
 
+    #[tracing::instrument(skip_all, fields(folder_id = %receipt.entity().entity_id), err)]
+    async fn folder_has_explicit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<bool, ProjectError> {
+        let id = &receipt.entity().entity_id;
+        let project = self
+            .repo
+            .get_project_by_id(id)
+            .await
+            .map_err(|error| internal_error(error, "unable to read folder owner"))?
+            .ok_or_else(|| ProjectError::NotFound(id.clone()))?;
+        if project.user_id.as_user() != receipt.acting_user_id() {
+            return Ok(true);
+        }
+        self.repo
+            .folder_has_explicit_grant(parse_internal_uuid(id, "folder ID")?, &project.user_id)
+            .await
+            .map_err(|error| internal_error(error, "unable to read inherited folder grants"))
+    }
+
+    #[tracing::instrument(skip_all, fields(folder_id = %receipt.entity().entity_id), err)]
+    async fn folder_has_team_edit_grant(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<bool, ProjectError> {
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        if facts.owner.as_user() != receipt.acting_user_id() {
+            return Ok(false);
+        }
+        let Some(team_id) = facts.owner_team_id else {
+            return Ok(false);
+        };
+        self.repo
+            .folder_has_team_edit_grant(
+                parse_internal_uuid(&receipt.entity().entity_id, "folder ID")?,
+                team_id,
+            )
+            .await
+            .map_err(|error| internal_error(error, "unable to read folder team grant"))
+    }
+
     async fn get_project_access_level(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -459,16 +512,28 @@ where
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
     ) -> Result<Project, ProjectError> {
-        self.insert_project(principal, args, None).await
+        self.insert_project(
+            principal,
+            args,
+            None,
+            models_permissions::share_permission::InitialLinkShare::EntityDefault,
+        )
+        .await
     }
 
     async fn create_project_dated_by_contents(
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,
+        initial_link_share: models_permissions::share_permission::InitialLinkShare,
     ) -> Result<Project, ProjectError> {
-        self.insert_project(principal, args, Some(chrono::DateTime::UNIX_EPOCH))
-            .await
+        self.insert_project(
+            principal,
+            args,
+            Some(chrono::DateTime::UNIX_EPOCH),
+            initial_link_share,
+        )
+        .await
     }
 
     async fn edit_project(

@@ -46,21 +46,16 @@ impl PgImportRepo {
         &self,
         user: &MacroUserIdStr<'static>,
         import_id: Uuid,
-        shared: bool,
     ) -> Result<bool> {
         let changed = sqlx::query!(
             r#"
             UPDATE import_entity
-            SET metadata = jsonb_set(
-                    metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}',
-                    '{plan,shared}', to_jsonb($3::bool)
-                ), updated_at = NOW()
-            WHERE user_id = $1 AND id = $2 AND status = 'importing'
+            SET metadata = metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}', updated_at = NOW()
+            WHERE id = $2 AND (SELECT import_entity.user_id OFFSET 0) = $1 AND status = 'importing'
               AND metadata->'plan' IS NOT NULL
             "#,
             user.as_ref(),
             import_id,
-            shared,
         )
         .execute(&self.pool)
         .await?;
@@ -136,7 +131,7 @@ impl PgImportRepo {
                 team_id = NULL, waiting_on = NULL, review_id = NULL, last_error = $3,
                 metadata = CASE WHEN jsonb_typeof(metadata->'plan') = 'object'
                     THEN metadata #- '{plan,alreadyImported}' #- '{plan,reason}' #- '{plan,sharedReason}'
-                    ELSE metadata END,
+                    ELSE metadata END - 'personalFolderId' - 'separateFolder',
                 updated_at = NOW()
             WHERE id = $1
             "#,

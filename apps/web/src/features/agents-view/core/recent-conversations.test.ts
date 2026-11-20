@@ -60,6 +60,23 @@ describe('selectRecentAgentConversations', () => {
     ]);
   });
 
+  it('sorts search results by creation when requested without changing ownership', () => {
+    const first = session('first', {
+      createdAt: '2026-09-15T06:00:00Z',
+      updatedAt: '2026-09-15T12:00:00Z',
+    });
+    const second = chat('second', {
+      createdAt: '2026-09-15T09:00:00Z',
+      updatedAt: '2026-09-15T08:00:00Z',
+    });
+    expect(
+      selectRecentAgentConversations([first, second], OWNER, '', 'created')
+    ).toEqual([second, first]);
+    expect(
+      selectRecentAgentConversations([first, second], OWNER, 'first', 'created')
+    ).toEqual([first]);
+  });
+
   it('keeps only the owner’s conversations, newest first, matching the search', () => {
     const mine = session('a', { updatedAt: '2026-09-15T08:00:00Z' });
     const newer = chat('b', { updatedAt: '2026-09-15T11:00:00Z' });
