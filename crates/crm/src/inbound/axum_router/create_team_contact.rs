@@ -17,16 +17,23 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 pub struct CreateCrmTeamContactRequest {
     /// Display name for the contact.
     pub name: String,
-    /// The contact's email address, of any domain. Optional: omit it to
-    /// add the contact by name only.
+    /// The contact's email address, of any domain. A company-domain address
+    /// also links the contact to that domain's company, unless the team
+    /// blocks the domain or the company is hidden. Optional: omit it to add
+    /// the contact by name only.
     #[serde(default)]
     pub email: Option<String>,
 }
 
-/// Manually create a contact without a company for the caller's team.
-/// Any team member may create one. The team must not already have a
-/// company-less contact with the email (409), and the team's CRM
-/// killswitch must be on (403).
+/// Manually create a contact for the caller's team without naming a company.
+/// An email at a company's own domain files the contact under the team's
+/// company for that domain, creating the company when the team has none; a
+/// personal or generic provider address, a domain the team blocks, or a
+/// hidden company leaves the contact without a company. Any team member with
+/// CRM access may create one. A contact filed under a company is refused when
+/// that company, or a contact without a company, already has the email as its
+/// primary address, and one left without a company when another such contact
+/// has it (409). The team's CRM killswitch must be on (403).
 #[utoipa::path(
     post,
     path = "/crm/contacts",

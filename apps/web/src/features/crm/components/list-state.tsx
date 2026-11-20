@@ -1,4 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateCompaniesGraphic from '@design/empty-state-companies.svg';
 import EmptyStateNoAccessGraphic from '@design/empty-state-no-access.svg';
@@ -61,10 +62,10 @@ export function CrmListError(props: {
       centered
       topSpacerClass="grow-[0.5] basis-0 mobile:basis-0"
       graphic={EmptyStateNoAccessGraphic}
-      description="Please try again to reload this view."
-      title={props.title ?? "Couldn't load this list."}
+      description={t('crm.listReloadHelp')}
+      title={props.title ?? t('crm.listLoadFailed')}
       primaryAction={{
-        label: 'Try again',
+        label: t('crm.tryAgain'),
         onClick: () => fireAndForget(props.onRetry(), 'crm'),
       }}
     />

@@ -527,6 +527,12 @@ export default {
       other: 'Usunięto {{count}} elementu',
     },
     toastDeleteFailed: 'Nie udało się usunąć',
+    toastPropertySet: {
+      one: '{{property}}: ustawiono',
+      few: '{{property}}: ustawiono dla {{count}} elementów',
+      many: '{{property}}: ustawiono dla {{count}} elementów',
+      other: '{{property}}: ustawiono dla {{count}} elementu',
+    },
     toastAddedToFavorites: 'Dodano do ulubionych',
     toastAddedCountToFavorites: {
       one: 'Dodano {{count}} element do ulubionych',

@@ -227,9 +227,38 @@ impl EmailSendRepo for EmailPgRepo {
         actor: &MacroUserIdStr<'_>,
         link: Uuid,
         attempt: SendAttemptId,
+        prepared: PreparedSend,
+    ) -> Result<SendAttempt, EmailErr> {
+        self.admit(actor, link, attempt, prepared)
+            .await
+            .map_err(super::contended)
+    }
+
+    async fn cancel_send(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link: Uuid,
+        attempt: SendAttemptId,
+    ) -> Result<SendAttempt, EmailErr> {
+        self.cancel(actor, link, attempt)
+            .await
+            .map_err(super::contended)
+    }
+}
+
+/// The admission and cancellation bodies; their trait methods report a lock
+/// timeout as a busy inbox.
+impl EmailPgRepo {
+    async fn admit(
+        &self,
+        actor: &MacroUserIdStr<'_>,
+        link: Uuid,
+        attempt: SendAttemptId,
         mut prepared: PreparedSend,
     ) -> Result<SendAttempt, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        let mut tx = super::begin(&self.pool)
+            .await
+            .map_err(anyhow::Error::from)?;
         lock_attempt(&mut tx, actor, link, attempt).await?;
         if let Some(existing) =
             read_attempt(&mut tx, actor, link, attempt, Some(&prepared.snapshot)).await?
@@ -342,13 +371,15 @@ impl EmailSendRepo for EmailPgRepo {
         })
     }
 
-    async fn cancel_send(
+    async fn cancel(
         &self,
         actor: &MacroUserIdStr<'_>,
         link: Uuid,
         attempt: SendAttemptId,
     ) -> Result<SendAttempt, EmailErr> {
-        let mut tx = self.pool.begin().await.map_err(anyhow::Error::from)?;
+        let mut tx = super::begin(&self.pool)
+            .await
+            .map_err(anyhow::Error::from)?;
         lock_attempt(&mut tx, actor, link, attempt).await?;
         let existing = read_attempt(&mut tx, actor, link, attempt, None).await?;
         if let Some(existing) = &existing {
@@ -364,7 +395,7 @@ impl EmailSendRepo for EmailPgRepo {
                 // Outlook workers lock mailbox, message, then schedule. Match
                 // that order while revoking their pending draft revision.
                 sqlx::query!(
-                    "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR UPDATE",
+                    "SELECT id FROM email_links WHERE id = $1 AND provider = 'OUTLOOK' FOR SHARE",
                     link,
                 )
                 .fetch_optional(&mut *tx)

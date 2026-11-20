@@ -65,3 +65,24 @@ pub async fn cg_refresh_email(
             .inspect_err(|e| tracing::error!(error = %e, "Failed to refresh email"));
     }
 }
+
+/// The SQLSTATE of the first database failure in a worker error's chain, from
+/// a `sqlx` error or a mailbox database failure, for the failure span's
+/// `db.response.status_code`.
+pub(crate) fn sqlstate(error: &anyhow::Error) -> Option<String> {
+    use email::domain::mailbox::{DatabaseFailure, MailboxError};
+
+    error.chain().find_map(|cause| {
+        if let Some(error) = cause.downcast_ref::<sqlx::Error>() {
+            return error
+                .as_database_error()?
+                .code()
+                .map(|code| code.into_owned());
+        }
+        match cause.downcast_ref::<MailboxError>()? {
+            MailboxError::Database(DatabaseFailure::Sqlstate(code))
+            | MailboxError::Unstorable(code) => Some(code.clone()),
+            _ => None,
+        }
+    })
+}

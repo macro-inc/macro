@@ -1,10 +1,13 @@
 import { AnalyticsContextProvider } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider } from '@app/lib/analytics/posthog';
+import { crmSnapshotAuthorization } from '@app/lib/urql-solid/authorization';
 import { createUrqlQuery } from '@app/lib/urql-solid/create-urql-query';
+import { useSyncLoginCookie } from '@app/routes/use-sync-login-cookie';
 import { disableBrowserTursoCache } from '@core/constant/featureFlags';
 import { UserContextProvider } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { normalizedCacheResultMetadata } from '@graphql-cache/exchange/normalized-cache-exchange';
+import { cacheSessionGeneration } from '@graphql-cache/session-generation';
 import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import { useDocTags, useSoupDocTags } from '@property/tags/useDocTags';
 import { queryClient } from '@queries/client';
@@ -14,6 +17,8 @@ import { propertiesKeys } from '@queries/properties/keys';
 import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input';
 import { createGraphqlGroupedSoupAstItemsQuery } from '@queries/soup/graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from '@queries/soup/graphql/items';
+import { crmAccessAuthority } from '@service-storage/crm-access-authority';
+import { installCrmCacheHost } from '@service-storage/crm-access-cache';
 import {
   EntityPropertiesDocument,
   RenameEntitiesDocument,
@@ -21,9 +26,10 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
+  initializeGraphqlSoupCache,
 } from '@service-storage/graphql-soup';
 import { QueryClientProvider } from '@tanstack/solid-query';
-import { gql, type OperationResult } from '@urql/core';
+import { gql, type OperationResult, stringifyDocument } from '@urql/core';
 import { createComputed, createSignal, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import {
@@ -89,6 +95,9 @@ let refetch: () => Promise<ReadResult>;
 let pendingRead: Promise<ReadResult> | undefined;
 
 function Readers() {
+  // This isolated page must run the route root's real authenticated-session
+  // binding before its cache can verify a fresh permission proof.
+  useSyncLoginCookie();
   const tags = useDocTags(DOCUMENT_ID, 'DOCUMENT');
   const list = createGraphqlSoupAstItemsQuery(
     () => ({ params: { sort_method: 'updated_at' }, body: {} }),
@@ -299,6 +308,8 @@ function Readers() {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('missing functional test root');
+await initializeGraphqlSoupCache();
+
 const dispose = render(
   () => (
     <AnalyticsContextProvider>
@@ -341,7 +352,18 @@ const api = {
     }
   },
   async addIncompletePropertyLink() {
-    await getGraphqlCacheHost()?.writeQuery({
+    const host = getGraphqlCacheHost();
+    if (!host) throw new Error('expected an active cache');
+    const generation = cacheSessionGeneration.capture();
+    const source = await host.readQuery({
+      query: stringifyDocument(EntityPropertiesDocument),
+      variables: {
+        input: buildEntityPropertiesInput('DOCUMENT', DOCUMENT_ID)!,
+      },
+    });
+    if (source.kind !== 'hit') throw new Error('expected cached properties');
+    await host.writeQuery({
+      generation,
       query: `query PartialProperties($input: SoupInput!) {
         user { id soup(input: $input) { items {
           __typename id ... on GraphqlSoupDocument { properties { id } }
@@ -381,8 +403,21 @@ const api = {
     }
     await getGraphqlCacheHost()?.currentRevision();
   },
-  retireCache: () => getGraphqlCacheHost()?.dispose(),
+  retireCache() {
+    const host = getGraphqlCacheHost();
+    // Match production fallback ordering: detach authority before disposing the
+    // host, then let the real controller verify fresh network-only access.
+    installCrmCacheHost(undefined);
+    host?.dispose();
+  },
   hasCache: () => !!getGraphqlCacheHost(),
+  authority: () => getGraphqlCacheHost()?.authority?.current(),
+  authorityState: () => ({
+    account: crmAccessAuthority.account(),
+    allowed: crmAccessAuthority.allowed(),
+    owner: getGraphqlCacheHost()?.authority?.snapshot(),
+    authorization: crmSnapshotAuthorization(),
+  }),
   dispose,
 };
 declare global {

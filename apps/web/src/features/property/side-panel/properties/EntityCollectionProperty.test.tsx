@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Property, PropertyApiValues } from '../../types';
 import {
@@ -36,10 +37,11 @@ vi.mock('@property', () => ({
 vi.mock('@property/context/PropertiesContext', () => ({
   usePropertiesContext: () => ({ canEdit: true, entityType: 'TASK' }),
 }));
-vi.mock('@property/hooks', () => ({
-  usePropertyEntityDisplay: (entityId: () => string) => ({
-    name: entityId,
-    icon: () => null,
+vi.mock('@property/hooks/usePropertyEntityLink', () => ({
+  usePropertyEntityLink: (reference: () => { entity_id: string }) => ({
+    display: { name: () => reference().entity_id, icon: () => null },
+    canOpen: () => true,
+    open: vi.fn(),
   }),
 }));
 vi.mock('@property/utils', () => ({
@@ -182,4 +184,55 @@ it('keeps a newer save in charge of the row when an older one commits', async ()
   expect(addButton().disabled).toBe(true);
   expect(screen.queryByText('globex')).toBeNull();
   expect(onRefresh.mock.calls).toEqual([['saved']]);
+});
+
+it('keeps every remaining reference when the query rewrites its list in place after a removal', async () => {
+  // A query result is a store, and reconcile moves the remaining references
+  // up by rewriting the objects already in the list.
+  const [query, setQuery] = createStore<{ property: Property }>({
+    property: {
+      ...companies,
+      value: [
+        { entity_id: 'acme', entity_type: 'COMPANY' },
+        { entity_id: 'globex', entity_type: 'COMPANY' },
+        { entity_id: 'initech', entity_type: 'COMPANY' },
+      ],
+    },
+  });
+  const saved: PropertyApiValues[] = [];
+  const onSave: Save = async (_property, values, onAccepted) => {
+    saved.push(values);
+    onAccepted();
+  };
+  render(() => (
+    <EntityCollectionProperty
+      entityId="task"
+      onRefresh={async () => {}}
+      property={query.property}
+      onSave={onSave}
+      saving={createSignal(false)}
+      actionsBeforeAdd={null}
+      actionsAfterAdd={null}
+    />
+  ));
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Remove acme' }));
+  await mocks.detached[0];
+  setQuery(
+    'property',
+    'value',
+    reconcile([
+      { entity_id: 'globex', entity_type: 'COMPANY' as const },
+      { entity_id: 'initech', entity_type: 'COMPANY' as const },
+    ])
+  );
+
+  expect(screen.getAllByText('globex')).toHaveLength(1);
+  expect(screen.getAllByText('initech')).toHaveLength(1);
+
+  await fireEvent.click(screen.getByRole('button', { name: 'Remove initech' }));
+  expect(saved[1]).toEqual({
+    valueType: 'ENTITY',
+    refs: [{ entity_id: 'globex', entity_type: 'COMPANY' }],
+  });
 });

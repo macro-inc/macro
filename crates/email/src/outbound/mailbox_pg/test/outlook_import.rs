@@ -11,8 +11,8 @@ use crate::domain::mailbox::*;
 use crate::outbound::mailbox_pg::PgMailboxSync;
 use email_api_client::OutlookApiClientRepository;
 use email_api_client::domain::models::{
-    AccessToken, EmailApiError, MailFolder, MailboxAccess, MailboxChangePage, MailboxMessage,
-    ProviderId, RoundStart, StreamToken, TokenError, TokenFreshness,
+    AccessToken, EmailApiError, MailFolder, MailFolderCatalog, MailboxAccess, MailboxChangePage,
+    MailboxMessage, ProviderId, RoundStart, StreamToken, TokenError, TokenFreshness,
 };
 use email_api_client::domain::ports::{AlwaysAllowRateLimiter, MailboxTokenSource};
 use email_api_client::domain::service::mailbox::MailboxApiService;
@@ -54,7 +54,7 @@ pub(super) fn access(mailbox: MailboxKey) -> MailboxAccess {
 }
 
 impl MailboxGateway for Gateway {
-    async fn folders(&self, mailbox: MailboxKey) -> Result<Vec<MailFolder>, EmailApiError> {
+    async fn folders(&self, mailbox: MailboxKey) -> Result<MailFolderCatalog, EmailApiError> {
         self.0.folders(access(mailbox)).await
     }
     async fn changes(

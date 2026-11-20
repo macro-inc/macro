@@ -92,13 +92,14 @@ mail or suggestions names the first seat's domain in any case or its own in
 another case, and its mail renamed is the first seat's word for word: a
 snippet cut at 500 characters can cut a longer domain's copy elsewhere), a
 routines judgement reads the first seat's mail and the seat's suggestions
-renamed (`routinesEvidence`), so the seats of one round share the person,
-mail, catalog and key word for word; those go after the rubric, which the
-route caches, and the round's first judgement writes the cache the others then
-read. Any other seat is judged on its own mail, which no other seat's
-judgement shares. Rejudged that way, the same generations scored within the
-judge's own pass-to-pass difference (main 12.3 against 12.3 and 11.0, a
-single-session build 64.7 against 66.3) at about half the judge's cost.
+renamed (`routinesEvidence`), so a persona's seats, in every rep of the run
+(all at one "now"), share the person, mail, catalog and key word for word;
+those go after the rubric, which the route caches, and the persona's first
+judgement writes the cache the others then read. Any other seat is judged on
+its own mail, which no other seat's judgement shares. Rejudged that way, the
+same generations scored within the judge's own pass-to-pass difference (main
+12.3 against 12.3 and 11.0, a single-session build 64.7 against 66.3) at about
+half the judge's cost.
 
 A run records its judge (`JUDGE` in `judge.ts`: the model and a version to
 bump with any change to a rubric, a schema or what a judgement reads), and
@@ -140,14 +141,16 @@ seat is a copy of a persona under a domain of its own (`founder`,
 by side (see **Seats** below). Seats sign up on their first run (one signup
 each for `routines`, five for `feed`'s teams), against the webhook's 50
 an hour: on a new stack, run the two sections an hour apart, or `all` stops
-part way through the feed when the webhook refuses a seat. Judging runs alongside, as three
-grader accounts, while the next rep seeds.
+part way through the feed when the webhook refuses a seat. Judging runs as
+three grader accounts: the feed's while the next rep seeds, the routines'
+once the last rep has generated (see **Seats** below).
 
 Each run writes `~/.cache/suggestions-bench/runs/<label>-<section>-<set>-<time>/run.json`,
 with each attempt's suggestions, the judge's marks, the score and the
-sessions' transcripts beside it. `run` starts the stand-in if it isn't up
-and holds the stack while it runs (the drafting eval's lock), so two runs
-never share it.
+sessions' transcripts beside it. A routines attempt is written as soon as it
+has generated, marked not judged until it is, so `rejudge` can judge a run
+that stopped first. `run` starts the stand-in if it isn't up and holds the
+stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
@@ -275,15 +278,35 @@ briefs, customer requests); the sales rep lost one of the two needs only a
 drafted routine meets (found 3.83 to 2.94). Wrong sidebars fell from 0.56 to
 0.19 a generation.
 
+### One onboarding session, judged once a run
+
+Main `fa31ccc0c0` (one routines session for every surface) twice on
+`routines`, every rep at one "now" and each persona's judge prefix written
+once a run (`judgeLast`), 2026-11-19, on one stack:
+
+| Run | Score | Found / needs | Bad | Suggested | First | End |
+| --- | --- | --- | --- | --- | --- | --- |
+| A | 70.5 (61.6 to 79.5) | 4.07 / 5.7 | 0.11 | 4.8 | 136 s | 151 s |
+| B | 70.4 (61.5 to 79.3) | 4.11 / 5.7 | 0.15 | 4.9 | 141 s | 155 s |
+
+`noise` A against B: score −0.1 (95% −7.5 to 7.2), found +0.04 (−0.28 to
+0.35), bad +0.04 (−0.17 to 0.24), each inside its margin: judging once a
+run leaves `MARGINS` as they were.
+
 ## Cost and time
 
-From the baseline runs. A generation's cost is its `ai_usage`; the judge
-(Opus 5.5) costs about as much again.
+An attempt's cost, from the baseline runs (`feed`, 2026-11-18) and main's
+runs above (`routines`, 2026-11-19). A generation's cost is its
+`ai_usage`; the judge is Opus 5.5.
 
 | Section | Generation | Judge | One run (27 attempts) | Wall time of a run |
 | --- | --- | --- | --- | --- |
-| `routines` | $0.21 | $0.24 | about $12 | 31 to 34 minutes |
+| `routines` | $0.08 | $0.05 | about $3.70 | 33 to 35 minutes |
 | `feed` | $0.18 | $0.28 | about $12 | 26 to 32 minutes |
+
+A `routines` run's judge costs $1.35 to $1.65. Of one at $1.64, $0.75 wrote each
+persona's prefix and each attempt's own part, $0.70 was output and $0.20
+cached reads.
 
 A comparison is one run of the change against a stored run of main from the
 same stack: the cost of one run. Run main again when main changes what the
@@ -330,10 +353,14 @@ cost nothing beyond the model calls.
   session (`delivery_unknown`) a bench error, so a build that breaks prompt
   delivery has nothing scored and `compare` refuses it rather than calling it
   a loss. The feed section indexes the
-  seeded items for search first. Judging runs alongside, three grader
-  accounts at a time, each judgement's cost read from its grader's usage
-  (a routines round's first judgement pays to write the cache its other
-  seats read).
+  seeded items for search first. Judging takes three grader accounts at a
+  time, each judgement's cost read from its grader's usage. The feed's
+  runs alongside, while the next rep seeds. Every rep of a routines run
+  reads its mail at the run's one "now", so a persona's judgements share
+  one cached prefix (the rubric, mail, catalog and key) across seats and
+  reps; they wait for the last rep, so the cache is still warm, and each
+  persona's first judgement pays to write it once, not once a rep
+  (`judgeLast`).
 
 ## Adding a persona or a section
 

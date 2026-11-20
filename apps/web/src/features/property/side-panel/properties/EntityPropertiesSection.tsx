@@ -7,6 +7,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import Plus from '@icon/system/regular/plus.svg';
 import { Property as PropertyNS, useProperty } from '@property';
 import { AddPropertyButton } from '@property/component/AddPropertyButton';
+import { EntityLinkPill } from '@property/component/EntityLinkPill';
 import { Modals } from '@property/component/modal';
 import { ProjectLinkPill } from '@property/component/ProjectLinkPill';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -47,7 +48,6 @@ import { match } from 'ts-pattern';
 import {
   type CollectionSaveOutcome,
   EntityCollectionProperty,
-  NonUserEntityChip,
 } from './EntityCollectionProperty';
 import { isPendingProperty, PropertyRowActions } from './PropertyRowActions';
 
@@ -629,11 +629,6 @@ function SidePanelPropertyRow(props: {
                   fallback={
                     <SinglePill
                       getEmptyLabel={props.getEmptyLabel}
-                      opensProject={
-                        ctx.entityType === 'TASK' &&
-                        props.property.propertyDefinitionId ===
-                          SYSTEM_PROPERTY_IDS.PROJECT
-                      }
                       property={property()}
                     />
                   }
@@ -715,9 +710,13 @@ function EmptyPropertyValue(props: {
   );
 }
 
+/**
+ * One value in a pill that opens the picker. A single referenced item other
+ * than a person splits it instead: its name opens the item and a caret opens
+ * the picker, so a viewer who cannot edit still gets the link.
+ */
 function SinglePill(props: {
   getEmptyLabel?: (property: Property) => JSX.Element | undefined;
-  opensProject?: boolean;
   property: Property;
 }) {
   const empty = () => !hasValue(props.property);
@@ -790,12 +789,24 @@ function SinglePill(props: {
             fallback={pill()}
           />
         </Match>
-        <Match when={props.opensProject}>
+        <Match when={entity()?.entity_type === 'INITIATIVE'}>
           <ProjectLinkPill
             property={props.property}
             variant="ghost"
             iconClass="touch:size-4"
             fallback={pill()}
+          />
+        </Match>
+        <Match when={entity()}>
+          <EntityLinkPill
+            property={props.property}
+            variant="ghost"
+            iconClass="touch:size-4"
+            fallback={pill()}
+            openLabel={(name) => t('entityActions.openEntityNamed', { name })}
+            changeLabel={t('entityActions.changeEntity', {
+              property: props.property.displayName,
+            })}
           />
         </Match>
       </Switch>
@@ -845,9 +856,11 @@ function MultiValue(props: {
   const ctx = usePropertiesContext();
   const propertyCtx = useProperty();
   const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const isEntity = () => props.property.valueType === 'ENTITY';
+  // Multi-value entity properties other than people render as collections
+  // (`EntityCollectionProperty`) and never reach this row.
   const isUserEntity = () =>
-    isEntity() && props.property.specificEntityType === 'USER';
+    props.property.valueType === 'ENTITY' &&
+    props.property.specificEntityType === 'USER';
 
   return (
     <Show
@@ -860,142 +873,59 @@ function MultiValue(props: {
       }
     >
       <PropertyNS.Tooltip property={props.property}>
-        <Show
-          when={!isEntity()}
-          fallback={
-            <NonUserEntityValue
-              property={props.property}
-              actionsBeforeAdd={props.actionsBeforeAdd}
-              actionsAfterAdd={props.actionsAfterAdd}
-            />
-          }
-        >
-          <div class="flex flex-wrap items-center gap-1.5">
-            <Show when={!hasValue(props.property)}>
-              <PropertyNS.Pill class="w-fit overflow-hidden">
-                <EmptyPropertyValue
-                  property={props.property}
-                  getEmptyLabel={props.getEmptyLabel}
-                />
-                <PropertyNS.Caret />
-              </PropertyNS.Pill>
+        <div class="flex flex-wrap items-center gap-1.5">
+          <Show when={!hasValue(props.property)}>
+            <PropertyNS.Pill class="w-fit overflow-hidden">
+              <EmptyPropertyValue
+                property={props.property}
+                getEmptyLabel={props.getEmptyLabel}
+              />
+              <PropertyNS.Caret />
+            </PropertyNS.Pill>
+          </Show>
+          <PropertyNS.Chips
+            property={props.property}
+            renderChip={(chip) => (
+              <Layer depth={2}>
+                <Badge variant="ghost" size="sm" class="max-w-35">
+                  <PropertyValueIcon
+                    optionId={chip.key}
+                    class={
+                      props.property.propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.STATUS ||
+                      props.property.propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.PRIORITY
+                        ? 'size-4 shrink-0'
+                        : 'size-3 shrink-0'
+                    }
+                  />
+                  <span class="truncate">{chip.label}</span>
+                </Badge>
+              </Layer>
+            )}
+          />
+          <div class="flex shrink-0 items-center gap-0.5">
+            {props.actionsBeforeAdd}
+            <Show when={!isReadOnly() && hasValue(props.property)}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                class="text-ink-extra-muted"
+                aria-label={`Add ${props.property.displayName}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  propertyCtx.openEditor(event.currentTarget);
+                }}
+              >
+                <Plus class="size-4" />
+              </Button>
             </Show>
-            <PropertyNS.Chips
-              property={props.property}
-              renderChip={(chip) => (
-                <Layer depth={2}>
-                  <Badge variant="ghost" size="sm" class="max-w-35">
-                    <PropertyValueIcon
-                      optionId={chip.key}
-                      class={
-                        props.property.propertyDefinitionId ===
-                          SYSTEM_PROPERTY_IDS.STATUS ||
-                        props.property.propertyDefinitionId ===
-                          SYSTEM_PROPERTY_IDS.PRIORITY
-                          ? 'size-4 shrink-0'
-                          : 'size-3 shrink-0'
-                      }
-                    />
-                    <span class="truncate">{chip.label}</span>
-                  </Badge>
-                </Layer>
-              )}
-            />
-            <div class="flex shrink-0 items-center gap-0.5">
-              {props.actionsBeforeAdd}
-              <Show when={!isReadOnly() && hasValue(props.property)}>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-xs"
-                  class="text-ink-extra-muted"
-                  aria-label={`Add ${props.property.displayName}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    propertyCtx.openEditor(event.currentTarget);
-                  }}
-                >
-                  <Plus class="size-4" />
-                </Button>
-              </Show>
-              {props.actionsAfterAdd}
-            </div>
+            {props.actionsAfterAdd}
           </div>
-        </Show>
+        </div>
       </PropertyNS.Tooltip>
     </Show>
-  );
-}
-
-function NonUserEntityValue(props: {
-  property: Property;
-  actionsBeforeAdd: JSX.Element;
-  actionsAfterAdd: JSX.Element;
-}) {
-  const ctx = usePropertiesContext();
-  const propertyCtx = useProperty();
-  const entities = () => getEntityValues(props.property);
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-
-  const handleRemoveEntity = async (entityId: string) => {
-    const remaining = entities().filter(
-      (entity) => entity.entity_id !== entityId
-    );
-    await propertyCtx.onSave?.(props.property, {
-      valueType: 'ENTITY',
-      refs: remaining.length > 0 ? remaining : null,
-    });
-  };
-
-  return (
-    <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
-      <For each={entities()}>
-        {(entityRef) => (
-          <NonUserEntityChip
-            property={props.property}
-            entityId={entityRef.entity_id}
-            entityType={entityRef.entity_type}
-            specificMessageId={entityRef.specific_message_id}
-            canEdit={!isReadOnly()}
-            onRemove={() => handleRemoveEntity(entityRef.entity_id)}
-            onEdit={(anchor) => {
-              if (isReadOnly()) return;
-              propertyCtx.openEditor(anchor);
-            }}
-          />
-        )}
-      </For>
-      <div class="flex shrink-0 items-center gap-0.5">
-        {props.actionsBeforeAdd}
-        <Show
-          when={!isReadOnly()}
-          fallback={
-            <Show when={entities().length === 0}>
-              <Badge variant="ghost" size="sm">
-                <SidePanel.EmptyPill />
-              </Badge>
-            </Show>
-          }
-        >
-          <Show when={entities().length === 0 || props.property.isMultiSelect}>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              class="text-ink-extra-muted"
-              aria-label={`Add ${props.property.displayName}`}
-              onClick={(event) => {
-                event.stopPropagation();
-                propertyCtx.openEditor(event.currentTarget);
-              }}
-            >
-              <Plus class="size-4" />
-            </Button>
-          </Show>
-        </Show>
-        {props.actionsAfterAdd}
-      </div>
-    </div>
   );
 }
 
