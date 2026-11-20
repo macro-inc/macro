@@ -57,8 +57,10 @@ export type BlockStep =
   | { kind: 'insert'; requested: number };
 
 /** The markdown of each top-level block, each rendered on its own. */
-export function blockMarkdown(blocks: SerializedLexicalNode[]): string[] {
-  const scratch = createEditingSession();
+export function blockMarkdown(
+  blocks: SerializedLexicalNode[],
+  scratch = createEditingSession()
+): string[] {
   return blocks.map((block) => {
     scratch.editor.setEditorState(
       scratch.editor.parseEditorState({

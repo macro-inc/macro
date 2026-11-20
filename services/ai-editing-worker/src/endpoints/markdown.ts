@@ -5,39 +5,21 @@ import { match } from 'ts-pattern';
 import * as z from 'zod';
 import { type Bindings, getEnv } from '../env';
 import { runMarkdownRequest } from '../markdown/body';
-import { EditRefusal } from '../markdown/direct-edit/edits';
+import {
+  DirectEdit,
+  EditRefusal,
+  MAX_MARKDOWN_CHARS,
+} from '../markdown/direct-edit/edits';
 import {
   DirectEditConflict,
+  InvalidBaseRevision,
   readMarkdownBlocks,
   runDirectEdit,
 } from '../markdown/direct-edit/run';
 import { createSyncDocumentStorage, SyncDocumentError } from '../sync-document';
 
-/** Markdown longer than this is refused; the snapshot limit binds well before. */
-const MAX_MARKDOWN_CHARS = 1_000_000;
-
 /** One batch holds at most this many edits. */
 const MAX_EDITS = 200;
-const blockId = z.string().min(1).max(256);
-/** A block id, or `start` / `end`. */
-const position = blockId;
-const text = z.string().max(MAX_MARKDOWN_CHARS);
-
-const DirectEdit = z.union([
-  z
-    .object({
-      block_id: blockId.optional(),
-      old: text,
-      new: text,
-      replace_all: z.boolean().optional(),
-    })
-    .strict(),
-  z.object({ insert_after: position, markdown: text }).strict(),
-  z.object({ insert_before: position, markdown: text }).strict(),
-  z.object({ delete: blockId }).strict(),
-  z.object({ move: blockId, after: position }).strict(),
-  z.object({ move: blockId, before: position }).strict(),
-]);
 
 const MarkdownBody = z
   .object({
@@ -141,8 +123,10 @@ markdown.post('/', zValidator('json', MarkdownBody), async (c) => {
           if (error instanceof EditRefusal) {
             span.setAttr('edit.outcome', 'refused');
             span.setAttr('edit.refusal', error.code);
-          } else if (error instanceof DirectEditConflict)
+          } else if (error instanceof DirectEditConflict) {
             span.setAttr('edit.outcome', 'conflict');
+            span.setAttr('edit.conflict', error.reason);
+          }
           throw error;
         }
       });
@@ -171,16 +155,21 @@ markdown.post('/', zValidator('json', MarkdownBody), async (c) => {
             code: error.code,
             message: error.message,
             edit: error.edit ?? null,
-            candidates: error.candidates ?? [],
+            blocks: error.blocks ?? [],
           },
         },
         422
       );
     if (error instanceof DirectEditConflict)
       return c.json(
-        { error: error.message, conflict: { edit: error.edit ?? null } },
+        {
+          error: error.message,
+          conflict: { reason: error.reason, edit: error.edit ?? null },
+        },
         409
       );
+    if (error instanceof InvalidBaseRevision)
+      return c.json({ error: error.message }, 400);
     if (error instanceof SyncDocumentError)
       return c.json({ error: failureMessage(error) }, error.status);
     if (signal.aborted)
