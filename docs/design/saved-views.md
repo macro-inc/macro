@@ -147,6 +147,9 @@ This intentionally stores a consumer-owned definition rather than a fully
 compiled Soup AST. A compiled AST bakes in the current user, requires reverse
 parsing to restore editable controls, and couples persisted definitions to query
 transport details. Reuse the existing compiler at execution time instead.
+Task list and text search share that compiled document/property expression.
+Search accepts the existing GraphQL Soup Boolean shape and rejects unsupported
+scopes or predicates rather than dropping saved conditions.
 
 ### Project definition v1
 

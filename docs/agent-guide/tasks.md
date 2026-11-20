@@ -51,6 +51,7 @@ the rows and hovering a submenu hands focus to it as usual. The mobile drawer ha
 AI box.
 Search the Tasks or Projects list from the header's expandable Search icon; the
 desktop sidebar has no search field.
+Task text search executes the same document/property filter expression as the list, including creator-or-assignee membership, saved-view refinements, and missing-date negation.
 The desktop sidebar and toolbar `New` menus offer `Task`, `Subtask`, `Project` (when
 Projects is enabled), and `Tag`. Task and Project open their existing composers;
 Tag opens the tag editor, with personal scope selected and team sharing available

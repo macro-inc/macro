@@ -58,11 +58,6 @@ impl FilterVariantToSearchArgs for item_filters::DocumentFilters {
                 document_ids: filter_document_response.document_ids,
                 ids_only: filter_document_response.ids_only,
                 sub_types: self.sub_types.clone(),
-                owner_or_assignee: self
-                    .task_filters
-                    .owner_or_assignee
-                    .as_ref()
-                    .map(|owner| owner.principal_id()),
                 ..Default::default()
             })
         }

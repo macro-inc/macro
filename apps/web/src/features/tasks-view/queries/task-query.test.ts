@@ -1,4 +1,5 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
+import { makeGraphqlFilters } from '@queries/soup/graphql/ast';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createDateBucketBoundaries,
@@ -56,13 +57,14 @@ describe('task reference scope', () => {
       facets: {},
       reference,
     });
-    expect(request.body.filters?.property_filters).toEqual([
-      {
-        property_definition_id: reference.propertyDefinitionId,
-        entity_type: 'TASK',
-        entity_ids: ['company-1'],
+    expect(request.body.filter_expression).toMatchObject({
+      propertiesFilter: {
+        literal: {
+          propertyDefinitionId: reference.propertyDefinitionId,
+          value: { entityRef: 'company-1' },
+        },
       },
-    ]);
+    });
   });
 });
 
@@ -569,12 +571,11 @@ describe('saved task filter execution', () => {
         matchType: 'partial',
         userId: viewer,
       });
-      expect(search.body.filters?.document_filters?.task_filters).toEqual({
-        owner_or_assignee: viewer,
+      const expected = makeGraphqlFilters(query.body);
+      expect(search.body.filter_expression).toEqual({
+        documentFilter: expected.documentFilter,
+        propertiesFilter: expected.propertiesFilter,
       });
-      expect(search.body.filters?.property_filters?.[0]?.entity_ids).toEqual([
-        'macro|fixed@example.com',
-      ]);
     }
   });
 
@@ -635,9 +636,9 @@ describe('saved task filter execution', () => {
     expect(query.body.propf).toEqual({
       l: { pd: '00000001-0000-0000-0000-000000000001', v: { er: 'user' } },
     });
-    expect(search.body.filters?.property_filters?.[0]?.entity_ids).toEqual([
-      'user',
-    ]);
+    expect(search.body.filter_expression).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(query.body).propertiesFilter,
+    });
     expect(config.filters.tags).toEqual([]);
     expect(issues.map(({ path }) => path.join('.'))).toEqual(
       expect.arrayContaining([
@@ -699,10 +700,11 @@ describe('saved task filter execution', () => {
       expect(query.body.propf).toEqual({
         l: { pd: '00000001-0000-0000-0000-000000000001', v: { er: viewer } },
       });
-      expect(search.body.filters?.document_filters?.owners).toEqual([viewer]);
-      expect(search.body.filters?.property_filters?.[0]?.entity_ids).toEqual([
-        viewer,
-      ]);
+      const expected = makeGraphqlFilters(query.body);
+      expect(search.body.filter_expression).toEqual({
+        documentFilter: expected.documentFilter,
+        propertiesFilter: expected.propertiesFilter,
+      });
     }
   });
 
@@ -726,10 +728,9 @@ describe('saved task filter execution', () => {
     expect(JSON.stringify(query.body.propf)).toContain(tag);
     expect(JSON.stringify(query.body.propf)).toContain(property);
     expect(JSON.stringify(query.body.propf)).toContain(status);
-    expect(search.body.filters?.tag_option_ids).toEqual([tag]);
-    expect(search.body.filters?.property_filters?.[0]?.option_ids).toEqual([
-      status,
-    ]);
+    expect(search.body.filter_expression).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(query.body).propertiesFilter,
+    });
   });
 });
 
@@ -765,11 +766,11 @@ describe('Project task filters', () => {
         userId: 'viewer',
         query: 'launch',
         matchType: 'partial',
-      }).body.filters?.property_filters
-    ).toContainEqual({
-      property_definition_id: SYSTEM_PROPERTY_IDS.PROJECT,
-      entity_type: 'TASK',
-      entity_ids: projectIds,
+      }).body.filter_expression
+    ).toMatchObject({
+      propertiesFilter: makeGraphqlFilters(
+        buildTaskQuery({ ...options, ...restored, dueDate: undefined }).body
+      ).propertiesFilter,
     });
   });
 

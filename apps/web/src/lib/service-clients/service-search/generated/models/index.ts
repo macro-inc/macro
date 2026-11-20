@@ -364,7 +364,6 @@ export * from './soupPropertyValue';
 export * from './tagFilterMode';
 export * from './taskFilters';
 export * from './taskFiltersIncludeCbmAtmNc';
-export * from './taskFiltersOwnerOrAssignee';
 export * from './termMatching';
 export * from './unifiedSearchParams';
 export * from './unifiedSearchRequest';

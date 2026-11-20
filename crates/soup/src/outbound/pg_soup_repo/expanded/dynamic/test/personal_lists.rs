@@ -61,10 +61,6 @@ fn membership_is_a_bound_only_when_every_match_requires_it() {
     assert!(!membership::bounds_initiatives(Some(&Expr::is_not(
         project_membership()
     ))));
-    assert_eq!(
-        item_filters::ast::document::ASSIGNEES_PROPERTY_ID,
-        SystemPropertyKey::ASSIGNEES_UUID
-    );
 }
 
 #[test]

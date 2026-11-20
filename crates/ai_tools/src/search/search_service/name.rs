@@ -159,6 +159,7 @@ impl AsyncTool<SearchToolContext> for NameSearch {
             query: self.name.to_owned(),
             match_type: self.match_type.into(),
             filters: search_filters(&non_channel_types, base_filters),
+            filter_expression: None,
             search_on: models_search::SearchOn::Name,
             include_crm: false,
             calendar_event_scope: Default::default(),

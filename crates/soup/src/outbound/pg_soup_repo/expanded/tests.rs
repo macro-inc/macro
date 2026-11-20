@@ -4313,7 +4313,6 @@ async fn test_dyn_task_include_cbm_atm_nc_bypasses_document_filters(
             file_types: vec!["pdf".to_string()],
             task_filters: TaskFilters {
                 include_cbm_atm_nc: Some(true),
-                ..Default::default()
             },
             ..Default::default()
         },

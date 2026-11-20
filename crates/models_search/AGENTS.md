@@ -44,6 +44,7 @@ cross-entity response.
 
 - An indexed `owner_id` is the owner's canonical principal string ("Mine"
   filters compare it directly); preserve prefixes like `bot|` when indexing.
+- Keep `UnifiedSearchRequest.filter_expression` optional, document-only, and in the GraphQL Soup document/property shape; unsupported scopes and predicates must fail rather than disappear.
 
 ## Related
 

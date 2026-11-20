@@ -18,7 +18,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 ## Gotchas
 
-- Keep My tasks membership as creator OR assignee in the query and optimistic predicate, independently of completion and editable facets; keep assignee membership namespace-agnostic for documents converted to tasks and never merge client pages. Normalize retired creator tabs at URL and persistence boundaries.
+- Keep My tasks membership as creator OR assignee in the query and optimistic predicate, independently of completion and editable facets; send the list's document/property expressions unchanged to search through the shared GraphQL converter, and never merge client pages. Normalize retired creator tabs at URL and persistence boundaries.
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep Priority groups in Urgent, High, Medium, Low order with unset priority last through the shared Soup group comparator; group presentation does not follow item sort direction or stored option display order.
 - Filter tasks by Project through the existing Project entity-reference property, with OR within projects and AND across facets; keep IDs in saved views and entry state, use the authorized paged project picker source (including read-only projects), and omit the facet in a single-project host. No project and AI project resolution remain unsupported.

@@ -658,7 +658,6 @@ fn it_expands_document_task_include_cbm_atm_nc_as_or() {
             file_types: vec!["pdf".to_string()],
             task_filters: crate::TaskFilters {
                 include_cbm_atm_nc: Some(true),
-                ..Default::default()
             },
             ..Default::default()
         },
@@ -689,7 +688,6 @@ fn task_include_cbm_atm_nc_false_is_noop() {
         document_filters: DocumentFilters {
             task_filters: crate::TaskFilters {
                 include_cbm_atm_nc: Some(false),
-                ..Default::default()
             },
             ..Default::default()
         },
@@ -699,40 +697,6 @@ fn task_include_cbm_atm_nc_false_is_noop() {
     assert!(
         EntityFilterAst::new_from_filters(f).unwrap().is_none(),
         "false should be equivalent to not setting the include flag"
-    );
-}
-
-#[test]
-fn task_membership_is_an_independent_owner_or_assignee_condition() {
-    let filters = EntityFilters {
-        document_filters: DocumentFilters {
-            owners: vec!["macro|creator@example.com".into()],
-            task_filters: crate::TaskFilters {
-                owner_or_assignee: Some(
-                    model_owner::Owner::from_principal_str("macro|viewer@example.com").unwrap(),
-                ),
-                ..Default::default()
-            },
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    let ast = EntityFilterAst::new_from_filters(filters).unwrap().unwrap();
-    assert_eq!(
-        serde_json::to_value(ast.document_filter.unwrap()).unwrap(),
-        json!({"&": [
-            {"l": {"o": "macro|creator@example.com"}},
-            {"&": [
-                {"l": {"dst": "task"}},
-                {"|": [
-                    {"l": {"o": "macro|viewer@example.com"}},
-                    {"l": {"prop": {
-                        "pd": "00000001-0000-0000-0000-000000000001",
-                        "v": {"er": "macro|viewer@example.com"}
-                    }}}
-                ]}
-            ]}
-        ]})
     );
 }
 

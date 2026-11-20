@@ -66791,10 +66791,6 @@
           "include_cbm_atm_nc": {
             "type": ["boolean", "null"],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
-          },
-          "owner_or_assignee": {
-            "type": ["string", "null"],
-            "description": "Match tasks owned by or assigned to this principal, independently of completion."
           }
         }
       },

@@ -449,6 +449,9 @@ async fn search_unified_sources(
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }
+    // Validate every expression branch before any source lookup or execution.
+    let filter_expression = super::filter_expression::compile(req.filter_expression)?;
+    let has_filter_expression = filter_expression.is_some();
     let user_id = MacroUserId::parse_from_str(&user_id)
         .map_err(|_| SearchError::InvalidUserId(user_id.to_string()))?
         .lowercase();
@@ -504,10 +507,13 @@ async fn search_unified_sources(
     // (set only when `include_crm` is true and the user has a qualifying
     // membership). `crm_company_filters` scopes/selects within the team.
     let crm_company_filters = req.filters.crm_company_filters.clone();
-    let should_include_crm = crm_access.is_some() && !tags_active;
+    let should_include_crm = crm_access.is_some() && !tags_active && !has_filter_expression;
 
     let calendar_event_scope = req.calendar_event_scope;
-    let search_filters = SearchEntityFilters::from(req.filters);
+    let mut search_filters = SearchEntityFilters::from(req.filters);
+    if has_filter_expression {
+        super::filter_expression::restrict_sources(&mut search_filters);
+    }
     let requested_sessions = search_filters
         .agent_session_filters
         .ids
@@ -654,6 +660,7 @@ async fn search_unified_sources(
     filter_document_response.property_filters = property_filter_args;
     filter_document_response.tag_option_ids = tag_option_ids.clone();
     filter_document_response.match_all_tags = match_all_tags;
+    filter_document_response.filter_expression = filter_expression;
     filter_document_response.term_matching = document_term_matching;
     filter_channel_response.terms = search_terms.clone();
     filter_chat_response.terms = search_terms.clone();

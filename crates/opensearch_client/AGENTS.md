@@ -48,7 +48,8 @@ projects.
   OpenSearch — see `crates/opensearch_query_builder/docker-compose.yml`).
 
 ## Gotchas
-- Keep task owner-or-assignee membership in its own required OR filter, using indexed `owner_id` and nested Assignees values; never replace the parent access filter or explicit property filters.
+- Compile document/property Soup expressions as required Boolean filters; OR requires `minimum_should_match: 1`, and neither an expression owner nor ID replaces authenticated access constraints. Reject unsupported predicates and property namespaces.
+- Keep property definition, namespace, and value predicates inside the same nested object; legacy entries without namespaces match only their canonical document subtype.
 
 - Map a failed `.send()` with `OpensearchClientError::request_failed` and a
   failed body read with `deserialization_failed`. Both take an

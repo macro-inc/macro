@@ -97,6 +97,13 @@ pub struct UnifiedSearchRequest {
     #[serde(default)]
     pub filters: EntityFilters,
 
+    /// Additional document/property expression in the GraphQL Soup filter shape.
+    /// Restricts results to documents; supports Boolean composition and is ANDed
+    /// with flat filters and access checks.
+    /// Unsupported scopes and predicates are rejected rather than ignored.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter_expression: Option<serde_json::Value>,
+
     /// Fields to search on (Name, Content, NameContent). Defaults to Content
     #[serde(default)]
     pub search_on: SearchOn,

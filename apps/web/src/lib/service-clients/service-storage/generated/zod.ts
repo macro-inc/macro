@@ -55984,12 +55984,6 @@ export const postItemsSoupBody = zod
               .describe(
                 'Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters.'
               ),
-            owner_or_assignee: zod
-              .string()
-              .nullish()
-              .describe(
-                'Match tasks owned by or assigned to this principal, independently of completion.'
-              ),
           })
           .optional()
           .describe('Task-only filters nested under document filters.'),

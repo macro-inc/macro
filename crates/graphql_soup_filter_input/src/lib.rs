@@ -189,7 +189,7 @@ macro_rules! filter_expr_input {
         #[doc = concat!("The two operands of a recursive `", $type_name, "` binary expression.")]
         #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
         #[derive(Serialize, Deserialize)]
-        #[serde(rename_all = "camelCase")]
+        #[serde(deny_unknown_fields, rename_all = "camelCase")]
         struct $binary_name {
             /// Left expression.
             left: Box<$name>,
@@ -240,7 +240,7 @@ filter_expr_input!(
 /// GraphQL input for matching a property value on an entity.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct GraphqlFilterPropertiesLiteral {
     /// Property definition id to match.
     property_definition_id: ID,
@@ -289,7 +289,7 @@ enum GraphqlFilterPropertyMatchValue {
 /// Explicit UTC bounds for a DATE property.
 #[cfg_attr(feature = "server", derive(async_graphql::InputObject))]
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct GraphqlPropertyDateRange {
     /// Inclusive UTC start, or no lower bound.
     start: Option<String>,
