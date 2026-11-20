@@ -4387,6 +4387,8 @@
           "invalid",
           "confirmation_required",
           "not_configured",
+          "send_outcome_unknown",
+          "busy",
           "provider_rejected",
           "provider_unavailable",
           "internal"

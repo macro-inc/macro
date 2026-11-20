@@ -28,17 +28,13 @@ use serde::Deserialize;
 
 use crate::domain::models::{
     AgentMailboxError, LocalPart, MailMessage, MessageList, MessagePage, OutgoingMessage,
-    ProviderMessageId, ProvisionRequest, ReplyMessage, SentMessage,
+    ProviderMessageId, ProvisionRequest, ReplyMessage, SendAuthority, SentMessage,
 };
 use crate::domain::service::AgentMailboxUseCases;
 use crate::wire::{
     AgentMailboxErrorBody, AgentMailboxErrorCode, AgentMailboxResponse,
     ProvisionAgentMailboxRequest, ReplyAgentMessageRequest, SendAgentMessageRequest,
 };
-
-/// Why an agent's program may not send without the owner seeing it first;
-/// the same rule as every other email send from a program.
-pub const PROGRAM_SEND_REFUSAL: &str = "An agent's program cannot send email without its owner's approval. Ask the owner, and send again with their reply quoted in `confirmation`.";
 
 /// Router state.
 pub struct AgentMailboxRouterState<Service, Auth> {
@@ -71,9 +67,6 @@ pub enum AgentMailboxHttpError {
     /// The service refused or failed.
     #[error(transparent)]
     Service(#[from] AgentMailboxError),
-    /// A program asked to send without the owner's quoted approval.
-    #[error("{PROGRAM_SEND_REFUSAL}")]
-    ConfirmationRequired,
     /// The path names something malformed.
     #[error("invalid {0}")]
     BadPath(&'static str),
@@ -83,14 +76,6 @@ impl IntoResponse for AgentMailboxHttpError {
     fn into_response(self) -> Response {
         let error = match self {
             Self::Service(error) => error,
-            Self::ConfirmationRequired => {
-                return answer(
-                    StatusCode::FORBIDDEN,
-                    AgentMailboxErrorCode::ConfirmationRequired,
-                    PROGRAM_SEND_REFUSAL.to_owned(),
-                    None,
-                );
-            }
             Self::BadPath(what) => {
                 return answer(
                     StatusCode::BAD_REQUEST,
@@ -108,12 +93,13 @@ impl IntoResponse for AgentMailboxHttpError {
             }
             AgentMailboxErrorCode::AlreadyProvisioned
             | AgentMailboxErrorCode::Paused
-            | AgentMailboxErrorCode::NotReady => StatusCode::CONFLICT,
+            | AgentMailboxErrorCode::NotReady
+            | AgentMailboxErrorCode::SendOutcomeUnknown => StatusCode::CONFLICT,
             AgentMailboxErrorCode::SendLimit => StatusCode::TOO_MANY_REQUESTS,
             AgentMailboxErrorCode::Invalid => StatusCode::BAD_REQUEST,
-            AgentMailboxErrorCode::NotConfigured | AgentMailboxErrorCode::ProviderUnavailable => {
-                StatusCode::SERVICE_UNAVAILABLE
-            }
+            AgentMailboxErrorCode::NotConfigured
+            | AgentMailboxErrorCode::ProviderUnavailable
+            | AgentMailboxErrorCode::Busy => StatusCode::SERVICE_UNAVAILABLE,
             AgentMailboxErrorCode::ProviderRejected => StatusCode::BAD_GATEWAY,
             AgentMailboxErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -166,16 +152,22 @@ pub struct ListMessagesQuery {
     pub limit: Option<u8>,
 }
 
-fn refuse_unconfirmed_program_send(
+/// Who is sending: an agent's program (signed for an agent, or sent from
+/// code mode) carries the owner's quoted approval, which the service checks.
+fn send_authority(
     authorization: &MacroAuthorizationExtractor<impl MacroAuthorizationService, UserOrInternal>,
     headers: &HeaderMap,
-    confirmation: Option<&str>,
-) -> Result<(), AgentMailboxHttpError> {
-    let confirmed = confirmation.is_some_and(|quote| !quote.trim().is_empty());
-    if is_agent_run(authorization.authorization.user.attribution(), headers) && !confirmed {
-        return Err(AgentMailboxHttpError::ConfirmationRequired);
+    confirmation: Option<String>,
+) -> SendAuthority {
+    if is_agent_run(authorization.authorization.user.attribution(), headers) {
+        SendAuthority::Program { confirmation }
+    } else {
+        SendAuthority::Person
     }
-    Ok(())
+}
+
+fn message_path(message_id: &str) -> Result<ProviderMessageId, AgentMailboxHttpError> {
+    ProviderMessageId::parse(message_id).map_err(|_| AgentMailboxHttpError::BadPath("message id"))
 }
 
 fn agent_path(agent_user_id: &str) -> Result<MacroUserIdStr<'static>, AgentMailboxHttpError> {
@@ -301,11 +293,9 @@ pub async fn read_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     State(state): State<AgentMailboxRouterState<Service, Auth>>,
     Path(message_id): Path<String>,
 ) -> Result<Json<MailMessage>, AgentMailboxHttpError> {
+    let message_id = message_path(&message_id)?;
     let agent = &authorization.authorization.user.macro_user_id;
-    let message = state
-        .service
-        .read_message(agent, &ProviderMessageId(message_id))
-        .await?;
+    let message = state.service.read_message(agent, &message_id).await?;
     Ok(Json(message))
 }
 
@@ -333,7 +323,7 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     headers: HeaderMap,
     Json(body): Json<SendAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    refuse_unconfirmed_program_send(&authorization, &headers, body.confirmation.as_deref())?;
+    let authority = send_authority(&authorization, &headers, body.confirmation);
     let agent = &authorization.authorization.user.macro_user_id;
     let message = OutgoingMessage {
         to: body.to,
@@ -343,7 +333,7 @@ pub async fn send_message<Service: AgentMailboxUseCases, Auth: MacroAuthorizatio
     };
     let sent = state
         .service
-        .send(agent, body.idempotency_key, message)
+        .send(agent, authority, body.idempotency_key, message)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }
@@ -373,19 +363,15 @@ pub async fn reply_to_message<Service: AgentMailboxUseCases, Auth: MacroAuthoriz
     Path(message_id): Path<String>,
     Json(body): Json<ReplyAgentMessageRequest>,
 ) -> Result<(StatusCode, Json<SentMessage>), AgentMailboxHttpError> {
-    refuse_unconfirmed_program_send(&authorization, &headers, body.confirmation.as_deref())?;
+    let authority = send_authority(&authorization, &headers, body.confirmation);
+    let message = message_path(&message_id)?;
     let agent = &authorization.authorization.user.macro_user_id;
     let reply = ReplyMessage {
         text_body: body.text_body,
     };
     let sent = state
         .service
-        .reply(
-            agent,
-            &ProviderMessageId(message_id),
-            body.idempotency_key,
-            reply,
-        )
+        .reply(agent, authority, &message, body.idempotency_key, reply)
         .await?;
     Ok((StatusCode::CREATED, Json(sent)))
 }

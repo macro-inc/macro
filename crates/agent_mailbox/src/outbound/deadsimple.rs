@@ -40,6 +40,11 @@ const SCOPED_KEY_PERMISSIONS: [&str; 4] = [
 /// Largest attachment the provider guardrail lets through.
 const GUARDRAIL_MAX_ATTACHMENT_MB: u32 = 10;
 
+/// An id as one URL path segment, so no id can reach another route.
+fn segment(id: &str) -> std::borrow::Cow<'_, str> {
+    urlencoding::encode(id)
+}
+
 /// The owner tag on each provider mailbox, so a lost create can be found again.
 fn owner_tag(mailbox: AgentMailboxId) -> String {
     format!("macro-agent-mailbox:{mailbox}")
@@ -364,7 +369,7 @@ impl MailboxProvisioner for DeadSimple {
             max_sends_per_hour,
             max_attachment_size_mb: GUARDRAIL_MAX_ATTACHMENT_MB,
         };
-        let path = format!("/v1/inboxes/{}/guardrails", mailbox.0);
+        let path = format!("/v1/inboxes/{}/guardrails", segment(&mailbox.0));
         let response = send_request(self.admin(Method::PUT, &path)?.json(&guardrails)).await?;
         if !response.status().is_success() {
             return Err(failure(response, Operation::Other).await);
@@ -417,12 +422,20 @@ impl MailboxProvisioner for DeadSimple {
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.revoke_scoped_key", skip_all, err)]
     async fn revoke_access(&self, grant: &ProviderGrantId) -> Result<(), ProviderError> {
-        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/api-keys/{}", grant.0))?).await
+        idempotent_delete(self.admin(
+            Method::DELETE,
+            &format!("/v1/api-keys/{}", segment(&grant.0)),
+        )?)
+        .await
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.delete_inbox", skip_all, err)]
     async fn delete_mailbox(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
-        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/inboxes/{}", mailbox.0))?).await
+        idempotent_delete(self.admin(
+            Method::DELETE,
+            &format!("/v1/inboxes/{}", segment(&mailbox.0)),
+        )?)
+        .await
     }
 }
 
@@ -442,7 +455,7 @@ impl MailboxClient for DeadSimple {
         let list: ProviderMessageList = data(
             self.scoped(
                 Method::GET,
-                &format!("/v1/inboxes/{}/messages", mailbox.0),
+                &format!("/v1/inboxes/{}/messages", segment(&mailbox.0)),
                 key,
             )
             .query(&query),
@@ -467,7 +480,11 @@ impl MailboxClient for DeadSimple {
         key: &MailboxKey,
         message: &ProviderMessageId,
     ) -> Result<MailMessage, ProviderError> {
-        let path = format!("/v1/inboxes/{}/messages/{}", mailbox.0, message.0);
+        let path = format!(
+            "/v1/inboxes/{}/messages/{}",
+            segment(&mailbox.0),
+            segment(&message.0)
+        );
         let found: Message = data(self.scoped(Method::GET, &path, key), Operation::Other).await?;
         found.try_into()
     }
@@ -489,7 +506,7 @@ impl MailboxClient for DeadSimple {
         let sent: SendResult = data(
             self.scoped(
                 Method::POST,
-                &format!("/v1/inboxes/{}/messages", mailbox.0),
+                &format!("/v1/inboxes/{}/messages", segment(&mailbox.0)),
                 key,
             )
             .header("Idempotency-Key", idempotency_key.to_string())
@@ -512,7 +529,11 @@ impl MailboxClient for DeadSimple {
         reply: &ReplyMessage,
         idempotency_key: Uuid,
     ) -> Result<SentMessage, ProviderError> {
-        let path = format!("/v1/inboxes/{}/messages/{}/reply", mailbox.0, message.0);
+        let path = format!(
+            "/v1/inboxes/{}/messages/{}/reply",
+            segment(&mailbox.0),
+            segment(&message.0)
+        );
         let sent: SendResult = data(
             self.scoped(Method::POST, &path, key)
                 .header("Idempotency-Key", idempotency_key.to_string())

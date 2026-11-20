@@ -127,9 +127,12 @@ async fn run_server() -> anyhow::Result<()> {
         ),
     });
     let read_receipts = crate::composition::read_receipts(db.clone(), env)?;
-    let agent_mailboxes = std::sync::Arc::new(
-        crate::composition::agent_mailboxes::agent_mailboxes(&config, db.clone(), &aws_config)?,
-    );
+    let agent_mailboxes =
+        std::sync::Arc::new(crate::composition::agent_mailboxes::agent_mailboxes(
+            &config,
+            db.clone(),
+            aws_sdk_kms::Client::new(&aws_config),
+        )?);
     let background_tracker = TaskTracker::new();
     let background_cancel = tokio_util::sync::CancellationToken::new();
     crate::composition::agent_mailboxes::spawn_sweep(

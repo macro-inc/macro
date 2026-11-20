@@ -102,7 +102,6 @@ calendar_events = { path = "../../crates/calendar_events", features = ["gateway-
 anyhow = { workspace = true }
 authentication_service_client = { path = "../../crates/authentication_service_client" }
 macro_aws_config = { path = "../../crates/macro_aws_config", features = ["s3", "sqs"] }
-aws-config = { workspace = true }
 aws-sdk-kms = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }

@@ -93,7 +93,7 @@ export type AgentMailboxErrorBody = {
 /**
  * Why a request was refused, stable for callers to match on.
  */
-export type AgentMailboxErrorCode = 'not_found' | 'not_an_agent' | 'already_provisioned' | 'paused' | 'not_ready' | 'send_limit' | 'invalid' | 'confirmation_required' | 'not_configured' | 'provider_rejected' | 'provider_unavailable' | 'internal';
+export type AgentMailboxErrorCode = 'not_found' | 'not_an_agent' | 'already_provisioned' | 'paused' | 'not_ready' | 'send_limit' | 'invalid' | 'confirmation_required' | 'not_configured' | 'send_outcome_unknown' | 'busy' | 'provider_rejected' | 'provider_unavailable' | 'internal';
 
 /**
  * Macro's id for an agent's mailbox, also sent to the provider as the owner tag.

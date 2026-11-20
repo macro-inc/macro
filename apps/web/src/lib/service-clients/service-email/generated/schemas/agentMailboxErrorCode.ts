@@ -22,6 +22,8 @@ export const AgentMailboxErrorCode = {
   invalid: 'invalid',
   confirmation_required: 'confirmation_required',
   not_configured: 'not_configured',
+  send_outcome_unknown: 'send_outcome_unknown',
+  busy: 'busy',
   provider_rejected: 'provider_rejected',
   provider_unavailable: 'provider_unavailable',
   internal: 'internal',

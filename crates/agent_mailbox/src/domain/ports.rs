@@ -154,7 +154,17 @@ pub trait AgentDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 }
 
+/// A claim on one mailbox's provider-side operations, held by one attempt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LeaseToken(pub Uuid);
+
 /// Mailbox rows and the send ledger.
+///
+/// Provider-side steps (create, scope a key, revoke, delete) run under a
+/// lease: [`claim`](Self::claim) hands one attempt a token, and every write
+/// that records a provider step names it, so an attempt whose lease another
+/// took over writes nothing. State flips by the caller (pause, resume,
+/// start of a release) need no lease and win over a running attempt.
 pub trait AgentMailboxRepository: Send + Sync + 'static {
     /// The error type.
     type Err: std::error::Error + Send + Sync + 'static;
@@ -173,26 +183,55 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         agent: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Option<AgentMailbox>, Self::Err>> + Send;
 
-    /// Record the provider's mailbox.
+    /// Take the mailbox's lease until `now + ttl` unless another attempt holds
+    /// an unexpired one, returning the row as it stands under the lease.
+    fn claim(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+        now: DateTime<Utc>,
+        ttl: chrono::Duration,
+    ) -> impl Future<Output = Result<Option<AgentMailbox>, Self::Err>> + Send;
+
+    /// Give the lease back.
+    fn unclaim(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Record the provider's mailbox, in any state but released, so a release
+    /// that started meanwhile still deletes it. False when the lease is lost.
     fn record_created(
         &self,
         id: AgentMailboxId,
+        token: LeaseToken,
         mailbox: &ProvisionedMailbox,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Record the credential and make the mailbox active, unless it left
-    /// provisioning meanwhile. Returns whether it became active.
-    fn activate(
+    /// Record the scoped credential, in any state but released. False when
+    /// the lease is lost.
+    fn record_grant(
         &self,
         id: AgentMailboxId,
+        token: LeaseToken,
         grant: &StoredGrant,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Record why provisioning stopped, leaving it in `state`
-    /// (`Provisioning` to retry, `Failed` to stop).
+    /// Make a provisioning (or failed) mailbox with a credential active.
+    /// False when it left provisioning meanwhile or the lease is lost.
+    fn activate(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Record why provisioning stopped, leaving it in `state` (`Provisioning`
+    /// to retry, `Failed` to stop), unless it left provisioning meanwhile.
     fn record_failure(
         &self,
         id: AgentMailboxId,
+        token: LeaseToken,
         state: MailboxState,
         failure: ProvisioningFailure,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
@@ -206,21 +245,51 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
+    /// Start releasing a mailbox only if it is still paused, and was paused
+    /// before `paused_before`. Returns whether it started.
+    fn release_if_paused_before(
+        &self,
+        id: AgentMailboxId,
+        paused_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Forget the credential once the provider revoked it.
-    fn clear_grant(&self, id: AgentMailboxId)
-    -> impl Future<Output = Result<(), Self::Err>> + Send;
+    fn clear_grant(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Mark a releasing mailbox released. Returns whether it did.
+    fn finish_release(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
     /// Mailboxes the sweep should move on: provisioning since before
-    /// `stalled_before`, releasing, or paused since before `paused_before`.
+    /// `stalled_before`, releasing, or paused since before `paused_before`,
+    /// leaving out those deferred past `now`.
     fn due_for_sweep(
         &self,
+        now: DateTime<Utc>,
         stalled_before: DateTime<Utc>,
         paused_before: DateTime<Utc>,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<AgentMailbox>, Self::Err>> + Send;
 
+    /// Keep the sweep off this mailbox until `until`, after a failed step.
+    fn defer_sweep(
+        &self,
+        id: AgentMailboxId,
+        until: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Count a send against the caps, or find it already sent. A retry of a
-    /// send whose outcome is unknown proceeds without counting twice.
+    /// send whose outcome is unknown proceeds without counting twice while
+    /// it started after `replayable_since`, and is refused as unknown after.
     fn reserve_send(
         &self,
         mailbox: AgentMailboxId,
@@ -228,6 +297,7 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         kind: SendKind,
         limits: SendLimits,
         now: DateTime<Utc>,
+        replayable_since: DateTime<Utc>,
     ) -> impl Future<Output = Result<SendReservation, Self::Err>> + Send;
 
     /// Record the provider's acceptance of a reserved send.
@@ -245,10 +315,11 @@ pub trait AgentMailboxRepository: Send + Sync + 'static {
         idempotency_key: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete send records created before `before`; they no longer count
-    /// toward a cap or dedupe a retry. Returns how many went.
+    /// Delete up to `limit` send records created before `before`; they no
+    /// longer count toward a cap or dedupe a retry. Returns how many went.
     fn prune_sends(
         &self,
         before: DateTime<Utc>,
+        limit: u32,
     ) -> impl Future<Output = Result<u64, Self::Err>> + Send;
 }

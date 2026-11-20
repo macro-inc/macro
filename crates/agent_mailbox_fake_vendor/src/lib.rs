@@ -356,9 +356,20 @@ async fn list_messages(
         .filter(|message| message.inbox_id == inbox_id)
         .collect();
     messages.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+    // Listings carry no bodies, as the real API's message summaries don't.
+    let summaries: Vec<Value> = messages
+        .iter()
+        .map(|message| {
+            let mut summary = json!(message);
+            if let Some(fields) = summary.as_object_mut() {
+                fields.remove("text_body");
+            }
+            summary
+        })
+        .collect();
     data(
         StatusCode::OK,
-        json!({"messages": messages, "count": messages.len()}),
+        json!({"messages": summaries, "count": summaries.len()}),
     )
 }
 

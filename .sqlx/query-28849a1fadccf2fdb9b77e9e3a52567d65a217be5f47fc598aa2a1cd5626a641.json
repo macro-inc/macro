@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, request_id, user_id, provider, requested_local_part, display_name,\n                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            FROM agent_mailboxes\n            WHERE (state = 'provisioning' AND updated_at < $1)\n               OR state = 'releasing'\n               OR (state = 'paused' AND paused_at < $2)\n            ORDER BY updated_at\n            LIMIT $3\n            ",
+  "query": "\n            UPDATE agent_mailboxes\n            SET lease_token = $2, lease_expires_at = $4\n            WHERE id = $1\n              AND state <> 'released'\n              AND (lease_token IS NULL OR lease_expires_at < $3)\n            RETURNING id, request_id, user_id, provider, requested_local_part, display_name,\n                      provider_mailbox_id, address, grant_id, grant_key_ciphertext,\n                      grant_kms_key_id, grant_encryption_version, state, last_error, paused_at\n            ",
   "describe": {
     "columns": [
       {
@@ -81,9 +81,10 @@
     ],
     "parameters": {
       "Left": [
+        "Uuid",
+        "Uuid",
         "Timestamptz",
-        "Timestamptz",
-        "Int8"
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -104,5 +105,5 @@
       true
     ]
   },
-  "hash": "164c2be83c0c5ccb6d6e5df48d083a32e315f3511d6c83e6efb4f332b49a3aa4"
+  "hash": "28849a1fadccf2fdb9b77e9e3a52567d65a217be5f47fc598aa2a1cd5626a641"
 }

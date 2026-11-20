@@ -22,6 +22,7 @@ outbound = [
   "dep:reqwest",
   "dep:serde",
   "dep:sqlx",
+  "dep:urlencoding",
 ]
 
 [dependencies]
@@ -29,6 +30,7 @@ axum = { workspace = true, optional = true }
 aws-sdk-kms = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 email_validator = { path = "../email_validator" }
+lazy-regex = { workspace = true }
 http = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_service_urls = { path = "../macro_service_urls", optional = true }
@@ -41,6 +43,7 @@ sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+urlencoding = { workspace = true, optional = true }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 uuid = { workspace = true, features = ["v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

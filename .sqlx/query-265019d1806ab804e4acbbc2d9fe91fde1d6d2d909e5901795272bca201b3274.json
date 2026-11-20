@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM agent_mailbox_sends\n            WHERE (mailbox_id, idempotency_key) IN (\n                SELECT mailbox_id, idempotency_key\n                FROM agent_mailbox_sends\n                WHERE created_at < $1\n                LIMIT $2\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "265019d1806ab804e4acbbc2d9fe91fde1d6d2d909e5901795272bca201b3274"
+}

@@ -70,9 +70,18 @@ flowchart LR
 - Provisioning is idempotent per `requestId`: the row is reserved first, the
   provider create carries an idempotency key and an owner tag, and a lost create
   is found again by its tag. A taken address retries once with a short suffix.
+- Provider-side steps run under a per-mailbox lease whose token fences every
+  write they record, so overlapping provisioning attempts, a release and the
+  sweep never interleave at the provider. A release that starts while a create
+  is in flight waits for it, then deletes what it made.
 - Release revokes the scoped key, then deletes the provider mailbox and its mail.
 - The sweep runs every minute: stalled provisioning, unfinished releases, and
-  mailboxes paused for more than 30 days.
+  mailboxes paused for more than 30 days (rechecked in the write that starts
+  the release, so a resume in between wins). A step that fails is set aside
+  for five minutes so failing mailboxes never crowd out the rest.
+- A send whose outcome is unknown is retried under the same provider
+  idempotency key only within 23 hours; after that it answers
+  `send_outcome_unknown` instead of risking a second delivery.
 
 ## Configuration
 

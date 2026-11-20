@@ -34,9 +34,13 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
     return new AgentMailMessage(client, id);
   }
 
-  /** A handle seeded from a listing. */
+  /**
+   * A handle seeded with what a listing returned. Listings carry no body, so
+   * reading it loads the message.
+   */
   static from(client: MacroClient, record: MailMessage): AgentMailMessage {
-    return new AgentMailMessage(client, record.id, record);
+    const { textBody: _listingsCarryNoBody, ...listed } = record;
+    return new AgentMailMessage(client, record.id).withListed(listed);
   }
 
   /** The sender's address. */
@@ -54,14 +58,8 @@ export class AgentMailMessage extends MacroEntity<MailMessage> {
   /** When the mailbox recorded it. */
   readonly createdAt = this.field('createdAt');
 
-  /**
-   * The plain-text body (listings leave it out; this loads the message).
-   *
-   * @readonly
-   */
-  async textBody(): Promise<string | undefined> {
-    return (await this.detail.get()).textBody ?? undefined;
-  }
+  /** The plain-text body; on a listed message, reading it loads the message. */
+  readonly textBody = this.field('textBody');
 
   /**
    * Reply to this message from the agent's mailbox, after the owner approved

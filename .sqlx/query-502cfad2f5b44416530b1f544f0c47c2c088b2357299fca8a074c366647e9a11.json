@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT provider_message_id, provider_thread_id\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND idempotency_key = $2\n            ",
+  "query": "\n            SELECT provider_message_id, provider_thread_id, created_at\n            FROM agent_mailbox_sends\n            WHERE mailbox_id = $1 AND idempotency_key = $2\n            ",
   "describe": {
     "columns": [
       {
@@ -12,6 +12,11 @@
         "ordinal": 1,
         "name": "provider_thread_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
@@ -22,8 +27,9 @@
     },
     "nullable": [
       true,
-      true
+      true,
+      false
     ]
   },
-  "hash": "dda9ab8562097d30ca816049345b9d8f2cb5e8ec96bfc3e45e0a5cc4cfaa6a01"
+  "hash": "502cfad2f5b44416530b1f544f0c47c2c088b2357299fca8a074c366647e9a11"
 }

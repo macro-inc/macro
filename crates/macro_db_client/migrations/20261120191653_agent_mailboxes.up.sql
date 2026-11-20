@@ -25,6 +25,13 @@ CREATE TABLE agent_mailboxes (
         last_error IN ('not_configured', 'address_taken', 'quota_exceeded', 'rejected', 'unavailable')
     ),
     paused_at TIMESTAMPTZ,
+    -- One provider-side operation (provisioning or teardown) at a time: the
+    -- holder's token fences every write it makes, and an expired lease can
+    -- be taken over.
+    lease_token UUID,
+    lease_expires_at TIMESTAMPTZ,
+    -- When the sweep may try this mailbox again after a failed step.
+    next_sweep_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     CHECK ((provider_mailbox_id IS NULL) = (address IS NULL)),
@@ -34,7 +41,8 @@ CREATE TABLE agent_mailboxes (
         AND (grant_id IS NULL) = (grant_encryption_version IS NULL)
     ),
     CHECK (state <> 'active' OR grant_id IS NOT NULL),
-    CHECK ((state = 'paused') = (paused_at IS NOT NULL))
+    CHECK ((state = 'paused') = (paused_at IS NOT NULL)),
+    CHECK ((lease_token IS NULL) = (lease_expires_at IS NULL))
 );
 
 -- One live mailbox per agent; also the lookup for every agent request.

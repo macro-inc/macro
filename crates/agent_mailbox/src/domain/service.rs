@@ -14,14 +14,14 @@ use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    AgentMailbox, AgentMailboxError, AgentMailboxView, CreateMailbox, MailMessage, MailboxState,
-    MessageList, MessagePage, OutgoingMessage, ProviderMailboxId, ProviderMessageId,
-    ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage, Reservation, SendKind,
-    SendLimits, SendReservation, SentMessage, StoredGrant, VendorMode,
+    AgentMailbox, AgentMailboxError, AgentMailboxId, AgentMailboxView, CreateMailbox, MailMessage,
+    MailboxState, MessageList, MessagePage, OutgoingMessage, ProviderMailboxId, ProviderMessageId,
+    ProvisionRequest, ProvisionedMailbox, ProvisioningFailure, ReplyMessage, Reservation,
+    SendAuthority, SendKind, SendLimits, SendReservation, SentMessage, StoredGrant, VendorMode,
 };
 use crate::domain::ports::{
-    AgentDirectory, AgentMailboxRepository, MailboxClient, MailboxKeyCipher, MailboxProvisioner,
-    ProviderError,
+    AgentDirectory, AgentMailboxRepository, LeaseToken, MailboxClient, MailboxKeyCipher,
+    MailboxProvisioner, ProviderError,
 };
 
 /// A paused mailbox is released after this long.
@@ -45,6 +45,20 @@ pub const MAX_PAGE_SIZE: u8 = 50;
 /// Send records are kept this long: past the daily cap's window and the
 /// provider's 24-hour idempotency replay.
 pub const SEND_RECORD_RETENTION: Duration = Duration::days(7);
+
+/// How long one attempt holds a mailbox's lease. Every provider call in an
+/// attempt times out well inside it (a handful of calls at 20 seconds each).
+pub const LEASE_TTL: Duration = Duration::minutes(3);
+
+/// How long the sweep leaves a mailbox alone after one of its steps failed.
+pub const SWEEP_RETRY_DELAY: Duration = Duration::minutes(5);
+
+/// The provider replays an idempotent request for 24 hours; a send whose
+/// outcome is unknown is retried only inside this, with a margin.
+pub const PROVIDER_REPLAY_WINDOW: Duration = Duration::hours(23);
+
+/// Send records the sweep prunes per round.
+pub const PRUNE_BATCH: u32 = 1000;
 
 /// Mailboxes the sweep moves on per round.
 pub const SWEEP_BATCH: u16 = 50;
@@ -144,7 +158,7 @@ where
 
         let reservation = self
             .repository
-            .reserve(&request, crate::domain::models::AgentMailboxId::generate())
+            .reserve(&request, AgentMailboxId::generate())
             .await
             .map_err(internal)?;
         let mailbox = match reservation {
@@ -153,92 +167,137 @@ where
         };
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
 
-        let mailbox = match mailbox.state {
-            MailboxState::Provisioning | MailboxState::Failed => self.advance(mailbox).await?,
-            MailboxState::Active
-            | MailboxState::Paused
-            | MailboxState::Releasing
-            | MailboxState::Released => mailbox,
-        };
+        if matches!(
+            mailbox.state,
+            MailboxState::Provisioning | MailboxState::Failed
+        ) {
+            self.advance(mailbox.id).await?;
+        }
+        let mailbox = self
+            .repository
+            .live_mailbox(&request.agent)
+            .await
+            .map_err(internal)?
+            .ok_or(AgentMailboxError::NotFound)?;
         tracing::Span::current().record("agent_mailbox.state", mailbox.state.as_ref());
         Ok(self.view(&mailbox))
     }
 
-    /// Take a provisioning mailbox as far as it goes: create (or find) it at the
-    /// provider, mint its credential, and activate it. Each step is recorded
-    /// before the next, so a retry resumes rather than repeats.
-    async fn advance(&self, mut mailbox: AgentMailbox) -> Result<AgentMailbox, AgentMailboxError> {
-        let provisioned = match (&mailbox.provider_mailbox_id, &mailbox.address) {
-            (Some(id), Some(address)) => ProvisionedMailbox {
-                id: id.clone(),
-                address: address.clone(),
-            },
-            _ => match self.create(&mailbox).await {
-                Ok(provisioned) => {
-                    self.repository
-                        .record_created(mailbox.id, &provisioned)
-                        .await
-                        .map_err(internal)?;
-                    mailbox.provider_mailbox_id = Some(provisioned.id.clone());
-                    mailbox.address = Some(provisioned.address.clone());
-                    provisioned
-                }
-                Err(error) => return self.stop(mailbox, error).await,
-            },
-        };
-
-        // Before the credential exists, so no send can precede the provider's cap.
-        if let Err(error) = self
-            .vendor
-            .apply_guardrails(&provisioned.id, self.limits.per_hour)
-            .await
-        {
-            return self.stop(mailbox, error).await;
-        }
-
-        // The mailbox id is the grant's idempotency key, so a retry within the
-        // provider's replay window gets the same credential back.
-        let (grant_id, key) = match self
-            .vendor
-            .grant_access(&provisioned.id, mailbox.id.0)
-            .await
-        {
-            Ok(grant) => grant,
-            Err(error) => return self.stop(mailbox, error).await,
-        };
-        let encrypted = self
-            .cipher
-            .encrypt(mailbox.id, &mailbox.agent, &key)
-            .await
-            .map_err(internal)?;
-        let grant = StoredGrant {
-            id: grant_id,
-            key: encrypted,
-        };
-
-        let activated = self
+    /// Run `step` on the mailbox under its lease, giving the lease back after.
+    /// `None` when another attempt holds the lease.
+    async fn with_lease<Value>(
+        &self,
+        id: AgentMailboxId,
+        step: impl AsyncFnOnce(AgentMailbox, LeaseToken) -> Result<Value, AgentMailboxError>,
+    ) -> Result<Option<Value>, AgentMailboxError> {
+        let token = LeaseToken(Uuid::now_v7());
+        let Some(mailbox) = self
             .repository
-            .activate(mailbox.id, &grant)
-            .await
-            .map_err(internal)?;
-        if activated {
-            mailbox.state = MailboxState::Active;
-            mailbox.last_error = None;
-            mailbox.grant = Some(grant);
-            return Ok(mailbox);
-        }
-
-        // Paused or released while this attempt ran: the credential is not
-        // needed, and a stored one would outlive the mailbox's decision.
-        self.vendor
-            .revoke_access(&grant.id)
-            .await
-            .map_err(mail_error)?;
-        self.repository
-            .live_mailbox(&mailbox.agent)
+            .claim(id, token, Utc::now(), LEASE_TTL)
             .await
             .map_err(internal)?
-            .ok_or(AgentMailboxError::NotFound)
+        else {
+            return Ok(None);
+        };
+
+        let outcome = step(mailbox, token).await;
+        let unclaimed = self.repository.unclaim(id, token).await.map_err(internal);
+        let value = outcome?;
+        unclaimed?;
+        Ok(Some(value))
+    }
+
+    /// Take a provisioning mailbox as far as it goes, under its lease: create
+    /// (or find) it at the provider, set the provider's send cap, mint and
+    /// store its scoped credential, and activate it. Each step is recorded
+    /// before the next, so a retry resumes rather than repeats. A mailbox
+    /// paused or released meanwhile keeps that state; nothing is revoked
+    /// here, so a stored credential is only ever revoked by a release.
+    async fn advance(&self, id: AgentMailboxId) -> Result<(), AgentMailboxError> {
+        let advanced = self
+            .with_lease(id, async |mut mailbox, token| {
+                if !matches!(
+                    mailbox.state,
+                    MailboxState::Provisioning | MailboxState::Failed
+                ) {
+                    return Ok(());
+                }
+
+                let provisioned = match (&mailbox.provider_mailbox_id, &mailbox.address) {
+                    (Some(id), Some(address)) => ProvisionedMailbox {
+                        id: id.clone(),
+                        address: address.clone(),
+                    },
+                    _ => match self.create(&mailbox).await {
+                        Ok(provisioned) => {
+                            let recorded = self
+                                .repository
+                                .record_created(mailbox.id, token, &provisioned)
+                                .await
+                                .map_err(internal)?;
+                            if !recorded {
+                                return Err(AgentMailboxError::Busy);
+                            }
+                            provisioned
+                        }
+                        Err(error) => return self.stop(&mailbox, token, error).await,
+                    },
+                };
+                mailbox.provider_mailbox_id = Some(provisioned.id.clone());
+
+                if mailbox.grant.is_none() {
+                    // Before the credential exists, so no send can precede the provider's cap.
+                    if let Err(error) = self
+                        .vendor
+                        .apply_guardrails(&provisioned.id, self.limits.per_hour)
+                        .await
+                    {
+                        return self.stop(&mailbox, token, error).await;
+                    }
+
+                    // The mailbox id is the grant's idempotency key: a retry
+                    // inside the provider's replay window gets the same
+                    // credential back instead of minting another.
+                    let (grant_id, key) = match self
+                        .vendor
+                        .grant_access(&provisioned.id, mailbox.id.0)
+                        .await
+                    {
+                        Ok(grant) => grant,
+                        Err(error) => return self.stop(&mailbox, token, error).await,
+                    };
+                    let encrypted = self
+                        .cipher
+                        .encrypt(mailbox.id, &mailbox.agent, &key)
+                        .await
+                        .map_err(internal)?;
+                    let grant = StoredGrant {
+                        id: grant_id,
+                        key: encrypted,
+                    };
+                    let recorded = self
+                        .repository
+                        .record_grant(mailbox.id, token, &grant)
+                        .await
+                        .map_err(internal)?;
+                    if !recorded {
+                        return Err(AgentMailboxError::Busy);
+                    }
+                }
+
+                self.repository
+                    .activate(mailbox.id, token)
+                    .await
+                    .map_err(internal)?;
+                Ok(())
+            })
+            .await?;
+
+        // Another attempt holds the lease and finishes on its own.
+        if advanced.is_none() {
+            tracing::info!(agent_mailbox.id = %id, "agent mailbox provisioning already in progress");
+        }
+        Ok(())
     }
 
     /// Create the mailbox at the provider, first looking for one an earlier
@@ -275,9 +334,10 @@ where
     /// `Provisioning` for the sweep; the rest are `Failed` until a retry.
     async fn stop(
         &self,
-        mut mailbox: AgentMailbox,
+        mailbox: &AgentMailbox,
+        token: LeaseToken,
         error: ProviderError,
-    ) -> Result<AgentMailbox, AgentMailboxError> {
+    ) -> Result<(), AgentMailboxError> {
         let (state, failure) = match error {
             ProviderError::Throttled | ProviderError::Unavailable => {
                 (MailboxState::Provisioning, ProvisioningFailure::Unavailable)
@@ -297,12 +357,9 @@ where
         };
         tracing::warn!(agent_mailbox.id = %mailbox.id, failure = failure.as_ref(), "agent mailbox provisioning stopped");
         self.repository
-            .record_failure(mailbox.id, state, failure)
+            .record_failure(mailbox.id, token, state, failure)
             .await
-            .map_err(internal)?;
-        mailbox.state = state;
-        mailbox.last_error = Some(failure);
-        Ok(mailbox)
+            .map_err(internal)
     }
 
     /// The agent's mailbox, in any state but released.
@@ -353,7 +410,7 @@ where
             .map_err(internal)?
             .ok_or(AgentMailboxError::NotFound)?;
 
-        // A mailbox paused before it was ready goes back to provisioning.
+        // A mailbox paused before its credential was stored goes back to provisioning.
         let resumed_state = if mailbox.grant.is_some() {
             MailboxState::Active
         } else {
@@ -395,8 +452,10 @@ where
         Ok(self.view(&mailbox))
     }
 
-    /// Delete the agent's mailbox and its mail at the provider. Safe to repeat;
-    /// a failed step leaves it releasing for the sweep.
+    /// Delete the agent's mailbox and its mail at the provider. Safe to
+    /// repeat. The mailbox stops serving the agent at once; when another
+    /// operation holds it or the provider fails, it stays releasing, answers
+    /// `Busy` or `Unavailable`, and the sweep finishes it.
     #[tracing::instrument(skip_all, err)]
     pub async fn release(
         &self,
@@ -411,14 +470,6 @@ where
         else {
             return Ok(());
         };
-        self.release_mailbox(mailbox, now).await
-    }
-
-    async fn release_mailbox(
-        &self,
-        mailbox: AgentMailbox,
-        now: DateTime<Utc>,
-    ) -> Result<(), AgentMailboxError> {
         let all_live = [
             MailboxState::Provisioning,
             MailboxState::Active,
@@ -429,56 +480,75 @@ where
             .transition(mailbox.id, &all_live, MailboxState::Releasing, now)
             .await
             .map_err(internal)?;
+        self.tear_down(mailbox.id, now).await
+    }
 
-        if let Some(grant) = &mailbox.grant {
-            self.vendor
-                .revoke_access(&grant.id)
-                .await
-                .map_err(mail_error)?;
-            self.repository
-                .clear_grant(mailbox.id)
-                .await
-                .map_err(internal)?;
-        }
+    /// Under the lease, revoke the credential and delete the provider mailbox
+    /// of a releasing mailbox, then mark it released. Reads the row as the
+    /// lease found it, so a credential or mailbox recorded by an attempt that
+    /// finished just before is torn down too.
+    async fn tear_down(
+        &self,
+        id: AgentMailboxId,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let torn_down = self
+            .with_lease(id, async |mailbox, token| {
+                if mailbox.state != MailboxState::Releasing {
+                    return Ok(());
+                }
 
-        // A create whose response was lost may still have made a mailbox.
-        let provider_mailbox = match mailbox.provider_mailbox_id {
-            Some(id) => Some(id),
-            None => self
-                .vendor
-                .find_mailbox(mailbox.id)
-                .await
-                .map_err(mail_error)?
-                .map(|found| found.id),
-        };
-        if let Some(provider_mailbox) = provider_mailbox {
-            self.vendor
-                .delete_mailbox(&provider_mailbox)
-                .await
-                .map_err(mail_error)?;
-        }
+                if let Some(grant) = &mailbox.grant {
+                    self.vendor
+                        .revoke_access(&grant.id)
+                        .await
+                        .map_err(mail_error)?;
+                    self.repository
+                        .clear_grant(mailbox.id, token)
+                        .await
+                        .map_err(internal)?;
+                }
 
-        self.repository
-            .transition(
-                mailbox.id,
-                &[MailboxState::Releasing],
-                MailboxState::Released,
-                now,
-            )
-            .await
-            .map_err(internal)?;
-        Ok(())
+                // A create whose response was lost may still have made a mailbox.
+                let provider_mailbox = match mailbox.provider_mailbox_id {
+                    Some(id) => Some(id),
+                    None => self
+                        .vendor
+                        .find_mailbox(mailbox.id)
+                        .await
+                        .map_err(mail_error)?
+                        .map(|found| found.id),
+                };
+                if let Some(provider_mailbox) = provider_mailbox {
+                    self.vendor
+                        .delete_mailbox(&provider_mailbox)
+                        .await
+                        .map_err(mail_error)?;
+                }
+
+                self.repository
+                    .finish_release(mailbox.id, token, now)
+                    .await
+                    .map_err(internal)?;
+                Ok(())
+            })
+            .await?;
+        torn_down.ok_or(AgentMailboxError::Busy)
     }
 
     /// One round of background upkeep: finish stalled provisioning and
     /// releases, and release mailboxes paused longer than [`PAUSED_RETENTION`].
+    /// A mailbox whose step fails is left alone for [`SWEEP_RETRY_DELAY`], so
+    /// failing mailboxes never crowd out the rest.
     #[tracing::instrument(skip_all, fields(agent_mailbox.sweep.advanced, agent_mailbox.sweep.failed), err)]
     pub async fn sweep(&self, now: DateTime<Utc>) -> Result<SweepReport, AgentMailboxError> {
+        let paused_before = now - PAUSED_RETENTION;
         let due = self
             .repository
             .due_for_sweep(
+                now,
                 now - PROVISIONING_RETRY_AFTER,
-                now - PAUSED_RETENTION,
+                paused_before,
                 SWEEP_BATCH,
             )
             .await
@@ -488,23 +558,26 @@ where
         for mailbox in due {
             let id = mailbox.id;
             let outcome = match mailbox.state {
-                MailboxState::Provisioning => self.advance(mailbox).await.map(|_| ()),
-                MailboxState::Releasing | MailboxState::Paused => {
-                    self.release_mailbox(mailbox, now).await
-                }
+                MailboxState::Provisioning => self.advance(id).await,
+                MailboxState::Releasing => self.tear_down(id, now).await,
+                MailboxState::Paused => self.expire_paused(id, paused_before, now).await,
                 MailboxState::Active | MailboxState::Failed | MailboxState::Released => Ok(()),
             };
             match outcome {
                 Ok(()) => report.advanced += 1,
                 Err(error) => {
                     tracing::warn!(agent_mailbox.id = %id, error = %error, "agent mailbox sweep step failed");
+                    self.repository
+                        .defer_sweep(id, now + SWEEP_RETRY_DELAY)
+                        .await
+                        .map_err(internal)?;
                     report.failed += 1;
                 }
             }
         }
 
         self.repository
-            .prune_sends(now - SEND_RECORD_RETENTION)
+            .prune_sends(now - SEND_RECORD_RETENTION, PRUNE_BATCH)
             .await
             .map_err(internal)?;
 
@@ -512,6 +585,26 @@ where
         span.record("agent_mailbox.sweep.advanced", report.advanced);
         span.record("agent_mailbox.sweep.failed", report.failed);
         Ok(report)
+    }
+
+    /// Release a mailbox paused past retention, unless it was resumed since
+    /// the sweep read it: the state and its timestamp are rechecked in the
+    /// same write that starts the release.
+    async fn expire_paused(
+        &self,
+        id: AgentMailboxId,
+        paused_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<(), AgentMailboxError> {
+        let started = self
+            .repository
+            .release_if_paused_before(id, paused_before, now)
+            .await
+            .map_err(internal)?;
+        if !started {
+            return Ok(());
+        }
+        self.tear_down(id, now).await
     }
 
     /// The agent's mailbox, ready to use, with its decrypted credential.
@@ -627,9 +720,11 @@ where
     pub async fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
+        require_approval(&authority)?;
         validate_outgoing(&message)?;
         let (mailbox, provider_mailbox, key) = self.usable(agent).await?;
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
@@ -650,10 +745,12 @@ where
     pub async fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
+        require_approval(&authority)?;
         validate_body(&reply.text_body)?;
         let (mailbox, provider_mailbox, key) = self.usable(agent).await?;
         tracing::Span::current().record("agent_mailbox.id", mailbox.id.to_string());
@@ -674,7 +771,8 @@ where
     /// Count a send against the caps, run it, and record the outcome. A send
     /// the provider definitely refused frees its slot; one whose outcome is
     /// unknown keeps it, and a retry with the same key resends under the same
-    /// provider idempotency key.
+    /// provider idempotency key while the provider still dedupes it
+    /// ([`PROVIDER_REPLAY_WINDOW`]); after that the outcome stays unknown.
     async fn with_reserved_send(
         &self,
         mailbox: &AgentMailbox,
@@ -682,14 +780,23 @@ where
         kind: SendKind,
         send: impl AsyncFnOnce() -> Result<SentMessage, ProviderError>,
     ) -> Result<SentMessage, AgentMailboxError> {
+        let now = Utc::now();
         let reservation = self
             .repository
-            .reserve_send(mailbox.id, idempotency_key, kind, self.limits, Utc::now())
+            .reserve_send(
+                mailbox.id,
+                idempotency_key,
+                kind,
+                self.limits,
+                now,
+                now - PROVIDER_REPLAY_WINDOW,
+            )
             .await
             .map_err(internal)?;
         match reservation {
             SendReservation::Proceed => {}
             SendReservation::AlreadySent(sent) => return Ok(sent),
+            SendReservation::OutcomeUnknown => return Err(AgentMailboxError::SendOutcomeUnknown),
             SendReservation::LimitReached { retry_at } => {
                 return Err(AgentMailboxError::SendLimit { retry_at });
             }
@@ -710,6 +817,24 @@ where
                     .await
                     .map_err(internal)?;
                 Err(mail_error(error))
+            }
+        }
+    }
+}
+
+/// The send policy every email send from a program follows: an agent's
+/// program must quote its owner's approval.
+fn require_approval(authority: &SendAuthority) -> Result<(), AgentMailboxError> {
+    match authority {
+        SendAuthority::Person => Ok(()),
+        SendAuthority::Program { confirmation } => {
+            let confirmed = confirmation
+                .as_deref()
+                .is_some_and(|quote| !quote.trim().is_empty());
+            if confirmed {
+                Ok(())
+            } else {
+                Err(AgentMailboxError::ConfirmationRequired)
             }
         }
     }
@@ -799,6 +924,7 @@ pub trait AgentMailboxUseCases: Send + Sync + 'static {
     fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send;
@@ -806,6 +932,7 @@ pub trait AgentMailboxUseCases: Send + Sync + 'static {
     fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
@@ -870,18 +997,20 @@ where
     fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         idempotency_key: Uuid,
         message: OutgoingMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
-        AgentMailboxService::send(self, agent, idempotency_key, message)
+        AgentMailboxService::send(self, agent, authority, idempotency_key, message)
     }
     fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         message: &ProviderMessageId,
         idempotency_key: Uuid,
         reply: ReplyMessage,
     ) -> impl Future<Output = Result<SentMessage, AgentMailboxError>> + Send {
-        AgentMailboxService::reply(self, agent, message, idempotency_key, reply)
+        AgentMailboxService::reply(self, agent, authority, message, idempotency_key, reply)
     }
 }

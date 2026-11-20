@@ -9,7 +9,7 @@ use tower::ServiceExt;
 
 use super::*;
 use crate::domain::models::{
-    AgentMailboxId, AgentMailboxView, MailboxProvider, MailboxState, VendorMode,
+    AgentMailboxId, AgentMailboxView, MailboxProvider, MailboxState, SendAuthority, VendorMode,
 };
 use crate::wire::FAKE_VENDOR_NOTICE;
 use uuid::Uuid;
@@ -113,10 +113,14 @@ impl AgentMailboxUseCases for Recording {
     async fn send(
         &self,
         agent: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
         _: Uuid,
         _: OutgoingMessage,
     ) -> Result<SentMessage, AgentMailboxError> {
-        self.record(format!("send {agent}"));
+        self.record(format!("send {agent} {authority:?}"));
+        if authority == (SendAuthority::Program { confirmation: None }) {
+            return Err(AgentMailboxError::ConfirmationRequired);
+        }
         if self.send_limit {
             return Err(AgentMailboxError::SendLimit {
                 retry_at: Utc::now() + chrono::Duration::minutes(10),
@@ -127,6 +131,7 @@ impl AgentMailboxUseCases for Recording {
     async fn reply(
         &self,
         agent: &MacroUserIdStr<'_>,
+        _: SendAuthority,
         message: &ProviderMessageId,
         _: Uuid,
         _: ReplyMessage,
@@ -237,27 +242,52 @@ async fn the_agent_sees_its_own_mailbox_labelled_as_a_fake_vendor() {
 }
 
 #[tokio::test]
-async fn an_agent_program_cannot_send_without_the_owners_quoted_approval() {
+async fn a_program_send_carries_its_quoted_approval_to_the_service() {
     let service = Arc::new(Recording::default());
 
     let refused = agent_router_for(service.clone())
         .oneshot(send_request("agent-run", None))
         .await
         .unwrap();
-    let blank = agent_router_for(service.clone())
-        .oneshot(send_request("agent-run", Some("  ")))
-        .await
-        .unwrap();
     let confirmed = agent_router_for(service.clone())
         .oneshot(send_request("agent-run", Some("yes, send it")))
+        .await
+        .unwrap();
+    let person = agent_router_for(service.clone())
+        .oneshot(send_request("agent-key", None))
         .await
         .unwrap();
 
     assert_eq!(refused.status(), StatusCode::FORBIDDEN);
     assert_eq!(json_body(refused).await["code"], "confirmation_required");
-    assert_eq!(blank.status(), StatusCode::FORBIDDEN);
     assert_eq!(confirmed.status(), StatusCode::CREATED);
-    assert_eq!(service.calls(), vec![format!("send {AGENT}")]);
+    assert_eq!(person.status(), StatusCode::CREATED);
+    assert_eq!(
+        service.calls(),
+        vec![
+            format!("send {AGENT} Program {{ confirmation: None }}"),
+            format!("send {AGENT} Program {{ confirmation: Some(\"yes, send it\") }}"),
+            format!("send {AGENT} Person"),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_malformed_message_id_never_reaches_the_service() {
+    let service = Arc::new(Recording::default());
+
+    let response = agent_router_for(service.clone())
+        .oneshot(
+            Request::get("/messages/..%2Fother")
+                .header(header::AUTHORIZATION, "Bearer agent-key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(service.calls().is_empty());
 }
 
 #[tokio::test]

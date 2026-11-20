@@ -15,7 +15,7 @@ use crate::domain::models::{
     ProvisioningFailure, Reservation, SendKind, SendLimits, SendReservation, SentMessage,
     StoredGrant,
 };
-use crate::domain::ports::{AgentDirectory, AgentMailboxRepository};
+use crate::domain::ports::{AgentDirectory, AgentMailboxRepository, LeaseToken};
 
 /// A storage failure.
 #[derive(Debug, thiserror::Error)]
@@ -209,40 +209,90 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         row.map(AgentMailbox::try_from).transpose()
     }
 
-    async fn record_created(
+    async fn claim(
         &self,
         id: AgentMailboxId,
-        mailbox: &ProvisionedMailbox,
-    ) -> Result<(), Self::Err> {
+        token: LeaseToken,
+        now: DateTime<Utc>,
+        ttl: Duration,
+    ) -> Result<Option<AgentMailbox>, Self::Err> {
+        let row = sqlx::query_as!(
+            MailboxRow,
+            r#"
+            UPDATE agent_mailboxes
+            SET lease_token = $2, lease_expires_at = $4
+            WHERE id = $1
+              AND state <> 'released'
+              AND (lease_token IS NULL OR lease_expires_at < $3)
+            RETURNING id, request_id, user_id, provider, requested_local_part, display_name,
+                      provider_mailbox_id, address, grant_id, grant_key_ciphertext,
+                      grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
+            "#,
+            id.0,
+            token.0,
+            now,
+            now + ttl,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(AgentMailbox::try_from).transpose()
+    }
+
+    async fn unclaim(&self, id: AgentMailboxId, token: LeaseToken) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE agent_mailboxes
-            SET provider_mailbox_id = $2, address = $3, updated_at = now()
-            WHERE id = $1
+            SET lease_token = NULL, lease_expires_at = NULL
+            WHERE id = $1 AND lease_token = $2
             "#,
             id.0,
-            mailbox.id.0,
-            mailbox.address,
+            token.0,
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
-    async fn activate(&self, id: AgentMailboxId, grant: &StoredGrant) -> Result<bool, Self::Err> {
+    async fn record_created(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+        mailbox: &ProvisionedMailbox,
+    ) -> Result<bool, Self::Err> {
         let result = sqlx::query!(
             r#"
             UPDATE agent_mailboxes
-            SET grant_id = $2,
-                grant_key_ciphertext = $3,
-                grant_kms_key_id = $4,
-                grant_encryption_version = $5,
-                state = 'active',
-                last_error = NULL,
-                updated_at = now()
-            WHERE id = $1 AND state IN ('provisioning', 'failed')
+            SET provider_mailbox_id = $3, address = $4, updated_at = now()
+            WHERE id = $1 AND lease_token = $2 AND state <> 'released'
             "#,
             id.0,
+            token.0,
+            mailbox.id.0,
+            mailbox.address,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    async fn record_grant(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+        grant: &StoredGrant,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes
+            SET grant_id = $3,
+                grant_key_ciphertext = $4,
+                grant_kms_key_id = $5,
+                grant_encryption_version = $6,
+                updated_at = now()
+            WHERE id = $1 AND lease_token = $2 AND state <> 'released'
+            "#,
+            id.0,
+            token.0,
             grant.id.0,
             grant.key.ciphertext,
             grant.key.kms_key_id,
@@ -253,9 +303,28 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(result.rows_affected() == 1)
     }
 
+    async fn activate(&self, id: AgentMailboxId, token: LeaseToken) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes
+            SET state = 'active', last_error = NULL, updated_at = now()
+            WHERE id = $1
+              AND lease_token = $2
+              AND state IN ('provisioning', 'failed')
+              AND grant_id IS NOT NULL
+            "#,
+            id.0,
+            token.0,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     async fn record_failure(
         &self,
         id: AgentMailboxId,
+        token: LeaseToken,
         state: MailboxState,
         failure: ProvisioningFailure,
     ) -> Result<(), Self::Err> {
@@ -264,10 +333,11 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         sqlx::query!(
             r#"
             UPDATE agent_mailboxes
-            SET state = $2, last_error = $3, updated_at = now()
-            WHERE id = $1 AND state IN ('provisioning', 'failed')
+            SET state = $3, last_error = $4, updated_at = now()
+            WHERE id = $1 AND lease_token = $2 AND state IN ('provisioning', 'failed')
             "#,
             id.0,
+            token.0,
             state.as_ref(),
             failure.as_ref(),
         )
@@ -289,6 +359,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             UPDATE agent_mailboxes
             SET state = $3::text,
                 paused_at = CASE WHEN $3::text = 'paused' THEN $4::timestamptz ELSE NULL END,
+                next_sweep_at = NULL,
                 updated_at = $4::timestamptz
             WHERE id = $1 AND state = ANY($2)
             "#,
@@ -302,7 +373,28 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(result.rows_affected() == 1)
     }
 
-    async fn clear_grant(&self, id: AgentMailboxId) -> Result<(), Self::Err> {
+    async fn release_if_paused_before(
+        &self,
+        id: AgentMailboxId,
+        paused_before: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes
+            SET state = 'releasing', paused_at = NULL, updated_at = $3
+            WHERE id = $1 AND state = 'paused' AND paused_at < $2
+            "#,
+            id.0,
+            paused_before,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
+    async fn clear_grant(&self, id: AgentMailboxId, token: LeaseToken) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE agent_mailboxes
@@ -311,17 +403,40 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
                 grant_kms_key_id = NULL,
                 grant_encryption_version = NULL,
                 updated_at = now()
-            WHERE id = $1 AND state <> 'active'
+            WHERE id = $1 AND lease_token = $2 AND state = 'releasing'
             "#,
             id.0,
+            token.0,
         )
         .execute(&self.pool)
         .await?;
         Ok(())
     }
 
+    async fn finish_release(
+        &self,
+        id: AgentMailboxId,
+        token: LeaseToken,
+        now: DateTime<Utc>,
+    ) -> Result<bool, Self::Err> {
+        let result = sqlx::query!(
+            r#"
+            UPDATE agent_mailboxes
+            SET state = 'released', updated_at = $3
+            WHERE id = $1 AND lease_token = $2 AND state = 'releasing'
+            "#,
+            id.0,
+            token.0,
+            now,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(result.rows_affected() == 1)
+    }
+
     async fn due_for_sweep(
         &self,
+        now: DateTime<Utc>,
         stalled_before: DateTime<Utc>,
         paused_before: DateTime<Utc>,
         limit: u16,
@@ -330,15 +445,17 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
             MailboxRow,
             r#"
             SELECT id, request_id, user_id, provider, requested_local_part, display_name,
-                   provider_mailbox_id, address, grant_id, grant_key_ciphertext,
-                   grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
+                      provider_mailbox_id, address, grant_id, grant_key_ciphertext,
+                      grant_kms_key_id, grant_encryption_version, state, last_error, paused_at
             FROM agent_mailboxes
-            WHERE (state = 'provisioning' AND updated_at < $1)
-               OR state = 'releasing'
-               OR (state = 'paused' AND paused_at < $2)
+            WHERE ((state = 'provisioning' AND updated_at < $2)
+                   OR state = 'releasing'
+                   OR (state = 'paused' AND paused_at < $3))
+              AND (next_sweep_at IS NULL OR next_sweep_at <= $1)
             ORDER BY updated_at
-            LIMIT $3
+            LIMIT $4
             "#,
+            now,
             stalled_before,
             paused_before,
             i64::from(limit),
@@ -346,6 +463,17 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         .fetch_all(&self.pool)
         .await?;
         rows.into_iter().map(AgentMailbox::try_from).collect()
+    }
+
+    async fn defer_sweep(&self, id: AgentMailboxId, until: DateTime<Utc>) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE agent_mailboxes SET next_sweep_at = $2 WHERE id = $1",
+            id.0,
+            until,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(agent_mailbox.id = %mailbox), err)]
@@ -356,6 +484,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         kind: SendKind,
         limits: SendLimits,
         now: DateTime<Utc>,
+        replayable_since: DateTime<Utc>,
     ) -> Result<SendReservation, Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
@@ -370,7 +499,7 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
 
         let existing = sqlx::query!(
             r#"
-            SELECT provider_message_id, provider_thread_id
+            SELECT provider_message_id, provider_thread_id, created_at
             FROM agent_mailbox_sends
             WHERE mailbox_id = $1 AND idempotency_key = $2
             "#,
@@ -386,7 +515,8 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
                     id: ProviderMessageId(id),
                     thread_id: existing.provider_thread_id,
                 }),
-                None => SendReservation::Proceed,
+                None if existing.created_at >= replayable_since => SendReservation::Proceed,
+                None => SendReservation::OutcomeUnknown,
             });
         }
 
@@ -478,10 +608,21 @@ impl AgentMailboxRepository for PgAgentMailboxRepository {
         Ok(())
     }
 
-    async fn prune_sends(&self, before: DateTime<Utc>) -> Result<u64, Self::Err> {
+    async fn prune_sends(&self, before: DateTime<Utc>, limit: u32) -> Result<u64, Self::Err> {
+        // Bounded per round, so a backlog after downtime drains over several
+        // rounds instead of one long delete.
         let result = sqlx::query!(
-            "DELETE FROM agent_mailbox_sends WHERE created_at < $1",
-            before
+            r#"
+            DELETE FROM agent_mailbox_sends
+            WHERE (mailbox_id, idempotency_key) IN (
+                SELECT mailbox_id, idempotency_key
+                FROM agent_mailbox_sends
+                WHERE created_at < $1
+                LIMIT $2
+            )
+            "#,
+            before,
+            i64::from(limit),
         )
         .execute(&self.pool)
         .await?;

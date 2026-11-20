@@ -34,6 +34,11 @@ pub enum AgentMailboxErrorCode {
     ConfirmationRequired,
     /// No provider is configured. `503`.
     NotConfigured,
+    /// An earlier send with this key may have gone out and can no longer be
+    /// deduplicated; check the sent mail before sending with a new key. `409`.
+    SendOutcomeUnknown,
+    /// Another operation on this mailbox is running and finishes on its own. `503`.
+    Busy,
     /// The provider refused the request. `502`.
     ProviderRejected,
     /// The provider is unavailable; retry with the same key. `503`.
@@ -54,6 +59,9 @@ impl AgentMailboxErrorCode {
             AgentMailboxError::NotReady(_) => Self::NotReady,
             AgentMailboxError::SendLimit { .. } => Self::SendLimit,
             AgentMailboxError::Invalid(_) => Self::Invalid,
+            AgentMailboxError::ConfirmationRequired => Self::ConfirmationRequired,
+            AgentMailboxError::SendOutcomeUnknown => Self::SendOutcomeUnknown,
+            AgentMailboxError::Busy => Self::Busy,
             AgentMailboxError::NotConfigured => Self::NotConfigured,
             AgentMailboxError::Rejected => Self::ProviderRejected,
             AgentMailboxError::Unavailable => Self::ProviderUnavailable,

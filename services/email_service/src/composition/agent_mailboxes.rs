@@ -30,16 +30,13 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(60);
 pub(crate) fn agent_mailboxes(
     config: &Config,
     db: sqlx::PgPool,
-    aws_config: &aws_config::SdkConfig,
+    kms_client: aws_sdk_kms::Client,
 ) -> anyhow::Result<AgentMailboxSvc> {
     let provisioning_key = config
         .deadsimple_api_key()
         .map(|key| ProvisioningKey::new(key.to_owned()));
     let kms = match (&provisioning_key, config.agent_mailbox_kms_key_id()) {
-        (_, Some(kms_key_id)) => Some(AwsMailboxKms::new(
-            aws_sdk_kms::Client::new(aws_config),
-            kms_key_id.to_owned(),
-        )),
+        (_, Some(kms_key_id)) => Some(AwsMailboxKms::new(kms_client, kms_key_id.to_owned())),
         (Some(_), None) => {
             anyhow::bail!("AGENT_MAILBOX_KMS_KEY_ID is required when DEADSIMPLE_API_KEY is set")
         }

@@ -3,6 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use super::*;
 
 const ADA: &str = "macro|ada-1@agents.macro.invalid";
+const TTL: Duration = Duration::minutes(3);
 
 fn ada() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(ADA).unwrap().into_owned()
@@ -28,7 +29,11 @@ fn grant() -> StoredGrant {
     }
 }
 
-async fn active_mailbox(repository: &PgAgentMailboxRepository) -> AgentMailboxId {
+fn token(value: u128) -> LeaseToken {
+    LeaseToken(Uuid::from_u128(value))
+}
+
+async fn new_mailbox(repository: &PgAgentMailboxRepository) -> AgentMailboxId {
     let Reservation::New(mailbox) = repository
         .reserve(&request(1), AgentMailboxId::generate())
         .await
@@ -36,18 +41,31 @@ async fn active_mailbox(repository: &PgAgentMailboxRepository) -> AgentMailboxId
     else {
         panic!("expected a new reservation");
     };
-    repository
-        .record_created(
-            mailbox.id,
-            &ProvisionedMailbox {
-                id: ProviderMailboxId("inbox-1".to_owned()),
-                address: "ada@example.net".to_owned(),
-            },
-        )
-        .await
-        .unwrap();
-    assert!(repository.activate(mailbox.id, &grant()).await.unwrap());
     mailbox.id
+}
+
+async fn active_mailbox(repository: &PgAgentMailboxRepository) -> AgentMailboxId {
+    let id = new_mailbox(repository).await;
+    let lease = token(1);
+    repository
+        .claim(id, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+    assert!(
+        repository
+            .record_created(id, lease, &created)
+            .await
+            .unwrap()
+    );
+    assert!(repository.record_grant(id, lease, &grant()).await.unwrap());
+    assert!(repository.activate(id, lease).await.unwrap());
+    repository.unclaim(id, lease).await.unwrap();
+    id
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -82,64 +100,144 @@ async fn reserve_is_idempotent_and_allows_one_live_mailbox_per_agent(pool: PgPoo
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_released_mailbox_frees_the_agent_for_a_new_one(pool: PgPool) {
+async fn one_lease_at_a_time_fences_the_writes_of_the_other(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
-    let id = active_mailbox(&repository).await;
+    let id = new_mailbox(&repository).await;
     let now = Utc::now();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
 
-    assert!(
-        repository
-            .transition(id, &[MailboxState::Active], MailboxState::Releasing, now)
-            .await
-            .unwrap()
-    );
-    repository.clear_grant(id).await.unwrap();
-    assert!(
-        repository
-            .transition(id, &[MailboxState::Releasing], MailboxState::Released, now)
-            .await
-            .unwrap()
-    );
-
-    assert!(repository.live_mailbox(&ada()).await.unwrap().is_none());
-    let next = repository
-        .reserve(&request(2), AgentMailboxId::generate())
+    let holder = repository.claim(id, token(1), now, TTL).await.unwrap();
+    let rival = repository.claim(id, token(2), now, TTL).await.unwrap();
+    let rival_write = repository
+        .record_created(id, token(2), &created)
         .await
         .unwrap();
-    assert!(matches!(next, Reservation::New(_)));
+    let taken_over = repository
+        .claim(id, token(2), now + Duration::minutes(4), TTL)
+        .await
+        .unwrap();
+    let stale_write = repository
+        .record_created(id, token(1), &created)
+        .await
+        .unwrap();
+
+    assert!(holder.is_some());
+    assert!(rival.is_none());
+    assert!(!rival_write);
+    assert!(taken_over.is_some(), "an expired lease is taken over");
+    assert!(!stale_write, "the first holder's writes are fenced off");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn activation_stores_the_grant_and_a_pause_wins_over_a_late_activation(pool: PgPool) {
+async fn a_pause_wins_over_activation_and_keeps_the_stored_grant(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
-    let id = active_mailbox(&repository).await;
+    let id = new_mailbox(&repository).await;
+    let lease = token(1);
+    repository
+        .claim(id, lease, Utc::now(), TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+    repository
+        .record_created(id, lease, &created)
+        .await
+        .unwrap();
 
-    let stored = repository.live_mailbox(&ada()).await.unwrap().unwrap();
-    assert_eq!(stored.state, MailboxState::Active);
-    assert_eq!(stored.grant, Some(grant()));
-    assert_eq!(stored.address.as_deref(), Some("ada@example.net"));
-
-    let now = Utc::now();
     assert!(
         repository
-            .transition(id, &[MailboxState::Active], MailboxState::Paused, now)
+            .transition(
+                id,
+                &[MailboxState::Provisioning],
+                MailboxState::Paused,
+                Utc::now()
+            )
             .await
             .unwrap()
     );
-    assert!(!repository.activate(id, &grant()).await.unwrap());
+    assert!(repository.record_grant(id, lease, &grant()).await.unwrap());
+    assert!(!repository.activate(id, lease).await.unwrap());
     repository
-        .record_failure(id, MailboxState::Failed, ProvisioningFailure::Rejected)
+        .record_failure(
+            id,
+            lease,
+            MailboxState::Failed,
+            ProvisioningFailure::Rejected,
+        )
         .await
         .unwrap();
 
     let paused = repository.live_mailbox(&ada()).await.unwrap().unwrap();
     assert_eq!(paused.state, MailboxState::Paused);
+    assert_eq!(paused.grant, Some(grant()));
     assert_eq!(paused.last_error, None);
-    assert!(paused.paused_at.is_some());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn the_sweep_finds_stalled_releasing_and_long_paused_mailboxes(pool: PgPool) {
+async fn a_release_records_a_late_create_and_finishes_under_the_lease(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let id = new_mailbox(&repository).await;
+    let now = Utc::now();
+    let in_flight = token(1);
+    repository
+        .claim(id, in_flight, now, TTL)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let live = [
+        MailboxState::Provisioning,
+        MailboxState::Active,
+        MailboxState::Failed,
+        MailboxState::Paused,
+    ];
+    assert!(
+        repository
+            .transition(id, &live, MailboxState::Releasing, now)
+            .await
+            .unwrap()
+    );
+    let created = ProvisionedMailbox {
+        id: ProviderMailboxId("inbox-1".to_owned()),
+        address: "ada@example.net".to_owned(),
+    };
+    assert!(
+        repository
+            .record_created(id, in_flight, &created)
+            .await
+            .unwrap()
+    );
+    repository.unclaim(id, in_flight).await.unwrap();
+
+    let teardown = token(2);
+    let claimed = repository
+        .claim(id, teardown, now, TTL)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        claimed.provider_mailbox_id,
+        Some(ProviderMailboxId("inbox-1".to_owned()))
+    );
+    assert!(repository.finish_release(id, teardown, now).await.unwrap());
+    assert!(repository.live_mailbox(&ada()).await.unwrap().is_none());
+    assert!(matches!(
+        repository
+            .reserve(&request(2), AgentMailboxId::generate())
+            .await
+            .unwrap(),
+        Reservation::New(_)
+    ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retention_release_starts_only_for_a_mailbox_still_paused_long_enough(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
     let id = active_mailbox(&repository).await;
     let now = Utc::now();
@@ -153,24 +251,74 @@ async fn the_sweep_finds_stalled_releasing_and_long_paused_mailboxes(pool: PgPoo
         .await
         .unwrap();
 
-    let recent = repository
-        .due_for_sweep(now - Duration::minutes(1), now - Duration::days(32), 10)
+    let too_recent = repository
+        .release_if_paused_before(id, now - Duration::days(32), now)
         .await
         .unwrap();
-    let due = repository
-        .due_for_sweep(now - Duration::minutes(1), now - Duration::days(30), 10)
+    repository
+        .transition(id, &[MailboxState::Paused], MailboxState::Active, now)
+        .await
+        .unwrap();
+    let resumed = repository
+        .release_if_paused_before(id, now - Duration::days(30), now)
         .await
         .unwrap();
 
-    assert!(recent.is_empty());
+    assert!(!too_recent);
+    assert!(!resumed);
     assert_eq!(
-        due.iter().map(|mailbox| mailbox.id).collect::<Vec<_>>(),
+        repository
+            .live_mailbox(&ada())
+            .await
+            .unwrap()
+            .unwrap()
+            .state,
+        MailboxState::Active
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn the_sweep_skips_deferred_mailboxes_until_their_time(pool: PgPool) {
+    let repository = PgAgentMailboxRepository::new(pool);
+    let id = active_mailbox(&repository).await;
+    let now = Utc::now();
+    repository
+        .transition(id, &[MailboxState::Active], MailboxState::Releasing, now)
+        .await
+        .unwrap();
+    repository
+        .defer_sweep(id, now + Duration::minutes(5))
+        .await
+        .unwrap();
+
+    let deferred = repository
+        .due_for_sweep(
+            now,
+            now - Duration::minutes(1),
+            now - Duration::days(30),
+            10,
+        )
+        .await
+        .unwrap();
+    let later = repository
+        .due_for_sweep(
+            now + Duration::minutes(6),
+            now,
+            now - Duration::days(30),
+            10,
+        )
+        .await
+        .unwrap();
+
+    assert!(deferred.is_empty());
+    assert_eq!(
+        later.iter().map(|mailbox| mailbox.id).collect::<Vec<_>>(),
         vec![id]
     );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
+async fn sends_dedupe_by_key_stop_at_the_caps_and_expire_unknown_outcomes(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
     let id = active_mailbox(&repository).await;
     let limits = SendLimits {
@@ -178,6 +326,7 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
         per_day: 3,
     };
     let now = Utc::now();
+    let replayable = now - Duration::hours(23);
     let sent = SentMessage {
         id: ProviderMessageId("sent-1".to_owned()),
         thread_id: Some("thread-1".to_owned()),
@@ -190,6 +339,7 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
             SendKind::Message,
             limits,
             now - Duration::hours(2),
+            replayable,
         )
         .await
         .unwrap();
@@ -198,7 +348,14 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
         .await
         .unwrap();
     let replay = repository
-        .reserve_send(id, Uuid::from_u128(1), SendKind::Message, limits, now)
+        .reserve_send(
+            id,
+            Uuid::from_u128(1),
+            SendKind::Message,
+            limits,
+            now,
+            replayable,
+        )
         .await
         .unwrap();
     let second = repository
@@ -208,19 +365,45 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
             SendKind::Reply,
             limits,
             now - Duration::minutes(30),
+            replayable,
         )
         .await
         .unwrap();
     let in_flight_retry = repository
-        .reserve_send(id, Uuid::from_u128(2), SendKind::Reply, limits, now)
+        .reserve_send(
+            id,
+            Uuid::from_u128(2),
+            SendKind::Reply,
+            limits,
+            now,
+            replayable,
+        )
+        .await
+        .unwrap();
+    let expired_retry = repository
+        .reserve_send(id, Uuid::from_u128(2), SendKind::Reply, limits, now, now)
         .await
         .unwrap();
     let third = repository
-        .reserve_send(id, Uuid::from_u128(3), SendKind::Message, limits, now)
+        .reserve_send(
+            id,
+            Uuid::from_u128(3),
+            SendKind::Message,
+            limits,
+            now,
+            replayable,
+        )
         .await
         .unwrap();
     let over_day = repository
-        .reserve_send(id, Uuid::from_u128(4), SendKind::Message, limits, now)
+        .reserve_send(
+            id,
+            Uuid::from_u128(4),
+            SendKind::Message,
+            limits,
+            now,
+            replayable,
+        )
         .await
         .unwrap();
 
@@ -228,6 +411,7 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
     assert_eq!(replay, SendReservation::AlreadySent(sent));
     assert_eq!(second, SendReservation::Proceed);
     assert_eq!(in_flight_retry, SendReservation::Proceed);
+    assert_eq!(expired_retry, SendReservation::OutcomeUnknown);
     assert_eq!(third, SendReservation::Proceed);
     let SendReservation::LimitReached { retry_at } = over_day else {
         panic!("expected a limit, got {over_day:?}")
@@ -236,34 +420,55 @@ async fn sends_dedupe_by_key_and_stop_at_the_caps(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_cancelled_send_frees_its_slot_and_old_records_are_pruned(pool: PgPool) {
+async fn a_cancelled_send_frees_its_slot_and_pruning_is_bounded(pool: PgPool) {
     let repository = PgAgentMailboxRepository::new(pool);
     let id = active_mailbox(&repository).await;
     let limits = SendLimits {
-        per_hour: 1,
+        per_hour: 10,
         per_day: 10,
     };
     let now = Utc::now();
+    let replayable = now - Duration::hours(23);
 
     repository
-        .reserve_send(id, Uuid::from_u128(1), SendKind::Message, limits, now)
+        .reserve_send(
+            id,
+            Uuid::from_u128(1),
+            SendKind::Message,
+            limits,
+            now,
+            replayable,
+        )
         .await
         .unwrap();
     repository
         .cancel_send(id, Uuid::from_u128(1))
         .await
         .unwrap();
-    let after_cancel = repository
-        .reserve_send(id, Uuid::from_u128(2), SendKind::Message, limits, now)
+    for key in 2..5 {
+        repository
+            .reserve_send(
+                id,
+                Uuid::from_u128(key),
+                SendKind::Message,
+                limits,
+                now,
+                replayable,
+            )
+            .await
+            .unwrap();
+    }
+    let first_batch = repository
+        .prune_sends(now + Duration::seconds(1), 2)
         .await
         .unwrap();
-    let pruned = repository
-        .prune_sends(now + Duration::seconds(1))
+    let second_batch = repository
+        .prune_sends(now + Duration::seconds(1), 2)
         .await
         .unwrap();
 
-    assert_eq!(after_cancel, SendReservation::Proceed);
-    assert_eq!(pruned, 1);
+    assert_eq!(first_batch, 2);
+    assert_eq!(second_batch, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -37,6 +37,22 @@ pub struct ProviderMailboxId(pub String);
 #[cfg_attr(feature = "wire", serde(transparent))]
 pub struct ProviderMessageId(pub String);
 
+/// A message id that is not one a provider would issue.
+#[derive(Debug, thiserror::Error)]
+#[error("a message id is 1 to 128 letters, digits, '.', '_', ':' or '-'")]
+pub struct InvalidMessageId;
+
+impl ProviderMessageId {
+    /// Accept a message id a caller passed, checking its shape.
+    pub fn parse(value: &str) -> Result<Self, InvalidMessageId> {
+        if lazy_regex::regex_is_match!(r"\A[A-Za-z0-9._:-]{1,128}\z", value) {
+            Ok(Self(value.to_owned()))
+        } else {
+            Err(InvalidMessageId)
+        }
+    }
+}
+
 /// The provider's id for the mailbox-scoped credential Macro holds.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ProviderGrantId(pub String);
@@ -384,8 +400,12 @@ pub enum SendKind {
 /// What `reserve_send` decided.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SendReservation {
-    /// Go ahead: a new send, or a retry of one whose outcome is unknown.
+    /// Go ahead: a new send, or a retry of one whose outcome is unknown and
+    /// still inside the provider's idempotency replay window.
     Proceed,
+    /// An earlier attempt with this key may have been sent, and the provider
+    /// no longer dedupes it: sending again could send twice.
+    OutcomeUnknown,
     /// The same idempotency key already sent this.
     AlreadySent(SentMessage),
     /// A cap is full until `retry_at`.
@@ -422,6 +442,19 @@ pub enum VendorMode {
     Live,
     /// A local fake standing in for the provider: no real mail moves.
     Fake,
+}
+
+/// Who is asking to send, which decides whether the owner's approval must
+/// be quoted.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SendAuthority {
+    /// A person sending from their own session.
+    Person,
+    /// An agent's program, with the owner's approving reply when it has one.
+    Program {
+        /// The owner's approval, quoted.
+        confirmation: Option<String>,
+    },
 }
 
 /// What callers see about a mailbox. No credentials.
@@ -471,6 +504,20 @@ pub enum AgentMailboxError {
     /// The request is malformed.
     #[error("{0}")]
     Invalid(String),
+    /// An agent's program sent without its owner's quoted approval.
+    #[error(
+        "an agent's program cannot send email without its owner's approval; ask the owner, and send again with their reply quoted in `confirmation`"
+    )]
+    ConfirmationRequired,
+    /// An earlier send with this key may have gone out and can no longer be
+    /// deduplicated: check the sent mail before sending again with a new key.
+    #[error(
+        "an earlier send with this idempotency key may have been delivered; check the sent messages before sending again with a new key"
+    )]
+    SendOutcomeUnknown,
+    /// Another operation on this mailbox is running; it finishes on its own.
+    #[error("another operation on this mailbox is in progress; it finishes on its own")]
+    Busy,
     /// The provider has no credentials or refused them.
     #[error("the mail provider is not configured")]
     NotConfigured,

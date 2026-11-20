@@ -65,4 +65,36 @@ describe('agentMailbox', () => {
     ]);
     expect(sent?.id).toBe('sent-1');
   });
+
+  test('a listed message loads its body when the body is read', async () => {
+    let reads = 0;
+    const listed = {
+      id: 'm-1',
+      from: 'person@example.com',
+      to: ['ada@example.net'],
+      cc: [],
+      subject: 'Hello',
+      direction: 'inbound',
+      textBody: null,
+    };
+    const client = {
+      email: {
+        listAgentMailboxMessages: async () => ({
+          data: { messages: [listed], nextCursor: null },
+        }),
+        readAgentMailboxMessage: async () => {
+          reads += 1;
+          return { data: { ...listed, textBody: 'The full body' } };
+        },
+      },
+    } as unknown as MacroClient;
+
+    const [message] = (await new AgentMailboxNamespace(client).messages())
+      .messages;
+
+    expect(await message?.subject()).toBe('Hello');
+    expect(reads).toBe(0);
+    expect(await message?.textBody()).toBe('The full body');
+    expect(reads).toBe(1);
+  });
 });
