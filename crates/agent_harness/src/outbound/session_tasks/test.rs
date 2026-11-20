@@ -66,14 +66,23 @@ const TASK: &str = "0199c0a8-7d3e-7c1a-9b5e-3f2a1c4d5e6f";
 const OTHER_TASK: &str = "0199c0a8-7d3e-7c1a-9b5e-3f2a1c4d5e70";
 
 async fn session_entries(pool: &PgPool, session: AgentSessionId) -> Vec<(String, String, String)> {
-    sqlx::query_as::<_, (String, String, String)>(
-        "SELECT source_entity_type, entity_type || ':' || entity_id, coalesce(user_id, '') \
-         FROM comms_entity_mentions WHERE source_entity_id = $1",
+    sqlx::query!(
+        r#"SELECT source_entity_type, entity_type, entity_id, user_id
+        FROM comms_entity_mentions WHERE source_entity_id = $1"#,
+        session.to_string(),
     )
-    .bind(session.to_string())
     .fetch_all(pool)
     .await
     .unwrap()
+    .into_iter()
+    .map(|row| {
+        (
+            row.source_entity_type,
+            format!("{}:{}", row.entity_type, row.entity_id),
+            row.user_id.unwrap_or_default(),
+        )
+    })
+    .collect()
 }
 
 #[sqlx::test(migrator = "macro_db_migrator::MACRO_DB_MIGRATIONS")]

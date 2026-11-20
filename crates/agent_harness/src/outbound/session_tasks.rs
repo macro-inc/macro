@@ -24,9 +24,7 @@ use agent_session::domain::session_task::{
     PullRequestState, SessionTaskError, SessionTaskReferences, TaskDirectory, TaskDocumentId,
     TaskFacts, TaskPullRequest, TaskPullRequestLinker,
 };
-use comms_db_client::entity_mentions::{
-    NewEntityMention, create_entity_mentions, delete_entity_mentions_by_source,
-};
+use comms_db_client::entity_mentions::{NewEntityMention, replace_source_mention};
 use sqlx::PgPool;
 
 #[cfg(test)]
@@ -243,33 +241,17 @@ impl SessionTaskReferences for CommsSessionTaskReferences {
         owner: &MacroUserIdStr<'static>,
         task: &TaskDocumentId,
     ) -> Result<(), SessionTaskError> {
-        let unavailable =
-            |error: anyhow::Error| SessionTaskError::Unavailable(rootcause::report!("{error:#}"));
-        let session = session.to_string();
-        let mut transaction = self
-            .pool
-            .begin()
-            .await
-            .map_err(|error| unavailable(error.into()))?;
-        // Session ids are uuids, so the source id alone names this session's entries.
-        delete_entity_mentions_by_source(&mut *transaction, vec![session.clone()])
-            .await
-            .map_err(unavailable)?;
-        create_entity_mentions(
-            &mut *transaction,
+        replace_source_mention(
+            &self.pool,
             AGENT_SESSION_SOURCE,
-            &session,
+            &session.to_string(),
             Some(owner.as_ref()),
-            &[NewEntityMention {
+            &NewEntityMention {
                 entity_type: TASK_ENTITY.to_owned(),
                 entity_id: task.as_str().to_owned(),
-            }],
+            },
         )
         .await
-        .map_err(unavailable)?;
-        transaction
-            .commit()
-            .await
-            .map_err(|error| unavailable(error.into()))
+        .map_err(|error| SessionTaskError::Unavailable(rootcause::report!("{error:#}")))
     }
 }

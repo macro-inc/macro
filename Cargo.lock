@@ -4995,6 +4995,7 @@ dependencies = [
  "cached",
  "channels",
  "chrono",
+ "futures",
  "macro_db_migrator",
  "macro_user_id",
  "macro_uuid",

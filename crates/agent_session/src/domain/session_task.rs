@@ -336,10 +336,11 @@ where
                         tracing::warn!(?error, "could not publish session metadata update");
                     }
                 }
-                self.references.replace(session, owner, &facts.id).await?;
                 if let Some(url) = &pull_request {
                     self.link_pull_request(url, &facts).await?;
                 }
+                // Idempotent, so a caller that sees this fail can link again.
+                self.references.replace(session, owner, &facts.id).await?;
                 let mention =
                     mention_utils::serialize::task_mention(facts.id.as_str(), &facts.title)
                         .map_err(|error| {
