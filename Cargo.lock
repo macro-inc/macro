@@ -1256,6 +1256,7 @@ dependencies = [
  "anthropic",
  "anyhow",
  "async-trait",
+ "aws-sdk-s3",
  "aws-sdk-secretsmanager",
  "aws-sdk-sqs",
  "axum",
@@ -1361,6 +1362,7 @@ dependencies = [
  "url",
  "uuid",
  "web_search",
+ "wiremock",
  "workspace-hack",
 ]
 
