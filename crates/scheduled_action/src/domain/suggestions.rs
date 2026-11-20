@@ -5,7 +5,11 @@
 //! nightly, run by the `suggestion_generation` crate, which also runs their
 //! suggestions sessions) are told what [`RoutineSuggestionApi::brief`] says: the
 //! person's newest mail and connected apps as untrusted data, Macro's
-//! catalog, and what they dismissed. Each hands back suggestions through
+//! catalog, and what they dismissed. At onboarding, behind
+//! [`ROUTINE_FIND_WORK_FLAG`], one session picks from the catalog at once
+//! while [`RoutineSuggestionApi::find_work`] lists the streams of work in the
+//! person's last month of mail ([`work`]), and a second drafts from that
+//! list. Each hands back suggestions through
 //! `macro.routines.suggest` ([`RoutineSuggestionApi::suggest`]), which only the
 //! person's own open routines sessions may call. A suggestion is a catalog
 //! routine with bounded knob values, or a routine the session drafted that
@@ -29,6 +33,7 @@ pub mod ports;
 pub mod prompt;
 pub mod state;
 pub mod text;
+pub mod work;
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -43,6 +48,7 @@ use model_owner::CreationPrincipal;
 use routine_program::{CATALOG, Surface};
 use suggestions::domain::model::{GenerationSession, GenerationTrigger, RoutineText, SessionKind};
 use suggestions::domain::ports::GenerationSessions;
+use tracing::Instrument as _;
 
 use self::model::{
     GenerationStatus, RetireSuggestion, ReviewedSuggestion, RoutineGenerationReport,
@@ -51,8 +57,11 @@ use self::model::{
 };
 use suggestions::domain::service::{NEW_PER_GENERATION, OPEN_LIMIT};
 
-use self::ports::{GenerationStatuses, Kept, SuggestionRepo, SuggestionSources};
+use self::ports::{
+    BriefPart, GenerationStatuses, Kept, SuggestionRepo, SuggestionSources, WorkModel,
+};
 use self::state::{RoutineSuggestionState, Transition};
+use self::work::{WORK_DAYS, WORK_MESSAGES, WORK_MODEL, WORK_TEXTS, WorkList};
 use super::event_rollout::EVENT_ROUTINES_FLAG;
 use super::models::ActionPolicyError;
 use super::ports::{
@@ -64,6 +73,9 @@ mod test;
 
 /// The PostHog flag that turns routine suggestions on for a person.
 pub const ROUTINE_SUGGESTIONS_FLAG: &str = "enable-routine-suggestions";
+/// The PostHog flag that has a person's onboarding find the work in their
+/// last month of mail, and draft routines from it in a session of its own.
+pub const ROUTINE_FIND_WORK_FLAG: &str = "routine-suggestions-find-work";
 /// Inbox messages a brief holds.
 pub const INBOX_MESSAGES: u16 = 100;
 /// Suggestions shown per surface: AI's, then Macro's templates.
@@ -122,6 +134,8 @@ pub struct RoutineSuggestionService<Actions, Repo, Sources, Code, Flags> {
     statuses: Arc<dyn GenerationStatuses>,
     flags: Option<Flags>,
     briefing: RoutineBriefing,
+    /// What finds the work in a person's mail; without it, none is found.
+    work: Option<Arc<dyn WorkModel>>,
 }
 
 impl<Actions, Repo, Sources, Code, Flags>
@@ -156,7 +170,14 @@ where
             statuses,
             flags,
             briefing,
+            work: None,
         }
+    }
+
+    /// Find the work in a person's month of mail with `model`.
+    pub fn with_work_model(mut self, model: Arc<dyn WorkModel>) -> Self {
+        self.work = Some(model);
+        self
     }
 
     /// The flags for the person; none when they can't be read.
@@ -409,6 +430,8 @@ where
 
     #[tracing::instrument(name = "routine.suggestions.brief", skip_all, fields(
         routine.suggestions.surfaces = ?surfaces,
+        routine.suggestions.part = part.name(),
+        routine.suggestions.work_streams = tracing::field::Empty,
         routine.suggestions.inbox_messages = tracing::field::Empty,
         routine.suggestions.apps = tracing::field::Empty,
         routine.suggestions.code = tracing::field::Empty,
@@ -421,6 +444,7 @@ where
         surfaces: &[Surface],
         trigger: GenerationTrigger,
         timezone: Tz,
+        part: BriefPart<'_>,
     ) -> Result<String> {
         // A drafted routine starts on mail through a condition, and saving
         // one needs both conditions and this flag: told otherwise, a session
@@ -451,6 +475,9 @@ where
         span.record("routine.suggestions.code", code);
         span.record("routine.suggestions.events", events);
         span.record("routine.suggestions.crm", crm);
+        if let BriefPart::Drafts(Some(list)) = part {
+            span.record("routine.suggestions.work_streams", list.streams.len());
+        }
         Ok(prompt::brief(&prompt::BriefData {
             surfaces,
             trigger,
@@ -463,7 +490,48 @@ where
             events,
             crm,
             guide: self.briefing.guide,
+            part,
         }))
+    }
+
+    #[tracing::instrument(name = "routine.suggestions.find_work", skip_all, fields(
+        agent.session.id = %session,
+        routine.suggestions.model = WORK_MODEL,
+        routine.suggestions.messages = tracing::field::Empty,
+        routine.suggestions.texts = tracing::field::Empty,
+        routine.suggestions.streams = tracing::field::Empty,
+    ), err)]
+    async fn find_work(&self, user: &MacroUserIdStr<'static>, session: Uuid) -> Result<WorkList> {
+        let Some(model) = &self.work else {
+            bail!("nothing here finds the work in a person's mail");
+        };
+        let span = tracing::Span::current();
+        let messages = self
+            .sources
+            .inbox_window(user, WORK_DAYS, WORK_MESSAGES, WORK_TEXTS)
+            .instrument(tracing::info_span!("routine.suggestions.read_month"))
+            .await?;
+        span.record("routine.suggestions.messages", messages.len());
+        span.record(
+            "routine.suggestions.texts",
+            messages
+                .iter()
+                .filter(|message| message.snippet.is_some())
+                .count(),
+        );
+        let answer = model
+            .complete(
+                user,
+                session,
+                WORK_MODEL,
+                work::prompt(&messages, Utc::now()),
+                work::schema(),
+            )
+            .instrument(tracing::info_span!("routine.suggestions.list_work"))
+            .await?;
+        let list = WorkList::from_answer(answer)?;
+        span.record("routine.suggestions.streams", list.streams.len());
+        Ok(list)
     }
 
     #[tracing::instrument(name = "routine.suggestions.texts", skip_all, fields(

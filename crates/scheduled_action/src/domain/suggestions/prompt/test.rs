@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::suggestions::work::WorkList;
 
 fn data<'a>(surfaces: &'a [Surface], inbox: &'a [InboxMessage], code: bool) -> BriefData<'a> {
     BriefData {
@@ -13,6 +14,7 @@ fn data<'a>(surfaces: &'a [Surface], inbox: &'a [InboxMessage], code: bool) -> B
         events: true,
         crm: true,
         guide: "The guide.",
+        part: BriefPart::Whole,
     }
 }
 
@@ -134,4 +136,85 @@ fn a_weekly_brief_says_its_limits_win() {
         );
     }
     assert!(!brief(&data(&[Surface::Email], &[], false)).contains("this wins"));
+}
+
+fn part_brief(part: BriefPart<'_>) -> String {
+    brief(&BriefData {
+        part,
+        ..data(&[Surface::Email], &[], true)
+    })
+}
+
+#[test]
+fn every_part_fills_in_its_whole_brief() {
+    let list = WorkList {
+        person: "Runs a bakery".to_owned(),
+        streams: Vec::new(),
+    };
+    for part in [
+        BriefPart::Whole,
+        BriefPart::Picks,
+        BriefPart::Drafts(Some(&list)),
+        BriefPart::Drafts(None),
+    ] {
+        let brief = part_brief(part);
+        for placeholder in [
+            "{plan}",
+            "{kinds}",
+            "{count}",
+            "{handles}",
+            "{lacks}",
+            "{max_drafts}",
+            "{days}",
+            "{crm}",
+            "{start}",
+            "{surfaces}",
+            "{occasion}",
+        ] {
+            assert!(!brief.contains(placeholder), "{part:?} left {placeholder}");
+        }
+        assert!(brief.contains(HANDLES), "{part:?}");
+        assert!(brief.contains(LACKS), "{part:?}");
+    }
+}
+
+#[test]
+fn a_whole_session_picks_and_drafts() {
+    let brief = part_brief(BriefPart::Whole);
+    assert!(brief.contains("Two kinds:\n\n1. A catalog routine: "));
+    assert!(brief.contains("\n2. A routine the catalog lacks"));
+    assert!(brief.contains("at most three"));
+    assert!(brief.contains("<routines-guide>"));
+    assert!(brief.contains(COUNT));
+}
+
+#[test]
+fn a_picking_session_reads_nothing_about_writing_routines() {
+    let brief = part_brief(BriefPart::Picks);
+    assert!(brief.contains("you suggest catalog routines only, and draft none"));
+    assert!(brief.contains("You suggest one kind:\n\nA catalog routine: "));
+    assert!(!brief.contains("Prefer these."));
+    assert!(!brief.contains("A routine the catalog lacks"));
+    assert!(!brief.contains("<routines-guide>"));
+    assert!(!brief.contains("How to write a code step"));
+}
+
+#[test]
+fn a_drafting_session_drafts_for_each_stream_found() {
+    let list = WorkList {
+        person: "Runs a bakery".to_owned(),
+        streams: Vec::new(),
+    };
+    let brief = part_brief(BriefPart::Drafts(Some(&list)));
+    assert!(brief.contains("you draft the routines the catalog lacks, and pick none"));
+    assert!(brief.contains(&format!("at most {MAX_DRAFTS}")));
+    assert!(brief.contains("You suggest one kind:\n\nA routine the catalog lacks"));
+    assert!(!brief.contains("A catalog routine: "));
+    assert!(!brief.contains(COUNT));
+    assert!(brief.contains("<routines-guide>"));
+    assert!(brief.ends_with(&format!("<untrusted>\n{}\n</untrusted>", list.to_brief())));
+    let from_mail = part_brief(BriefPart::Drafts(None));
+    assert!(from_mail.contains("each stream of mail they act on"));
+    assert!(from_mail.ends_with("</untrusted>"));
+    assert!(!from_mail.contains("The streams of work a step found"));
 }
