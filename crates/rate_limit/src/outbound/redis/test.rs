@@ -2,7 +2,8 @@ use std::time::Duration;
 
 use crate::{
     RateLimitConfig, RateLimitKey, RateLimitPort, RateLimitResult, RateLimitServiceImpl,
-    domain::ports::RateLimitService, outbound::redis::RedisRateLimitAdapter,
+    TokenBucketConfig, TokenBucketPort, TokenBucketResult, domain::ports::RateLimitService,
+    outbound::redis::RedisRateLimitAdapter,
 };
 
 fn redis_client() -> redis::Client {
@@ -278,4 +279,179 @@ async fn check_and_increment_sets_expiry_on_first_key() {
         ttl > 0 && ttl <= 60,
         "key should have a TTL within the window, got {ttl}"
     );
+}
+
+async fn redis_now_ms(client: &redis::Client) -> u64 {
+    let (seconds, micros): (u64, u64) = redis::cmd("TIME")
+        .query_async(&mut client.get_multiplexed_async_connection().await.unwrap())
+        .await
+        .unwrap();
+    seconds * 1000 + micros / 1000
+}
+
+#[tokio::test]
+async fn a_bucket_lets_its_capacity_through_at_once_then_waits_for_its_next_token() {
+    let adapter = adapter();
+    let key = unique_key("bucket_capacity");
+    let config = TokenBucketConfig {
+        capacity: 3,
+        refill_interval: Duration::from_secs(60),
+    };
+
+    let mut taken = Vec::new();
+    for _ in 0..3 {
+        taken.push(TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap());
+    }
+    assert_eq!(
+        taken,
+        vec![
+            TokenBucketResult::Taken { remaining: 2 },
+            TokenBucketResult::Taken { remaining: 1 },
+            TokenBucketResult::Taken { remaining: 0 },
+        ]
+    );
+
+    match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
+        TokenBucketResult::Empty { retry_after } => {
+            assert!(!retry_after.is_zero());
+            assert!(retry_after <= Duration::from_secs(60), "{retry_after:?}");
+        }
+        TokenBucketResult::Taken { remaining } => {
+            panic!("an empty bucket gave a token, {remaining} left")
+        }
+    }
+}
+
+#[tokio::test]
+async fn an_emptied_bucket_gains_one_token_per_refill_interval() {
+    let client = redis_client();
+    let adapter = adapter();
+    let key = unique_key("bucket_refill");
+    let config = TokenBucketConfig {
+        capacity: 200,
+        refill_interval: Duration::from_secs(1),
+    };
+    let emptied_at = redis_now_ms(&client).await - 2_500;
+    let _: () = redis::AsyncCommands::hset_multiple(
+        &mut client.get_multiplexed_async_connection().await.unwrap(),
+        super::token_bucket_key(&key),
+        &[("tokens", 0), ("refilled_at", emptied_at)],
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap(),
+        TokenBucketResult::Taken { remaining: 1 }
+    );
+    assert_eq!(
+        TokenBucketPort::take(&adapter, key.clone(), config).await.unwrap(),
+        TokenBucketResult::Taken { remaining: 0 }
+    );
+    match TokenBucketPort::take(&adapter, key, config).await.unwrap() {
+        TokenBucketResult::Empty { retry_after } => {
+            assert!(!retry_after.is_zero());
+            assert!(retry_after <= Duration::from_millis(500), "{retry_after:?}");
+        }
+        TokenBucketResult::Taken { remaining } => {
+            panic!("the third token came early, {remaining} left")
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_full_bucket_banks_no_time_beyond_its_capacity() {
+    let client = redis_client();
+    let adapter = adapter();
+    let key = unique_key("bucket_full");
+    let config = TokenBucketConfig {
+        capacity: 3,
+        refill_interval: Duration::from_secs(1),
+    };
+    let an_hour_ago = redis_now_ms(&client).await - 3_600_000;
+    let _: () = redis::AsyncCommands::hset_multiple(
+        &mut client.get_multiplexed_async_connection().await.unwrap(),
+        super::token_bucket_key(&key),
+        &[("tokens", 3), ("refilled_at", an_hour_ago)],
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+        TokenBucketPort::take(&adapter, key, config).await.unwrap(),
+        TokenBucketResult::Taken { remaining: 2 }
+    );
+}
+
+#[tokio::test]
+async fn concurrent_takes_never_take_more_than_the_capacity() {
+    let key = unique_key("bucket_concurrent");
+    let config = TokenBucketConfig {
+        capacity: 5,
+        refill_interval: Duration::from_secs(60),
+    };
+
+    let mut handles = Vec::new();
+    for _ in 0..20 {
+        let adapter = adapter();
+        let key = key.clone();
+        handles.push(tokio::spawn(async move {
+            TokenBucketPort::take(&adapter, key, config).await
+        }));
+    }
+    let mut taken = 0;
+    for handle in handles {
+        if let TokenBucketResult::Taken { .. } = handle.await.unwrap().unwrap() {
+            taken += 1;
+        }
+    }
+
+    assert_eq!(taken, 5);
+}
+
+#[tokio::test]
+async fn each_key_has_its_own_bucket() {
+    let adapter = adapter();
+    let emptied = unique_key("bucket_emptied");
+    let other = unique_key("bucket_other");
+    let config = TokenBucketConfig {
+        capacity: 1,
+        refill_interval: Duration::from_secs(60),
+    };
+
+    TokenBucketPort::take(&adapter, emptied.clone(), config)
+        .await
+        .unwrap();
+    assert!(matches!(
+        TokenBucketPort::take(&adapter, emptied, config).await.unwrap(),
+        TokenBucketResult::Empty { .. }
+    ));
+
+    assert_eq!(
+        TokenBucketPort::take(&adapter, other, config).await.unwrap(),
+        TokenBucketResult::Taken { remaining: 0 }
+    );
+}
+
+#[tokio::test]
+async fn a_bucket_expires_once_it_would_be_full_again() {
+    let client = redis_client();
+    let adapter = adapter();
+    let key = unique_key("bucket_expiry");
+    let config = TokenBucketConfig {
+        capacity: 3,
+        refill_interval: Duration::from_secs(1),
+    };
+
+    TokenBucketPort::take(&adapter, key.clone(), config)
+        .await
+        .unwrap();
+
+    let ttl_ms: i64 = redis::AsyncCommands::pttl(
+        &mut client.get_multiplexed_async_connection().await.unwrap(),
+        super::token_bucket_key(&key),
+    )
+    .await
+    .unwrap();
+    assert!(ttl_ms > 0 && ttl_ms <= 3_000, "{ttl_ms}");
 }
