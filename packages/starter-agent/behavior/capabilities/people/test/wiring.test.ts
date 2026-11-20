@@ -44,7 +44,7 @@ const history = (recent: readonly Entry[]): History => ({
   recent: async () => recent,
   record: async () => undefined,
   recorded: async () => false,
-  wait: async () => undefined,
+  wait: async () => true,
   answered: async () => undefined,
   waiting: async () => [],
 });

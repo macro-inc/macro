@@ -33,6 +33,7 @@ const fakeMacro = () => {
   let meCalls = 0;
   let meFailures = 0;
   let unreadable = false;
+  let held: Promise<void> | undefined;
   let handler: ((event: unknown) => Promise<void>) | undefined;
   let options: ListenOptions | undefined;
   const handle = (message: Posted) => ({
@@ -97,6 +98,7 @@ const fakeMacro = () => {
     channels: {
       activeSince: async function* (after: string | Date) {
         activeSince.push(new Date(after).toISOString());
+        await held;
         yield channel;
       },
       byId: () => channel,
@@ -106,6 +108,15 @@ const fakeMacro = () => {
     macro: macro as unknown as Macro,
     activeSince,
     meCalls: () => meCalls,
+    /** Listing active channels waits until the returned release. */
+    hold: () => {
+      const gate = Promise.withResolvers<void>();
+      held = gate.promise;
+      return () => {
+        held = undefined;
+        gate.resolve();
+      };
+    },
     /** The next `times` round trips fail. */
     failMe: (times: number) => {
       meFailures = times;
@@ -399,4 +410,26 @@ test('a root deleted during the restart is not delivered, its new reply is', asy
     'gone-reply'
   );
   expect(await nothingWithin(next())).toBe('nothing');
+});
+
+test('while a catch-up is still reading, the cursor stays before its gap', async () => {
+  const backend = fakeMacro();
+  const release = backend.hold();
+  const { next, written } = listening(backend, { at: '2026-11-19T11:00:00Z' });
+
+  void next();
+  await Bun.sleep(10);
+  backend.options()?.onOpen?.(now);
+  await Bun.sleep(10);
+  // A live event during the pass must not move the cursor past the gap.
+  backend.options()?.onEventId?.('e5');
+  await Bun.sleep(10);
+  expect(written.at(-1)).toEqual({
+    eventId: 'e5',
+    at: '2026-11-19T10:59:00.000Z',
+  });
+
+  release();
+  await Bun.sleep(20);
+  expect(written.at(-1)).toEqual({ eventId: 'e5', at: now.toISOString() });
 });

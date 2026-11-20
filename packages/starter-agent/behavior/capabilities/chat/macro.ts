@@ -164,8 +164,15 @@ export const sdkChat = ({
   // restart reads them again (history drops the ones already recorded).
   const unhandled = new Map<string, number>();
   let lastEventId: string | undefined;
+  // The earliest gap a catch-up hasn't finished reading yet: the cursor
+  // stays at or before it too, so a restart mid catch-up reads it again.
+  let catchUpFloor = (): number => Number.POSITIVE_INFINITY;
   const cursorNow = (): StreamCursor => {
-    const oldest = Math.min(now().getTime(), ...unhandled.values());
+    const oldest = Math.min(
+      now().getTime(),
+      catchUpFloor(),
+      ...unhandled.values()
+    );
     const at = new Date(oldest).toISOString();
     return lastEventId === undefined ? { at } : { eventId: lastEventId, at };
   };
@@ -500,6 +507,11 @@ export const sdkChat = ({
       let pending =
         stored === undefined ? undefined : from(new Date(stored.at));
       let lastEvent: Date | undefined;
+      // The gap the running pass reads.
+      let reading: string | undefined;
+      const instant = (at: string | undefined) =>
+        at === undefined ? Number.POSITIVE_INFINITY : Date.parse(at);
+      catchUpFloor = () => Math.min(instant(pending), instant(reading));
       let open = false;
       let catchingUp = false;
       const catchUp = async (): Promise<void> => {
@@ -508,11 +520,15 @@ export const sdkChat = ({
         try {
           while (open && pending !== undefined) {
             const after = pending;
+            reading = after;
             pending = undefined;
             await sleep(Math.random() * catchUpSpreadMs);
             for (let attempt = 0; ; attempt += 1) {
               try {
                 await catchUpFrom(after);
+                // Read: what it found is in `unhandled` now.
+                reading = undefined;
+                saveCursor();
                 break;
               } catch {
                 // The backend is still coming back: try again.

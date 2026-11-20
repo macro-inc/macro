@@ -107,6 +107,18 @@ describe('ChannelNamespace', () => {
     expect(ids).toEqual(['newest', 'replied']);
   });
 
+  test('activeSince refuses a value that is not an instant', async () => {
+    const client = {
+      storage: {
+        getChannels: async () => ({ data: { items: [], next_cursor: null } }),
+      },
+    } as unknown as MacroClient;
+
+    await expect(
+      Array.fromAsync(new ChannelNamespace(client).activeSince('not a time')),
+    ).rejects.toThrow('not an instant');
+  });
+
   test('name search asks the server for channel names in one request', async () => {
     const listRequests: GetChannelsData['query'][] = [];
     const searchRequests: UnifiedSearchData[] = [];

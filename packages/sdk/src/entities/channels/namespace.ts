@@ -2,7 +2,13 @@ import type {
   ApiChannelWithLatest,
   ChannelType,
 } from '../../../generated/storage/types.gen';
-import { type IterationOptions, iterate, paginate, unwrap } from '../../utils';
+import {
+  type IterationOptions,
+  iterate,
+  MacroError,
+  paginate,
+  unwrap,
+} from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import type { SearchOpts } from '../search/options';
 import type { Team } from '../teams/team';
@@ -112,6 +118,8 @@ export class ChannelNamespace {
    */
   async *activeSince(after: Date | string): AsyncGenerator<Channel> {
     const since = (after instanceof Date ? after : new Date(after)).getTime();
+    if (Number.isNaN(since))
+      throw new MacroError(`activeSince: not an instant: ${String(after)}`);
     const active: {
       readonly latest: number;
       readonly record: ApiChannelWithLatest;

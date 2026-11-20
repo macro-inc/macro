@@ -40,17 +40,21 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
               decide_error: String(error),
             }),
         });
-        await history.record(channelId, entry);
-        // Recorded: a restart from here needn't read it again.
-        chat.handled(entry.id);
-        if (verdict.kind === 'ignored') return;
+        // Recorded, so a restart from here needn't read it again. A message
+        // for the agent is queued first: recorded but not queued, it would
+        // never be answered.
+        const done = async () => {
+          await history.record(channelId, entry);
+          chat.handled(entry.id);
+        };
+        if (verdict.kind === 'ignored') return done();
         await log.event(listenLog, {
           channel,
           message_id: entry.id,
           relevant: verdict.kind === 'relevant',
           p: verdict.p,
         });
-        if (verdict.kind !== 'relevant') return;
+        if (verdict.kind !== 'relevant') return done();
         const message = {
           channel_id: channelId,
           channel,
@@ -58,8 +62,10 @@ export const chatHandlers = (sources: ReturnType<typeof chatSources>) =>
           mentioned: verdict.mentioned,
           p: { ...verdict.p },
         };
-        await history.wait(message);
-        waiting.push(channelId, message);
+        // Already waiting when a restart restored it from the queue.
+        const queued = await history.wait(message);
+        await done();
+        if (queued) waiting.push(channelId, message);
       }
     )
     // The responder: wakes the agent to answer one conversation. It doesn't
