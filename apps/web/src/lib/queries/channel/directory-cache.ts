@@ -101,6 +101,16 @@ export function createChannelDirectoryIndex(
   let entries = new Map<string, IndexEntry>();
   let generation: string | undefined;
 
+  const snapshot = (reread: number): ChannelDirectoryRead => {
+    const channels: DirectoryChannel[] = [];
+    const incompleteIds: string[] = [];
+    for (const [recordKey, entry] of entries) {
+      if (entry.channel) channels.push(entry.channel);
+      else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
+    }
+    return { channels, incompleteIds, reread };
+  };
+
   return {
     async refresh(
       storageGeneration: string,
@@ -142,14 +152,28 @@ export function createChannelDirectoryIndex(
         if (channel) next.set(key, { sourceHash: '', channel });
       }
       entries = next;
+      return snapshot(read.size);
+    },
 
-      const channels: DirectoryChannel[] = [];
-      const incompleteIds: string[] = [];
-      for (const [recordKey, entry] of entries) {
-        if (entry.channel) channels.push(entry.channel);
-        else incompleteIds.push(recordKey.slice(CHANNEL_RECORD_PREFIX.length));
-      }
-      return { channels, incompleteIds, reread: read.size };
+    /**
+     * Rereads only these records, for the channels a by-id read just wrote,
+     * without listing the rest. Undefined when the index holds another
+     * storage generation and needs a full refresh first. A record still
+     * missing a field keeps the entry it had.
+     */
+    async readKeys(
+      storageGeneration: string,
+      recordKeys: readonly string[],
+      signal?: AbortSignal
+    ): Promise<ChannelDirectoryRead | undefined> {
+      if (storageGeneration !== generation) return undefined;
+      const read = await readDirectoryChannels(host, recordKeys, signal);
+      signal?.throwIfAborted();
+      if (storageGeneration !== generation) return undefined;
+      // An empty hash makes the next refresh read it again.
+      for (const [recordKey, channel] of read)
+        entries.set(recordKey, { sourceHash: '', channel });
+      return snapshot(read.size);
     },
   };
 }

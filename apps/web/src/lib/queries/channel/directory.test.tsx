@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import type { CacheChangeListener } from '@graphql-cache/host/types';
+import type {
+  CacheChangeListener,
+  CacheGenerationChange,
+} from '@graphql-cache/host/types';
 import type {
   ChannelDirectoryFieldsFragment,
   ChannelDirectoryPageQuery,
@@ -12,21 +15,29 @@ import type {
   GraphqlSoupInput,
 } from '@service-storage/graphql-soup';
 import { render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import type { Client } from '@urql/core';
-import { createRoot, createSignal } from 'solid-js';
+import { createRenderEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   initialSoupBackfillCheckpoint,
+  markSoupBackfillLaneFailed,
   saveSoupBackfillCheckpoint,
 } from '../soup/backfill-checkpoint';
 import {
   type ChannelDirectory,
+  channelDirectoryPagesQueryOptions,
   channelDirectoryState,
   createCachedChannelDirectory,
   createMemoryChannelDirectory,
   fetchJoinedChannels,
   lookupChannel,
+  refreshChannelDirectory,
+  settledChannelLookup,
   staticChannelDirectory,
 } from './directory';
 import type { DirectoryChannel } from './directory-core';
@@ -310,33 +321,57 @@ type CachedDirectoryOptions = {
   viewer?: string;
   generation?: string;
   fetchAll?: () => Promise<readonly DirectoryChannel[]>;
+  /** Ids a by-id read returns without a readable record. */
+  unreadable?: readonly string[];
 };
 
 /** Mounts the cached directory over a fake cache whose by-id reads land the
- * named records from `server`. */
+ * named records from `server`. The viewer and storage generation it reports
+ * can change, and a listing can be held after it has read the records, to
+ * change things while a scan is under way. */
 function mountCachedDirectory(
   server: ChannelDirectoryFieldsFragment[],
   options: CachedDirectoryOptions = {}
 ) {
   const cache = fakeChannelCache();
-  const listeners: CacheChangeListener[] = [];
+  let viewer = options.viewer ?? VIEWER;
+  let generation = options.generation ?? 'g1';
+  let hold: Promise<void> | undefined;
+  const changeListeners: CacheChangeListener[] = [];
+  const generationListeners: ((change: CacheGenerationChange) => void)[] = [];
+  const search = cache.host.search;
   const host = {
     ...cache.host,
-    currentStorageGeneration: async () => options.generation ?? 'g1',
+    search: vi.fn(async (...args: Parameters<typeof search>) => {
+      const listed = await search(...args);
+      await hold;
+      return listed;
+    }),
+    currentStorageGeneration: vi.fn(async () => generation),
     readQuery: vi.fn(async () => ({
       kind: 'hit' as const,
-      data: { user: { id: options.viewer ?? VIEWER } },
+      data: { user: { id: viewer } },
     })),
     onCacheChanged: (listener: CacheChangeListener) => {
-      listeners.push(listener);
-      return () => listeners.splice(listeners.indexOf(listener), 1);
+      changeListeners.push(listener);
+      return () => changeListeners.splice(changeListeners.indexOf(listener), 1);
+    },
+    onCacheGenerationChanged: (
+      listener: (change: CacheGenerationChange) => void
+    ) => {
+      generationListeners.push(listener);
+      return () =>
+        generationListeners.splice(generationListeners.indexOf(listener), 1);
     },
   };
   const hydrate = vi.fn(
     async (input: GraphqlSoupInput): Promise<GraphqlSoupHydrationPage> => {
       const named = namedIds(input) ?? [];
       const found = server.filter(({ id }) => named.includes(id));
-      for (const record of found) cache.put(record);
+      for (const record of found)
+        cache.put(record, {
+          incomplete: options.unreadable?.includes(record.id),
+        });
       return { nextCursor: null, entityIds: found.map(({ id }) => id) };
     }
   );
@@ -350,7 +385,37 @@ function mountCachedDirectory(
       fetchAll,
     });
   });
-  return { cache, directory, hydrate, fetchAll };
+  return {
+    cache,
+    host,
+    directory,
+    hydrate,
+    fetchAll,
+    /** Holds every listing's answer until the returned release is called. */
+    holdListings() {
+      let release!: () => void;
+      hold = new Promise((done) => {
+        release = done;
+      });
+      return () => {
+        hold = undefined;
+        release();
+      };
+    },
+    setViewer(next: string) {
+      viewer = next;
+    },
+    resetStorage(next: string) {
+      generation = next;
+      for (const listener of [...generationListeners])
+        listener({ storage: 'reset' } as CacheGenerationChange);
+    },
+    /** A new cache engine over the same storage, which reads again. */
+    reopen() {
+      for (const listener of [...generationListeners])
+        listener({ storage: 'preserved' } as CacheGenerationChange);
+    },
+  };
 }
 
 /** Records that a pass of the channel lane finished in `generation`. */
@@ -363,6 +428,21 @@ function completeLane(generation: string) {
     },
     CHANNEL_DIRECTORY_CHECKPOINT_ID
   );
+}
+
+/** Every (complete, joined ids) the directory showed, in order. */
+function recordStates(directory: ChannelDirectory) {
+  const seen: { complete: boolean; ids: string[] }[] = [];
+  createRoot((dispose) => {
+    disposers.push(dispose);
+    createRenderEffect(() =>
+      seen.push({
+        complete: directory.complete(),
+        ids: ids(directory.channels()),
+      })
+    );
+  });
+  return seen;
 }
 
 describe('cached channel directory', () => {
@@ -380,6 +460,74 @@ describe('cached channel directory', () => {
     completeLane('g1');
     await vi.waitFor(() => expect(directory.complete()).toBe(true));
     expect(directory.failed()).toBe(false);
+  });
+
+  it('never calls a scan complete that started before the lane finished', async () => {
+    const { cache, directory, holdListings, host, reopen } =
+      mountCachedDirectory([]);
+    cache.put(channelRecord('a'));
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    const seen = recordStates(directory);
+
+    // A scan has listed the records when the lane's last page lands.
+    const release = holdListings();
+    const listings = host.search.mock.calls.length;
+    reopen();
+    await vi.waitFor(() =>
+      expect(host.search.mock.calls.length).toBeGreaterThan(listings)
+    );
+    cache.put(channelRecord('last'));
+    completeLane('g1');
+    release();
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(seen.filter(({ complete }) => complete)).toEqual(
+      seen
+        .filter(({ complete }) => complete)
+        .map(() => ({ complete: true, ids: ['a', 'last'] }))
+    );
+  });
+
+  it('drops a scan when the cache changed hands while it ran', async () => {
+    const { cache, directory, holdListings, setViewer, host, reopen } =
+      mountCachedDirectory([]);
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    const seen = recordStates(directory);
+
+    // The next viewer's records land while a scan is under way.
+    const release = holdListings();
+    const listings = host.search.mock.calls.length;
+    cache.put(channelRecord('theirs'));
+    reopen();
+    await vi.waitFor(() =>
+      expect(host.search.mock.calls.length).toBeGreaterThan(listings)
+    );
+    setViewer('macro|someone-else@example.com');
+    release();
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(false));
+    expect(directory.channels()).toEqual([]);
+    expect(seen.flatMap((state) => state.ids)).not.toContain('theirs');
+  });
+
+  it('retires what it read when the storage resets, and reads the new one', async () => {
+    const { cache, directory, resetStorage } = mountCachedDirectory([]);
+    cache.put(channelRecord('a'));
+    completeLane('g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    cache.records.clear();
+    cache.put(channelRecord('fresh'));
+    resetStorage('g2');
+
+    expect(directory.complete()).toBe(false);
+    await vi.waitFor(() =>
+      expect(ids(directory.channels())).toEqual(['fresh'])
+    );
+    expect(directory.complete()).toBe(false);
+    completeLane('g2');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
   });
 
   it('reads a pending channel by id and answers once its record is cached', async () => {
@@ -401,6 +549,38 @@ describe('cached channel directory', () => {
     expect(hydrate).toHaveBeenCalledTimes(2);
   });
 
+  it('reads only the records a by-id read wrote, not the whole listing', async () => {
+    const { directory, host } = mountCachedDirectory([
+      channelRecord('late', { name: 'Late' }),
+    ]);
+    await vi.waitFor(() => expect(host.search).toHaveBeenCalled());
+    await vi.waitFor(() => expect(host.readQuery).toHaveBeenCalled());
+    const listings = host.search.mock.calls.length;
+
+    expect(directory.lookup('late').status).toBe('pending');
+    await vi.waitFor(() =>
+      expect(directory.lookup('late').status).toBe('loaded')
+    );
+
+    expect(host.search).toHaveBeenCalledTimes(listings);
+    expect(host.readRecordsByKeys).toHaveBeenLastCalledWith(
+      expect.objectContaining({ keys: ['GraphqlSoupChannel:late'] })
+    );
+  });
+
+  it('reads a returned channel again when its record cannot be read', async () => {
+    const { directory, hydrate } = mountCachedDirectory(
+      [channelRecord('thin')],
+      { unreadable: ['thin'] }
+    );
+
+    expect(directory.lookup('thin').status).toBe('pending');
+    // Read once more, then given up on for a while.
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    // Neither answered: still waiting, not missing.
+    expect(directory.lookup('thin').status).toBe('pending');
+  });
+
   it('reads every channel from the network until complete, then from the cache', async () => {
     const network = [directoryChannel('a'), directoryChannel('b')];
     const { cache, directory, fetchAll } = mountCachedDirectory([], {
@@ -417,15 +597,131 @@ describe('cached channel directory', () => {
     expect(fetchAll).toHaveBeenCalledOnce();
   });
 
+  it('completes from the network once the lane gives up', async () => {
+    const { cache, directory, fetchAll } = mountCachedDirectory([], {
+      fetchAll: async () => [directoryChannel('a'), directoryChannel('b')],
+    });
+    cache.put(channelRecord('a', { name: 'cached a' }));
+    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    expect(directory.complete()).toBe(false);
+
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(fetchAll).toHaveBeenCalledOnce();
+    // The cached record follows soup updates, so it wins over the network's.
+    expect(directory.channels().map(({ name }) => name)).toEqual([
+      'cached a',
+      'channel b',
+    ]);
+    expect(directory.lookup('zzz').status).toBe('missing');
+    expect(directory.failed()).toBe(false);
+  });
+
+  it('fails when the lane gave up and the network fails too, until retried', async () => {
+    let attempt = 0;
+    const { directory, fetchAll } = mountCachedDirectory([], {
+      fetchAll: async () => {
+        attempt += 1;
+        if (attempt === 1) throw new Error('offline');
+        return [directoryChannel('a')];
+      },
+    });
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+
+    await vi.waitFor(() => expect(directory.failed()).toBe(true));
+    expect(directory.complete()).toBe(false);
+
+    directory.retry();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.failed()).toBe(false);
+    expect(ids(directory.channels())).toEqual(['a']);
+    expect(fetchAll).toHaveBeenCalledTimes(2);
+  });
+
   it("answers nothing from another viewer's cache", async () => {
-    const { cache, directory } = mountCachedDirectory([], {
+    const { cache, directory, host } = mountCachedDirectory([], {
       viewer: 'macro|someone-else@example.com',
     });
     cache.put(channelRecord('theirs'));
     completeLane('g1');
 
-    await vi.waitFor(() => expect(cache.host.search).not.toHaveBeenCalled());
+    // The scope check has answered before the listing would run.
+    await vi.waitFor(() => expect(host.readQuery).toHaveBeenCalled());
+    await vi.waitFor(() =>
+      expect(host.currentStorageGeneration).toHaveBeenCalled()
+    );
+    await new Promise((done) => setTimeout(done, 50));
+    expect(host.search).not.toHaveBeenCalled();
     expect(directory.channels()).toEqual([]);
     expect(directory.complete()).toBe(false);
+  });
+});
+
+describe('refreshChannelDirectory', () => {
+  it('reads again after a first read that was in flight during the change', async () => {
+    const network = fakeNetwork([channelRecord('a')], { holdPages: true });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    disposers.push(() => queryClient.clear());
+    const options = channelDirectoryPagesQueryOptions(
+      VIEWER,
+      () => network.client
+    );
+    const observer = new QueryObserver(queryClient, options);
+    disposers.push(observer.subscribe(() => undefined));
+    await vi.waitFor(() => expect(network.inputs).toHaveLength(1));
+
+    const refreshed = refreshChannelDirectory(queryClient);
+    network.release();
+    await refreshed;
+
+    // The first walk, then one that started after the change.
+    expect(network.inputs).toHaveLength(2);
+    expect(queryClient.getQueryState(options.queryKey)?.isInvalidated).toBe(
+      false
+    );
+  });
+});
+
+describe('settledChannelLookup', () => {
+  function lookingUp() {
+    const [lookup, setLookup] = createSignal<
+      ReturnType<ChannelDirectory['lookup']>
+    >({ status: 'pending' });
+    return { directory: { lookup: () => lookup() }, setLookup };
+  }
+
+  it('waits for a pending lookup to answer', async () => {
+    const { directory, setLookup } = lookingUp();
+    const settled = createRoot((dispose) => {
+      disposers.push(dispose);
+      return settledChannelLookup(directory, 'a', 1_000);
+    });
+    setLookup({ status: 'loaded', channel: directoryChannel('a') });
+    expect(await settled).toMatchObject({
+      status: 'loaded',
+      channel: { name: 'channel a' },
+    });
+  });
+
+  it('answers pending when the lookup does not settle in time', async () => {
+    const { directory } = lookingUp();
+    const settled = createRoot((dispose) => {
+      disposers.push(dispose);
+      return settledChannelLookup(directory, 'a', 20);
+    });
+    expect(await settled).toEqual({ status: 'pending' });
+  });
+
+  it('answers pending when its owner goes away first', async () => {
+    const { directory } = lookingUp();
+    const settled = createRoot((dispose) => {
+      const promise = settledChannelLookup(directory, 'a', 1_000);
+      dispose();
+      return promise;
+    });
+    expect(await settled).toEqual({ status: 'pending' });
   });
 });

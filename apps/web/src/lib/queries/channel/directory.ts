@@ -10,6 +10,7 @@
  */
 
 import { ENABLE_GRAPHQL_BACKFILL } from '@core/constant/featureFlags';
+import { debounce } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
@@ -25,7 +26,8 @@ import {
   getGraphqlSoupClient,
   hydrateGraphqlSoup,
 } from '@service-storage/graphql-soup';
-import { AsyncBatcher } from '@tanstack/pacer';
+import { promiseTimeout, until } from '@solid-primitives/promise';
+import { AsyncQueuer, Batcher } from '@tanstack/pacer';
 import {
   type QueryClient,
   queryOptions,
@@ -43,16 +45,23 @@ import {
 import { unwrap } from 'solid-js/store';
 import { useQueryAccount } from '../auth/use-query-account';
 import { queryClient } from '../client';
-import { readContactCacheScope } from '../contacts/cache-scope';
+import {
+  assertContactCacheScope,
+  ContactDirectoryScopeError,
+  readContactCacheScope,
+} from '../contacts/cache-scope';
 import { queryReadyGate } from '../gate';
 import {
   soupBackfillLaneCompleted,
+  soupBackfillLaneFailed,
   watchSoupBackfillCheckpoint,
 } from '../soup/backfill-checkpoint';
 import { subscribeToVisibleCacheChanges } from '../subscribe-to-visible-cache-changes';
 import { ACCOUNT_WIDE_REFRESH_INTERVAL_MS } from '../visible-refresh';
 import {
+  CHANNEL_RECORD_PREFIX,
   CHANNEL_SEARCH_BUCKETS,
+  type ChannelDirectoryRead,
   createChannelDirectoryIndex,
 } from './directory-cache';
 import { type DirectoryChannel, toDirectoryChannel } from './directory-core';
@@ -66,8 +75,12 @@ import { channelKeys } from './keys';
 // The server answers a by-id read of at most this many channels in one page.
 const BY_ID_BATCH = 100;
 const BY_ID_WAIT_MS = 25;
-// A failed by-id read is tried once more before its channels stay pending.
+// A failed by-id read is tried once more before its channels count as
+// failed, and read again after a pause while a lookup still asks for them.
 const BY_ID_ATTEMPTS = 2;
+const BY_ID_RETRY_AFTER_MS = 30_000;
+// By-id batches read at once; more wait their turn.
+const BY_ID_CONCURRENCY = 2;
 // Records still lacking a field once the lane finished, read per refresh.
 const INCOMPLETE_READS_PER_REFRESH = 500;
 const DIRECTORY_STALE_MS = 5 * 60_000;
@@ -107,7 +120,8 @@ export type ChannelDirectory = {
    * complete yet. */
   readComplete: () => Promise<readonly DirectoryChannel[]>;
   /** Whether filling the directory failed and stays failed until `retry`.
-   * The cached directory never does: its backfill lane retries itself. */
+   * The cached directory fails only when its backfill lane gave up and the
+   * network's pages failed too. */
   failed: Accessor<boolean>;
   retry: () => void;
 };
@@ -139,6 +153,31 @@ export function lookupChannel(
   if (!state.complete) return PENDING;
   if (state.incomplete[channelId] && outcome !== 'returned') return PENDING;
   return MISSING;
+}
+
+/** The channel's lookup once it stops being pending, or pending after
+ * `timeoutMs`, for a one-time read such as rendering a mention to text. */
+export async function settledChannelLookup(
+  directory: Pick<ChannelDirectory, 'lookup'>,
+  channelId: string,
+  timeoutMs: number
+): Promise<ChannelLookup> {
+  const settled = until(() => {
+    const lookup = directory.lookup(channelId);
+    return lookup.status === 'pending' ? undefined : lookup;
+  });
+  // Not raceTimeout: its cleanup leaves a rejection unhandled when the
+  // owner goes away first.
+  try {
+    return (
+      (await Promise.race([settled, promiseTimeout(timeoutMs)])) ?? PENDING
+    );
+  } catch {
+    // The owner that asked went away.
+    return PENDING;
+  } finally {
+    settled.dispose();
+  }
 }
 
 export function sameChannelLookup(a: ChannelLookup, b: ChannelLookup) {
@@ -216,12 +255,16 @@ export async function fetchJoinedChannels(
   signal?: AbortSignal
 ): Promise<DirectoryChannel[]> {
   return Telemetry.span('channel_directory.page_all', async (span) => {
+    // Each page after the first starts after an await, outside the span.
+    const context = Telemetry.captureContext();
     const channels = new Map<string, DirectoryChannel>();
     let input: GraphqlSoupInput = { initial: CHANNEL_DIRECTORY_INPUT };
     let pages = 0;
     for (;;) {
       signal?.throwIfAborted();
-      const page = await fetchDirectoryPage(client, input, signal);
+      const page = await context.run(() =>
+        fetchDirectoryPage(client, input, signal)
+      );
       pages += 1;
       // A channel that moved up while the pages were read is kept once.
       for (const channel of page.channels) channels.set(channel.id, channel);
@@ -269,22 +312,50 @@ export function channelDirectoryPagesQueryOptions(
   });
 }
 
-/** Re-reads the in-memory directory after a channel change. The cached
- * directory needs nothing: the server's soup updates keep it current. */
-export function refreshChannelDirectory(client: QueryClient = queryClient) {
-  return client.invalidateQueries({ queryKey: channelKeys.directory._def });
+/**
+ * Re-reads the in-memory directory after a channel change. The cached
+ * directory needs nothing: the server's soup updates keep it current.
+ *
+ * Invalidating a first read still in flight joins it, and its success clears
+ * the invalidation, though it may have read the pages before the change. So
+ * such a read is awaited and then read again.
+ */
+export async function refreshChannelDirectory(
+  client: QueryClient = queryClient
+) {
+  const filters = { queryKey: channelKeys.directory._def };
+  const firstReads = client
+    .getQueryCache()
+    .findAll(filters)
+    .flatMap((query) =>
+      query.state.fetchStatus !== 'idle' &&
+      query.state.data === undefined &&
+      query.promise
+        ? [query.promise]
+        : []
+    );
+  await client.invalidateQueries(filters);
+  if (firstReads.length === 0) return;
+  await Promise.allSettled(firstReads);
+  await client.invalidateQueries(filters);
 }
 
+/** What a by-id read found. `returned` is undefined when the answer proves
+ * nothing about the ids it lacks; `unreadable` are ids it returned whose
+ * records could not be read, to be read again. */
+type ByIdRead = {
+  returned: ReadonlySet<string> | undefined;
+  unreadable?: readonly string[];
+};
+
 /**
- * Coalesces by-id reads. `read` resolves to the ids the server returned, or
- * undefined when its answer proves nothing about the others. Each id is read
- * at most once until `reset`.
+ * Coalesces by-id reads, at most `BY_ID_CONCURRENCY` batches at a time. Each
+ * id is read once until `reset`, except that an id whose reads failed is
+ * forgotten `BY_ID_RETRY_AFTER_MS` after the last failure, so a lookup still
+ * asking for it reads it again.
  */
 function createByIdReader(
-  read: (
-    ids: string[],
-    signal: AbortSignal
-  ) => Promise<ReadonlySet<string> | undefined>
+  read: (ids: string[], signal: AbortSignal) => Promise<ByIdRead>
 ) {
   const [outcomes, setOutcomes] = createSignal<
     Readonly<Record<string, ByIdOutcome>>
@@ -292,41 +363,72 @@ function createByIdReader(
   let requested = new Set<string>();
   let attempts = new Map<string, number>();
   let controller = new AbortController();
-  onCleanup(() => controller.abort());
 
-  const settle = (updates: Record<string, ByIdOutcome>) =>
+  const settle = (updates: Record<string, ByIdOutcome>) => {
+    if (Object.keys(updates).length === 0) return;
     setOutcomes((previous) => ({ ...previous, ...updates }));
+  };
+
+  const forgetFailures = debounce(() => {
+    const failed = Object.entries(untrack(outcomes)).flatMap(([id, outcome]) =>
+      outcome === 'failed' ? [id] : []
+    );
+    if (failed.length === 0) return;
+    for (const id of failed) {
+      requested.delete(id);
+      attempts.delete(id);
+    }
+    setOutcomes((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([, outcome]) => outcome !== 'failed')
+      )
+    );
+  }, BY_ID_RETRY_AFTER_MS);
 
   const retryOrFail = (ids: readonly string[]) => {
     const failed: Record<string, ByIdOutcome> = {};
     for (const id of ids) {
       const tried = (attempts.get(id) ?? 0) + 1;
       attempts.set(id, tried);
-      if (tried < BY_ID_ATTEMPTS) queue(id);
+      if (tried < BY_ID_ATTEMPTS) batcher.addItem(id);
       else failed[id] = 'failed';
     }
     settle(failed);
+    if (Object.keys(failed).length > 0) forgetFailures();
   };
 
   // A batch never rejects: a read that a reset aborted settles nothing, and
   // a failed one is retried or marked failed here.
   const readBatch = async (ids: string[]) => {
     const signal = controller.signal;
+    if (signal.aborted) return;
     try {
-      const returned = await Telemetry.span(
+      const found = await Telemetry.span(
         'channel_directory.by_id',
         async (span) => {
           span.setAttr('channel_directory.requested', ids.length);
           const result = await read(ids, signal);
-          span.setAttr('channel_directory.returned', result?.size ?? -1);
+          span.setAttr(
+            'channel_directory.returned',
+            result.returned?.size ?? -1
+          );
+          span.setAttr(
+            'channel_directory.unreadable',
+            result.unreadable?.length ?? 0
+          );
           return result;
         }
       );
       if (signal.aborted) return;
+      const unreadable = new Set(found.unreadable);
       const updates: Record<string, ByIdOutcome> = {};
-      for (const id of ids)
-        updates[id] = !returned || returned.has(id) ? 'returned' : 'absent';
+      for (const id of ids) {
+        if (unreadable.has(id)) continue;
+        updates[id] =
+          !found.returned || found.returned.has(id) ? 'returned' : 'absent';
+      }
       settle(updates);
+      if (unreadable.size > 0) retryOrFail([...unreadable]);
     } catch (error) {
       if (signal.aborted) return;
       Telemetry.error(error, { surface: 'channel-directory-by-id' });
@@ -334,13 +436,26 @@ function createByIdReader(
     }
   };
 
-  const batcher = new AsyncBatcher<string>(readBatch, {
+  const queuer = new AsyncQueuer<string[]>(readBatch, {
+    concurrency: BY_ID_CONCURRENCY,
+    onError: (error) =>
+      Telemetry.error(error, { surface: 'channel-directory-by-id' }),
+  });
+  const batcher = new Batcher<string>((ids) => queuer.addItem(ids), {
     wait: BY_ID_WAIT_MS,
     maxSize: BY_ID_BATCH,
   });
-  // The batch never rejects; see readBatch.
-  const queue = (id: string) =>
-    fireAndForget(batcher.addItem(id), 'channel-directory-by-id');
+  const drop = () => {
+    controller.abort();
+    batcher.cancel();
+    batcher.clear();
+    queuer.clear();
+    forgetFailures.clear();
+  };
+  onCleanup(() => {
+    drop();
+    queuer.stop();
+  });
 
   return {
     outcomes,
@@ -349,30 +464,31 @@ function createByIdReader(
     request(id: string) {
       if (requested.has(id)) return;
       requested.add(id);
-      queue(id);
+      batcher.addItem(id);
     },
     /** Forgets every read, for a new storage generation. */
     reset() {
-      controller.abort();
+      drop();
       controller = new AbortController();
       requested = new Set();
       attempts = new Map();
-      batcher.clear();
       setOutcomes({});
     },
   };
 }
 
-/** Runs `run` one at a time; a request during a run runs it again after.
- * The promise settles once a run that started after the request ends. */
-function createSerialRunner(run: () => Promise<void>) {
+/** Runs `run` one at a time; a request during a run, or a run that resolves
+ * true, runs it again after. The promise settles once a run that started
+ * after the request ends. */
+function createSerialRunner(run: () => Promise<boolean>) {
   let running: Promise<void> | undefined;
   let again = false;
   const loop = async () => {
     try {
       do {
         again = false;
-        await run();
+        const rerun = await run();
+        again ||= rerun;
       } while (again);
     } finally {
       running = undefined;
@@ -396,6 +512,7 @@ type CachedDirectoryDeps = {
     | 'currentStorageGeneration'
     | 'readQuery'
     | 'onCacheChanged'
+    | 'onCacheGenerationChanged'
   >;
   userId: string;
   hydrate: (
@@ -405,78 +522,231 @@ type CachedDirectoryDeps = {
   fetchAll: () => Promise<readonly DirectoryChannel[]>;
 };
 
-/** The directory read from the cache. Complete once a pass of the channel
- * lane finished in the cache's current storage generation. */
+/** The joined channels paged from the network once the channel lane gave
+ * up, so the directory can still complete. */
+type LaneFallback =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'loaded'; channels: readonly DirectoryChannel[] }
+  | { status: 'failed' };
+
+/** What the channel lane's checkpoint says of the current storage
+ * generation. */
+type LaneProgress = { complete: boolean; failed: boolean };
+
+const LANE_NOT_STARTED: LaneProgress = { complete: false, failed: false };
+
+function readLaneProgress(
+  userId: string,
+  storageGeneration: string
+): LaneProgress {
+  const complete = soupBackfillLaneCompleted(
+    userId,
+    CHANNEL_DIRECTORY_CHECKPOINT_ID,
+    storageGeneration
+  );
+  return {
+    complete,
+    failed:
+      !complete &&
+      soupBackfillLaneFailed(
+        userId,
+        CHANNEL_DIRECTORY_CHECKPOINT_ID,
+        storageGeneration
+      ),
+  };
+}
+
+/** The cached records, plus the network's channels the cache lacks. A cached
+ * record follows soup updates; the network's list is as of its read. */
+function withNetworkChannels(
+  cached: readonly DirectoryChannel[],
+  network: readonly DirectoryChannel[]
+): DirectoryChannel[] {
+  const ids = new Set(cached.map(({ id }) => id));
+  return [...cached, ...network.filter(({ id }) => !ids.has(id))];
+}
+
+/**
+ * The directory read from the cache. Complete once a pass of the channel lane
+ * finished in the cache's current storage generation. If the lane gives up
+ * first, the joined channels are paged from the network instead, and
+ * `failed` says whether that failed too.
+ */
 export function createCachedChannelDirectory(
   deps: CachedDirectoryDeps
 ): ChannelDirectory {
   const { host, userId } = deps;
   const index = createChannelDirectoryIndex(host);
   const [state, setState] = createSignal(EMPTY_CHANNEL_DIRECTORY_STATE);
+  const [fallback, setFallback] = createSignal<LaneFallback>({
+    status: 'idle',
+  });
   const controller = new AbortController();
   onCleanup(() => controller.abort());
   let generation: string | undefined;
+  // The cache the by-id reads answered for: a storage generation, null for
+  // another viewer's, undefined before the first read or after a reset.
+  let adopted: string | null | undefined;
+  // As of the last full read, which alone may promote completeness.
+  let lane = LANE_NOT_STARTED;
+  let lastRead: ChannelDirectoryRead | undefined;
+  // A full read lists every cached record; a keys read rereads only the
+  // records a by-id read wrote.
+  let wantFull = true;
+  const wantKeys = new Set<string>();
 
   const reader = createByIdReader(async (ids, signal) => {
     const page = await deps.hydrate(
       readableChannelsInput(CHANNEL_DIRECTORY_INPUT, ids),
       { signal }
     );
-    // A lookup answers from the index, so let it see the records first.
-    await refresh();
-    return page.nextCursor === null && page.entityIds
-      ? new Set(page.entityIds)
-      : undefined;
+    // A lookup answers from the directory, so let it see the records first.
+    for (const id of ids) wantKeys.add(`${CHANNEL_RECORD_PREFIX}${id}`);
+    await runner();
+    if (page.nextCursor !== null || !page.entityIds)
+      return { returned: undefined };
+    const records = untrack(state).records;
+    return {
+      returned: new Set(page.entityIds),
+      unreadable: page.entityIds.filter((id) => !records[id]),
+    };
   });
+
+  /** What the directory holds without a cache read: the network's channels
+   * once the lane gave up and they loaded, else nothing. */
+  const networkState = () => {
+    const network = untrack(fallback);
+    return network.status === 'loaded'
+      ? channelDirectoryState(network.channels, [], true)
+      : EMPTY_CHANNEL_DIRECTORY_STATE;
+  };
+
+  const publish = (read: ChannelDirectoryRead) => {
+    lastRead = read;
+    const network = untrack(fallback);
+    const networkChannels =
+      !lane.complete && network.status === 'loaded'
+        ? network.channels
+        : undefined;
+    const next = channelDirectoryState(
+      networkChannels
+        ? withNetworkChannels(read.channels, networkChannels)
+        : read.channels,
+      read.incompleteIds,
+      lane.complete || networkChannels !== undefined
+    );
+    if (!sameState(untrack(state), next)) setState(next);
+    // Before the lane finishes it fills these itself.
+    if (lane.complete)
+      for (const id of read.incompleteIds.slice(
+        0,
+        INCOMPLETE_READS_PER_REFRESH
+      ))
+        reader.request(id);
+    if (lane.failed) startFallback();
+  };
+
+  const loadFallback = async () => {
+    const signal = controller.signal;
+    try {
+      const channels = await deps.fetchAll();
+      if (signal.aborted) return;
+      setFallback({ status: 'loaded', channels });
+      if (lastRead) publish(lastRead);
+      else setState(networkState());
+    } catch (error) {
+      if (signal.aborted) return;
+      Telemetry.error(error, { surface: 'channel-directory-fallback' });
+      setFallback({ status: 'failed' });
+    }
+  };
+  const startFallback = () => {
+    if (untrack(fallback).status !== 'idle') return;
+    setFallback({ status: 'loading' });
+    // Never rejects: a failed read is reported inside.
+    fireAndForget(loadFallback(), 'channel-directory-fallback');
+  };
+
+  /** The cache's storage generation while it holds this viewer's records,
+   * adopted as the directory's; undefined for another viewer's cache. */
+  const adoptScope = async (signal: AbortSignal) => {
+    const scope = await readContactCacheScope(host, userId, signal);
+    // A lookup made before the first read keeps its by-id read.
+    if (adopted !== undefined && adopted !== (scope ?? null)) reader.reset();
+    adopted = scope ?? null;
+    generation = scope;
+    if (scope === undefined) {
+      // Another viewer's cache: nothing in it is this viewer's.
+      lane = LANE_NOT_STARTED;
+      lastRead = undefined;
+      setState(networkState());
+    }
+    return scope;
+  };
 
   const readIndex = () =>
     Telemetry.span('channel_directory.refresh', async (span) => {
       const signal = controller.signal;
-      const scope = await readContactCacheScope(host, userId, signal);
+      const scope = await adoptScope(signal);
       if (scope === undefined) {
-        // Another viewer's cache: nothing in it is this viewer's.
         span.setAttr('channel_directory.scope', 'other_viewer');
-        setState(EMPTY_CHANNEL_DIRECTORY_STATE);
         return;
       }
-      if (scope !== generation) {
-        generation = scope;
-        reader.reset();
-      }
+      // Read before the scan: a pass that finishes during it may have
+      // written records the scan missed, and its save reads again.
+      lane = readLaneProgress(userId, scope);
       const read = await index.refresh(scope, signal);
-      const complete = soupBackfillLaneCompleted(
-        userId,
-        CHANNEL_DIRECTORY_CHECKPOINT_ID,
-        scope
-      );
-      const next = channelDirectoryState(
-        read.channels,
-        read.incompleteIds,
-        complete
-      );
+      // The cache may have changed hands while it was read.
+      await assertContactCacheScope(host, userId, scope, signal);
       span.setAttr('channel_directory.records', read.channels.length);
-      span.setAttr('channel_directory.joined', next.joined.length);
       span.setAttr('channel_directory.incomplete', read.incompleteIds.length);
       span.setAttr('channel_directory.reread', read.reread);
-      span.setAttr('channel_directory.complete', complete);
-      if (!sameState(untrack(state), next)) setState(next);
-      // Before the lane finishes it fills these itself.
-      if (complete)
-        for (const id of read.incompleteIds.slice(
-          0,
-          INCOMPLETE_READS_PER_REFRESH
-        ))
-          reader.request(id);
+      span.setAttr('channel_directory.complete', lane.complete);
+      span.setAttr('channel_directory.lane_failed', lane.failed);
+      publish(read);
     });
 
-  const refresh = createSerialRunner(async () => {
+  /** Rereads these records; false when a full read has to run instead. */
+  const readKeys = (keys: readonly string[]) =>
+    Telemetry.span('channel_directory.read_keys', async (span) => {
+      span.setAttr('channel_directory.keys', keys.length);
+      const signal = controller.signal;
+      const scope = await readContactCacheScope(host, userId, signal);
+      if (scope === undefined || scope !== generation) return false;
+      const read = await index.readKeys(scope, keys, signal);
+      if (!read) return false;
+      await assertContactCacheScope(host, userId, scope, signal);
+      publish(read);
+      return true;
+    });
+
+  const runner = createSerialRunner(async () => {
     try {
-      await readIndex();
+      if (wantFull || generation === undefined) {
+        wantFull = false;
+        wantKeys.clear();
+        await readIndex();
+      } else if (wantKeys.size > 0) {
+        const keys = [...wantKeys];
+        wantKeys.clear();
+        if (!(await readKeys(keys))) wantFull = true;
+      }
     } catch (error) {
-      if (controller.signal.aborted) return;
-      Telemetry.error(error, { surface: 'channel-directory-refresh' });
+      if (controller.signal.aborted) return false;
+      // Read again in the cache's new hands.
+      if (error instanceof ContactDirectoryScopeError) wantFull = true;
+      else Telemetry.error(error, { surface: 'channel-directory-refresh' });
     }
+    return wantFull || wantKeys.size > 0;
   });
+  const refresh = () => {
+    wantFull = true;
+    return runner();
+  };
+  // Never rejects: a failed read is reported inside.
+  const refreshNow = () =>
+    fireAndForget(refresh(), 'channel-directory-refresh');
 
   onCleanup(
     subscribeToVisibleCacheChanges(host, refresh, {
@@ -484,22 +754,30 @@ export function createCachedChannelDirectory(
       intervalMs: ACCOUNT_WIDE_REFRESH_INTERVAL_MS,
     })
   );
-  // Every page saves the checkpoint; only a finished pass changes what the
-  // directory can answer.
+  onCleanup(
+    host.onCacheGenerationChanged((change) => {
+      if (change.storage === 'reset') {
+        // The records read so far went with the storage that held them.
+        generation = undefined;
+        lane = LANE_NOT_STARTED;
+        lastRead = undefined;
+        reader.reset();
+        adopted = undefined;
+        setState(networkState());
+      }
+      refreshNow();
+    })
+  );
+  // Every page saves the checkpoint; only a finished pass, or the lane giving
+  // up, changes what the directory can answer.
   onCleanup(
     watchSoupBackfillCheckpoint(userId, CHANNEL_DIRECTORY_CHECKPOINT_ID, () => {
       if (generation === undefined) return;
-      const complete = soupBackfillLaneCompleted(
-        userId,
-        CHANNEL_DIRECTORY_CHECKPOINT_ID,
-        generation
-      );
-      if (complete !== untrack(state).complete) refreshNow();
+      const next = readLaneProgress(userId, generation);
+      if (next.complete !== lane.complete || next.failed !== lane.failed)
+        refreshNow();
     })
   );
-  // Never rejects: a failed read is reported inside.
-  const refreshNow = () =>
-    fireAndForget(refresh(), 'channel-directory-refresh');
   refreshNow();
 
   return {
@@ -515,8 +793,12 @@ export function createCachedChannelDirectory(
       if (current.complete) return current.joined;
       return deps.fetchAll();
     },
-    failed: () => false,
-    retry: () => {},
+    failed: () => fallback().status === 'failed',
+    retry() {
+      if (untrack(fallback).status !== 'failed') return;
+      setFallback({ status: 'idle' });
+      startFallback();
+    },
   };
 }
 
@@ -546,7 +828,7 @@ export function createMemoryChannelDirectory(
       for (const channel of channels) next[channel.id] = channel;
       return next;
     });
-    return new Set(channels.map(({ id }) => id));
+    return { returned: new Set(channels.map(({ id }) => id)) };
   });
 
   const state = createMemo((): ChannelDirectoryState => {
