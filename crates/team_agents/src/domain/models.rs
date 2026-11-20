@@ -133,11 +133,9 @@ pub struct CreateTeamAgent {
 /// Where an invited agent runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(
-    tag = "kind",
-    rename_all = "camelCase",
-    rename_all_fields = "camelCase"
-)]
+// Field names are renamed one by one: utoipa ignores `rename_all_fields`, so
+// the schema would name a field differently from what serde reads.
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum InviteComputer {
     /// Buy it a Macro computer of this size.
     New {
@@ -149,6 +147,7 @@ pub enum InviteComputer {
     /// engine). No purchase.
     Own {
         /// The machine's harness.
+        #[serde(rename = "harnessId")]
         harness_id: HarnessId,
     },
 }

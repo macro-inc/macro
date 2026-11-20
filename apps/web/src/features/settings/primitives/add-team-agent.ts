@@ -193,7 +193,7 @@ export function useAddTeamAgent(options: {
     addOnHost: ({ harnessId, ...request }: HostInvite) =>
       invite({
         ...request,
-        computer: { kind: 'own', harness_id: harnessId },
+        computer: { kind: 'own', harnessId },
       }),
     retry,
   };

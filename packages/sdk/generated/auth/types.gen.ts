@@ -1568,7 +1568,7 @@ export type InviteComputer = {
     /**
      * The machine's harness.
      */
-    harness_id: HarnessId;
+    harnessId: HarnessId;
     kind: 'own';
 };
 

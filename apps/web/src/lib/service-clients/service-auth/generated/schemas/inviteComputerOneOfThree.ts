@@ -13,6 +13,6 @@ engine). No purchase.
  */
 export type InviteComputerOneOfThree = {
   /** The machine's harness. */
-  harness_id: HarnessId;
+  harnessId: HarnessId;
   kind: InviteComputerOneOfThreeKind;
 };
