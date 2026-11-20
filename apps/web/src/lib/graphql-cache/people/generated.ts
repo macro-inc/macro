@@ -2,7 +2,7 @@
 
 import { z } from 'zod/v3';
 
-export const PEOPLE_POLICY_VERSION = 6;
+export const PEOPLE_POLICY_VERSION = 7;
 
 export const PEOPLE_MIN_POLICY_VERSION = 5;
 
@@ -206,6 +206,7 @@ export const PeopleSearchSchema = z
     cursor: z.union([z.string(), z.null()]).optional(),
     excluded: z.array(z.string()).max(500),
     limit: z.number().int().gte(1).lte(500),
+    listPriority: z.array(z.array(z.string())).max(16).optional(),
     mode: z.union([
       z.literal('command'),
       z.literal('recipient'),
@@ -213,6 +214,7 @@ export const PeopleSearchSchema = z
       z.literal('property'),
     ]),
     nowMs: z.number().int(),
+    onlyListed: z.boolean().optional(),
     query: z.string(),
     scope: z
       .object({
