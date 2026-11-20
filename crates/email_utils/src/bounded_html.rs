@@ -440,13 +440,20 @@ impl TreeSink for BoundedSink {
         if self.clipped {
             return;
         }
-        let existing = match self.html.tree.get(*target).map(|node| node.value()) {
-            Some(Node::Element(element)) => element.attrs().count(),
-            _ => 0,
+        // Only names the element lacks are added.
+        let (existing, added) = match self.html.tree.get(*target).map(|node| node.value()) {
+            Some(Node::Element(element)) => (
+                element.attrs.len(),
+                attrs
+                    .into_iter()
+                    .filter(|attr| !element.attrs.contains_key(&attr.name))
+                    .collect::<Vec<_>>(),
+            ),
+            _ => (0, attrs),
         };
-        self.count_attributes(&attrs, existing + attrs.len());
+        self.count_attributes(&added, existing + added.len());
         if !self.clipped {
-            self.html.add_attrs_if_missing(target, attrs);
+            self.html.add_attrs_if_missing(target, added);
         }
     }
 
