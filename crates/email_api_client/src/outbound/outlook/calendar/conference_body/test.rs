@@ -176,6 +176,7 @@ fn a_crafted_body_is_refused_in_bounded_memory() {
 
         let error = result.unwrap().expect_err(name);
         assert_eq!(error.message(), TOO_LARGE, "{name}");
+        assert!(error.is_refused(), "{name}");
         // Parsed whole, the rebuilt bold peaked at 326 MB and 1.7 GB and the
         // nested divs took minutes.
         assert!(

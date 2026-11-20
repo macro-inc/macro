@@ -143,10 +143,11 @@ Outlook (Microsoft Graph) outbound adapters.
   `div`s) from the user's text in `outlook/calendar/conference_body.rs`,
   which parses the body as received through `email_utils::bounded_html`,
   since an invitation's body is whatever its sender wrote. A clipped parse
-  refuses the write (`Permanent`, telling the user to edit in Outlook)
-  rather than write back a description cut at the clip, and warns `refused
-  to split an Outlook event body too large to parse whole` with
-  `body_bytes`. Find the blocks in one walk of the tree, never by checking
+  refuses the write with `CalendarProviderError::refused`, telling the user
+  to edit in Outlook, rather than write back a description cut at the clip;
+  a refusal reaches the user without the "Calendar provider request
+  failed:" prefix, since nothing was sent. It warns `refused to split an
+  Outlook event body too large to parse whole` with `body_bytes`. Find the blocks in one walk of the tree, never by checking
   each `div`'s ancestors: that reads an ancestor's classes once per `div`
   inside it, seconds of CPU for a body within the parse bounds.
 - The Outlook calendar normalizer (`outlook/calendar/normalize.rs`,

@@ -6,7 +6,8 @@ use scraper::{ElementRef, Html};
 /// Refuses a body whose parse stopped at a bound of [`bounded_html`]: what
 /// it left out cannot be checked for the meeting link, and writing the rest
 /// back would cut the description short.
-const TOO_LARGE: &str = "This event's description is too large for Macro to edit safely. Edit or replace the event in Outlook to preserve your description.";
+const TOO_LARGE: &str =
+    "This event's description is too large to edit in Macro. Edit the event in Outlook instead.";
 
 /// Split a recognized meeting block from user content. Never infer ownership from
 /// aggregate text: an ordinary wrapper may also contain the user's trailing notes.
@@ -17,7 +18,7 @@ pub(super) fn split(content: &str, join: &str) -> Result<(String, String), Calen
             body_bytes = content.len(),
             "refused to split an Outlook event body too large to parse whole"
         );
-        return Err(unsupported(TOO_LARGE));
+        return Err(CalendarProviderError::refused(TOO_LARGE));
     }
     let mut document = parsed.html;
     let blocks: Vec<_> = provider_blocks(&document)
