@@ -4,8 +4,13 @@ name = "agent_mailbox"
 publish = false
 version = "0.1.0"
 
+[[bin]]
+name = "agent_mailbox_fake_vendor"
+required-features = ["fake-vendor"]
+
 [features]
 default = []
+fake-vendor = ["dep:axum", "dep:clap", "dep:serde_json", "dep:tokio", "outbound"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
@@ -24,6 +29,7 @@ outbound = [
 ]
 
 [dependencies]
+clap = { workspace = true, optional = true, features = ["env"] }
 axum = { workspace = true, optional = true }
 aws-sdk-kms = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
@@ -35,10 +41,12 @@ macro_tower_layers = { path = "../macro_tower_layers", optional = true }
 macro_user_id = { path = "../macro_user_id" }
 reqwest = { workspace = true, optional = true }
 rootcause = { workspace = true }
+serde_json = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, optional = true, features = ["macros", "net", "rt-multi-thread"] }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true, features = ["chrono", "uuid"] }
 uuid = { workspace = true, features = ["v7"] }
@@ -46,13 +54,13 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
-agent_mailbox = { path = ".", features = ["inbound", "outbound"] }
+agent_mailbox = { path = ".", features = ["fake-vendor", "inbound", "outbound"] }
 bot_id = { path = "../bot_id" }
 macro_db_migrator = { path = "../macro_db_migrator" }
 model_user = { path = "../model_user" }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
 tower = { workspace = true }
 urlencoding = { workspace = true }
 wiremock = { workspace = true }

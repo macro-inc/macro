@@ -197,3 +197,33 @@ impl MailboxKms for AwsMailboxKms {
         Ok(Zeroizing::new(plaintext.into_inner()))
     }
 }
+
+/// No KMS key is configured: every operation fails. Only composed where no
+/// provisioning key is configured either, so nothing reaches it.
+impl<Kms: MailboxKms> MailboxKms for Option<Kms> {
+    async fn encrypt(
+        &self,
+        encryption_context: HashMap<String, String>,
+        plaintext: &[u8],
+    ) -> Result<(Vec<u8>, String), MailboxKmsError> {
+        match self {
+            Some(kms) => kms.encrypt(encryption_context, plaintext).await,
+            None => Err(MailboxKmsError),
+        }
+    }
+
+    async fn decrypt(
+        &self,
+        kms_key_id: &str,
+        ciphertext: &[u8],
+        encryption_context: HashMap<String, String>,
+    ) -> Result<Zeroizing<Vec<u8>>, MailboxKmsError> {
+        match self {
+            Some(kms) => {
+                kms.decrypt(kms_key_id, ciphertext, encryption_context)
+                    .await
+            }
+            None => Err(MailboxKmsError),
+        }
+    }
+}

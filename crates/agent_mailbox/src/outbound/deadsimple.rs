@@ -68,7 +68,9 @@ impl std::fmt::Debug for ProvisioningKey {
 pub struct DeadSimple {
     client: reqwest::Client,
     base_url: String,
-    provisioning_key: ProvisioningKey,
+    /// Absent when no key is configured: every provisioning call then
+    /// answers `NotConfigured` without reaching the provider.
+    provisioning_key: Option<ProvisioningKey>,
 }
 
 /// The HTTP client could not be built.
@@ -80,7 +82,7 @@ impl DeadSimple {
     /// An adapter for `base_url` (from `macro_service_urls::DeadSimpleApiUrl`).
     pub fn new(
         base_url: &str,
-        provisioning_key: ProvisioningKey,
+        provisioning_key: Option<ProvisioningKey>,
     ) -> Result<Self, DeadSimpleClientError> {
         let client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
@@ -112,8 +114,12 @@ impl DeadSimple {
             .headers(trace_headers)
     }
 
-    fn admin(&self, method: Method, path: &str) -> RequestBuilder {
-        self.request(method, path, &self.provisioning_key.0)
+    fn admin(&self, method: Method, path: &str) -> Result<RequestBuilder, ProviderError> {
+        let key = self
+            .provisioning_key
+            .as_ref()
+            .ok_or(ProviderError::NotConfigured)?;
+        Ok(self.request(method, path, &key.0))
     }
 
     fn scoped(&self, method: Method, path: &str, key: &MailboxKey) -> RequestBuilder {
@@ -338,7 +344,7 @@ impl MailboxProvisioner for DeadSimple {
             tags: [owner_tag(request.owner_tag)],
         };
         let inbox: Inbox = data(
-            self.admin(Method::POST, "/v1/inboxes")
+            self.admin(Method::POST, "/v1/inboxes")?
                 .header("Idempotency-Key", request.idempotency_key.to_string())
                 .json(&body),
             Operation::CreateInbox,
@@ -359,7 +365,7 @@ impl MailboxProvisioner for DeadSimple {
             max_attachment_size_mb: GUARDRAIL_MAX_ATTACHMENT_MB,
         };
         let path = format!("/v1/inboxes/{}/guardrails", mailbox.0);
-        let response = send_request(self.admin(Method::PUT, &path).json(&guardrails)).await?;
+        let response = send_request(self.admin(Method::PUT, &path)?.json(&guardrails)).await?;
         if !response.status().is_success() {
             return Err(failure(response, Operation::Other).await);
         }
@@ -373,7 +379,7 @@ impl MailboxProvisioner for DeadSimple {
     ) -> Result<Option<ProvisionedMailbox>, ProviderError> {
         let tag = self::owner_tag(owner_tag);
         let list: InboxList = data(
-            self.admin(Method::GET, "/v1/inboxes")
+            self.admin(Method::GET, "/v1/inboxes")?
                 .query(&[("tag", tag.as_str()), ("limit", "2")]),
             Operation::Other,
         )
@@ -397,7 +403,7 @@ impl MailboxProvisioner for DeadSimple {
             inbox_ids: [mailbox.0.as_str()],
         };
         let created: ApiKey = data(
-            self.admin(Method::POST, "/v1/api-keys")
+            self.admin(Method::POST, "/v1/api-keys")?
                 .header("Idempotency-Key", idempotency_key.to_string())
                 .json(&body),
             Operation::Other,
@@ -411,12 +417,12 @@ impl MailboxProvisioner for DeadSimple {
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.revoke_scoped_key", skip_all, err)]
     async fn revoke_access(&self, grant: &ProviderGrantId) -> Result<(), ProviderError> {
-        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/api-keys/{}", grant.0))).await
+        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/api-keys/{}", grant.0))?).await
     }
 
     #[tracing::instrument(name = "agent_mailbox.deadsimple.delete_inbox", skip_all, err)]
     async fn delete_mailbox(&self, mailbox: &ProviderMailboxId) -> Result<(), ProviderError> {
-        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/inboxes/{}", mailbox.0))).await
+        idempotent_delete(self.admin(Method::DELETE, &format!("/v1/inboxes/{}", mailbox.0))?).await
     }
 }
 

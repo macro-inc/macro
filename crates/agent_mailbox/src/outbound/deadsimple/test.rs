@@ -10,8 +10,11 @@ const SCOPED_KEY: &str = "dse_scoped_test";
 
 async fn adapter() -> (MockServer, DeadSimple) {
     let server = MockServer::start().await;
-    let adapter =
-        DeadSimple::new(&server.uri(), ProvisioningKey::new(ADMIN_KEY.to_owned())).unwrap();
+    let adapter = DeadSimple::new(
+        &server.uri(),
+        Some(ProvisioningKey::new(ADMIN_KEY.to_owned())),
+    )
+    .unwrap();
     (server, adapter)
 }
 
@@ -314,4 +317,15 @@ fn only_the_real_api_is_live() {
         DeadSimple::vendor_mode("http://agent-mailbox-fake-vendor:8080"),
         VendorMode::Fake
     );
+}
+
+#[tokio::test]
+async fn without_a_provisioning_key_nothing_reaches_the_provider() {
+    let server = MockServer::start().await;
+    let adapter = DeadSimple::new(&server.uri(), None).unwrap();
+
+    let error = adapter.create_mailbox(&create_request()).await.unwrap_err();
+
+    assert!(matches!(error, ProviderError::NotConfigured));
+    assert!(server.received_requests().await.unwrap().is_empty());
 }
