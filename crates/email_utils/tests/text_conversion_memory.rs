@@ -106,3 +106,31 @@ fn a_table_with_one_very_wide_row_over_many_rows_is_refused_cheaply() {
         html.len()
     );
 }
+
+#[test]
+fn spanning_cells_convert_in_bounded_memory() {
+    // A rowspan reaching past every later row adds a filler cell to each of
+    // them, and colspans add columns that every row then copies: neither is
+    // a cell in the HTML.
+    let rowspans = format!("<table>{}</table>", "<tr><td rowspan=99999>x".repeat(1_000));
+    let colspans = format!(
+        "<table>{}</table>",
+        (1..=4_000)
+            .map(|span| format!("<tr><td colspan={span}>a<td>b"))
+            .collect::<String>()
+    );
+
+    for html in [rowspans, colspans] {
+        let mut text = None;
+
+        let peak = peak_bytes_during(|| text = html_to_plaintext(&html));
+
+        assert!(text.is_some());
+        // Kept, the spans made each of these peak above 100 MB.
+        assert!(
+            peak < 32 << 20,
+            "{peak} bytes to convert {} bytes of HTML",
+            html.len()
+        );
+    }
+}
