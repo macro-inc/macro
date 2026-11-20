@@ -322,9 +322,10 @@ async function reconcile(input: Reconciliation): Promise<void> {
  * that started at its first page finishes, each cached channel it did not
  * return is read again by id; the ones the server no longer returns are
  * deleted from the cache. A pass that cannot do so (it resumed from a cursor,
- * a page listed no ids, the cache changed hands, or the reads kept failing)
- * deletes nothing and fails on its last page, so the lane never records it
- * complete. Without a cache there is nothing to reconcile.
+ * a page listed no ids, or the cache is another viewer's) deletes nothing; one
+ * whose cache changed hands or whose reads kept failing stops before its next
+ * round of deletes. Either fails on its last page, so the lane never records
+ * it complete. Without a cache there is nothing to reconcile.
  *
  * A page counts once the lane asks for the page after it. The lane saves a
  * page's cursor only after the checks that follow its read, and a retry

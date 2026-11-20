@@ -861,7 +861,7 @@ describe('cached channel directory', () => {
     expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
   });
 
-  it('keeps waiting on a channel a by-id read gave no evidence for', async () => {
+  it('stays partial while a by-id read gave no evidence for a record that lacks a field', async () => {
     const network = [directoryChannel('thin')];
     const { cache, directory, hydrate, fetchAll } = mountCachedDirectory([], {
       fetchAll: async () => network,
@@ -874,11 +874,12 @@ describe('cached channel directory', () => {
     cache.put(channelRecord('thin'), { incomplete: true });
     completeLane('g1');
 
-    // Complete once both reads gave up, so the cache answers offline.
-    await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(hydrate).toHaveBeenCalledTimes(2);
+    // Both reads gave up: the joined channels may lack this one.
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    await new Promise((done) => setTimeout(done, 50));
+    expect(directory.complete()).toBe(false);
     expect(directory.lookup(channelUuid('thin')).status).toBe('pending');
-    // But not proven: a full read still asks the network.
+    // A full read asks the network.
     expect(ids(await directory.readComplete())).toEqual(['thin']);
     expect(fetchAll).toHaveBeenCalledOnce();
   });
@@ -970,9 +971,10 @@ describe('cached channel directory', () => {
       );
 
     it('pages the network once the lane saves nothing for half a minute', async () => {
-      const { cache, directory, pageAll } = mountCachedDirectory([], {
-        pageAll: async () => [directoryChannel('a'), directoryChannel('b')],
-      });
+      const { cache, directory, pageAll } = mountCachedDirectory(
+        [channelRecord('b')],
+        { pageAll: async () => [directoryChannel('a'), directoryChannel('b')] }
+      );
       cache.put(channelRecord('a'));
       await vi.advanceTimersByTimeAsync(29_000);
       expect(ids(directory.channels())).toEqual(['a']);
@@ -981,6 +983,10 @@ describe('cached channel directory', () => {
       await vi.advanceTimersByTimeAsync(1_000);
 
       expect(pageAll).toHaveBeenCalledOnce();
+      expect(ids(directory.channels())).toEqual(['a', 'b']);
+      // The cache held no record of b: complete once its by-id read finds it.
+      expect(directory.complete()).toBe(false);
+      await vi.advanceTimersByTimeAsync(1_000);
       expect(directory.complete()).toBe(true);
       expect(ids(directory.channels())).toEqual(['a', 'b']);
     });
@@ -1163,16 +1169,135 @@ describe('cached channel directory', () => {
     });
     markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
 
-    // As the pages listed them until a read says otherwise.
-    await vi.waitFor(() => expect(directory.complete()).toBe(true));
-    expect(ids(directory.channels()).sort()).toEqual(['a', 'gone']);
+    // As the pages listed them until a read says otherwise, and partial
+    // until the reads answer.
+    await vi.waitFor(() =>
+      expect(ids(directory.channels()).sort()).toEqual(['a', 'gone'])
+    );
+    await new Promise((done) => setTimeout(done, 50));
+    expect(directory.complete()).toBe(false);
 
     // Deleted after its page was read, while the cache held no record a
     // removal could reach.
     release();
-    await vi.waitFor(() => expect(ids(directory.channels())).toEqual(['a']));
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels())).toEqual(['a']);
     expect(directory.lookup(channelUuid('gone')).status).toBe('missing');
     expect(ids(await directory.readComplete())).toEqual(['a']);
+  });
+
+  it('leaves out a channel the network did not list while its by-id reads give no evidence', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory([], {
+      pageAll: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+        }),
+    });
+    // Pages that reached their limit without the channel.
+    hydrate.mockImplementation(async () => ({
+      nextCursor: 'more',
+      entityIds: [],
+    }));
+    cache.put(channelRecord('kept'));
+    // Cached when the viewer lost it, and no removal reached the cache.
+    cache.put(channelRecord('stale'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    // A view stamp rewrites the stale record while the pages are read.
+    cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
+      sourceHash: 'stale-2',
+    });
+    reopen();
+    await vi.waitFor(() => expect(viewedAt(directory, 'stale')).toBe(VIEWED_2));
+    answer([directoryChannel('kept')]);
+
+    // Read once more, then given up on: neither read returned it.
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledTimes(2));
+    await new Promise((done) => setTimeout(done, 50));
+    expect(ids(directory.channels())).toEqual(['kept']);
+    expect(directory.complete()).toBe(false);
+  });
+
+  it('pages the network again when the storage resets under the fallback', async () => {
+    const { directory, pageAll, resetStorage } = mountCachedDirectory(
+      [channelRecord('a')],
+      { pageAll: async () => [directoryChannel('a')] }
+    );
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(pageAll).toHaveBeenCalledOnce();
+
+    // What the fallback saw of the cache went with the old storage.
+    resetStorage('g2');
+
+    await vi.waitFor(() => expect(pageAll).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels())).toEqual(['a']);
+  });
+
+  it('pages the network again after a failed fallback once the storage resets', async () => {
+    let attempt = 0;
+    const { directory, pageAll, resetStorage } = mountCachedDirectory(
+      [channelRecord('a')],
+      {
+        pageAll: async () => {
+          attempt += 1;
+          if (attempt === 1) throw new Error('offline');
+          return [directoryChannel('a')];
+        },
+      }
+    );
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(directory.failed()).toBe(true));
+
+    resetStorage('g2');
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.failed()).toBe(false);
+    expect(pageAll).toHaveBeenCalledTimes(2);
+  });
+
+  it('pages the network again when the cache changes hands under the fallback', async () => {
+    let walks = 0;
+    const { directory, pageAll, reopen, setViewer } = mountCachedDirectory(
+      [channelRecord('a')],
+      {
+        pageAll: async (signal) => {
+          walks += 1;
+          if (walks === 1) return [directoryChannel('a')];
+          // Held, so the test reads what the restart showed.
+          return new Promise((_, reject) =>
+            signal.addEventListener('abort', () => reject(signal.reason))
+          );
+        },
+      }
+    );
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+
+    setViewer('macro|someone-else@example.com');
+    reopen();
+
+    await vi.waitFor(() => expect(pageAll).toHaveBeenCalledTimes(2));
+    expect(directory.complete()).toBe(false);
+  });
+
+  it('reads back what the network walk wrote into the cache before reading any channel by id', async () => {
+    const { cache, directory, hydrate } = mountCachedDirectory([], {
+      pageAll: async () => {
+        // The walk's pages land in the cache as it reads them.
+        cache.put(channelRecord('a'));
+        cache.put(channelRecord('b'));
+        return [directoryChannel('a'), directoryChannel('b')];
+      },
+    });
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(ids(directory.channels()).sort()).toEqual(['a', 'b']);
+    expect(hydrate).not.toHaveBeenCalled();
   });
 
   it('does not take a pass an earlier build recorded as one that reconciled the cache', async () => {
