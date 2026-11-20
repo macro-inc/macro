@@ -4,6 +4,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_credentials::AgentCreators;
+use computer_screen::domain::service::Hold;
 use feature_flags::FeatureFlags;
 
 use macro_user_id::user_id::MacroUserIdStr;
@@ -21,14 +22,76 @@ pub(crate) struct BrainCaller {
     pub(crate) team_id: Uuid,
 }
 
+/// Why a brain could not be let through.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum BrainLookupError {
+    /// The lookup failed.
+    #[error("brain lookup failed: {0:?}")]
+    Failed(rootcause::Report),
+    /// A person still drives the agent's computer after the hold's bound;
+    /// the brain retries after `retry_after`.
+    #[error("a person is driving the agent's computer")]
+    Held { retry_after: std::time::Duration },
+}
+
+impl From<rootcause::Report> for BrainLookupError {
+    fn from(report: rootcause::Report) -> Self {
+        Self::Failed(report)
+    }
+}
+
 /// A boxed lookup, so the gateway can hold any authenticator.
 pub(crate) type BrainLookup<'a> =
-    Pin<Box<dyn Future<Output = Result<Option<BrainCaller>, rootcause::Report>> + Send + 'a>>;
+    Pin<Box<dyn Future<Output = Result<Option<BrainCaller>, BrainLookupError>> + Send + 'a>>;
 
 /// Resolves a presented key to an agent teammate.
 pub(crate) trait BrainAuthenticator: Send + Sync + 'static {
     /// The agent teammate a live key belongs to; `None` for any other key.
     fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a>;
+}
+
+/// How long a brain request waits for a person to hand the agent's computer
+/// back before it is answered 503 with `Retry-After`.
+pub(crate) const HOLD_BOUND: std::time::Duration = std::time::Duration::from_secs(5 * 60);
+/// What a held brain is told to wait before retrying.
+pub(crate) const HELD_RETRY_AFTER: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Holds every `/brain/*` request of an agent whose computer a person
+/// drives: wraps the one authenticator all brain routes share, so a new
+/// route built on it is held too. Keyed by the agent's user id.
+pub(crate) struct HeldBrains {
+    inner: Arc<dyn BrainAuthenticator>,
+    screens: Arc<crate::computers::screen::Screens>,
+}
+
+impl HeldBrains {
+    pub(crate) fn new(
+        inner: Arc<dyn BrainAuthenticator>,
+        screens: Arc<crate::computers::screen::Screens>,
+    ) -> Self {
+        Self { inner, screens }
+    }
+}
+
+impl BrainAuthenticator for HeldBrains {
+    fn authenticate<'a>(&'a self, key: &'a str) -> BrainLookup<'a> {
+        Box::pin(async move {
+            let Some(caller) = self.inner.authenticate(key).await? else {
+                return Ok(None);
+            };
+            match self
+                .screens
+                .hold_agent(&caller.user_id, HOLD_BOUND)
+                .await
+                .map_err(|error| rootcause::report!("{error:?}"))?
+            {
+                Hold::Free | Hold::Released { .. } => Ok(Some(caller)),
+                Hold::TimedOut => Err(BrainLookupError::Held {
+                    retry_after: HELD_RETRY_AFTER,
+                }),
+            }
+        })
+    }
 }
 
 type Evaluate =

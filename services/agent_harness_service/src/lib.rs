@@ -1470,9 +1470,31 @@ pub async fn run() -> anyhow::Result<()> {
         redis.clone(),
     )
     .await?;
-    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> = Arc::new(
-        anthropic_gateway::brain::PgBrainAuthenticator::new(pool.clone()),
-    );
+    let computer_tasks = tokio_util::task::TaskTracker::new();
+    // Watching and driving agents' screens; the hold below keeps an agent's
+    // brain waiting while a person drives its computer.
+    let screens: Arc<computers::screen::Screens> =
+        Arc::new(computer_screen::domain::service::ScreenService::new(
+            computer_screen::outbound::pg::PgScreenRepo::new(pool.clone()),
+            computers::screen::guest_files::GuestFiles::new(
+                computer_operator.clone().map(|operator| operator as _),
+            ),
+            computer_screen::outbound::lease_changes::PgLeaseChanges::listen(
+                pool.clone(),
+                &computer_tasks,
+                service_shutdown.clone(),
+            )
+            .await,
+        ));
+    // Every /brain/* route authenticates through this one, held while a
+    // person drives the agent's computer.
+    let brains: Arc<dyn anthropic_gateway::brain::BrainAuthenticator> =
+        Arc::new(anthropic_gateway::brain::HeldBrains::new(
+            Arc::new(anthropic_gateway::brain::PgBrainAuthenticator::new(
+                pool.clone(),
+            )),
+            Arc::clone(&screens),
+        ));
     // Both brain routes serve only agents with agent teammates on for their
     // creator.
     let brain_rollout = feature_flags
@@ -1505,10 +1527,10 @@ pub async fn run() -> anyhow::Result<()> {
             anthropic_gateway::ANTHROPIC_API_URL,
             &config.anthropic_api_key,
         )?
-        .with_brains(brains, brain_rollout),
+        .with_brains(brains, brain_rollout)
+        .with_screen_notices(Arc::clone(&screens)),
     )
     .merge(speech_gateway::router(speech.clone()));
-    let computer_tasks = tokio_util::task::TaskTracker::new();
     let sign_in_ahead = Arc::new(std::sync::OnceLock::new());
     let runtimes = RuntimeRegistry::with_presence(
         Arc::new(computers::ComputerPresence::new(
@@ -2250,6 +2272,30 @@ pub async fn run() -> anyhow::Result<()> {
         feature_flags.clone(),
     )
     .await?;
+    let screen_router = match &computer_operator {
+        Some(operator) => Some(computers::screen::router(computers::screen::ScreenRoutes {
+            harnesses: Arc::new(computers::harness_service(&pool)),
+            screens: Arc::clone(&screens),
+            agents: hosted_runtimes::outbound::pg::PgComputerAgents::new(pool.clone()),
+            tunnel: Arc::new(computers::screen::tunnel::FleetTunnel::new(
+                Arc::clone(operator) as _,
+            )),
+            waker: Arc::clone(operator) as _,
+            medias: computers::screen::ScreenMedias {
+                vnc: Arc::new(computers::screen::media::VncMedia),
+            },
+            rollout: feature_flags
+                .clone()
+                .map(hosted_runtimes::domain::rollout::ComputerRollout::new)
+                .unwrap_or_default()
+                .with_allowlist(config.computer_rollout_allowlist()?),
+            shutdown: service_shutdown.clone(),
+            authorization_state: MacroAuthorizationState::new(Arc::new(
+                authorization_service.clone(),
+            )),
+        })),
+        None => None,
+    };
     let http_shutdown = service_shutdown.clone();
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -2269,10 +2315,12 @@ pub async fn run() -> anyhow::Result<()> {
             .with_conversations(conversations)
             .with_coding_agents(coding_agents)
             .with_claude_access(match &computer_operator {
-                Some(operator) => computer_claude.merge(computers::moves::router(
-                    Arc::clone(operator),
-                    MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-                )),
+                Some(operator) => computer_claude
+                    .merge(computers::moves::router(
+                        Arc::clone(operator),
+                        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+                    ))
+                    .merge(screen_router.unwrap_or_default()),
                 None => computer_claude,
             })
             .with_capabilities(capabilities)

@@ -34,6 +34,7 @@ use tracing::{Instrument, Span, field::Empty};
 use usage::{SseUsage, TokenUsage};
 
 pub(crate) mod brain;
+mod screen_notices;
 mod usage;
 
 #[cfg(test)]
@@ -146,6 +147,8 @@ pub(super) struct GatewayState<Sessions, Computers> {
     brains: Option<Arc<dyn brain::BrainAuthenticator>>,
     /// Whether agent teammates are on for the calling agent.
     brain_rollout: brain::BrainRollout,
+    /// Screen take-over notices for agents' next brain request.
+    screens: Option<Arc<crate::computers::screen::Screens>>,
 }
 
 impl<Sessions, Computers> GatewayState<Sessions, Computers> {
@@ -177,6 +180,7 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
             api_key,
             brains: None,
             brain_rollout: brain::BrainRollout::default(),
+            screens: None,
         })
     }
 
@@ -189,6 +193,16 @@ impl<Sessions, Computers> GatewayState<Sessions, Computers> {
     ) -> Self {
         self.brains = Some(brains);
         self.brain_rollout = rollout;
+        self
+    }
+
+    /// Deliver screen take-over and hand-back notices with agents' brain
+    /// messages.
+    pub(super) fn with_screen_notices(
+        mut self,
+        screens: Arc<crate::computers::screen::Screens>,
+    ) -> Self {
+        self.screens = Some(screens);
         self
     }
 }
@@ -294,6 +308,7 @@ async fn unsupported() -> Response {
         status: StatusCode::NOT_FOUND,
         kind: "not_found_error",
         outcome: "unsupported_endpoint",
+        retry_after_seconds: None,
         message: "Macro's Anthropic gateway serves only /v1/messages and /v1/messages/count_tokens"
             .into(),
     }
@@ -338,6 +353,7 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     span: &Span,
 ) -> Result<Response, Rejection> {
     let (parts, body) = request.into_parts();
+    let mut brain_agent = None;
     let (owner, entity) = if parts.extensions.get::<BrainRoute>().is_some() {
         let brain = authenticate_brain(state.brains.as_deref(), &parts.headers).await?;
         span.record(
@@ -348,6 +364,7 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
         if !state.brain_rollout.enabled(&brain.user_id).await {
             return Err(Rejection::AGENT_TEAMMATES_OFF);
         }
+        brain_agent = Some(brain.user_id.clone());
         (brain.user_id, None)
     } else {
         let session = authenticate(state.sessions.as_ref(), &parts.headers).await?;
@@ -380,6 +397,12 @@ async fn forward<Sessions: AgentSessionRepo, Computers: BotComputers>(
     })?;
     let model = GatewayModel::parse(&shape.model)?;
     span.record("gen_ai.request.model", model.request_id());
+    let body = match (&brain_agent, &state.screens) {
+        (Some(agent), Some(screens)) if endpoint == Endpoint::Messages => {
+            screen_notices::deliver(body, screens, agent).await
+        }
+        _ => body,
+    };
 
     let api_key = state.api_key.as_ref().ok_or(Rejection::NOT_CONFIGURED)?;
     if endpoint == Endpoint::Messages {
@@ -466,9 +489,12 @@ async fn authenticate_brain(
     brains
         .authenticate(bearer.token())
         .await
-        .map_err(|error| {
-            tracing::error!(error = ?error, "could not authenticate a brain");
-            Rejection::UPSTREAM_UNREACHABLE
+        .map_err(|error| match error {
+            brain::BrainLookupError::Held { retry_after } => Rejection::agent_held(retry_after),
+            brain::BrainLookupError::Failed(report) => {
+                tracing::error!(error = ?report, "could not authenticate a brain");
+                Rejection::UPSTREAM_UNREACHABLE
+            }
         })?
         .ok_or(Rejection::BRAIN_UNAUTHENTICATED)
 }
@@ -628,6 +654,8 @@ struct Rejection {
     /// Low-cardinality span outcome.
     outcome: &'static str,
     message: std::borrow::Cow<'static, str>,
+    /// Sent as `Retry-After`, so the client backs off and retries.
+    retry_after_seconds: Option<u64>,
 }
 
 impl Rejection {
@@ -635,6 +663,7 @@ impl Rejection {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",
         outcome: "unauthenticated",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "send the agent teammate's Macro API key as `Authorization: Bearer`",
         ),
@@ -644,6 +673,7 @@ impl Rejection {
         status: StatusCode::UNAUTHORIZED,
         kind: "authentication_error",
         outcome: "unauthenticated",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "send the agent session's Macro token as `Authorization: Bearer`",
         ),
@@ -655,6 +685,7 @@ impl Rejection {
         status: StatusCode::FORBIDDEN,
         kind: "permission_error",
         outcome: "agent_teammates_off",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("agent teammates are not enabled for this agent"),
     };
 
@@ -664,6 +695,7 @@ impl Rejection {
         status: StatusCode::FORBIDDEN,
         kind: "permission_error",
         outcome: "not_on_a_computer",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed(
             "Macro's Anthropic gateway serves only sessions on a Macro computer",
         ),
@@ -673,6 +705,7 @@ impl Rejection {
         status: StatusCode::SERVICE_UNAVAILABLE,
         kind: "api_error",
         outcome: "not_configured",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("Macro's Anthropic gateway has no API key configured"),
     };
 
@@ -680,14 +713,29 @@ impl Rejection {
         status: StatusCode::SERVICE_UNAVAILABLE,
         kind: "api_error",
         outcome: "upstream_unreachable",
+        retry_after_seconds: None,
         message: std::borrow::Cow::Borrowed("Anthropic could not be reached"),
     };
+
+    /// A person still drives the agent's computer: back off and retry.
+    fn agent_held(retry_after: Duration) -> Self {
+        Self {
+            status: StatusCode::SERVICE_UNAVAILABLE,
+            kind: "overloaded_error",
+            outcome: "agent_held",
+            message: std::borrow::Cow::Borrowed(
+                "a person is driving this agent's computer; retry after they hand it back",
+            ),
+            retry_after_seconds: Some(retry_after.as_secs()),
+        }
+    }
 
     fn invalid_request(message: &'static str) -> Self {
         Self {
             status: StatusCode::BAD_REQUEST,
             kind: "invalid_request_error",
             outcome: "invalid_request",
+            retry_after_seconds: None,
             message: message.into(),
         }
     }
@@ -701,6 +749,7 @@ impl Rejection {
             status: StatusCode::BAD_REQUEST,
             kind: "invalid_request_error",
             outcome: "model_not_allowed",
+            retry_after_seconds: None,
             message: format!(
                 "model `{model}` is not available on Macro credits; use one of: {}",
                 allowed.join(", ")
@@ -714,6 +763,7 @@ impl Rejection {
             status: StatusCode::FORBIDDEN,
             kind: "permission_error",
             outcome: "forbidden",
+            retry_after_seconds: None,
             message: message.into(),
         }
     }
@@ -724,12 +774,14 @@ impl Rejection {
                 status: StatusCode::FORBIDDEN,
                 kind: "permission_error",
                 outcome: "admission_denied",
+                retry_after_seconds: None,
                 message: error.to_string().into(),
             },
             AiAdmissionError::Unavailable => Self {
                 status: StatusCode::SERVICE_UNAVAILABLE,
                 kind: "api_error",
                 outcome: "admission_unavailable",
+                retry_after_seconds: None,
                 message: error.to_string().into(),
             },
         }
@@ -738,13 +790,19 @@ impl Rejection {
 
 impl IntoResponse for Rejection {
     fn into_response(self) -> Response {
-        (
+        let mut response = (
             self.status,
             Json(serde_json::json!({
                 "type": "error",
                 "error": { "type": self.kind, "message": self.message },
             })),
         )
-            .into_response()
+            .into_response();
+        if let Some(seconds) = self.retry_after_seconds {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, HeaderValue::from(seconds));
+        }
+        response
     }
 }
