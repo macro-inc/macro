@@ -574,6 +574,8 @@ pub async fn run() -> anyhow::Result<()> {
     let routine_connect = connect
         .clone()
         .map(|connect| Arc::new(backends(Some(connect))));
+    // Sessions are offered only the grants these backends will serve.
+    let macro_connect_configured = connect.is_some();
     let connectors = backends(connect);
 
     // Session egress reaches only public addresses, except on a local stack
@@ -934,7 +936,8 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&mcp_connections),
                 Arc::clone(&mcp_servers),
                 egress_base_url.clone(),
-            ),
+            )
+            .with_macro_connect(macro_connect_configured, connect_rollout.clone()),
             sessions: session_repo.clone(),
             gate: owner_tool_gate.clone(),
             connectors: tool_context.connector_tool_context.clone(),
@@ -1649,6 +1652,7 @@ pub async fn run() -> anyhow::Result<()> {
                 Arc::clone(&mcp_servers),
                 egress_base_url,
             )
+            .with_macro_connect(macro_connect_configured, connect_rollout.clone())
             .with_external_base_url(config.external_egress_base_url.clone()),
             RedisCommandForwarder::new(redis.clone()),
             PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),

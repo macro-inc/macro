@@ -627,3 +627,79 @@ async fn a_selected_overlaid_app_is_advertised_as_its_native_server_once_connect
         assert_eq!(custom, expected_custom);
     }
 }
+
+fn connect_connection(app_slug: &str) -> pipedream_mcp::domain::models::PipedreamConnection {
+    pipedream_mcp::domain::models::PipedreamConnection {
+        provider: pipedream_mcp::domain::models::ConnectionProvider::Connect,
+        account_id: format!("connect_{app_slug}"),
+        ..connection(app_slug, true)
+    }
+}
+
+fn rollout(on: bool) -> pipedream_mcp::domain::ports::ConnectRollout {
+    Arc::new(move |_user| Box::pin(async move { on }))
+}
+
+async fn advertised_slugs(
+    provisioner: &EgressProvisioner<FixedConnections, FixedServers>,
+) -> Vec<String> {
+    let (slugs, _custom) = provisioner
+        .advertised_all(
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            &AgentMcpServers::OwnerConnections,
+        )
+        .await
+        .expect("advertised");
+    slugs.iter().map(ToString::to_string).collect()
+}
+
+/// Dispatch refuses a Pipedream grant of an owner on Macro Connect alone
+/// ("reconnect it through Macro Connect"), so a session never sees it: a
+/// program listing its apps would otherwise fail on the first call to it.
+#[tokio::test]
+async fn an_owner_on_connect_alone_is_not_offered_their_pipedream_grants() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("notion", true),
+            connect_connection("linear"),
+        ])),
+        Arc::new(FixedServers(vec![])),
+        "https://egress.macro.com",
+    )
+    .with_macro_connect(true, Some(rollout(true)));
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["linear"]);
+}
+
+/// An owner the rollout leaves on Pipedream keeps both kinds of grant.
+#[tokio::test]
+async fn an_owner_off_the_rollout_is_offered_both_kinds_of_grant() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("notion", true),
+            connect_connection("linear"),
+        ])),
+        Arc::new(FixedServers(vec![])),
+        "https://egress.macro.com",
+    )
+    .with_macro_connect(true, Some(rollout(false)));
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["notion", "linear"]);
+}
+
+/// Where Macro Connect isn't configured, dispatch can't reach a Connect
+/// grant, so it isn't offered; Pipedream grants are.
+#[tokio::test]
+async fn connect_grants_are_not_offered_where_connect_is_not_configured() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("notion", true),
+            connect_connection("linear"),
+        ])),
+        Arc::new(FixedServers(vec![])),
+        "https://egress.macro.com",
+    )
+    .with_macro_connect(false, None);
+
+    assert_eq!(advertised_slugs(&provisioner).await, ["notion"]);
+}
