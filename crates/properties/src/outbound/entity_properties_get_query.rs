@@ -770,6 +770,8 @@ AND (
 pub struct IndexedEntityProperty {
     /// The property definition id this value belongs to.
     pub definition_id: String,
+    /// Namespace of a DOCUMENT or TASK assignment; absent for other entities.
+    pub entity_type: Option<String>,
     /// Every equality-filterable value as a string: select-option UUIDs,
     /// entity-reference ids, links, text, bool as "true"/"false".
     pub values: Vec<String>,
@@ -789,6 +791,7 @@ impl IndexedEntityProperty {
 /// Null and unparseable values yield None so one bad value can't fail the
 /// whole index.
 fn flatten_property_for_index(
+    entity_type: EntityType,
     property_definition_id: Uuid,
     values: Option<serde_json::Value>,
 ) -> Option<IndexedEntityProperty> {
@@ -808,6 +811,11 @@ fn flatten_property_for_index(
         }
     };
     let mut property = IndexedEntityProperty {
+        entity_type: match entity_type {
+            EntityType::Document => Some("DOCUMENT".to_string()),
+            EntityType::Task => Some("TASK".to_string()),
+            _ => None,
+        },
         definition_id: property_definition_id.to_string(),
         ..Default::default()
     };
@@ -843,24 +851,33 @@ pub async fn get_entity_properties_for_index(
     entity_id: &str,
     entity_type: EntityType,
 ) -> anyhow::Result<Vec<IndexedEntityProperty>> {
+    let other_type = match entity_type {
+        EntityType::Document => EntityType::Task,
+        EntityType::Task => EntityType::Document,
+        other => other,
+    };
     let rows = sqlx::query!(
         r#"
         SELECT
             property_definition_id,
+            entity_type as "entity_type: EntityType",
             values as "values: serde_json::Value"
         FROM entity_properties
         WHERE entity_id = $1
-          AND entity_type = $2
+          AND entity_type IN ($2, $3)
         "#,
         entity_id,
         entity_type as EntityType,
+        other_type as EntityType,
     )
     .fetch_all(pool)
     .await?;
 
     Ok(rows
         .into_iter()
-        .filter_map(|row| flatten_property_for_index(row.property_definition_id, row.values))
+        .filter_map(|row| {
+            flatten_property_for_index(row.entity_type, row.property_definition_id, row.values)
+        })
         .collect())
 }
 
@@ -903,25 +920,33 @@ pub async fn get_entity_properties_for_index_batch(
     if entity_ids.is_empty() {
         return Ok(HashMap::new());
     }
+    let other_type = match entity_type {
+        EntityType::Document => EntityType::Task,
+        EntityType::Task => EntityType::Document,
+        other => other,
+    };
     let rows = sqlx::query!(
         r#"
         SELECT
             entity_id,
+            entity_type as "entity_type: EntityType",
             property_definition_id,
             values as "values: serde_json::Value"
         FROM entity_properties
         WHERE entity_id = ANY($1)
-          AND entity_type = $2
+          AND entity_type IN ($2, $3)
         "#,
         entity_ids,
         entity_type as EntityType,
+        other_type as EntityType,
     )
     .fetch_all(pool)
     .await?;
 
     let mut result: HashMap<String, Vec<IndexedEntityProperty>> = HashMap::new();
     for row in rows {
-        let Some(property) = flatten_property_for_index(row.property_definition_id, row.values)
+        let Some(property) =
+            flatten_property_for_index(row.entity_type, row.property_definition_id, row.values)
         else {
             continue;
         };
@@ -930,3 +955,6 @@ pub async fn get_entity_properties_for_index_batch(
 
     Ok(result)
 }
+
+#[cfg(test)]
+mod test;

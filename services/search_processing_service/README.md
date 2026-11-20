@@ -228,6 +228,20 @@ During the dual-delivery window, rollback the consumer deployment while SQS cont
 
 Use `POST /internal/backfill/calls` after a rollback, a dropped upsert, or a suspected transition gap. An empty body re-enqueues every archived call through SQS; `{"call_ids": ["<uuid>"]}` targets known calls. This restores existing call documents but does not synthesize a delete event for a call that no longer exists, so investigate dropped delete logs by call ID.
 
+## Document property namespaces
+
+Document search indexing reads both `DOCUMENT` and `TASK` property assignments
+for the same document ID. Each indexed property retains `entity_type`; values
+from different namespaces must not overwrite each other. This keeps converted
+tasks searchable through retained document assignments, while explicit task
+property filters still read the task namespace.
+
+Apply the additive `properties.entity_type` keyword mapping before deploying
+the indexer. Then use the existing document/property backfill paths to refresh
+existing document parents before enabling namespace-aware search. Old entries
+without the field retain their canonical-subtype behavior during rollout. A
+mapping update or backfill is an operational action, not part of code generation.
+
 ## Backfill HTTP Routes
 
 Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count; a resumable backfill also reports its `cursor` and update counts. SQS can take a batch and refuse some of its entries; the backfill sends those again, twice at most (never an entry SQS blames on the request), and counts the ones it still refuses as `not_queued`, in messages, not source rows (one email message carries several threads). A job with any is `failed`, cancelled or not, so `completed` means every message reached the search event queue; the warning names up to 10 of the refused ids, so rerun them or the same scope.

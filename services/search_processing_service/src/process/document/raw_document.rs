@@ -85,8 +85,8 @@ async fn upsert_document(
     Ok(())
 }
 
-/// Properties are keyed under the task entity type for tasks, otherwise the
-/// document entity type.
+/// Task and document property namespaces share the document index. The
+/// indexed-property read fetches both regardless of the document subtype.
 fn properties_entity_type(sub_type: Option<&str>) -> EntityType {
     sub_type
         .and_then(|s| s.parse::<DocumentSubType>().ok())

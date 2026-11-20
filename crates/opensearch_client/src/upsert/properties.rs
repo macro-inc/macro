@@ -7,6 +7,9 @@
 pub struct IndexedProperty {
     /// The property definition id this value belongs to.
     pub definition_id: String,
+    /// Namespace of a DOCUMENT or TASK assignment, omitted for other entities.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub entity_type: Option<String>,
     /// Every equality-filterable value as a keyword: select-option UUIDs,
     /// entity-reference ids, links, text, bool as "true"/"false".
     #[serde(skip_serializing_if = "Vec::is_empty")]

@@ -89,3 +89,49 @@ async fn a_calendar_events_property_change_reaches_its_search_document(pool: sql
         }])
     );
 }
+
+#[sqlx::test(migrations = "../../crates/macro_db_client/migrations")]
+async fn task_property_change_preserves_document_and_task_assignments(pool: sqlx::PgPool) {
+    let document_id = "01980000-0000-7000-8000-00000000d001";
+    for (entity_type, value) in [
+        (EntityType::Document, "document project"),
+        (EntityType::Task, "task project"),
+    ] {
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+            VALUES (gen_random_uuid(), $1, $2, $3, jsonb_build_object('type', 'String', 'value', $4::text))
+            "#,
+            document_id,
+            entity_type as EntityType,
+            PROJECT_PROPERTY,
+            value,
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let (opensearch, requests) = fake_opensearch().await;
+
+    process_entity_property_update(&opensearch, &pool, document_id, EntityType::Task)
+        .await
+        .unwrap();
+
+    let requests = requests.lock().unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(
+        requests[0].0,
+        format!("POST /documents/_update/{document_id}")
+    );
+    let body: serde_json::Value = serde_json::from_str(&requests[0].1).unwrap();
+    let indexed = body["doc"]["properties"].as_array().unwrap();
+    assert_eq!(indexed.len(), 2);
+    for (entity_type, value) in [("DOCUMENT", "document project"), ("TASK", "task project")] {
+        assert!(indexed.iter().any(|property| property
+            == &serde_json::json!({
+                "definition_id": PROJECT_PROPERTY.to_string(),
+                "entity_type": entity_type,
+                "values": [value],
+            })));
+    }
+}
