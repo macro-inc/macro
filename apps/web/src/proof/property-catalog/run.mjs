@@ -333,7 +333,11 @@ async function openSide(storageState, side, label) {
     await ctx.route(OLD_MODULE, async (r) => {
       const u = new URL(r.request().url());
       u.pathname = u.pathname.replace(/\.ts$/, '.__old__.ts');
-      await r.fulfill({ response: await r.fetch({ url: u.toString() }) });
+      // A failed module fetch fails the page load, which loadHarness retries; it
+      // must never fall back to the head's module on the OLD side.
+      const resp = await r.fetch({ url: u.toString() }).catch((e) => (harnessError(`${label}: old module ${u.pathname}: ${firstLine(e)}`), null));
+      if (!resp) return r.abort('failed');
+      await r.fulfill({ response: resp });
     });
   // Writes to the properties service: recorded on NEW, replayed on OLD, so
   // each write reaches the server once and both sides see the same answer.
@@ -343,7 +347,12 @@ async function openSide(storageState, side, label) {
     const u = new URL(req.url());
     const entry = { method: req.method(), path: u.pathname + u.search, body: req.postData() ?? null };
     if (tap.mode === 'record') {
-      const resp = await r.fetch();
+      // A write the dev server never answered fails on both sides alike.
+      const resp = await r.fetch().catch((e) => (harnessError(`${label}: write ${entry.method} ${u.pathname}: ${firstLine(e)}`), null));
+      if (!resp) {
+        tap.rec.push({ ...entry, failed: true });
+        return r.abort('failed');
+      }
       const body = await resp.text();
       const headers = { ...resp.headers() };
       delete headers['content-encoding'];
@@ -356,6 +365,7 @@ async function openSide(storageState, side, label) {
       tap.mismatches.push({ expected: next && { method: next.method, path: next.path, body: next.body }, got: entry });
       return r.fulfill({ status: 599, body: 'harness: unexpected write' });
     }
+    if (next.failed) return r.abort('failed');
     return r.fulfill({ status: next.status, headers: next.headers, body: next.resp });
   });
   if (side === 'neu' && ['drop-row', 'swap-order', 'alter-field'].includes(CONFIG.mutant)) {
@@ -367,7 +377,8 @@ async function openSide(storageState, side, label) {
         op = req.postDataJSON()?.operationName ?? null;
       } catch {}
       if (!op?.startsWith('PropertyCatalog') || !tap.mutantArmed || !g.chance(CONFIG.mutantRate)) return r.fallback();
-      const resp = await r.fetch();
+      const resp = await r.fetch().catch((e) => (harnessError(`${label}: mutant fetch: ${firstLine(e)}`), null));
+      if (!resp) return r.abort('failed');
       const json = await resp.json();
       if (mutateResponse(json, CONFIG.mutant, g)) R.mutant.applied++;
       const headers = { ...resp.headers() };
@@ -423,6 +434,10 @@ async function loadHarness(s) {
       log(msg.slice(0, 300));
     }
   }
+}
+// The first line of an error: Playwright appends the request log, cookies included.
+function firstLine(e) {
+  return String(e?.message ?? e).split('\n')[0].slice(0, 200);
 }
 function harnessError(msg) {
   if (R.harnessErrors.length < 200) R.harnessErrors.push(msg);

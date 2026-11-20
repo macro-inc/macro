@@ -4,7 +4,8 @@ Proof harness for moving the property catalog reads (definitions, options, tag
 sets) from REST to GraphQL. It is not product code and is not on `main`.
 
 ```sh
-apps/web/src/proof/property-catalog/run.sh all     # seed 1 quiet, seed 2 under load, control, mutants
+apps/web/src/proof/property-catalog/run.sh all     # seed 1 quiet, seed 2 under load, seed 4 quiet, control, mutants
+apps/web/src/proof/property-catalog/run.sh control mutants   # any modes, in order
 apps/web/src/proof/property-catalog/run.sh smoke   # 1 sequence of 3 steps
 ```
 
@@ -36,3 +37,14 @@ Postgres container in `$PG_CONTAINER`. All accounts are synthetic
   `state` and `diff`.
 - `MUTANT=drop-row|swap-order|alter-field|stale-cache|skip-live-update` plants a
   fault in the NEW path; `CONTROL=1` runs OLD against OLD.
+- `node summarize.mjs` rolls every `out/*/results.json` into `out/summary.json`.
+
+## Limits of the local stack
+
+- The auth service lets one address create 50 users an hour. Account pairs are
+  reused for `ROTATE` (25) sequences, and a refused signup waits five minutes
+  and retries, so a full run spends some of its time waiting.
+- The dev server now and then serves a reloaded page without its modules
+  (`ERR_NETWORK_CHANGED` on a machine with many network interfaces). The
+  harness retries the load and records it in `harnessErrors`; a write the dev
+  server never answers fails on both sides alike.
