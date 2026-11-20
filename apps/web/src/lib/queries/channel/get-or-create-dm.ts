@@ -1,3 +1,4 @@
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { type ResultError, throwOnErr } from '@core/util/result';
 import { Telemetry, type TraceContext } from '@macro-inc/observability';
@@ -79,15 +80,18 @@ export function getOrCreateDirectMessageChannel(
 }
 
 /**
- * The viewer's existing DM with a recipient, without creating one: the one
- * the server's get-or-create would reuse. Asked of the server each time, since
- * the DM may be one the viewer's directory has not loaded yet.
+ * The viewer's existing DM with a person, without creating one: the one the
+ * server's get-or-create would reuse. Asked of the server each time, since
+ * the DM may be one the viewer's directory has not loaded yet. The server
+ * looks up people only; agents are opened through their own DM flow
+ * (`openTeamAgentDirectMessage`), so a bot answers none without asking.
  */
 export function existingDirectMessage(
   viewerId: string,
   recipientId: string
 ): ResultAsync<string | undefined, unknown> {
-  if (recipientId === viewerId) return okAsync(undefined);
+  if (recipientId === viewerId || isBotPrincipalId(recipientId))
+    return okAsync(undefined);
   return ResultAsync.fromPromise(
     lookupDirectMessage(recipientId),
     (error) => error
