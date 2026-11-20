@@ -244,7 +244,9 @@ where
     /// A connection can close between the snapshot and the renewal's write,
     /// which then restores the row its close deleted. A close leaves the
     /// registry before it deletes its row, so a restored connection the
-    /// registry no longer holds closed in between, and is closed again here.
+    /// registry no longer holds closed in between, and is closed again. Off
+    /// the renewal's path: a close can wait on locks, and a late renewal lets
+    /// every lease here lapse.
     pub async fn renew_presence(&self) {
         let Some(presence) = &self.presence else {
             return;
@@ -269,7 +271,7 @@ where
                 %connection,
                 "a renewal restored a connection that closed while it ran; closing it again"
             );
-            Arc::clone(presence).disconnected(harness, connection).await;
+            tokio::spawn(Arc::clone(presence).disconnected(harness, connection));
         }
     }
 

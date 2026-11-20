@@ -335,7 +335,7 @@ impl HarnessPresence for PgHarnessPresence {
                     %harness,
                     %connection,
                     replica = %self.replica,
-                    "a held harness runtime connection had no presence row"
+                    "a renewed harness runtime connection had no presence row"
                 );
             }
             live.into_iter()

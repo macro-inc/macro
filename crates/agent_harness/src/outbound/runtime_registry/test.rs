@@ -551,6 +551,8 @@ struct LeasedPresence {
     events: Mutex<Vec<PresenceEvent>>,
     renewal_started: tokio::sync::Notify,
     renewal_gate: tokio::sync::Notify,
+    /// How many closes presence has recorded.
+    disconnects: tokio::sync::watch::Sender<usize>,
 }
 
 impl LeasedPresence {
@@ -560,6 +562,22 @@ impl LeasedPresence {
 
     fn events(&self) -> Vec<PresenceEvent> {
         self.events.lock().unwrap().clone()
+    }
+
+    async fn recorded_disconnects(&self, count: usize) {
+        let mut disconnects = self.disconnects.subscribe();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            disconnects.wait_for(|recorded| *recorded >= count),
+        )
+        .await
+        .unwrap_or_else(|_| {
+            panic!(
+                "presence never recorded {count} closes: {:?}",
+                self.events()
+            )
+        })
+        .expect("presence is alive");
     }
 }
 
@@ -591,6 +609,7 @@ impl HarnessPresence for LeasedPresence {
                 .lock()
                 .unwrap()
                 .push(PresenceEvent::Disconnected(connection));
+            self.disconnects.send_modify(|recorded| *recorded += 1);
         })
     }
 
@@ -668,6 +687,8 @@ async fn a_renewal_that_lands_after_a_close_leaves_the_connection_closed() {
     assert!(presence.rows().is_empty());
     presence.renewal_gate.notify_one();
     renewal.await.expect("the renewal finishes");
+    // The second close runs off the renewal's path.
+    presence.recorded_disconnects(2).await;
 
     assert!(
         presence.rows().is_empty(),
@@ -675,10 +696,12 @@ async fn a_renewal_that_lands_after_a_close_leaves_the_connection_closed() {
         presence.rows()
     );
     assert_eq!(
-        presence.events().last(),
-        Some(&PresenceEvent::Disconnected(closing.id)),
-        "the close is reported again after the renewal: {:?}",
-        presence.events()
+        presence.events(),
+        [
+            PresenceEvent::Connected(closing.id),
+            PresenceEvent::Disconnected(closing.id),
+            PresenceEvent::Disconnected(closing.id),
+        ]
     );
 }
 
@@ -702,13 +725,79 @@ async fn a_redial_during_a_late_renewal_stays_connected() {
     let redial = dial_recorded(&registry, &presence, &ContainerMock::default()).await;
     presence.renewal_gate.notify_one();
     renewal.await.expect("the renewal finishes");
+    presence.recorded_disconnects(2).await;
 
     assert_eq!(presence.rows(), [redial.id]);
     assert!(registry.is_connected(HarnessId::TEST_A));
-    assert!(
-        !presence
-            .events()
-            .contains(&PresenceEvent::Disconnected(redial.id))
+    assert_eq!(
+        presence.events(),
+        [
+            PresenceEvent::Connected(closing.id),
+            PresenceEvent::Disconnected(closing.id),
+            PresenceEvent::Connected(redial.id),
+            PresenceEvent::Disconnected(closing.id),
+        ]
+    );
+}
+
+/// A close still waiting on its own attach write when a late renewal
+/// restores its row: the renewal's close runs first, and the attach write
+/// then the close's own leave it closed.
+#[tokio::test(start_paused = true)]
+async fn a_late_renewal_during_a_close_that_waits_for_its_attach_ends_closed() {
+    let presence = Arc::new(LeasedPresence::default());
+    let registry = RuntimeRegistry::with_presence(
+        Arc::clone(&presence) as Arc<dyn HarnessPresence>,
+        mpsc::unbounded_channel().0,
+    );
+    let runtime = ContainerMock::default();
+    let listed = ListedConnection {
+        id: RuntimeConnectionId::generate(),
+        connection: RuntimeConnection::connect(runtime.clone()),
+        accepts: RuntimeAccepts::default(),
+    };
+    registry
+        .connections
+        .insert(HarnessId::TEST_A, listed.clone());
+    let (release, released) = tokio::sync::oneshot::channel::<()>();
+    let connected_write = tokio::spawn({
+        let presence = Arc::clone(&presence);
+        let listed = listed.clone();
+        async move {
+            let _ = released.await;
+            presence
+                .connected(HarnessId::TEST_A, listed.id, listed.accepts)
+                .await;
+        }
+    });
+
+    let renewal = renewal_holding_its_snapshot(&registry, &presence).await;
+    runtime.disconnects();
+    let closing = Arc::clone(&registry).drop_when_closed(
+        HarnessId::TEST_A,
+        listed.clone(),
+        Some(connected_write),
+    );
+    tokio::pin!(closing);
+    tokio::select! {
+        () = &mut closing => panic!("the close finished before its attach was recorded"),
+        () = tokio::time::sleep(Duration::from_secs(1)) => {}
+    }
+    assert!(!registry.is_connected(HarnessId::TEST_A));
+    presence.renewal_gate.notify_one();
+    renewal.await.expect("the renewal finishes");
+    presence.recorded_disconnects(1).await;
+    release.send(()).expect("the attach write is waiting");
+    closing.await;
+
+    assert!(presence.rows().is_empty(), "{:?}", presence.rows());
+    assert_eq!(
+        presence.events(),
+        [
+            PresenceEvent::Disconnected(listed.id),
+            PresenceEvent::Connected(listed.id),
+            PresenceEvent::Disconnected(listed.id),
+        ]
     );
 }
 

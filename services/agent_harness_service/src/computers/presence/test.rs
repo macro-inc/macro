@@ -108,7 +108,8 @@ async fn observation_checks_lease_time_after_guard_started(pool: PgPool) {
 
 /// A renewal that listed a connection before its close and writes after it
 /// brings the closed row back, so a computer's close check reads it as still
-/// connected and skips the disconnect. Closing it again is what clears it.
+/// connected and skips the disconnect. Closing it again, as the registry does
+/// for a restore it no longer holds, clears it.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_late_renewal_restores_a_closed_connection_until_it_is_closed_again(pool: PgPool) {
     let harness = HarnessId::new_from_uuid(macro_uuid::generate_uuid_v7());
