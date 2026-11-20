@@ -808,7 +808,7 @@ async fn database_dependencies_are_separate_deduplicated_and_keep_fallbacks() {
     assert_eq!(discovered.dependencies[0].source, source);
     assert_eq!(discovered.dependencies[0].referenced_by, vec![page]);
     let body = &discovered.pages[0];
-    assert_eq!(body.occurrences.len(), 4);
+    assert_eq!(body.occurrences.len(), 7);
     assert_eq!(
         body.occurrences[0].sources[0].ownership,
         Some(crate::domain::databases::SourceOwnership::Linked)

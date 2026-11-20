@@ -1,13 +1,17 @@
-//! Extend the reviewed inventory with sources reached through body placements.
+//! Discover page-level review dependencies without reading any source rows.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
-use import_notion::domain::databases::{ReadFailure, discover_database_dependencies};
-use import_notion::domain::inventory::all_rows;
-use import_notion::domain::model::{DataSourceSummary, Inventory, NotionDataSource, NotionId};
-use import_notion::domain::ports::{NotionApi, NotionError};
+use futures::{StreamExt, stream};
+use import_notion::domain::databases::{DatabaseLoss, ReadFailure};
+use import_notion::domain::model::{DataSourceSummary, Inventory, InventoryProgress, NotionId};
+use import_notion::domain::ports::NotionApi;
 
-use super::{enrich, read_failure, resolve_page};
+use super::super::write::Cancel;
+use super::{read_failure, resolve_page};
+
+/// Match inventory's bounded source-sampling fanout.
+const DISCOVERY_CONCURRENCY: usize = 4;
 
 /// An external source, including one the connection cannot read.
 pub(crate) struct Dependency {
@@ -17,7 +21,7 @@ pub(crate) struct Dependency {
     pub unavailable: Option<ReadFailure>,
 }
 
-/// All readable sources are staged; unavailable ones remain visible for review.
+/// Page-level dependencies join the review. Row-body discovery waits for writing.
 pub(crate) struct Discovery {
     pub inventory: Inventory,
     pub dependencies: HashMap<NotionId, Dependency>,
@@ -25,150 +29,34 @@ pub(crate) struct Discovery {
     pub warnings: HashMap<NotionId, Vec<String>>,
 }
 
-/// Follow linked sources and row bodies to a fixed point before asking for approval.
+struct PageScan {
+    dependencies: HashMap<NotionId, Dependency>,
+    warnings: HashMap<NotionId, Vec<String>>,
+    inline_on: HashMap<NotionId, Vec<NotionId>>,
+}
+
+/// Keep search summaries and discard each page body as soon as its references are read.
 #[tracing::instrument(name = "notion.database_dependencies", skip_all, fields(dependencies = tracing::field::Empty, sources = tracing::field::Empty), err)]
 pub(crate) async fn discover<Api: NotionApi>(
     api: &Api,
     mut inventory: Inventory,
-) -> Result<Discovery, NotionError> {
-    let found = discover_database_dependencies(api, &inventory).await?;
-    let mut cached: HashMap<NotionId, NotionDataSource> = found
-        .dependencies
-        .into_iter()
-        .map(|dependency| (dependency.source.id.clone(), dependency.source))
-        .collect();
-    let mut known: HashSet<NotionId> = inventory
-        .data_sources
-        .iter()
-        .map(|summary| summary.source.id.clone())
-        .collect();
-    let mut sources: VecDeque<NotionId> = inventory
-        .data_sources
-        .iter()
-        .map(|summary| summary.source.id.clone())
-        .collect();
-    let mut bodies = VecDeque::new();
-    for body in found.pages {
-        let page = body.page_id.clone();
-        bodies.push_back((page, enrich(api, body).await?));
-    }
-    let mut dependencies: HashMap<NotionId, Dependency> = HashMap::new();
-    let mut warnings: HashMap<NotionId, Vec<String>> = HashMap::new();
-    let mut scanned = HashSet::new();
-    let mut inline_on: HashMap<NotionId, Vec<NotionId>> = HashMap::new();
-    loop {
-        while let Some((origin, resolved)) = bodies.pop_front() {
-            warnings
-                .entry(origin.clone())
-                .or_default()
-                .extend(resolved.warnings);
-            for occurrence in resolved.body.occurrences {
-                for reference in occurrence.sources {
-                    let origins = inline_on.entry(reference.id.clone()).or_default();
-                    if !origins.contains(&origin) {
-                        origins.push(origin.clone());
-                    }
-                    // Selected sources retain their original place. Repeated references
-                    // to an external source only add provenance to the same review row.
-                    if let Some(dependency) = dependencies.get_mut(&reference.id) {
-                        if !dependency.referenced_by.contains(&origin) {
-                            dependency.referenced_by.push(origin.clone());
-                        }
-                        continue;
-                    }
-                    if known.contains(&reference.id) {
-                        continue;
-                    }
-                    let loaded = match cached.remove(&reference.id) {
-                        Some(source) => Ok(source),
-                        None => api.data_source(&reference.id).await,
-                    };
-                    let (source, unavailable) = match loaded {
-                        Ok(source) if !source.in_trash => (Some(source), None),
-                        Ok(_) => (None, Some(ReadFailure::Trashed)),
-                        Err(error) => match read_failure(&error) {
-                            Some(reason) => (None, Some(reason)),
-                            None => return Err(error),
-                        },
-                    };
-                    let title = source
-                        .as_ref()
-                        .map(|source| source.title.clone())
-                        .unwrap_or_else(|| occurrence.title.clone());
-                    let url = source
-                        .as_ref()
-                        .map(|source| source.database_id.url())
-                        .unwrap_or_else(|| reference.id.url());
-                    dependencies.insert(
-                        reference.id.clone(),
-                        Dependency {
-                            title,
-                            url,
-                            referenced_by: vec![origin.clone()],
-                            unavailable,
-                        },
-                    );
-                    if let Some(source) = source {
-                        known.insert(source.id.clone());
-                        sources.push_back(source.id.clone());
-                        inventory.data_sources.push(DataSourceSummary {
-                            source,
-                            row_count: 0,
-                            sample_titles: vec![],
-                        });
-                    }
-                }
-            }
-        }
-        let Some(source) = sources.pop_front() else {
-            break;
-        };
-        if !scanned.insert(source.clone()) {
-            continue;
-        }
-        let rows = match all_rows(api, &source).await {
-            Ok(rows) => rows,
-            Err(error) if read_failure(&error).is_some() => {
-                warnings.entry(source.clone()).or_default().push(format!(
-                    "Source {source}: rows unavailable ({:?})",
-                    read_failure(&error)
-                ));
-                continue;
-            }
-            Err(error) => return Err(error),
-        };
-        if !rows.complete {
-            warnings.entry(source.clone()).or_default().push(format!(
-                "Source {source}: Notion returned an incomplete row query"
-            ));
-        }
-        if let Some(summary) = inventory
-            .data_sources
-            .iter_mut()
-            .find(|summary| summary.source.id == source)
-        {
-            summary.row_count = rows.rows.len();
-            summary.sample_titles = rows
-                .rows
-                .iter()
-                .take(5)
-                .map(|row| row.title.clone())
-                .collect();
-        }
-        for row in rows.rows {
-            match resolve_page(api, &row.id).await {
-                Ok(body) => bodies.push_back((source.clone(), body)),
-                Err(error) if read_failure(&error).is_some() => {
-                    warnings.entry(source.clone()).or_default().push(format!(
-                        "Row {}: body unavailable ({:?})",
-                        row.id,
-                        read_failure(&error)
-                    ));
-                }
-                Err(error) => return Err(error),
-            }
-        }
-    }
+    cancel: &Cancel,
+    progress: &(dyn Fn(InventoryProgress) + Send + Sync),
+) -> anyhow::Result<Discovery> {
+    let PageScan {
+        dependencies,
+        mut warnings,
+        inline_on,
+    } = scan_pages(api, &inventory, cancel, progress).await?;
+    let dependencies = load_dependencies(
+        api,
+        &mut inventory,
+        dependencies,
+        &mut warnings,
+        cancel,
+        progress,
+    )
+    .await?;
     tracing::Span::current().record("dependencies", dependencies.len() as i64);
     tracing::Span::current().record("sources", inventory.data_sources.len() as i64);
     Ok(Discovery {
@@ -177,4 +65,155 @@ pub(crate) async fn discover<Api: NotionApi>(
         inline_on,
         warnings,
     })
+}
+
+#[tracing::instrument(name = "notion.database_page_scan", skip_all, fields(pages = inventory.pages.len() as i64, pages_read = tracing::field::Empty), err)]
+async fn scan_pages<Api: NotionApi>(
+    api: &Api,
+    inventory: &Inventory,
+    cancel: &Cancel,
+    progress: &(dyn Fn(InventoryProgress) + Send + Sync),
+) -> anyhow::Result<PageScan> {
+    let known: HashSet<_> = inventory
+        .data_sources
+        .iter()
+        .map(|summary| summary.source.id.clone())
+        .collect();
+    let mut scan = PageScan {
+        dependencies: HashMap::new(),
+        warnings: HashMap::new(),
+        inline_on: HashMap::new(),
+    };
+    cancel.ensure_running()?;
+    progress(InventoryProgress {
+        pages: 0,
+        data_sources: known.len(),
+    });
+    let mut pages_read = 0usize;
+    // Own only identifiers and titles across the stream's awaits, never all bodies.
+    let inputs: Vec<_> = inventory
+        .pages
+        .iter()
+        .map(|page| (page.id.clone(), page.title.clone()))
+        .collect();
+    let mut pages = stream::iter(inputs)
+        .map(|(page, title)| async move {
+            if cancel.stopped() {
+                return (page, title, None);
+            }
+            let resolved = resolve_page(api, &page).await;
+            (page, title, Some(resolved))
+        })
+        .buffered(DISCOVERY_CONCURRENCY);
+    while let Some((page, title, outcome)) = pages.next().await {
+        cancel.ensure_running()?;
+        pages_read += 1;
+        let losses = scan.warnings.entry(page.clone()).or_default();
+        match outcome {
+            Some(Ok(resolved)) => {
+                losses.extend(resolved.warnings);
+                for occurrence in resolved.body.occurrences {
+                    losses.extend(occurrence.losses.iter().map(|loss| {
+                        format!(
+                            "Page \"{title}\", database \"{}\": {loss}.",
+                            occurrence.title
+                        )
+                    }));
+                    for reference in occurrence.sources {
+                        let origins = scan.inline_on.entry(reference.id.clone()).or_default();
+                        if !origins.contains(&page) {
+                            origins.push(page.clone());
+                        }
+                        if known.contains(&reference.id) {
+                            continue;
+                        }
+                        let unavailable = occurrence.losses.iter().find_map(|loss| match loss {
+                            DatabaseLoss::SourceUnavailable { source_id, reason }
+                                if source_id == &reference.id =>
+                            {
+                                Some(*reason)
+                            }
+                            _ => None,
+                        });
+                        let dependency = scan
+                            .dependencies
+                            .entry(reference.id.clone())
+                            .or_insert_with(|| Dependency {
+                                title: occurrence.title.clone(),
+                                url: reference.id.url(),
+                                referenced_by: vec![],
+                                unavailable,
+                            });
+                        if !dependency.referenced_by.contains(&page) {
+                            dependency.referenced_by.push(page.clone());
+                        }
+                    }
+                }
+                // The potentially large markdown and view payloads are dropped here.
+            }
+            Some(Err(error)) => {
+                let reason = read_failure(&error).unwrap_or(ReadFailure::TemporarilyUnavailable);
+                losses.push(format!("Page \"{title}\": database references could not be checked because {reason}. The page remains in the plan."));
+            }
+            None => cancel.ensure_running()?,
+        }
+        progress(InventoryProgress {
+            pages: pages_read,
+            data_sources: known.len() + scan.dependencies.len(),
+        });
+    }
+    tracing::Span::current().record("pages_read", pages_read as i64);
+    Ok(scan)
+}
+
+#[tracing::instrument(name = "notion.database_dependency_metadata", skip_all, fields(dependencies = tracing::field::Empty), err)]
+async fn load_dependencies<Api: NotionApi>(
+    api: &Api,
+    inventory: &mut Inventory,
+    candidates: HashMap<NotionId, Dependency>,
+    warnings: &mut HashMap<NotionId, Vec<String>>,
+    cancel: &Cancel,
+    progress: &(dyn Fn(InventoryProgress) + Send + Sync),
+) -> anyhow::Result<HashMap<NotionId, Dependency>> {
+    let known = inventory.data_sources.len();
+    let mut candidates: Vec<_> = candidates.into_iter().collect();
+    candidates.sort_by(|left, right| left.0.as_str().cmp(right.0.as_str()));
+    let mut reads = stream::iter(candidates)
+        .map(|(id, dependency)| async move {
+            if cancel.stopped() || dependency.unavailable.is_some() {
+                return (id, dependency, None);
+            }
+            let source = api.data_source(&id).await;
+            (id, dependency, Some(source))
+        })
+        .buffered(DISCOVERY_CONCURRENCY);
+    let mut dependencies = HashMap::new();
+    while let Some((id, mut dependency, loaded)) = reads.next().await {
+        cancel.ensure_running()?;
+        match loaded {
+            Some(Ok(source)) if !source.in_trash => {
+                dependency.title = source.title.clone();
+                dependency.url = source.database_id.url();
+                warnings.entry(id.clone()).or_default().push(format!("Database \"{}\": rows will be read when imported; no row count was available from this scan.", dependency.title));
+                inventory.data_sources.push(DataSourceSummary {
+                    source,
+                    row_count: 0,
+                    sample_titles: vec![],
+                });
+            }
+            Some(Ok(_)) => dependency.unavailable = Some(ReadFailure::Trashed),
+            Some(Err(error)) => {
+                dependency.unavailable =
+                    Some(read_failure(&error).unwrap_or(ReadFailure::TemporarilyUnavailable))
+            }
+            None => {}
+        }
+        dependencies.insert(id, dependency);
+        progress(InventoryProgress {
+            pages: inventory.pages.len(),
+            data_sources: known + dependencies.len(),
+        });
+    }
+    tracing::Span::current().record("dependencies", dependencies.len() as i64);
+    Ok(dependencies)
 }

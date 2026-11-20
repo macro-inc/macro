@@ -63,7 +63,12 @@ pub(super) fn occurrences(markdown: &str) -> Vec<DatabaseOccurrence> {
             _ => None,
         };
         let title = match parsed.title.trim() {
-            "" => "Notion database",
+            "" => attributes
+                .get("title")
+                .copied()
+                .map(str::trim)
+                .filter(|title| !title.is_empty())
+                .unwrap_or("Notion database"),
             title => title,
         };
         occurrences.push(DatabaseOccurrence {
@@ -137,8 +142,15 @@ fn code(input: &str) -> IResult<&str, ()> {
 fn database(input: &str) -> IResult<&str, DatabaseTag<'_>> {
     let (input, _) = tag("<database").parse(input)?;
     let (input, attributes) = many0(preceded(multispace1, attribute)).parse(input)?;
-    let (input, _) = (multispace0, char('>')).parse(input)?;
-    let (input, title) = terminated(take_until("</database>"), tag("</database>")).parse(input)?;
+    let (input, _) = multispace0.parse(input)?;
+    let (input, title) = alt((
+        value("", tag("/>")),
+        preceded(
+            char('>'),
+            terminated(take_until("</database>"), tag("</database>")),
+        ),
+    ))
+    .parse(input)?;
     Ok((input, DatabaseTag { attributes, title }))
 }
 

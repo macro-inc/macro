@@ -70,9 +70,13 @@ maps a data source onto Macro database columns and cells
 - `databases::discover_database_dependencies` reads standalone page bodies
   without expanding `Inventory` or querying dependency rows. Its cache and
   source deduplication belong to one workspace client; import mappings must
-  also include workspace identity. Read row bodies with `read_page_databases`.
+  also include workspace identity. The convenience helper retains its bodies;
+  workspace planning instead streams bounded `read_page_databases` calls and
+  drops markdown immediately. Row bodies are read only during writing.
 - Database occurrences retain their original tags and byte ranges, including
-  unresolved placements. A container returning no sources is `NeedsViews`,
+  unresolved placements. Both Rust and TypeScript read the shared
+  `fixtures/database_occurrences.md` grammar fixture; inline/self-closing tags
+  and both quote forms count, while code, comments and escapes do not. A container returning no sources is `NeedsViews`,
   not empty: resolve linked views before declaring `EmptyContainer`. View
   selection and translation belong to the caller; a multi-source container
   retains every source, and a URL fragment never supplies the selected view.

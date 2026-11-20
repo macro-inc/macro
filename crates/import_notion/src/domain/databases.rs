@@ -58,6 +58,20 @@ pub enum ReadFailure {
     InvalidObject,
     /// The object is in the trash.
     Trashed,
+    /// The connector exhausted its retries for this object.
+    TemporarilyUnavailable,
+}
+
+impl std::fmt::Display for ReadFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::NotFound => "not found or not shared with the connection",
+            Self::Forbidden => "the connection does not have access",
+            Self::InvalidObject => "the reference does not identify a supported database",
+            Self::Trashed => "the object is in the trash",
+            Self::TemporarilyUnavailable => "Notion is temporarily unavailable after retries",
+        })
+    }
 }
 
 /// A placement loss that the import review/report must retain.
@@ -82,6 +96,24 @@ pub enum DatabaseLoss {
         /// The access or object failure.
         reason: ReadFailure,
     },
+}
+
+impl std::fmt::Display for DatabaseLoss {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::MissingContainerId => {
+                f.write_str("the database reference has no usable destination")
+            }
+            Self::NeedsViews => f.write_str("the database tabs could not be resolved"),
+            Self::EmptyContainer => f.write_str("the database has no readable data source"),
+            Self::ContainerUnavailable { reason } => {
+                write!(f, "the database is unavailable: {reason}")
+            }
+            Self::SourceUnavailable { reason, .. } => {
+                write!(f, "the referenced data source is unavailable: {reason}")
+            }
+        }
+    }
 }
 
 /// One `<database>` block, in original body order, including unresolved blocks.

@@ -312,9 +312,13 @@ paths reject workspace-plan rows so approval cannot be bypassed.
 
 ## Inline and linked Notion databases
 
-- Discover body placements and view-backed dependencies before triage, including
-  sources reached from row bodies. `plan.dependencyOf` names the planned objects
-  referencing an external source; readable dependencies start included, and
+- Scan standalone page bodies before triage with at most four concurrent reads.
+  Reuse inventory's search row counts/titles; do not query source rows during
+  dependency discovery. Check cancellation and publish scan counters inside the
+  loops, and discard each markdown body after extracting its references. Object
+  read failures become named warnings instead of aborting the plan.
+  `plan.dependencyOf` names the pages referencing an external source; readable
+  dependencies start included, and
   unavailable dependencies are visible by-hand rows without sharing controls.
   `plan.inlineOn` includes referenced sources already in selected roots; suggest
   Copy for every inline source. Preserve approved Tasks or exclusion choices at
@@ -340,9 +344,10 @@ paths reject workspace-plan rows so approval cannot be bypassed.
   `SchemaPlan` carries a UUIDv5 property-schema fingerprint: on restart mismatch,
   fail only that source and report unresolved card fallbacks; keep other sources
   and pages running. Do not rebuild incompatible columns or store full snapshots.
-- Keep rootless dependencies reached only from source rows at the Notion folder
-  and report that placement with the source titles. Apply the same privacy guard;
-  do not create or share row-body folders early merely to file a dependency.
+- Discover row-body references only when writing. Sources absent from the review
+  remain named Notion links with typed reasons and counted report losses; never
+  import an unreviewed dependency while writing. Page-level dependencies remain
+  in the review. Span page scans and dependency metadata as separate phases.
   Approximate filters preserve a superset of source rows and visibly mark the
   saved view name. Persist translation losses, unresolved placements and labelled
   computed snapshots through `WrittenObjects::record_warnings`; reports and

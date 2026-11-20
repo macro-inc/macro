@@ -19,3 +19,6 @@ Not a captured workspace response; linked placement serialization needs real-wor
 ```
 `<database url="https://www.notion.so/d9824bdc84454327be8b5b47500af6ce" inline="true">Inline code</database>`
 \<database url="https://www.notion.so/d9824bdc84454327be8b5b47500af6ce" inline="true">Escaped</database>
+Before <database url="https://www.notion.so/d9824bdc84454327be8b5b47500af6ce" inline="true">Mid-line tasks</database> after
+<database url='https://www.notion.so/d9824bdc84454327be8b5b47500af6ce' inline='true' title='Self-closing tasks' />
+<database url="https://www.notion.so/d9824bdc84454327be8b5b47500af6ce">Final tasks</database>

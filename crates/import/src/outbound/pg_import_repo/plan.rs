@@ -292,7 +292,7 @@ impl NotionPlanRepo for PgImportRepo {
         Ok(result.rows_affected() > 0)
     }
 
-    #[tracing::instrument(skip(self), fields(pages = scanned.pages, data_sources = scanned.data_sources), err)]
+    #[tracing::instrument(skip(self, user), fields(pages = scanned.pages, data_sources = scanned.data_sources), err)]
     async fn record_scan(
         &self,
         user: &MacroUserIdStr<'static>,

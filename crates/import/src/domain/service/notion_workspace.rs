@@ -419,7 +419,6 @@ where
         let span = tracing::info_span!(
             "workspace_import.plan",
             source = self.workspace_source.as_ref(),
-            %user,
             sharing = sharing.as_ref(),
             already_in_macro = tracing::field::Empty,
             stopped = tracing::field::Empty,
@@ -476,26 +475,32 @@ where
             .ok_or(ImportError::NotionNotConnected)?;
         let (counts, scanned) = tokio::sync::watch::channel(ScanCounts::default());
         let walk = async {
-            let found = inventory(&api, &scope, &|progress| {
+            let publish = |progress: import_notion::domain::model::InventoryProgress| {
                 counts.send_replace(ScanCounts {
                     pages: u32::try_from(progress.pages).unwrap_or(u32::MAX),
                     data_sources: u32::try_from(progress.data_sources).unwrap_or(u32::MAX),
                 });
-            })
-            .await;
-            // Dropping `counts` here lets the recorder write the final counts.
+            };
+            let found = inventory(&api, &scope, &publish).await?;
+            if control.reason().is_some() {
+                drop(counts);
+                return Ok(None);
+            }
+            let discovery = databases::discover(&api, found, &control.cancel, &publish).await?;
+            // Keep the recorder alive through both the search and page-reference phases.
             drop(counts);
-            found
+            Ok::<_, ImportError>(Some(discovery))
         };
         let (found, ()) = tokio::join!(
             walk,
             scan::record_scan(&self.repo, user, scanned, ImportSource::Notion)
         );
-        let found = found?;
+        let Some(discovery) = found? else {
+            return Ok(());
+        };
         if control.reason().is_some() {
             return Ok(());
         }
-        let discovery = databases::discover(&api, found).await?;
         let tree = plan::PlanTree::with_databases(&discovery);
         let team = self.repo.user_team_id(user).await?.is_some();
         let already_imported = self.already_in_macro(user, &tree).await?;

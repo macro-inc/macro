@@ -4,6 +4,7 @@ import type {
   SerializedLexicalNode,
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
+import sharedDatabaseGrammar from '../../../crates/import_notion/fixtures/database_occurrences.md?raw';
 import {
   notionMarkdownToLoroSnapshot,
   notionMarkdownToSerializedEditorState,
@@ -45,6 +46,37 @@ function text(node: SerializedLexicalNode): string {
 function convert(markdown: string): Node[] {
   return blocks(notionMarkdownToSerializedEditorState(markdown, LINKS));
 }
+
+it('uses the shared Rust fixture without drifting inline or self-closing ordinals', () => {
+  const markdown = sharedDatabaseGrammar;
+  const state = notionMarkdownToSerializedEditorState(markdown, {
+    pages: {},
+    users: {},
+    databases: [0, 1, 2, 3, 4].map((ordinal) => ({
+      containerId: 'd9824bdc84454327be8b5b47500af6ce',
+      ordinal,
+      target: {
+        databaseId: 'database-1',
+        tableId: 'table-1',
+        viewId: `view-${ordinal}`,
+      },
+    })),
+  });
+  const cards = blocks(state).filter((node) => node.type === 'document-card');
+  expect(cards.map((node) => node.documentName)).toEqual([
+    'External tasks',
+    'External tasks again',
+    'Mid-line tasks',
+    'Self-closing tasks',
+    'Final tasks',
+  ]);
+  expect(cards.map((node) => node.blockParams)).toEqual(
+    [0, 1, 2, 3, 4].map((ordinal) => ({
+      tableId: 'table-1',
+      viewId: `view-${ordinal}`,
+    }))
+  );
+});
 
 // Enhanced markdown fixture: Notion-Version 2026-03-11, documented at
 // https://developers.notion.com/guides/data-apis/enhanced-markdown#page-and-database-references

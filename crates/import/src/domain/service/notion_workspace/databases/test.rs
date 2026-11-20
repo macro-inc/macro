@@ -7,11 +7,35 @@ use import_notion::domain::ports::{NotionApi, NotionError};
 use import_notion::domain::views::{NotionView, ViewScope};
 use serde_json::json;
 
+#[derive(Default)]
 struct LinkedNotion {
     denied: bool,
+    body: Option<&'static str>,
+    body_calls: std::sync::atomic::AtomicUsize,
+    row_calls: std::sync::atomic::AtomicUsize,
+    gate: Option<tokio::sync::Semaphore>,
+    fail_body: bool,
 }
 impl NotionApi for LinkedNotion {
     async fn page_markdown(&self, _: &NotionId) -> Result<PageMarkdown, NotionError> {
+        self.body_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let _permit = match &self.gate {
+            Some(gate) => Some(gate.acquire().await.unwrap()),
+            None => None,
+        };
+        if self.fail_body {
+            return Err(NotionError::Upstream {
+                status: 503,
+                body: "temporarily unavailable".into(),
+            });
+        }
+        if let Some(body) = self.body {
+            return Ok(PageMarkdown {
+                markdown: body.into(),
+                unknown_block_ids: vec![],
+            });
+        }
         Ok(PageMarkdown {
             markdown: "Before\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa?v=cccccccccccccccccccccccccccccccc\" inline=\"true\">Linked work</database>\nBetween\n<database url=\"https://www.notion.so/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\" inline=\"true\">Linked work</database>\nAfter".into(),
             unknown_block_ids: vec![],
@@ -77,6 +101,8 @@ impl NotionApi for LinkedNotion {
         _: &NotionId,
         _: Option<String>,
     ) -> Result<RowsPage, NotionError> {
+        self.row_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(RowsPage {
             rows: vec![],
             next: RowsNext::End,
@@ -90,9 +116,15 @@ impl NotionApi for LinkedNotion {
 #[tokio::test]
 async fn empty_linked_containers_use_paginated_views_and_keep_repeated_positions() {
     let page = NotionId::parse("11111111111111111111111111111111").unwrap();
-    let resolved = resolve_page(&LinkedNotion { denied: false }, &page)
-        .await
-        .unwrap();
+    let resolved = resolve_page(
+        &LinkedNotion {
+            denied: false,
+            ..Default::default()
+        },
+        &page,
+    )
+    .await
+    .unwrap();
     assert_eq!(resolved.body.occurrences.len(), 2);
     assert_eq!(
         resolved.body.occurrences[0].sources[0].id.as_str(),
@@ -128,7 +160,10 @@ async fn empty_linked_containers_use_paginated_views_and_keep_repeated_positions
 async fn a_repeated_linked_source_is_one_reviewed_dependency() {
     let page = NotionId::parse("11111111111111111111111111111111").unwrap();
     let discovered = discover(
-        &LinkedNotion { denied: false },
+        &LinkedNotion {
+            denied: false,
+            ..Default::default()
+        },
         Inventory {
             pages: vec![NotionPage {
                 id: page.clone(),
@@ -142,6 +177,8 @@ async fn a_repeated_linked_source_is_one_reviewed_dependency() {
             }],
             data_sources: vec![],
         },
+        &super::super::write::Cancel::default(),
+        &|_| {},
     )
     .await
     .unwrap();
@@ -154,9 +191,17 @@ async fn a_repeated_linked_source_is_one_reviewed_dependency() {
     assert_eq!(discovered.inline_on[&source], vec![page.clone()]);
     // Referencing a source already selected still records its placement, without
     // presenting it as an external dependency or creating another mapping.
-    let selected = discover(&LinkedNotion { denied: false }, discovered.inventory)
-        .await
-        .unwrap();
+    let selected = discover(
+        &LinkedNotion {
+            denied: false,
+            ..Default::default()
+        },
+        discovered.inventory,
+        &super::super::write::Cancel::default(),
+        &|_| {},
+    )
+    .await
+    .unwrap();
     assert!(selected.dependencies.is_empty());
     assert_eq!(selected.inventory.data_sources.len(), 1);
     assert_eq!(selected.inline_on[&source], vec![page]);
@@ -175,7 +220,10 @@ async fn a_repeated_linked_source_is_one_reviewed_dependency() {
 async fn an_unreadable_linked_source_remains_a_disabled_review_dependency() {
     let page = NotionId::parse("11111111111111111111111111111111").unwrap();
     let discovered = discover(
-        &LinkedNotion { denied: true },
+        &LinkedNotion {
+            denied: true,
+            ..Default::default()
+        },
         Inventory {
             pages: vec![NotionPage {
                 id: page.clone(),
@@ -189,6 +237,8 @@ async fn an_unreadable_linked_source_remains_a_disabled_review_dependency() {
             }],
             data_sources: vec![],
         },
+        &super::super::write::Cancel::default(),
+        &|_| {},
     )
     .await
     .unwrap();
@@ -200,3 +250,5 @@ async fn an_unreadable_linked_source_remains_a_disabled_review_dependency() {
         Some(ReadFailure::NotFound)
     );
 }
+
+mod discovery;

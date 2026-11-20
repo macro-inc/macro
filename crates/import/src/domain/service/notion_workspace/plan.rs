@@ -126,7 +126,7 @@ impl PlanTree {
             if let Some(dependency) = discovery.dependencies.get(&node.id) {
                 node.dependency_of = dependency.referenced_by.clone();
                 node.unavailable = dependency.unavailable.map(|reason| {
-                    format!("Linked source unavailable: {reason:?}. Keep its Notion link.")
+                    format!("Linked source unavailable: {reason}. Keep its Notion link.")
                 });
                 if node.parent.is_none() {
                     node.parent = dependency

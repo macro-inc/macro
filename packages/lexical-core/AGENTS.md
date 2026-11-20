@@ -74,5 +74,8 @@ per container. Each target selects a database/table/optional view for the
 existing `DocumentCardNode`; absent or failed targets remain named Notion links
 with a typed reason. Database mentions remain compact references. Keep the
 ordinal counter shared across recursive container imports and ignore code.
+Both parsers read `crates/import_notion/fixtures/database_occurrences.md`;
+split mid-line database tags into blocks, accept self-closing tags and either
+quote form, and exclude comments, code and escaped tags from the counter.
 
 Creation-time markdown snapshots write explicit root pins as `pending:<definitionId>`; omit initial pins to preserve the blank golden snapshot and implicit defaults.

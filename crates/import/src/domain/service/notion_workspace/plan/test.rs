@@ -259,7 +259,7 @@ fn unreadable_dependencies_are_visible_but_cannot_be_included_or_shared() {
     assert_eq!(plan.decision, Some(NotionDecision::Hand));
     assert!(!plan.shareable);
     assert!(!plan.shared);
-    assert!(plan.reason.unwrap().contains("Forbidden"));
+    assert!(plan.reason.unwrap().contains("access"));
 }
 
 #[test]

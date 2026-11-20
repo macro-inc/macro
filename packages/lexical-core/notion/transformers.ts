@@ -69,8 +69,10 @@ type Attributes = Record<string, string>;
 
 function attributes(raw: string | undefined): Attributes {
   const parsed: Attributes = {};
-  for (const [, name, value] of (raw ?? '').matchAll(/([\w-]+)="([^"]*)"/g)) {
-    parsed[name] = value
+  for (const [, name, doubleQuoted, singleQuoted] of (raw ?? '').matchAll(
+    /([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+  )) {
+    parsed[name] = (doubleQuoted ?? singleQuoted)
       .replaceAll('&quot;', '"')
       .replaceAll('&lt;', '<')
       .replaceAll('&gt;', '>')
@@ -643,6 +645,68 @@ function containerTransformer(
   };
 }
 
+/** Put database blocks on their own lines without touching code, comments or escapes. */
+function databaseBlocks(markdown: string): string {
+  const tag =
+    /<database((?:\s+[\w-]+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*(?:\/>|>([\s\S]*?)<\/database>)/y;
+  const output: string[] = [];
+  let cursor = 0;
+  let retained = 0;
+  while (cursor < markdown.length) {
+    if (markdown[cursor] === '\\') {
+      cursor += 2;
+      continue;
+    }
+    if (markdown.startsWith('<!--', cursor)) {
+      const end = markdown.indexOf('-->', cursor + 4);
+      cursor = end < 0 ? markdown.length : end + 3;
+      continue;
+    }
+    const character = markdown[cursor];
+    if (character === '`' || character === '~') {
+      let end = cursor;
+      while (markdown[end] === character) end++;
+      const width = end - cursor;
+      if (width >= 3) {
+        const newline = markdown.indexOf('\n', end);
+        const closing = new RegExp(
+          `^[ \\t]*${character}{${width},}[ \\t]*\\r?$`,
+          'gm'
+        );
+        closing.lastIndex = newline < 0 ? markdown.length : newline + 1;
+        const found = closing.exec(markdown);
+        cursor = found ? found.index + found[0].length : markdown.length;
+        continue;
+      }
+      if (character === '`') {
+        const close = markdown.indexOf(character.repeat(width), end);
+        cursor = close < 0 ? end : close + width;
+        continue;
+      }
+      cursor = end;
+      continue;
+    }
+    if (markdown.startsWith('<database', cursor)) {
+      tag.lastIndex = cursor;
+      const found = tag.exec(markdown);
+      if (found) {
+        output.push(
+          markdown.slice(retained, cursor),
+          '\n',
+          found[0].replace(/\r?\n/g, ' '),
+          '\n'
+        );
+        cursor = tag.lastIndex;
+        retained = cursor;
+        continue;
+      }
+    }
+    cursor++;
+  }
+  output.push(markdown.slice(retained));
+  return output.join('');
+}
+
 /**
  * Notion markdown with blank lines dropped (Notion separates blocks by line,
  * and spells an empty block `<empty-block/>`), indentation kept only where
@@ -652,7 +716,7 @@ function containerTransformer(
 export function notionLines(markdown: string): string {
   const output: string[] = [];
   let fence: string | undefined;
-  for (const raw of markdown.split('\n')) {
+  for (const raw of databaseBlocks(markdown).split('\n')) {
     const line = raw.replace(/\r$/, '');
     const marker = line.match(FENCE)?.[1];
     if (fence) {

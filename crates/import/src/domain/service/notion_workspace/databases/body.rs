@@ -161,6 +161,8 @@ fn fallback_reason(reason: ReadFailure) -> NotionDatabaseFallback {
     match reason {
         ReadFailure::Forbidden => NotionDatabaseFallback::NoAccess,
         ReadFailure::NotFound | ReadFailure::Trashed => NotionDatabaseFallback::NotFound,
-        ReadFailure::InvalidObject => NotionDatabaseFallback::Unresolved,
+        ReadFailure::InvalidObject | ReadFailure::TemporarilyUnavailable => {
+            NotionDatabaseFallback::Unresolved
+        }
     }
 }
