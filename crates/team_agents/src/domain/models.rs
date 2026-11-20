@@ -9,6 +9,7 @@ pub use agent_credentials::{AgentApiKey, RepoToken};
 pub use agent_git::domain::voice::VoiceModel;
 pub use harness_id::HarnessId;
 pub use hosted_runtimes::domain::ids::ComputerId;
+pub use hosted_runtimes::domain::models::PurchaseKey;
 pub use hosted_runtimes::domain::size::ComputerSize;
 
 /// Longest agent name, in characters.
@@ -107,6 +108,51 @@ pub struct CreateTeamAgent {
     pub voice: Option<VoiceModel>,
 }
 
+/// An agent's display name: trimmed, 1 to [`MAX_NAME_CHARS`] characters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentName(String);
+
+impl AgentName {
+    /// Trim `value` and check its length.
+    pub fn try_new(value: &str) -> Result<Self, TeamAgentError> {
+        let name = value.trim();
+        if name.is_empty() || name.chars().count() > MAX_NAME_CHARS {
+            return Err(TeamAgentError::InvalidName);
+        }
+        Ok(Self(name.to_owned()))
+    }
+
+    /// Borrow the name.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Take the name.
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+/// A [`CreateTeamAgent`] whose fields have been checked, before anything is
+/// created.
+#[derive(Debug, Clone)]
+pub struct TeamAgentInvite {
+    /// The invite's purchase key.
+    pub purchase_key: PurchaseKey,
+    /// Display name.
+    pub name: AgentName,
+    /// What the agent is responsible for, trimmed; may be empty.
+    pub job_description: String,
+    /// How the agent behaves and talks, trimmed; may be empty.
+    pub personality: String,
+    /// The computer to buy.
+    pub size: ComputerSize,
+    /// Profile picture URL, `https://`.
+    pub avatar_url: Option<String>,
+    /// The call voice picked in the invite.
+    pub voice: Option<VoiceModel>,
+}
+
 /// The non-secret inputs the brain's first run writes into its workspace.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PersonaSeed {
@@ -136,13 +182,13 @@ pub struct NewAgentAccount {
     /// Admin creating it.
     pub created_by: MacroUserIdStr<'static>,
     /// Display name.
-    pub name: String,
+    pub name: AgentName,
     /// Profile picture URL.
     pub avatar_url: Option<String>,
     /// Workspace seed.
     pub persona_seed: PersonaSeed,
     /// The invite's purchase key: one agent per key per team.
-    pub purchase_key: String,
+    pub purchase_key: PurchaseKey,
 }
 
 /// What [`super::ports::TeamAgentRepository::create_account`] did.
@@ -211,7 +257,7 @@ pub struct AgentRepo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ComputerPurchase {
     /// The buyer's key for this purchase.
-    pub purchase_key: String,
+    pub purchase_key: PurchaseKey,
     /// The team that pays.
     pub team_id: Uuid,
     /// The admin buying it.
@@ -221,7 +267,7 @@ pub struct ComputerPurchase {
     /// The computer's size.
     pub size: ComputerSize,
     /// Display name.
-    pub name: String,
+    pub name: AgentName,
 }
 
 /// The coarse status of an agent's computer.
@@ -233,6 +279,8 @@ pub enum ComputerState {
     SettingUp,
     /// Up.
     Ready,
+    /// Up, with its first start waiting on the agent reporting online.
+    AwaitingAgent,
     /// Asleep, waking, stopping, stopped, or no fleet is attached.
     Paused,
     /// Gave up.
@@ -243,13 +291,14 @@ pub enum ComputerState {
 
 impl TeamAgentStatus {
     /// The agent's status from its computer's, and whether the agent has
-    /// ever reported itself online: an up computer runs the agent only once
-    /// it has.
+    /// ever reported itself online: a computer waiting on its agent runs it
+    /// only once it has. A computer that waits on nothing (bought before
+    /// agents reported) runs its agent once it is up.
     pub fn of(state: ComputerState, came_online: bool) -> Self {
         match state {
             ComputerState::Purchasing | ComputerState::SettingUp => Self::Provisioning,
-            ComputerState::Ready if !came_online => Self::Starting,
-            ComputerState::Ready => Self::Running,
+            ComputerState::AwaitingAgent if !came_online => Self::Starting,
+            ComputerState::AwaitingAgent | ComputerState::Ready => Self::Running,
             ComputerState::Paused => Self::Paused,
             ComputerState::Failed => Self::Failed,
             ComputerState::Released => Self::Released,

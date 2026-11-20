@@ -4,29 +4,32 @@ Work in code mode, as the user. Don't call DescribeCodeTools. {docs}. Work in a 
 
 ## 1. Research
 
-Every program has this shape, with the helpers inside `main`, as written. Every field of a handle that loads from the server is a function to await (`await message.body()`, `await call.name()`); items of `macro.workspace.list` carry `id`, `name` and `entity`, the handle.
+Every program has this shape, with the helpers inside `main`, as written. Programs are TypeScript, type-checked against the SDK before they run: give every value TypeScript can't infer a type, such as an empty array (`const ids: string[] = []`). Every field of a handle that loads from the server is a function to await (`await message.body()`, `await call.name()`); items of `macro.workspace.list` carry `id`, `name` and `entity`, the handle.
 
-```js
-export async function main({ macro }) {
-  const cut = (s, n) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
-  const day = (s) => String(s ?? '').slice(0, 10);
-  const take = async (gen, n) => { const out = []; for await (const x of gen) { out.push(x); if (out.length >= n) break; } return out; };
-  const recent = (type, n, more = {}) => take(macro.workspace.list({ includeTypes: [type], limit: n, ...more }), n).catch(() => []);
-  const each = (items, read) => Promise.all(items.map((item) => read(item).catch((e) => ({ id: item.id, error: String(e) }))));
-  const tryTo = (read) => read().catch((e) => ({ error: String(e) }));
+```typescript
+import type { SuggestionInput, WorkspaceItem, WorkspaceListOptions } from '@macro-inc/sdk';
+export async function main({ macro }: CodeContext) {
+  const cut = (s: unknown, n: number) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const day = (s: unknown) => String(s ?? '').slice(0, 10);
+  const take = async <T>(items: AsyncIterable<T>, n: number) => { const out: T[] = []; for await (const x of items) { out.push(x); if (out.length >= n) break; } return out; };
+  const recent = async <Type extends WorkspaceItem['type']>(type: Type, n: number, more: WorkspaceListOptions = {}) =>
+    (await take(macro.workspace.list({ ...more, includeTypes: [type], limit: n }), n).catch((): WorkspaceItem[] => []))
+      .filter((item): item is Extract<WorkspaceItem, { type: Type }> => item.type === type);
+  const each = <T, R>(items: T[], read: (item: T) => Promise<R>) => Promise.all(items.map((item, index) => read(item).catch((e: unknown) => ({ index, error: String(e) }))));
+  const tryTo = <R>(read: () => Promise<R>) => read().catch((e: unknown) => ({ error: String(e) }));
   // the program's own lines go here and end with: return { data, reviews: [] };
 }
 ```
 
 Program 1 is the map of their workspace. Run these lines as written, inside `main` after the helpers:
 
-```js
+```typescript
 const [review, me, memory, routines, agents, databases, docs, calls, channels, threads] = await Promise.all([
   macro.suggestions.review(), tryTo(() => macro.myPrincipalId()), tryTo(() => macro.memory.read()),
   tryTo(() => macro.routines.list()), tryTo(() => macro.agents.list()), tryTo(() => macro.databases.list()),
   recent('document', 100), recent('call', 6), recent('channel', 12), recent('email', 25, { emailView: 'inbox' })]);
 const tasks = docs.filter((d) => d.subType === 'task');
-const state = await macro.tasks.summaries(tasks.map((t) => t.entity)).catch(() => []);
+const state = await macro.tasks.summaries(tasks.map((t) => macro.tasks.byId(t.id))).catch(() => []);
 return { data: {
   review, me, memory, routines, agents, databases,
   documents: docs.filter((d) => d.subType !== 'task').map((d) => [d.id, d.name, day(d.snapshot.data.updatedAt)]),
@@ -50,9 +53,9 @@ return { data: {
 
 Program 2 reads documents in full. From the map's names pick up to 15: every plan, goal, OKR, roadmap or strategy document; every spend, budget, vendor, subscription, tool, renewal or pricing document; every tracker, list, checklist, process or handbook; meeting notes and retros; and any document the mail, calls or channels lean on.
 
-```js
-const ids = [/* the documents you picked */];
-return { data: await each(ids.map((id) => ({ id })), async ({ id }) => {
+```typescript
+const ids: string[] = [/* the documents you picked */];
+return { data: await each(ids, async (id) => {
   const d = macro.documents.byId(id); return [id, await d.name(), (await d.content()).slice(0, 8000)]; }), reviews: [] };
 ```
 
@@ -106,10 +109,11 @@ People, companies, amounts and dates should be named. State only figures, dates 
 
 - Add what is missing with `macro.suggestions.suggest`, several in one program. Write it like this, without reading any documentation first:
 
-```js
-const told = async (write) => { const o = await write; return { ok: o.ok, problems: o.problems }; }; // return this, never the suggestion
+```typescript
+const told = async (write: Promise<{ ok: boolean; problems: string[] }>) => { const o = await write; return { ok: o.ok, problems: o.problems }; }; // return this, never the suggestion
+const results: { ok: boolean; problems: string[] }[] = [];
 const doc = macro.documents.byId(docId), thread = macro.email.byId(threadId), channel = macro.channels.byId(channelId), call = macro.calls.byId(callId);
-const rest = { dedupKey, title, summary, importance, categories, about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
+const rest: Pick<SuggestionInput, 'dedupKey' | 'title' | 'summary' | 'importance' | 'categories' | 'about'> = { dedupKey, title, summary, importance, categories: ['important'], about: [{ entity: doc }, { entity: channel, part: { id: messageId } }] };
 results.push(await told(macro.suggestions.suggest({ kind: 'prompt', prompt, runMode: 'background', ...rest })));
 results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, about: [{ entity: thread }] })));
 ```
@@ -120,12 +124,12 @@ results.push(await told(macro.suggestions.suggest({ kind: 'entity', action: 'rep
 - Don't bring back a suggestion the user dismissed unless something new happened since its date; then pass a `reason` saying what.
 - For the one or two most important `reply` suggestions, and no others, you may write the reply as a draft, never sending it, in the same program as the suggestion:
 
-```js
+```typescript
 const out = await macro.suggestions.suggest({ kind: 'entity', action: 'reply', ...rest, about: [{ entity: thread }] });
 results.push({ ok: out.ok, problems: out.problems });
-if (out.ok && (await thread.drafts()).length === 0) {
+if (out.suggestion && (await thread.drafts()).length === 0) {
   const all = await thread.messages(); const last = all[all.length - 1]; const from = await last.from();
-  const draft = await macro.email.createDraft({ thread, replyingTo: last, to: [{ email: from.email, name: from.name }], subject, bodyText }, await thread.link());
+  const draft = await macro.email.createDraft({ thread, replyingTo: last, to: from ? [{ email: from.email, name: from.name }] : [], subject, bodyText }, await thread.link());
   results.push(await told(out.suggestion.attachDraft(draft, reason)));
 }
 ```
@@ -137,8 +141,8 @@ Writes answer `{ ok, problems }`; when `ok` is false, fix what `problems` says a
 
 Last, have every suggestion you wrote checked against its items by a reader who has seen nothing else. Run these lines as written, inside `main` after the helpers, with `keys` the `dedupKey`s to check (first, every suggestion you wrote this run) and `now` the date line at the end of this brief:
 
-```js
-const source = async ({ entityType, entityId }) => {
+```typescript
+const source = async ({ entityType, entityId }: { entityType: string; entityId: string }) => {
   if (entityType === 'email_thread') return (await each(await macro.email.byId(entityId).messages(), async (m) => [(await m.from())?.name, day(await m.sentAt()), await m.subject(), await m.body()].join(' '))).join(' ');
   if (entityType === 'document') { const d = macro.documents.byId(entityId); return [await d.name(), await d.content()].join(' '); }
   if (entityType === 'call') { const c = macro.calls.byId(entityId); return [await c.name(), day(await c.startedAt()), ...(await c.transcript()).map((x) => [x.speakerId, x.content].join(' '))].join(' '); }
@@ -152,8 +156,9 @@ return { data: (await each(suggestions, async (i) => {
     prompt: ['<sources>', text, '</sources>', 'Now: ' + now, '<suggestion>', i.title, i.summary, i.prompt ?? '', '</suggestion>'].join(' '),
     'additional_instructions': 'List every statement in the suggestion that the sources do not state: a figure, a date or deadline, a name, a status, an approval, or that someone did, said, sent, agreed to or asked for something. Sums and rates the sources do not give count. Quote the words from the suggestion and say in a few words what the sources say instead, or that they say nothing. What the suggestion proposes to do next is not a statement. Answer with an empty list when the sources state everything.',
     'output_schema': { name: 'Unsupported', schema: { type: 'object', properties: { unsupported: { type: 'array', items: { type: 'string' } } }, required: ['unsupported'] } } });
-  return { key: i.dedupKey, unsupported: answer.outcome?.result?.unsupported ?? answer.outcome };
-})).filter((x) => x.unsupported?.length !== 0), reviews: [] };
+  const outcome = answer.outcome;
+  return { key: i.dedupKey, unsupported: outcome.status === 'completed' ? (outcome.result as { unsupported: string[] }).unsupported : [outcome.reason] };
+})).filter((x) => !('unsupported' in x) || x.unsupported.length !== 0), reviews: [] };
 ```
 
 The answer lists only the suggestions with a problem; a suggestion not listed passed. `unsupported` is what a suggestion states that its items don't. For each entry: when another item you read does state it, add that item to the suggestion's `about`; otherwise take the statement out, or word it as the open question it is ("not yet confirmed", "no date given"). Fix every listed suggestion with `suggestion.rewrite` in one program, and retire one left with nothing to say. Then run the check again with only the keys you rewrote, and repeat until it lists nothing, three checks at most. Then stop with one short line.

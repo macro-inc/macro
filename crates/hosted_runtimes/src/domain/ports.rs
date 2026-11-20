@@ -21,7 +21,8 @@ use crate::domain::lifecycle::{
 };
 use crate::domain::models::{
     BillingInterval, Computer, ComputerRecord, ControlPlaneId, Host, HostAllocation, HostName,
-    HostRecord, HostRegistration, NewReservation, Quote, Reservation, Reserved, SubscriptionItem,
+    HostRecord, HostRegistration, NewReservation, PurchaseBilling, PurchaseTerms, Quote,
+    Reservation, Reserved, SubscriptionItem,
 };
 use crate::domain::size::ComputerSize;
 
@@ -30,6 +31,9 @@ pub use overcommit::{
     ComputersInUse, ComputersInUseFuture, EveryComputerInUse, GuestUsage, HostLimitsState,
     HostMemory, OvercommitRepo,
 };
+
+mod usage;
+pub use usage::UsageHistory;
 
 /// Supplies advisory fleet operator presence at the caller's time.
 pub trait FleetAttachmentSource: Send + Sync + 'static {
@@ -343,6 +347,14 @@ pub trait ComputerRepo: Send + Sync + 'static {
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Run the effect again at `run_after` without counting an attempt: it
+    /// was turned away, not failed.
+    fn defer_effect(
+        &self,
+        id: i64,
+        run_after: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Record a failed attempt and run the effect again at `retry_at`.
     fn retry_effect(
         &self,
@@ -432,6 +444,10 @@ pub enum BillingError {
     /// teams only, so nothing is charged or provisioned.
     #[error("Computers are available on paid plans. Your team is on a trial.")]
     TeamOnTrial,
+    /// Another change to the team's subscription is still in flight (a
+    /// release's item removal, say): nothing was sent; try again shortly.
+    #[error("another change to the team's subscription is still in flight")]
+    ChangeInFlight,
     /// The billing provider failed; the change's outcome is unknown.
     #[error("billing provider error: {0:?}")]
     Provider(rootcause::Report),
@@ -446,7 +462,7 @@ impl BillingError {
             | Self::IntervalNotSold(_)
             | Self::PaymentFailed
             | Self::TeamOnTrial => true,
-            Self::Provider(_) => false,
+            Self::ChangeInFlight | Self::Provider(_) => false,
         }
     }
 }
@@ -483,6 +499,20 @@ pub trait Billing: Send + Sync + 'static {
         team_id: Uuid,
         size: ComputerSize,
     ) -> impl Future<Output = Result<Quote, BillingError>> + Send;
+
+    /// What buying one computer of each of `sizes` would cost the team, for
+    /// the buy dialog: each recurring price and what it would invoice now,
+    /// the renewal date and the card, from ONE subscription read and ONE
+    /// invoice preview (none when `billing` is comped: nothing is invoiced,
+    /// so `due_today` is 0 and no card is named). `due_today` is net of the
+    /// team's credit balance, which Stripe applies to the invoice first. A Stripe-billed trialing team is refused with
+    /// [`BillingError::TeamOnTrial`]. Never on the purchase path.
+    fn purchase_terms(
+        &self,
+        team_id: Uuid,
+        sizes: &[ComputerSize],
+        billing: &PurchaseBilling,
+    ) -> impl Future<Output = Result<PurchaseTerms, BillingError>> + Send;
 
     /// The price to buy one computer of `size` at, from ONE read of the
     /// team's subscription: refuses a trialing team with

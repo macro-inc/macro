@@ -156,6 +156,19 @@ impl Repository for PostgresRepository {
         .map_err(db_error)?;
         Ok(rows.into_iter().map(|row| (row.host, row.count)).collect())
     }
+    async fn daily_bookings(
+        &self,
+        profile: Uuid,
+        event_type: Uuid,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+        exclude: Option<Uuid>,
+    ) -> Result<i64, Error> {
+        let mut tx = self.pool.begin().await.map_err(db_error)?;
+        let count = count_daily_bookings(&mut tx, profile, event_type, start, end, exclude).await?;
+        tx.commit().await.map_err(db_error)?;
+        Ok(count)
+    }
     async fn busy(
         &self,
         hosts: &[String],
@@ -200,7 +213,15 @@ impl Repository for PostgresRepository {
             return Err(Error::Conflict);
         }
         if let Some(limit) = limit {
-            let count = sqlx::query_scalar!("SELECT count(*) FROM scheduling_booking WHERE profile_id = $1 AND event_type_id = $2 AND starts_at >= $3 AND starts_at < $4 AND status <> 'cancelled'", record.profile_id, record.booking.event_type_id, day_start, day_end).fetch_one(&mut *tx).await.map_err(db_error)?.unwrap_or(0);
+            let count = count_daily_bookings(
+                &mut tx,
+                record.profile_id,
+                record.booking.event_type_id,
+                day_start,
+                day_end,
+                None,
+            )
+            .await?;
             if count >= i64::from(limit) {
                 return Err(Error::Conflict);
             }
@@ -250,7 +271,15 @@ impl Repository for PostgresRepository {
         .await
         .map_err(db_error)?;
         if let Some(limit) = record.event.daily_limit {
-            let count = sqlx::query_scalar!("SELECT count(*) FROM scheduling_booking WHERE profile_id = $1 AND event_type_id = $2 AND starts_at >= $3 AND starts_at < $4 AND status <> 'cancelled' AND id <> $5", record.profile_id, record.booking.event_type_id, start, end, record.booking.id).fetch_one(&mut *tx).await.map_err(db_error)?.unwrap_or(0);
+            let count = count_daily_bookings(
+                &mut tx,
+                record.profile_id,
+                record.booking.event_type_id,
+                start,
+                end,
+                Some(record.booking.id),
+            )
+            .await?;
             if count >= i64::from(limit) {
                 return Err(Error::Conflict);
             }
@@ -312,6 +341,59 @@ impl Repository for PostgresRepository {
         tx.commit().await.map_err(db_error)?;
         Ok(record)
     }
+}
+
+/// Bookings that take a place in an event type's daily limit on `[start, end)`,
+/// optionally leaving one out (the booking being moved). A move holds both its
+/// days until the calendar answers: its row already starts on the new day, and
+/// a first attempt still in flight goes back to `originalStart` if the calendar
+/// refuses it (`recovery::finish_operation`), so it also counts on the day it
+/// left. Later attempts are never put back. The second count reads only the
+/// profile's in-flight bookings, through `scheduling_booking_processing`.
+/// The count runs under a 5 s statement timeout, restored afterwards so the
+/// caller's later writes keep their own.
+async fn count_daily_bookings(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    profile: Uuid,
+    event_type: Uuid,
+    start: DateTime<Utc>,
+    end: DateTime<Utc>,
+    exclude: Option<Uuid>,
+) -> Result<i64, Error> {
+    sqlx::query!("SET LOCAL statement_timeout = '5s'")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    let count = sqlx::query_scalar!(
+        r#"SELECT
+             (SELECT count(*) FROM scheduling_booking
+               WHERE profile_id = $1 AND starts_at >= $3 AND starts_at < $4
+                 AND event_type_id = $2 AND status <> 'cancelled'
+                 AND ($5::uuid IS NULL OR id <> $5))
+           + (SELECT count(*) FROM scheduling_booking
+               WHERE profile_id = $1 AND status = 'processing'
+                 AND event_type_id = $2
+                 AND ($5::uuid IS NULL OR id <> $5)
+                 AND NOT (starts_at >= $3 AND starts_at < $4)
+                 AND record->'operation'->>'attempt' = '0'
+                 AND record->'operation'->'kind'->>'kind' = 'move'
+                 AND (record->'operation'->'kind'->>'original_start')::timestamptz >= $3
+                 AND (record->'operation'->'kind'->>'original_start')::timestamptz < $4)
+           AS "count!""#,
+        profile,
+        event_type,
+        start,
+        end,
+        exclude
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(db_error)?;
+    sqlx::query!("SET LOCAL statement_timeout = DEFAULT")
+        .execute(&mut **tx)
+        .await
+        .map_err(db_error)?;
+    Ok(count)
 }
 
 #[cfg(test)]

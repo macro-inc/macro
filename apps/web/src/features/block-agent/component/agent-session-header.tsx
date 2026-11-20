@@ -32,6 +32,7 @@ export function agentSessionFileOperations(
     ...(permissions === Permissions.OWNER
       ? [
           {
+            id: 'archive',
             label: archived ? 'Unarchive' : 'Archive',
             icon: TrayIcon,
             action: setArchived,

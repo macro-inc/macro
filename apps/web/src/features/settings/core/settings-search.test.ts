@@ -118,6 +118,7 @@ describe('individual settings search', () => {
     if (!billing) throw new Error('Billing tab missing');
     const groups = [
       {
+        id: 'personal',
         label: '個人',
         items: [{ ...billing, label: '請求', englishLabel: 'Billing' }],
       },

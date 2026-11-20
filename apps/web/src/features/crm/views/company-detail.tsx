@@ -1,6 +1,8 @@
 import { TraceFlow, usePending } from '@app/observability/flow';
 import { SidePanel } from '@components/app/side-panel';
+import { createOpenTracker } from '@core/internal/open-tracker';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
+import { CompanyDiscussionSection } from '../company-discussion-section';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
 import { useCrmContext } from '../context/crm-context';
@@ -11,7 +13,6 @@ import {
   sameRecordScope,
 } from '../core/record';
 import { CompanyContactsSection } from './company-contacts-section';
-import { CompanyDiscussionSection } from './company-discussion-section';
 import { CompanyEmailsSection } from './company-emails-section';
 import { CompanyHeader } from './company-header';
 import { CompanyListsSection } from './company-list-membership';
@@ -66,6 +67,7 @@ function CompanyContent(props: CompanyProps) {
   const listsEnabled = context.listsEnabled();
   const { company, query } = useCompanyQuery(() => props.companyId);
   usePending('crm.record', () => query.isLoading);
+  createOpenTracker('company', () => company()?.id);
   const section = () => props.section ?? 'overview';
   const scope = createMemo(
     (): CrmRecordScope | undefined => {

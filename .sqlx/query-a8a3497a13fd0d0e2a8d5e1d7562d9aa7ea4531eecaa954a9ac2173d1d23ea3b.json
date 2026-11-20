@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_channel_section_notification_setting AS s\n                   (user_id, label_id, built_in_section, disabled_event_types, muted,\n                    snoozed_until)\n               VALUES ($1, $2, $3, ARRAY(SELECT unnest($4::text[]) ORDER BY 1),\n                       COALESCE($6, FALSE), $7)\n               ON CONFLICT (user_id, section_key) DO UPDATE\n               SET disabled_event_types = ARRAY(\n                       SELECT unnest(s.disabled_event_types || $4::text[])\n                       EXCEPT SELECT unnest($5::text[])\n                       ORDER BY 1),\n                   muted = COALESCE($6, s.muted),\n                   snoozed_until = CASE WHEN $6::boolean IS NULL THEN s.snoozed_until ELSE $7 END,\n                   updated_at = NOW()\n               RETURNING disabled_event_types, muted, snoozed_until",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "disabled_event_types",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "muted",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "snoozed_until",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "TextArray",
+        "TextArray",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a8a3497a13fd0d0e2a8d5e1d7562d9aa7ea4531eecaa954a9ac2173d1d23ea3b"
+}

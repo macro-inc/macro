@@ -50,6 +50,11 @@ Postgres connections and one Redis database each).
   socket and passes on what the email services ask the gateway to send the user.
 - Not in the stack: the notification, search, contacts and calendar services.
   New mail does not appear in an open list by itself; sync, then open.
+- The bundle has unified notifications on (`enable-unified-notifications` is
+  on in dev), so the navigation's unread marks, the Mail badge among them,
+  follow the server's count of unread notification rows, which only the
+  notification service writes: on a test's own stack they never light. Test
+  them on the full-stack tier.
 
 ## Writing a test
 
@@ -145,13 +150,17 @@ nix develop -c just apps/web/test-email-e2e-full-stack email-e2e reply   # only 
   instance.
 - The `full-stack-*.spec.ts` files are the functions only this tier reaches:
   connecting through the authentication service and the providers' consent
-  (including administrator approval), search, notifications, sharing a
+  (including administrator approval), search, notifications and the Mail
+  badge, sharing a
   thread with another user, a file too large to attach, mail on Home and
   in a contact's record, a reminder coming due, and the calendar
   (invitations, an event made from an email).
 - `test.use({ access: 'mail-and-calendar' })` links the mailbox with its
-  calendar too. The calendar is ready some moments after linking: wait for
-  it (`calendarReady` in `full-stack-calendar.spec.ts`) before using it.
+  calendar too. Tests that need a ready calendar use `calendarReady` in
+  `full-stack-calendar.spec.ts`. The first-sync scenario starts with an empty
+  Google grant (`seedGoogleGrant: false`), so the mail-only connection has no
+  calendar. It delays discovery on the mailbox linked with calendar access and
+  uses both actions before discovery finishes.
 - `tickReminders` (`harness/organise.ts`) runs the reminder sweep there by
   queueing it on the stack's own queue. It sweeps for every user, so a
   test asserts only on its own threads.
@@ -246,7 +255,7 @@ One spec file per area; helpers a file shares with others are in `harness/`.
 | `list*`, `state`, `inbox`, `folders`, `saved-views` | the list, its views, controls and search, Done and read state, inbox selection, Sent, folders | `harness/list.ts` |
 | `organise-*`, `labels`, `reminders` | marking, moving and muting threads and senders, labels, reminders | `harness/organise.ts` |
 | `thread*`, `render` | the thread view, opening from search, pictures in a message | `harness/thread.ts` |
-| `link*`, `connect-more`, `settings-accounts`, `notify` | connecting, reconnecting and sharing inboxes, calendars, onboarding, the Mail badge | `harness/linking.ts` |
+| `link*`, `connect-more`, `settings-accounts` | connecting, reconnecting and sharing inboxes, calendars, onboarding | `harness/linking.ts` |
 | `sync-provider*` | what reaches the app from the provider: existing and new mail, changes made in the provider's own client, threading, classification | `harness/sync.ts` |
 | `sharing`, `elsewhere`, `entitlement` | sharing a thread and access requests, mail shown outside Mail, an account without email | `harness/sharing.ts` |
 | `calendar-invitation`, `invitation-actions` | the invitation card in a thread and its actions | |

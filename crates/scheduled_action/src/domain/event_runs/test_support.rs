@@ -153,6 +153,34 @@ impl CurrentOwnerAccess for Access {
     }
 }
 
+/// Inbox delegations as (owner, inbox, delegate) edges.
+#[derive(Default)]
+pub struct Delegates {
+    pub edges: Mutex<Vec<(MacroUserIdStr<'static>, Uuid, MacroUserIdStr<'static>)>>,
+    pub unavailable: Mutex<bool>,
+    pub calls: Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>,
+}
+impl InboxDelegates for Delegates {
+    async fn delegates(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        self.calls.lock().unwrap().push((owner.clone(), link_id));
+        if *self.unavailable.lock().unwrap() {
+            return Err(rootcause::report!("delegations unavailable"));
+        }
+        Ok(self
+            .edges
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(edge_owner, edge_link, _)| edge_owner == owner && *edge_link == link_id)
+            .map(|(_, _, delegate)| delegate.clone())
+            .collect())
+    }
+}
+
 #[derive(Default)]
 pub struct State {
     pub configurations: Vec<EventActionConfiguration>,

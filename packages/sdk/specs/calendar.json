@@ -1062,6 +1062,9 @@
           },
           "409": {
             "description": ""
+          },
+          "422": {
+            "description": "The host's calendar refused the reschedule; the booking keeps its original time"
           }
         }
       }

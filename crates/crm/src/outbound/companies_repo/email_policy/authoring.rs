@@ -286,6 +286,30 @@ impl EmailPolicyAuthoringRepository for CompaniesRepositoryImpl {
         Ok(facts)
     }
 
+    #[tracing::instrument(skip_all, fields(team_id = %team), err)]
+    async fn admit_email_rule_resources(
+        &self,
+        team: Uuid,
+        user: &str,
+        link: Uuid,
+        rules: &[EmailInclusionRule],
+    ) -> Result<(), CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        sqlx::query!("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        admit_resources(&mut tx, team, user, link, rules).await?;
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all,fields(team_id=%team,revision),err)]
     async fn email_rule_revision(
         &self,
@@ -375,4 +399,35 @@ impl EmailPolicyAuthoringRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(events)
     }
+}
+
+/// Both validation and mutation execute the owning domain's same checker. This
+/// helper owns no transaction: the caller chooses read-only snapshot or locked
+/// mutation, and a failed mutation rolls back every first-write side effect.
+pub(super) async fn admit_resources(
+    connection: &mut PgConnection,
+    team: Uuid,
+    user: &str,
+    link: Uuid,
+    rules: &[EmailInclusionRule],
+) -> Result<(), CrmError> {
+    use crate::domain::email_rule_discovery::{
+        EmailRuleDiscoveryRequest, EmailRuleDiscoveryService, ProposedEmailRules,
+    };
+    crate::outbound::email_rule_discovery::PgEmailRuleDiscovery
+        .discover(
+            connection,
+            EmailRuleDiscoveryRequest {
+                team_id: team,
+                links: None,
+                proposed: Some(ProposedEmailRules {
+                    user_id: user.to_owned(),
+                    link_id: link,
+                    rules: rules.to_vec(),
+                }),
+            },
+            std::time::Instant::now() + std::time::Duration::from_secs(10),
+        )
+        .await?;
+    Ok(())
 }
