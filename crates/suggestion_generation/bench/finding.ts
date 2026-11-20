@@ -73,7 +73,7 @@ export function boundedList(list: WorkList): WorkList {
   return {
     person: cut(list.person, 400),
     streams: list.streams
-      .filter((stream) => stream.name.trim())
+      .filter((stream) => trimAsRust(stream.name))
       .slice(0, MAX_STREAMS)
       .map((stream) => ({
         name: cut(stream.name, 80),
@@ -89,6 +89,9 @@ export function boundedList(list: WorkList): WorkList {
       })),
   };
 }
+
+/** `text` without the whitespace Rust's `str::trim` takes off its ends (Unicode's White_Space, which JavaScript's `trim` differs from at U+0085 and U+FEFF). */
+export const trimAsRust = (text: string) => text.replace(/^\p{White_Space}+|\p{White_Space}+$/gu, '');
 
 /** Labels every message in an inbox carries, which the finding call leaves out. */
 const HIDDEN_LABELS = new Set(['INBOX', 'UNREAD']);
@@ -106,7 +109,7 @@ export function mailText(persona: Persona, now: number): string {
     const labels = message.labels.filter((label) => !HIDDEN_LABELS.has(label)).slice(0, 5).map((label) => cut(label, 120));
     const from = message.from.name.trim() ? `${message.from.name} <${message.from.email}>` : message.from.email;
     const head = `${message.received_at.slice(0, 16).replace('T', ' ')} · ${cut(from, 120)} · ${cut(message.subject, 200)}${labels.length ? ` · ${labels.join(', ')}` : ''}`;
-    const text = message.snippet?.trim();
+    const text = message.snippet ? trimAsRust(message.snippet) : undefined;
     return text ? `${head}\n    ${cut(text, 500)}` : head;
   });
   return lines.join('\n');
@@ -122,6 +125,9 @@ ${mailText(persona, now)}
 }
 
 export type EntryMark = { n: number; stream: string; also: string[]; why: string };
+
+/** The fewest held-out people an aggregate is shown over: fewer would show one person's result. */
+export const MIN_HELDOUT_PEOPLE = 2;
 const MARKS = obj({ entries: { type: 'array', items: obj({ n: int, stream: str, also: strs, why: str }) } });
 
 const keyText = (streams: MailStream[]) =>
@@ -178,6 +184,14 @@ ${asWritten(persona, listText(list))}
 /** A list matched to the key; `unread` where the drafting session read no list, scored as an empty one. */
 export type ListScore = { work: number; found: number; unreal: number; duplicates: number; listed: number; missed: string[]; unread?: boolean };
 
+/** No list: what a generation whose drafting sessions read none is scored as. */
+export const NO_LIST: WorkList = { person: '', streams: [] };
+
+/** How the work list a generation's drafting sessions read scores against `marks`; one that read none (`workList` undefined) scores as an empty list that found nothing. */
+export function scoreWorkList(persona: Persona, workList: WorkList | undefined, marks: EntryMark[]): ListScore {
+  return { ...scoreList(persona, workList ?? NO_LIST, marks), ...(workList ? {} : { unread: true }) };
+}
+
 export function scoreList(persona: Persona, list: WorkList, marks: EntryMark[]): ListScore {
   const streams = persona.streamsTruth!.streams;
   const work = new Set(streams.filter((s) => s.kind === 'work').map((s) => s.id));
@@ -223,7 +237,9 @@ export async function runFinding(at: Stack, people: Persona[], opts: { model: st
           attempt.error = String(error).slice(0, 300);
         }
         attempts.push(attempt);
-        console.log(`${job.persona.name} #${job.rep}: ${attempt.list ? `${attempt.list.streams.length} streams in ${((attempt.ms ?? 0) / 1000).toFixed(0)} s` : attempt.error}`);
+        // A held-out person's results stay unread (README, Held-out personas): not even their name or how their call went.
+        if (job.persona.heldout) console.log(`held-out list #${job.rep}: ${attempt.list ? 'answered' : 'failed'}`);
+        else console.log(`${job.persona.name} #${job.rep}: ${attempt.list ? `${attempt.list.streams.length} streams in ${((attempt.ms ?? 0) / 1000).toFixed(0)} s` : attempt.error}`);
       }
     }),
   );
@@ -252,6 +268,13 @@ export async function runFinding(at: Stack, people: Persona[], opts: { model: st
 
 function report(attempts: FindAttempt[], cost: Cost, people: Persona[], model: string) {
   const scored = attempts.filter((a) => a.score);
+  // An aggregate over one held-out person is that person's result.
+  const heldout = new Set(people.filter((persona) => persona.heldout).map((persona) => persona.name));
+  const heldoutScored = new Set(scored.filter((a) => heldout.has(a.persona)).map((a) => a.persona)).size;
+  if (heldout.size && heldoutScored < MIN_HELDOUT_PEOPLE) {
+    console.log(`${heldoutScored} held-out people scored, fewer than ${MIN_HELDOUT_PEOPLE}: their aggregate would show one person's result, so none is shown`);
+    return;
+  }
   const sum = (f: (s: ListScore) => number) => scored.reduce((t, a) => t + f(a.score!), 0);
   for (const persona of people) {
     // A held-out person's results stay unread (README, Held-out personas).

@@ -154,17 +154,18 @@ stack while it runs (the drafting eval's lock), so two runs never share it.
 
 To compare a change: run main, switch the stack to your build (`just
 run_local --instance sugbench ...` from your branch, or reload the harness),
-run the same section with another `--label`, then `compare`. A difference
-inside the section's margin (`MARGINS` in `bench.ts`) is noise.
+run the same section with another `--label`, then `compare` with the
+margins two runs of main measured. A difference inside them is noise.
 
 ### Noise
 
 `compare` takes, for each persona both runs have, B's mean less A's, and
 averages over personas; its 95% interval is that ± t standard errors, from
 how much each persona's attempts spread on each side. It calls a change a
-win or a loss only when the score moved past the section's margin
-(`MARGINS` in `bench.ts`: how far two runs of main land apart at the
-default size) and the interval leaves zero. *found* and *bad* get the same
+win or a loss only when the score moved past its margin (`--margins
+score,found,bad`: how far two runs of main land apart at the default size,
+on the same kind of set and judged by the same judge) and the interval
+leaves zero. *found* and *bad* get the same
 test against margins of their own, and show a change in one before the
 score can. Measure the margins again after changing the personas, the
 judge or the default size:
@@ -174,11 +175,10 @@ bun $B/bench.ts run routines --label main-a && bun $B/bench.ts run routines --la
 bun $B/bench.ts noise <main-a run.json> <main-b run.json>
 ```
 
-`MARGINS` were measured on week sets (100 messages a person) with the
-judge from before judges were recorded, so on a month set, or for runs with
-a recorded judge, `compare` marks its verdict UNCALIBRATED. Two runs of main
-on the same kind of set give measured ones, which `--margins
-score,found,bad` passes in place of `MARGINS`.
+`compare` has no margins of its own and refuses to run without
+`--margins`: ones measured on another kind of set or by another judge
+would decide nothing. The week-set margins below were measured with the
+judge from before judges were recorded.
 
 A side of `compare`, `noise` or `report` may be several runs of one section
 and set, judged by one recorded judge on personas read the same way, joined by
@@ -217,8 +217,10 @@ drafted routines are within reach, and a streams key (`streams-truth.json`)
 that spells out every stream in the mail: its senders, count, cadence, what
 each message asks and what the person does with it, as `work` (mail they act
 on), `noise` (mail they read or ignore) or `thread` (a one-off
-conversation). The writer refuses a person whose month keeps fewer than 250
-messages or whose key has fewer than five needs a drafted routine can meet.
+conversation). Every message is the inbox's. The writer refuses a person
+whose month keeps fewer than 250 messages or whose key has fewer than five
+needs (by id, with a drafted routine that isn't blank) a drafted routine can
+meet.
 Writing one took $4.50 to $4.91 a person (three at once in about ten
 minutes). The stand-in serves the month to the read the finding step makes
 (`?days=30&limit=500&texts=100&snippet_chars=500`), refuses any other
@@ -244,7 +246,8 @@ as the stream an entry mostly covers or one it covers in full (*found*), and
 the entries that name none (*unreal*: noise, a one-off thread, or nothing in
 the mail). It runs on a set whose every person has a streams key, times each
 list from just before its call, and prints per-person results only for
-people who aren't held out:
+people who aren't held out; for held-out people it prints only whether each
+call answered, and their aggregate only over two people or more:
 
 ```sh
 bun $B/bench.ts find --set m1 --label flash --model google/gemini-3.8-flash --thinking low --reps 2
@@ -255,9 +258,10 @@ routine-suggestions-find-work` (comma-separated) adds flags to the
 section's. With `routine-suggestions-find-work` on, the run scores the work
 list each generation's drafting session read the same way (`workListOf`
 reads it from the earliest `session/prompt` the harness sent a runtime that
-holds one), a generation whose session read none as finding nothing, and a
-list the judge couldn't mark apart from the routines, which are scored all
-the same. `rescore` scores the lists again from their marks. The run reports
+holds one), a generation whose session read none as finding nothing, its
+build failed or not, and a list the judge couldn't mark apart from the
+routines, which are scored all the same. `rescore` scores the lists again
+from their marks, and refuses marks that no longer fit the list and the key. The run reports
 time to the last suggestion beside the first.
 
 The seed CLI refuses an address whose local part isn't ASCII, so as a

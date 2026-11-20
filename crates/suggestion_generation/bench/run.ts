@@ -243,7 +243,8 @@ export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
   const prompts = [...rows]
     .map((row) => row as TranscriptRow)
     .filter((row) => row.direction === 'to_runtime' && row.content?.method === 'session/prompt')
-    .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
+    // `capture` writes `created_at` at a fixed width in UTC, so its text sorts as its time does.
+    .sort((a, b) => ((a.created_at ?? '') < (b.created_at ?? '') ? -1 : (a.created_at ?? '') > (b.created_at ?? '') ? 1 : 0));
   const shares = new Map<string | undefined, WorkList>();
   for (const row of prompts) {
     if (shares.has(row.session)) continue;
@@ -266,7 +267,8 @@ export function workListOf(rows: Iterable<unknown>): WorkList | undefined {
 
 async function capture(db: SQL, generation: string, seen: Map<string, unknown>) {
   const rows = await db.unsafe(
-    `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content, l.created_at::text
+    `SELECT l.id::text, l.agent_session_id::text AS session, l.direction, l.content,
+            to_char(l.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at
        FROM agent_session_log l
        JOIN suggestion_generation_session s ON s.session_id = l.agent_session_id
       WHERE s.generation_id = $1
@@ -452,6 +454,8 @@ export async function generate(
     result.cost = await costOf(db, user, new Date(start - 1000), new Date());
   } catch (error) {
     result.error = String(error).slice(0, 500);
+    // A generation that ran out of time may have briefed its drafting sessions: its list is scored all the same.
+    if (transcript.size) result.workList ??= workListOf(transcript.values());
     // A generation that failed or ran out of time may still have spent: count it.
     if (asked !== undefined) {
       result.wallMs ??= Date.now() - asked;

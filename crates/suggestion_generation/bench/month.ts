@@ -92,6 +92,14 @@ const TEXTS_PER_CALL = 10;
 const CALLS = 4;
 /** The fewest messages a month keeps in the window: half the read, or it is not a month of real work. */
 const MIN_MONTH_MESSAGES = WINDOW_MESSAGES / 2;
+/** `labels` with INBOX among them: every message of a month is written to the inbox. */
+export const inInbox = (labels: string[]) => (labels.includes('INBOX') ? labels : ['INBOX', ...labels]);
+
+/** The needs only a drafted routine meets, counted once each by id; a need whose drafted routine is blank counts for none. */
+export function draftableNeeds(needs: { id: string; drafted?: string }[]): number {
+  return new Set(needs.filter((need) => need.drafted?.trim()).map((need) => need.id)).size;
+}
+
 /** The fewest needs a drafted routine can meet, so five good drafts are within reach. */
 const MIN_DRAFTED_NEEDS = 5;
 
@@ -181,8 +189,9 @@ ${planText}`,
   const headers = (await pooled(jobs)).flat();
 
   // Keep what fits the window and the read: dated in it, newest first, at most WINDOW_MESSAGES.
+  // Every message is the inbox's, as the read the finding step makes and the minimum both count it.
   const kept = headers
-    .map((m) => ({ ...m, at: Date.parse(m.date) }))
+    .map((m) => ({ ...m, labels: inInbox(m.labels), at: Date.parse(m.date) }))
     .filter((m) => Number.isFinite(m.at) && m.at > windowStart && m.at < ANCHOR)
     .sort((a, b) => b.at - a.at)
     .slice(0, WINDOW_MESSAGES);
@@ -266,10 +275,10 @@ ${context}`,
   placed.needs = placed.needs.map((need) => ({
     ...need,
     streams: ((need as { streams?: string[] }).streams ?? []).filter((id) => ids.has(id)),
-    drafted: need.drafted || undefined,
+    drafted: need.drafted?.trim() || undefined,
   }));
   // Five good drafted routines must be within reach.
-  const draftable = placed.needs.filter((need) => need.drafted).length;
+  const draftable = draftableNeeds(needs);
   if (draftable < MIN_DRAFTED_NEEDS) throw new Error(`${sketch.slug}: ${draftable} of ${placed.needs.length} needs can be met by a drafted routine, fewer than ${MIN_DRAFTED_NEEDS}`);
   writeFileSync(join(dir, 'routines-truth.json'), `${JSON.stringify(placed, null, 1)}\n`);
 

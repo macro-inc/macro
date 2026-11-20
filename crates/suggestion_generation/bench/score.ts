@@ -227,6 +227,7 @@ export function summary(attempts: Attempt[]) {
   const wall = done.map((a) => a.generation.wallMs).filter((v): v is number => v !== undefined);
   const last = done.map((a) => a.generation.lastMs).filter((v): v is number => v !== undefined);
   const lists = done.flatMap((a) => (a.finding ? [a.finding] : []));
+  const listErrors = done.filter((a) => a.findingError).length;
   const total = (f: (list: ListScore) => number) => lists.reduce((sum, list) => sum + f(list), 0);
   return {
     attempts: attempts.length,
@@ -256,12 +257,13 @@ export function summary(attempts: Attempt[]) {
       : {}),
     failedGenerations: done.filter((a) => a.generation.status !== 'ready').length,
     // Generations run to find the work: how many drafting sessions read a list, what share of the key's work streams the lists named (none where no list was read), and how many entries named none.
-    ...(lists.length
+    // Where every judgement failed, `lists` is 0 and the shares are NaN: the report says none could be judged.
+    ...(lists.length || listErrors
       ? {
           finding: {
             lists: lists.length,
             read: lists.filter((list) => !list.unread).length,
-            errors: done.filter((a) => a.findingError).length,
+            errors: listErrors,
             found: total((list) => list.found) / Math.max(1, total((list) => list.work)),
             unreal: total((list) => list.unreal) / lists.length,
             listed: total((list) => list.listed) / lists.length,

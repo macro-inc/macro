@@ -247,7 +247,8 @@ export function asWritten(persona: Persona, text: string): string {
   const domain = domainOf(persona.inbox.owner.email);
   // A domain is letters, digits, hyphens and dots: only a dot is special in a pattern.
   const name = domain.replace(/\.example$/, '').replaceAll('.', '\\.');
-  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example`, 'g'), `@${domain}`);
+  // Not inside a longer domain: no letter, digit or hyphen follows, nor a dot and one.
+  return text.replace(new RegExp(`@${name}(?:-s\\d+)?(?:-signup)?\\.example(?![A-Za-z0-9-]|\\.[A-Za-z0-9-])`, 'g'), `@${domain}`);
 }
 
 /** The scenario name the seed CLI marks a variant's rows with. */

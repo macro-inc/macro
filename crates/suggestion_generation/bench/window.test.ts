@@ -2,8 +2,10 @@ import { describe, expect, test } from 'bun:test';
 import type { RoutineMark } from './judge';
 import { asWritten, type Inbox, type Persona, recentMessages, type RoutinesTruth, type StreamsTruth, windowMessages } from './personas';
 import { type Generation, type RoutineRow, workListOf } from './run';
-import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, type WorkList } from './finding';
-import { type Attempt, scoreRoutines, summary } from './score';
+import { boundedList, type EntryMark, type FoundStream, mailText, marksProblem, scoreList, scoreWorkList, trimAsRust, type WorkList } from './finding';
+import { draftableNeeds, inInbox } from './month';
+import { lines } from './report';
+import { type Attempt, failedScore, type RunFile, scoreRoutines, summary } from './score';
 import { ANCHOR } from './clock';
 
 const HOUR = 60 * 60_000;
@@ -218,6 +220,8 @@ describe('workListOf', () => {
   test('reads the earliest brief, whatever order the rows came in', () => {
     const retried = { ...list, person: 'Retried' };
     expect(workListOf([prompt(retried, '2026-11-20 10:05:00+00'), prompt(list, '2026-11-20 10:00:00+00')])).toEqual(list);
+    // As `capture` writes the time: a thousandth of a second later sorts later.
+    expect(workListOf([prompt(retried, '2026-11-20T10:00:00.001000Z'), prompt(list, '2026-11-20T10:00:00.000000Z')])).toEqual(list);
   });
 
   test('puts together the shares each drafting session read, a retried share once', () => {
@@ -298,5 +302,72 @@ describe('asWritten', () => {
     expect(asWritten(ana, 'bo@acme-s2-signup.example, cy@acme-signup.example, di@acme-s3.example, ed@acmex.example')).toBe(
       'bo@acme.example, cy@acme.example, di@acme.example, ed@acmex.example',
     );
+  });
+  test('leaves a longer domain alone, and reads one at the end of a sentence', () => {
+    const ana = persona(1, 1);
+    expect(asWritten(ana, 'user@acme-s2-signup.example.test, fy@acme-s2.example-mail.test; write to bo@acme-s2.example.')).toBe(
+      'user@acme-s2-signup.example.test, fy@acme-s2.example-mail.test; write to bo@acme.example.',
+    );
+  });
+});
+
+describe('trimAsRust', () => {
+  test('takes off what Rust\'s trim does, no more', () => {
+    expect(trimAsRust('\u0085 a \u3000')).toBe('a');
+    expect(trimAsRust('\uFEFF')).toBe('\uFEFF');
+    expect(boundedList(listOf('\u0085', 'a')).streams.map((stream) => stream.name)).toEqual(['a']);
+  });
+});
+
+describe('the finding score of a run', () => {
+  const attempt = (over: Partial<Attempt>): Attempt => ({
+    section: 'routines',
+    label: 't',
+    persona: 'test',
+    heldout: false,
+    rep: 1,
+    generation: { ...generation([]), status: 'ready' },
+    judgeUsd: 0,
+    score: failedScore(3),
+    ...over,
+  });
+
+  test('counts a failed build that read no list as finding nothing', () => {
+    const read = scoreWorkList(keyed(), listOf('a', 'b'), [entry(1, 's1'), entry(2, 's2')]);
+    const failed = scoreWorkList(keyed(), undefined, []);
+    expect(failed).toMatchObject({ found: 0, work: 2, unread: true });
+    const s = summary([attempt({ finding: read }), attempt({ generation: { ...generation([]), status: 'generating', buildFailed: true }, finding: failed })]);
+    expect(s.finding).toMatchObject({ lists: 2, read: 1, found: 0.5 });
+  });
+
+  test('says so when no list could be judged', () => {
+    const run: RunFile = { section: 'routines', label: 't', set: 'm', commit: 'c', attempts: [attempt({ findingError: 'judge' }), attempt({ findingError: 'judge' })] } as RunFile;
+    expect(summary(run.attempts).finding).toMatchObject({ lists: 0, errors: 2 });
+    expect(lines([run]).join('\n')).toContain('no work list could be judged (2 failed)');
+  });
+
+  test('shows a held-out aggregate only over two people or more, and no held-out error', () => {
+    const heldout = (persona: string, over: Partial<Attempt> = {}) => attempt({ persona, heldout: true, ...over });
+    const one: RunFile = { section: 'routines', label: 't', set: 'h', commit: 'c', attempts: [heldout('p1'), heldout('p1', { rep: 2 }), heldout('p2', { benchError: 'generation: no generation for p2@p2.example' })] } as RunFile;
+    const shown = lines([one]).join('\n');
+    expect(shown).toContain('1 held-out people scored, fewer than 2');
+    expect(shown).not.toContain('0.0');
+    expect(shown).not.toContain('p2');
+    const two: RunFile = { ...one, attempts: [heldout('p1'), heldout('p2'), heldout('p3', { benchError: 'generation: no generation for p3@p3.example' })] };
+    const both = lines([two]).join('\n');
+    expect(both).toContain('| 0.0 (');
+    expect(both).toContain('- a held-out generation #1: bench error');
+    expect(both).not.toContain('p3');
+  });
+});
+
+describe('writing a month', () => {
+  test('puts every message in the inbox', () => {
+    expect(inInbox(['Orders'])).toEqual(['INBOX', 'Orders']);
+    expect(inInbox(['INBOX', 'Orders'])).toEqual(['INBOX', 'Orders']);
+  });
+
+  test('counts each need a drafted routine meets once, and none whose routine is blank', () => {
+    expect(draftableNeeds([{ id: 'r1', drafted: 'a task per invoice' }, { id: 'r1', drafted: 'again' }, { id: 'r2', drafted: '  ' }, { id: 'r3' }, { id: 'r4', drafted: 'a lead log' }])).toBe(2);
   });
 });
