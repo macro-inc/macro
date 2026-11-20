@@ -340,6 +340,15 @@ where
                 {
                     continue;
                 }
+                // The projection names the attachment of an upload effect
+                // itself (`EffectFailure::AttachmentUpload`); a download or
+                // database failure carries none, so it is named here, once.
+                if !matches!(error, MailboxError::Effect(_)) {
+                    tracing::Span::current().record(
+                        "outlook.attachment_id",
+                        tracing::field::display(attachment_id),
+                    );
+                }
                 return Err(error);
             }
         }

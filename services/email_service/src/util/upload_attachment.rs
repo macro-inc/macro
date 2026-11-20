@@ -13,6 +13,10 @@ use models_email::service::attachment::{
     AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
 };
 use models_email::service::link;
+use nom::Parser;
+use nom::bytes::complete::{tag, take_until};
+use nom::character::complete::alphanumeric1;
+use nom::sequence::{preceded, terminated};
 use sha2::{Digest, Sha256};
 use static_file_service_client::StaticFileServiceClient;
 use std::str::FromStr;
@@ -61,8 +65,20 @@ pub enum UploadAttachmentError {
     #[error("Attachment was deleted before it could be imported")]
     AttachmentDeleted,
 
-    #[error("Failed to upload attachment to presigned URL. Status: {0}, Body: {1}")]
-    PresignedUrlUploadFailed(reqwest::StatusCode, String),
+    /// The upload never got an answer. The error carries no URL: a presigned
+    /// URL's query holds its credentials and session token.
+    #[error("Failed to send attachment to presigned URL: {0}")]
+    PresignedUrlUnreachable(reqwest::Error),
+
+    #[error(
+        "Failed to upload attachment to presigned URL. Status: {status}, code: {}",
+        code.as_deref().unwrap_or("none")
+    )]
+    PresignedUrlRefused {
+        status: reqwest::StatusCode,
+        /// The S3 error `<Code>`, the only part of the body kept.
+        code: Option<String>,
+    },
 
     #[error("Failed to set email attachment properties: {0}")]
     SystemPropertiesSetFailed(String),
@@ -413,22 +429,30 @@ async fn upload_data_to_presigned_url(
         .body(attachment_data)
         .send()
         .await
-        .map_err(|e| {
-            UploadAttachmentError::PresignedUrlUploadFailed(
-                reqwest::StatusCode::INTERNAL_SERVER_ERROR,
-                e.to_string(),
-            )
-        })?;
+        .map_err(|error| UploadAttachmentError::PresignedUrlUnreachable(error.without_url()))?;
 
     if !response.status().is_success() {
         let status = response.status();
         let body = response.text().await.unwrap_or_default();
-        return Err(UploadAttachmentError::PresignedUrlUploadFailed(
-            status, body,
-        ));
+        return Err(UploadAttachmentError::PresignedUrlRefused {
+            status,
+            code: s3_error_code(&body),
+        });
     }
 
     Ok(())
+}
+
+/// The `<Code>` of an S3 error response, such as `SignatureDoesNotMatch` or
+/// `SlowDown`. The rest of the body can echo the signed request, the presigned
+/// URL's credentials and session token included, so nothing else is read.
+fn s3_error_code(body: &str) -> Option<String> {
+    let mut code = preceded(
+        (take_until("<Code>"), tag("<Code>")),
+        terminated(alphanumeric1, tag("</Code>")),
+    );
+    let parsed: nom::IResult<&str, &str> = code.parse(body);
+    parsed.ok().map(|(_, code)| code.to_owned())
 }
 
 /// Sets email attachment properties for the uploaded document.

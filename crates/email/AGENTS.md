@@ -543,7 +543,9 @@ tools — hexagonal, heavily feature-gated.
   database steps with `database_failed` and everything else with `failed`.
   Its `EffectFailure` names the effect (`outlook.effect`) and, for attachment
   uploads, the attachment (`outlook.attachment_id`); never return one without
-  a cause.
+  a cause. A failed attachment download or database step is not an effect, so
+  email-service's attachment step records `outlook.attachment_id` for it
+  before returning; the span carries the field once either way.
 - `MailboxSyncService` reads through two gateways: `import_provider` for a
   folder page claimed before the folder's first round completes and for
   import reconciliation rows, `provider` for everything else, live passes

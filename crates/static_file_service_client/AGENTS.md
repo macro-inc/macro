@@ -39,6 +39,10 @@ internal-auth-key-authenticated requests.
 - reqwest sends an empty body with no `Content-Length`, and S3 refuses a
   presigned PUT without one (411 Length Required). Set the header on every
   upload to a presigned URL, as `put_file.rs` does.
+- A reqwest error prints its request URL, and an upload URL's query holds the
+  presigned credentials and session token. `put_file.rs` strips every reqwest
+  error with `without_url()` before it leaves the client; keep that on new
+  requests.
 
 ## Related
 
