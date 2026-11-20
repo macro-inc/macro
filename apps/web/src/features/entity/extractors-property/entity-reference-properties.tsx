@@ -132,7 +132,8 @@ function ReferencePill(props: {
     event.stopPropagation();
     open(event.shiftKey);
   });
-  // A menu selection carries no event, so Shift is read from the press before it.
+  // A menu selection carries no event, so Shift is read from the release or
+  // key press that makes it.
   let shiftHeld = false;
   const captureSplitIntent = (event: PointerEvent | KeyboardEvent) => {
     shiftHeld = event.shiftKey;
@@ -154,7 +155,7 @@ function ReferencePill(props: {
         fallback={
           <Dropdown.Item
             disabled={display.isLoading()}
-            onPointerDown={captureSplitIntent}
+            onPointerUp={captureSplitIntent}
             onKeyDown={captureSplitIntent}
             onSelect={() => open(shiftHeld)}
           >

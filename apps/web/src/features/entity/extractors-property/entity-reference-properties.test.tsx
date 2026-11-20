@@ -182,23 +182,45 @@ it('moves focus off the overflow control to the record after a menu row opens it
   expect(mocks.returnFocus).toHaveBeenCalledOnce();
 });
 
-it('opens a menu row in a new split when shift is held', async () => {
-  renderRow();
-  fireEvent.keyDown(
-    screen.getByRole('button', { name: 'Show 1 more property values' }),
-    { key: 'Enter' }
-  );
-  await screen.findByRole('menu');
+it.each([
+  {
+    how: 'a pointer release',
+    // jsdom has no PointerEvent; the menu row reads only these mouse fields.
+    pick: (row: HTMLElement) =>
+      fireEvent(
+        row,
+        new MouseEvent('pointerup', {
+          bubbles: true,
+          button: 0,
+          shiftKey: true,
+        })
+      ),
+  },
+  {
+    how: 'Enter',
+    pick: (row: HTMLElement) =>
+      fireEvent.keyDown(row, { key: 'Enter', shiftKey: true }),
+  },
+])(
+  'opens a menu row in a new split when shift is held on $how',
+  async ({ pick }) => {
+    renderRow();
+    fireEvent.keyDown(
+      screen.getByRole('button', { name: 'Show 1 more property values' }),
+      { key: 'Enter' }
+    );
+    const menu = await screen.findByRole('menu');
 
-  fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Ada Lovelace' }), {
-    key: 'Enter',
-    shiftKey: true,
-  });
+    vi.useFakeTimers();
+    pick(screen.getByRole('menuitem', { name: 'Ada Lovelace' }));
+    finishClosing(menu);
+    await Promise.resolve();
 
-  expect(mocks.openDocument).toHaveBeenCalledWith(
-    'contact',
-    'ada',
-    undefined,
-    true
-  );
-});
+    expect(mocks.openDocument).toHaveBeenCalledWith(
+      'contact',
+      'ada',
+      undefined,
+      true
+    );
+  }
+);
