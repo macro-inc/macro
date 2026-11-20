@@ -360,3 +360,25 @@ fn an_agent_environment_carries_the_setup_trace_and_reads_without_it() {
     };
     assert_eq!(traceparent, None);
 }
+
+#[test]
+fn network_isolation_that_cant_be_enforced_is_a_host_problem_and_a_failure() {
+    assert_eq!(
+        serde_json::to_value(TeammateHostProblem::NetworkIsolationUnavailable).unwrap(),
+        json!({ "kind": "networkIsolationUnavailable" })
+    );
+    let status = ToServerMessage::TeammateStatus {
+        install: TeammateInstall {
+            install_id: TeammateInstallId::new("i-1").unwrap(),
+            generation: 1,
+            delivery: 1,
+        },
+        state: TeammateRunState::Failed {
+            reason: TeammateRunFailure::NetworkIsolationUnavailable,
+        },
+    };
+    assert_eq!(
+        serde_json::to_value(&status).unwrap()["state"],
+        json!({ "state": "failed", "reason": "networkIsolationUnavailable" })
+    );
+}

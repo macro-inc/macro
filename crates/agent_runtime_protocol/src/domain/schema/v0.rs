@@ -365,6 +365,9 @@ pub enum TeammateHostProblem {
     /// The engine can't give the container the user namespaces its inner
     /// sandboxes (bubblewrap, Chromium) need, e.g. a host AppArmor policy.
     InnerSandboxUnavailable,
+    /// No installed engine passed the network-isolation probe, so the
+    /// teammate's egress policy can't be enforced; it never runs open.
+    NetworkIsolationUnavailable,
     /// The machine is below the teammate runtime's hardware floor.
     BelowFloor {
         /// The resource that is short.
@@ -434,6 +437,9 @@ pub enum TeammateRunFailure {
     CrashLoop,
     /// The machine can't host teammates (see [`TeammateHostReport`]).
     HostUnsupported,
+    /// The install's egress policy couldn't be put in place (or read back
+    /// as put), so the agent wasn't started.
+    NetworkIsolationUnavailable,
 }
 
 /// An agent teammate's environment: credentials and addresses, one variable
