@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1\n            FROM \"Document\" d\n            JOIN document_sub_type s ON s.document_id = d.id\n            WHERE d.id = $1\n              AND s.sub_type = 'task'\n              AND d.\"deletedAt\" IS NULL\n        ) AS \"live!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "live!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6b14aeb81318dece1de1f08eb92c665e066bfbe7265bd4c6e787a480624eb473"
+}

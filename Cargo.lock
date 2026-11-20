@@ -21418,6 +21418,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "time_tracking"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "chrono-tz",
+ "entity_access",
+ "feature_flags",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_event_broker",
+ "macro_event_topics",
+ "macro_user_id",
+ "model-error-response",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "tiny-skia"
 version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
