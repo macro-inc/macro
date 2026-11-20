@@ -14,7 +14,7 @@ use crate::api::email::drafts::add_attachment::{
 use crate::api::email::drafts::add_forwarded_attachment::{
     AddForwardedAttachmentRequest, AddForwardedAttachmentResponse,
 };
-use crate::api::email::init::{InitErrorCodeResponse, InitResponse, SharedInboxConflictResponse};
+use crate::api::email::init::{InitConflictResponse, InitErrorCodeResponse, InitResponse};
 use crate::api::email::labels::create::CreateLabelRequest;
 use crate::api::email::labels::create::CreateLabelResponse;
 use crate::api::email::links::list::ListLinksResponse;
@@ -146,7 +146,7 @@ use utoipa::OpenApi;
             // Init types
             InitErrorCodeResponse,
             InitResponse,
-            SharedInboxConflictResponse,
+            InitConflictResponse,
             // Label types
             CreateLabelRequest,
             CreateLabelResponse,

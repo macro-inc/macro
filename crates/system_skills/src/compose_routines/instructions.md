@@ -49,12 +49,11 @@ export async function main({ macro }: CodeContext) {
     return found;
   };
   const names = ['#customer-feedback', '#bug-triage'];
-  const matches = [];
-  for (const name of names) matches.push({ name, channels: await named(name) });
-  if (matches.some((match) => match.channels.length !== 1)) {
-    return { data: { ask: matches.map((match) => ({ name: match.name, matches: match.channels.length })) } };
+  const found = await Promise.all(names.map(named));
+  if (found.some((channels) => channels.length !== 1)) {
+    return { data: { ask: names.map((name, i) => ({ name, matches: found[i].length })) } };
   }
-  const [[feedback], [triage]] = matches.map((match) => match.channels);
+  const [[feedback], [triage]] = found;
   const routine: RoutineOptions = {
     name: 'Bugs from #customer-feedback in #bug-triage',
     appearance: { icon: { kind: 'macro', name: 'bug' }, color: 'red' },

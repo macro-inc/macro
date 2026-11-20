@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -9,7 +10,7 @@ import {
   type ListNavActions,
   useListKeyBindings,
 } from '@core/util/useListKeyBindings';
-import { type EntityData, InlineEntity, isTaskEntity } from '@entity';
+import { isTaskEntity } from '@entity';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import PropertiesIcon from '@icon/system/regular/sliders-horizontal.svg';
@@ -57,7 +58,6 @@ import {
   CommandMenuList,
   CommandMenuSearchInput,
   CommandMenuShell,
-  cn,
   createCommandListController,
   Dialog,
   Hotkey,
@@ -67,7 +67,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  For,
   Match,
   on,
   onCleanup,
@@ -196,10 +195,6 @@ function propertyEditorEntityType(entity: PropertyEditorEntity): EntityType {
   return macroEntityToPropertyEntityType(entity);
 }
 
-function propertyEditorEntityName(entity: PropertyEditorEntity): string {
-  return entity.name || 'Entity';
-}
-
 export function PropertyEditorModal() {
   const saveProperties = useSavePropertyForMultiEntitites();
   const handlePropertySave = (value: PropertyApiValues) => {
@@ -207,12 +202,10 @@ export function PropertyEditorModal() {
     if (!selectedEntities.length || !targetProperty) return;
 
     // Snapshot before closing — closing resets selectedEntities.
-    const count = selectedEntities.length;
-    const message = `Set ${targetProperty.displayName} for ${
-      count === 1
-        ? propertyEditorEntityName(selectedEntities[0])
-        : count + ' entities'
-    }`;
+    const message = t('entityActions.toastPropertySet', {
+      property: targetProperty.displayName,
+      count: selectedEntities.length,
+    });
 
     fireAndForget(
       saveProperties(selectedEntities, targetProperty, value).then(
@@ -261,7 +254,6 @@ export function PropertyEditorDialog(props: {
   ) => void | Promise<void>;
   availableProperties?: PropertyDefinitionDomain[];
   properties?: Property[];
-  name?: string;
 }) {
   const [dialogRef, setDialogRef] = createSignal<HTMLElement | undefined>();
   const [attach, hotkeyScope] = useHotkeyDOMScope('property-editor');
@@ -287,6 +279,16 @@ export function PropertyEditorDialog(props: {
 
   const openCreateProperty = (initialName: string) => {
     setCreatePropertyInitialName(initialName);
+  };
+
+  // The create dialog offers a built-in property only where it applies, so it
+  // needs the entity type when every selected entity shares one. A host with
+  // no selection (a draft) supplies it through its properties context.
+  const selectedEntityType = () => {
+    const [first, ...rest] = props.state.selectedEntities.map(
+      propertyEditorEntityType
+    );
+    return rest.every((type) => type === first) ? first : undefined;
   };
 
   let searchInput: HTMLInputElement | undefined;
@@ -432,16 +434,6 @@ export function PropertyEditorDialog(props: {
             inputType={inputType()}
           />
         </CommandMenuShell.Header>
-        <CommandMenuShell.Toolbar class="p-3 py-2 border-b-0">
-          <Show
-            when={props.name}
-            fallback={
-              <EditingEntityPreview entities={props.state.selectedEntities} />
-            }
-          >
-            <span class="truncate text-ink-muted">{props.name}</span>
-          </Show>
-        </CommandMenuShell.Toolbar>
         <CommandMenuShell.Body>
           <Switch>
             <Match when={props.state.mode === 'selector'}>
@@ -500,6 +492,7 @@ export function PropertyEditorDialog(props: {
           <CreatePropertyModal
             isOpen
             initialName={initialName()}
+            entityType={selectedEntityType()}
             autoPinOnCreate={false}
             onClose={closeCreateProperty}
             onPropertyCreated={handlePropertyCreated}
@@ -712,41 +705,6 @@ function PropertyList(props: {
         )}
       </CommandMenuList>
     </Show>
-  );
-}
-
-function EditingEntityPreview(props: { entities: PropertyEditorEntity[] }) {
-  const displayEntities = () => props.entities.slice(0, 2);
-  const remainingCount = () => Math.max(0, props.entities.length - 2);
-  return (
-    <div class="flex items-center gap-2">
-      <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <Show
-                when={!('entityType' in entity)}
-                fallback={propertyEditorEntityName(entity)}
-              >
-                <InlineEntity entity={entity as EntityData} />
-              </Show>
-            </div>
-          );
-        }}
-      </For>
-      <Show when={remainingCount() > 0}>
-        <div class="text-ink-muted text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
-      </Show>
-    </div>
   );
 }
 

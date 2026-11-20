@@ -168,6 +168,11 @@ the gateway `/email` prefix.
   client.
 - Long attachment names are truncated to the DSS limit before upload (#7893);
   don't remove that truncation when touching `util/upload_attachment.rs`.
+- A presigned upload URL's query holds AWS credentials and a session token,
+  and the `UploadAttachmentError`s of every attachment upload are logged. Keep
+  them free of it: strip reqwest errors with `without_url()`, and from an S3
+  error body keep only its `<Code>` (`s3_error_code`), since a
+  `SignatureDoesNotMatch` body echoes the signed request.
 - An attachment's file type comes from a Macro file type's extension on its
   filename (`FileType::split_suffix_match`, as uploads use) unless its MIME
   type names a different Macro file type, and from the MIME type without such
@@ -335,6 +340,21 @@ the gateway `/email` prefix.
   spends live provider quota; Gmail reads three messages at a time to stay
   under the gate's live cap. Don't record message content or addresses on
   its spans.
+- Connecting an inbox writes its `email_links` row, which a CRM contact
+  population share-locks for its whole transaction. The connect transactions
+  (`outbound/inbox_connection/transactions.rs`, `outbound/mailbox_init.rs`)
+  open with `outbound::link_lock::begin`, a 5 s `lock_timeout`, and a lock
+  timeout is `InitializationError::Contended`. `/email/init` answers it 503,
+  never 409: web clients released before the coded 409s read any 409 from
+  that route as a sharing conflict to confirm.
+  `set_credential_owner` keeps waiting, because it follows the Google grant's
+  relocation and a give-up would leave the shared inbox's tokens failing.
+  The token-health writes (`email_db_client::links::update::{set,clear}_link_needs_reauth`)
+  give up after 5 s too and are written again on the next token fetch.
+- Every 409 from `/email/init` is an `InitConflictResponse` tagged by `code`;
+  clients offer to share the inbox only for `SHARED_INBOX_CONFLICT`, whose
+  fields stay at the top level for those older clients. A new 409 outcome
+  gets its own variant, never a plain-text body.
 - To run against `crates/gmail_emulator` instead of Google, set the
   `OVERRIDE_*` variables its AGENTS.md lists; a local stack with no real
   Google client sets them itself. Without
