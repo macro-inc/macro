@@ -1237,6 +1237,46 @@ describe('cached channel directory', () => {
     expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
   });
 
+  it('answers pending for a channel the fallback waits on a by-id read to decide', async () => {
+    let answer!: (channels: DirectoryChannel[]) => void;
+    let open!: () => void;
+    const { cache, directory, hydrate, reopen } = mountCachedDirectory(
+      [channelRecord('kept')],
+      {
+        byIdGate: new Promise<void>((done) => {
+          open = done;
+        }),
+        pageAll: () =>
+          new Promise((resolve) => {
+            answer = resolve;
+          }),
+      }
+    );
+    cache.put(channelRecord('kept'));
+    cache.put(channelRecord('stale'));
+    await vi.waitFor(() => expect(directory.channels()).toHaveLength(2));
+    markSoupBackfillLaneFailed(VIEWER, CHANNEL_DIRECTORY_CHECKPOINT_ID, 'g1');
+    await vi.waitFor(() => expect(answer).toBeDefined());
+    cache.put(channelRecord('stale', { viewedAt: VIEWED_2 }), {
+      sourceHash: 'stale-2',
+    });
+    reopen();
+    await vi.waitFor(() => expect(viewedAt(directory, 'stale')).toBe(VIEWED_2));
+    answer([directoryChannel('kept')]);
+    await vi.waitFor(() => expect(hydrate).toHaveBeenCalledOnce());
+    expect(ids(directory.channels())).toEqual(['kept']);
+
+    // The network left it out, but the cache rewrote it: the viewer may have
+    // rejoined it, and the read under way decides.
+    expect(directory.lookup(channelUuid('stale')).status).toBe('pending');
+    await new Promise((done) => setTimeout(done, 50));
+    expect(hydrate).toHaveBeenCalledOnce();
+
+    open();
+    await vi.waitFor(() => expect(directory.complete()).toBe(true));
+    expect(directory.lookup(channelUuid('stale')).status).toBe('missing');
+  });
+
   it('reads a channel again that a by-id read found gone once the viewer rejoins it', async () => {
     let answer!: (channels: DirectoryChannel[]) => void;
     const server = [channelRecord('kept')];

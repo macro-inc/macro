@@ -177,21 +177,25 @@ export const EMPTY_CHANNEL_DIRECTORY_STATE: ChannelDirectoryState = {
 
 const PENDING: ChannelLookup = { status: 'pending' };
 const MISSING: ChannelLookup = { status: 'missing' };
+const NO_IDS: Readonly<Record<string, true>> = {};
 
 /** The answer for one channel. A complete directory holds every joined
  * channel, so a channel it lacks is not joined; a cached record that lacks
- * a field waits for its by-id read. An unjoined channel is missing, as it
- * was from the REST channel list. */
+ * a field waits for its by-id read, and so does a channel the directory
+ * left out until a read decides it (`unconfirmed`). An unjoined channel is
+ * missing, as it was from the REST channel list. */
 export function lookupChannel(
   state: ChannelDirectoryState,
   outcomes: Readonly<Record<string, ByIdOutcome>>,
-  channelId: string
+  channelId: string,
+  unconfirmed: Readonly<Record<string, true>> = NO_IDS
 ): ChannelLookup {
   const channel = state.records[channelId];
   if (channel)
     return channel.isParticipant ? { status: 'loaded', channel } : MISSING;
   // No channel has it, and no read could say so.
   if (!isChannelId(channelId)) return MISSING;
+  if (unconfirmed[channelId]) return PENDING;
   const outcome = outcomes[channelId];
   if (outcome === 'absent') return MISSING;
   if (!state.complete) return PENDING;
@@ -771,8 +775,6 @@ type ShownDirectory = {
   /** The channels the fallback waits on a by-id read to decide, by id. */
   unconfirmed: Readonly<Record<string, true>>;
 };
-
-const NO_IDS: Readonly<Record<string, true>> = {};
 
 /** Why the directory paged the network itself. */
 type FallbackReason =
@@ -1384,8 +1386,16 @@ export function createCachedChannelDirectory(
     channels: () => view().joined,
     complete: proven,
     lookup(channelId) {
-      const result = lookupChannel(view(), reader.outcomes(), channelId);
-      if (result.status === 'pending') reader.request(channelId);
+      const { unconfirmed } = shown();
+      const result = lookupChannel(
+        view(),
+        reader.outcomes(),
+        channelId,
+        unconfirmed
+      );
+      // The fallback's own read decides an unconfirmed one.
+      if (result.status === 'pending' && !unconfirmed[channelId])
+        reader.request(channelId);
       return result;
     },
     async readComplete() {
