@@ -79,7 +79,7 @@ These use their own tags — never wrap them in `<m-document-mention>`:
 
 Only the tags listed here exist. Never invent a tag or put an id in the wrong one. Anything else, such as a `calendarId` from ListCalendars, is plain text: mention individual events, not calendars.
 
-`EditDocument` takes no mention tags in `instructions`; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips.
+`EditDocument` takes no mention tags in `instructions`; pass each item's ids and details (userId/email, documentId/blockName, session id, ISO date and displayFormat, booking-link profileId/slug/url) so the editor inserts the chips. Its exact `edits` (and the SDK's `applyMarkdownEdits`) are document content: write chips there as the tags above, exactly as ReadContent shows them.
 "##;
 
 static INTENT: &str = "Entities, people, dates, agent sessions, and other chips are referenced \

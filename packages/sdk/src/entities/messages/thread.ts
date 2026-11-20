@@ -1,8 +1,10 @@
 import type {
+  MessageCursor,
   MessageListItem,
   MessageTimelineQuery,
   ThreadPatch,
   ThreadState,
+  TimelineActivity,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
@@ -142,13 +144,28 @@ export class MessageThread extends MacroEntity<ThreadState> {
   }
 }
 
+/** One timeline entry: a message handle or a recorded activity. */
+export type TimelineEntry<TMessage> =
+  | { type: 'activity'; activity: TimelineActivity & { actor: User } }
+  | { type: 'message'; message: TMessage };
+
+/** A bounded mixed message/activity page with typed message handles. */
+export interface TimelinePage<TMessage> {
+  /** Messages and activity, newest first. */
+  entries: TimelineEntry<TMessage>[];
+  /** Cursor that continues past this page. */
+  nextCursor?: MessageCursor;
+  /** Cursor that continues before this page. */
+  previousCursor?: MessageCursor;
+}
+
 /** A bounded mixed message/activity page with typed message handles. */
 export async function timeline<TMessage extends TimelineMessage>(
   client: MacroClient,
   parent: MessageParent,
   map: (record: MessageListItem) => TMessage,
   selection?: TimelineOptions<TMessage>,
-) {
+): Promise<TimelinePage<TMessage>> {
   for (const message of [
     ...(selection?.messages ?? []),
     ...(selection?.around ? [selection.around] : []),

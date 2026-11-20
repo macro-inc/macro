@@ -79,6 +79,13 @@ word docs, Illustrator/Photoshop files).
   `contentWithRevision`/`setContent`. The worker's `POST /markdown` reads the
   body with sync-service's revision and commits a write only at the revision
   the caller read (409 `revision_conflict` otherwise). No model, no billing.
+- `src/domain/markdown_edits.rs`: direct edits with no model, the
+  `EditDocument` tool's `edits` and the SDK's
+  `markdownBlocks`/`applyMarkdownEdits`
+  (`GET /{id}/markdown/blocks`, `POST /{id}/markdown/edits`). The worker's
+  `/markdown` `edit` action applies the batch at `baseRevision` and merges it;
+  422 `edit_refused` carries the typed refusal, 409 `revision_conflict` means
+  an edit's matched text is gone, 502 `edit_failed` may have applied.
 - `src/domain/text_comment.rs`: a comment thread anchored to quoted text, shared
   by the `CommentOnText` tool and `POST /{id}/comments/text` (the SDK's
   `Document.commentOnText`). Markdown places the mark first and removes it if

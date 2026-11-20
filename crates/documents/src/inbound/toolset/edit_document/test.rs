@@ -4,12 +4,17 @@ use std::sync::{Arc, Mutex};
 
 use crate::domain::content::DocumentContent;
 use crate::domain::events::InteractionReason;
+use crate::domain::markdown_edits::{
+    BlockId, MarkdownEditMatchingBlock, MarkdownEditMerge, MarkdownEditRefusal,
+    MarkdownEditRefusalCode, MarkdownEdited,
+};
 use crate::domain::models::{
     CreateTaskRequest, DocumentError, DocumentTeamShareResponse, EditDocumentServiceArgs,
     GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs, LocationQueryParams, NewDocument,
     TaskBranchName,
 };
 use crate::domain::permission_token::decode_permission_token;
+use crate::domain::ports::editing::MarkdownEditOutcome;
 use crate::domain::ports::editing::{
     CommentMarkPlacement, EditMode, EditResult, EditingWorkerService, EditorName,
 };
@@ -92,6 +97,9 @@ async fn cancelled_tool_does_not_start_worker() {
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.into(),
         instructions: "edit".into(),
+        edits: vec![],
+        dry_run: false,
+        allow_deleting_content: false,
         fast: false,
     };
     assert_eq!(
@@ -556,6 +564,10 @@ pub(in crate::inbound::toolset) struct FakeEditingWorker {
     comment_mark_fails: bool,
     pub(in crate::inbound::toolset) added_comment_marks: Arc<Mutex<Vec<AddedCommentMark>>>,
     pub(in crate::inbound::toolset) removed_comment_marks: Arc<Mutex<Vec<Uuid>>>,
+    /// Direct-edit batches the worker received, with their tokens.
+    markdown_edits: Arc<Mutex<Vec<(MarkdownEditRequest, DocumentPermissionToken)>>>,
+    /// Refuse every direct-edit batch with this.
+    markdown_edit_refusal: Option<MarkdownEditRefusal>,
 }
 
 impl FakeEditingWorker {
@@ -643,6 +655,43 @@ impl EditingWorkerService for FakeEditingWorker {
         _markdown: &str,
     ) -> anyhow::Result<crate::domain::ports::editing::MarkdownWrite> {
         panic!("unexpected write_markdown call")
+    }
+
+    async fn markdown_blocks(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+    ) -> anyhow::Result<crate::domain::markdown_edits::DocumentMarkdownBlocks> {
+        panic!("unexpected markdown_blocks call")
+    }
+
+    async fn edit_markdown(
+        &self,
+        _document_id: &str,
+        document_token: &DocumentPermissionToken,
+        request: &MarkdownEditRequest,
+    ) -> anyhow::Result<MarkdownEditOutcome> {
+        self.markdown_edits
+            .lock()
+            .expect("markdown edits lock poisoned")
+            .push((request.clone(), document_token.clone()));
+        Ok(match &self.markdown_edit_refusal {
+            Some(refusal) => MarkdownEditOutcome::Refused(refusal.clone()),
+            None => MarkdownEditOutcome::Applied(MarkdownEdited {
+                outcome: if request.dry_run {
+                    MarkdownEditOutcomeKind::DryRun
+                } else {
+                    MarkdownEditOutcomeKind::Committed
+                },
+                revision: "AQIE".into(),
+                changes: vec![MarkdownBlockChange::Edited {
+                    block_id: BlockId::try_from("b1".to_owned()).expect("block id"),
+                    before: "Ship in Q3.".into(),
+                    after: "Ship in Q4.".into(),
+                }],
+                merge: Some(MarkdownEditMerge::Current),
+            }),
+        })
     }
 
     async fn add_comment_mark(
@@ -789,6 +838,9 @@ async fn call_edit_document_in(
     let tool = EditDocument {
         document_id: TEST_DOCUMENT_ID.to_string(),
         instructions: "tidy up the imports".to_string(),
+        edits: vec![],
+        dry_run: false,
+        allow_deleting_content: false,
         fast,
     };
 
@@ -1042,4 +1094,115 @@ fn only_markdown_is_editable() {
 fn word_documents_are_pointed_at_the_word_tools() {
     let error = ensure_markdown(&document_with_file_type(Some("docx"))).unwrap_err();
     assert!(error.description.contains("EditWordDocument"));
+}
+
+fn direct_tool(edits: serde_json::Value, instructions: &str) -> EditDocument {
+    serde_json::from_value(serde_json::json!({
+        "document_id": TEST_DOCUMENT_ID,
+        "instructions": instructions,
+        "edits": edits,
+    }))
+    .expect("EditDocument with edits should parse")
+}
+
+#[tokio::test]
+async fn edits_apply_directly_without_the_ai_editor() {
+    let editing = FakeEditingWorker::default();
+    let tool = direct_tool(
+        serde_json::json!([{ "block_id": "b1", "old": "Q3", "new": "Q4" }]),
+        "",
+    );
+    let mut context = tool_context(FakeDocumentService::new("md"), editing.clone());
+    context.0 = context.0.with_actor(BotId::TEST_A);
+
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(response.summary, "Applied 1 edit(s) to the document.");
+    assert_eq!(
+        serde_json::to_value(&response.changes).unwrap(),
+        serde_json::json!([
+            { "kind": "edited", "blockId": "b1", "before": "Ship in Q3.", "after": "Ship in Q4." }
+        ])
+    );
+    assert!(editing.edit_calls.lock().unwrap().is_empty());
+    let batches = editing.markdown_edits.lock().unwrap();
+    let (request, token) = &batches[0];
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        serde_json::json!({ "edits": [{ "block_id": "b1", "old": "Q3", "new": "Q4" }] })
+    );
+    let claims = decode_permission_token(token, "unused-jwt-secret").unwrap();
+    assert_eq!(claims.access_level, AccessLevel::Edit);
+    assert!(
+        claims.actor.is_some(),
+        "the edit is attributed to the agent"
+    );
+}
+
+#[tokio::test]
+async fn a_refused_batch_names_the_code_and_the_matching_blocks() {
+    let editing = FakeEditingWorker {
+        markdown_edit_refusal: Some(MarkdownEditRefusal {
+            code: MarkdownEditRefusalCode::AmbiguousMatch,
+            message: "edit 1: old occurs 2 times; add block_id".into(),
+            edit: Some(1),
+            blocks: vec![MarkdownEditMatchingBlock {
+                block_id: BlockId::try_from("b1".to_owned()).unwrap(),
+                occurrences: 2,
+                markdown: "Q3 and Q3".into(),
+            }],
+        }),
+        ..FakeEditingWorker::default()
+    };
+    let tool = direct_tool(serde_json::json!([{ "old": "Q3", "new": "Q4" }]), "");
+    let context = tool_context(FakeDocumentService::new("md"), editing.clone());
+
+    let error = tool.call(context, request_context()).await.unwrap_err();
+
+    assert_eq!(
+        error.description,
+        "edits refused (ambiguous_match), nothing was written: edit 1: old occurs 2 times; add block_id\n- block b1 (2 occurrence(s)): Q3 and Q3"
+    );
+}
+
+#[tokio::test]
+async fn edits_and_instructions_together_or_neither_are_rejected() {
+    for tool in [
+        direct_tool(serde_json::json!([{ "delete": "b1" }]), "also tidy up"),
+        direct_tool(serde_json::json!([]), " "),
+    ] {
+        let editing = FakeEditingWorker::default();
+        let context = tool_context(FakeDocumentService::new("md"), editing.clone());
+        assert!(tool.call(context, request_context()).await.is_err());
+        assert!(editing.markdown_edits.lock().unwrap().is_empty());
+        assert!(editing.edit_calls.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn a_dry_run_says_nothing_was_written() {
+    let editing = FakeEditingWorker::default();
+    let mut tool = direct_tool(serde_json::json!([{ "delete": "b1" }]), "");
+    tool.dry_run = true;
+    let context = tool_context(FakeDocumentService::new("md"), editing.clone());
+
+    let response = tool.call(context, request_context()).await.unwrap();
+
+    assert_eq!(
+        response.summary,
+        "Dry run: the edits apply as shown in `changes`; nothing was written."
+    );
+    assert!(editing.markdown_edits.lock().unwrap()[0].0.dry_run);
+}
+
+#[tokio::test]
+async fn an_instructions_call_with_dry_run_reaches_no_editor() {
+    let editing = FakeEditingWorker::default();
+    let mut tool = direct_tool(serde_json::json!([]), "replace Q3 with Q4");
+    tool.dry_run = true;
+    let context = tool_context(FakeDocumentService::new("md"), editing.clone());
+
+    assert!(tool.call(context, request_context()).await.is_err());
+    assert!(editing.edit_calls.lock().unwrap().is_empty());
+    assert!(editing.markdown_edits.lock().unwrap().is_empty());
 }
