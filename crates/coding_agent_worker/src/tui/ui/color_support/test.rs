@@ -8,7 +8,7 @@ use crate::tui::quickstart::{Quickstart, QuickstartFocus, QuickstartMode};
 #[test]
 fn terminal_identities_map_to_their_color_support() {
     let cases = [
-        // macOS Terminal.app, as Marni's Intel Mac and the macOS 14 VM report it.
+        // macOS Terminal.app before macOS 26, as an Intel Mac on macOS 14 reports it.
         (
             TerminalIdentity {
                 term_program: Some("Apple_Terminal"),
@@ -48,6 +48,23 @@ fn terminal_identities_map_to_their_color_support() {
         // ssh drops COLORTERM; TERM still says 256 colors.
         (
             TerminalIdentity {
+                term: Some("xterm-256color"),
+                ..TerminalIdentity::default()
+            },
+            ColorSupport::Ansi256,
+        ),
+        // kitty over ssh: only its TERM arrives.
+        (
+            TerminalIdentity {
+                term: Some("xterm-kitty"),
+                ..TerminalIdentity::default()
+            },
+            ColorSupport::TrueColor,
+        ),
+        // tmux, which downsamples for its outer terminal anyway.
+        (
+            TerminalIdentity {
+                term_program: Some("tmux"),
                 term: Some("tmux-256color"),
                 ..TerminalIdentity::default()
             },
@@ -108,11 +125,23 @@ fn theme_colors_fit_the_256_palette() {
 }
 
 #[test]
-fn theme_colors_fit_the_16_named_colors() {
+fn theme_colors_keep_their_roles_in_16_colors() {
     let fit = |red, green, blue| ColorSupport::Ansi16.fit(Color::Rgb(red, green, blue));
+    // Background, surface, text, muted, border.
     assert_eq!(fit(21, 17, 14), Color::Black);
+    assert_eq!(fit(33, 26, 20), Color::Black);
     assert_eq!(fit(255, 248, 240), Color::White);
+    assert_eq!(fit(199, 185, 171), Color::Gray);
+    assert_eq!(fit(128, 106, 85), Color::DarkGray);
+    // Accent and the text drawn on it.
+    assert_eq!(fit(249, 115, 22), Color::Yellow);
+    assert_eq!(fit(24, 13, 5), Color::Black);
+    // Success, warning, error.
+    assert_eq!(fit(74, 222, 128), Color::LightGreen);
+    assert_eq!(fit(255, 178, 36), Color::LightYellow);
     assert_eq!(fit(255, 107, 107), Color::LightRed);
+    // A color outside the theme takes the nearest named color.
+    assert_eq!(fit(0, 0, 230), Color::Blue);
 }
 
 #[test]

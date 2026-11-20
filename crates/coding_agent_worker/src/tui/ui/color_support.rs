@@ -8,6 +8,8 @@
 use ratatui::buffer::Buffer;
 use ratatui::style::Color;
 
+use super::theme::THEME;
+
 #[cfg(test)]
 mod test;
 
@@ -27,6 +29,16 @@ mod environment {
 
 /// Terminal applications that take RGB colors without setting `COLORTERM`.
 const TRUECOLOR_PROGRAMS: [&str; 4] = ["iTerm.app", "WezTerm", "vscode", "ghostty"];
+
+/// `TERM` values of terminals that take RGB colors. ssh forwards `TERM` but
+/// not `COLORTERM` or `TERM_PROGRAM`.
+const TRUECOLOR_TERMS: [&str; 5] = [
+    "xterm-kitty",
+    "alacritty",
+    "foot",
+    "wezterm",
+    "xterm-ghostty",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ColorSupport {
@@ -72,7 +84,9 @@ impl ColorSupport {
             _ => {}
         }
         match terminal.term {
-            Some(term) if term.ends_with("-direct") => Self::TrueColor,
+            Some(term) if term.ends_with("-direct") || TRUECOLOR_TERMS.contains(&term) => {
+                Self::TrueColor
+            }
             Some(term) if term.contains("256color") => Self::Ansi256,
             None if terminal.windows => Self::TrueColor,
             _ => Self::Ansi16,
@@ -87,7 +101,7 @@ impl ColorSupport {
         match self {
             Self::TrueColor => color,
             Self::Ansi256 => Color::Indexed(nearest_256([red, green, blue])),
-            Self::Ansi16 => nearest_16([red, green, blue]),
+            Self::Ansi16 => theme_role_16(color).unwrap_or_else(|| nearest_16([red, green, blue])),
         }
     }
 
@@ -165,6 +179,28 @@ const NAMED: [(Color, [u8; 3]); 16] = [
     (Color::White, [255, 255, 255]),
 ];
 
+/// The theme's colors in 16-color terminals, chosen by role: the nearest
+/// named color by distance turns error text gray and success teal.
+fn theme_role_16(color: Color) -> Option<Color> {
+    let roles = [
+        (THEME.background, Color::Black),
+        (THEME.surface, Color::Black),
+        (THEME.text, Color::White),
+        (THEME.muted, Color::Gray),
+        (THEME.border, Color::DarkGray),
+        (THEME.accent, Color::Yellow),
+        (THEME.accent_text, Color::Black),
+        (THEME.success, Color::LightGreen),
+        (THEME.warning, Color::LightYellow),
+        (THEME.error, Color::LightRed),
+    ];
+    roles
+        .into_iter()
+        .find(|(theme, _)| *theme == color)
+        .map(|(_, named)| named)
+}
+
+/// The nearest named color, for colors outside the theme.
 fn nearest_16(rgb: [u8; 3]) -> Color {
     NAMED
         .iter()

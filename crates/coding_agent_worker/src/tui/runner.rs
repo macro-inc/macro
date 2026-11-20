@@ -54,6 +54,7 @@ pub async fn run(
         }
     });
 
+    let colors = ui::ColorSupport::detect();
     let mut terminal = ratatui::init();
     let existing_config = match Config::load(config_path) {
         Ok(config) => Some(config),
@@ -75,6 +76,7 @@ pub async fn run(
     } else {
         match run_quickstart(
             &mut terminal,
+            colors,
             config_path,
             existing_config.as_ref(),
             &mut input_rx,
@@ -103,18 +105,18 @@ pub async fn run(
             return Err(error);
         }
     };
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
+    let outcome = run_loop(&mut terminal, colors, &mut app, &mut input_rx, quickstarted).await;
     ratatui::restore();
     outcome
 }
 
 async fn run_quickstart(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     config_path: &Path,
     existing_config: Option<&Config>,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
 ) -> rootcause::Result<bool> {
-    let colors = ui::ColorSupport::detect();
     let mut quickstart = match existing_config {
         Some(config) => Quickstart::from_config(config),
         None => Quickstart::new()?,
@@ -199,11 +201,11 @@ fn config_is_working(config: &Config) -> bool {
 
 async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
+    colors: ui::ColorSupport,
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
     pair_on_start: bool,
 ) -> rootcause::Result<Option<Restart>> {
-    let colors = ui::ColorSupport::detect();
     let mut tick = tokio::time::interval(TICK);
     let mut poller = update::start_poller(app.config.update.auto);
     let mut staged: Option<StagedUpdate> = None;
