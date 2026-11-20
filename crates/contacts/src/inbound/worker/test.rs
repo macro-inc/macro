@@ -1,4 +1,6 @@
 use super::*;
+use crate::domain::models::invalidation::ContactsInvalidation;
+use crate::domain::models::list::InboxSource;
 use aws_sdk_sqs::config::{BehaviorVersion, Credentials, Region, retry::RetryConfig};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
@@ -30,12 +32,40 @@ impl ContactsRepository for CountingRepository {
     }
 }
 
+impl ContactListRepository for CountingRepository {
+    async fn record_interactions(
+        &self,
+        _users: &[MacroUserIdStr<'static>],
+        _peers: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>, rootcause::Report> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        Ok(Vec::new())
+    }
+
+    async fn record_inbox_contacts(
+        &self,
+        _inbox: &InboxSource,
+        _contacts: &[MacroUserIdStr<'static>],
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        Ok(Vec::new())
+    }
+
+    async fn delete_user_lists(
+        &self,
+        _user: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<MacroUserIdStr<'static>>, rootcause::Report> {
+        self.writes.fetch_add(1, Ordering::SeqCst);
+        Ok(Vec::new())
+    }
+}
+
 struct NoopNotifier;
 
 impl ContactsNotifier for NoopNotifier {
     async fn invalidate_contacts_for_users(
         &self,
-        _user_ids: Vec<MacroUserIdStr<'_>>,
+        _invalidations: Vec<ContactsInvalidation>,
     ) -> Result<(), rootcause::Report> {
         Ok(())
     }
