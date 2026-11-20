@@ -1,8 +1,11 @@
 import { t } from '@app/lib/i18n';
-import CheckIcon from '@icon/system/regular/check.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
 import { Button } from '@ui';
 
-/** The quiet check beside a notification stack's newest message. */
+/**
+ * The quiet bell beside a notification stack's newest message, which marks the
+ * stack done.
+ */
 export function StackDoneCheck(props: { label: string; onDone: () => void }) {
   return (
     <Button
@@ -17,7 +20,7 @@ export function StackDoneCheck(props: { label: string; onDone: () => void }) {
       }}
       onClick={() => props.onDone()}
     >
-      <CheckIcon class="size-4" />
+      <BellIcon class="size-4" />
     </Button>
   );
 }

@@ -40,6 +40,22 @@ test('a wide pane docks the list beside one check per stack', async ({
   );
   expect(listRight).toBeLessThanOrEqual(Math.min(...lanes) - 28);
 
+  // The gutter and the list mark with the same bell.
+  const gutterGlyph = await checks(page)
+    .first()
+    .locator('svg')
+    .evaluate((svg) => svg.innerHTML);
+  const rowGlyph = await rows
+    .first()
+    .getByRole('button', { name: /^Mark done:/ })
+    .locator('svg')
+    .evaluate((svg) => svg.innerHTML);
+  expect(rowGlyph).toBe(gutterGlyph);
+  await expect(checks(page).first().locator('svg')).toHaveAttribute(
+    'data-macro-icon',
+    'bell'
+  );
+
   await rows
     .filter({ hasText: 'Thread reply' })
     .getByRole('button')
