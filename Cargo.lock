@@ -18683,6 +18683,7 @@ dependencies = [
  "name_search",
  "opensearch_client",
  "properties",
+ "rate_limit",
  "readonly_pool",
  "rootcause",
  "serde",
