@@ -197,11 +197,19 @@ jobs:
 
         started=$(date +%s)
         # The bring-up prints a stage's output only once the stage ends, so a stage
-        # that never ends leaves nothing in the log. Once a minute, name the three
-        # busiest processes.
+        # that never ends leaves nothing in the log. Once a minute, name the build and
+        # compose commands that are running. Read from /proc: the runner's `ps` does
+        # not load inside the Nix shell.
+        running() {
+          for cmdline in /proc/[0-9]*/cmdline; do
+            # A process may have ended since the list was made.
+            { tr '\0' ' ' < "$cmdline"; } 2>/dev/null || true
+            echo
+          done | grep -E '^([^ ]*/)?(docker|cargo|rustc|bun|node) ' | cut -c1-120 | sort -u | head -n 3 | tr '\n' ';'
+        }
         (
           while sleep 60; do
-            echo "starting the stack, $(( $(date +%s) - started )) s: $(ps -eo pcpu,etime,args --sort=-pcpu | sed -n 2,4p | cut -c1-140 | tr '\n' ';')"
+            echo "starting the stack, $(( $(date +%s) - started )) s: $(running || true)"
           done
         ) &
         watch=$!
