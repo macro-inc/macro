@@ -225,6 +225,11 @@ describe('linkCodeReferences', () => {
     expect(linkCodeReferences(markdown, files)).toBe(markdown);
   });
 
+  it('keeps a fence open past a line that only opens one', () => {
+    const markdown = '```\n```ts\n`src/pane.tsx`\n```';
+    expect(linkCodeReferences(markdown, files)).toBe(markdown);
+  });
+
   it('links again after a closed fence', () => {
     expect(
       linkCodeReferences(

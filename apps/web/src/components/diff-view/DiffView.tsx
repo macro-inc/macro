@@ -192,14 +192,17 @@ function Stack(props: DiffListProps) {
   const revealLine = () => {
     const range = props.reveal?.();
     if (!anchoredPath || range?.path !== anchoredPath) return;
+    const root = diffReveal
+      .card(anchoredPath)
+      ?.querySelector(DIFFS_TAG_NAME)?.shadowRoot;
+    // Split view numbers each column's rows by its own side; unified view
+    // has one column, where the other side's changed rows share numbers.
     const otherSide =
       range.side === 'deletions' ? 'change-addition' : 'change-deletion';
-    const line = diffReveal
-      .card(anchoredPath)
-      ?.querySelector(DIFFS_TAG_NAME)
-      ?.shadowRoot?.querySelector(
-        `[data-line="${range.lineNumber}"]:not([data-line-type="${otherSide}"])`
-      );
+    const row = `[data-line="${range.lineNumber}"]:not([data-line-type="${otherSide}"])`;
+    const line =
+      root?.querySelector(`[data-${range.side}] ${row}`) ??
+      root?.querySelector(row);
     if (!line) return;
     releaseAnchor();
     line.scrollIntoView({ block: 'center', behavior: 'smooth' });

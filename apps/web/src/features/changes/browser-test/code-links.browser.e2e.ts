@@ -56,3 +56,18 @@ test('a link to an unchanged file opens it on GitHub at the head commit', async 
   );
   await expect(page.getByRole('region', { name: 'Changes' })).toBeHidden();
 });
+
+test('in split view the pointed line scrolls in, not the old line with its number', async ({
+  page,
+}) => {
+  await page.goto(
+    '/src/features/changes/browser-test/code-links.html?style=split'
+  );
+  await page.getByRole('link', { name: 'apps/web/src/long.ts:2' }).click();
+  const changes = page.getByRole('region', { name: 'Changes' });
+  // The old side's line 2 is a context row 60 rows further down.
+  const pointed = changes
+    .locator('[data-additions] [data-selected-line]:not([data-column-number])')
+    .filter({ hasText: 'row2 = 2' });
+  await expect(pointed).toBeInViewport();
+});

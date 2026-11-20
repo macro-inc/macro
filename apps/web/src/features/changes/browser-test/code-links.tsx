@@ -11,9 +11,29 @@ import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 
+// A file whose new lines sit far from the old ones with the same numbers:
+// 60 lines added above three that were there.
+const LONG_ADDED = Array.from(
+  { length: 60 },
+  (_, i) => `export const row${i + 1} = ${i + 1};`
+);
+const LONG_PATCH = [
+  'diff --git a/apps/web/src/long.ts b/apps/web/src/long.ts',
+  'index 4444444..5555555 100644',
+  '--- a/apps/web/src/long.ts',
+  '+++ b/apps/web/src/long.ts',
+  '@@ -1,3 +1,63 @@',
+  ...LONG_ADDED.map((line) => `+${line}`),
+  ' const tail1 = 1;',
+  ' const tail2 = 2;',
+  ' const tail3 = 3;',
+  '',
+].join('\n');
+
 const REPLY = [
   'I bumped `b` in `apps/web/src/a.ts:2` and added [the new helpers](file:///home/agent/macro/crates/x/src/lib.rs#L1-L2).',
   'The setup notes are in [docs/guide.md](docs/guide.md#L3); `b` itself is unchanged elsewhere.',
+  'The generated rows start at `apps/web/src/long.ts:2`.',
 ].join('\n\n');
 
 const reply: FoldedMessage = {
@@ -33,20 +53,38 @@ const reply: FoldedMessage = {
 };
 
 function Fixture() {
+  const changeset = mockChangeset({
+    head: { name: 'agent/branch', sha: 'abc123' },
+  });
+  const style = new URLSearchParams(location.search).get('style');
   const context = createMockChangesContext({
     summary: {
       capturing: false,
-      changeset: mockChangeset({
-        head: { name: 'agent/branch', sha: 'abc123' },
-      }),
+      changeset: {
+        ...changeset,
+        files: [
+          ...changeset.files,
+          {
+            path: 'apps/web/src/long.ts',
+            kind: 'modified',
+            additions: 60,
+            deletions: 0,
+            binary: false,
+            patchOmitted: false,
+          },
+        ],
+        additions: changeset.additions + 60,
+      },
     },
-    patch: MOCK_PATCH,
+    patch: MOCK_PATCH + LONG_PATCH,
   });
   // The fixture has no browser to hand GitHub links to; it lists them.
   const [opened, setOpened] = createSignal<string[]>([]);
   context.host.openExternal = (url) => setOpened((list) => [...list, url]);
   const [layout, setLayout] = createSignal<PaneLayout>('closed');
-  const [diffStyle, setDiffStyle] = createSignal<DiffStyle>('unified');
+  const [diffStyle, setDiffStyle] = createSignal<DiffStyle>(
+    style === 'split' ? 'split' : 'unified'
+  );
   return (
     <main class="h-dvh max-w-full bg-page text-ink">
       <ChangesProvider

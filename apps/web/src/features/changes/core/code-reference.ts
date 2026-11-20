@@ -130,6 +130,7 @@ export function codeLinkTarget(
 
 // A fence opens or closes at any indent and inside blockquotes (`> ```ts`).
 const FENCE = /^(?:\s*>)*\s*(`{3,}|~{3,})/;
+const CLOSING_FENCE = /^(?:\s*>)*\s*(`{3,}|~{3,})\s*$/;
 // One inline code span: single backticks around text with no backtick, and
 // not part of a longer backtick run.
 const INLINE_CODE = /(?<!`)`([^`\n]+)`(?!`)/g;
@@ -204,7 +205,14 @@ export function linkCodeReferences(
     .map((line) => {
       const opener = FENCE.exec(line)?.[1];
       if (fence) {
-        if (opener && opener[0] === fence[0] && opener.length >= fence.length) {
+        // A closing fence carries no info string.
+        const closes = CLOSING_FENCE.test(line);
+        if (
+          closes &&
+          opener &&
+          opener[0] === fence[0] &&
+          opener.length >= fence.length
+        ) {
           fence = undefined;
         }
         return line;

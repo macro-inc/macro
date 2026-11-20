@@ -63,7 +63,7 @@ into the `path#L…` form. A resolved link calls `layout.open()` and
 `reveal` scrolls the pointed line in once the file settles. A line outside the
 diff's hunks has no row, so nothing lights and the file header stays in view.
 Unchanged relative files open on GitHub at the head commit. `browser-test/`
-clicks a rendered reply through all of it.
+clicks a rendered reply through all of it, in unified and split view.
 
 Native PR and Agents workspace hosts put their title row and content together
 inside `ChangesSplit`, so changes occupy the full height beside that row.
