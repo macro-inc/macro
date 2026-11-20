@@ -948,9 +948,12 @@ export function Channel(props: ChannelProps) {
                       <div
                         class={cn(
                           'relative flex-1 min-h-0',
-                          callPanel
-                            ? '[container-type:size]'
-                            : '@container/channel-pane'
+                          callPanel && '[container-type:size]',
+                          // Contains layout, so only while its checks may show.
+                          !callPanel &&
+                            !isTouchDevice() &&
+                            notificationGutter.checksFlagOn() &&
+                            '@container/channel-pane'
                         )}
                         ref={setThreadListContainerEl}
                       >

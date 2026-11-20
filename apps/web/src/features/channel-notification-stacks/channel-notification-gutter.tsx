@@ -91,6 +91,8 @@ export function createChannelNotificationGutter(options: {
   };
 
   return {
+    /** The checks may show, so the pane is a size container for their lane. */
+    checksFlagOn: () => checksFlag().enabled,
     checksEnabled,
     listEnabled,
     /** The checks a top-level message and its replies put in the gutter. */
