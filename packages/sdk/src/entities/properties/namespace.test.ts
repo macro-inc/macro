@@ -179,4 +179,18 @@ describe('PropertiesNamespace.create', () => {
 
     expect(created[0]?.scope).toBe('team');
   });
+
+  test('a misspelled option throws instead of making a personal property', async () => {
+    const { client, created } = propertiesClient();
+    const options = {
+      displayName: 'Hours Spent',
+      dataType: { type: 'number' },
+      scpoe: 'team',
+    } as unknown as Parameters<PropertiesNamespace['create']>[0];
+
+    await expect(
+      new PropertiesNamespace(client).create(options),
+    ).rejects.toThrow('properties.create does not take `scpoe`');
+    expect(created).toEqual([]);
+  });
 });
